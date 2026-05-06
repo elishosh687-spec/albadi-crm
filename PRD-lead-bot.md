@@ -34,9 +34,10 @@
 | החלטה | בחירה | נימוק |
 |-------|-------|-------|
 | בסיס תקשורת | ManyChat נשאר | כבר עובד, 40 לידים מוגדרים, ה-UI סביר. החלפה לא פותרת את הבעיה האמיתית. |
-| אדריכלות התחלתית | C+ (polling proxy) | מהיר להקמה, לא דורש WABA חדש, מחזיק את כל הקיים. |
-| אוטונומיית הבוט | בוט שולח בשמי | אלי אישר. לא מאשרים כל הודעה. |
-| כללים: קוד מול AI | קוד-first, AI-fallback | יציבות. AI רק כשאין כלל. |
+| אדריכלות התחלתית | C+ Local Loop | Claude Code אצל אלי = מנוע ה-AI. אין Vercel, אין Anthropic API. $0/חודש. |
+| מנוע AI | Claude Code עצמו (לא SDK) | אלי משאיר session פתוח עם /loop 1h. |
+| אוטונומיית הבוט | תיוג בלבד ב-MVP | שליחת הודעות מצריכה Templates מאושרי מטא — דחוי ל-Phase 3. |
+| כללים: קוד מול AI | קוד-first, Claude-judgment | רק כשאין כלל ברור. |
 | הסלמה אליי | רב-טריגרית | confidence נמוך + מילולי + כספי + לא מוכר. |
 | תצוגה לי | Dashboard "מי דורש אותי", לא "תגים" | התגים נשארים ב-state machine, לא בממשק. |
 
@@ -57,34 +58,57 @@
 
 המסמך מכסה את כל המסלולים. מתחילים ב-C+. אם לא מספיק → B. אם עוד לא מספיק → A.
 
-### 3.1 C+ (פעימה ראשית) — Polling Proxy
+### 3.1 C+ (פעימה ראשית) — Claude Code Local Loop
+
+**שונה ממה שתוכנן בהתחלה. ארכיטקטורה final אחרי החלטה לבטל Vercel + Anthropic API:**
 
 ```
 ┌─────────────────┐                ┌─────────────────┐
 │  WhatsApp user  │ ─── הודעה ──► │    ManyChat     │
 └─────────────────┘                └────────┬────────┘
                                             │ poll API
-                                  ┌─────────▼─────────┐
-                                  │   Lead Bot        │
-                                  │  (Vercel cron)    │
-                                  │   ────────────    │
-                                  │   1. Pull updates │
-                                  │   2. Classify     │
-                                  │   3. Decide       │
-                                  │   4. Send/Tag     │
-                                  └─────────┬─────────┘
+                                  ┌─────────▼─────────────────┐
+                                  │   Claude Code Session     │
+                                  │   (אצל אלי, פתוח 24/7)    │
+                                  │   /loop 1h /albadi-bot-run│
+                                  │   ────────────────────    │
+                                  │   1. tsx scripts/         │
+                                  │      list-leads-for-review│
+                                  │   2. Claude מקבלת JSON,   │
+                                  │      מסווגת לפי כללים     │
+                                  │   3. דו-משמעי? Claude     │
+                                  │      מחליטה               │
+                                  │   4. tsx scripts/apply-tag│
+                                  │   5. tsx scripts/         │
+                                  │      save-decision        │
+                                  │   6. tsx scripts/         │
+                                  │      notify-eli           │
+                                  └─────────┬─────────────────┘
                                             │
                           ┌─────────────────┼─────────────────┐
                           │                 │                 │
                   ┌───────▼───────┐ ┌──────▼──────┐ ┌────────▼────────┐
-                  │   Neon DB     │ │  ManyChat   │ │  Dashboard +    │
-                  │  (state +     │ │  API write  │ │  אזעקה אליי     │
-                  │   audit log)  │ │ (tag/reply) │ │  (WhatsApp)     │
+                  │   Neon DB     │ │  ManyChat   │ │  Local Next.js  │
+                  │  (state +     │ │  API write  │ │  Dashboard      │
+                  │   audit log)  │ │ (tag only)  │ │  (npm run dev)  │
                   └───────────────┘ └─────────────┘ └─────────────────┘
 ```
 
-**תדירות:** כל שעה (קבוע MVP). ניתן להוריד ל-30/15 דק' אם זמן תגובה לא מספיק.
-**תקציב הקמה:** 2-3 שבועות.
+**תדירות:** `/loop 1h /albadi-bot-run` — כל שעה, כל עוד session פתוח.
+**עלות:** $0/חודש (מנוי Claude Code שלך, Neon free tier).
+**תלות יחידה:** המחשב של אלי דולק + Claude Code session פתוח.
+
+**מה בוטל:**
+- ❌ Vercel deploy (לא צריך)
+- ❌ GitHub Actions cron (לא צריך)
+- ❌ `@anthropic-ai/sdk` (Claude עצמו = הסוכן)
+- ❌ AI fallback בקוד (Claude מחליטה ישירות)
+
+**מה נשאר:**
+- ✅ Next.js (רק לדאשבורד מקומי, `npm run dev` כשרוצה לראות)
+- ✅ Drizzle + Neon (audit log + state)
+- ✅ ManyChat client TypeScript
+- ✅ Templates נדרשים אם בעתיד נוסיף outbound (Phase 3+)
 
 ### 3.2 B (פעימה שנייה — אם C+ לא מספיק) — Webhook Proxy
 
@@ -435,64 +459,50 @@ CREATE TABLE anomalies (
 
 ## נספח A — מפת קוד
 
-**ארכיטקטורה: `albadi-crm` הוא פרויקט עצמאי, נפרד לחלוטין מ-`bag-quote-app`.**
+**ארכיטקטורה: `albadi-crm` הוא פרויקט עצמאי, נפרד לחלוטין מ-`bag-quote-app`. רץ מקומית, אין Vercel.**
 - Stack: Next.js + TypeScript + Drizzle + Neon (DB נפרד מ-bag-quote-app).
-- Vercel project עצמאי משלו.
-- מתקשר עם ManyChat דרך API (כמו bag-quote-app — שניהם עצמאיים, ManyChat = source of truth משותף).
+- Trigger: Claude Code skill `albadi-bot-run` שמופעל מ-`/loop 1h`.
+- מתקשר עם ManyChat דרך API. Claude Code = מנוע ה-AI.
 
 ```
 albadi-crm/
   PRD-lead-bot.md                    ← זה
-  README.md                          ← מתעדכן בסוף Phase 0
-  package.json                       ← חדש
-  next.config.js                     ← חדש
-  tsconfig.json                      ← חדש
-  vercel.json                        ← חדש
-  drizzle.config.ts                  ← חדש
-  .env.example                       ← חדש
+  README.md
+  package.json
+  next.config.js
+  tsconfig.json
+  drizzle.config.ts
+  .env.example
   .env                               ← gitignored
+  .claude/
+    skills/
+      albadi-bot-run/SKILL.md        ← הסקיל המרכזי שרץ ב-/loop 1h
   drizzle/
-    schema.ts                        ← 5 טבלאות (סעיף 5)
-    migrations/                      ← drizzle-kit migrate
+    schema.ts                        ← 6 טבלאות
+    migrations/                      ← drizzle-kit
   app/
-    api/
-      bot/
-        poll/route.ts                ← endpoint שמופעל מ-GitHub Actions
-        webhook/route.ts             ← (Phase 4 — B, לא ב-MVP)
-      actions/
-        tag/route.ts
-        reply/route.ts
-        escalate/route.ts
-      kill-switch/route.ts           ← הפעלה/כיבוי בוט
+    layout.tsx
+    page.tsx
     dashboard/
       page.tsx                       ← UI ראשי ("מי דורש אותי")
-      pipeline/page.tsx              ← Kanban view
-      escalations/page.tsx           ← תור הסלמות
-      runs/page.tsx                  ← היסטוריית runs
+      pipeline/page.tsx              ← Kanban view (Phase 4)
+      escalations/page.tsx           ← תור הסלמות (Phase 4)
+      runs/page.tsx                  ← היסטוריית runs (Phase 4)
   lib/
     manychat/
       client.ts                      ← wrapper ל-ManyChat API
-      config.ts                      ← Tag IDs, Field IDs, מ-.env
-    classifier/
-      rules.ts                       ← code rules (קוד-first)
-      ai-fallback.ts                 ← Claude classifier
-      index.ts                       ← orchestrator
-    decision/
-      engine.ts                      ← what action to take
-      escalation.ts                  ← rules to escalate
-      scoring.ts                     ← תרגום של daily_calls.py priority logic
-    replier/
-      templates.ts                   ← 4 templates + IDs מ-Meta
-      sender.ts                      ← שליחה דרך ManyChat
+      config.ts                      ← Tag IDs, Field IDs
     db.ts                            ← Neon connection
   scripts/
-    pull-tone-samples.ts             ← Phase 0 — auto-pull תגובות אלי
+    pull-tone-samples.ts             ← Phase 0
+    pull-new-messages.ts             ← MVP — מושך מצב כל הלידים
+    list-leads-for-review.ts         ← MVP — מסווג לפי כללים, מציג מי דורש Claude
+    apply-tag.ts                     ← MVP — מחליף תג ב-ManyChat
+    save-decision.ts                 ← MVP — audit log
+    notify-eli.ts                    ← MVP — רשומת הסלמה ב-DB
   legacy/
-    daily_calls.py                   ← מועבר. לא רץ יותר. לוגיקה תורגמה ל-lib/decision/scoring.ts.
-    תוכנית-סידור-ManyChat.md         ← מועבר. ל-reference.
-.github/
-  workflows/
-    bot-poll.yml                     ← cron שעתי. curl ל-/api/bot/poll
+    daily_calls.py                   ← לא רץ. לוגיקת ניקוד תורגם בעתיד.
+    תוכנית-סידור-ManyChat.md         ← reference.
 ```
 
 ### המעבר של הקוד הקיים

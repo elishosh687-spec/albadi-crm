@@ -10,11 +10,16 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:studio": "drizzle-kit studio",
-    "tone:pull": "tsx scripts/pull-tone-samples.ts"
+    "tone:pull": "tsx scripts/pull-tone-samples.ts",
+    "bot:pull-messages": "tsx scripts/pull-new-messages.ts",
+    "bot:apply-tag": "tsx scripts/apply-tag.ts",
+    "bot:save-decision": "tsx scripts/save-decision.ts",
+    "bot:notify-eli": "tsx scripts/notify-eli.ts",
+    "bot:list-leads": "tsx scripts/list-leads-for-review.ts"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.40.1",
     "@neondatabase/serverless": "^0.10.4",
+    "dotenv": "^16.6.1",
     "drizzle-orm": "^0.36.4",
     "next": "^16.2.5",
     "react": "19.0.0",

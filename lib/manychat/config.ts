@@ -35,7 +35,7 @@ export const FIELD_IDS = {
 
 export type FieldName = keyof typeof FIELD_IDS;
 
-export const STATUS_TAG_IDS = [
+export const STATUS_TAG_IDS: number[] = [
   TAG_IDS.ליד_חדש,
   TAG_IDS.מעוניין,
   TAG_IDS.הצעה_בוט,
@@ -46,4 +46,4 @@ export const STATUS_TAG_IDS = [
   TAG_IDS.לא_רלוונטי,
 ];
 
-export const TERMINAL_TAGS = [TAG_IDS.לקוח, TAG_IDS.לא_רלוונטי];
+export const TERMINAL_TAGS: number[] = [TAG_IDS.לקוח, TAG_IDS.לא_רלוונטי];
