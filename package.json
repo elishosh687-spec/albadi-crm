@@ -15,7 +15,8 @@
     "bot:apply-tag": "tsx scripts/apply-tag.ts",
     "bot:save-decision": "tsx scripts/save-decision.ts",
     "bot:notify-eli": "tsx scripts/notify-eli.ts",
-    "bot:list-leads": "tsx scripts/list-leads-for-review.ts"
+    "bot:list-leads": "tsx scripts/list-leads-for-review.ts",
+    "bot:restart": "tsx scripts/restart-mode.ts"
   },
   "dependencies": {
     "@neondatabase/serverless": "^0.10.4",
