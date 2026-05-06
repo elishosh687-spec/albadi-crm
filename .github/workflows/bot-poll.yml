@@ -1,0 +1,16 @@
+name: Lead bot hourly poll
+
+on:
+  schedule:
+    - cron: '0 * * * *'
+  workflow_dispatch:
+
+jobs:
+  poll:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger bot poll endpoint
+        run: |
+          curl -fsS -X POST \
+            -H "Authorization: Bearer ${{ secrets.BOT_SECRET }}" \
+            "${{ vars.BOT_POLL_URL }}"

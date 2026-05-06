@@ -1,0 +1,14 @@
+node_modules/
+.next/
+.env
+.env.local
+out/
+build/
+dist/
+*.log
+.DS_Store
+.vercel/
+*.tsbuildinfo
+next-env.d.ts
+.claude/
+scripts/tone-samples.json
