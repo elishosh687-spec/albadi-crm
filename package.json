@@ -18,7 +18,8 @@
     "bot:list-leads": "tsx scripts/list-leads-for-review.ts",
     "bot:restart": "tsx scripts/restart-mode.ts",
     "bot:send-template": "tsx scripts/send-template.ts",
-    "bot:restart-send": "tsx scripts/restart-send.ts"
+    "bot:restart-send": "tsx scripts/restart-send.ts",
+    "bot:run-once": "tsx scripts/run-bot-once.ts"
   },
   "dependencies": {
     "@neondatabase/serverless": "^0.10.4",
