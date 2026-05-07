@@ -301,7 +301,7 @@
 | 5 | `albadi_questionnaire_incomplete` | `דקה אחת חסרה לך להצעת מחיר 📝` | `{{1}}` name | `TEMPLATE_QUESTIONNAIRE_INCOMPLETE` |
 | 6 | `albadi_last_attempt` | `לפני שאני סוגר את התיק שלך 🎒` | `{{1}}` name | `TEMPLATE_LAST_ATTEMPT` |
 | 7 | `albadi_eli_alert` | `🚨 התראה — Albadi` | `{{1}}` lead name | `TEMPLATE_ELI_ALERT` |
-| 8 | `albadi_eli_summary` | `🤖 סיכום Albadi` | 3 משתנים | `TEMPLATE_ELI_SUMMARY` |
+| 8 | `albadi_eli_summary` | `🤖 סיכום Albadi` | `{{1}}` body | `TEMPLATE_ELI_SUMMARY` |
 
 ---
 
@@ -381,11 +381,13 @@ Albadi Bot
 
 ---
 
-## Template 8: `albadi_eli_summary` (סיכום תקופתי לאלי)
+## Template 8: `albadi_eli_summary` (סיכום תקופתי לאלי) — גרסה פשוטה
 
 **מטרה:** סיכום קצר 3-4 פעמים ביום — מה הבוט עשה, מה ממתין לטיפול. נשלח ל-`ADMIN_SUBSCRIBER_ID` בלבד.
 
 **Category:** Utility
+
+**הערה:** משתנה אחד גדול = פורמט שעובר Meta בקלות (אין צורך ביצירת custom fields חדשים ב-ManyChat).
 
 | שדה | ערך |
 |-----|-----|
@@ -397,38 +399,51 @@ Albadi Bot
 ```
 🤖 סיכום Albadi
 ```
-**(אין משתנה ב-Header)**
+**(טקסט קבוע, אין משתנה)**
 
 ### Message
 ```
-מאז הסיכום הקודם:
-
-✓ {{1}} פעולות אוטומטיות
-🟡 {{2}} הסלמות מחכות לך
-⚠️ {{3}} שגיאות
+{{1}}
 
 לפרטים מלאים — פתח Dashboard.
 ```
-**משתנים:**
-- `{{1}}` = מספר פעולות אוטו (e.g. `5`)
-- `{{2}}` = מספר הסלמות פתוחות (e.g. `2`)
-- `{{3}}` = מספר שגיאות (e.g. `0`)
+**משתנים:** `{{1}}` = כל גוף הסיכום. הבוט בונה אותו דינמית.
 
 ### Footer
 ```
 Albadi Bot
 ```
 
-### Buttons (URL Button — 1)
+### Buttons (URL — 1)
 - **Type:** URL
 - **Text:** `פתח Dashboard`
 - **URL:** `https://albadi-crm.vercel.app`
-*(אחרי שהדאשבורד יעלה לאוויר. לעת עתה אפשר לרשום עם URL מלא placeholder ולערוך אחרי deploy.)*
 
-### Sample values
-- `{{1}}` = `5`
-- `{{2}}` = `2`
-- `{{3}}` = `0`
+### Sample value for Meta approval
+`{{1}}` =
+```
+מאז הסיכום הקודם:
+
+✓ 5 פעולות אוטומטיות
+🟡 2 הסלמות מחכות לך
+⚠️ 0 שגיאות
+```
+
+### איך זה ייראה בוואצאפ אצלך
+```
+🤖 סיכום Albadi
+
+מאז הסיכום הקודם:
+
+✓ 5 פעולות אוטומטיות
+🟡 2 הסלמות מחכות לך
+⚠️ 0 שגיאות
+
+לפרטים מלאים — פתח Dashboard.
+
+Albadi Bot
+[פתח Dashboard]
+```
 
 **ENV var:** `TEMPLATE_ELI_SUMMARY=<template_id>`
 
