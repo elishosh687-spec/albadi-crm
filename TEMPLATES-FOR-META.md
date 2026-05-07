@@ -300,16 +300,20 @@
 | 4 | `albadi_call_request_followup` | `מוכן להתקשר אליך השבוע 📞` | `{{1}}` name | `TEMPLATE_CALL_REQUEST_FOLLOWUP` |
 | 5 | `albadi_questionnaire_incomplete` | `דקה אחת חסרה לך להצעת מחיר 📝` | `{{1}}` name | `TEMPLATE_QUESTIONNAIRE_INCOMPLETE` |
 | 6 | `albadi_last_attempt` | `לפני שאני סוגר את התיק שלך 🎒` | `{{1}}` name | `TEMPLATE_LAST_ATTEMPT` |
-| 7 | `albadi_eli_alert` | `🚨 {{1}}` | 4 משתנים | `TEMPLATE_ELI_ALERT` |
+| 7 | `albadi_eli_alert` | `🚨 התראה — Albadi` | `{{1}}` lead name | `TEMPLATE_ELI_ALERT` |
 | 8 | `albadi_eli_summary` | `🤖 סיכום Albadi` | 3 משתנים | `TEMPLATE_ELI_SUMMARY` |
 
 ---
 
-## Template 7: `albadi_eli_alert` (התראה אישית לאלי)
+## Template 7: `albadi_eli_alert` (התראה אישית לאלי) — גרסה סופית
 
-**מטרה:** התראה אישית לאלי כשהבוט צריך אישור או החלטה. נשלח ל-`ADMIN_SUBSCRIBER_ID` בלבד (המספר שלך). לא לקוחות.
+**מטרה:** התראה אישית לאלי. הבוט שולח לך את כל ההקשר + אופציות ממוספרות, ואתה יכול:
+- (א) להגיב במספר (1/2/3) — אישור מהיר בוואצאפ
+- (ב) ללחוץ על כפתור Dashboard — עריכת טיוטה לפני שליחה
 
-**Category:** Utility (זה התראה תפעולית, לא שיווק. Meta בדרך כלל מאשרת מהר יותר.)
+**Category:** Utility
+
+**הערה:** משתנה אחד גדול = פורמט שעובר Meta בקלות.
 
 | שדה | ערך |
 |-----|-----|
@@ -319,41 +323,59 @@
 
 ### Header
 ```
-🚨 {Reason}
+🚨 Albadi
 ```
-**ב-{ }:** Custom Field text (תיצור ב-ManyChat שדה חדש בשם `eli_alert_reason` אם לא קיים)
+**(טקסט קבוע, אין משתנים)**
 
 ### Message
 ```
-לקוח: {Lead Name}
+{{1}}
 
-פרטים: {Lead Context}
-
-טיוטה מוצעת:
-{Draft Reply}
-
-מה לעשות?
+ענה במספר, או לחץ Dashboard לעריכה.
 ```
-**משתנים ב-Message (בסדר):**
-- `{{1}}` = Lead Name
-- `{{2}}` = Lead Context (קצר — סטטוס, סכום, סיבה)
-- `{{3}}` = Draft Reply (טיוטת תגובה שאלי יכול לאשר)
+**משתנים:** `{{1}}` = כל גוף ההודעה (הבוט בונה אותו דינמית — שם הליד + סיבה + אופציות).
 
 ### Footer
 ```
 Albadi Bot
 ```
 
-### Buttons (Quick Reply — 3)
-1. `✓ אשר ושלח`
-2. `✗ דחה / סגור`
-3. `📱 פתח Dashboard`
+### Buttons (URL — 1)
+- **Type:** URL
+- **Text:** `פתח Dashboard`
+- **URL:** `https://albadi-crm.vercel.app/escalations`
 
-### Sample values for Meta approval
-- `{Reason}` (Header) = `בקשת הנחה`
-- `{{1}}` = `Basel Mahamid`
-- `{{2}}` = `הצעה 5000 ש"ח, ביקש הנחה של 10%`
-- `{{3}}` = `שלום Basel, שמעתי. אבדוק מה אפשר ואחזור עוד היום.`
+### Sample for Meta approval
+`{{1}}` =
+```
+בסל מחמיד מחכה לטיפול.
+סיבה: ביקש הנחה.
+טיוטה: שמעתי, אבדוק ואחזור.
+
+אופציות:
+1️⃣ שלח את הטיוטה
+2️⃣ דחה
+3️⃣ אטפל ידנית
+```
+
+### איך זה ייראה בוואצאפ אצלך
+```
+🚨 Albadi
+
+בסל מחמיד מחכה לטיפול.
+סיבה: ביקש הנחה.
+טיוטה: שמעתי, אבדוק ואחזור.
+
+אופציות:
+1️⃣ שלח את הטיוטה
+2️⃣ דחה
+3️⃣ אטפל ידנית
+
+ענה במספר, או לחץ Dashboard לעריכה.
+
+Albadi Bot
+[פתח Dashboard]
+```
 
 **ENV var:** `TEMPLATE_ELI_ALERT=<template_id>`
 
