@@ -1,0 +1,41 @@
+/**
+ * Cloud Routine writes Claude's analysis result back to an escalation.
+ */
+import { NextRequest, NextResponse } from "next/server";
+import { db } from "@/lib/db";
+import { escalations } from "@/drizzle/schema";
+import { eq } from "drizzle-orm";
+
+export const runtime = "nodejs";
+
+export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
+  const auth = req.headers.get("authorization");
+  if (!process.env.BOT_SECRET || auth !== `Bearer ${process.env.BOT_SECRET}`) {
+    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  }
+
+  const { id: idParam } = await ctx.params;
+  const id = Number(idParam);
+  if (!Number.isFinite(id)) {
+    return NextResponse.json({ error: "invalid id" }, { status: 400 });
+  }
+
+  const body = (await req.json()) as { summary?: string; suggested_reply?: string };
+  const summary = body.summary?.trim();
+  const suggestedReply = body.suggested_reply?.trim();
+
+  if (!summary) {
+    return NextResponse.json({ error: "missing summary" }, { status: 400 });
+  }
+
+  await db
+    .update(escalations)
+    .set({
+      analysisSummary: summary,
+      suggestedReply: suggestedReply ?? null,
+      analyzedAt: new Date(),
+    })
+    .where(eq(escalations.id, id));
+
+  return NextResponse.json({ ok: true });
+}

@@ -56,6 +56,10 @@ export const escalations = pgTable("escalations", {
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   resolvedAt: timestamp("resolved_at", { withTimezone: true }),
   resolutionNote: text("resolution_note"),
+  analyzeRequested: boolean("analyze_requested").default(false).notNull(),
+  analysisSummary: text("analysis_summary"),
+  suggestedReply: text("suggested_reply"),
+  analyzedAt: timestamp("analyzed_at", { withTimezone: true }),
 });
 
 export const anomalies = pgTable("anomalies", {
