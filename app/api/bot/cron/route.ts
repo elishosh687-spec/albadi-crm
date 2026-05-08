@@ -43,9 +43,17 @@ function applyRules(lead: Lead): Outcome {
   const tag = lead.currentTag;
   const notes = (lead.notes || "").toLowerCase();
 
+  // Tier 1 (F): fresh lead grace period — 0–3 days, leave alone
+  if (days <= 3) {
+    return { classifiedTag: tag, rule: "fresh_lead_grace_period", aiUsed: false, confidence: 1.0, action: "no_action" };
+  }
+
+  // Stable: tagged unanswered, still within window
   if (tag === "לא_ענה" && days < 7) {
     return { classifiedTag: tag, rule: "no_action_stable", aiUsed: false, confidence: 1.0, action: "no_action" };
   }
+
+  // High-signal escalations (still trigger regardless of days, as long as past grace period)
   if (notes.includes("הנחה") || notes.includes("יקר")) {
     return { classifiedTag: tag, rule: null, aiUsed: true, confidence: 0.9, action: "escalated", escalationReason: "pricing", escalationTrigger: "מילים: יקר/הנחה ב-notes" };
   }
@@ -58,13 +66,22 @@ function applyRules(lead: Lead): Outcome {
   if (lead.quoteTotal && lead.quoteTotal >= 10000 && days >= 5) {
     return { classifiedTag: tag, rule: null, aiUsed: true, confidence: 0.88, action: "escalated", escalationReason: "low_confidence", escalationTrigger: `עסקה גדולה (${lead.quoteTotal} ש"ח), ${days} ימים שקט` };
   }
+
+  // Auto-tag: silent for 5+ days
   if ((tag === "הצעה_בוט" || tag === "הצעה_טלפון" || tag === "ליד_חדש" || tag === "בתהליך") && days >= 5) {
     return { classifiedTag: "לא_ענה", rule: "no_contact_5days", aiUsed: false, confidence: 1.0, action: "tag_only" };
   }
   if (tag === "מעוניין" && days >= 5 && !lead.quoteTotal) {
     return { classifiedTag: "לא_ענה", rule: "interested_no_quote_5days", aiUsed: false, confidence: 0.95, action: "tag_only" };
   }
-  return { classifiedTag: tag, rule: null, aiUsed: true, confidence: 0.5, action: "escalated", escalationReason: "low_confidence", escalationTrigger: "אין כלל ברור, Claude לא בטוחה" };
+
+  // Tier 4 (F): 14+ days stuck with no rule firing — escalate as truly stuck
+  if (days >= 14 && tag !== "לקוח" && tag !== "לא_רלוונטי") {
+    return { classifiedTag: tag, rule: "stuck_14_days", aiUsed: false, confidence: 1.0, action: "escalated", escalationReason: "low_confidence", escalationTrigger: `${days} ימים בלי מגע — צריך התערבות ידנית` };
+  }
+
+  // (A) Default — no rule matched, no urgency. Do nothing, retry next hour.
+  return { classifiedTag: tag, rule: "no_rule_match", aiUsed: false, confidence: null, action: "no_action" };
 }
 
 export async function POST(req: NextRequest) {

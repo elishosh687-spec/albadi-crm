@@ -1,9 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { Badge, Dot } from "@/components/ui/Badge";
 import { colors, fontStack, leading, radius, size, space, weight } from "@/lib/ui/tokens";
+import { requestAnalysis } from "@/app/actions/escalation-analysis";
 
 interface EscalationContext {
   currentTag: string | null;
@@ -23,6 +25,10 @@ interface Escalation {
   triggerText: string | null;
   createdAt: string;
   context?: EscalationContext;
+  analyzeRequested?: boolean;
+  analysisSummary?: string | null;
+  suggestedReply?: string | null;
+  analyzedAt?: string | null;
 }
 
 const REASON_HE: Record<string, string> = {
@@ -42,11 +48,35 @@ const REASON_TONE: Record<string, "warning" | "danger" | "accent" | "neutral"> =
 };
 
 export function EscalationCard({ escalation }: { escalation: Escalation }) {
+  const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
   const [showFullNotes, setShowFullNotes] = useState(false);
+  const [analyzePending, startAnalyze] = useTransition();
+  const [analyzeError, setAnalyzeError] = useState<string | null>(null);
+
+  const isPendingAnalysis = !!escalation.analyzeRequested && !escalation.analyzedAt;
+  const hasAnalysis = !!escalation.analysisSummary;
+
+  // Poll for analysis result while pending
+  useEffect(() => {
+    if (!isPendingAnalysis) return;
+    const interval = setInterval(() => {
+      router.refresh();
+    }, 10000);
+    return () => clearInterval(interval);
+  }, [isPendingAnalysis, router]);
+
+  function onRequestAnalysis() {
+    setAnalyzeError(null);
+    startAnalyze(async () => {
+      const r = await requestAnalysis(escalation.id);
+      if (!r.ok) setAnalyzeError(r.error ?? "לא ניתן לבקש ניתוח");
+      else router.refresh();
+    });
+  }
 
   async function resolve(action: string, note?: string) {
     setBusy(true);
@@ -239,6 +269,99 @@ export function EscalationCard({ escalation }: { escalation: Escalation }) {
           </div>
         </div>
       )}
+
+      {/* Claude analysis section */}
+      <div style={{ marginBottom: space.md }}>
+        {hasAnalysis ? (
+          <>
+            <p style={fieldLabelStyle}>ניתוח Claude</p>
+            <div
+              style={{
+                padding: space.md,
+                background: colors.accentSoft,
+                borderInlineStart: `3px solid ${colors.accent}`,
+                borderRadius: radius.sm,
+                fontSize: size.sm,
+                color: colors.ink,
+                lineHeight: leading.normal,
+                fontFamily: fontStack.body,
+                whiteSpace: "pre-wrap",
+              }}
+            >
+              {escalation.analysisSummary}
+              {escalation.suggestedReply && (
+                <div
+                  style={{
+                    marginTop: space.md,
+                    paddingTop: space.md,
+                    borderTop: `1px solid ${colors.accent}33`,
+                  }}
+                >
+                  <div style={{ fontWeight: weight.semibold, marginBottom: space.xs }}>
+                    תגובה מוצעת:
+                  </div>
+                  <div style={{ fontStyle: "italic" }}>{escalation.suggestedReply}</div>
+                  <button
+                    onClick={() => setDraft(escalation.suggestedReply!)}
+                    style={{
+                      marginTop: space.sm,
+                      background: "none",
+                      border: `1px solid ${colors.accent}`,
+                      color: colors.accent,
+                      fontSize: size.xs,
+                      fontWeight: weight.medium,
+                      padding: `${space.xs}px ${space.md}px`,
+                      borderRadius: radius.sm,
+                      cursor: "pointer",
+                      fontFamily: fontStack.body,
+                    }}
+                  >
+                    השתמש בתגובה הזו
+                  </button>
+                </div>
+              )}
+            </div>
+          </>
+        ) : isPendingAnalysis ? (
+          <div
+            style={{
+              padding: space.md,
+              background: colors.surfaceMuted,
+              borderInlineStart: `3px solid ${colors.inkSubtle}`,
+              borderRadius: radius.sm,
+              fontSize: size.sm,
+              color: colors.inkMuted,
+              fontFamily: fontStack.body,
+            }}
+          >
+            Claude מנתח את הליד… (יכול לקחת עד 5 דקות, יתעדכן אוטומטית)
+          </div>
+        ) : (
+          <div>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={onRequestAnalysis}
+              pending={analyzePending}
+              pendingText="שולח..."
+            >
+              נתח עם Claude
+            </Button>
+            {analyzeError && (
+              <span
+                style={{
+                  marginInlineStart: space.sm,
+                  color: colors.danger,
+                  fontSize: size.sm,
+                  fontFamily: fontStack.body,
+                }}
+              >
+                {analyzeError}
+              </span>
+            )}
+          </div>
+        )}
+      </div>
 
       <div style={{ marginBottom: space.md }}>
         <label htmlFor={`draft-${escalation.id}`} style={fieldLabelStyle}>
