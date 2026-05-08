@@ -1,6 +1,6 @@
 /**
  * Restart-mode batch sender. Re-runs the restart-mode classification,
- * maps each lead to the right template, and sends in 5/minute throttle.
+ * maps each lead to the right ManyChat Flow, and sends via sendFlow (5/min throttle).
  *
  * Default mode: --dry-run. Shows exactly what would be sent. NO send.
  * To actually send: pass --confirm.
@@ -14,6 +14,16 @@ import { getSubscriber, getFieldValue } from "../lib/manychat/client";
 import { TAG_IDS, TERMINAL_TAGS, MANYCHAT_BASE, MANYCHAT_TOKEN } from "../lib/manychat/config";
 import { db } from "../lib/db";
 import { repliesSent } from "../drizzle/schema";
+
+// flow_ns for each approved WhatsApp template Flow in ManyChat
+const FLOW_NS: Record<string, string> = {
+  TEMPLATE_FOLLOWUP_QUOTE_SENT:     "content20260508151701_091472",
+  TEMPLATE_AFTER_HOLIDAY:           "content20260508152934_109626",
+  TEMPLATE_PRICE_TOO_HIGH:          "content20260508180816_402346",
+  TEMPLATE_CALL_REQUEST_FOLLOWUP:   "content20260508152941_860840",
+  TEMPLATE_QUESTIONNAIRE_INCOMPLETE:"content20260508152940_284953",
+  TEMPLATE_LAST_ATTEMPT:            "content20260508152938_498910",
+};
 
 const KNOWN_SUBSCRIBERS = [
   "1290975646", "335237336", "843866619", "1567115769", "2035644170",
@@ -39,7 +49,7 @@ interface Lead {
 }
 
 type GroupKey =
-  | "high_value_quote_followup"      // > 10K — ALSO gets template per Eli's request
+  | "high_value_quote_followup"
   | "quote_sent_followup"
   | "after_holiday"
   | "said_too_expensive"
@@ -50,83 +60,35 @@ type GroupKey =
   | "manual_review";
 
 const GROUP_TO_TEMPLATE_ENV: Record<GroupKey, string | null> = {
-  high_value_quote_followup: "TEMPLATE_FOLLOWUP_QUOTE_SENT",
-  quote_sent_followup: "TEMPLATE_FOLLOWUP_QUOTE_SENT",
-  after_holiday: "TEMPLATE_AFTER_HOLIDAY",
-  said_too_expensive: "TEMPLATE_PRICE_TOO_HIGH",
-  requested_call_no_answer: "TEMPLATE_CALL_REQUEST_FOLLOWUP",
-  questionnaire_incomplete: "TEMPLATE_QUESTIONNAIRE_INCOMPLETE",
-  already_marked_no_answer: "TEMPLATE_LAST_ATTEMPT",
-  broken_lead: null,
-  manual_review: null,
+  high_value_quote_followup:  "TEMPLATE_FOLLOWUP_QUOTE_SENT",
+  quote_sent_followup:        "TEMPLATE_FOLLOWUP_QUOTE_SENT",
+  after_holiday:              "TEMPLATE_AFTER_HOLIDAY",
+  said_too_expensive:         "TEMPLATE_PRICE_TOO_HIGH",
+  requested_call_no_answer:   "TEMPLATE_CALL_REQUEST_FOLLOWUP",
+  questionnaire_incomplete:   "TEMPLATE_QUESTIONNAIRE_INCOMPLETE",
+  already_marked_no_answer:   "TEMPLATE_LAST_ATTEMPT",
+  broken_lead:                null,
+  manual_review:              null,
 };
 
 function classify(lead: Lead): GroupKey {
   const notes = (lead.notes || "").toLowerCase();
   const tag = lead.currentTag;
 
-  if (lead.currentTag === null && lead.name === lead.subscriberId) {
-    return "broken_lead";
-  }
-
-  if (lead.quoteTotal && lead.quoteTotal >= 10000) {
-    return "high_value_quote_followup";
-  }
-
-  if (notes.includes("יקר")) {
-    return "said_too_expensive";
-  }
-
-  if (notes.includes("אחרי החג") || notes.includes("אחרי חג")) {
-    return "after_holiday";
-  }
-
-  if (notes.includes("לחץ תיאום שיחה") || notes.includes("רוצה לדבר") || notes.includes("עם סוכן")) {
-    return "requested_call_no_answer";
-  }
-
-  if (tag === "לא_ענה") {
-    return "already_marked_no_answer";
-  }
-
-  if (
-    tag === "ליד_חדש" ||
-    notes.includes("מילא חלקי") ||
-    notes.includes("לא מילא") ||
-    notes.includes("חלקי")
-  ) {
-    return "questionnaire_incomplete";
-  }
-
-  if (lead.quoteTotal && lead.quoteTotal > 0) {
-    return "quote_sent_followup";
-  }
-
-  if (tag === "הצעה_בוט" || tag === "הצעה_טלפון") {
-    return "quote_sent_followup";
-  }
-
+  if (lead.currentTag === null && lead.name === lead.subscriberId) return "broken_lead";
+  if (lead.quoteTotal && lead.quoteTotal >= 10000) return "high_value_quote_followup";
+  if (notes.includes("יקר")) return "said_too_expensive";
+  if (notes.includes("אחרי החג") || notes.includes("אחרי חג")) return "after_holiday";
+  if (notes.includes("לחץ תיאום שיחה") || notes.includes("רוצה לדבר") || notes.includes("עם סוכן")) return "requested_call_no_answer";
+  if (tag === "לא_ענה") return "already_marked_no_answer";
+  if (tag === "ליד_חדש" || notes.includes("מילא חלקי") || notes.includes("לא מילא") || notes.includes("חלקי")) return "questionnaire_incomplete";
+  if (lead.quoteTotal && lead.quoteTotal > 0) return "quote_sent_followup";
+  if (tag === "הצעה_בוט" || tag === "הצעה_טלפון") return "quote_sent_followup";
   return "manual_review";
 }
 
-function buildVars(group: GroupKey, lead: Lead): Record<string, string> {
-  // Template 1 (followup_quote_sent): {{1}}=quote, {{2}}=name
-  if (group === "quote_sent_followup" || group === "high_value_quote_followup") {
-    return {
-      "1": String(lead.quoteTotal ?? 0),
-      "2": lead.name.split(" ")[0],
-    };
-  }
-  // Templates 2-6: {{1}}=name only
-  return { "1": lead.name.split(" ")[0] };
-}
-
-async function sendTemplate(
-  subscriberId: string,
-  templateId: string,
-  vars: Record<string, string>
-): Promise<string | null> {
-  const res = await fetch(`${MANYCHAT_BASE}/sending/sendContent`, {
+async function sendFlow(subscriberId: string, flowNs: string): Promise<string | null> {
+  const res = await fetch(`${MANYCHAT_BASE}/sending/sendFlow`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${MANYCHAT_TOKEN}`,
@@ -134,23 +96,12 @@ async function sendTemplate(
     },
     body: JSON.stringify({
       subscriber_id: subscriberId,
-      data: {
-        version: "v2",
-        content: {
-          messages: [
-            {
-              type: "whatsapp_template",
-              template_id: templateId,
-              variables: vars,
-            },
-          ],
-        },
-      },
+      flow_ns: flowNs,
     }),
   });
   const json = (await res.json()) as { status: string; message?: string; data?: any };
   if (!res.ok || json.status !== "success") {
-    throw new Error(`ManyChat send failed: ${res.status} ${JSON.stringify(json)}`);
+    throw new Error(`ManyChat sendFlow failed: ${res.status} ${JSON.stringify(json)}`);
   }
   return json.data?.message_id ?? null;
 }
@@ -182,43 +133,27 @@ async function main() {
   }
   console.log(`Pulled ${leads.length} active leads.\n`);
 
-  // 2. Classify + plan sends
-  type Plan = { lead: Lead; group: GroupKey; templateEnv: string | null; vars: Record<string, string> };
+  // 2. Classify + plan
+  type Plan = { lead: Lead; group: GroupKey; templateEnv: string | null; flowNs: string | null };
   const plans: Plan[] = leads.map((lead) => {
     const group = classify(lead);
     const templateEnv = GROUP_TO_TEMPLATE_ENV[group];
-    const vars = templateEnv ? buildVars(group, lead) : {};
-    return { lead, group, templateEnv, vars };
+    const flowNs = templateEnv ? (FLOW_NS[templateEnv] ?? null) : null;
+    return { lead, group, templateEnv, flowNs };
   });
 
   // 3. Print plan
   console.log(`${dryRun ? "🟡 DRY RUN" : "🟢 SENDING FOR REAL"} — plan:\n`);
-  const willSend = plans.filter((p) => p.templateEnv !== null);
-  const willSkip = plans.filter((p) => p.templateEnv === null);
+  const willSend = plans.filter((p) => p.flowNs !== null);
+  const willSkip = plans.filter((p) => p.flowNs === null);
 
   for (const p of willSend) {
-    const templateId = process.env[p.templateEnv!] || "<NOT_SET_IN_ENV>";
-    const ready = templateId !== "<NOT_SET_IN_ENV>" ? "✓" : "✗";
-    console.log(
-      `  ${ready} [${p.group}] ${p.lead.name}  →  ${p.templateEnv}  vars=${JSON.stringify(p.vars)}`
-    );
+    const ready = FLOW_NS[p.templateEnv!] ? "✓" : "✗ MISSING flow_ns";
+    console.log(`  ${ready} [${p.group}] ${p.lead.name}  →  ${p.templateEnv}`);
   }
   console.log(`\nSkip (no template): ${willSkip.length}`);
   for (const p of willSkip) {
     console.log(`  • ${p.lead.name} [${p.group}]`);
-  }
-
-  // 4. Validate ENV
-  const missing = willSend.filter((p) => !process.env[p.templateEnv!]);
-  if (missing.length > 0) {
-    console.log(
-      `\n❌ ${missing.length} templates not yet approved or ENV not filled. Cannot proceed.`
-    );
-    console.log("Templates missing:");
-    for (const m of missing) {
-      console.log(`  - ${m.templateEnv}`);
-    }
-    process.exit(1);
   }
 
   if (dryRun) {
@@ -226,18 +161,17 @@ async function main() {
     return;
   }
 
-  // 5. Send (5/min throttle = 12 sec between sends)
-  console.log(`\n🟢 Sending ${willSend.length} templates at 5/min...\n`);
+  // 4. Send (5/min throttle = 12 sec between sends)
+  console.log(`\n🟢 Sending ${willSend.length} flows at 5/min...\n`);
   let sent = 0;
   let failed = 0;
   for (const p of willSend) {
-    const templateId = process.env[p.templateEnv!]!;
     try {
-      const msgId = await sendTemplate(p.lead.subscriberId, templateId, p.vars);
+      const msgId = await sendFlow(p.lead.subscriberId, p.flowNs!);
       await db.insert(repliesSent).values({
         manychatSubId: p.lead.subscriberId,
         templateUsed: p.templateEnv!,
-        text: `${p.group}: ${JSON.stringify(p.vars)}`,
+        text: `flow:${p.flowNs} group:${p.group}`,
         manychatMsgId: msgId,
       });
       console.log(`  ✓ ${p.lead.name} (${p.templateEnv})`);
