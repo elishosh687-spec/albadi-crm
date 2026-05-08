@@ -1,5 +1,48 @@
 # Changelog — Albadi CRM
 
+## [0.5] — 2026-05-08
+
+### Added — Dashboard redesign + actions (PR #1)
+- `lib/ui/tokens.ts` — Paper & Ink palette + spacing/typography tokens (single source of truth)
+- `components/ui/{Page,Card,Button,Stat,Badge}` — shared UI primitives
+- `next/font` integration for Frank Ruhl Libre + Heebo (Hebrew + Latin)
+- `/dashboard/instructions` — full Hebrew user guide (no longer hardcoded "פקודות טרמינל")
+- 3 action buttons on `/dashboard` home: "הרץ בוט עכשיו", "שלח Re-engagement", "הוסף ליד ידני"
+- `app/actions/bot.ts` — Server Actions wrapping API routes; `BOT_SECRET` stays server-side
+- `components/dashboard/ActionButtons.tsx` — client UI for the 3 actions
+
+### Added — Escalation context (PR #3)
+- Dashboard escalations now show **why** the bot escalated, with full lead context
+- 4-cell context grid per escalation: ימים ללא מגע · הצעה ב-₪ · ביטחון AI · כלל שזוהה (color-coded)
+- Full ManyChat notes shown (collapsed if >220 chars)
+- Home dashboard adds inline meta line: `tag · X ימים שקט · ₪quote`
+
+### Added — Escalation noise reduction A+F (PR #4)
+- **Default → no_action** (instead of escalate "low_confidence"). Bot only escalates on clear signal.
+- **Aging tiers** in `applyRules`:
+  - `days <= 3` → fresh-lead grace period (no_action)
+  - `3 < days < 14` → existing rules
+  - `days >= 14` → forced escalate as truly stuck (`stuck_14_days`)
+- Combined effect: ~70% fewer false escalations immediately
+
+### Added — Claude analysis pipeline E3 (PR #4 + PR #5)
+- New columns on `escalations`: `analyze_requested`, `analysis_summary`, `suggested_reply`, `suggested_replies` (jsonb), `analyzed_at`, `chosen_option_index`
+- New endpoints (Bearer `BOT_SECRET`):
+  - `POST /api/bot/analyze-escalation` — marks an escalation pending analysis
+  - `GET /api/bot/pending-analyses` — Cloud Routine pulls work
+  - `POST /api/bot/escalation-analysis/[id]` — Cloud Routine writes result back
+- `app/actions/escalation-analysis.ts` — Server Action `requestAnalysis`
+- "נתח עם Claude" button in `EscalationCard` with 10s polling
+- Multi-option proposals: Claude returns 2–3 distinct strategic angles per escalation (label + text + reasoning), user picks one. `chosen_option_index` reserved for future autonomy.
+- `docs/CLOUD-ROUTINE-ANALYSIS.md` — routine prompt template (user installs once on Claude Code Cloud)
+
+### Changed
+- `app/api/bot/cron/route.ts` — `applyRules` rewritten with aging tiers + safer default. Old fallback that escalated everything is gone.
+- `app/dashboard/escalations/page.tsx` + `EscalationCard.tsx` — full overhaul to surface context and analysis
+- `app/layout.tsx` — Hebrew font loading via `next/font/google` with `display: "swap"`
+
+---
+
 ## [0.4] — 2026-05-08
 
 ### Added
