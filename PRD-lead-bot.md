@@ -1,9 +1,9 @@
 # PRD — Albadi Lead Bot
 
-**גרסה:** 0.1 (טיוטה)
-**תאריך:** 2026-05-06
+**גרסה:** 0.4
+**תאריך עדכון:** 2026-05-08
 **בעלים:** אלי
-**סטטוס:** לאישור
+**סטטוס:** פעיל (deployed)
 
 ---
 
@@ -278,6 +278,19 @@
 
 ---
 
+## 4.7 רישום לידים אוטומטי
+
+כל ליד חדש מתווסף ל-DB דרך webhook:
+- **Endpoint:** `POST /api/bot/new-lead`
+- **Auth:** `Bearer <BOT_SECRET>`
+- **Body:** `{ "subscriber_id": "...", "name": "..." }`
+
+**חיבור ב-ManyChat:** בכל Flow של כניסת ליד (WhatsApp trigger + Facebook form trigger) — הוסף שלב "External Request" עם הפרטים הנ"ל. ManyChat יקרא ל-endpoint אוטומטית כשליד נכנס.
+
+הבוט (`/api/bot/cron`) שולף לידים פעילים מ-DB במקום מרשימה hardcoded.
+
+---
+
 ## 5. נתונים — Schema (Neon)
 
 ```sql
@@ -342,6 +355,16 @@ CREATE TABLE anomalies (
   description     TEXT,
   detected_at     TIMESTAMPTZ DEFAULT NOW(),
   resolved_at     TIMESTAMPTZ
+);
+
+-- Active leads (replaces hardcoded KNOWN_SUBSCRIBERS)
+CREATE TABLE leads (
+  manychat_sub_id TEXT PRIMARY KEY,
+  name            TEXT,
+  active          BOOLEAN NOT NULL DEFAULT TRUE,
+  source          TEXT DEFAULT 'manual',  -- 'manual' | 'seed' | 'manychat_webhook'
+  created_at      TIMESTAMPTZ DEFAULT NOW(),
+  updated_at      TIMESTAMPTZ DEFAULT NOW()
 );
 ```
 
