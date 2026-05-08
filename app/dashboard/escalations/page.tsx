@@ -29,6 +29,7 @@ export default async function EscalationsPage() {
         analyzeRequested: escalations.analyzeRequested,
         analysisSummary: escalations.analysisSummary,
         suggestedReply: escalations.suggestedReply,
+        suggestedReplies: escalations.suggestedReplies,
         analyzedAt: escalations.analyzedAt,
         aiUsed: decisions.aiUsed,
         aiConfidence: decisions.aiConfidence,
@@ -74,6 +75,7 @@ export default async function EscalationsPage() {
                   analyzeRequested: e.analyzeRequested,
                   analysisSummary: e.analysisSummary ?? null,
                   suggestedReply: e.suggestedReply ?? null,
+                  suggestedReplies: e.suggestedReplies ?? null,
                   analyzedAt: e.analyzedAt ? e.analyzedAt.toISOString() : null,
                   context: {
                     currentTag: input.currentTag ?? null,

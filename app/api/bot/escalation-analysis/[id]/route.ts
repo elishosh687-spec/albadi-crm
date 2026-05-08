@@ -20,9 +20,23 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     return NextResponse.json({ error: "invalid id" }, { status: 400 });
   }
 
-  const body = (await req.json()) as { summary?: string; suggested_reply?: string };
+  const body = (await req.json()) as {
+    summary?: string;
+    suggested_reply?: string;
+    suggested_replies?: { label: string; text: string; reasoning: string }[];
+  };
   const summary = body.summary?.trim();
-  const suggestedReply = body.suggested_reply?.trim();
+  const legacyReply = body.suggested_reply?.trim();
+  const replies = Array.isArray(body.suggested_replies)
+    ? body.suggested_replies
+        .filter((r) => r && typeof r.text === "string" && r.text.trim().length > 0)
+        .map((r) => ({
+          label: String(r.label ?? "אופציה").trim().slice(0, 40),
+          text: r.text.trim(),
+          reasoning: String(r.reasoning ?? "").trim(),
+        }))
+        .slice(0, 5)
+    : null;
 
   if (!summary) {
     return NextResponse.json({ error: "missing summary" }, { status: 400 });
@@ -32,7 +46,8 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     .update(escalations)
     .set({
       analysisSummary: summary,
-      suggestedReply: suggestedReply ?? null,
+      suggestedReply: legacyReply ?? null,
+      suggestedReplies: replies && replies.length > 0 ? replies : null,
       analyzedAt: new Date(),
     })
     .where(eq(escalations.id, id));

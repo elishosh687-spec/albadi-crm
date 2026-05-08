@@ -17,6 +17,12 @@ interface EscalationContext {
   ruleMatched: string | null;
 }
 
+interface SuggestedReply {
+  label: string;
+  text: string;
+  reasoning: string;
+}
+
 interface Escalation {
   id: number;
   leadName: string | null;
@@ -28,6 +34,7 @@ interface Escalation {
   analyzeRequested?: boolean;
   analysisSummary?: string | null;
   suggestedReply?: string | null;
+  suggestedReplies?: SuggestedReply[] | null;
   analyzedAt?: string | null;
 }
 
@@ -289,21 +296,45 @@ export function EscalationCard({ escalation }: { escalation: Escalation }) {
               }}
             >
               {escalation.analysisSummary}
-              {escalation.suggestedReply && (
+            </div>
+
+            {/* Multi-option suggested replies (preferred) */}
+            {escalation.suggestedReplies && escalation.suggestedReplies.length > 0 ? (
+              <div style={{ marginTop: space.md }}>
+                <p style={fieldLabelStyle}>אופציות תגובה — בחר אחת</p>
+                <div style={{ display: "flex", flexDirection: "column", gap: space.sm }}>
+                  {escalation.suggestedReplies.map((opt, idx) => (
+                    <ReplyOption
+                      key={idx}
+                      option={opt}
+                      isSelected={draft === opt.text}
+                      onPick={() => setDraft(opt.text)}
+                    />
+                  ))}
+                </div>
+              </div>
+            ) : escalation.suggestedReply ? (
+              // Backward compat: single suggested_reply
+              <div style={{ marginTop: space.md }}>
+                <p style={fieldLabelStyle}>תגובה מוצעת</p>
                 <div
                   style={{
-                    marginTop: space.md,
-                    paddingTop: space.md,
-                    borderTop: `1px solid ${colors.accent}33`,
+                    padding: space.md,
+                    background: colors.surface,
+                    border: `1px solid ${colors.rule}`,
+                    borderRadius: radius.md,
+                    fontSize: size.sm,
+                    color: colors.ink,
+                    lineHeight: leading.normal,
+                    fontFamily: fontStack.body,
+                    fontStyle: "italic",
                   }}
                 >
-                  <div style={{ fontWeight: weight.semibold, marginBottom: space.xs }}>
-                    תגובה מוצעת:
-                  </div>
-                  <div style={{ fontStyle: "italic" }}>{escalation.suggestedReply}</div>
+                  {escalation.suggestedReply}
                   <button
                     onClick={() => setDraft(escalation.suggestedReply!)}
                     style={{
+                      display: "block",
                       marginTop: space.sm,
                       background: "none",
                       border: `1px solid ${colors.accent}`,
@@ -319,8 +350,8 @@ export function EscalationCard({ escalation }: { escalation: Escalation }) {
                     השתמש בתגובה הזו
                   </button>
                 </div>
-              )}
-            </div>
+              </div>
+            ) : null}
           </>
         ) : isPendingAnalysis ? (
           <div
@@ -421,6 +452,92 @@ export function EscalationCard({ escalation }: { escalation: Escalation }) {
         </p>
       )}
     </article>
+  );
+}
+
+function ReplyOption({
+  option,
+  isSelected,
+  onPick,
+}: {
+  option: SuggestedReply;
+  isSelected: boolean;
+  onPick: () => void;
+}) {
+  return (
+    <div
+      style={{
+        padding: space.md,
+        background: isSelected ? colors.accentSoft : colors.surface,
+        border: `1px solid ${isSelected ? colors.accent : colors.rule}`,
+        borderRadius: radius.md,
+        fontFamily: fontStack.body,
+        transition: "background 150ms, border-color 150ms",
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          marginBottom: space.sm,
+          gap: space.sm,
+        }}
+      >
+        <span
+          style={{
+            fontSize: size.xs,
+            fontWeight: weight.semibold,
+            letterSpacing: "0.08em",
+            textTransform: "uppercase",
+            color: colors.accent,
+          }}
+        >
+          {option.label}
+        </span>
+        <button
+          onClick={onPick}
+          style={{
+            background: isSelected ? colors.accent : "transparent",
+            color: isSelected ? colors.surface : colors.accent,
+            border: `1px solid ${colors.accent}`,
+            fontSize: size.xs,
+            fontWeight: weight.medium,
+            padding: `${space.xs}px ${space.md}px`,
+            borderRadius: radius.sm,
+            cursor: "pointer",
+            fontFamily: fontStack.body,
+          }}
+        >
+          {isSelected ? "✓ נבחרה" : "השתמש בזו"}
+        </button>
+      </div>
+      <div
+        style={{
+          fontSize: size.sm,
+          color: colors.ink,
+          lineHeight: leading.normal,
+          marginBottom: option.reasoning ? space.sm : 0,
+          whiteSpace: "pre-wrap",
+        }}
+      >
+        {option.text}
+      </div>
+      {option.reasoning && (
+        <div
+          style={{
+            fontSize: size.xs,
+            color: colors.inkMuted,
+            lineHeight: leading.normal,
+            paddingTop: space.xs,
+            borderTop: `1px solid ${colors.ruleSoft}`,
+          }}
+        >
+          <span style={{ fontWeight: weight.medium }}>למה: </span>
+          {option.reasoning}
+        </div>
+      )}
+    </div>
   );
 }
 

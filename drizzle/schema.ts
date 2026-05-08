@@ -59,7 +59,11 @@ export const escalations = pgTable("escalations", {
   analyzeRequested: boolean("analyze_requested").default(false).notNull(),
   analysisSummary: text("analysis_summary"),
   suggestedReply: text("suggested_reply"),
+  suggestedReplies: jsonb("suggested_replies").$type<
+    { label: string; text: string; reasoning: string }[]
+  >(),
   analyzedAt: timestamp("analyzed_at", { withTimezone: true }),
+  chosenOptionIndex: integer("chosen_option_index"),
 });
 
 export const anomalies = pgTable("anomalies", {
