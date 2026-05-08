@@ -1,9 +1,11 @@
 # Albadi CRM — סקירת מוצר מקיפה
 
-**גרסה:** 1.0 (MVP)
-**תאריך:** 2026-05-07
+**גרסה:** 1.5
+**תאריך עדכון:** 2026-05-08
 **בעלים:** אלי שושן
 **רישיון:** פרטי
+
+> **מה חדש ב-1.5:** רידיזיין מלא של ה-UI (Editorial Hebrew, Frank Ruhl Libre + Heebo, פלטת "Paper & Ink" עם accent טרקוטה), 3 כפתורי פעולה בדאשבורד, escalation context grid עם נתוני הליד המלאים, A+F (default → no_action + aging tiers — מוריד ~70% מההסלמות), E3 (Cloud Routine שמנתחת הסלמות ב-Claude ומציעה 2-3 אופציות תגובה), דף `/dashboard/instructions` חדש.
 
 ---
 
@@ -84,12 +86,22 @@
 **URL:** https://albadi-crm.vercel.app
 **סיסמה:** `Eb688837`
 
+**עיצוב:** Editorial Hebrew minimalism — Frank Ruhl Libre (display) + Heebo (body), פלטת "Paper & Ink" (paper `#faf8f4`, ink `#1c1815`, accent טרקוטה `#9c4221`). UI מבוסס `lib/ui/tokens.ts` + 5 פרימיטיבים (`Page`, `Card`, `Button`, `Stat`, `Badge`).
+
 | מסך | מה מציג |
 |-----|---------|
-| `/dashboard` | בית — הסלמות פתוחות + סטטיסטיקת בוט 24 שעות אחרונות |
-| `/dashboard/escalations` | תור הסלמות מלא עם textarea לטיוטה + כפתורי אישור/דחייה |
-| `/dashboard/pipeline` | תצוגת kanban — לידים מקובצים לפי תג |
-| `/dashboard/runs` | היסטוריית כל ריצות הבוט עם סטטוס |
+| `/` | landing — כותרת ענק "הבוט שמטפל בלידים שלך" + CTA לדאשבורד |
+| `/login` | הזנת סיסמה |
+| `/dashboard` | בית — 3 כפתורי פעולה (הרץ בוט / re-engagement / הוסף ליד) + הסלמות פתוחות (עם תג, ימים שקט, ₪quote inline) + סטטיסטיקת בוט 24 שעות |
+| `/dashboard/escalations` | תור הסלמות עם **context grid** (4 שדות: ימים ללא מגע, הצעה ב-₪, ביטחון AI, כלל שזוהה) + Notes מלא מ-ManyChat + סיבה לספק + ניתוח Claude (אם נתבקש) + textarea לטיוטה + 3 כפתורי החלטה |
+| `/dashboard/pipeline` | תצוגת kanban — 8 עמודות לפי תג, צבעי הפלטה |
+| `/dashboard/runs` | היסטוריית כל ריצות הבוט עם סטטוס, tabular numerals |
+| `/dashboard/instructions` | מדריך שימוש מלא בעברית — מה הבוט עושה, מתי להפעיל כל כפתור, איך לטפל בהסלמה |
+
+**3 כפתורי פעולה ב-`/dashboard`** (דרך Server Actions שלא חושפות `BOT_SECRET` ל-client):
+1. **הרץ בוט עכשיו** → POST `/api/bot/cron`, מציג תוצאה (לידים, החלטות, הסלמות)
+2. **שלח Re-engagement** → POST `/api/bot/restart-send` עם confirm. fire-and-forget (route maxDuration=120s)
+3. **הוסף ליד ידני** → טופס subscriber_id + שם → POST `/api/bot/new-lead`
 
 ### 3.2 Repo בקוד פתוח (פרטי)
 
@@ -119,14 +131,24 @@
 **Tables:** 6
 **ניהול:** https://console.neon.tech
 
-### 3.5 Anthropic Cloud Routine
+### 3.5 Anthropic Cloud Routines (3 routines)
 
-**Routine name:** `Albadi Bot — Hourly Run`
-**Routine ID:** `trig_01VWAWDtdHXqMMProUCseKbj`
-**URL:** https://claude.ai/code/routines/trig_01VWAWDtdHXqMMProUCseKbj
-**לוח זמנים:** `0 * * * *` (כל שעה עגולה UTC)
-**מודל:** claude-sonnet-4-6
-**מטרה:** מבצע curl POST לאנדפוינט `/api/bot/cron` בכל שעה. רץ בענן Anthropic — לא תלוי במחשב המקומי.
+**1. `Albadi Bot — Hourly Run`** (קיים, כרגע disabled)
+- **ID:** `trig_01VWAWDtdHXqMMProUCseKbj`
+- **לו"ז:** `0 * * * *` (כל שעה עגולה UTC)
+- **מטרה:** curl POST ל-`/api/bot/cron`. ניתן להפעיל ידנית מהדאשבורד (כפתור "הרץ בוט עכשיו").
+
+**2. `Albadi Restart Send`** (one-time)
+- **ID:** `trig_01YQr7ccHcm3eRyW7GiwgQhe`
+- **לו"ז:** רץ פעם אחת ב-2026-05-10 08:00 UTC (יום ראשון 11:00 ישראל)
+- **מטרה:** curl POST ל-`/api/bot/restart-send` — שולח template re-engagement לכל הלידים התקועים.
+
+**3. `Albadi — Escalation Analysis`** (חדש, 1.5)
+- **ID:** `trig_011ZchHAtDCNM2Hx4Pki1NQL`
+- **לו"ז:** `0 * * * *` (כל שעה — מינימום cron של Anthropic Cloud Routines)
+- **מטרה:** Polls `/api/bot/pending-analyses`. עבור כל הסלמה שאתה לחצת עליה "נתח עם Claude" בדאשבורד — Claude קורא את הקונטקסט המלא, מנסח summary בעברית, מציע 2–3 אופציות תגובה (label + text + reasoning), ושולח חזרה ל-`/api/bot/escalation-analysis/{id}`. אתה בוחר אופציה ב-UI.
+- **מודל:** claude-sonnet-4-6
+- **prompt template:** מתועד ב-[`docs/CLOUD-ROUTINE-ANALYSIS.md`](docs/CLOUD-ROUTINE-ANALYSIS.md)
 
 ### 3.6 ManyChat (קיים מראש)
 
@@ -162,21 +184,25 @@
 
 ## 5. פיצ'רים שנבנו
 
-### 5.1 Dashboard (4 מסכים)
-- ✅ דף בית עם הסלמות פתוחות וסטטיסטיקת 24 שעות
-- ✅ עמוד הסלמות עם textarea לטיוטת תגובה ו-3 כפתורים (אישור / דחייה / ידני)
-- ✅ Pipeline view בסגנון Kanban — 8 עמודות לפי תג
-- ✅ History view של כל ריצות הבוט
-- ✅ עיצוב RTL בעברית
+### 5.1 Dashboard (7 מסכים)
+- ✅ דף landing (`/`) — hero ענק "הבוט שמטפל בלידים שלך" + CTA
+- ✅ דף login (`/login`) — focus ring accent
+- ✅ דף בית (`/dashboard`) — 3 כפתורי פעולה ידנית + הסלמות פתוחות עם meta line + Stats 24 שעות
+- ✅ עמוד הסלמות (`/dashboard/escalations`) — context grid מלא + Notes + ניתוח Claude + 2-3 אופציות תגובה ניתנות לבחירה + textarea + 3 כפתורי החלטה
+- ✅ Pipeline view (`/dashboard/pipeline`) — 8 עמודות לפי תג בצבעי פלטה
+- ✅ History view (`/dashboard/runs`) — tabular numerals
+- ✅ מדריך (`/dashboard/instructions`) — תיעוד שימוש בעברית
+- ✅ עיצוב RTL בעברית, Editorial Hebrew minimalism
 - ✅ Authentication עם middleware (cookie httpOnly + secure)
 
-### 5.2 Bot — אוטומציה שעתית
-- ✅ שולף 32 לידים מ-ManyChat דרך API
-- ✅ מסווג לפי 7 כללים (`no_contact_5days`, `interested_no_quote_5days`, וכו')
-- ✅ מסלים מקרים דו-משמעיים: בקשת מחיר/הנחה, בקשת שיחה, סבסקרייבר שבור, עסקה גדולה ארוכה
+### 5.2 Bot — אוטומציה
+- ✅ שולף לידים פעילים מטבלת `leads` ומסווג לפי כללים
+- ✅ **Aging tiers** (1.5): 0-3 ימים → no_action (תקופת חסד), 3-14 → כללים, 14+ → escalate "stuck"
+- ✅ **Default → no_action** (1.5): לידים שלא תפסו כלל לא מסולמים יותר (פרט לאחרי 14 ימים)
+- ✅ Escalation triggers: pricing keywords, human request, broken lead, big quote stuck, stuck 14+ days
 - ✅ שומר כל החלטה ל-DB עם audit מלא
-- ✅ מצב read-only ב-MVP (לא מתייג בפועל ב-ManyChat — רק רושם הצעה)
-- ✅ רץ אוטומטית כל שעה דרך Anthropic Cloud Routine
+- ✅ Phase 1 read-only (לא מתייג בפועל ב-ManyChat — רק רושם הצעה)
+- ✅ ניתן להפעיל ידנית מהדאשבורד (כפתור "הרץ בוט עכשיו") או דרך Cloud Routine
 
 ### 5.3 Templates ל-WhatsApp
 - ✅ 6 templates ראשונים נרשמו ב-Meta וממתינים לאישור (1-3 ימים):
@@ -207,6 +233,32 @@
 - ✅ סקריפט `bot:list-leads` — תצוגת לידים פתוחים עם הצעות פעולה
 - ✅ סקריפט `bot:run-once` — ריצה ידנית מקומית
 - ✅ סקריפט `pull-tone-samples` — שליפת notes מ-ManyChat לכיול טון
+
+### 5.7 רידיזיין UI (1.5)
+- ✅ Design tokens (`lib/ui/tokens.ts`) — Paper & Ink palette, מקור אמת יחיד
+- ✅ 5 פרימיטיבים משותפים (`Page`, `Card`, `Button`, `Stat`, `Badge`) ב-`components/ui/`
+- ✅ Frank Ruhl Libre + Heebo דרך `next/font/google` (hebrew + latin subsets)
+- ✅ הסרת אימוג'ים מ-UI structural — צבעי dot + Badge במקום
+- ✅ Hairline rules במקום צללים — היררכיה מ-typography ו-spacing
+
+### 5.8 כפתורי פעולה (1.5)
+- ✅ 3 Server Actions ב-`app/actions/bot.ts` — `BOT_SECRET` נשאר server-side, לא מודלף ל-client bundle
+- ✅ "הרץ בוט עכשיו" עם pending state ותוצאה
+- ✅ "שלח Re-engagement" עם confirm dialog ו-fire-and-forget
+- ✅ "הוסף ליד ידני" עם form (subscriber_id חובה, שם אופציונלי)
+
+### 5.9 Escalation context (1.5)
+- ✅ JOIN של `escalations` עם `decisions` כדי להציג `input_messages` JSONB
+- ✅ Context grid 4 שדות: ימים ללא מגע (אדום אם ≥7), הצעה ב-₪ (accent אם ≥10k), ביטחון AI %, כלל שזוהה
+- ✅ Notes מלא מ-ManyChat (collapsible מ-220 תווים)
+- ✅ דף בית מציג meta line inline לכל הסלמה: `tag · X ימים שקט · ₪quote`
+
+### 5.10 Claude analysis pipeline (1.5)
+- ✅ עמודות חדשות ב-`escalations`: `analyze_requested`, `analysis_summary`, `suggested_reply`, `suggested_replies` (jsonb), `analyzed_at`, `chosen_option_index`
+- ✅ 3 endpoints חדשים: `analyze-escalation`, `pending-analyses`, `escalation-analysis/[id]` (Bearer `BOT_SECRET`)
+- ✅ Server Action `requestAnalysis` ב-`app/actions/escalation-analysis.ts`
+- ✅ UI: כפתור "נתח עם Claude" → polling כל 10 שניות → הצגת summary + 2-3 אופציות תגובה
+- ✅ User-in-the-loop: Claude מציע, אתה בוחר. עתידי: `chosen_option_index` יאסוף נתונים לאוטונומיה הדרגתית
 
 ---
 
@@ -325,9 +377,14 @@ RemoteTrigger update enabled=false
 - 3 פעמים ביום סיכום אוטומטי (`albadi_eli_summary`)
 **עבודה:** ~3 ימים (template approvals + parser ידי לתגובות 1/2/3 + cron לסיכומים)
 
-### 8.4 Phase 5 — דרפט חכם
-**מה:** במקום textarea ריק, הדאשבורד מציג טיוטה מוצעת שמיוצרת על ידי Claude לפי ההקשר
-**עבודה:** ~2 ימים — צריך אינטגרציה של Anthropic SDK ב-Vercel + prompt engineering
+### 8.4 Phase 5 — דרפט חכם ✅ (גרסה 1.5)
+**מה נעשה:** במקום textarea ריק, הדאשבורד מציג ניתוח Claude עם 2-3 אופציות תגובה (label + text + reasoning). אתה בוחר, ה-textarea מתמלא. דרך Cloud Routine במנוי Claude שלך — ללא `ANTHROPIC_API_KEY` ו-$0/חודש.
+**עבודה שנותרה (אופציונלי):** הוספת D — קריאת הודעות אמיתיות מ-ManyChat per lead. כרגע Claude מנתח מ-`notes` בלבד.
+
+### 8.4b Phase 5b — אוטונומיה הדרגתית (עתידי)
+**מתי:** אחרי איסוף 200+ הסלמות עם `chosen_option_index` ממולא
+**מה:** "אם הסלמה דומה לאלה שתמיד נבחרה בה אופציה X (90%+) → הפעל אוטומטית במקום לסלם"
+**עבודה:** ~3 ימים (similarity + threshold + override)
 
 ### 8.5 Phase 6 — Webhook real-time
 **מה:** במקום polling שעתי, ManyChat שולח webhook בכל הודעה חדשה. הסלמות מתגלות תוך שניות.
