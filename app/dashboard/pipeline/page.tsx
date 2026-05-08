@@ -1,6 +1,8 @@
 import { db } from "@/lib/db";
-import { decisions } from "@/drizzle/schema";
-import { desc, sql } from "drizzle-orm";
+import { sql } from "drizzle-orm";
+import { Page } from "@/components/ui/Page";
+import { Dot } from "@/components/ui/Badge";
+import { colors, fontStack, leading, radius, size, space, weight } from "@/lib/ui/tokens";
 
 export const dynamic = "force-dynamic";
 
@@ -13,21 +15,31 @@ const TAGS_ORDER = [
   "לקוח",
   "לא_ענה",
   "לא_רלוונטי",
-];
+] as const;
 
-const TAG_COLORS: Record<string, string> = {
-  ליד_חדש: "#e3f2fd",
-  מעוניין: "#fff3e0",
-  הצעה_בוט: "#fff8e1",
-  הצעה_טלפון: "#fff8e1",
-  בתהליך: "#e8f5e9",
-  לקוח: "#dcedc8",
-  לא_ענה: "#f5f5f5",
-  לא_רלוונטי: "#fafafa",
+type Tag = (typeof TAGS_ORDER)[number];
+
+const TAG_TONE: Record<Tag, "info" | "accent" | "warning" | "success" | "neutral" | "danger"> = {
+  ליד_חדש: "info",
+  מעוניין: "accent",
+  הצעה_בוט: "warning",
+  הצעה_טלפון: "warning",
+  בתהליך: "success",
+  לקוח: "success",
+  לא_ענה: "neutral",
+  לא_רלוונטי: "neutral",
+};
+
+const TONE_BG: Record<string, string> = {
+  info: colors.infoBg,
+  accent: colors.accentSoft,
+  warning: colors.warningBg,
+  success: colors.successBg,
+  neutral: colors.surfaceMuted,
+  danger: colors.dangerBg,
 };
 
 export default async function PipelinePage() {
-  // Get latest classification per subscriber
   const latest = await db.execute(sql`
     SELECT DISTINCT ON (manychat_sub_id)
       manychat_sub_id, lead_name, classified_tag, created_at
@@ -51,50 +63,115 @@ export default async function PipelinePage() {
 
   return (
     <div>
-      <h1 style={{ margin: 0, fontSize: 28 }}>Pipeline</h1>
-      <p style={{ color: "#666", marginTop: 4, fontSize: 14 }}>
-        תצוגת kanban — לידים מקובצים לפי תג. מבוסס על הסיווג האחרון של הבוט לכל ליד.
-      </p>
+      <Page
+        title="Pipeline"
+        description="תצוגת kanban — לידים מקובצים לפי הסיווג האחרון של הבוט. נגלל אופקית."
+      />
 
       {rows.length === 0 ? (
-        <p style={{ color: "#888", marginTop: 16 }}>
-          אין עדיין החלטות מהבוט. ה-pipeline ימולא אחרי שהבוט ירוץ.
-        </p>
+        <p style={emptyStyle}>אין עדיין החלטות מהבוט. ה-pipeline יתמלא אחרי שהבוט ירוץ.</p>
       ) : (
-        <div style={{ display: "flex", gap: 12, overflowX: "auto", marginTop: 16 }}>
-          {TAGS_ORDER.map((tag) => (
-            <div
-              key={tag}
-              style={{
-                minWidth: 200,
-                background: TAG_COLORS[tag] ?? "#f7f7f8",
-                borderRadius: 8,
-                padding: 12,
-              }}
-            >
-              <h3 style={{ margin: 0, fontSize: 13, color: "#333" }}>
-                {tag} ({grouped[tag].length})
-              </h3>
-              <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 6 }}>
-                {grouped[tag].map((r) => (
-                  <div
-                    key={r.manychat_sub_id}
+        <div
+          style={{
+            display: "flex",
+            gap: space.md,
+            overflowX: "auto",
+            paddingBottom: space.lg,
+          }}
+        >
+          {TAGS_ORDER.map((tag) => {
+            const tone = TAG_TONE[tag];
+            return (
+              <div
+                key={tag}
+                style={{
+                  minWidth: 220,
+                  maxWidth: 240,
+                  background: TONE_BG[tone],
+                  borderRadius: radius.lg,
+                  padding: space.md,
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: space.sm,
+                }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    paddingBottom: space.sm,
+                    borderBottom: `1px solid ${colors.rule}`,
+                  }}
+                >
+                  <span style={{ display: "flex", alignItems: "center", gap: space.xs }}>
+                    <Dot tone={tone} />
+                    <span
+                      style={{
+                        fontFamily: fontStack.body,
+                        fontSize: size.sm,
+                        fontWeight: weight.semibold,
+                        color: colors.ink,
+                      }}
+                    >
+                      {tag.replace(/_/g, " ")}
+                    </span>
+                  </span>
+                  <span
                     style={{
-                      background: "#fff",
-                      padding: 8,
-                      borderRadius: 4,
-                      fontSize: 13,
-                      border: "1px solid rgba(0,0,0,0.05)",
+                      fontFamily: fontStack.display,
+                      fontSize: size.md,
+                      color: colors.inkMuted,
+                      fontVariantNumeric: "tabular-nums",
                     }}
                   >
-                    {r.lead_name ?? r.manychat_sub_id}
-                  </div>
-                ))}
+                    {grouped[tag].length}
+                  </span>
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: space.xs }}>
+                  {grouped[tag].length === 0 ? (
+                    <span
+                      style={{
+                        fontFamily: fontStack.body,
+                        fontSize: size.xs,
+                        color: colors.inkSubtle,
+                        padding: `${space.xs}px ${space.sm}px`,
+                      }}
+                    >
+                      ריק
+                    </span>
+                  ) : (
+                    grouped[tag].map((r) => (
+                      <div
+                        key={r.manychat_sub_id}
+                        style={{
+                          background: colors.surface,
+                          padding: `${space.sm}px ${space.md}px`,
+                          borderRadius: radius.sm,
+                          fontFamily: fontStack.body,
+                          fontSize: size.sm,
+                          color: colors.ink,
+                          lineHeight: leading.normal,
+                        }}
+                      >
+                        {r.lead_name ?? r.manychat_sub_id}
+                      </div>
+                    ))
+                  )}
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>
   );
 }
+
+const emptyStyle: React.CSSProperties = {
+  fontFamily: fontStack.body,
+  fontSize: size.md,
+  color: colors.inkMuted,
+  margin: 0,
+  padding: `${space["2xl"]}px 0`,
+};

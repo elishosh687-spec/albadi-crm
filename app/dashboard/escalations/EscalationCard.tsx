@@ -1,6 +1,9 @@
 "use client";
 
 import { useState } from "react";
+import { Button } from "@/components/ui/Button";
+import { Badge, Dot } from "@/components/ui/Badge";
+import { colors, fontStack, leading, radius, size, space, weight } from "@/lib/ui/tokens";
 
 interface Escalation {
   id: number;
@@ -19,13 +22,23 @@ const REASON_HE: Record<string, string> = {
   unknown: "לא מוכר / שבור",
 };
 
+const REASON_TONE: Record<string, "warning" | "danger" | "accent" | "neutral"> = {
+  low_confidence: "warning",
+  human_request: "accent",
+  pricing: "warning",
+  complaint: "danger",
+  unknown: "neutral",
+};
+
 export function EscalationCard({ escalation }: { escalation: Escalation }) {
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
 
   async function resolve(action: string, note?: string) {
     setBusy(true);
+    setError(null);
     try {
       const res = await fetch("/api/actions/escalate", {
         method: "POST",
@@ -34,8 +47,8 @@ export function EscalationCard({ escalation }: { escalation: Escalation }) {
       });
       if (!res.ok) throw new Error("failed");
       setDone(true);
-    } catch (e) {
-      alert("שגיאה בעדכון");
+    } catch {
+      setError("שגיאה בעדכון");
     } finally {
       setBusy(false);
     }
@@ -46,60 +59,96 @@ export function EscalationCard({ escalation }: { escalation: Escalation }) {
       <div
         id={`e-${escalation.id}`}
         style={{
-          padding: 16,
-          border: "1px solid #d1e7dd",
-          background: "#f0f9f4",
-          borderRadius: 8,
-          marginBottom: 12,
-          color: "#2d7a3a",
+          padding: space.lg,
+          borderTop: `1px solid ${colors.rule}`,
+          color: colors.success,
+          fontSize: size.sm,
+          fontFamily: fontStack.body,
+          fontWeight: weight.medium,
         }}
       >
-        ✓ {escalation.leadName ?? escalation.manychatSubId} — נסגר
+        נסגר — {escalation.leadName ?? escalation.manychatSubId}
       </div>
     );
   }
 
+  const reasonTone = REASON_TONE[escalation.reason] ?? "neutral";
+
   return (
-    <div
+    <article
       id={`e-${escalation.id}`}
       style={{
-        padding: 16,
-        border: "1px solid #e5e5e5",
-        background: "#fff",
-        borderRadius: 8,
-        marginBottom: 12,
+        padding: `${space.xl}px 0`,
+        borderTop: `1px solid ${colors.rule}`,
       }}
     >
-      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
-        <div>
-          <strong style={{ fontSize: 16 }}>{escalation.leadName ?? escalation.manychatSubId}</strong>
-          <span style={{ marginInlineStart: 8, color: "#888", fontSize: 13 }}>
-            — {REASON_HE[escalation.reason] ?? escalation.reason}
-          </span>
+      <header
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "flex-start",
+          gap: space.md,
+          marginBottom: space.md,
+        }}
+      >
+        <div style={{ display: "flex", gap: space.sm, alignItems: "center", flexWrap: "wrap" }}>
+          <Dot tone={reasonTone} />
+          <strong
+            style={{
+              fontFamily: fontStack.body,
+              fontSize: size.lg,
+              fontWeight: weight.semibold,
+              color: colors.ink,
+            }}
+          >
+            {escalation.leadName ?? escalation.manychatSubId}
+          </strong>
+          <Badge tone={reasonTone}>{REASON_HE[escalation.reason] ?? escalation.reason}</Badge>
         </div>
-        <span style={{ color: "#888", fontSize: 12 }}>
+        <span
+          style={{
+            color: colors.inkSubtle,
+            fontSize: size.xs,
+            fontFamily: fontStack.body,
+            fontVariantNumeric: "tabular-nums",
+            flexShrink: 0,
+          }}
+        >
           {new Date(escalation.createdAt).toLocaleString("he-IL")}
         </span>
-      </div>
+      </header>
 
       {escalation.triggerText && (
         <div
           style={{
-            background: "#f7f7f8",
-            padding: 8,
-            borderRadius: 4,
-            fontSize: 13,
-            color: "#444",
-            marginBottom: 12,
+            background: colors.surfaceMuted,
+            padding: space.md,
+            borderRadius: radius.md,
+            fontSize: size.sm,
+            color: colors.ink,
+            lineHeight: leading.normal,
+            marginBottom: space.lg,
+            fontFamily: fontStack.body,
           }}
         >
           {escalation.triggerText}
         </div>
       )}
 
-      <div style={{ marginBottom: 12 }}>
-        <label style={{ display: "block", fontSize: 13, color: "#666", marginBottom: 4 }}>
-          טיוטת תגובה (לערוך לפני אישור):
+      <div style={{ marginBottom: space.md }}>
+        <label
+          style={{
+            display: "block",
+            fontFamily: fontStack.body,
+            fontSize: size.xs,
+            fontWeight: weight.medium,
+            letterSpacing: "0.12em",
+            textTransform: "uppercase",
+            color: colors.inkMuted,
+            marginBottom: space.xs,
+          }}
+        >
+          טיוטת תגובה
         </label>
         <textarea
           value={draft}
@@ -108,63 +157,51 @@ export function EscalationCard({ escalation }: { escalation: Escalation }) {
           rows={3}
           style={{
             width: "100%",
-            padding: 8,
-            borderRadius: 4,
-            border: "1px solid #ddd",
-            fontFamily: "inherit",
-            fontSize: 14,
+            padding: space.md,
+            borderRadius: radius.md,
+            border: `1px solid ${colors.rule}`,
+            fontFamily: fontStack.body,
+            fontSize: size.md,
+            color: colors.ink,
+            background: colors.surface,
             resize: "vertical",
+            outline: "none",
+            lineHeight: leading.normal,
           }}
         />
       </div>
 
-      <div style={{ display: "flex", gap: 8 }}>
-        <button
+      <div style={{ display: "flex", gap: space.sm, flexWrap: "wrap" }}>
+        <Button
+          variant="primary"
           onClick={() => resolve("sent", `נשלח: ${draft.slice(0, 100)}`)}
           disabled={busy || !draft.trim()}
-          style={btnPrimary(busy || !draft.trim())}
+          pending={busy}
+          pendingText="שולח..."
         >
-          ✓ אשר ושלח
-        </button>
-        <button
-          onClick={() => resolve("dismissed")}
-          disabled={busy}
-          style={btnSecondary(busy)}
-        >
-          ✗ דחה
-        </button>
-        <button
-          onClick={() => resolve("manual", "אטפל ידנית")}
-          disabled={busy}
-          style={btnSecondary(busy)}
-        >
-          ✏️ אטפל ידנית
-        </button>
+          אשר ושלח
+        </Button>
+        <Button variant="secondary" onClick={() => resolve("dismissed")} disabled={busy}>
+          דחה
+        </Button>
+        <Button variant="ghost" onClick={() => resolve("manual", "אטפל ידנית")} disabled={busy}>
+          אטפל ידנית
+        </Button>
       </div>
-    </div>
+
+      {error && (
+        <p
+          style={{
+            color: colors.danger,
+            fontSize: size.sm,
+            marginTop: space.sm,
+            marginBottom: 0,
+            fontFamily: fontStack.body,
+          }}
+        >
+          {error}
+        </p>
+      )}
+    </article>
   );
-}
-
-function btnPrimary(disabled: boolean): React.CSSProperties {
-  return {
-    background: disabled ? "#ccc" : "#1a1a1a",
-    color: "#fff",
-    padding: "8px 16px",
-    borderRadius: 6,
-    fontSize: 13,
-    border: "none",
-    cursor: disabled ? "not-allowed" : "pointer",
-  };
-}
-
-function btnSecondary(disabled: boolean): React.CSSProperties {
-  return {
-    background: "#fff",
-    color: "#1a1a1a",
-    padding: "8px 16px",
-    borderRadius: 6,
-    fontSize: 13,
-    border: "1px solid #ddd",
-    cursor: disabled ? "not-allowed" : "pointer",
-  };
 }

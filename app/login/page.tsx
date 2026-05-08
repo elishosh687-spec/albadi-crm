@@ -1,4 +1,5 @@
 import { LoginForm } from "./LoginForm";
+import { colors, fontStack, headingStyle, leading, size, space, weight } from "@/lib/ui/tokens";
 
 export default function LoginPage({
   searchParams,
@@ -12,23 +13,47 @@ export default function LoginPage({
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        background: "#f7f7f8",
-        fontFamily: "system-ui, -apple-system, sans-serif",
+        background: colors.paper,
+        padding: space.lg,
       }}
     >
       <div
         style={{
-          background: "#fff",
-          padding: 32,
+          background: colors.surface,
+          padding: `${space["2xl"]}px ${space.xl}px`,
+          border: `1px solid ${colors.rule}`,
           borderRadius: 8,
-          border: "1px solid #e5e5e5",
-          width: 360,
+          width: "100%",
+          maxWidth: 380,
           textAlign: "center",
         }}
       >
-        <h1 style={{ margin: 0, fontSize: 24 }}>🎒 Albadi CRM</h1>
-        <p style={{ color: "#666", fontSize: 14, marginTop: 8 }}>
-          הזן סיסמה כדי להיכנס
+        <p
+          style={{
+            fontFamily: fontStack.body,
+            fontSize: size.xs,
+            fontWeight: weight.medium,
+            letterSpacing: "0.18em",
+            textTransform: "uppercase",
+            color: colors.accent,
+            margin: 0,
+            marginBottom: space.sm,
+          }}
+        >
+          Albadi · CRM
+        </p>
+        <h1 style={{ ...headingStyle("h2"), fontSize: size["2xl"] }}>כניסה</h1>
+        <p
+          style={{
+            fontFamily: fontStack.body,
+            color: colors.inkMuted,
+            fontSize: size.sm,
+            lineHeight: leading.normal,
+            marginTop: space.sm,
+            marginBottom: space.xl,
+          }}
+        >
+          הזן סיסמה כדי להמשיך לדאשבורד.
         </p>
         <LoginForm searchParams={searchParams} />
       </div>

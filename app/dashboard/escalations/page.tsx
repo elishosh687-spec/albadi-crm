@@ -1,7 +1,10 @@
 import { db } from "@/lib/db";
 import { escalations } from "@/drizzle/schema";
-import { desc, isNull, isNotNull, sql } from "drizzle-orm";
+import { desc, isNull, isNotNull } from "drizzle-orm";
 import { EscalationCard } from "./EscalationCard";
+import { Page } from "@/components/ui/Page";
+import { Card } from "@/components/ui/Card";
+import { colors, fontStack, leading, size, space, weight } from "@/lib/ui/tokens";
 
 export const dynamic = "force-dynamic";
 
@@ -22,42 +25,75 @@ export default async function EscalationsPage() {
 
   return (
     <div>
-      <h1 style={{ margin: 0, fontSize: 28 }}>הסלמות</h1>
+      <Page
+        title="הסלמות"
+        description="לידים שהבוט לא יכול לטפל בהם לבד — נושאי מחיר, בקשות לשיחה, או כל מקרה שדורש שיקול דעת אנושי."
+      />
 
-      <h2 style={{ marginTop: 24, fontSize: 16 }}>
-        🟡 פתוחות ({open.length})
-      </h2>
-      {open.length === 0 ? (
-        <p style={{ color: "#888" }}>אין הסלמות פתוחות.</p>
-      ) : (
-        open.map((e) => <EscalationCard key={e.id} escalation={{
-          id: e.id,
-          leadName: e.leadName ?? null,
-          manychatSubId: e.manychatSubId,
-          reason: e.reason,
-          triggerText: e.triggerText ?? null,
-          createdAt: e.createdAt.toISOString(),
-        }} />)
-      )}
+      <Card title="פתוחות" eyebrow={`${open.length} ממתינות`}>
+        {open.length === 0 ? (
+          <p style={emptyStyle}>אין הסלמות פתוחות.</p>
+        ) : (
+          open.map((e) => (
+            <EscalationCard
+              key={e.id}
+              escalation={{
+                id: e.id,
+                leadName: e.leadName ?? null,
+                manychatSubId: e.manychatSubId,
+                reason: e.reason,
+                triggerText: e.triggerText ?? null,
+                createdAt: e.createdAt.toISOString(),
+              }}
+            />
+          ))
+        )}
+      </Card>
 
-      <h2 style={{ marginTop: 32, fontSize: 16, color: "#888" }}>
-        ⚪ סגורות (אחרונות {closed.length})
-      </h2>
-      {closed.map((e) => (
-        <div
-          key={e.id}
-          style={{
-            padding: 12,
-            borderBottom: "1px solid #eee",
-            color: "#888",
-            fontSize: 13,
-          }}
-        >
-          <strong>{e.leadName ?? e.manychatSubId}</strong> — {e.reason}
-          {" "}— {e.resolutionNote ?? "טופל"}
-          {e.resolvedAt && ` (${new Date(e.resolvedAt).toLocaleString("he-IL")})`}
-        </div>
-      ))}
+      <Card title="סגורות" eyebrow={`אחרונות ${closed.length}`}>
+        {closed.length === 0 ? (
+          <p style={emptyStyle}>אין הסלמות סגורות עדיין.</p>
+        ) : (
+          <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
+            {closed.map((e, i) => (
+              <li
+                key={e.id}
+                style={{
+                  borderTop: i === 0 ? "none" : `1px solid ${colors.ruleSoft}`,
+                  padding: `${space.md}px 0`,
+                  display: "flex",
+                  justifyContent: "space-between",
+                  gap: space.lg,
+                  fontSize: size.sm,
+                  color: colors.inkMuted,
+                  lineHeight: leading.normal,
+                  fontFamily: fontStack.body,
+                }}
+              >
+                <div>
+                  <strong style={{ color: colors.ink, fontWeight: weight.medium }}>
+                    {e.leadName ?? e.manychatSubId}
+                  </strong>{" "}
+                  — {e.reason} — {e.resolutionNote ?? "טופל"}
+                </div>
+                {e.resolvedAt && (
+                  <span style={{ fontVariantNumeric: "tabular-nums", flexShrink: 0 }}>
+                    {new Date(e.resolvedAt).toLocaleString("he-IL")}
+                  </span>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+      </Card>
     </div>
   );
 }
+
+const emptyStyle: React.CSSProperties = {
+  fontFamily: fontStack.body,
+  fontSize: size.md,
+  color: colors.inkMuted,
+  margin: 0,
+  padding: `${space.lg}px 0`,
+};
