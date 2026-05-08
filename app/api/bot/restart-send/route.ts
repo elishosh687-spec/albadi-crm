@@ -9,8 +9,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSubscriber, getFieldValue } from "@/lib/manychat/client";
 import { TAG_IDS, TERMINAL_TAGS, MANYCHAT_BASE, MANYCHAT_TOKEN } from "@/lib/manychat/config";
 import { db } from "@/lib/db";
-import { repliesSent } from "@/drizzle/schema";
-import { gte } from "drizzle-orm";
+import { repliesSent, leads } from "@/drizzle/schema";
+import { gte, eq } from "drizzle-orm";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
@@ -23,17 +23,6 @@ const FLOW_NS: Record<string, string> = {
   TEMPLATE_QUESTIONNAIRE_INCOMPLETE: "content20260508152940_284953",
   TEMPLATE_LAST_ATTEMPT:             "content20260508152938_498910",
 };
-
-const KNOWN_SUBSCRIBERS = [
-  "1290975646", "335237336", "843866619", "1567115769", "2035644170",
-  "1884294789", "1602697859", "933250256", "1945485008", "2121695200",
-  "21902603", "342493590", "1342391971", "647013452", "235009133",
-  "1109877399", "1233780185", "1168653412", "1745508158", "1559024601",
-  "940287852", "969554152", "24594158", "1513055758", "1986772872",
-  "3658499", "1890126495", "248319497", "221677737", "347894123",
-  "869425808", "1768242677", "956589647", "771607363", "1720207271",
-  "774945448", "1701651968", "1258938556", "306431271",
-];
 
 const tagIdToName: Record<number, string> = Object.fromEntries(
   Object.entries(TAG_IDS).map(([k, v]) => [v, k])
@@ -102,12 +91,15 @@ export async function POST(req: NextRequest) {
     .where(gte(repliesSent.sentAt, todayStart));
   const alreadySentIds = new Set(alreadySent.map((r) => r.id));
 
+  const activeLeads = await db.select({ id: leads.manychatSubId }).from(leads).where(eq(leads.active, true));
+  const subscriberIds = activeLeads.map((r) => r.id);
+
   let sent = 0;
   let skipped = 0;
   let failed = 0;
   const failures: string[] = [];
 
-  for (const sid of KNOWN_SUBSCRIBERS) {
+  for (const sid of subscriberIds) {
     if (alreadySentIds.has(sid)) { skipped++; continue; }
 
     try {

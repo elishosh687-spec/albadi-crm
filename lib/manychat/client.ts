@@ -1,4 +1,7 @@
 import { MANYCHAT_BASE, MANYCHAT_TOKEN, FIELD_IDS, FieldName } from "./config";
+import { db } from "../db";
+import { leads } from "../../drizzle/schema";
+import { eq } from "drizzle-orm";
 
 const headers = {
   Authorization: `Bearer ${MANYCHAT_TOKEN}`,
@@ -73,4 +76,9 @@ export function getFieldValue(
 ): string | number | null {
   const id = FIELD_IDS[name];
   return fields.find((f) => f.id === id)?.value ?? null;
+}
+
+export async function getActiveSubscriberIds(): Promise<string[]> {
+  const rows = await db.select({ id: leads.manychatSubId }).from(leads).where(eq(leads.active, true));
+  return rows.map((r) => r.id);
 }

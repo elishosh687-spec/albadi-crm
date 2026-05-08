@@ -72,3 +72,12 @@ export const botConfig = pgTable("bot_config", {
   value: text("value"),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 });
+
+export const leads = pgTable("leads", {
+  manychatSubId: text("manychat_sub_id").primaryKey(),
+  name: text("name"),
+  active: boolean("active").default(true).notNull(),
+  source: text("source").default("manual"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+});
