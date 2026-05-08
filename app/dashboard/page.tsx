@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
 import { escalations, decisions, botRuns, repliesSent } from "@/drizzle/schema";
-import { desc, isNull, sql } from "drizzle-orm";
+import { desc, eq, isNull, sql } from "drizzle-orm";
 import Link from "next/link";
 import { Page } from "@/components/ui/Page";
 import { Card } from "@/components/ui/Card";
@@ -37,8 +37,10 @@ async function getStats() {
         triggerText: escalations.triggerText,
         createdAt: escalations.createdAt,
         manychatSubId: escalations.manychatSubId,
+        inputMessages: decisions.inputMessages,
       })
       .from(escalations)
+      .leftJoin(decisions, eq(escalations.decisionId, decisions.id))
       .where(isNull(escalations.resolvedAt))
       .orderBy(desc(escalations.createdAt))
       .limit(20),
@@ -99,65 +101,92 @@ export default async function DashboardHome() {
           <p style={emptyStyle}>אין הסלמות פתוחות. הבוט מטפל בכל הלידים אוטומטית.</p>
         ) : (
           <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
-            {openEscalations.map((e, i) => (
-              <li
-                key={e.id}
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  gap: space.lg,
-                  padding: `${space.md}px 0`,
-                  borderTop: i === 0 ? "none" : `1px solid ${colors.ruleSoft}`,
-                }}
-              >
-                <div style={{ minWidth: 0, flex: 1 }}>
-                  <div
-                    style={{
-                      display: "flex",
-                      gap: space.sm,
-                      alignItems: "center",
-                      marginBottom: 2,
-                    }}
-                  >
-                    <Dot tone={REASON_TONE[e.reason] ?? "neutral"} />
-                    <strong style={{ fontSize: size.md, fontWeight: weight.semibold }}>
-                      {e.leadName ?? e.manychatSubId}
-                    </strong>
-                    <Badge tone={REASON_TONE[e.reason] ?? "neutral"}>
-                      {REASON_HE[e.reason] ?? e.reason}
-                    </Badge>
-                  </div>
-                  {e.triggerText && (
-                    <div
-                      style={{
-                        color: colors.inkMuted,
-                        fontSize: size.sm,
-                        marginInlineStart: space.lg,
-                        lineHeight: leading.normal,
-                      }}
-                    >
-                      {e.triggerText}
-                    </div>
-                  )}
-                </div>
-                <Link
-                  href={`/dashboard/escalations#e-${e.id}`}
+            {openEscalations.map((e, i) => {
+              const input = (e.inputMessages ?? {}) as {
+                currentTag?: string | null;
+                daysSinceContact?: number | null;
+                quoteTotal?: number | null;
+              };
+              const meta: string[] = [];
+              if (input.currentTag) meta.push(input.currentTag.replace(/_/g, " "));
+              if (input.daysSinceContact != null) meta.push(`${input.daysSinceContact} ימים שקט`);
+              if (input.quoteTotal != null && input.quoteTotal > 0)
+                meta.push(`₪${input.quoteTotal.toLocaleString("he-IL")}`);
+              return (
+                <li
+                  key={e.id}
                   style={{
-                    fontFamily: fontStack.body,
-                    fontSize: size.sm,
-                    fontWeight: weight.medium,
-                    color: colors.ink,
-                    border: `1px solid ${colors.rule}`,
-                    padding: `${space.xs}px ${space.md}px`,
-                    borderRadius: 6,
-                    flexShrink: 0,
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    gap: space.lg,
+                    padding: `${space.md}px 0`,
+                    borderTop: i === 0 ? "none" : `1px solid ${colors.ruleSoft}`,
                   }}
                 >
-                  טפל
-                </Link>
-              </li>
-            ))}
+                  <div style={{ minWidth: 0, flex: 1 }}>
+                    <div
+                      style={{
+                        display: "flex",
+                        gap: space.sm,
+                        alignItems: "center",
+                        flexWrap: "wrap",
+                        marginBottom: 2,
+                      }}
+                    >
+                      <Dot tone={REASON_TONE[e.reason] ?? "neutral"} />
+                      <strong style={{ fontSize: size.md, fontWeight: weight.semibold }}>
+                        {e.leadName ?? e.manychatSubId}
+                      </strong>
+                      <Badge tone={REASON_TONE[e.reason] ?? "neutral"}>
+                        {REASON_HE[e.reason] ?? e.reason}
+                      </Badge>
+                    </div>
+                    {meta.length > 0 && (
+                      <div
+                        style={{
+                          color: colors.inkMuted,
+                          fontSize: size.xs,
+                          marginInlineStart: space.lg,
+                          marginTop: space.xs,
+                          fontVariantNumeric: "tabular-nums",
+                        }}
+                      >
+                        {meta.join(" · ")}
+                      </div>
+                    )}
+                    {e.triggerText && (
+                      <div
+                        style={{
+                          color: colors.ink,
+                          fontSize: size.sm,
+                          marginInlineStart: space.lg,
+                          marginTop: space.xs,
+                          lineHeight: leading.normal,
+                        }}
+                      >
+                        {e.triggerText}
+                      </div>
+                    )}
+                  </div>
+                  <Link
+                    href={`/dashboard/escalations#e-${e.id}`}
+                    style={{
+                      fontFamily: fontStack.body,
+                      fontSize: size.sm,
+                      fontWeight: weight.medium,
+                      color: colors.ink,
+                      border: `1px solid ${colors.rule}`,
+                      padding: `${space.xs}px ${space.md}px`,
+                      borderRadius: 6,
+                      flexShrink: 0,
+                    }}
+                  >
+                    טפל
+                  </Link>
+                </li>
+              );
+            })}
           </ul>
         )}
       </Card>

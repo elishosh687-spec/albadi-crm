@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
-import { escalations } from "@/drizzle/schema";
-import { desc, isNull, isNotNull } from "drizzle-orm";
+import { escalations, decisions } from "@/drizzle/schema";
+import { desc, eq, isNull, isNotNull } from "drizzle-orm";
 import { EscalationCard } from "./EscalationCard";
 import { Page } from "@/components/ui/Page";
 import { Card } from "@/components/ui/Card";
@@ -8,11 +8,32 @@ import { colors, fontStack, leading, size, space, weight } from "@/lib/ui/tokens
 
 export const dynamic = "force-dynamic";
 
+interface DecisionInput {
+  notes?: string | null;
+  currentTag?: string | null;
+  daysSinceContact?: number | null;
+  quoteTotal?: number | null;
+}
+
 export default async function EscalationsPage() {
   const [open, closed] = await Promise.all([
     db
-      .select()
+      .select({
+        id: escalations.id,
+        manychatSubId: escalations.manychatSubId,
+        leadName: escalations.leadName,
+        reason: escalations.reason,
+        triggerText: escalations.triggerText,
+        createdAt: escalations.createdAt,
+        decisionId: escalations.decisionId,
+        aiUsed: decisions.aiUsed,
+        aiConfidence: decisions.aiConfidence,
+        ruleMatched: decisions.ruleMatched,
+        prevTag: decisions.prevTag,
+        inputMessages: decisions.inputMessages,
+      })
       .from(escalations)
+      .leftJoin(decisions, eq(escalations.decisionId, decisions.id))
       .where(isNull(escalations.resolvedAt))
       .orderBy(desc(escalations.createdAt)),
     db
@@ -34,19 +55,31 @@ export default async function EscalationsPage() {
         {open.length === 0 ? (
           <p style={emptyStyle}>אין הסלמות פתוחות.</p>
         ) : (
-          open.map((e) => (
-            <EscalationCard
-              key={e.id}
-              escalation={{
-                id: e.id,
-                leadName: e.leadName ?? null,
-                manychatSubId: e.manychatSubId,
-                reason: e.reason,
-                triggerText: e.triggerText ?? null,
-                createdAt: e.createdAt.toISOString(),
-              }}
-            />
-          ))
+          open.map((e) => {
+            const input = (e.inputMessages ?? {}) as DecisionInput;
+            return (
+              <EscalationCard
+                key={e.id}
+                escalation={{
+                  id: e.id,
+                  leadName: e.leadName ?? null,
+                  manychatSubId: e.manychatSubId,
+                  reason: e.reason,
+                  triggerText: e.triggerText ?? null,
+                  createdAt: e.createdAt.toISOString(),
+                  context: {
+                    currentTag: input.currentTag ?? null,
+                    notes: input.notes ?? null,
+                    quoteTotal: input.quoteTotal ?? null,
+                    daysSinceContact: input.daysSinceContact ?? null,
+                    aiUsed: e.aiUsed ?? false,
+                    aiConfidence: e.aiConfidence ? Number(e.aiConfidence) : null,
+                    ruleMatched: e.ruleMatched ?? null,
+                  },
+                }}
+              />
+            );
+          })
         )}
       </Card>
 
