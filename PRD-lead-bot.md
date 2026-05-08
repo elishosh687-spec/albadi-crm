@@ -547,4 +547,22 @@ albadi-crm/
 
 ---
 
+---
+
+## 12. Backlog — שיפורים ידועים
+
+### 🔴 אבטחה
+- [ ] **`legacy/daily_calls.py`** — מספרי טלפון אישיים hardcoded בקוד מקור. להעביר ל-`.env` או למחוק.
+
+### 🟠 דינמיות (hardcoded → DB/env)
+- [ ] **`TAG_IDS` / `FIELD_IDS`** ב-`lib/manychat/config.ts` — כרגע hardcoded. לשלוף מ-ManyChat API או להעביר ל-`.env`.
+- [ ] **`FLOW_NS`** ב-`app/api/bot/restart-send/route.ts` — flow namespace strings hardcoded. להעביר ל-`.env`.
+- [ ] **ספי חוקים** — `10000` ש"ח (high-value), `5` ימים (no-contact), `7` ימים (stable tag) — מפוזרים בקוד. לרכז ב-`bot_config` table או `.env`.
+
+### 🟡 אינטגרציה ManyChat
+- [ ] **Webhook "ליד חדש"** — הגדר HTTP Request action בכל Flow כניסה (WhatsApp + Facebook form) לקרוא ל-`/api/bot/new-lead`. עד אז לידים חדשים לא נרשמים אוטומטית.
+
+### 🟢 דאשבורד — פעולות
+- [ ] לשונית "פעולות" עם כפתורים: שלח restart batch, הרץ בוט ידנית, הוסף ליד ידנית, רשימת flows פעילים.
+
 **סוף PRD.**
