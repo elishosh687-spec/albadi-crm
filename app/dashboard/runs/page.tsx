@@ -1,6 +1,9 @@
 import { db } from "@/lib/db";
 import { botRuns } from "@/drizzle/schema";
 import { desc } from "drizzle-orm";
+import { Page } from "@/components/ui/Page";
+import { Badge } from "@/components/ui/Badge";
+import { colors, fontStack, size, space, weight } from "@/lib/ui/tokens";
 
 export const dynamic = "force-dynamic";
 
@@ -9,70 +12,120 @@ export default async function RunsPage() {
 
   return (
     <div>
-      <h1 style={{ margin: 0, fontSize: 28 }}>היסטוריית ריצות</h1>
+      <Page
+        title="היסטוריית ריצות"
+        description="50 הריצות האחרונות של הבוט. כל ריצה היא סבב סיווג של כל הלידים הפעילים."
+      />
 
       {runs.length === 0 ? (
-        <p style={{ color: "#888", marginTop: 16 }}>הבוט עדיין לא רץ.</p>
+        <p style={emptyStyle}>הבוט עדיין לא רץ.</p>
       ) : (
-        <table style={{ width: "100%", marginTop: 16, borderCollapse: "collapse" }}>
-          <thead>
-            <tr style={{ background: "#f7f7f8" }}>
-              <th style={th()}>זמן</th>
-              <th style={th()}>סטטוס</th>
-              <th style={th()}>לידים</th>
-              <th style={th()}>החלטות</th>
-              <th style={th()}>תגובות</th>
-              <th style={th()}>הסלמות</th>
-              <th style={th()}>שגיאות</th>
-            </tr>
-          </thead>
-          <tbody>
-            {runs.map((r) => (
-              <tr key={r.id} style={{ borderBottom: "1px solid #eee" }}>
-                <td style={td()}>{new Date(r.startedAt).toLocaleString("he-IL")}</td>
-                <td style={td()}>
-                  <StatusBadge status={r.status} />
-                </td>
-                <td style={td()}>{r.leadsSeen ?? 0}</td>
-                <td style={td()}>{r.decisions ?? 0}</td>
-                <td style={td()}>{r.repliesSent ?? 0}</td>
-                <td style={td()}>{r.escalations ?? 0}</td>
-                <td style={td()}>{r.errors ?? 0}</td>
+        <div style={{ overflowX: "auto", marginTop: space.lg }}>
+          <table
+            style={{
+              width: "100%",
+              borderCollapse: "collapse",
+              fontFamily: fontStack.body,
+              fontSize: size.sm,
+            }}
+          >
+            <thead>
+              <tr style={{ borderBottom: `1px solid ${colors.rule}` }}>
+                <th style={th}>זמן</th>
+                <th style={th}>סטטוס</th>
+                <th style={thNum}>לידים</th>
+                <th style={thNum}>החלטות</th>
+                <th style={thNum}>תגובות</th>
+                <th style={thNum}>הסלמות</th>
+                <th style={thNum}>שגיאות</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {runs.map((r) => (
+                <tr
+                  key={r.id}
+                  style={{
+                    borderBottom: `1px solid ${colors.ruleSoft}`,
+                  }}
+                >
+                  <td
+                    style={{
+                      ...td,
+                      fontVariantNumeric: "tabular-nums",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {new Date(r.startedAt).toLocaleString("he-IL")}
+                  </td>
+                  <td style={td}>
+                    <StatusBadge status={r.status} />
+                  </td>
+                  <td style={tdNum}>{r.leadsSeen ?? 0}</td>
+                  <td style={tdNum}>{r.decisions ?? 0}</td>
+                  <td style={tdNum}>{r.repliesSent ?? 0}</td>
+                  <td style={tdNum}>{r.escalations ?? 0}</td>
+                  <td
+                    style={{
+                      ...tdNum,
+                      color: (r.errors ?? 0) > 0 ? colors.danger : colors.inkMuted,
+                    }}
+                  >
+                    {r.errors ?? 0}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
     </div>
   );
 }
 
 function StatusBadge({ status }: { status: string | null }) {
-  const map: Record<string, { color: string; bg: string; label: string }> = {
-    success: { color: "#2d7a3a", bg: "#f0f9f4", label: "הצליח" },
-    partial: { color: "#a05a00", bg: "#fff8eb", label: "חלקי" },
-    failed: { color: "#c1272d", bg: "#fee9e9", label: "נכשל" },
-    running: { color: "#0066cc", bg: "#eff5ff", label: "רץ עכשיו" },
+  const map: Record<string, { tone: "success" | "warning" | "danger" | "info" | "neutral"; label: string }> = {
+    success: { tone: "success", label: "הצליח" },
+    partial: { tone: "warning", label: "חלקי" },
+    failed: { tone: "danger", label: "נכשל" },
+    running: { tone: "info", label: "רץ עכשיו" },
   };
-  const s = (status && map[status]) || { color: "#888", bg: "#f0f0f0", label: status ?? "?" };
-  return (
-    <span
-      style={{
-        background: s.bg,
-        color: s.color,
-        padding: "2px 8px",
-        borderRadius: 4,
-        fontSize: 12,
-      }}
-    >
-      {s.label}
-    </span>
-  );
+  const s = (status && map[status]) || { tone: "neutral" as const, label: status ?? "—" };
+  return <Badge tone={s.tone}>{s.label}</Badge>;
 }
 
-function th(): React.CSSProperties {
-  return { textAlign: "right", padding: 10, fontSize: 13, color: "#666", fontWeight: 600 };
-}
-function td(): React.CSSProperties {
-  return { padding: 10, fontSize: 13 };
-}
+const th: React.CSSProperties = {
+  textAlign: "start",
+  padding: `${space.sm}px ${space.md}px ${space.sm}px 0`,
+  fontSize: size.xs,
+  fontWeight: weight.medium,
+  color: colors.inkMuted,
+  letterSpacing: "0.12em",
+  textTransform: "uppercase",
+};
+
+const thNum: React.CSSProperties = {
+  ...th,
+  textAlign: "end",
+  paddingInlineStart: space.md,
+};
+
+const td: React.CSSProperties = {
+  padding: `${space.md}px ${space.md}px ${space.md}px 0`,
+  color: colors.ink,
+  fontSize: size.sm,
+};
+
+const tdNum: React.CSSProperties = {
+  ...td,
+  textAlign: "end",
+  fontVariantNumeric: "tabular-nums",
+  paddingInlineStart: space.md,
+};
+
+const emptyStyle: React.CSSProperties = {
+  fontFamily: fontStack.body,
+  fontSize: size.md,
+  color: colors.inkMuted,
+  margin: 0,
+  padding: `${space.lg}px 0`,
+};

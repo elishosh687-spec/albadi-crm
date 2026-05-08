@@ -1,14 +1,43 @@
 import { db } from "@/lib/db";
 import { escalations, decisions, botRuns, repliesSent } from "@/drizzle/schema";
-import { desc, eq, isNull, sql } from "drizzle-orm";
+import { desc, isNull, sql } from "drizzle-orm";
 import Link from "next/link";
+import { Page } from "@/components/ui/Page";
+import { Card } from "@/components/ui/Card";
+import { Stat, StatRow } from "@/components/ui/Stat";
+import { Badge, Dot } from "@/components/ui/Badge";
+import { ActionButtons } from "@/components/dashboard/ActionButtons";
+import { colors, fontStack, leading, size, space, weight } from "@/lib/ui/tokens";
 
 export const dynamic = "force-dynamic";
+
+const REASON_HE: Record<string, string> = {
+  low_confidence: "Claude לא בטוחה",
+  human_request: "ביקש שיחה אישית",
+  pricing: "נושא מחיר/הנחה",
+  complaint: "תלונה",
+  unknown: "לא מוכר / שבור",
+};
+
+const REASON_TONE: Record<string, "warning" | "danger" | "accent" | "neutral"> = {
+  low_confidence: "warning",
+  human_request: "accent",
+  pricing: "warning",
+  complaint: "danger",
+  unknown: "neutral",
+};
 
 async function getStats() {
   const [openEscalations, todayDecisions, todayReplies, lastRun] = await Promise.all([
     db
-      .select({ id: escalations.id, leadName: escalations.leadName, reason: escalations.reason, triggerText: escalations.triggerText, createdAt: escalations.createdAt, manychatSubId: escalations.manychatSubId })
+      .select({
+        id: escalations.id,
+        leadName: escalations.leadName,
+        reason: escalations.reason,
+        triggerText: escalations.triggerText,
+        createdAt: escalations.createdAt,
+        manychatSubId: escalations.manychatSubId,
+      })
       .from(escalations)
       .where(isNull(escalations.resolvedAt))
       .orderBy(desc(escalations.createdAt))
@@ -23,6 +52,7 @@ async function getStats() {
       .where(sql`${repliesSent.sentAt} >= now() - interval '24 hours'`),
     db.select().from(botRuns).orderBy(desc(botRuns.startedAt)).limit(1),
   ]);
+
   return {
     openEscalations,
     todayDecisions: todayDecisions[0]?.count ?? 0,
@@ -33,45 +63,97 @@ async function getStats() {
 
 export default async function DashboardHome() {
   const { openEscalations, todayDecisions, todayReplies, lastRun } = await getStats();
+  const today = new Date();
+  const dateLabel = today.toLocaleDateString("he-IL", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
 
   return (
     <div>
-      <h1 style={{ margin: 0, fontSize: 28 }}>בית</h1>
-      <p style={{ color: "#666", marginTop: 4 }}>
-        תאריך: {new Date().toLocaleDateString("he-IL")}
-      </p>
+      <Page
+        eyebrow={dateLabel}
+        title="בית"
+        description="סקירה יומית של פעילות הבוט והלידים שמחכים לטיפול ידני."
+      />
 
-      {/* Open escalations */}
-      <Card title={`🟡 ${openEscalations.length} לקוחות מחכים לטיפול`}>
+      <ActionButtons />
+
+      <Card
+        title={`לקוחות מחכים לטיפול`}
+        eyebrow={`${openEscalations.length} פתוחות`}
+        actions={
+          openEscalations.length > 0 && (
+            <Link
+              href="/dashboard/escalations"
+              style={{ fontSize: size.sm, fontFamily: fontStack.body, fontWeight: weight.medium }}
+            >
+              עבור לכל ההסלמות ←
+            </Link>
+          )
+        }
+      >
         {openEscalations.length === 0 ? (
-          <Empty text="אין הסלמות פתוחות. הבוט מטפל בכל הלידים אוטומטית." />
+          <p style={emptyStyle}>אין הסלמות פתוחות. הבוט מטפל בכל הלידים אוטומטית.</p>
         ) : (
           <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
-            {openEscalations.map((e) => (
+            {openEscalations.map((e, i) => (
               <li
                 key={e.id}
                 style={{
-                  padding: 12,
-                  borderBottom: "1px solid #eee",
                   display: "flex",
                   justifyContent: "space-between",
                   alignItems: "center",
+                  gap: space.lg,
+                  padding: `${space.md}px 0`,
+                  borderTop: i === 0 ? "none" : `1px solid ${colors.ruleSoft}`,
                 }}
               >
-                <div>
-                  <div style={{ fontWeight: 600 }}>
-                    {e.leadName ?? e.manychatSubId}{" "}
-                    <span style={{ color: "#888", fontWeight: 400, fontSize: 13 }}>
-                      — {reasonHe(e.reason)}
-                    </span>
+                <div style={{ minWidth: 0, flex: 1 }}>
+                  <div
+                    style={{
+                      display: "flex",
+                      gap: space.sm,
+                      alignItems: "center",
+                      marginBottom: 2,
+                    }}
+                  >
+                    <Dot tone={REASON_TONE[e.reason] ?? "neutral"} />
+                    <strong style={{ fontSize: size.md, fontWeight: weight.semibold }}>
+                      {e.leadName ?? e.manychatSubId}
+                    </strong>
+                    <Badge tone={REASON_TONE[e.reason] ?? "neutral"}>
+                      {REASON_HE[e.reason] ?? e.reason}
+                    </Badge>
                   </div>
                   {e.triggerText && (
-                    <div style={{ color: "#666", fontSize: 13, marginTop: 2 }}>
+                    <div
+                      style={{
+                        color: colors.inkMuted,
+                        fontSize: size.sm,
+                        marginInlineStart: space.lg,
+                        lineHeight: leading.normal,
+                      }}
+                    >
                       {e.triggerText}
                     </div>
                   )}
                 </div>
-                <Link href={`/dashboard/escalations#e-${e.id}`} style={btnStyle()}>
+                <Link
+                  href={`/dashboard/escalations#e-${e.id}`}
+                  style={{
+                    fontFamily: fontStack.body,
+                    fontSize: size.sm,
+                    fontWeight: weight.medium,
+                    color: colors.ink,
+                    border: `1px solid ${colors.rule}`,
+                    padding: `${space.xs}px ${space.md}px`,
+                    borderRadius: 6,
+                    flexShrink: 0,
+                  }}
+                >
                   טפל
                 </Link>
               </li>
@@ -80,74 +162,42 @@ export default async function DashboardHome() {
         )}
       </Card>
 
-      {/* Bot summary */}
-      <Card title="🤖 פעילות הבוט (24 שעות אחרונות)">
-        <Stat label="החלטות" value={todayDecisions} />
-        <Stat label="הודעות נשלחו" value={todayReplies} />
-        {lastRun && (
-          <p style={{ color: "#666", fontSize: 13, marginTop: 12, marginBottom: 0 }}>
-            ריצה אחרונה: {new Date(lastRun.startedAt).toLocaleString("he-IL")} —{" "}
-            {lastRun.status ?? "?"}
-          </p>
-        )}
-        {!lastRun && (
-          <p style={{ color: "#888", fontSize: 13, marginTop: 12, marginBottom: 0 }}>
-            הבוט עדיין לא רץ. הפעל אצלך ב-Claude Code: <code>/loop 1h /albadi-bot-run</code>
-          </p>
-        )}
+      <Card title="פעילות הבוט" eyebrow="24 שעות אחרונות">
+        <StatRow>
+          <Stat label="החלטות" value={todayDecisions} />
+          <Stat label="הודעות נשלחו" value={todayReplies} />
+          <Stat label="הסלמות פתוחות" value={openEscalations.length} />
+        </StatRow>
+        <p
+          style={{
+            fontFamily: fontStack.body,
+            fontSize: size.sm,
+            color: colors.inkMuted,
+            marginTop: space.xl,
+            marginBottom: 0,
+          }}
+        >
+          {lastRun ? (
+            <>
+              ריצה אחרונה:{" "}
+              <span style={{ fontVariantNumeric: "tabular-nums" }}>
+                {new Date(lastRun.startedAt).toLocaleString("he-IL")}
+              </span>{" "}
+              — {lastRun.status ?? "—"}
+            </>
+          ) : (
+            <>הבוט עדיין לא רץ. השתמש בכפתור &quot;הרץ בוט עכשיו&quot; למעלה כדי להתחיל.</>
+          )}
+        </p>
       </Card>
     </div>
   );
 }
 
-function reasonHe(reason: string): string {
-  const map: Record<string, string> = {
-    low_confidence: "Claude לא בטוחה",
-    human_request: "ביקש שיחה אישית",
-    pricing: "נושא מחיר/הנחה",
-    complaint: "תלונה",
-    unknown: "לא מוכר / שבור",
-  };
-  return map[reason] ?? reason;
-}
-
-function Card({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <section
-      style={{
-        background: "#fff",
-        border: "1px solid #e5e5e5",
-        borderRadius: 8,
-        padding: 16,
-        marginTop: 16,
-      }}
-    >
-      <h2 style={{ margin: 0, marginBottom: 12, fontSize: 16 }}>{title}</h2>
-      {children}
-    </section>
-  );
-}
-
-function Empty({ text }: { text: string }) {
-  return <p style={{ color: "#888", fontSize: 14, margin: 0 }}>{text}</p>;
-}
-
-function Stat({ label, value }: { label: string; value: number }) {
-  return (
-    <span style={{ marginInlineEnd: 24, fontSize: 14 }}>
-      <span style={{ color: "#666" }}>{label}: </span>
-      <span style={{ fontWeight: 600 }}>{value}</span>
-    </span>
-  );
-}
-
-function btnStyle() {
-  return {
-    background: "#1a1a1a",
-    color: "#fff",
-    padding: "8px 14px",
-    borderRadius: 6,
-    fontSize: 13,
-    textDecoration: "none",
-  };
-}
+const emptyStyle: React.CSSProperties = {
+  fontFamily: fontStack.body,
+  fontSize: size.md,
+  color: colors.inkMuted,
+  margin: 0,
+  padding: `${space.lg}px 0`,
+};

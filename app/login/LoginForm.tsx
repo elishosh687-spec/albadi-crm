@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, use } from "react";
 import { useRouter } from "next/navigation";
-import { use } from "react";
+import { Button } from "@/components/ui/Button";
+import { colors, fontStack, radius, size, space } from "@/lib/ui/tokens";
 
 export function LoginForm({
   searchParams,
@@ -40,7 +41,7 @@ export function LoginForm({
   }
 
   return (
-    <form onSubmit={submit} style={{ marginTop: 16 }}>
+    <form onSubmit={submit} style={{ textAlign: "start" }}>
       <input
         type="password"
         value={password}
@@ -49,33 +50,42 @@ export function LoginForm({
         autoFocus
         style={{
           width: "100%",
-          padding: 10,
-          fontSize: 14,
-          borderRadius: 6,
-          border: "1px solid #ddd",
+          padding: `${space.md}px ${space.md}px`,
+          fontSize: size.md,
+          fontFamily: fontStack.body,
+          color: colors.ink,
+          background: colors.surface,
+          borderRadius: radius.md,
+          border: `1px solid ${colors.rule}`,
           boxSizing: "border-box",
+          outline: "none",
         }}
       />
       {error && (
-        <div style={{ color: "#c1272d", fontSize: 13, marginTop: 8 }}>{error}</div>
+        <div
+          style={{
+            color: colors.danger,
+            fontSize: size.sm,
+            marginTop: space.sm,
+            fontFamily: fontStack.body,
+          }}
+          role="alert"
+        >
+          {error}
+        </div>
       )}
-      <button
+      <Button
         type="submit"
-        disabled={busy || !password}
-        style={{
-          marginTop: 12,
-          width: "100%",
-          padding: 10,
-          background: busy || !password ? "#ccc" : "#1a1a1a",
-          color: "#fff",
-          border: "none",
-          borderRadius: 6,
-          fontSize: 14,
-          cursor: busy ? "wait" : "pointer",
-        }}
+        disabled={!password}
+        pending={busy}
+        pendingText="מתחבר..."
+        variant="primary"
+        size="md"
+        fullWidth
+        style={{ marginTop: space.lg }}
       >
-        {busy ? "..." : "כניסה"}
-      </button>
+        כניסה
+      </Button>
     </form>
   );
 }
