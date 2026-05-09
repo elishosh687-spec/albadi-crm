@@ -29,3 +29,18 @@ export async function requestAnalysis(escalationId: number) {
     return { ok: false, error: e instanceof Error ? e.message : "network error" };
   }
 }
+
+export async function requestAllAnalyses() {
+  try {
+    const res = await fetch(`${baseUrl()}/api/bot/analyze-all-escalations`, {
+      method: "POST",
+      headers: authHeader(),
+      cache: "no-store",
+    });
+    const json = (await res.json()) as { ok?: boolean; marked?: number; error?: string };
+    if (!res.ok) return { ok: false, error: json.error ?? "failed" };
+    return { ok: true, marked: json.marked ?? 0 };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "network error" };
+  }
+}
