@@ -357,15 +357,30 @@ export function EscalationCard({ escalation }: { escalation: Escalation }) {
           <div
             style={{
               padding: space.md,
-              background: colors.surfaceMuted,
-              borderInlineStart: `3px solid ${colors.inkSubtle}`,
+              background: colors.warningBg,
+              borderInlineStart: `3px solid ${colors.warning}`,
               borderRadius: radius.sm,
               fontSize: size.sm,
-              color: colors.inkMuted,
+              color: colors.ink,
               fontFamily: fontStack.body,
+              lineHeight: leading.normal,
             }}
           >
-            Claude מנתח את הליד… (יכול לקחת עד 5 דקות, יתעדכן אוטומטית)
+            <strong style={{ fontWeight: weight.semibold }}>ממתין לניתוח.</strong>{" "}
+            פתח Claude Code על המחשב והרץ את המשימה{" "}
+            <code
+              style={{
+                background: colors.surface,
+                border: `1px solid ${colors.rule}`,
+                borderRadius: 4,
+                padding: "1px 6px",
+                fontSize: size.xs,
+                fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+              }}
+            >
+              albadi-escalation-analysis
+            </code>
+            . התוצאה תופיע כאן תוך 1–3 דקות.
           </div>
         ) : (
           <div>
