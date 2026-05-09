@@ -2,6 +2,7 @@ import { db } from "@/lib/db";
 import { escalations, decisions } from "@/drizzle/schema";
 import { desc, eq, isNull, isNotNull } from "drizzle-orm";
 import { EscalationCard } from "./EscalationCard";
+import { BulkAnalyzeButton } from "./BulkAnalyzeButton";
 import { Page } from "@/components/ui/Page";
 import { Card } from "@/components/ui/Card";
 import { colors, fontStack, leading, size, space, weight } from "@/lib/ui/tokens";
@@ -54,6 +55,7 @@ export default async function EscalationsPage() {
       <Page
         title="הסלמות"
         description="לידים שהבוט לא יכול לטפל בהם לבד — נושאי מחיר, בקשות לשיחה, או כל מקרה שדורש שיקול דעת אנושי."
+        actions={<BulkAnalyzeButton openCount={open.length} />}
       />
 
       <Card title="פתוחות" eyebrow={`${open.length} ממתינות`}>
