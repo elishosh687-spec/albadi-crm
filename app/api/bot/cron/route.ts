@@ -10,7 +10,7 @@ import { getSubscriber, getFieldValue } from "@/lib/manychat/client";
 import { TAG_IDS, TERMINAL_TAGS } from "@/lib/manychat/config";
 import { db } from "@/lib/db";
 import { botRuns, decisions, escalations, leads } from "@/drizzle/schema";
-import { eq } from "drizzle-orm";
+import { and, desc, eq, isNotNull } from "drizzle-orm";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -149,12 +149,38 @@ export async function POST(req: NextRequest) {
       decisionsCount++;
 
       if (outcome.action === "escalated") {
+        const [prev] = await db
+          .select({
+            chosenOptionIndex: escalations.chosenOptionIndex,
+            suggestedReplies: escalations.suggestedReplies,
+            resolvedAt: escalations.resolvedAt,
+          })
+          .from(escalations)
+          .where(
+            and(eq(escalations.manychatSubId, sid), isNotNull(escalations.resolvedAt))
+          )
+          .orderBy(desc(escalations.resolvedAt))
+          .limit(1);
+
+        let trigger = outcome.escalationTrigger ?? "";
+        if (
+          prev?.chosenOptionIndex != null &&
+          prev.suggestedReplies &&
+          prev.suggestedReplies[prev.chosenOptionIndex]
+        ) {
+          const opt = prev.suggestedReplies[prev.chosenOptionIndex];
+          const dt = prev.resolvedAt
+            ? new Date(prev.resolvedAt).toLocaleDateString("he-IL")
+            : "";
+          trigger = `${trigger} | ניסיון קודם (${dt}): ${opt.label} — ${opt.reasoning}`.trim();
+        }
+
         await db.insert(escalations).values({
           decisionId: dec.id,
           manychatSubId: sid,
           leadName: lead.name,
           reason: outcome.escalationReason!,
-          triggerText: outcome.escalationTrigger ?? null,
+          triggerText: trigger || null,
         });
         escalationsCount++;
       }
