@@ -60,6 +60,7 @@ export function EscalationCard({ escalation }: { escalation: Escalation }) {
   const [done, setDone] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
+  const [pickedIndex, setPickedIndex] = useState<number | null>(null);
   const [showFullNotes, setShowFullNotes] = useState(false);
   const [analyzePending, startAnalyze] = useTransition();
   const [analyzeError, setAnalyzeError] = useState<string | null>(null);
@@ -92,7 +93,12 @@ export function EscalationCard({ escalation }: { escalation: Escalation }) {
       const res = await fetch("/api/actions/escalate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: escalation.id, action, note: note ?? action }),
+        body: JSON.stringify({
+          id: escalation.id,
+          action,
+          note: note ?? action,
+          chosenOptionIndex: pickedIndex,
+        }),
       });
       if (!res.ok) throw new Error("failed");
       setDone(true);
@@ -307,8 +313,11 @@ export function EscalationCard({ escalation }: { escalation: Escalation }) {
                     <ReplyOption
                       key={idx}
                       option={opt}
-                      isSelected={draft === opt.text}
-                      onPick={() => setDraft(opt.text)}
+                      isSelected={pickedIndex === idx}
+                      onPick={() => {
+                        setDraft(opt.text);
+                        setPickedIndex(idx);
+                      }}
                     />
                   ))}
                 </div>
