@@ -36,6 +36,9 @@ interface Escalation {
   suggestedReply?: string | null;
   suggestedReplies?: SuggestedReply[] | null;
   analyzedAt?: string | null;
+  suggestedTag?: string | null;
+  suggestedTagReason?: string | null;
+  tagAppliedAt?: string | null;
 }
 
 const REASON_HE: Record<string, string> = {
@@ -62,6 +65,9 @@ export function EscalationCard({ escalation }: { escalation: Escalation }) {
   const [draft, setDraft] = useState("");
   const [pickedIndex, setPickedIndex] = useState<number | null>(null);
   const [showFullNotes, setShowFullNotes] = useState(false);
+  const [tagBusy, setTagBusy] = useState(false);
+  const [tagApplied, setTagApplied] = useState<string | null>(escalation.tagAppliedAt ?? null);
+  const [tagError, setTagError] = useState<string | null>(null);
   const [analyzePending, startAnalyze] = useTransition();
   const [analyzeError, setAnalyzeError] = useState<string | null>(null);
 
@@ -84,6 +90,28 @@ export function EscalationCard({ escalation }: { escalation: Escalation }) {
       if (!r.ok) setAnalyzeError(r.error ?? "לא ניתן לבקש ניתוח");
       else router.refresh();
     });
+  }
+
+  async function applyTag() {
+    if (!escalation.suggestedTag) return;
+    setTagBusy(true);
+    setTagError(null);
+    try {
+      const res = await fetch("/api/actions/apply-tag", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: escalation.id, tag: escalation.suggestedTag }),
+      });
+      if (!res.ok) {
+        const data = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(data.error ?? "failed");
+      }
+      setTagApplied(new Date().toISOString());
+    } catch (e) {
+      setTagError(e instanceof Error ? e.message : "שגיאה בעדכון תג");
+    } finally {
+      setTagBusy(false);
+    }
   }
 
   async function resolve(action: string, note?: string) {
@@ -361,6 +389,71 @@ export function EscalationCard({ escalation }: { escalation: Escalation }) {
                 </div>
               </div>
             ) : null}
+
+            {escalation.suggestedTag && (
+              <div style={{ marginTop: space.md }}>
+                <p style={fieldLabelStyle}>הצעה לשינוי תג</p>
+                <div
+                  style={{
+                    padding: space.md,
+                    background: colors.surface,
+                    border: `1px solid ${colors.rule}`,
+                    borderRadius: radius.md,
+                    fontFamily: fontStack.body,
+                    fontSize: size.sm,
+                    color: colors.ink,
+                    lineHeight: leading.normal,
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: space.sm, flexWrap: "wrap" }}>
+                    <span style={{ color: colors.inkMuted }}>סמן כ:</span>
+                    <strong style={{ fontWeight: weight.semibold }}>{escalation.suggestedTag}</strong>
+                  </div>
+                  {escalation.suggestedTagReason && (
+                    <div
+                      style={{
+                        marginTop: space.xs,
+                        fontSize: size.xs,
+                        color: colors.inkMuted,
+                      }}
+                    >
+                      {escalation.suggestedTagReason}
+                    </div>
+                  )}
+                  <div style={{ marginTop: space.sm }}>
+                    {tagApplied ? (
+                      <span style={{ color: colors.success, fontWeight: weight.medium, fontSize: size.xs }}>
+                        ✓ תג הוחל ב-{new Date(tagApplied).toLocaleString("he-IL")}
+                      </span>
+                    ) : (
+                      <button
+                        onClick={applyTag}
+                        disabled={tagBusy}
+                        style={{
+                          background: colors.accent,
+                          color: colors.surface,
+                          border: "none",
+                          fontSize: size.xs,
+                          fontWeight: weight.medium,
+                          padding: `${space.xs}px ${space.md}px`,
+                          borderRadius: radius.sm,
+                          cursor: tagBusy ? "wait" : "pointer",
+                          fontFamily: fontStack.body,
+                          opacity: tagBusy ? 0.6 : 1,
+                        }}
+                      >
+                        {tagBusy ? "מחיל..." : "אשר תג"}
+                      </button>
+                    )}
+                    {tagError && (
+                      <span style={{ marginInlineStart: space.sm, color: colors.danger, fontSize: size.xs }}>
+                        {tagError}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
           </>
         ) : isPendingAnalysis ? (
           <div

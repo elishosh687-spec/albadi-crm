@@ -64,6 +64,9 @@ export const escalations = pgTable("escalations", {
   >(),
   analyzedAt: timestamp("analyzed_at", { withTimezone: true }),
   chosenOptionIndex: integer("chosen_option_index"),
+  suggestedTag: text("suggested_tag"),
+  suggestedTagReason: text("suggested_tag_reason"),
+  tagAppliedAt: timestamp("tag_applied_at", { withTimezone: true }),
 });
 
 export const anomalies = pgTable("anomalies", {
