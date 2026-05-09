@@ -93,22 +93,24 @@ npm run dev
 | `npm run dev` | dashboard מקומי |
 | `npm run build` | בדיקת build לפני push |
 | `npm run db:studio` | UI לעיון ב-Neon DB |
-| `npm run bot:list-leads` | תצוגת 32 לידים עם סיווג אוטו |
-| `npm run bot:run-once` | ריצה ידנית של הבוט (Phase 1 read-only) |
-| `npm run bot:restart` | תצוגת קבוצות ל-restart mode (32 לידים תקועים) |
-| `npm run bot:restart-send` | dry-run של batch לכל 32 הלידים |
+| `npm run bot:pull-messages` | שליפת הודעות חדשות מ-ManyChat |
+| `npm run bot:restart` | תצוגת קבוצות ל-restart mode |
+| `npm run bot:restart-send` | dry-run של batch send |
 | `npm run bot:restart-send -- --confirm` | שליחה אמיתית (אחרי אישור Meta) |
+
+**הפעלת הבוט השעתי:** דרך כפתור "הרץ בוט עכשיו" בדאשבורד (`/dashboard`).
+**ניתוח הסלמות:** דרך "תנתח הסלמות albadi" בצ'אט Claude Code.
 
 ---
 
 ## סטטוס ענני
 
-המערכת רצה ב-3 ענני שונים שעובדים יחד:
+המערכת רצה ב-2 ענני שונים שעובדים יחד:
 
 ```
-Anthropic Cloud Routine (כל שעה)
+דאשבורד "הרץ בוט עכשיו" (ידני)
         │
-        │ HTTP POST + Bearer
+        │ Server Action → POST + Bearer
         ↓
 Vercel (Next.js + API)
         │
