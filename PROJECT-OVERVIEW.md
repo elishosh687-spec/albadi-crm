@@ -1,7 +1,7 @@
 # Albadi CRM — סקירת מוצר מקיפה
 
-**גרסה:** 1.0 (MVP)
-**תאריך:** 2026-05-07
+**גרסה:** 2.0 (E3 + Manual Trigger)
+**תאריך:** 2026-05-08
 **בעלים:** אלי שושן
 **רישיון:** פרטי
 
@@ -60,20 +60,31 @@
 └─────────────────────────────────────────────────────────────────┘
                           ▲
                           │ HTTP POST + Bearer token
-                          │ כל שעה
+                          │ ידני דרך הדאשבורד
                           │
 ┌─────────────────────────────────────────────────────────────────┐
-│         Anthropic Cloud Routine (טריגר שעתי)                   │
-│  cron: 0 * * * * UTC                                           │
-│  פעולה אחת: curl ל-/api/bot/cron                                │
+│   "הרץ בוט עכשיו" — Server Action בדאשבורד                     │
+│   POST → /api/bot/cron                                          │
+│   Cloud Routine הוסר; אין auto-cron כרגע                       │
+└─────────────────────────────────────────────────────────────────┘
+
+                          ↓
+                  הסלמות חדשות נוצרות
+                          ↓
+┌─────────────────────────────────────────────────────────────────┐
+│   Claude analysis — סקיל albadi-analyze                         │
+│   "תנתח הסלמות albadi" בצ'אט / /loop                            │
+│   מפיק summary + 2-3 אופציות + suggested_tag                   │
+│   POST → /api/bot/escalation-analysis/{id}                      │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
 **עקרונות עיצוב:**
 - **ManyChat נשאר source of truth.** לא מחליפים אותו, מתממשקים אליו.
-- **כללים בקוד תחילה, AI כברירת מחדל.** רוב התיוג דטרמיניסטי. AI רק כשאין כלל ברור.
-- **אוטונומיה מבוקרת.** הבוט מתייג לבד, אבל לא שולח הודעות בלי אישור.
-- **Single source of decisions:** Neon DB מתעד כל החלטה לחתוך זמן.
+- **כללים בקוד תחילה, Claude לאופציות.** הבוט השעתי דטרמיניסטי. Claude נכנס רק לניתוח הסלמות.
+- **אוטונומיה מבוקרת.** הבוט לא משנה תגים ב-ManyChat ולא שולח הודעות. רק יוצר הסלמות + הצעות תג ב-DB.
+- **המשתמש מאשר.** כל פעולה ב-ManyChat (תג / שליחה) נעשית בלחיצת כפתור בדאשבורד.
+- **Single source of decisions:** Neon DB מתעד כל החלטה.
 
 ---
 
@@ -119,14 +130,19 @@
 **Tables:** 6
 **ניהול:** https://console.neon.tech
 
-### 3.5 Anthropic Cloud Routine
+### 3.5 הפעלת הבוט (ידני)
 
-**Routine name:** `Albadi Bot — Hourly Run`
-**Routine ID:** `trig_01VWAWDtdHXqMMProUCseKbj`
-**URL:** https://claude.ai/code/routines/trig_01VWAWDtdHXqMMProUCseKbj
-**לוח זמנים:** `0 * * * *` (כל שעה עגולה UTC)
-**מודל:** claude-sonnet-4-6
-**מטרה:** מבצע curl POST לאנדפוינט `/api/bot/cron` בכל שעה. רץ בענן Anthropic — לא תלוי במחשב המקומי.
+**מצב נוכחי:** Cloud Routine נמחק (08/05/2026). אין auto-cron.
+
+**איך מפעילים:**
+- כפתור "הרץ בוט עכשיו" בדאשבורד (`/dashboard`) → Server Action שולח POST ל-`/api/bot/cron`
+- אופציה חלופית: `curl -X POST -H "Authorization: Bearer $BOT_SECRET" https://albadi-crm.vercel.app/api/bot/cron`
+
+**אם תרצה לחזור לאוטומציה שעתית:**
+- Cloud Routine באנתרופיק (חינם, דרש לתעדף)
+- Vercel Cron (Pro plan, $20/חודש)
+- cron-job.org (חינם, חיצוני)
+- Windows Task Scheduler מקומי (דורש שהמחשב פעיל)
 
 ### 3.6 ManyChat (קיים מראש)
 
@@ -202,62 +218,86 @@
 - ✅ `README.md` — מדריך פיתוח
 
 ### 5.6 כלים תפעוליים
-- ✅ סקיל `albadi-bot-run` ב-`~/.claude/skills/` (גלובלי, מסונכרן Google Drive)
-- ✅ Skill ב-project-level (`.claude/skills/`) — backup
-- ✅ סקריפט `bot:list-leads` — תצוגת לידים פתוחים עם הצעות פעולה
-- ✅ סקריפט `bot:run-once` — ריצה ידנית מקומית
+- ✅ סקיל `albadi-analyze` ב-`.claude/skills/` (פרויקטי) — מנתח הסלמות עם Claude, מפיק summary + אופציות + suggested_tag
+- ✅ Skill `albadi-restart-send` ב-`~/.claude/scheduled-tasks/` — שליחת batch של templates
+- ✅ סקריפט `bot:pull-messages` — שליפת הודעות חדשות מ-ManyChat
+- ✅ סקריפט `bot:restart-send` — batch send ל-WhatsApp templates
 - ✅ סקריפט `pull-tone-samples` — שליפת notes מ-ManyChat לכיול טון
+
+### 5.7 Pipeline ניתוח הסלמות (E3)
+- ✅ הבוט מסמן `analyze_requested=true` אוטומטית בכל הסלמה חדשה
+- ✅ Claude (אני בצ'אט / /loop) מפיק summary בעברית + 2-3 אופציות תגובה אסטרטגיות + (כשרלוונטי) suggested_tag
+- ✅ דאשבורד מציג את הניתוח ועם כפתור "השתמש בזו" / "אשר תג" / "סגור הסלמה"
+- ✅ "אשר תג" דוחף את התג ל-ManyChat (`/api/actions/apply-tag`) + מתעד notes
+- ✅ chosen_option נשמר ל-DB + נוסף ל-ManyChat notes
+- ✅ הסלמות עתידיות על אותו ליד מקבלות הקשר "ניסיון קודם"
 
 ---
 
 ## 6. זרימות תפעוליות
 
-### 6.1 ריצה אוטומטית (כל שעה)
+### 6.1 ריצת הבוט (ידני)
 
 ```
-T=0 (שעה עגולה UTC)
+אתה לוחץ "הרץ בוט עכשיו" בדאשבורד
    ↓
-Anthropic Cloud Routine מתעורר
-   ↓
-מריץ curl POST → albadi-crm.vercel.app/api/bot/cron
+Server Action → POST /api/bot/cron
    ↓ (Authorization: Bearer <BOT_SECRET>)
 Vercel verifies token
    ↓
-שולף 32 לידים מ-ManyChat (rate-limited ~150ms/lead)
+שולף לידים פעילים מ-ManyChat
    ↓
-מסווג כל ליד לפי כללים → outcome אחד מתוך:
-   - tag_only (ידוע, ניתן לתייג)
-   - escalated (דורש אותך)
+מסווג כל ליד לפי כללים → outcome:
+   - tag_only (היה תג חדש; נשמר ב-DB אבל לא נדחף ל-ManyChat)
+   - escalated (דורש אותך) → analyze_requested=true אוטו'
    - no_action (יציב)
    ↓
 שומר ל-Neon: bot_runs + decisions + escalations
    ↓
 מחזיר JSON summary
    ↓
-Anthropic Cloud Routine מסיים
-   ↓
-T=+5 שניות בערך — סוף ריצה
+דאשבורד מציג: "X לידים, Y החלטות, Z הסלמות"
 ```
 
-**עלות לריצה:** $0 (כלול במנוי Anthropic + Vercel free tier + ManyChat קיים)
+**עלות לריצה:** $0 (Vercel free tier + ManyChat קיים)
+
+### 6.1b ניתוח הסלמות
+
+```
+אתה כותב "תנתח הסלמות albadi" בצ'אט / מריץ /loop
+   ↓
+Claude מפעיל את הסקיל albadi-analyze
+   ↓
+GET /api/bot/pending-analyses (Bearer)
+   ↓
+לכל הסלמה: קורא context, חושב, מפיק:
+   - summary בעברית
+   - 2-3 אופציות תגובה (label, text, reasoning)
+   - suggested_tag + suggested_tag_reason (אופציונלי)
+   ↓
+POST /api/bot/escalation-analysis/{id} per item
+   ↓
+לולאה עד pending=[]
+   ↓
+דאשבורד מתעדכן: הניתוחים מופיעים בכל הסלמה
+```
 
 ### 6.2 פעולה ידנית של הבעלים
 
 ```
 פותח https://albadi-crm.vercel.app/dashboard
    ↓
-רואה הסלמות פתוחות
+רואה הסלמות פתוחות עם summary + 3 אופציות + (לפעמים) הצעת תג
    ↓
 לוחץ על הסלמה
    ↓
-קורא את ההקשר + הטריגר
+לוחץ "השתמש בזו" על אופציה רצויה → טקסט נכנס ל-textarea, chosen_option_index נשמר
    ↓
-כותב טיוטת תגובה ב-textarea
+(אופציונלי) לוחץ "אשר תג" → התג מתחלף ב-ManyChat + נרשם ב-notes
    ↓
-לוחץ:
-   - "✓ אשר ושלח" → (Phase 3) ישלח template ללקוח
-   - "✗ דחה" → ההסלמה נסגרת בלי פעולה
-   - "✏️ אטפל ידנית" → סימון שאתה מטפל מחוץ למערכת
+שולח את הטקסט ב-WhatsApp ידנית (דרך ManyChat / טלפון)
+   ↓
+לוחץ "סגור הסלמה" → resolution נשמר + notes מתעדכן ב-ManyChat
 ```
 
 ### 6.3 השעיית הבוט

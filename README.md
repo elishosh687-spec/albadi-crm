@@ -25,16 +25,14 @@ legacy/                          ← daily_calls.py + תוכנית-סידור-Ma
 
 ## הפעלת הבוט
 
-תוך session פתוח של Claude Code:
-```
-/loop 1h /albadi-bot-run
-```
+**ידני דרך הדאשבורד:** לחץ "הרץ בוט עכשיו" ב-`/dashboard`.
 
-הסקיל:
-1. מושך מצב לידים מ-ManyChat (`npm run bot:list-leads`)
-2. כללים אוטומטיים → מתייג + audit
-3. דו-משמעי → Claude מחליטה
-4. הסלמה → רשומה ב-DB, Eli רואה ב-dashboard
+**הזרימה:**
+1. הבוט שולף לידים מ-ManyChat
+2. מסווג לפי חוקים (rule-based, no Claude)
+3. הסלמות חדשות נוצרות עם `analyze_requested=true` אוטומטית
+4. כתוב "תנתח הסלמות albadi" בצ'אט / הרץ `/loop` → Claude מפיק summary + 3 אופציות + (כשרלוונטי) suggested_tag
+5. תפתח דאשבורד → לחץ "השתמש בזו" / "אשר תג" / "סגור הסלמה"
 
 לראות את ה-dashboard:
 ```
