@@ -1,8 +1,13 @@
 "use server";
 
 function baseUrl(): string {
-  if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;
-  return process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+  // Prefer canonical production URL — VERCEL_URL points to a deploy-specific
+  // host that's gated by Vercel Authentication and returns an HTML auth page
+  // for our Bearer-token API calls.
+  if (process.env.VERCEL_PROJECT_PRODUCTION_URL)
+    return `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`;
+  if (process.env.NEXT_PUBLIC_SITE_URL) return process.env.NEXT_PUBLIC_SITE_URL;
+  return "http://localhost:3000";
 }
 
 function authHeader(): HeadersInit {
