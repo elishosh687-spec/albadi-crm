@@ -181,6 +181,7 @@ export async function POST(req: NextRequest) {
           leadName: lead.name,
           reason: outcome.escalationReason!,
           triggerText: trigger || null,
+          analyzeRequested: true,
         });
         escalationsCount++;
       }
