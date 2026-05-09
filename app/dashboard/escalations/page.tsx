@@ -50,6 +50,8 @@ export default async function EscalationsPage() {
       .limit(20),
   ]);
 
+  const pendingAnalyses = open.filter((e) => e.analyzeRequested && !e.analyzedAt).length;
+
   return (
     <div>
       <Page
@@ -57,6 +59,29 @@ export default async function EscalationsPage() {
         description="לידים שהבוט לא יכול לטפל בהם לבד — נושאי מחיר, בקשות לשיחה, או כל מקרה שדורש שיקול דעת אנושי."
         actions={<BulkAnalyzeButton openCount={open.length} />}
       />
+
+      {pendingAnalyses > 0 && (
+        <div
+          style={{
+            background: colors.warningBg,
+            borderInlineStart: `3px solid ${colors.warning}`,
+            borderRadius: 6,
+            padding: `${space.md}px ${space.lg}px`,
+            marginBottom: space.xl,
+            fontFamily: fontStack.body,
+            fontSize: size.sm,
+            color: colors.ink,
+            lineHeight: leading.normal,
+          }}
+        >
+          <strong style={{ fontWeight: weight.semibold, marginInlineEnd: space.xs }}>
+            {pendingAnalyses} הסלמות מחכות לניתוח של Claude.
+          </strong>
+          כדי לקבל summary ואופציות תגובה, פתח <strong>Claude Code</strong> על המחשב שלך
+          ולחץ &quot;Run now&quot; על המשימה <code style={codeStyle}>albadi-escalation-analysis</code>.
+          התוצאה תופיע כאן תוך 1–3 דקות.
+        </div>
+      )}
 
       <Card title="פתוחות" eyebrow={`${open.length} ממתינות`}>
         {open.length === 0 ? (
@@ -141,4 +166,14 @@ const emptyStyle: React.CSSProperties = {
   color: colors.inkMuted,
   margin: 0,
   padding: `${space.lg}px 0`,
+};
+
+const codeStyle: React.CSSProperties = {
+  background: colors.surface,
+  border: `1px solid ${colors.rule}`,
+  borderRadius: 4,
+  padding: "1px 6px",
+  fontSize: size.xs,
+  fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+  color: colors.ink,
 };
