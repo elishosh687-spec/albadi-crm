@@ -43,11 +43,7 @@ function applyRules(lead: Lead): Outcome {
   const tag = lead.currentTag;
   const notes = (lead.notes || "").toLowerCase();
 
-  // Tier 1 (F): fresh lead grace period — 0–3 days, leave alone
-  if (days <= 3) {
-    return { classifiedTag: tag, rule: "fresh_lead_grace_period", aiUsed: false, confidence: 1.0, action: "no_action" };
-  }
-
+  // Grace period removed — fresh leads can also escalate if signals fire (יקר/שיחה/etc).
   // Stable: tagged unanswered, still within window
   if (tag === "לא_ענה" && days < 7) {
     return { classifiedTag: tag, rule: "no_action_stable", aiUsed: false, confidence: 1.0, action: "no_action" };
