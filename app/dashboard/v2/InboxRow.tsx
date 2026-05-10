@@ -24,8 +24,7 @@ export interface InboxItem {
   suggestedSummary: string | null;
   reason: string;
   source: string;
-  quoteTotal: number | null;
-  createdAt: Date;
+  quoteTotalDisplay: string | null;
 }
 
 export function InboxRow({
@@ -139,7 +138,7 @@ export function InboxRow({
             {item.leadName ?? item.manychatSubId}
           </div>
           <div style={{ display: "flex", gap: space.sm, flexWrap: "wrap", alignItems: "baseline" }}>
-            {item.quoteTotal != null && (
+            {item.quoteTotalDisplay && (
               <span
                 style={{
                   fontFamily: fontStack.body,
@@ -148,7 +147,7 @@ export function InboxRow({
                   color: colors.ink,
                 }}
               >
-                {item.quoteTotal.toLocaleString("he-IL")} ₪
+                {item.quoteTotalDisplay} ₪
               </span>
             )}
             {(item.suggestedFlags ?? []).map((f) => (
