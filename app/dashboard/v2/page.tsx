@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { db } from "@/lib/db";
 import { pipelineSuggestions, leads } from "@/drizzle/schema";
 import { desc, eq, sql } from "drizzle-orm";
@@ -175,16 +176,6 @@ export default async function DashboardV2() {
         description="כל הצעת סיווג שמחכה לאישור שלך + מבט כללי על ה-Pipeline. אישור = push ל-ManyChat וגם רישום ב-DB."
       />
 
-      <Card title={`Inbox — ${inboxItems.length} ממתינות`}>
-        {inboxItems.length === 0 ? (
-          <p style={{ fontFamily: fontStack.body, fontSize: size.md, color: colors.inkMuted }}>
-            אין הצעות ממתינות. הריץ את ה-skill <code>albadi-classify</code> כדי לקבל הצעות חדשות.
-          </p>
-        ) : (
-          <InboxList items={inboxItems} />
-        )}
-      </Card>
-
       <Card title="Pipeline — סיכום">
         <div
           style={{
@@ -195,16 +186,46 @@ export default async function DashboardV2() {
             fontSize: size.sm,
           }}
         >
+          <a
+            href="#inbox"
+            style={{
+              border: `1px solid ${inboxItems.length > 0 ? colors.accent : colors.rule}`,
+              borderRadius: 6,
+              padding: `${space.sm}px ${space.md}px`,
+              minWidth: 110,
+              textDecoration: "none",
+              color: "inherit",
+              display: "block",
+            }}
+          >
+            <div style={{ color: colors.accent, fontSize: size.xs, fontWeight: weight.medium }}>
+              הצעות ממתינות
+            </div>
+            <div
+              style={{
+                fontFamily: fontStack.display,
+                fontSize: size.xl,
+                fontWeight: weight.medium,
+                color: colors.ink,
+              }}
+            >
+              {inboxItems.length}
+            </div>
+          </a>
           {Object.entries(stageCounts).map(([stage, count]) => {
             if (count === 0) return null;
             return (
-              <div
+              <Link
                 key={stage}
+                href={`/dashboard/v2/stage/${encodeURIComponent(stage)}`}
                 style={{
                   border: `1px solid ${colors.rule}`,
                   borderRadius: 6,
                   padding: `${space.sm}px ${space.md}px`,
                   minWidth: 110,
+                  textDecoration: "none",
+                  color: "inherit",
+                  display: "block",
                 }}
               >
                 <div style={{ color: colors.inkMuted, fontSize: size.xs }}>{stage}</div>
@@ -218,10 +239,21 @@ export default async function DashboardV2() {
                 >
                   {count}
                 </div>
-              </div>
+              </Link>
             );
           })}
         </div>
+      </Card>
+
+      <div id="inbox" />
+      <Card title={`Inbox — ${inboxItems.length} ממתינות`}>
+        {inboxItems.length === 0 ? (
+          <p style={{ fontFamily: fontStack.body, fontSize: size.md, color: colors.inkMuted }}>
+            אין הצעות ממתינות. הריץ את ה-skill <code>albadi-classify</code> כדי לקבל הצעות חדשות.
+          </p>
+        ) : (
+          <InboxList items={inboxItems} />
+        )}
       </Card>
     </div>
   );
