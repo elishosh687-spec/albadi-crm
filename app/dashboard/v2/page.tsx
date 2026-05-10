@@ -1,10 +1,9 @@
 import { db } from "@/lib/db";
 import { pipelineSuggestions, leads } from "@/drizzle/schema";
-import { and, desc, eq, isNull } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 import { Page } from "@/components/ui/Page";
 import { Card } from "@/components/ui/Card";
-import { Badge } from "@/components/ui/Badge";
-import { colors, fontStack, leading, size, space, weight } from "@/lib/ui/tokens";
+import { colors, fontStack, size, space, weight } from "@/lib/ui/tokens";
 import { getSubscriber, getFieldValue } from "@/lib/manychat/client";
 import { V2_PIPELINE_STAGES, type V2PipelineStage } from "@/lib/manychat/config";
 import { InboxList } from "./InboxList";
@@ -23,14 +22,6 @@ interface LeadSnapshot {
   notes: string | null;
   lastInteraction: string | null;
 }
-
-const FLAG_TONES: Record<string, "danger" | "warning" | "info" | "accent" | "neutral"> = {
-  "דחוף": "danger",
-  "עסקה_גדולה": "accent",
-  "ביקש_שיחה": "warning",
-  "אחרי_החג": "info",
-  "מועדף": "accent",
-};
 
 async function pullLeadSnapshots(subIds: string[]): Promise<LeadSnapshot[]> {
   const flagNames = new Set([
@@ -140,15 +131,16 @@ export default async function DashboardV2() {
     );
   });
 
-  // Pipeline view: group all snapshots by stage
-  const groups: Record<string, LeadSnapshot[]> = {};
-  for (const stage of V2_PIPELINE_STAGES) groups[stage] = [];
-  groups["UNCLASSIFIED"] = [];
+  // Pipeline view: count by stage (table omitted to keep DOM light).
+  const stageCounts: Record<string, number> = {};
+  for (const stage of V2_PIPELINE_STAGES) stageCounts[stage] = 0;
+  stageCounts["UNCLASSIFIED"] = 0;
   for (const snap of snapshots) {
-    const key = snap.pipelineStage && V2_PIPELINE_STAGES.includes(snap.pipelineStage)
-      ? snap.pipelineStage
-      : "UNCLASSIFIED";
-    groups[key].push(snap);
+    const key =
+      snap.pipelineStage && V2_PIPELINE_STAGES.includes(snap.pipelineStage)
+        ? snap.pipelineStage
+        : "UNCLASSIFIED";
+    stageCounts[key] = (stageCounts[key] ?? 0) + 1;
   }
 
   return (
@@ -168,82 +160,43 @@ export default async function DashboardV2() {
         )}
       </Card>
 
-      <Card title="Pipeline — מצב כל הלידים">
-        {Object.entries(groups).map(([stage, list]) => {
-          if (list.length === 0) return null;
-          return (
-            <details
-              key={stage}
-              open={stage !== "UNCLASSIFIED"}
-              style={{
-                marginBottom: space.lg,
-                paddingBottom: space.md,
-                borderBottom: `1px solid ${colors.ruleSoft}`,
-              }}
-            >
-              <summary
+      <Card title="Pipeline — סיכום">
+        <div
+          style={{
+            display: "flex",
+            flexWrap: "wrap",
+            gap: space.lg,
+            fontFamily: fontStack.body,
+            fontSize: size.sm,
+          }}
+        >
+          {Object.entries(stageCounts).map(([stage, count]) => {
+            if (count === 0) return null;
+            return (
+              <div
+                key={stage}
                 style={{
-                  cursor: "pointer",
-                  fontFamily: fontStack.display,
-                  fontSize: size.lg,
-                  fontWeight: weight.medium,
-                  color: colors.ink,
-                  marginBottom: space.sm,
+                  border: `1px solid ${colors.rule}`,
+                  borderRadius: 6,
+                  padding: `${space.sm}px ${space.md}px`,
+                  minWidth: 110,
                 }}
               >
-                {stage}{" "}
-                <span style={{ color: colors.inkMuted, fontWeight: weight.regular, fontSize: size.sm }}>
-                  ({list.length})
-                </span>
-              </summary>
-              <table
-                style={{
-                  width: "100%",
-                  borderCollapse: "collapse",
-                  fontFamily: fontStack.body,
-                  fontSize: size.sm,
-                }}
-              >
-                <thead>
-                  <tr style={{ textAlign: "right", color: colors.inkMuted }}>
-                    <th style={{ padding: `${space.xs}px ${space.sm}px` }}>שם</th>
-                    <th style={{ padding: `${space.xs}px ${space.sm}px` }}>Quote</th>
-                    <th style={{ padding: `${space.xs}px ${space.sm}px` }}>Flags</th>
-                    <th style={{ padding: `${space.xs}px ${space.sm}px` }}>אינטרקציה אחרונה</th>
-                    <th style={{ padding: `${space.xs}px ${space.sm}px` }}>תור?</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {list.map((s) => (
-                    <tr key={s.sid} style={{ borderTop: `1px solid ${colors.ruleSoft}` }}>
-                      <td style={{ padding: `${space.xs}px ${space.sm}px`, color: colors.ink }}>
-                        {s.name ?? s.sid}
-                      </td>
-                      <td style={{ padding: `${space.xs}px ${space.sm}px`, color: colors.ink }}>
-                        {s.quoteTotal != null ? `${formatNum(s.quoteTotal)} ₪` : "—"}
-                      </td>
-                      <td style={{ padding: `${space.xs}px ${space.sm}px` }}>
-                        <span style={{ display: "inline-flex", gap: space.xs, flexWrap: "wrap" }}>
-                          {s.flags.map((f) => (
-                            <Badge key={f} tone={FLAG_TONES[f] ?? "neutral"}>
-                              {f}
-                            </Badge>
-                          ))}
-                        </span>
-                      </td>
-                      <td style={{ padding: `${space.xs}px ${space.sm}px`, color: colors.inkMuted }}>
-                        {s.lastInteraction ? s.lastInteraction.slice(0, 16).replace("T", " ") : "—"}
-                      </td>
-                      <td style={{ padding: `${space.xs}px ${space.sm}px`, color: colors.inkMuted }}>
-                        {pendingSids.has(s.sid) ? "•" : ""}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </details>
-          );
-        })}
+                <div style={{ color: colors.inkMuted, fontSize: size.xs }}>{stage}</div>
+                <div
+                  style={{
+                    fontFamily: fontStack.display,
+                    fontSize: size.xl,
+                    fontWeight: weight.medium,
+                    color: colors.ink,
+                  }}
+                >
+                  {count}
+                </div>
+              </div>
+            );
+          })}
+        </div>
       </Card>
     </div>
   );
