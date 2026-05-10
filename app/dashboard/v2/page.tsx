@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
 import { pipelineSuggestions, leads } from "@/drizzle/schema";
-import { desc, eq } from "drizzle-orm";
+import { desc, eq, sql } from "drizzle-orm";
 import { Page } from "@/components/ui/Page";
 import { Card } from "@/components/ui/Card";
 import { colors, fontStack, size, space, weight } from "@/lib/ui/tokens";
@@ -81,7 +81,7 @@ async function pullLeadSnapshots(subIds: string[]): Promise<LeadSnapshot[]> {
 }
 
 export default async function DashboardV2() {
-  const [pendingRows, activeLeads] = await Promise.all([
+  const [pendingRows, activeLeads, latestApprovedRows] = await Promise.all([
     db
       .select()
       .from(pipelineSuggestions)
@@ -91,17 +91,35 @@ export default async function DashboardV2() {
       .select({ id: leads.manychatSubId, name: leads.name })
       .from(leads)
       .where(eq(leads.active, true)),
+    db.execute(sql`
+      SELECT DISTINCT ON (manychat_sub_id)
+        manychat_sub_id, approved_stage
+      FROM pipeline_suggestions
+      WHERE approved_stage IS NOT NULL
+      ORDER BY manychat_sub_id, reviewed_at DESC
+    `),
   ]);
 
-  const uniqueSids = Array.from(
-    new Set(activeLeads.map((r) => r.id.trim()))
-  );
+  const stageBySid = new Map<string, string>();
+  for (const r of (latestApprovedRows.rows ?? latestApprovedRows) as Array<{
+    manychat_sub_id: string;
+    approved_stage: string;
+  }>) {
+    stageBySid.set(r.manychat_sub_id.trim(), r.approved_stage);
+  }
+
   const dbNameBySid = new Map(
     activeLeads.map((r) => [r.id.trim(), r.name])
   );
-  const snapshots = await pullLeadSnapshots(uniqueSids);
+  const pendingSids = new Set(
+    pendingRows.map((r) => r.manychatSubId.trim())
+  );
+
+  // Only fetch ManyChat snapshots for leads that have a pending suggestion
+  // (for quote display in Inbox). Skip the rest — Pipeline counts come from DB.
+  const inboxSids = Array.from(pendingSids);
+  const snapshots = await pullLeadSnapshots(inboxSids);
   const snapshotBySid = new Map(snapshots.map((s) => [s.sid, s]));
-  const pendingSids = new Set(pendingRows.map((r) => r.manychatSubId.trim()));
 
   const formatNum = (n: number | null) =>
     n == null ? null : n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
@@ -136,14 +154,16 @@ export default async function DashboardV2() {
     );
   });
 
-  // Pipeline view: count by stage (table omitted to keep DOM light).
+  // Pipeline counts come from DB (latest approved suggestion per lead).
+  // Avoids ManyChat rate-limit hitting on every dashboard render.
   const stageCounts: Record<string, number> = {};
   for (const stage of V2_PIPELINE_STAGES) stageCounts[stage] = 0;
   stageCounts["UNCLASSIFIED"] = 0;
-  for (const snap of snapshots) {
+  for (const sid of new Set(activeLeads.map((r) => r.id.trim()))) {
+    const stage = stageBySid.get(sid);
     const key =
-      snap.pipelineStage && V2_PIPELINE_STAGES.includes(snap.pipelineStage)
-        ? snap.pipelineStage
+      stage && (V2_PIPELINE_STAGES as readonly string[]).includes(stage)
+        ? stage
         : "UNCLASSIFIED";
     stageCounts[key] = (stageCounts[key] ?? 0) + 1;
   }
