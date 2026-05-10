@@ -31,9 +31,38 @@ export const FIELD_IDS = {
   lead_score: 14445937,
   quantity: 14356831,
   last_contact_type: 14449102,
+  // v2
+  pipeline_stage: 14445936,
+  next_action: 14571697,
+  bot_summary: 14571698,
 } as const;
 
 export type FieldName = keyof typeof FIELD_IDS;
+
+// v2 flag tags (boolean labels — multiple per subscriber allowed)
+export const V2_FLAG_TAG_IDS = {
+  "דחוף": 87265384,
+  "עסקה_גדולה": 87265385,
+  "ביקש_שיחה": 87265386,
+  "אחרי_החג": 87265387,
+  "מועדף": 87265390,
+} as const;
+export type V2FlagName = keyof typeof V2_FLAG_TAG_IDS;
+export const V2_FLAG_NAMES = Object.keys(V2_FLAG_TAG_IDS) as V2FlagName[];
+
+// v2 pipeline stage values (single value per lead — enforced by code)
+export const V2_PIPELINE_STAGES = [
+  "NEW",
+  "QUESTIONNAIRE",
+  "QUOTED",
+  "NEGOTIATING",
+  "WAITING_CALL",
+  "IN_PROGRESS",
+  "WON",
+  "SILENT",
+  "DROPPED",
+] as const;
+export type V2PipelineStage = (typeof V2_PIPELINE_STAGES)[number];
 
 export const STATUS_TAG_IDS: number[] = [
   TAG_IDS.ליד_חדש,
