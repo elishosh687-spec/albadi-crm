@@ -32,10 +32,7 @@ export default function DashboardLayout({
           Albadi
         </Link>
         <NavLink href="/dashboard">בית</NavLink>
-        <NavLink href="/dashboard/v2">v2 (חדש)</NavLink>
-        <NavLink href="/dashboard/escalations">הסלמות</NavLink>
-        <NavLink href="/dashboard/pipeline">Pipeline</NavLink>
-        <NavLink href="/dashboard/runs">היסטוריית ריצות</NavLink>
+        <NavLink href="/dashboard/v2">Inbox + Pipeline</NavLink>
         <NavLink href="/dashboard/instructions">מדריך</NavLink>
       </nav>
       <main

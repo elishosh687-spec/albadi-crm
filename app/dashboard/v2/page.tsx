@@ -33,7 +33,6 @@ const FLAG_TONES: Record<string, "danger" | "warning" | "info" | "accent" | "neu
 };
 
 async function pullLeadSnapshots(subIds: string[]): Promise<LeadSnapshot[]> {
-  const out: LeadSnapshot[] = [];
   const flagNames = new Set([
     "דחוף",
     "עסקה_גדולה",
@@ -41,36 +40,52 @@ async function pullLeadSnapshots(subIds: string[]): Promise<LeadSnapshot[]> {
     "אחרי_החג",
     "מועדף",
   ]);
-  for (const sid of subIds) {
+
+  async function pullOne(sid: string): Promise<LeadSnapshot> {
+    const cleanSid = sid.trim();
     try {
-      const sub = await getSubscriber(sid.trim());
+      const sub = await getSubscriber(cleanSid);
       const stage = getFieldValue(sub.custom_fields, "pipeline_stage");
       const quote = getFieldValue(sub.custom_fields, "quote_total");
       const notes = getFieldValue(sub.custom_fields, "notes");
       const flags = sub.tags
         .map((t) => t.name ?? "")
         .filter((n) => flagNames.has(n));
-      out.push({
-        sid: sid.trim(),
+      return {
+        sid: cleanSid,
         name: sub.name ?? null,
         pipelineStage: (stage ? String(stage) : null) as V2PipelineStage | null,
         flags,
         quoteTotal: quote ? Number(quote) : null,
         notes: notes ? String(notes) : null,
         lastInteraction: ((sub as any).last_interaction as string | null) ?? null,
-      });
+      };
     } catch {
-      out.push({
-        sid: sid.trim(),
+      return {
+        sid: cleanSid,
         name: null,
         pipelineStage: null,
         flags: [],
         quoteTotal: null,
         notes: null,
         lastInteraction: null,
-      });
+      };
     }
   }
+
+  // Parallel with concurrency cap to avoid ManyChat rate limits.
+  const CONCURRENCY = 10;
+  const out: LeadSnapshot[] = new Array(subIds.length);
+  let cursor = 0;
+  await Promise.all(
+    Array.from({ length: Math.min(CONCURRENCY, subIds.length) }, async () => {
+      while (true) {
+        const i = cursor++;
+        if (i >= subIds.length) return;
+        out[i] = await pullOne(subIds[i]);
+      }
+    })
+  );
   return out;
 }
 

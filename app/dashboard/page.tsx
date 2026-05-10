@@ -1,42 +1,45 @@
 import { db } from "@/lib/db";
-import { escalations, decisions, botRuns, repliesSent } from "@/drizzle/schema";
-import { desc, isNull, sql } from "drizzle-orm";
+import { pipelineSuggestions, eliDecisions, leads, messages } from "@/drizzle/schema";
+import { and, eq, gte, sql } from "drizzle-orm";
 import Link from "next/link";
 import { Page } from "@/components/ui/Page";
 import { Card } from "@/components/ui/Card";
 import { Stat, StatRow } from "@/components/ui/Stat";
-import { ActionButtons } from "@/components/dashboard/ActionButtons";
 import { colors, fontStack, size, space, weight } from "@/lib/ui/tokens";
 
 export const dynamic = "force-dynamic";
 
 async function getStats() {
-  const [openEscalationsCount, todayDecisions, todayReplies, lastRun] = await Promise.all([
+  const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+  const [pending, approvedToday, activeLeads, msgsToday] = await Promise.all([
     db
       .select({ count: sql<number>`count(*)::int` })
-      .from(escalations)
-      .where(isNull(escalations.resolvedAt)),
+      .from(pipelineSuggestions)
+      .where(eq(pipelineSuggestions.status, "pending_review")),
     db
       .select({ count: sql<number>`count(*)::int` })
-      .from(decisions)
-      .where(sql`${decisions.createdAt} >= now() - interval '24 hours'`),
+      .from(eliDecisions)
+      .where(gte(eliDecisions.decidedAt, dayAgo)),
     db
       .select({ count: sql<number>`count(*)::int` })
-      .from(repliesSent)
-      .where(sql`${repliesSent.sentAt} >= now() - interval '24 hours'`),
-    db.select().from(botRuns).orderBy(desc(botRuns.startedAt)).limit(1),
+      .from(leads)
+      .where(eq(leads.active, true)),
+    db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(messages)
+      .where(gte(messages.receivedAt, dayAgo)),
   ]);
 
   return {
-    openEscalationsCount: openEscalationsCount[0]?.count ?? 0,
-    todayDecisions: todayDecisions[0]?.count ?? 0,
-    todayReplies: todayReplies[0]?.count ?? 0,
-    lastRun: lastRun[0],
+    pending: pending[0]?.count ?? 0,
+    approvedToday: approvedToday[0]?.count ?? 0,
+    activeLeads: activeLeads[0]?.count ?? 0,
+    msgsToday: msgsToday[0]?.count ?? 0,
   };
 }
 
 export default async function DashboardHome() {
-  const { openEscalationsCount, todayDecisions, todayReplies, lastRun } = await getStats();
+  const { pending, approvedToday, activeLeads, msgsToday } = await getStats();
   const today = new Date();
   const dateLabel = today.toLocaleDateString("he-IL", {
     weekday: "long",
@@ -50,29 +53,32 @@ export default async function DashboardHome() {
       <Page
         eyebrow={dateLabel}
         title="בית"
-        description="סקירה יומית של פעילות הבוט והלידים שמחכים לטיפול ידני."
+        description="סיכום פעילות. ניהול הצעות והאישורים מתבצע בעמוד v2."
       />
 
-      <ActionButtons />
-
       <Card
-        title="פעילות הבוט"
+        title="סקירה"
         eyebrow="24 שעות אחרונות"
         actions={
-          openEscalationsCount > 0 && (
+          pending > 0 ? (
             <Link
-              href="/dashboard/escalations"
-              style={{ fontSize: size.sm, fontFamily: fontStack.body, fontWeight: weight.medium }}
+              href="/dashboard/v2"
+              style={{
+                fontSize: size.sm,
+                fontFamily: fontStack.body,
+                fontWeight: weight.medium,
+              }}
             >
-              עבור להסלמות ←
+              עבור ל-Inbox ←
             </Link>
-          )
+          ) : null
         }
       >
         <StatRow>
-          <Stat label="הסלמות פתוחות" value={openEscalationsCount} />
-          <Stat label="החלטות" value={todayDecisions} />
-          <Stat label="הודעות נשלחו" value={todayReplies} />
+          <Stat label="הצעות ממתינות" value={pending} />
+          <Stat label="אישורי אתמול" value={approvedToday} />
+          <Stat label="לידים פעילים" value={activeLeads} />
+          <Stat label="הודעות נכנסות" value={msgsToday} />
         </StatRow>
         <p
           style={{
@@ -83,17 +89,8 @@ export default async function DashboardHome() {
             marginBottom: 0,
           }}
         >
-          {lastRun ? (
-            <>
-              ריצה אחרונה:{" "}
-              <span style={{ fontVariantNumeric: "tabular-nums" }}>
-                {new Date(lastRun.startedAt).toLocaleString("he-IL")}
-              </span>{" "}
-              — {lastRun.status ?? "—"}
-            </>
-          ) : (
-            <>הבוט עדיין לא רץ. השתמש בכפתור &quot;הרץ בוט עכשיו&quot; למעלה כדי להתחיל.</>
-          )}
+          הסקיל <code>albadi-classify</code> רץ מקומית ב-<code>/loop 1h</code> ומייצר הצעות סיווג.
+          אישור בדאשבורד v2 דוחף ל-ManyChat.
         </p>
       </Card>
     </div>
