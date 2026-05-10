@@ -37,7 +37,10 @@ export function InboxList({ items }: { items: InboxItem[] }) {
       setResult("לא נבחרו שורות");
       return;
     }
-    if (!confirm(`לאשר ${ids.length} הצעות? יישלח עדכון ל-ManyChat לכל ליד.`)) return;
+    if (typeof window !== "undefined") {
+      if (!window.confirm(`לאשר ${ids.length} הצעות? יישלח עדכון ל-ManyChat לכל ליד.`))
+        return;
+    }
     setResult(null);
     start(async () => {
       const r = await bulkApprove(ids);

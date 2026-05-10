@@ -109,6 +109,9 @@ export default async function DashboardV2() {
   const snapshotBySid = new Map(snapshots.map((s) => [s.sid, s]));
   const pendingSids = new Set(pendingRows.map((r) => r.manychatSubId.trim()));
 
+  const formatNum = (n: number | null) =>
+    n == null ? null : n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+
   const inboxItems: InboxItem[] = pendingRows.map((r) => {
     const snap = snapshotBySid.get(r.manychatSubId.trim());
     return {
@@ -122,16 +125,19 @@ export default async function DashboardV2() {
       suggestedSummary: r.suggestedSummary,
       reason: r.reason,
       source: r.source,
-      quoteTotal: snap?.quoteTotal ?? null,
-      createdAt: r.createdAt,
+      quoteTotalDisplay: formatNum(snap?.quoteTotal ?? null),
     };
   });
 
+  const quoteBySid = new Map(snapshots.map((s) => [s.sid, s.quoteTotal ?? 0]));
   inboxItems.sort((a, b) => {
     const aDch = a.suggestedFlags.includes("דחוף") ? 1 : 0;
     const bDch = b.suggestedFlags.includes("דחוף") ? 1 : 0;
     if (aDch !== bDch) return bDch - aDch;
-    return (b.quoteTotal ?? 0) - (a.quoteTotal ?? 0);
+    return (
+      (quoteBySid.get(b.manychatSubId.trim()) ?? 0) -
+      (quoteBySid.get(a.manychatSubId.trim()) ?? 0)
+    );
   });
 
   // Pipeline view: group all snapshots by stage
@@ -214,7 +220,7 @@ export default async function DashboardV2() {
                         {s.name ?? s.sid}
                       </td>
                       <td style={{ padding: `${space.xs}px ${space.sm}px`, color: colors.ink }}>
-                        {s.quoteTotal != null ? `${s.quoteTotal.toLocaleString("he-IL")} ₪` : "—"}
+                        {s.quoteTotal != null ? `${formatNum(s.quoteTotal)} ₪` : "—"}
                       </td>
                       <td style={{ padding: `${space.xs}px ${space.sm}px` }}>
                         <span style={{ display: "inline-flex", gap: space.xs, flexWrap: "wrap" }}>
@@ -226,7 +232,7 @@ export default async function DashboardV2() {
                         </span>
                       </td>
                       <td style={{ padding: `${space.xs}px ${space.sm}px`, color: colors.inkMuted }}>
-                        {s.lastInteraction ? new Date(s.lastInteraction).toLocaleString("he-IL") : "—"}
+                        {s.lastInteraction ? s.lastInteraction.slice(0, 16).replace("T", " ") : "—"}
                       </td>
                       <td style={{ padding: `${space.xs}px ${space.sm}px`, color: colors.inkMuted }}>
                         {pendingSids.has(s.sid) ? "•" : ""}
