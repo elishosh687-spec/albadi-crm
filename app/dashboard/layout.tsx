@@ -33,7 +33,6 @@ export default function DashboardLayout({
         </Link>
         <NavLink href="/dashboard">בית</NavLink>
         <NavLink href="/dashboard/v2">Inbox + Pipeline</NavLink>
-        <NavLink href="/dashboard/instructions">מדריך</NavLink>
       </nav>
       <main
         style={{
