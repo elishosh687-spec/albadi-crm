@@ -96,6 +96,9 @@ export default async function DashboardV2() {
   const uniqueSids = Array.from(
     new Set(activeLeads.map((r) => r.id.trim()))
   );
+  const dbNameBySid = new Map(
+    activeLeads.map((r) => [r.id.trim(), r.name])
+  );
   const snapshots = await pullLeadSnapshots(uniqueSids);
   const snapshotBySid = new Map(snapshots.map((s) => [s.sid, s]));
   const pendingSids = new Set(pendingRows.map((r) => r.manychatSubId.trim()));
@@ -104,11 +107,13 @@ export default async function DashboardV2() {
     n == null ? null : n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
 
   const inboxItems: InboxItem[] = pendingRows.map((r) => {
-    const snap = snapshotBySid.get(r.manychatSubId.trim());
+    const cleanSid = r.manychatSubId.trim();
+    const snap = snapshotBySid.get(cleanSid);
+    const name = snap?.name ?? dbNameBySid.get(cleanSid) ?? null;
     return {
       id: r.id,
       manychatSubId: r.manychatSubId,
-      leadName: snap?.name ?? null,
+      leadName: name,
       prevStage: r.prevStage ?? snap?.pipelineStage ?? null,
       suggestedStage: r.suggestedStage,
       suggestedFlags: (r.suggestedFlags ?? []) as string[],
