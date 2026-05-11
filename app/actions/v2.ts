@@ -238,3 +238,21 @@ export async function bulkApprove(
   revalidatePath("/dashboard/v2");
   return { ok: failed === 0, approved, failed, errors: errors.length ? errors : undefined };
 }
+
+export async function updateLeadNotes(
+  manychatSubId: string,
+  notes: string
+): Promise<SimpleResult> {
+  try {
+    const cleanSid = manychatSubId.trim();
+    if (!cleanSid) return { ok: false, error: "missing subscriberId" };
+    await setCustomFields(cleanSid, [{ name: "notes", value: notes }]);
+    revalidatePath("/dashboard/v2");
+    return { ok: true, message: "ההערות נשמרו" };
+  } catch (e) {
+    return {
+      ok: false,
+      error: e instanceof Error ? e.message : "save failed",
+    };
+  }
+}
