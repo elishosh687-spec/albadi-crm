@@ -1,16 +1,11 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { colors, fontStack, leading, size, space, weight } from "@/lib/ui/tokens";
 import { approveSuggestion, rejectSuggestion } from "@/app/actions/v2";
-import {
-  V2_PIPELINE_STAGES,
-  type V2PipelineStage,
-} from "@/lib/manychat/config";
-import { NotesEditor } from "./NotesEditor";
 
 export interface InboxItem {
   id: number;
@@ -24,7 +19,6 @@ export interface InboxItem {
   reason: string;
   source: string;
   quoteTotalDisplay: string | null;
-  notes: string | null;
 }
 
 const FLAG_TONES: Record<string, "danger" | "warning" | "info" | "accent" | "neutral"> = {
@@ -46,25 +40,10 @@ export function InboxRow({
 }) {
   const router = useRouter();
   const [pending, start] = useTransition();
-  const [expanded, setExpanded] = useState(false);
-  const [overrideStage, setOverrideStage] = useState<string>("");
 
   function onApprove() {
     start(async () => {
       const r = await approveSuggestion({ suggestionId: item.id });
-      if (r.ok) router.refresh();
-      else if (typeof window !== "undefined") window.alert(r.error ?? "כשל");
-    });
-  }
-
-  function onOverride() {
-    if (!overrideStage) return;
-    start(async () => {
-      const r = await approveSuggestion({
-        suggestionId: item.id,
-        stage: overrideStage as V2PipelineStage,
-        overrideReason: `Manual override from ${item.suggestedStage} to ${overrideStage}`,
-      });
       if (r.ok) router.refresh();
       else if (typeof window !== "undefined") window.alert(r.error ?? "כשל");
     });
@@ -197,104 +176,14 @@ export function InboxRow({
           </div>
         )}
 
-        <div style={{ display: "flex", gap: space.sm, alignItems: "center", flexWrap: "wrap" }}>
+        <div style={{ display: "flex", gap: space.sm }}>
           <Button size="sm" variant="primary" onClick={onApprove} pending={pending}>
             אישור
           </Button>
           <Button size="sm" variant="ghost" onClick={onReject} disabled={pending}>
             דחה
           </Button>
-          <button
-            type="button"
-            onClick={() => setExpanded((v) => !v)}
-            style={{
-              fontFamily: fontStack.body,
-              fontSize: size.sm,
-              color: colors.accent,
-              background: "transparent",
-              border: "none",
-              cursor: "pointer",
-              padding: `${space.xs}px ${space.sm}px`,
-            }}
-          >
-            {expanded ? "סגור ▲" : "פתח notes + override ▼"}
-          </button>
         </div>
-
-        {expanded && (
-          <div
-            style={{
-              marginTop: space.md,
-              paddingTop: space.md,
-              borderTop: `1px solid ${colors.ruleSoft}`,
-            }}
-          >
-            <NotesEditor manychatSubId={item.manychatSubId} initialNotes={item.notes} />
-
-            <div
-              style={{
-                marginTop: space.md,
-                display: "flex",
-                gap: space.sm,
-                alignItems: "center",
-                flexWrap: "wrap",
-              }}
-            >
-              <span
-                style={{
-                  fontFamily: fontStack.body,
-                  fontSize: size.xs,
-                  color: colors.inkMuted,
-                  fontWeight: weight.medium,
-                }}
-              >
-                Override stage:
-              </span>
-              <select
-                value={overrideStage}
-                onChange={(e) => setOverrideStage(e.target.value)}
-                disabled={pending}
-                style={{
-                  fontFamily: fontStack.body,
-                  fontSize: size.sm,
-                  padding: `${space.xs}px ${space.sm}px`,
-                  border: `1px solid ${colors.rule}`,
-                  borderRadius: 6,
-                  background: colors.surface,
-                  color: colors.ink,
-                }}
-              >
-                <option value="">— בחר stage —</option>
-                {V2_PIPELINE_STAGES.filter((s) => s !== item.suggestedStage).map((s) => (
-                  <option key={s} value={s}>
-                    {s}
-                  </option>
-                ))}
-              </select>
-              <Button
-                size="sm"
-                variant="secondary"
-                onClick={onOverride}
-                disabled={!overrideStage || pending}
-              >
-                החל
-              </Button>
-              <a
-                href={`https://app.manychat.com/fb4499581/chat/${encodeURIComponent(item.manychatSubId.trim())}`}
-                target="_blank"
-                rel="noreferrer"
-                style={{
-                  fontFamily: fontStack.body,
-                  fontSize: size.sm,
-                  color: colors.accent,
-                  marginInlineStart: space.sm,
-                }}
-              >
-                Live Chat ↗
-              </a>
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );

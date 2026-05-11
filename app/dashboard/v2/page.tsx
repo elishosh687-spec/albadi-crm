@@ -141,7 +141,6 @@ export default async function DashboardV2() {
       reason: r.reason,
       source: r.source,
       quoteTotalDisplay: formatNum(snap?.quoteTotal ?? null),
-      notes: snap?.notes ?? null,
     };
   });
 
