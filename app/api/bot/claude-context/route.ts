@@ -18,19 +18,34 @@ import {
   pipelineSuggestions,
   eliDecisions,
 } from "@/drizzle/schema";
-import { and, desc, eq, gte, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, lt, or, sql } from "drizzle-orm";
 import { getSubscriber } from "@/lib/manychat/client";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
 const BATCH_LIMIT = 20;
+const STUCK_ANALYZING_MINUTES = 5;
 
 export async function GET(req: NextRequest) {
   const auth = req.headers.get("authorization");
   if (!process.env.BOT_SECRET || auth !== `Bearer ${process.env.BOT_SECRET}`) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
+
+  // Recover rows stuck in 'analyzing' (skill crashed before POSTing back).
+  const stuckCutoff = new Date(
+    Date.now() - STUCK_ANALYZING_MINUTES * 60 * 1000
+  );
+  await db
+    .update(analysisQueue)
+    .set({ status: "pending", startedAt: null })
+    .where(
+      and(
+        eq(analysisQueue.status, "analyzing"),
+        lt(analysisQueue.startedAt, stuckCutoff)
+      )
+    );
 
   // Atomic claim: SELECT pending IDs and UPDATE to analyzing in one go.
   const pending = await db
