@@ -72,35 +72,32 @@ npx tsx scripts/restart-send.ts --confirm
 
 Push to `main` → Vercel auto-deploys. No manual steps needed.
 
-## v2 Dashboard — DOM-weight crash rule (READ BEFORE EDITING /dashboard/v2)
+## v2 Dashboard — client-bundle import rule (READ BEFORE EDITING /dashboard/v2)
 
-**The Inbox and stage-detail pages crash the browser if they render too many state-bearing widgets per row.** Multiple attempts have hit this; each one cost a full revert.
+**Every "crash" on /dashboard/v2 reported by Eli (PRs #28-30, #33-34) had the same root cause: a `throw` at module-load on the client bundle.**
 
-**Stable baseline:** commit `6d0652b` (PR #26). InboxRow has only checkbox + Approve + Reject buttons. Stage detail is a plain server-rendered table. No per-row textarea, no per-row `<select>`, no NotesEditor mounted inline.
+[lib/manychat/config.ts](lib/manychat/config.ts) starts with:
+```ts
+if (!process.env.MANYCHAT_TOKEN) throw new Error("MANYCHAT_TOKEN is not set");
+```
+This is fine on the server. But the moment a `"use client"` component imports anything from that module — even just a constant like `V2_PIPELINE_STAGES` — the bundler inlines the whole module into the browser chunk. `process.env.MANYCHAT_TOKEN` is undefined in the browser, the module evaluation throws, and React unmounts the page tree. The Vercel runtime logs show 200 OK (server SSR is fine); only the DevTools console shows the actual error.
 
-**Re-introduced inline editors → crashed even though…**
-- typecheck was green
-- server returned 200 OK on every render
-- editors were conditionally rendered (`{expanded && <NotesEditor/>}`)
-- moved to a dedicated `/dashboard/v2/lead/[sid]` route
+**Rule:** client components must NEVER import from `@/lib/manychat/config`. Client-safe constants live in [lib/manychat/stages.ts](lib/manychat/stages.ts) — `V2_PIPELINE_STAGES`, `V2PipelineStage`, `V2_FLAG_TAG_IDS`, `V2FlagName`, `V2_FLAG_NAMES`. Add new client-safe constants there, not in config.ts. Server-side code can keep importing from config.ts; it re-exports the same names for compatibility.
 
-Three PRs all crashed in Eli's env (Vercel logs showed no server error, so the crash is purely client-side):
-- PR #28 — inline NotesEditor + override select per row → crash
-- PR #29 — dedicated `/lead/[sid]` page (heavy server fetches) → crash on open
-- PR #30 — collapsed-by-default inline editor → crash
+When you add or move a constant the classifier or dashboard depends on, double-check the import path in every `"use client"` file before merging.
 
-Root cause was never definitively isolated within reasonable time. Likely contributors found by review:
-- Many `useState` + `useTransition` + `useRouter` instances per row (9+ rows × multiple hooks)
-- `useState<Set<number>>(new Set(items.map(...)))` recomputed each render in `InboxList.tsx`
-- `router.refresh()` inside per-row `useTransition` callbacks, cascading invalidations
-- `setTimeout` in `NotesEditor` without cleanup on unmount
-- Lack of per-call timeout on `getSubscriber` in `lib/manychat/client.ts` — a hanging ManyChat call freezes SSR until Vercel's `maxDuration` fires
+**Stable shape today:**
+- Inbox row: checkbox + Approve + Reject + a plain `<button>` that opens a single-instance `NotesModal` ([app/dashboard/v2/NotesModal.tsx](app/dashboard/v2/NotesModal.tsx)) mounted once at `InboxList` root.
+- `NotesModal` holds the textarea, "+ הוסף תאריך עכשיו" stamper, and the stage-override `<select>`. Only one instance of all of those exists in the DOM at a time, regardless of how many leads are pending.
+- `updateLeadNotes` in [app/actions/v2.ts](app/actions/v2.ts) writes the ManyChat `notes` custom field (id 14447147) via `setCustomFields`. The classifier skill reads it back via `getSubscriber` and weaves it into the suggestion `reason`.
+- [lib/manychat/client.ts](lib/manychat/client.ts) wraps every ManyChat call with an 8-second `AbortController` timeout, so a hanging request cannot freeze SSR.
 
-**Rules for any future dashboard change:**
-1. **Never** add a `<textarea>`, `<select>`, or extra state-bearing client component to InboxRow or stage-detail rows — even conditionally. Each row must stay near the d583a61/6d0652b shape.
-2. If editing UI is required (notes, override stage, override flags), put it on a **separate route or modal that mounts a single instance** for the lead the user is acting on. Not one per row.
-3. Notes editing for now happens directly in **ManyChat UI** → custom field `notes` (id 14447147). The classifier skill (`lib/manychat/client.ts → getSubscriber` + `albadi-classify`) already reads that field and weaves it into the suggestion `reason`. The `notes` field belongs to subscriber custom fields, not the ManyChat conversation notes panel — that panel is **not** exposed by the public API (verified — all `getNotes`-style endpoints 404).
-4. The server action `updateLeadNotes` exists in `app/actions/v2.ts` and writes to the `notes` custom field. It's safe to call from a new isolated UI, just don't sprinkle the caller across every row.
-5. When you do build that isolated UI, add a per-call timeout to `getSubscriber` (or use `AbortController`) so a slow ManyChat call cannot freeze the page.
+**Background note on conversation notes:** ManyChat's "Notes" panel (the per-conversation sidebar notes) is **not** exposed by the public API — every `getNotes`-style endpoint we tested returns 404. The `notes` custom field is separate from that panel; Eli writes to it via ManyChat's "Custom User Fields" section in the same conversation view, and it's the only ManyChat-side notes surface we can read.
 
-**If a crash report comes in again:** first ask whether the user is on the `6d0652b`-shaped Inbox. If yes, suspect something else (ManyChat hang, hydration mismatch). If a recent PR has added inline per-row editors, revert that PR before debugging further.
+**Debug playbook if /dashboard/v2 ever "crashes" again:**
+1. Open DevTools → Console. The actual JS error (and the module path) will be the first uncaught exception.
+2. Vercel runtime logs show only SSR — they will not surface client throws.
+3. If the error mentions `MANYCHAT_TOKEN is not set` or similar module-load throw, find the new client component importing from config.ts (or any server-only module) and reroute the import to `stages.ts` (or a similar client-safe split).
+4. If you see hydration mismatch errors instead, audit any locale/date/random-id values passed from server to client.
+
+**Do not** assume "DOM weight" before reading the console. The previous CLAUDE.md entry chased that hypothesis through multiple PRs and never closed the bug.
