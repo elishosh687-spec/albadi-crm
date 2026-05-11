@@ -50,6 +50,8 @@ export default async function StageDetailPage({
 
   let rows: LeadRow[] = [];
   if (stageDecoded === "UNCLASSIFIED") {
+    // Truly unclassified = active lead with NO approved suggestion AND
+    // NO pending_review suggestion. Pending ones live in the Inbox.
     const r = await db.execute(sql`
       SELECT l.manychat_sub_id AS sid, l.name AS name
       FROM leads l
@@ -58,6 +60,11 @@ export default async function StageDetailPage({
           SELECT 1 FROM pipeline_suggestions ps
           WHERE TRIM(ps.manychat_sub_id) = TRIM(l.manychat_sub_id)
             AND ps.approved_stage IS NOT NULL
+        )
+        AND NOT EXISTS (
+          SELECT 1 FROM pipeline_suggestions ps
+          WHERE TRIM(ps.manychat_sub_id) = TRIM(l.manychat_sub_id)
+            AND ps.status = 'pending_review'
         )
       ORDER BY COALESCE(l.name, l.manychat_sub_id)
     `);
