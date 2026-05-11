@@ -1,14 +1,15 @@
 /**
- * Hourly queue builder — finds leads that need a fresh Claude analysis
- * and inserts rows into `analysis_queue`. Local Claude /loop picks them up.
+ * Queue builder — finds leads that need a fresh Claude analysis and inserts
+ * rows into `analysis_queue`. Local Claude /albadi-classify picks them up.
  *
- * Trigger: Anthropic cloud routine (hourly), Bearer BOT_SECRET.
+ * Trigger: invoked at the start of /albadi-classify (Bearer BOT_SECRET).
  *
  * Logic per active lead:
  *   - never has a pipeline_suggestions row → reason 'never_analyzed'
  *   - has a message in `messages` newer than its most-recent suggestion → 'new_message'
- *   - most-recent suggestion >24h old → 'stale_24h'
- *   - else skip
+ *   - else skip — time alone does NOT re-queue a lead. Notes edits made
+ *     through the dashboard enqueue themselves (reason 'notes_updated')
+ *     via app/actions/v2.ts updateLeadNotes.
  *
  * Skips if a 'pending' or 'analyzing' row already exists in analysis_queue
  * for that sub_id (to avoid duplicates).
@@ -21,7 +22,7 @@ import { and, desc, eq, gt, inArray } from "drizzle-orm";
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
-type QueueReason = "never_analyzed" | "new_message" | "stale_24h";
+type QueueReason = "never_analyzed" | "new_message";
 
 export async function POST(req: NextRequest) {
   const auth = req.headers.get("authorization");
@@ -50,9 +51,6 @@ export async function POST(req: NextRequest) {
             )
           );
   const alreadyQueued = new Set(queuedRows.map((r) => r.id));
-
-  const now = new Date();
-  const dayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
 
   let queued = 0;
   let skipped = 0;
@@ -88,8 +86,6 @@ export async function POST(req: NextRequest) {
         .limit(1);
       if (newerMsg) {
         reason = "new_message";
-      } else if (latestSugg.createdAt < dayAgo) {
-        reason = "stale_24h";
       }
     }
 

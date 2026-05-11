@@ -1,7 +1,11 @@
 "use server";
 
 import { db } from "@/lib/db";
-import { pipelineSuggestions, eliDecisions } from "@/drizzle/schema";
+import {
+  pipelineSuggestions,
+  eliDecisions,
+  analysisQueue,
+} from "@/drizzle/schema";
 import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import {
@@ -247,6 +251,27 @@ export async function updateLeadNotes(
     const cleanSid = manychatSubId.trim();
     if (!cleanSid) return { ok: false, error: "missing subscriberId" };
     await setCustomFields(cleanSid, [{ name: "notes", value: notes }]);
+
+    // Notes are a strong signal that stage may need to change. Enqueue an
+    // analysis so the next /albadi-classify run picks the lead up. Skip if
+    // a pending/analyzing row already exists for the sub_id.
+    try {
+      const openRows = await db
+        .select({ status: analysisQueue.status })
+        .from(analysisQueue)
+        .where(eq(analysisQueue.manychatSubId, cleanSid));
+      const hasOpen = openRows.some(
+        (r) => r.status === "pending" || r.status === "analyzing"
+      );
+      if (!hasOpen) {
+        await db
+          .insert(analysisQueue)
+          .values({ manychatSubId: cleanSid, reason: "notes_updated" });
+      }
+    } catch (e) {
+      console.error("updateLeadNotes: enqueue failed", e);
+    }
+
     revalidatePath("/dashboard/v2");
     return { ok: true, message: "ההערות נשמרו" };
   } catch (e) {
