@@ -8,7 +8,7 @@ import { approveSuggestion, updateLeadNotes } from "@/app/actions/v2";
 import {
   V2_PIPELINE_STAGES,
   type V2PipelineStage,
-} from "@/lib/manychat/config";
+} from "@/lib/manychat/stages";
 
 export interface NotesModalTarget {
   manychatSubId: string;
