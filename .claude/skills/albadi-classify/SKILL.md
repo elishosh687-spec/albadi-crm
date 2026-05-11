@@ -68,8 +68,9 @@ Response: `{ items: [...] }`. אם `items=[]` — סיים שקט: "0 pending".
 | stage | מתי |
 |---|---|
 | `NEW` | נרשם <7 ימים, אין שאלון, אין quote |
-| `QUESTIONNAIRE` | חלק משאלון מולא, אין `quote_total` |
-| `QUOTED` | `quote_total > 0`, אין סימני משא ומתן |
+| `QUESTIONNAIRE` | חלק משאלון מולא, אין `quote_total` ואין סימן שנשלח למפעל |
+| `WAITING_FACTORY` | ה-notes מציין "שלחתי למפעל" / "ממתין למפעל" / "ממתין לתמחור" / "ספק" — לקוח מסר ספציפיקציה, Eli שלח למפעל, אין עדיין `quote_total`/`quote_result`. עדיפות על `QUESTIONNAIRE` כשה-notes מזכיר מפעל גם אם שאלון לא הושלם. |
+| `QUOTED` | `quote_total > 0` או `quote_result` קיים, אין סימני משא ומתן |
 | `NEGOTIATING` | quote + מילים "יקר"/"הנחה"/"להוריד" |
 | `WAITING_CALL` | בקשת שיחה, אין מגע טלפוני אחרון |
 | `IN_PROGRESS` | אחרי שיחה + notes "מאשר"/"ממתין"/"עיצוב" |
