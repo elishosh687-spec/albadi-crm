@@ -1,16 +1,12 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import Link from "next/link";
+import { useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { colors, fontStack, leading, size, space, weight } from "@/lib/ui/tokens";
 import { approveSuggestion, rejectSuggestion } from "@/app/actions/v2";
-import {
-  V2_PIPELINE_STAGES,
-  type V2PipelineStage,
-} from "@/lib/manychat/config";
-import { NotesEditor } from "./NotesEditor";
 
 export interface InboxItem {
   id: number;
@@ -46,7 +42,6 @@ export function InboxRow({
 }) {
   const router = useRouter();
   const [pending, start] = useTransition();
-  const [overrideStage, setOverrideStage] = useState<string>("");
 
   function onApprove() {
     start(async () => {
@@ -56,22 +51,9 @@ export function InboxRow({
     });
   }
 
-  function onOverride() {
-    if (!overrideStage) return;
-    start(async () => {
-      const r = await approveSuggestion({
-        suggestionId: item.id,
-        stage: overrideStage as V2PipelineStage,
-        overrideReason: `Manual override from ${item.suggestedStage} to ${overrideStage}`,
-      });
-      if (r.ok) router.refresh();
-      else if (typeof window !== "undefined") window.alert(r.error ?? "כשל");
-    });
-  }
-
   function onReject() {
     if (typeof window !== "undefined") {
-      if (!window.confirm("לדחות את ההצעה לחלוטין? הליד ינותח מחדש בריצה הבאה.")) return;
+      if (!window.confirm("לדחות את ההצעה? הליד ינותח מחדש בריצה הבאה.")) return;
     }
     start(async () => {
       const r = await rejectSuggestion(item.id);
@@ -79,6 +61,8 @@ export function InboxRow({
       else if (typeof window !== "undefined") window.alert(r.error ?? "כשל");
     });
   }
+
+  const cleanSid = item.manychatSubId.trim();
 
   return (
     <div
@@ -110,16 +94,18 @@ export function InboxRow({
             flexWrap: "wrap",
           }}
         >
-          <div
+          <Link
+            href={`/dashboard/v2/lead/${encodeURIComponent(cleanSid)}`}
             style={{
               fontFamily: fontStack.display,
               fontSize: size.lg,
               fontWeight: weight.medium,
               color: colors.ink,
+              textDecoration: "none",
             }}
           >
-            {item.leadName ?? item.manychatSubId}
-          </div>
+            {item.leadName ?? cleanSid}
+          </Link>
           <div style={{ display: "flex", gap: space.sm, flexWrap: "wrap", alignItems: "baseline" }}>
             {item.quoteTotalDisplay && (
               <span
@@ -196,45 +182,25 @@ export function InboxRow({
           </div>
         )}
 
-        <div style={{ display: "flex", gap: space.sm, flexWrap: "wrap", alignItems: "center" }}>
+        <div style={{ display: "flex", gap: space.sm, alignItems: "center", flexWrap: "wrap" }}>
           <Button size="sm" variant="primary" onClick={onApprove} pending={pending}>
-            אישור ({item.suggestedStage})
-          </Button>
-          <select
-            value={overrideStage}
-            onChange={(e) => setOverrideStage(e.target.value)}
-            disabled={pending}
-            style={{
-              fontFamily: fontStack.body,
-              fontSize: size.sm,
-              padding: `${space.xs}px ${space.sm}px`,
-              border: `1px solid ${colors.rule}`,
-              borderRadius: 6,
-              background: colors.surface,
-              color: colors.ink,
-            }}
-          >
-            <option value="">— Override stage —</option>
-            {V2_PIPELINE_STAGES.filter((s) => s !== item.suggestedStage).map((s) => (
-              <option key={s} value={s}>
-                {s}
-              </option>
-            ))}
-          </select>
-          <Button
-            size="sm"
-            variant="secondary"
-            onClick={onOverride}
-            disabled={!overrideStage || pending}
-          >
-            החל override
+            אישור
           </Button>
           <Button size="sm" variant="ghost" onClick={onReject} disabled={pending}>
             דחה
           </Button>
+          <Link
+            href={`/dashboard/v2/lead/${encodeURIComponent(cleanSid)}`}
+            style={{
+              fontFamily: fontStack.body,
+              fontSize: size.sm,
+              color: colors.accent,
+              marginInlineStart: space.sm,
+            }}
+          >
+            פתח מסך מלא (notes + override) ↗
+          </Link>
         </div>
-
-        <NotesEditor manychatSubId={item.manychatSubId} initialNotes={item.notes} />
       </div>
     </div>
   );
