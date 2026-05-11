@@ -1,23 +1,31 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
+import { pipelineSuggestions, leads } from "@/drizzle/schema";
 import { sql } from "drizzle-orm";
 import { Page } from "@/components/ui/Page";
 import { Card } from "@/components/ui/Card";
+import { Badge } from "@/components/ui/Badge";
 import { colors, fontStack, size, space, weight } from "@/lib/ui/tokens";
 import { V2_PIPELINE_STAGES } from "@/lib/manychat/config";
-import { getSubscriber, getFieldValue } from "@/lib/manychat/client";
-import { StageRow, type StageRowData } from "./StageRow";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
-export const maxDuration = 60;
 
-interface BaseRow {
+const FLAG_TONES: Record<string, "danger" | "warning" | "info" | "accent" | "neutral"> = {
+  "דחוף": "danger",
+  "עסקה_גדולה": "accent",
+  "ביקש_שיחה": "warning",
+  "אחרי_החג": "info",
+  "מועדף": "accent",
+};
+
+interface LeadRow {
   manychatSubId: string;
   name: string | null;
   flags: string[];
   summary: string | null;
+  reviewedAt: Date | null;
   daysSince: number | null;
 }
 
@@ -25,29 +33,6 @@ function daysSince(d: Date | string | null): number | null {
   if (!d) return null;
   const t = typeof d === "string" ? new Date(d).getTime() : d.getTime();
   return Math.floor((Date.now() - t) / 86400000);
-}
-
-async function pullNotes(subIds: string[]): Promise<Map<string, string | null>> {
-  const out = new Map<string, string | null>();
-  const CONCURRENCY = 10;
-  let cursor = 0;
-  await Promise.all(
-    Array.from({ length: Math.min(CONCURRENCY, subIds.length) }, async () => {
-      while (true) {
-        const i = cursor++;
-        if (i >= subIds.length) return;
-        const sid = subIds[i];
-        try {
-          const sub = await getSubscriber(sid);
-          const n = getFieldValue(sub.custom_fields, "notes");
-          out.set(sid, n ? String(n) : null);
-        } catch {
-          out.set(sid, null);
-        }
-      }
-    })
-  );
-  return out;
 }
 
 export default async function StageDetailPage({
@@ -63,8 +48,10 @@ export default async function StageDetailPage({
     (V2_PIPELINE_STAGES as readonly string[]).includes(stageDecoded);
   if (!isValid) notFound();
 
-  let baseRows: BaseRow[] = [];
+  let rows: LeadRow[] = [];
   if (stageDecoded === "UNCLASSIFIED") {
+    // Truly unclassified = active lead with NO approved suggestion AND
+    // NO pending_review suggestion. Pending ones live in the Inbox.
     const r = await db.execute(sql`
       SELECT l.manychat_sub_id AS sid, l.name AS name
       FROM leads l
@@ -81,11 +68,12 @@ export default async function StageDetailPage({
         )
       ORDER BY COALESCE(l.name, l.manychat_sub_id)
     `);
-    baseRows = ((r.rows ?? r) as Array<{ sid: string; name: string | null }>).map((x) => ({
+    rows = ((r.rows ?? r) as Array<{ sid: string; name: string | null }>).map((x) => ({
       manychatSubId: x.sid,
       name: x.name,
       flags: [],
       summary: null,
+      reviewedAt: null,
       daysSince: null,
     }));
   } else {
@@ -109,42 +97,37 @@ export default async function StageDetailPage({
       summary: string | null;
       reviewed_at: string | Date | null;
     };
-    baseRows = ((r.rows ?? r) as DbRow[]).map((x) => ({
+    rows = ((r.rows ?? r) as DbRow[]).map((x) => ({
       manychatSubId: x.sid,
       name: x.name,
       flags: (x.flags ?? []) as string[],
       summary: x.summary,
+      reviewedAt: x.reviewed_at ? new Date(x.reviewed_at as any) : null,
       daysSince: daysSince(x.reviewed_at),
     }));
-    baseRows.sort((a, b) =>
+    rows.sort((a, b) =>
       (a.name ?? a.manychatSubId).localeCompare(b.name ?? b.manychatSubId, "he")
     );
   }
-
-  const cleanSids = baseRows.map((r) => r.manychatSubId.trim());
-  const notesBySid = await pullNotes(cleanSids);
-
-  const rows: StageRowData[] = baseRows.map((r) => ({
-    manychatSubId: r.manychatSubId,
-    name: r.name,
-    flags: r.flags,
-    summary: r.summary,
-    daysSince: r.daysSince,
-    notes: notesBySid.get(r.manychatSubId.trim()) ?? null,
-    isUnclassified: stageDecoded === "UNCLASSIFIED",
-  }));
 
   return (
     <div>
       <div style={{ marginBottom: space.md }}>
         <Link
           href="/dashboard/v2"
-          style={{ fontFamily: fontStack.body, fontSize: size.sm, color: colors.accent }}
+          style={{
+            fontFamily: fontStack.body,
+            fontSize: size.sm,
+            color: colors.accent,
+          }}
         >
           ← חזרה ל-Inbox
         </Link>
       </div>
-      <Page title={`Stage: ${stageDecoded}`} description={`${rows.length} לידים`} />
+      <Page
+        title={`Stage: ${stageDecoded}`}
+        description={`${rows.length} לידים`}
+      />
 
       <Card>
         {rows.length === 0 ? (
@@ -159,32 +142,81 @@ export default async function StageDetailPage({
             אין לידים ב-stage הזה.
           </p>
         ) : (
-          <div>
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "1.5fr 1fr 1.2fr 0.5fr 2fr auto",
-                gap: space.md,
-                padding: `${space.sm}px 0`,
-                color: colors.inkMuted,
-                fontFamily: fontStack.body,
-                fontSize: size.xs,
-                fontWeight: weight.medium,
-              }}
-            >
-              <div>שם</div>
-              <div>sub_id</div>
-              <div>flags</div>
-              <div>ימים</div>
-              <div>סיכום</div>
-              <div></div>
-            </div>
-            {rows.map((r) => (
-              <StageRow key={r.manychatSubId} data={r} />
-            ))}
-          </div>
+          <table
+            style={{
+              width: "100%",
+              borderCollapse: "collapse",
+              fontFamily: fontStack.body,
+              fontSize: size.sm,
+            }}
+          >
+            <thead>
+              <tr style={{ textAlign: "right", color: colors.inkMuted }}>
+                <th style={th}>שם</th>
+                <th style={th}>sub_id</th>
+                <th style={th}>flags</th>
+                {stageDecoded !== "UNCLASSIFIED" && <th style={th}>ימים מאז עדכון</th>}
+                <th style={th}>סיכום</th>
+                <th style={th}>פעולות</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r) => (
+                <tr
+                  key={r.manychatSubId}
+                  style={{ borderTop: `1px solid ${colors.ruleSoft}`, verticalAlign: "top" }}
+                >
+                  <td style={{ ...td, color: colors.ink, fontWeight: weight.medium }}>
+                    {r.name ?? r.manychatSubId}
+                  </td>
+                  <td style={{ ...td, color: colors.inkSubtle, fontFamily: "ui-monospace, monospace", fontSize: size.xs }}>
+                    {r.manychatSubId}
+                  </td>
+                  <td style={td}>
+                    <span style={{ display: "inline-flex", flexWrap: "wrap", gap: space.xs }}>
+                      {r.flags.map((f) => (
+                        <Badge key={f} tone={FLAG_TONES[f] ?? "neutral"}>
+                          {f}
+                        </Badge>
+                      ))}
+                    </span>
+                  </td>
+                  {stageDecoded !== "UNCLASSIFIED" && (
+                    <td style={{ ...td, color: colors.inkMuted }}>
+                      {r.daysSince !== null ? `${r.daysSince}d` : "—"}
+                    </td>
+                  )}
+                  <td style={{ ...td, color: colors.inkMuted, maxWidth: 380 }}>
+                    {r.summary ?? "—"}
+                  </td>
+                  <td style={td}>
+                    <a
+                      href={`https://app.manychat.com/fb4499581/chat/${encodeURIComponent(r.manychatSubId.trim())}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      style={{
+                        fontFamily: fontStack.body,
+                        fontSize: size.sm,
+                        color: colors.accent,
+                      }}
+                    >
+                      Live Chat ↗
+                    </a>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         )}
       </Card>
     </div>
   );
 }
+
+const th: React.CSSProperties = {
+  padding: `${space.sm}px ${space.sm}px`,
+  fontWeight: weight.medium,
+};
+const td: React.CSSProperties = {
+  padding: `${space.sm}px ${space.sm}px`,
+};
