@@ -19,6 +19,7 @@ export interface InboxItem {
   reason: string;
   source: string;
   quoteTotalDisplay: string | null;
+  notes: string | null;
 }
 
 const FLAG_TONES: Record<string, "danger" | "warning" | "info" | "accent" | "neutral"> = {
@@ -33,10 +34,12 @@ export function InboxRow({
   item,
   checked,
   onToggle,
+  onOpenNotes,
 }: {
   item: InboxItem;
   checked: boolean;
   onToggle: (next: boolean) => void;
+  onOpenNotes: () => void;
 }) {
   const router = useRouter();
   const [pending, start] = useTransition();
@@ -176,13 +179,29 @@ export function InboxRow({
           </div>
         )}
 
-        <div style={{ display: "flex", gap: space.sm }}>
+        <div style={{ display: "flex", gap: space.sm, alignItems: "center", flexWrap: "wrap" }}>
           <Button size="sm" variant="primary" onClick={onApprove} pending={pending}>
             אישור
           </Button>
           <Button size="sm" variant="ghost" onClick={onReject} disabled={pending}>
             דחה
           </Button>
+          <button
+            type="button"
+            onClick={onOpenNotes}
+            disabled={pending}
+            style={{
+              fontFamily: fontStack.body,
+              fontSize: size.sm,
+              color: colors.accent,
+              background: "transparent",
+              border: "none",
+              cursor: pending ? "not-allowed" : "pointer",
+              padding: `${space.xs}px ${space.sm}px`,
+            }}
+          >
+            ✎ הערות{item.notes ? ` (${item.notes.length})` : ""}
+          </button>
         </div>
       </div>
     </div>
