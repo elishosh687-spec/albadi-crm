@@ -157,16 +157,18 @@ export default async function DashboardV2() {
 
   // Pipeline counts come from DB (latest approved suggestion per lead).
   // Avoids ManyChat rate-limit hitting on every dashboard render.
+  // Leads with a pending_review suggestion are excluded from UNCLASSIFIED —
+  // they live under "הצעות ממתינות" until Eli approves.
   const stageCounts: Record<string, number> = {};
   for (const stage of V2_PIPELINE_STAGES) stageCounts[stage] = 0;
   stageCounts["UNCLASSIFIED"] = 0;
   for (const sid of new Set(activeLeads.map((r) => r.id.trim()))) {
     const stage = stageBySid.get(sid);
-    const key =
-      stage && (V2_PIPELINE_STAGES as readonly string[]).includes(stage)
-        ? stage
-        : "UNCLASSIFIED";
-    stageCounts[key] = (stageCounts[key] ?? 0) + 1;
+    if (stage && (V2_PIPELINE_STAGES as readonly string[]).includes(stage)) {
+      stageCounts[stage] = (stageCounts[stage] ?? 0) + 1;
+    } else if (!pendingSids.has(sid)) {
+      stageCounts["UNCLASSIFIED"] = (stageCounts["UNCLASSIFIED"] ?? 0) + 1;
+    }
   }
 
   return (
