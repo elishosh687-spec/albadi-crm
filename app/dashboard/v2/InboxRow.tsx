@@ -200,7 +200,7 @@ export function InboxRow({
               padding: `${space.xs}px ${space.sm}px`,
             }}
           >
-            ✎ הערות{item.notes ? ` (${item.notes.length})` : ""}
+            ✎ הערות / שנה stage{item.notes ? ` (${item.notes.length})` : ""}
           </button>
         </div>
       </div>
