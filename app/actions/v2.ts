@@ -243,6 +243,83 @@ export async function bulkApprove(
   return { ok: failed === 0, approved, failed, errors: errors.length ? errors : undefined };
 }
 
+interface SetLeadStageInput {
+  manychatSubId: string;
+  stage: V2PipelineStage;
+  flags: V2FlagName[];
+  reason?: string;
+}
+
+export async function setLeadStage(
+  input: SetLeadStageInput
+): Promise<SimpleResult> {
+  try {
+    const cleanSid = input.manychatSubId.trim();
+    if (!cleanSid) return { ok: false, error: "missing subscriberId" };
+    if (!V2_PIPELINE_STAGES.includes(input.stage)) {
+      return { ok: false, error: `invalid stage: ${input.stage}` };
+    }
+    for (const f of input.flags) {
+      if (!(f in V2_FLAG_TAG_IDS)) {
+        return { ok: false, error: `invalid flag: ${f}` };
+      }
+    }
+
+    const reasonText = input.reason?.trim() || "Manual edit from dashboard";
+
+    const [row] = await db
+      .insert(pipelineSuggestions)
+      .values({
+        manychatSubId: cleanSid,
+        prevStage: null,
+        suggestedStage: input.stage,
+        suggestedFlags: input.flags,
+        suggestedNextAction: null,
+        suggestedSummary: null,
+        reason: reasonText,
+        source: "manual",
+        status: "approved",
+        approvedStage: input.stage,
+        approvedFlags: input.flags,
+        reviewedAt: new Date(),
+      })
+      .returning({ id: pipelineSuggestions.id });
+
+    await db.insert(eliDecisions).values({
+      suggestionId: row.id,
+      manychatSubId: cleanSid,
+      action: "manual_edit",
+      claudeSuggested: null,
+      eliChose: { stage: input.stage, flags: input.flags },
+      overrideReason: input.reason ?? null,
+    });
+
+    try {
+      await pushToManychat(cleanSid, input.stage, input.flags, null, null);
+      await db
+        .update(pipelineSuggestions)
+        .set({ pushedToManychatAt: new Date() })
+        .where(eq(pipelineSuggestions.id, row.id));
+    } catch (e) {
+      revalidatePath("/dashboard/v2");
+      return {
+        ok: false,
+        error: `נשמר ב-DB אך כתיבה ל-ManyChat נכשלה: ${
+          e instanceof Error ? e.message : String(e)
+        }`,
+      };
+    }
+
+    revalidatePath("/dashboard/v2");
+    return { ok: true, message: `סטייג ${input.stage} נשמר` };
+  } catch (e) {
+    return {
+      ok: false,
+      error: e instanceof Error ? e.message : "save failed",
+    };
+  }
+}
+
 export async function updateLeadNotes(
   manychatSubId: string,
   notes: string

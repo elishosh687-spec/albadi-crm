@@ -4,9 +4,15 @@ import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { colors, fontStack, size, space, weight } from "@/lib/ui/tokens";
-import { approveSuggestion, updateLeadNotes } from "@/app/actions/v2";
 import {
+  approveSuggestion,
+  setLeadStage,
+  updateLeadNotes,
+} from "@/app/actions/v2";
+import {
+  V2_FLAG_NAMES,
   V2_PIPELINE_STAGES,
+  type V2FlagName,
   type V2PipelineStage,
 } from "@/lib/manychat/stages";
 
@@ -14,8 +20,12 @@ export interface NotesModalTarget {
   manychatSubId: string;
   leadName: string | null;
   initialNotes: string | null;
+  // Inbox mode — there's a pending Claude suggestion on this lead.
   suggestionId: number | null;
   suggestedStage: string | null;
+  // Stage-detail mode — the lead is already in a stage and we edit it directly.
+  currentStage?: string | null;
+  currentFlags?: string[] | null;
 }
 
 function nowStamp(): string {
@@ -35,6 +45,8 @@ export function NotesModal({
   const [value, setValue] = useState("");
   const [saved, setSaved] = useState("");
   const [overrideStage, setOverrideStage] = useState<string>("");
+  const [directStage, setDirectStage] = useState<string>("");
+  const [directFlags, setDirectFlags] = useState<Set<V2FlagName>>(new Set());
   const [pending, start] = useTransition();
   const [msg, setMsg] = useState<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
@@ -47,6 +59,8 @@ export function NotesModal({
       setValue(v);
       setSaved(v);
       setOverrideStage("");
+      setDirectStage(target.currentStage ?? "");
+      setDirectFlags(new Set((target.currentFlags ?? []) as V2FlagName[]));
       setMsg(null);
     }
   }, [target]);
@@ -118,6 +132,34 @@ export function NotesModal({
       });
       if (r.ok) {
         flashMsg(`הסטייג שונה ל-${overrideStage}`, true);
+        router.refresh();
+        onClose();
+      } else {
+        flashMsg(r.error ?? "כשל", false);
+      }
+    });
+  }
+
+  function toggleFlag(name: V2FlagName) {
+    setDirectFlags((prev) => {
+      const next = new Set(prev);
+      if (next.has(name)) next.delete(name);
+      else next.add(name);
+      return next;
+    });
+  }
+
+  function onSaveDirectStage() {
+    if (!target || !directStage) return;
+    start(async () => {
+      const r = await setLeadStage({
+        manychatSubId: target.manychatSubId,
+        stage: directStage as V2PipelineStage,
+        flags: Array.from(directFlags),
+        reason: `Manual edit from stage detail (${target.currentStage ?? "none"} → ${directStage})`,
+      });
+      if (r.ok) {
+        flashMsg(`הסטייג נשמר: ${directStage}`, true);
         router.refresh();
         onClose();
       } else {
@@ -323,6 +365,108 @@ export function NotesModal({
               }}
             >
               החלה תרשם כ-<code>overridden</code>, תידחף ל-ManyChat (<code>pipeline_stage</code>) ותתועד ב-<code>eli_decisions</code>.
+            </div>
+          </section>
+        )}
+
+        {/* Direct stage edit — used by stage-detail page (no pending suggestion) */}
+        {!target.suggestionId && target.currentStage !== undefined && (
+          <section
+            style={{
+              borderTop: `1px solid ${colors.ruleSoft}`,
+              paddingTop: space.md,
+              display: "flex",
+              flexDirection: "column",
+              gap: space.sm,
+            }}
+          >
+            <label
+              style={{
+                fontFamily: fontStack.body,
+                fontSize: size.xs,
+                color: colors.inkMuted,
+                fontWeight: weight.medium,
+              }}
+            >
+              שינוי stage נוכחי
+              {target.currentStage ? (
+                <>
+                  {" "}(עכשיו: <strong>{target.currentStage}</strong>)
+                </>
+              ) : (
+                <> (ללא stage)</>
+              )}
+            </label>
+            <div style={{ display: "flex", gap: space.sm, alignItems: "center", flexWrap: "wrap" }}>
+              <select
+                value={directStage}
+                onChange={(e) => setDirectStage(e.target.value)}
+                disabled={pending}
+                style={{
+                  fontFamily: fontStack.body,
+                  fontSize: size.sm,
+                  padding: `${space.sm}px ${space.md}px`,
+                  border: `1px solid ${colors.rule}`,
+                  borderRadius: 6,
+                  background: colors.surface,
+                  color: colors.ink,
+                }}
+              >
+                <option value="">— בחר stage —</option>
+                {V2_PIPELINE_STAGES.map((s) => (
+                  <option key={s} value={s}>
+                    {s}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div style={{ display: "flex", gap: space.md, flexWrap: "wrap", alignItems: "center" }}>
+              <span style={{ fontFamily: fontStack.body, fontSize: size.xs, color: colors.inkMuted, fontWeight: weight.medium }}>
+                flags:
+              </span>
+              {V2_FLAG_NAMES.map((f) => (
+                <label
+                  key={f}
+                  style={{
+                    fontFamily: fontStack.body,
+                    fontSize: size.sm,
+                    color: colors.ink,
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: space.xs,
+                    cursor: "pointer",
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={directFlags.has(f)}
+                    onChange={() => toggleFlag(f)}
+                    disabled={pending}
+                  />
+                  {f}
+                </label>
+              ))}
+            </div>
+            <div style={{ display: "flex", gap: space.sm, alignItems: "center" }}>
+              <Button
+                size="sm"
+                variant="primary"
+                onClick={onSaveDirectStage}
+                disabled={!directStage || pending}
+                pending={pending}
+                pendingText="שומר…"
+              >
+                שמור stage + flags
+              </Button>
+            </div>
+            <div
+              style={{
+                fontFamily: fontStack.body,
+                fontSize: size.xs,
+                color: colors.inkMuted,
+              }}
+            >
+              שמירה תיצור הצעה חדשה <code>approved</code> מקור <code>manual</code>, תדחף ל-ManyChat ותרשם ב-<code>eli_decisions</code>.
             </div>
           </section>
         )}
