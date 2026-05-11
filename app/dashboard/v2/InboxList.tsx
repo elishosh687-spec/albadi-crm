@@ -102,6 +102,8 @@ export function InboxList({ items }: { items: InboxItem[] }) {
               manychatSubId: item.manychatSubId,
               leadName: item.leadName,
               initialNotes: item.notes,
+              suggestionId: item.id,
+              suggestedStage: item.suggestedStage,
             })
           }
         />
