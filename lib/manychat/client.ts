@@ -16,22 +16,36 @@ export interface SubscriberInfo {
   custom_fields: { id: number; name?: string; value: string | number | null }[];
 }
 
+const REQUEST_TIMEOUT_MS = 8000;
+
 async function request<T>(
   path: string,
   init: RequestInit = {}
 ): Promise<T> {
-  const res = await fetch(`${MANYCHAT_BASE}${path}`, {
-    ...init,
-    headers: { ...headers, ...(init.headers || {}) },
-  });
-  if (!res.ok) {
-    throw new Error(`ManyChat ${path} failed: ${res.status} ${await res.text()}`);
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  try {
+    const res = await fetch(`${MANYCHAT_BASE}${path}`, {
+      ...init,
+      headers: { ...headers, ...(init.headers || {}) },
+      signal: controller.signal,
+    });
+    if (!res.ok) {
+      throw new Error(`ManyChat ${path} failed: ${res.status} ${await res.text()}`);
+    }
+    const json = (await res.json()) as { status: string; data?: T; message?: string };
+    if (json.status !== "success") {
+      throw new Error(`ManyChat ${path} returned: ${json.message || "unknown"}`);
+    }
+    return json.data as T;
+  } catch (e) {
+    if (e instanceof Error && e.name === "AbortError") {
+      throw new Error(`ManyChat ${path} timed out after ${REQUEST_TIMEOUT_MS}ms`);
+    }
+    throw e;
+  } finally {
+    clearTimeout(timer);
   }
-  const json = (await res.json()) as { status: string; data?: T; message?: string };
-  if (json.status !== "success") {
-    throw new Error(`ManyChat ${path} returned: ${json.message || "unknown"}`);
-  }
-  return json.data as T;
 }
 
 export async function getSubscriber(subscriberId: string): Promise<SubscriberInfo> {

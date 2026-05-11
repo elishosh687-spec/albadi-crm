@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/Button";
 import { colors, fontStack, size, space, weight } from "@/lib/ui/tokens";
 import { bulkApprove } from "@/app/actions/v2";
 import { InboxRow, type InboxItem } from "./InboxRow";
+import { NotesModal, type NotesModalTarget } from "./NotesModal";
 
 export function InboxList({ items }: { items: InboxItem[] }) {
   const router = useRouter();
@@ -14,6 +15,7 @@ export function InboxList({ items }: { items: InboxItem[] }) {
     new Set(items.map((i) => i.id))
   );
   const [result, setResult] = useState<string | null>(null);
+  const [notesTarget, setNotesTarget] = useState<NotesModalTarget | null>(null);
 
   function toggle(id: number, next: boolean) {
     setChecked((prev) => {
@@ -95,8 +97,17 @@ export function InboxList({ items }: { items: InboxItem[] }) {
           item={item}
           checked={checked.has(item.id)}
           onToggle={(next) => toggle(item.id, next)}
+          onOpenNotes={() =>
+            setNotesTarget({
+              manychatSubId: item.manychatSubId,
+              leadName: item.leadName,
+              initialNotes: item.notes,
+            })
+          }
         />
       ))}
+
+      <NotesModal target={notesTarget} onClose={() => setNotesTarget(null)} />
     </div>
   );
 }
