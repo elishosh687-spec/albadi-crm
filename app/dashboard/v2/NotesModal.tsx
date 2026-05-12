@@ -37,9 +37,11 @@ function nowStamp(): string {
 export function NotesModal({
   target,
   onClose,
+  onNotesSaved,
 }: {
   target: NotesModalTarget | null;
   onClose: () => void;
+  onNotesSaved?: (manychatSubId: string, notes: string) => void;
 }) {
   const router = useRouter();
   const [value, setValue] = useState("");
@@ -99,6 +101,7 @@ export function NotesModal({
       const r = await updateLeadNotes(target.manychatSubId, value);
       if (r.ok) {
         setSaved(value);
+        if (onNotesSaved) onNotesSaved(target.manychatSubId.trim(), value);
         flashMsg("נשמר", true);
         router.refresh();
       } else {

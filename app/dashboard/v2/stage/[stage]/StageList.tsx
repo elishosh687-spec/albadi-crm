@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Badge } from "@/components/ui/Badge";
 import { colors, fontStack, size, space, weight } from "@/lib/ui/tokens";
 import { NotesModal, type NotesModalTarget } from "../../NotesModal";
@@ -31,8 +31,13 @@ export function StageList({
   isUnclassified: boolean;
 }) {
   const [target, setTarget] = useState<NotesModalTarget | null>(null);
+  // Local mirror so optimistic onNotesSaved updates survive the
+  // router.refresh round-trip — reopening the modal too soon otherwise
+  // shows stale notes from the original server render.
+  const [localRows, setLocalRows] = useState<StageLeadRow[]>(rows);
+  useEffect(() => setLocalRows(rows), [rows]);
 
-  if (rows.length === 0) {
+  if (localRows.length === 0) {
     return (
       <p
         style={{
@@ -68,7 +73,7 @@ export function StageList({
           </tr>
         </thead>
         <tbody>
-          {rows.map((r) => {
+          {localRows.map((r) => {
             const cleanSid = r.manychatSubId.trim();
             return (
               <tr
@@ -145,7 +150,17 @@ export function StageList({
         </tbody>
       </table>
 
-      <NotesModal target={target} onClose={() => setTarget(null)} />
+      <NotesModal
+        target={target}
+        onClose={() => setTarget(null)}
+        onNotesSaved={(sid, notes) =>
+          setLocalRows((prev) =>
+            prev.map((r) =>
+              r.manychatSubId.trim() === sid ? { ...r, notes } : r
+            )
+          )
+        }
+      />
     </div>
   );
 }

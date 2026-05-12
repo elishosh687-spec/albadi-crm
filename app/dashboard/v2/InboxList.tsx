@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { colors, fontStack, size, space, weight } from "@/lib/ui/tokens";
@@ -16,6 +16,11 @@ export function InboxList({ items }: { items: InboxItem[] }) {
   );
   const [result, setResult] = useState<string | null>(null);
   const [notesTarget, setNotesTarget] = useState<NotesModalTarget | null>(null);
+  // Local mirror so optimistic onNotesSaved updates survive the
+  // router.refresh round-trip — otherwise reopening the modal too soon
+  // shows the stale (pre-save) notes prop from server.
+  const [localItems, setLocalItems] = useState<InboxItem[]>(items);
+  useEffect(() => setLocalItems(items), [items]);
 
   function toggle(id: number, next: boolean) {
     setChecked((prev) => {
@@ -91,7 +96,7 @@ export function InboxList({ items }: { items: InboxItem[] }) {
         )}
       </div>
 
-      {items.map((item) => (
+      {localItems.map((item) => (
         <InboxRow
           key={item.id}
           item={item}
@@ -109,7 +114,17 @@ export function InboxList({ items }: { items: InboxItem[] }) {
         />
       ))}
 
-      <NotesModal target={notesTarget} onClose={() => setNotesTarget(null)} />
+      <NotesModal
+        target={notesTarget}
+        onClose={() => setNotesTarget(null)}
+        onNotesSaved={(sid, notes) =>
+          setLocalItems((prev) =>
+            prev.map((it) =>
+              it.manychatSubId.trim() === sid ? { ...it, notes } : it
+            )
+          )
+        }
+      />
     </div>
   );
 }
