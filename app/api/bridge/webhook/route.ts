@@ -28,6 +28,7 @@ import {
   insertBridgeMessage,
   upsertLeadFromBridgeEvent,
 } from "@/lib/bridge/client";
+import { handleInbound } from "@/lib/autoresponder/questionnaire";
 
 export const runtime = "nodejs";
 export const maxDuration = 15;
@@ -101,6 +102,15 @@ async function handleMessageReceived(evt: BridgeEnvelope): Promise<void> {
     payload: d,
     receivedAt: new Date(evt.occurred_at),
   });
+
+  // Auto-responder first — only acts on NULL/NEW leads. Mid-pipeline
+  // leads short-circuit to `no_op` so Eli keeps full control of replies.
+  try {
+    const r = await handleInbound({ sid: jid, text });
+    console.log("[bridge.webhook] autoresponder", jid, r);
+  } catch (e) {
+    console.error("[bridge.webhook] autoresponder error", jid, e);
+  }
 
   const open = await db
     .select({ status: analysisQueue.status })

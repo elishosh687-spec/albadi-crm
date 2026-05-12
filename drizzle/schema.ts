@@ -38,6 +38,10 @@ export const leads = pgTable("leads", {
   leadScore: text("lead_score"),
   quantity: text("quantity"),
   lastContactType: text("last_contact_type"),
+
+  // Auto-responder questionnaire state. Null = no active questionnaire.
+  // Shape: { step: 1..9, shipping?, quantity?, product?, handles?, colors?, quoteResult?, doneAt? }
+  qState: jsonb("q_state"),
 });
 
 // DB-owned tags (replaces ManyChat tag IDs). One row per (lead, tag).
