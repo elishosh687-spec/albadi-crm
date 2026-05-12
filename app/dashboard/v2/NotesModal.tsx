@@ -20,6 +20,8 @@ export interface NotesModalTarget {
   manychatSubId: string;
   leadName: string | null;
   initialNotes: string | null;
+  phone?: string | null;
+  quoteResult?: string | null;
   // Inbox mode — there's a pending Claude suggestion on this lead.
   suggestionId: number | null;
   suggestedStage: string | null;
@@ -231,17 +233,44 @@ export function NotesModal({
         onMouseDown={(e) => e.stopPropagation()}
       >
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-          <h3
-            style={{
-              margin: 0,
-              fontFamily: fontStack.display,
-              fontSize: size.lg,
-              fontWeight: weight.medium,
-              color: colors.ink,
-            }}
-          >
-            {target.leadName ?? target.manychatSubId}
-          </h3>
+          <div style={{ display: "flex", flexDirection: "column", gap: space.xs }}>
+            <h3
+              style={{
+                margin: 0,
+                fontFamily: fontStack.display,
+                fontSize: size.lg,
+                fontWeight: weight.medium,
+                color: colors.ink,
+              }}
+            >
+              {target.leadName ?? target.manychatSubId}
+            </h3>
+            <div style={{ display: "flex", gap: space.md, alignItems: "baseline", flexWrap: "wrap" }}>
+              <span
+                style={{
+                  fontFamily: "ui-monospace, monospace",
+                  fontSize: size.xs,
+                  color: colors.inkSubtle,
+                }}
+              >
+                {target.manychatSubId.trim()}
+              </span>
+              {target.phone && (
+                <a
+                  href={`tel:${target.phone}`}
+                  style={{
+                    fontFamily: "ui-monospace, monospace",
+                    fontSize: size.sm,
+                    color: colors.accent,
+                    textDecoration: "none",
+                    direction: "ltr",
+                  }}
+                >
+                  📞 {target.phone}
+                </a>
+              )}
+            </div>
+          </div>
           <button
             type="button"
             onClick={onClose}
@@ -259,6 +288,46 @@ export function NotesModal({
             ×
           </button>
         </div>
+
+        {/* Quote summary block — only when a quote was generated in WhatsApp */}
+        {target.quoteResult && (
+          <details
+            style={{
+              border: `1px solid ${colors.rule}`,
+              borderRadius: 6,
+              padding: `${space.sm}px ${space.md}px`,
+              background: colors.surfaceMuted,
+            }}
+          >
+            <summary
+              style={{
+                fontFamily: fontStack.body,
+                fontSize: size.xs,
+                color: colors.inkMuted,
+                fontWeight: weight.medium,
+                cursor: "pointer",
+              }}
+            >
+              סיכום הצעה שנשלחה ב-WhatsApp
+            </summary>
+            <pre
+              style={{
+                marginTop: space.sm,
+                marginBottom: 0,
+                fontFamily: fontStack.body,
+                fontSize: size.sm,
+                color: colors.ink,
+                whiteSpace: "pre-wrap",
+                lineHeight: 1.4,
+                maxHeight: 240,
+                overflowY: "auto",
+                direction: "rtl",
+              }}
+            >
+              {target.quoteResult}
+            </pre>
+          </details>
+        )}
 
         {/* Notes section */}
         <section style={{ display: "flex", flexDirection: "column", gap: space.xs }}>

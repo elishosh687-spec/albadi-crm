@@ -20,6 +20,8 @@ export interface StageLeadRow {
   summary: string | null;
   daysSince: number | null;
   notes: string | null;
+  phone: string | null;
+  quoteResult: string | null;
   currentStage: string | null;
 }
 
@@ -81,7 +83,24 @@ export function StageList({
                 style={{ borderTop: `1px solid ${colors.ruleSoft}`, verticalAlign: "top" }}
               >
                 <td style={{ ...td, color: colors.ink, fontWeight: weight.medium }}>
-                  {r.name ?? cleanSid}
+                  <div style={{ display: "flex", flexDirection: "column", gap: space.xs }}>
+                    <span>{r.name ?? cleanSid}</span>
+                    {r.phone && (
+                      <a
+                        href={`tel:${r.phone}`}
+                        style={{
+                          fontFamily: "ui-monospace, monospace",
+                          fontSize: size.xs,
+                          color: colors.accent,
+                          textDecoration: "none",
+                          direction: "ltr",
+                          fontWeight: weight.regular,
+                        }}
+                      >
+                        📞 {r.phone}
+                      </a>
+                    )}
+                  </div>
                 </td>
                 <td style={{ ...td, color: colors.inkSubtle, fontFamily: "ui-monospace, monospace", fontSize: size.xs }}>
                   {cleanSid}
@@ -112,6 +131,8 @@ export function StageList({
                           manychatSubId: cleanSid,
                           leadName: r.name,
                           initialNotes: r.notes,
+                          phone: r.phone,
+                          quoteResult: r.quoteResult,
                           suggestionId: null,
                           suggestedStage: null,
                           currentStage: r.currentStage,

@@ -27,8 +27,14 @@ function daysSince(d: Date | string | null): number | null {
   return Math.floor((Date.now() - t) / 86400000);
 }
 
-async function pullNotes(subIds: string[]): Promise<Map<string, string | null>> {
-  const out = new Map<string, string | null>();
+interface LeadCard {
+  notes: string | null;
+  phone: string | null;
+  quoteResult: string | null;
+}
+
+async function pullCards(subIds: string[]): Promise<Map<string, LeadCard>> {
+  const out = new Map<string, LeadCard>();
   const CONCURRENCY = 10;
   let cursor = 0;
   await Promise.all(
@@ -40,9 +46,18 @@ async function pullNotes(subIds: string[]): Promise<Map<string, string | null>> 
         try {
           const sub = await getSubscriber(sid);
           const n = getFieldValue(sub.custom_fields, "notes");
-          out.set(sid, n ? String(n) : null);
+          const qr =
+            sub.custom_fields.find((f) => f.name === "quote_result")?.value ??
+            null;
+          const wp = (sub as any).whatsapp_phone as string | null | undefined;
+          const phone = (wp && wp.trim()) || sub.phone || null;
+          out.set(sid, {
+            notes: n ? String(n) : null,
+            phone,
+            quoteResult: qr ? String(qr) : null,
+          });
         } catch {
-          out.set(sid, null);
+          out.set(sid, { notes: null, phone: null, quoteResult: null });
         }
       }
     })
@@ -137,17 +152,22 @@ export default async function StageDetailPage({
   }
 
   const cleanSids = baseRows.map((r) => r.manychatSubId.trim());
-  const notesBySid = await pullNotes(cleanSids);
+  const cardsBySid = await pullCards(cleanSids);
 
-  const rows: StageLeadRow[] = baseRows.map((r) => ({
-    manychatSubId: r.manychatSubId,
-    name: r.name,
-    flags: r.flags,
-    summary: r.summary,
-    daysSince: r.daysSince,
-    notes: notesBySid.get(r.manychatSubId.trim()) ?? null,
-    currentStage: isUnclassified ? null : stageDecoded,
-  }));
+  const rows: StageLeadRow[] = baseRows.map((r) => {
+    const card = cardsBySid.get(r.manychatSubId.trim());
+    return {
+      manychatSubId: r.manychatSubId,
+      name: r.name,
+      flags: r.flags,
+      summary: r.summary,
+      daysSince: r.daysSince,
+      notes: card?.notes ?? null,
+      phone: card?.phone ?? null,
+      quoteResult: card?.quoteResult ?? null,
+      currentStage: isUnclassified ? null : stageDecoded,
+    };
+  });
 
   return (
     <div>

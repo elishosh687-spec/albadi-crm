@@ -20,7 +20,9 @@ interface LeadSnapshot {
   pipelineStage: V2PipelineStage | null;
   flags: string[];
   quoteTotal: number | null;
+  quoteResult: string | null;
   notes: string | null;
+  phone: string | null;
   lastInteraction: string | null;
 }
 
@@ -39,17 +41,24 @@ async function pullLeadSnapshots(subIds: string[]): Promise<LeadSnapshot[]> {
       const sub = await getSubscriber(cleanSid);
       const stage = getFieldValue(sub.custom_fields, "pipeline_stage");
       const quote = getFieldValue(sub.custom_fields, "quote_total");
+      // quote_result is not in FIELD_IDS — read by name directly.
+      const quoteResult =
+        sub.custom_fields.find((f) => f.name === "quote_result")?.value ?? null;
       const notes = getFieldValue(sub.custom_fields, "notes");
       const flags = sub.tags
         .map((t) => t.name ?? "")
         .filter((n) => flagNames.has(n));
+      const wp = (sub as any).whatsapp_phone as string | null | undefined;
+      const phone = (wp && wp.trim()) || sub.phone || null;
       return {
         sid: cleanSid,
         name: sub.name ?? null,
         pipelineStage: (stage ? String(stage) : null) as V2PipelineStage | null,
         flags,
         quoteTotal: quote ? Number(quote) : null,
+        quoteResult: quoteResult ? String(quoteResult) : null,
         notes: notes ? String(notes) : null,
+        phone,
         lastInteraction: ((sub as any).last_interaction as string | null) ?? null,
       };
     } catch {
@@ -59,7 +68,9 @@ async function pullLeadSnapshots(subIds: string[]): Promise<LeadSnapshot[]> {
         pipelineStage: null,
         flags: [],
         quoteTotal: null,
+        quoteResult: null,
         notes: null,
+        phone: null,
         lastInteraction: null,
       };
     }
@@ -142,6 +153,8 @@ export default async function DashboardV2() {
       source: r.source,
       quoteTotalDisplay: formatNum(snap?.quoteTotal ?? null),
       notes: snap?.notes ?? null,
+      phone: snap?.phone ?? null,
+      quoteResult: snap?.quoteResult ?? null,
     };
   });
 
