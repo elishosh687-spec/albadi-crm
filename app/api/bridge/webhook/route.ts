@@ -102,7 +102,6 @@ async function handleMessageReceived(evt: BridgeEnvelope): Promise<void> {
     receivedAt: new Date(evt.occurred_at),
   });
 
-  // Enqueue classifier — skip if a pending/analyzing row already exists.
   const open = await db
     .select({ status: analysisQueue.status })
     .from(analysisQueue)
@@ -136,7 +135,13 @@ async function handleMessageSent(evt: BridgeEnvelope): Promise<void> {
 }
 
 export async function POST(req: NextRequest) {
-  const secret = process.env.BRIDGE_WEBHOOK_SECRET;
+  // Strip a stray UTF-8 BOM (U+FEFF) if the env was set via a tool that
+  // prepended one — PowerShell pipes on Windows do this. The bridge signs
+  // the raw secret, so a BOM in our copy would yield a silent HMAC mismatch.
+  const secret = (process.env.BRIDGE_WEBHOOK_SECRET ?? "").replace(
+    /^﻿/,
+    ""
+  );
   if (!secret) {
     return NextResponse.json(
       { error: "BRIDGE_WEBHOOK_SECRET not configured" },
@@ -156,24 +161,6 @@ export async function POST(req: NextRequest) {
   }
 
   if (!verifySignature(secret, sig.t, rawBody, sig.v1)) {
-    // TEMP DEBUG — remove after handshake works.
-    const expected = createHmac("sha256", secret)
-      .update(`${sig.t}.${rawBody}`)
-      .digest("hex");
-    console.error("[bridge.webhook] sig mismatch", {
-      t: sig.t,
-      receivedV1: sig.v1,
-      computedV1Hex: expected,
-      bodyLen: rawBody.length,
-      bodyHead: rawBody.slice(0, 80),
-      secretLen: secret.length,
-      secretHead: secret.slice(0, 8),
-      hdrs: {
-        sig: req.headers.get("x-bridge-signature"),
-        ct: req.headers.get("content-type"),
-        ua: req.headers.get("user-agent"),
-      },
-    });
     return NextResponse.json({ error: "bad signature" }, { status: 401 });
   }
 
@@ -187,7 +174,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "malformed envelope" }, { status: 400 });
   }
 
-  // Audit-log + dedupe via evt_id unique constraint.
   try {
     await db.insert(bridgeEvents).values({
       evtId: envelope.id,
@@ -197,7 +183,6 @@ export async function POST(req: NextRequest) {
       payload: envelope as any,
     });
   } catch (e: any) {
-    // Unique violation on evt_id ⇒ duplicate retry, ack and skip.
     if (String(e?.message ?? "").includes("duplicate") || e?.code === "23505") {
       return NextResponse.json({ ok: true, dedup: true });
     }
@@ -212,20 +197,17 @@ export async function POST(req: NextRequest) {
       case "message.sent":
         await handleMessageSent(envelope);
         break;
-      // delivered/read/failed/tenant.* land in bridge_events only.
       default:
         break;
     }
   } catch (e) {
     console.error("[bridge.webhook] handler error", envelope.type, e);
-    // Still 2xx — event is audit-logged, retry would just re-error.
     return NextResponse.json({ ok: true, handler_error: String(e) });
   }
 
   return NextResponse.json({ ok: true });
 }
 
-// Bridge has no GET probe convention; keep this for manual curling.
 export async function GET() {
   return NextResponse.json({
     ok: true,
