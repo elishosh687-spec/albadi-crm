@@ -95,21 +95,6 @@ export function NotesModal({
     if (!isOk) console.warn("Notes modal error:", text);
   }
 
-  function onSave() {
-    if (!target) return;
-    start(async () => {
-      const r = await updateLeadNotes(target.manychatSubId, value);
-      if (r.ok) {
-        setSaved(value);
-        if (onNotesSaved) onNotesSaved(target.manychatSubId.trim(), value);
-        flashMsg("נשמר", true);
-        router.refresh();
-      } else {
-        flashMsg(r.error ?? "כשל", false);
-      }
-    });
-  }
-
   function onInsertStamp() {
     const stamp = `[${nowStamp()}] `;
     const next = value.length === 0 ? stamp : `${stamp}\n${value}`;
@@ -125,24 +110,6 @@ export function NotesModal({
     }, 0);
   }
 
-  function onApplyOverride() {
-    if (!target || !target.suggestionId || !overrideStage) return;
-    start(async () => {
-      const r = await approveSuggestion({
-        suggestionId: target.suggestionId!,
-        stage: overrideStage as V2PipelineStage,
-        overrideReason: `Manual override from ${target.suggestedStage} to ${overrideStage}`,
-      });
-      if (r.ok) {
-        flashMsg(`הסטייג שונה ל-${overrideStage}`, true);
-        router.refresh();
-        onClose();
-      } else {
-        flashMsg(r.error ?? "כשל", false);
-      }
-    });
-  }
-
   function toggleFlag(name: V2FlagName) {
     setDirectFlags((prev) => {
       const next = new Set(prev);
@@ -152,23 +119,81 @@ export function NotesModal({
     });
   }
 
-  function onSaveDirectStage() {
-    if (!target || !directStage) return;
+  function onSaveAll() {
+    if (!target) return;
+    const notesDirty = value !== saved;
+    const overrideChosen = !!overrideStage; // inbox mode
+    const directChanged =
+      target.suggestionId == null &&
+      target.currentStage !== undefined &&
+      directStage !== "" &&
+      (directStage !== (target.currentStage ?? "") ||
+        flagsChanged(directFlags, target.currentFlags ?? []));
+    if (!notesDirty && !overrideChosen && !directChanged) {
+      flashMsg("אין שינויים לשמור", false);
+      return;
+    }
+
     start(async () => {
-      const r = await setLeadStage({
-        manychatSubId: target.manychatSubId,
-        stage: directStage as V2PipelineStage,
-        flags: Array.from(directFlags),
-        reason: `Manual edit from stage detail (${target.currentStage ?? "none"} → ${directStage})`,
-      });
-      if (r.ok) {
-        flashMsg(`הסטייג נשמר: ${directStage}`, true);
+      let notesOk = true;
+      let stageOk = true;
+      const msgParts: string[] = [];
+      let lastError: string | null = null;
+
+      if (notesDirty) {
+        const r = await updateLeadNotes(target.manychatSubId, value);
+        if (r.ok) {
+          setSaved(value);
+          if (onNotesSaved) onNotesSaved(target.manychatSubId.trim(), value);
+          msgParts.push("הערות");
+        } else {
+          notesOk = false;
+          lastError = r.error ?? "כשל בשמירת הערות";
+        }
+      }
+
+      if (notesOk && overrideChosen) {
+        const r = await approveSuggestion({
+          suggestionId: target.suggestionId!,
+          stage: overrideStage as V2PipelineStage,
+          overrideReason: `Manual override from ${target.suggestedStage} to ${overrideStage}`,
+        });
+        if (r.ok) {
+          msgParts.push(`stage→${overrideStage}`);
+        } else {
+          stageOk = false;
+          lastError = r.error ?? "כשל בשמירת stage";
+        }
+      } else if (notesOk && directChanged) {
+        const r = await setLeadStage({
+          manychatSubId: target.manychatSubId,
+          stage: directStage as V2PipelineStage,
+          flags: Array.from(directFlags),
+          reason: `Manual edit from stage detail (${target.currentStage ?? "none"} → ${directStage})`,
+        });
+        if (r.ok) {
+          msgParts.push(`stage→${directStage}`);
+        } else {
+          stageOk = false;
+          lastError = r.error ?? "כשל בשמירת stage";
+        }
+      }
+
+      if (notesOk && stageOk) {
+        flashMsg(`נשמר: ${msgParts.join(" + ")}`, true);
         router.refresh();
-        onClose();
+        if (overrideChosen || directChanged) onClose();
       } else {
-        flashMsg(r.error ?? "כשל", false);
+        flashMsg(lastError ?? "כשל", false);
       }
     });
+  }
+
+  function flagsChanged(next: Set<V2FlagName>, prev: string[]): boolean {
+    const prevSet = new Set(prev);
+    if (next.size !== prevSet.size) return true;
+    for (const f of next) if (!prevSet.has(f)) return true;
+    return false;
   }
 
   function onBackdrop(e: React.MouseEvent<HTMLDivElement>) {
@@ -294,18 +319,6 @@ export function NotesModal({
               minHeight: 180,
             }}
           />
-          <div style={{ display: "flex", alignItems: "center", gap: space.sm }}>
-            <Button
-              size="sm"
-              variant="primary"
-              onClick={onSave}
-              disabled={!dirty || pending}
-              pending={pending}
-              pendingText="שומר…"
-            >
-              שמור הערות
-            </Button>
-          </div>
         </section>
 
         {/* Stage override section — only when there's an active pending suggestion */}
@@ -329,46 +342,28 @@ export function NotesModal({
             >
               העברת stage (Claude הציע: <strong>{target.suggestedStage}</strong>)
             </label>
-            <div style={{ display: "flex", gap: space.sm, alignItems: "center", flexWrap: "wrap" }}>
-              <select
-                value={overrideStage}
-                onChange={(e) => setOverrideStage(e.target.value)}
-                disabled={pending}
-                style={{
-                  fontFamily: fontStack.body,
-                  fontSize: size.sm,
-                  padding: `${space.sm}px ${space.md}px`,
-                  border: `1px solid ${colors.rule}`,
-                  borderRadius: 6,
-                  background: colors.surface,
-                  color: colors.ink,
-                }}
-              >
-                <option value="">— בחר stage חלופי —</option>
-                {V2_PIPELINE_STAGES.filter((s) => s !== target.suggestedStage).map((s) => (
-                  <option key={s} value={s}>
-                    {s}
-                  </option>
-                ))}
-              </select>
-              <Button
-                size="sm"
-                variant="secondary"
-                onClick={onApplyOverride}
-                disabled={!overrideStage || pending}
-              >
-                החל ושמור
-              </Button>
-            </div>
-            <div
+            <select
+              value={overrideStage}
+              onChange={(e) => setOverrideStage(e.target.value)}
+              disabled={pending}
               style={{
                 fontFamily: fontStack.body,
-                fontSize: size.xs,
-                color: colors.inkMuted,
+                fontSize: size.sm,
+                padding: `${space.sm}px ${space.md}px`,
+                border: `1px solid ${colors.rule}`,
+                borderRadius: 6,
+                background: colors.surface,
+                color: colors.ink,
+                width: "fit-content",
               }}
             >
-              החלה תרשם כ-<code>overridden</code>, תידחף ל-ManyChat (<code>pipeline_stage</code>) ותתועד ב-<code>eli_decisions</code>.
-            </div>
+              <option value="">— השאר על {target.suggestedStage} —</option>
+              {V2_PIPELINE_STAGES.filter((s) => s !== target.suggestedStage).map((s) => (
+                <option key={s} value={s}>
+                  {s}
+                </option>
+              ))}
+            </select>
           </section>
         )}
 
@@ -450,31 +445,28 @@ export function NotesModal({
                 </label>
               ))}
             </div>
-            <div style={{ display: "flex", gap: space.sm, alignItems: "center" }}>
-              <Button
-                size="sm"
-                variant="primary"
-                onClick={onSaveDirectStage}
-                disabled={!directStage || pending}
-                pending={pending}
-                pendingText="שומר…"
-              >
-                שמור stage + flags
-              </Button>
-            </div>
-            <div
-              style={{
-                fontFamily: fontStack.body,
-                fontSize: size.xs,
-                color: colors.inkMuted,
-              }}
-            >
-              שמירה תיצור הצעה חדשה <code>approved</code> מקור <code>manual</code>, תדחף ל-ManyChat ותרשם ב-<code>eli_decisions</code>.
-            </div>
           </section>
         )}
 
-        <div style={{ display: "flex", alignItems: "center", gap: space.sm, marginTop: space.sm }}>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: space.sm,
+            marginTop: space.sm,
+            paddingTop: space.md,
+            borderTop: `1px solid ${colors.ruleSoft}`,
+          }}
+        >
+          <Button
+            size="md"
+            variant="primary"
+            onClick={onSaveAll}
+            pending={pending}
+            pendingText="שומר…"
+          >
+            שמור
+          </Button>
           <Button size="md" variant="ghost" onClick={onClose} disabled={pending}>
             סגור
           </Button>
@@ -483,7 +475,7 @@ export function NotesModal({
               style={{
                 fontFamily: fontStack.body,
                 fontSize: size.sm,
-                color: msg.startsWith("נשמר") || msg.startsWith("הסטייג") ? colors.success : colors.danger,
+                color: msg.startsWith("נשמר") ? colors.success : colors.danger,
                 marginInlineStart: space.sm,
               }}
             >
