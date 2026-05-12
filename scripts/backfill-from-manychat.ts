@@ -24,19 +24,21 @@ import { resolveJidFromPhone } from "../lib/bridge/client";
 
 const CONFIRM = process.argv.includes("--confirm");
 
+// Drizzle column property names (camelCase) — keep aligned with
+// drizzle/schema.ts so .set() recognises every key.
 const FIELD_COLUMN: Record<FieldName, string> = {
   notes: "notes",
-  quote_total: "quote_total",
-  quote_alt: "quote_alt",
-  lead_source: "lead_source",
-  last_contact_date: "last_contact_date",
-  follow_up_date: "follow_up_date",
-  lead_score: "lead_score",
+  quote_total: "quoteTotal",
+  quote_alt: "quoteAlt",
+  lead_source: "leadSource",
+  last_contact_date: "lastContactDate",
+  follow_up_date: "followUpDate",
+  lead_score: "leadScore",
   quantity: "quantity",
-  last_contact_type: "last_contact_type",
-  pipeline_stage: "pipeline_stage",
-  next_action: "next_action",
-  bot_summary: "bot_summary",
+  last_contact_type: "lastContactType",
+  pipeline_stage: "pipelineStage",
+  next_action: "nextAction",
+  bot_summary: "botSummary",
 };
 
 const TAG_NAME_BY_ID = new Map<number, string>();
@@ -123,9 +125,9 @@ async function apply(plans: PlannedDiff[]): Promise<void> {
   let writes = 0;
   for (const p of plans) {
     const patch: Record<string, unknown> = { ...p.field_patch };
-    if (p.phone) patch.phone_e164 = p.phone;
-    if (p.wa_jid) patch.wa_jid = p.wa_jid;
-    patch.updated_at = new Date();
+    if (p.phone) patch.phoneE164 = p.phone;
+    if (p.wa_jid) patch.waJid = p.wa_jid;
+    patch.updatedAt = new Date();
 
     await db
       .update(leads)

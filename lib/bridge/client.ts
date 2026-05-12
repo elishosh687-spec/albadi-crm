@@ -16,7 +16,7 @@
  */
 import { db } from "../db";
 import { leads, leadTags, messages as messagesTable } from "../../drizzle/schema";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { bridgeFetch } from "./http";
 import {
   FIELD_IDS,
@@ -80,12 +80,25 @@ const FIELD_COLUMN: Record<FieldName, keyof typeof leads.$inferInsert> = {
 
 // ---------- public API ----------
 
+// Pre-existing data quirk: some leads.manychat_sub_id values carry a
+// trailing space. We can't trim the column in place because trimmed
+// versions of some IDs already exist as separate rows (would collide on
+// PK). So every lookup uses trim()=trim() instead of equality so callers
+// can pass either form.
+function sidMatch(sid: string) {
+  return sql`trim(${leads.manychatSubId}) = ${sid.trim()}`;
+}
+
+function tagSidMatch(sid: string) {
+  return sql`trim(${leadTags.manychatSubId}) = ${sid.trim()}`;
+}
+
 export async function getSubscriber(subscriberId: string): Promise<SubscriberInfo> {
   const sid = subscriberId.trim();
   const [row] = await db
     .select()
     .from(leads)
-    .where(eq(leads.manychatSubId, sid))
+    .where(sidMatch(sid))
     .limit(1);
 
   if (!row) {
@@ -101,7 +114,7 @@ export async function getSubscriber(subscriberId: string): Promise<SubscriberInf
   const tagRows = await db
     .select({ tag: leadTags.tag })
     .from(leadTags)
-    .where(eq(leadTags.manychatSubId, sid));
+    .where(tagSidMatch(sid));
 
   const tags = tagRows
     .map((t) => {
@@ -138,10 +151,14 @@ export async function addTag(subscriberId: string, tagId: number): Promise<void>
   if (!name) {
     throw new Error(`addTag: unknown tag id ${tagId}`);
   }
-  await db
-    .insert(leadTags)
-    .values({ manychatSubId: sid, tag: name })
-    .onConflictDoNothing();
+  // Check by trimmed match — pre-existing rows may carry trailing spaces.
+  const existing = await db
+    .select({ id: leadTags.id })
+    .from(leadTags)
+    .where(and(tagSidMatch(sid), eq(leadTags.tag, name)))
+    .limit(1);
+  if (existing.length > 0) return;
+  await db.insert(leadTags).values({ manychatSubId: sid, tag: name });
 }
 
 export async function removeTag(subscriberId: string, tagId: number): Promise<void> {
@@ -152,7 +169,7 @@ export async function removeTag(subscriberId: string, tagId: number): Promise<vo
   }
   await db
     .delete(leadTags)
-    .where(and(eq(leadTags.manychatSubId, sid), eq(leadTags.tag, name)));
+    .where(and(tagSidMatch(sid), eq(leadTags.tag, name)));
 }
 
 export async function setCustomFields(
@@ -171,7 +188,7 @@ export async function setCustomFields(
   await db
     .update(leads)
     .set({ ...patch, updatedAt: new Date() } as any)
-    .where(eq(leads.manychatSubId, sid));
+    .where(sidMatch(sid));
 }
 
 export function getFieldValue(
