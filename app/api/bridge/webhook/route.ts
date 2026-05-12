@@ -28,6 +28,7 @@ import {
   insertBridgeMessage,
   upsertLeadFromBridgeEvent,
 } from "@/lib/bridge/client";
+import { BRIDGE_WEBHOOK_SECRET } from "@/lib/bridge/config";
 import { handleInbound } from "@/lib/autoresponder/questionnaire";
 
 export const runtime = "nodejs";
@@ -81,6 +82,12 @@ async function handleMessageReceived(evt: BridgeEnvelope): Promise<void> {
   const d = evt.data ?? {};
   const jid = pickStr(d, "chat_jid", "chatJid", "jid");
   if (!jid) return;
+  // Ignore WhatsApp Statuses (stories) and groups — we only care about
+  // 1:1 chats. Group JIDs end @g.us; Status broadcasts use @broadcast.
+  if (jid.endsWith("@broadcast") || jid.endsWith("@g.us")) return;
+  // Bridge sends our own outbound as message.received with is_from_me=true
+  // on some configs — skip those, they are echoes.
+  if ((d as any)?.is_from_me === true) return;
   const waMessageId =
     pickStr(d, "wa_message_id", "id", "messageId") ?? `bridge:${evt.id}`;
   const text = pickStr(d, "text", "content", "body");
@@ -145,13 +152,8 @@ async function handleMessageSent(evt: BridgeEnvelope): Promise<void> {
 }
 
 export async function POST(req: NextRequest) {
-  // Strip a stray UTF-8 BOM (U+FEFF) if the env was set via a tool that
-  // prepended one — PowerShell pipes on Windows do this. The bridge signs
-  // the raw secret, so a BOM in our copy would yield a silent HMAC mismatch.
-  const secret = (process.env.BRIDGE_WEBHOOK_SECRET ?? "").replace(
-    /^﻿/,
-    ""
-  );
+  // BRIDGE_WEBHOOK_SECRET is BOM-stripped in lib/bridge/config.ts.
+  const secret = BRIDGE_WEBHOOK_SECRET;
   if (!secret) {
     return NextResponse.json(
       { error: "BRIDGE_WEBHOOK_SECRET not configured" },
