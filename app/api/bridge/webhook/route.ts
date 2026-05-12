@@ -156,6 +156,24 @@ export async function POST(req: NextRequest) {
   }
 
   if (!verifySignature(secret, sig.t, rawBody, sig.v1)) {
+    // TEMP DEBUG — remove after handshake works.
+    const expected = createHmac("sha256", secret)
+      .update(`${sig.t}.${rawBody}`)
+      .digest("hex");
+    console.error("[bridge.webhook] sig mismatch", {
+      t: sig.t,
+      receivedV1: sig.v1,
+      computedV1Hex: expected,
+      bodyLen: rawBody.length,
+      bodyHead: rawBody.slice(0, 80),
+      secretLen: secret.length,
+      secretHead: secret.slice(0, 8),
+      hdrs: {
+        sig: req.headers.get("x-bridge-signature"),
+        ct: req.headers.get("content-type"),
+        ua: req.headers.get("user-agent"),
+      },
+    });
     return NextResponse.json({ error: "bad signature" }, { status: 401 });
   }
 
