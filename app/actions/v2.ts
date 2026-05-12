@@ -150,7 +150,7 @@ export async function approveSuggestion(
         .set({ pushedToManychatAt: new Date() })
         .where(eq(pipelineSuggestions.id, input.suggestionId));
     } catch (e) {
-      revalidatePath("/dashboard/v2");
+      revalidatePath("/dashboard/v2", "layout");
       return {
         ok: false,
         error: `אישור נשמר ב-DB אך כתיבה ל-ManyChat נכשלה: ${
@@ -159,7 +159,7 @@ export async function approveSuggestion(
       };
     }
 
-    revalidatePath("/dashboard/v2");
+    revalidatePath("/dashboard/v2", "layout");
     return { ok: true, message: isOverride ? "Override נשמר" : "אושר" };
   } catch (e) {
     return {
@@ -208,7 +208,7 @@ export async function rejectSuggestion(
       overrideReason: reason ?? null,
     });
 
-    revalidatePath("/dashboard/v2");
+    revalidatePath("/dashboard/v2", "layout");
     return { ok: true, message: "נדחה" };
   } catch (e) {
     return {
@@ -301,7 +301,7 @@ export async function setLeadStage(
         .set({ pushedToManychatAt: new Date() })
         .where(eq(pipelineSuggestions.id, row.id));
     } catch (e) {
-      revalidatePath("/dashboard/v2");
+      revalidatePath("/dashboard/v2", "layout");
       return {
         ok: false,
         error: `נשמר ב-DB אך כתיבה ל-ManyChat נכשלה: ${
@@ -310,7 +310,7 @@ export async function setLeadStage(
       };
     }
 
-    revalidatePath("/dashboard/v2");
+    revalidatePath("/dashboard/v2", "layout");
     return { ok: true, message: `סטייג ${input.stage} נשמר` };
   } catch (e) {
     return {
@@ -349,7 +349,7 @@ export async function updateLeadNotes(
       console.error("updateLeadNotes: enqueue failed", e);
     }
 
-    revalidatePath("/dashboard/v2");
+    revalidatePath("/dashboard/v2", "layout");
     return { ok: true, message: "ההערות נשמרו" };
   } catch (e) {
     return {
