@@ -5,7 +5,7 @@ import { desc, eq, sql } from "drizzle-orm";
 import { Page } from "@/components/ui/Page";
 import { Card } from "@/components/ui/Card";
 import { colors, fontStack, size, space, weight } from "@/lib/ui/tokens";
-import { getSubscriber, getFieldValue } from "@/lib/manychat/client";
+import { getSubscriber, getFieldValue } from "@/lib/messaging";
 import { V2_PIPELINE_STAGES, type V2PipelineStage } from "@/lib/manychat/config";
 import { InboxList } from "./InboxList";
 import type { InboxItem } from "./InboxRow";

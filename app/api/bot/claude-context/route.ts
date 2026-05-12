@@ -19,7 +19,7 @@ import {
   eliDecisions,
 } from "@/drizzle/schema";
 import { and, desc, eq, gte, inArray, lt, or, sql } from "drizzle-orm";
-import { getSubscriber } from "@/lib/manychat/client";
+import { getSubscriber } from "@/lib/messaging";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;

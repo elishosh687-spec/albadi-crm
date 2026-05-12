@@ -6,7 +6,7 @@ import { Page } from "@/components/ui/Page";
 import { Card } from "@/components/ui/Card";
 import { colors, fontStack, size, space } from "@/lib/ui/tokens";
 import { V2_PIPELINE_STAGES } from "@/lib/manychat/stages";
-import { getSubscriber, getFieldValue } from "@/lib/manychat/client";
+import { getSubscriber, getFieldValue } from "@/lib/messaging";
 import { StageList, type StageLeadRow } from "./StageList";
 
 export const dynamic = "force-dynamic";

@@ -19,7 +19,7 @@ import {
   getSubscriber,
   removeTag,
   setCustomFields,
-} from "@/lib/manychat/client";
+} from "@/lib/messaging";
 
 export interface SimpleResult {
   ok: boolean;

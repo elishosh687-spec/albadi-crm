@@ -2,11 +2,12 @@
 
 ## Architecture
 
-Next.js app deployed on Vercel. Neon PostgreSQL via Drizzle ORM. ManyChat API for WhatsApp.
+Next.js app deployed on Vercel. Neon PostgreSQL via Drizzle ORM. WhatsApp messaging via either ManyChat (legacy) or the whatsapp-bridge-node tenant — toggled by `USE_BRIDGE` env (see "Bridge migration" below).
 
 **Deployed URL:** `https://albadi-crm.vercel.app`
 **DB:** Neon (see `DATABASE_URL` in `.env`)
 **ManyChat account:** see `MANYCHAT_TOKEN` in `.env`
+**Bridge tenant:** see `BRIDGE_BASE` + `BRIDGE_TENANT_TOKEN` in `.env`
 
 ## Key API Routes
 
@@ -101,3 +102,34 @@ When you add or move a constant the classifier or dashboard depends on, double-c
 4. If you see hydration mismatch errors instead, audit any locale/date/random-id values passed from server to client.
 
 **Do not** assume "DOM weight" before reading the console. The previous CLAUDE.md entry chased that hypothesis through multiple PRs and never closed the bug.
+
+## Bridge migration (READ BEFORE TOUCHING MESSAGING)
+
+We are mid-migration off ManyChat onto a self-hosted whatsapp-bridge-node tenant. The bridge gives us send/receive + webhooks but **does not** know about tags, custom fields, or template ("Flow") sends — that state moved into the DB.
+
+**Feature flag:** `USE_BRIDGE=1` flips every messaging call from the ManyChat HTTP path to the bridge + DB path. Default is `0` (ManyChat). Both paths coexist so we can revert instantly.
+
+**Import rule:** all server-side code MUST import messaging helpers from `@/lib/messaging`, NOT from `@/lib/manychat/client` or `@/lib/bridge/client` directly. The adapter at [lib/messaging/index.ts](lib/messaging/index.ts) re-exports the active backend.
+
+**State ownership when USE_BRIDGE=1:**
+- `leads` row holds name, phone (E.164), wa_jid, and every custom field (`pipeline_stage`, `next_action`, `bot_summary`, `notes`, `quote_total`, etc.). DB is authoritative.
+- `lead_tags(manychat_sub_id, tag)` holds tag membership by NAME (Hebrew keys from `TAG_IDS` / `V2_FLAG_TAG_IDS`). Numeric ids only live in code maps for backward compat with the legacy `addTag(id, tagId)` signature.
+- `bridge_events(evt_id UNIQUE)` audits every signed webhook envelope and dedupes retries.
+- `messages.wa_message_id` carries the bridge-side id for dedupe on inbound webhook retries.
+
+**Identity:** for bridge-origin leads we store the chat JID (e.g. `972…@s.whatsapp.net`) in `leads.manychat_sub_id`. ManyChat-origin leads keep their numeric subscriber id. The two namespaces never collide (JIDs contain `@`).
+
+**Webhook endpoint:** [app/api/bridge/webhook/route.ts](app/api/bridge/webhook/route.ts) verifies HMAC-SHA256 over `t.rawBody` against `BRIDGE_WEBHOOK_SECRET`, rejects >5min replay window, logs to `bridge_events`, and routes `message.received`/`message.sent` through `lib/bridge/client.ts`. Other event types (`delivered`/`read`/`failed`/`tenant.*`) are audit-logged only.
+
+**What the bridge cannot do (yet):** WhatsApp business templates. ManyChat Flows (`albadi_followup_quote_sent`, etc.) used to send templates to leads outside the 24h customer-service window. The bridge only sends free-form text/media, which WhatsApp blocks outside that window. **`scripts/restart-send.ts` keeps hitting ManyChat sendFlow until we add a Cloud API integration.** Do not assume `sendMessage()` on a stale lead will reach the recipient.
+
+**Cutover checklist:**
+1. `npx tsx scripts/backfill-from-manychat.ts` (dry run, review).
+2. `npx tsx scripts/backfill-from-manychat.ts --confirm`.
+3. Register bridge webhook → `POST /v1/subscriptions` (tenant-scoped) with `url=https://albadi-crm.vercel.app/api/bridge/webhook`, `events=["message.received","message.sent","message.delivered","message.read","message.failed"]`. Store the returned signing secret in `BRIDGE_WEBHOOK_SECRET`.
+4. Hit `POST /v1/subscriptions/:id/ping` to fire a synthetic event; verify it lands in `bridge_events` and `leads` (smoke test).
+5. `USE_BRIDGE=1` in Vercel, redeploy.
+6. Watch `/api/bot/cron` + dashboard for one full cycle.
+7. Only after a clean week: disable ManyChat Flow webhooks, delete `MANYCHAT_TOKEN`, drop `lib/manychat/client.ts`.
+
+**Rollback:** flip `USE_BRIDGE=0`, redeploy. DB state survives — ManyChat path resumes reading its own fields.
