@@ -90,18 +90,32 @@ export default async function StageDetailPage({
       daysSince: null,
     }));
   } else {
+    // First take the LATEST approved suggestion per sub_id (globally), then
+    // filter by stage. The old version filtered by stage first and then took
+    // DISTINCT ON sub_id, which meant an older WAITING_CALL row could keep
+    // beating a newer DROPPED row — so stage changes appeared not to update.
     const r = await db.execute(sql`
-      SELECT DISTINCT ON (TRIM(ps.manychat_sub_id))
-        ps.manychat_sub_id AS sid,
+      WITH latest AS (
+        SELECT DISTINCT ON (TRIM(ps.manychat_sub_id))
+          TRIM(ps.manychat_sub_id) AS sid,
+          ps.approved_stage,
+          ps.approved_flags,
+          ps.suggested_summary,
+          ps.reviewed_at
+        FROM pipeline_suggestions ps
+        WHERE ps.approved_stage IS NOT NULL
+        ORDER BY TRIM(ps.manychat_sub_id), ps.reviewed_at DESC NULLS LAST
+      )
+      SELECT
+        latest.sid AS sid,
         l.name AS name,
-        ps.approved_flags AS flags,
-        ps.suggested_summary AS summary,
-        ps.reviewed_at AS reviewed_at
-      FROM pipeline_suggestions ps
-      LEFT JOIN leads l ON TRIM(l.manychat_sub_id) = TRIM(ps.manychat_sub_id)
-      WHERE ps.approved_stage = ${stageDecoded}
+        latest.approved_flags AS flags,
+        latest.suggested_summary AS summary,
+        latest.reviewed_at AS reviewed_at
+      FROM latest
+      LEFT JOIN leads l ON TRIM(l.manychat_sub_id) = latest.sid
+      WHERE latest.approved_stage = ${stageDecoded}
         AND COALESCE(l.active, true) = true
-      ORDER BY TRIM(ps.manychat_sub_id), ps.reviewed_at DESC NULLS LAST
     `);
     type DbRow = {
       sid: string;
