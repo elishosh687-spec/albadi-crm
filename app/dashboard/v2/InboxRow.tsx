@@ -20,6 +20,8 @@ export interface InboxItem {
   source: string;
   quoteTotalDisplay: string | null;
   notes: string | null;
+  phone: string | null;
+  quoteResult: string | null;
 }
 
 const FLAG_TONES: Record<string, "danger" | "warning" | "info" | "accent" | "neutral"> = {
@@ -93,15 +95,31 @@ export function InboxRow({
             flexWrap: "wrap",
           }}
         >
-          <div
-            style={{
-              fontFamily: fontStack.display,
-              fontSize: size.lg,
-              fontWeight: weight.medium,
-              color: colors.ink,
-            }}
-          >
-            {item.leadName ?? item.manychatSubId}
+          <div style={{ display: "flex", flexDirection: "column", gap: space.xs }}>
+            <div
+              style={{
+                fontFamily: fontStack.display,
+                fontSize: size.lg,
+                fontWeight: weight.medium,
+                color: colors.ink,
+              }}
+            >
+              {item.leadName ?? item.manychatSubId}
+            </div>
+            {item.phone && (
+              <a
+                href={`tel:${item.phone}`}
+                style={{
+                  fontFamily: "ui-monospace, monospace",
+                  fontSize: size.xs,
+                  color: colors.accent,
+                  textDecoration: "none",
+                  direction: "ltr",
+                }}
+              >
+                📞 {item.phone}
+              </a>
+            )}
           </div>
           <div style={{ display: "flex", gap: space.sm, flexWrap: "wrap", alignItems: "baseline" }}>
             {item.quoteTotalDisplay && (
