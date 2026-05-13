@@ -1,7 +1,7 @@
 "use server";
 
 import { db } from "@/lib/db";
-import { leads, messages as messagesTable } from "@/drizzle/schema";
+import { botConfig, leads, messages as messagesTable } from "@/drizzle/schema";
 import { desc, eq, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import {
@@ -434,4 +434,34 @@ export async function rejectDraftAction(
   safeRevalidate("/dashboard/v2/drafts", "layout");
   if (!r.ok) return { ok: false, error: r.error };
   return { ok: true, message: "נדחה" };
+}
+
+/**
+ * Upsert a single key/value into bot_config. Used by the v3 Settings page
+ * for editable prompts and pipeline toggles. The bot does not read these
+ * values yet — the table is a holding area until the prompt + toggle
+ * integrations follow up. Saving here never breaks production.
+ */
+export async function saveBotConfigAction(
+  key: string,
+  value: string
+): Promise<SimpleResult> {
+  const cleanKey = key.trim();
+  if (!cleanKey) return { ok: false, error: "missing key" };
+  try {
+    await db
+      .insert(botConfig)
+      .values({ key: cleanKey, value, updatedAt: new Date() })
+      .onConflictDoUpdate({
+        target: botConfig.key,
+        set: { value, updatedAt: new Date() },
+      });
+    safeRevalidate("/dashboard/v3/settings", "layout");
+    return { ok: true, message: "נשמר" };
+  } catch (e) {
+    return {
+      ok: false,
+      error: e instanceof Error ? e.message : "save failed",
+    };
+  }
 }

@@ -1,7 +1,6 @@
 import { db } from "@/lib/db";
 import { leads, leadTags, messages } from "@/drizzle/schema";
 import { and, desc, eq, sql } from "drizzle-orm";
-import { V2_PIPELINE_STAGES } from "@/lib/manychat/stages";
 import { LeadsBoard, type LeadCardData } from "./_components/LeadsBoard";
 
 export const dynamic = "force-dynamic";
@@ -80,7 +79,5 @@ export default async function V3LeadsPage() {
     updatedAt: r.updatedAt.toISOString(),
   }));
 
-  const stagesOrder = [...V2_PIPELINE_STAGES, "UNCLASSIFIED"] as const;
-
-  return <LeadsBoard cards={cards} stagesOrder={[...stagesOrder]} />;
+  return <LeadsBoard cards={cards} />;
 }
