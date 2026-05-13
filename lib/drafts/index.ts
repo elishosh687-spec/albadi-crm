@@ -244,7 +244,7 @@ export async function generateAndQueueDraft(input: {
   try {
     // Dynamic imports keep the LLM module out of the cold-start path for
     // builds that don't need it.
-    const [{ suggestReplies }, { messages }, { db: _db }, { desc, eq }] =
+    const [{ draftMoneyReply }, { messages }, { db: _db }, { desc, eq }] =
       await Promise.all([
         import("@/lib/autoresponder/suggest-reply"),
         import("@/drizzle/schema"),
@@ -272,15 +272,13 @@ export async function generateAndQueueDraft(input: {
       }))
       .reverse();
 
-    const replies = await suggestReplies({
+    const draftText = await draftMoneyReply({
       recentMessages: conversation,
       leadName: input.leadName,
       pipelineStage: input.pipelineStage,
       botSummary: input.botSummary,
-      hint: `המטרה: לענות ללקוח על נקודה כספית (${input.moneyReason}).`,
+      moneyReason: input.moneyReason,
     });
-
-    const draftText = replies[0]?.trim();
     if (!draftText) return null;
 
     const draft = await createDraft({
