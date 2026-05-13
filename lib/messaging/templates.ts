@@ -1,12 +1,16 @@
 // Deterministic follow-up copy keyed by lead stage. Hebrew, free-form
-// (no business-template approval needed — new bridge has no 24h limit).
+// (new bridge has no 24h limit).
 //
-// LLM per-customer polish is deferred; these stay as plain string interpolation.
+// Cadence + thresholds are aligned to docs/CUSTOMER-FLOW.md v2:
+//   - Stage 1 (mid-questionnaire, NEW): 1h × 3.
+//   - Stages 2 / 3 / 4: 24h → 36h → 72h.
+// See app/api/bot/followups/route.ts for the cadence rules.
 
 export type FollowupStage =
   | "MID_QUESTIONNAIRE"
-  | "QUOTED"
-  | "NEGOTIATING_OR_CALL";
+  | "AWAITING_DECISION"
+  | "AWAITING_LOGO"
+  | "AWAITING_FINAL";
 
 const TEMPLATES: Record<FollowupStage, string[]> = {
   // pipeline_stage = NEW with q_state mid-flight (not bailed, not done).
@@ -15,15 +19,23 @@ const TEMPLATES: Record<FollowupStage, string[]> = {
     "תזכורת קטנה — נשארנו באמצע השאלון להצעת מחיר. תוך דקה אנחנו מסיימים 😊",
     "מנסה לתפוס אותך שוב — רוצה שנמשיך מאיפה שעצרנו? כתוב לי תשובה ונסיים.",
   ],
-  QUOTED: [
+  // Stage 2 — bot waiting on customer response to estimated quote.
+  AWAITING_DECISION: [
     "היי, רציתי לשמוע מה דעתך על ההצעה ששלחנו 🙏",
     "מה דעתך על המחיר? משהו לא ברור או שתרצה לשנות?",
     "תזכורת אחרונה — תרצה שנמשיך הלאה עם ההצעה, או שיש משהו שצריך להתאים?",
   ],
-  NEGOTIATING_OR_CALL: [
-    "היי 🙂 רוצה שנקבע שיחה קצרה לסגור את הפרטים?",
-    "מנסה לסגור איתך — מה השעה שנוחה לך לשיחה היום/מחר?",
-    "רוצה שאחזיר אליך טלפון? תכתוב לי שעה שמתאימה.",
+  // Stage 3 — bot waiting on logo file.
+  AWAITING_LOGO: [
+    "היי 👋 מחכים לקבל את הלוגו כדי להמשיך לציטוט סופי.",
+    "תזכורת קטנה — תשלח לוגו (תמונה / PDF / קישור) ונמשיך הלאה.",
+    "ניסיון אחרון לתפוס אותך — תשלח לוגו ונסגור את ההצעה.",
+  ],
+  // Stage 4 — bot waiting on customer response to final price.
+  AWAITING_FINAL: [
+    "היי, רציתי לשמוע מה דעתך על המחיר הסופי 🙏",
+    "תזכורת קטנה — תרצה שנתקדם לסגירה, או שיש משהו לא ברור?",
+    "ניסיון אחרון — נשמח לדעת מה דעתך על המחיר הסופי.",
   ],
 };
 

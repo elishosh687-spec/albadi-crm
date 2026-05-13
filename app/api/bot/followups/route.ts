@@ -1,13 +1,14 @@
 /**
  * Follow-up cron. Designed for Vercel cron at `every 15 minutes`.
  *
- * Per docs/FOLLOWUP-SPEC.md:
+ * Per docs/CUSTOMER-FLOW.md v2 (source of truth):
  *   - Gates: quiet hours (21:00-09:00 Asia/Jerusalem), no-send days
  *     (Fri/Sat/holiday-eve/holiday via Hebcal).
  *   - Customer-side cadence by stage:
- *       NEW (mid-questionnaire abandoned) → every 1h, max 3 attempts
- *       QUOTED → every 2h, max 3
- *       NEGOTIATING / WAITING_CALL → every 2h, max 3
+ *       NEW (mid-questionnaire abandoned)     → 1h, 1h, 1h
+ *       AWAITING_DECISION (Stage 2)           → 24h, 36h, 72h
+ *       AWAITING_LOGO (Stage 3)               → 24h, 36h, 72h
+ *       AWAITING_FINAL (Stage 4)              → 24h, 36h, 72h
  *   - WAITING_FACTORY → Eli-only daily reminder (no customer message).
  *   - After 3 unanswered attempts → escalate (NEEDS_ELI + bot_paused + Eli DM).
  *   - Skips leads where bot_paused=true.
@@ -40,13 +41,14 @@ const MAX_FOLLOWUPS = 3;
 
 interface StageRule {
   match: (pipelineStage: string | null, qState: any) => boolean;
-  cadenceMs: number;
+  /** Wait BEFORE attempt #N. cadences[0] = wait before 1st follow-up, etc. */
+  cadences: number[];
   template: FollowupStage;
 }
 
 const STAGE_RULES: StageRule[] = [
   {
-    // NEW + questionnaire in-flight (started but not done, not bailed).
+    // Stage 1 — NEW + questionnaire in-flight (started, not done, not bailed).
     match: (stage, q) => {
       const s = (stage || "").toUpperCase();
       if (s !== "" && s !== "NEW") return false;
@@ -54,21 +56,26 @@ const STAGE_RULES: StageRule[] = [
       if (q.bailed || q.doneAt) return false;
       return typeof q.step === "number" && q.step >= 2 && q.step <= 7;
     },
-    cadenceMs: 1 * HOUR_MS,
+    cadences: [1 * HOUR_MS, 1 * HOUR_MS, 1 * HOUR_MS],
     template: "MID_QUESTIONNAIRE",
   },
   {
-    match: (stage) => (stage || "").toUpperCase() === "QUOTED",
-    cadenceMs: 2 * HOUR_MS,
-    template: "QUOTED",
+    // Stage 2 — bot waiting on customer reply to estimated quote.
+    match: (stage) => (stage || "").toUpperCase() === "AWAITING_DECISION",
+    cadences: [24 * HOUR_MS, 36 * HOUR_MS, 72 * HOUR_MS],
+    template: "AWAITING_DECISION",
   },
   {
-    match: (stage) => {
-      const s = (stage || "").toUpperCase();
-      return s === "NEGOTIATING" || s === "WAITING_CALL";
-    },
-    cadenceMs: 2 * HOUR_MS,
-    template: "NEGOTIATING_OR_CALL",
+    // Stage 3 — bot waiting on logo file.
+    match: (stage) => (stage || "").toUpperCase() === "AWAITING_LOGO",
+    cadences: [24 * HOUR_MS, 36 * HOUR_MS, 72 * HOUR_MS],
+    template: "AWAITING_LOGO",
+  },
+  {
+    // Stage 4 — bot waiting on customer reply to final price.
+    match: (stage) => (stage || "").toUpperCase() === "AWAITING_FINAL",
+    cadences: [24 * HOUR_MS, 36 * HOUR_MS, 72 * HOUR_MS],
+    template: "AWAITING_FINAL",
   },
 ];
 
@@ -143,9 +150,12 @@ async function processCustomerLead(row: {
   }
 
   const now = Date.now();
+  // cadences[N] = wait before attempt #(N+1). followUpCount=0 → first send uses cadences[0].
+  const cadenceIdx = Math.min(row.followUpCount, rule.cadences.length - 1);
+  const waitMs = rule.cadences[cadenceIdx];
   if (row.lastFollowUpAt) {
     const elapsed = now - row.lastFollowUpAt.getTime();
-    if (elapsed < rule.cadenceMs) {
+    if (elapsed < waitMs) {
       return { sid: row.sid, action: "skipped_cadence" };
     }
   }

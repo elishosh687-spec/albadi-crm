@@ -388,8 +388,8 @@ export async function handleInbound(input: {
   const match = matchAnswer(text, currentQ);
   if (!match) {
     const unmatched = (ctx.qState.unmatchedAt ?? 0) + 1;
-    if (unmatched >= 2) {
-      // Don't drop — escalate so Eli can recover the lead.
+    if (unmatched >= 3) {
+      // Per CUSTOMER-FLOW.md v2 §1.1/1.2: reask × 3 → escalate.
       const bailed: QState = { ...ctx.qState, bailed: true, unmatchedAt: unmatched };
       await saveState(ctx.sid, bailed);
       await db
@@ -404,9 +404,9 @@ export async function handleInbound(input: {
         "תודה, נחזור אליך עם הצעה מותאמת ⏳"
       );
       await sendEliDM(
-        `⚠️ ${ctx.name ?? ctx.phone ?? "ליד"} נכשל בשאלון (2 תשובות לא תואמות בשלב ${currentQ.field}). צריך טיפול ידני.`
+        `⚠️ ${ctx.name ?? ctx.phone ?? "ליד"} נכשל בשאלון (3 תשובות לא תואמות בשלב ${currentQ.field}). צריך טיפול ידני.`
       );
-      return { action: "bailed", detail: "two unmatched answers" };
+      return { action: "bailed", detail: "three unmatched answers" };
     }
     const reasked: QState = { ...ctx.qState, unmatchedAt: unmatched };
     await saveState(ctx.sid, reasked);
