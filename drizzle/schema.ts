@@ -87,6 +87,38 @@ export const messages = pgTable("messages", {
 
   // bridge-side message id (e.g. "3A1B…"), null for ManyChat-origin rows.
   waMessageId: text("wa_message_id"),
+
+  // Origin of the message. 'lead' = inbound from customer.
+  // For direction='out': 'bot' = autoresponder/cron, 'eli' = manual reply
+  // (dashboard sendManualReply or WA Business app — distinguished by the
+  // bridge webhook sender-attribution heuristic in app/api/bridge/webhook).
+  // Nullable: legacy rows pre-migration are NULL.
+  sender: text("sender"),
+});
+
+// Bot-generated draft replies awaiting Eli's approval. Created when a money
+// moment is detected (stage gate or LLM is_money_moment flag) so Eli can
+// review/edit/approve before the message goes out to the customer.
+export const botDrafts = pgTable("bot_drafts", {
+  id: serial("id").primaryKey(),
+  manychatSubId: text("manychat_sub_id").notNull(),
+  draftText: text("draft_text").notNull(),
+  editedText: text("edited_text"),
+  // pending | approved | rejected | sent | failed
+  status: text("status").notNull().default("pending"),
+  // 'stage_gate' | 'discount_request' | 'price_question' | 'negotiation' |
+  // 'commitment' | 'manual'
+  moneyReason: text("money_reason"),
+  llmConfidence: text("llm_confidence"),
+  // Stage the lead was at when the draft was generated (snapshot for UI).
+  pipelineStageAtGen: text("pipeline_stage_at_gen"),
+  // Optional snapshot of the inbound message that triggered the draft.
+  triggerMessageId: integer("trigger_message_id"),
+  generatedAt: timestamp("generated_at", { withTimezone: true }).defaultNow().notNull(),
+  decidedAt: timestamp("decided_at", { withTimezone: true }),
+  sentAt: timestamp("sent_at", { withTimezone: true }),
+  sentWaMessageId: text("sent_wa_message_id"),
+  rejectReason: text("reject_reason"),
 });
 
 // analysisQueue, pipelineSuggestions, eliDecisions tables were removed

@@ -217,7 +217,11 @@ export interface BridgeSendResult {
 export async function sendBridgeMessage(
   recipient: string,
   message: string,
-  mediaPath?: string
+  mediaPath?: string,
+  // Sender attribution for the pre-inserted outbound `messages` row. Default
+  // 'bot' covers the autoresponder/cron/draft-approve paths; pass 'eli' from
+  // sendManualReply (dashboard) so manual replies are tagged correctly.
+  sender: "bot" | "eli" = "bot"
 ): Promise<BridgeSendResult> {
   // Test-only escape hatch — skips the actual WhatsApp send and returns a
   // fake message id. Set BRIDGE_DRY_RUN=1 in local test scripts (see
@@ -228,15 +232,32 @@ export async function sendBridgeMessage(
     console.log(`[bridge.dryrun] → ${recipient}: ${preview.replace(/\n/g, " ⏎ ")}`);
     return { wa_message_id: fakeId, status: "dryrun" };
   }
-  const body: Record<string, unknown> = {
-    recipient: isJid(recipient) ? recipient : phoneToJid(recipient),
-    message,
-  };
+  const jid = isJid(recipient) ? recipient : phoneToJid(recipient);
+  const body: Record<string, unknown> = { recipient: jid, message };
   if (mediaPath) body.media_path = mediaPath;
-  return bridgeFetch<BridgeSendResult>("/v1/messages", {
+  const result = await bridgeFetch<BridgeSendResult>("/v1/messages", {
     method: "POST",
     body: JSON.stringify(body),
   });
+
+  // Pre-insert the outbound row with sender attribution before the bridge's
+  // `message.sent` webhook fires. The webhook's insertBridgeMessage dedupes
+  // by waMessageId so this is the first writer; manual sends from the WA
+  // Business app skip this path and reach the webhook with sender='eli'.
+  try {
+    await insertBridgeMessage({
+      jid,
+      direction: "out",
+      text: message,
+      waMessageId: result.wa_message_id,
+      payload: { from: "sendBridgeMessage", mediaPath: mediaPath ?? null },
+      sender,
+    });
+  } catch (e) {
+    console.warn("[sendBridgeMessage] outbound pre-insert failed", e);
+  }
+
+  return result;
 }
 
 export async function resolveJidFromPhone(phone: string): Promise<string | null> {
@@ -289,8 +310,15 @@ export async function insertBridgeMessage(input: {
   waMessageId: string;
   payload: unknown;
   receivedAt?: Date;
+  // 'lead' for inbound; for outbound: 'bot' when our own code initiated
+  // the send (pre-insert before bridge.sent fires), 'eli' when the bridge
+  // reports an outbound we did not originate (manual reply from WA Business
+  // app). null = legacy / unknown.
+  sender?: "lead" | "bot" | "eli" | null;
 }): Promise<{ id: number } | null> {
-  // Dedupe by waMessageId — webhooks can retry.
+  // Dedupe by waMessageId — webhooks can retry, and our own pre-insert from
+  // approveDraft / sendManualReply / autoresponder paths will already have
+  // claimed this id with sender='bot' or 'eli'.
   const existing = await db
     .select({ id: messagesTable.id })
     .from(messagesTable)
@@ -307,7 +335,8 @@ export async function insertBridgeMessage(input: {
       payload: input.payload as any,
       waMessageId: input.waMessageId,
       ...(input.receivedAt ? { receivedAt: input.receivedAt } : {}),
-    })
+      ...(input.sender !== undefined ? { sender: input.sender } : {}),
+    } as any)
     .returning({ id: messagesTable.id });
   return row;
 }
