@@ -30,6 +30,13 @@ async function resolveEliJid(): Promise<string | null> {
 }
 
 export async function sendEliDM(text: string): Promise<void> {
+  // Test-only short-circuit (mirrors sendBridgeMessage dry-run). Skips JID
+  // resolution AND send so test scripts run without network access.
+  if (process.env.BRIDGE_DRY_RUN === "1") {
+    const preview = text.length > 100 ? `${text.slice(0, 100)}…` : text;
+    console.log(`[notify.eli.dryrun] → ${preview.replace(/\n/g, " ⏎ ")}`);
+    return;
+  }
   try {
     const jid = await resolveEliJid();
     if (!jid) {

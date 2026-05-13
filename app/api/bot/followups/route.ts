@@ -242,12 +242,16 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
+  // Test-only escape hatch — bypasses quiet hours + no-send-day gates so
+  // local cadence tests can run at any time. NEVER set in Vercel/prod.
+  const bypassGates = process.env.FOLLOWUPS_BYPASS_GATES === "1";
+
   // Gate 1: quiet hours.
-  if (isQuietNow()) {
+  if (!bypassGates && isQuietNow()) {
     return NextResponse.json({ ok: true, skipped: "quiet_hours" });
   }
   // Gate 2: no-send day (Fri/Sat/holiday eve/holiday).
-  if (await isNoSendDay()) {
+  if (!bypassGates && (await isNoSendDay())) {
     return NextResponse.json({ ok: true, skipped: "no_send_day" });
   }
 

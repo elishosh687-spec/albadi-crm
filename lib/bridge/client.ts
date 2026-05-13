@@ -219,6 +219,15 @@ export async function sendBridgeMessage(
   message: string,
   mediaPath?: string
 ): Promise<BridgeSendResult> {
+  // Test-only escape hatch — skips the actual WhatsApp send and returns a
+  // fake message id. Set BRIDGE_DRY_RUN=1 in local test scripts (see
+  // scripts/test-stage*.ts). NEVER set this in Vercel/prod.
+  if (process.env.BRIDGE_DRY_RUN === "1") {
+    const fakeId = `dryrun:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`;
+    const preview = message.length > 100 ? `${message.slice(0, 100)}…` : message;
+    console.log(`[bridge.dryrun] → ${recipient}: ${preview.replace(/\n/g, " ⏎ ")}`);
+    return { wa_message_id: fakeId, status: "dryrun" };
+  }
   const body: Record<string, unknown> = {
     recipient: isJid(recipient) ? recipient : phoneToJid(recipient),
     message,

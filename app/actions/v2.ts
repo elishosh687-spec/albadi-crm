@@ -4,6 +4,17 @@ import { db } from "@/lib/db";
 import { leads } from "@/drizzle/schema";
 import { sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
+
+// revalidatePath throws "static generation store missing" when called outside
+// a Next.js request context (e.g. from tsx test scripts). Cache invalidation
+// is best-effort — never let it break the action body.
+function safeRevalidate(path: string, type: "layout" | "page" = "layout"): void {
+  try {
+    revalidatePath(path, type);
+  } catch {
+    /* outside Next request context — ignore */
+  }
+}
 import {
   V2_FLAG_TAG_IDS,
   V2_PIPELINE_STAGES,
@@ -92,14 +103,14 @@ export async function setLeadStage(
     try {
       await pushStageAndFlags(cleanSid, input.stage, input.flags);
     } catch (e) {
-      revalidatePath("/dashboard/v2", "layout");
+      safeRevalidate("/dashboard/v2", "layout");
       return {
         ok: false,
         error: `כתיבה נכשלה: ${e instanceof Error ? e.message : String(e)}`,
       };
     }
 
-    revalidatePath("/dashboard/v2", "layout");
+    safeRevalidate("/dashboard/v2", "layout");
     return { ok: true, message: `סטייג ${input.stage} נשמר` };
   } catch (e) {
     return {
@@ -117,7 +128,7 @@ export async function updateLeadNotes(
     const cleanSid = manychatSubId.trim();
     if (!cleanSid) return { ok: false, error: "missing subscriberId" };
     await setCustomFields(cleanSid, [{ name: "notes", value: notes }]);
-    revalidatePath("/dashboard/v2", "layout");
+    safeRevalidate("/dashboard/v2", "layout");
     return { ok: true, message: "ההערות נשמרו" };
   } catch (e) {
     return {
@@ -192,7 +203,7 @@ export async function sendFinalPrice(
       })
       .where(sql`trim(${leads.manychatSubId}) = ${cleanSid}`);
 
-    revalidatePath("/dashboard/v2", "layout");
+    safeRevalidate("/dashboard/v2", "layout");
     return { ok: true, message: `המחיר הסופי ${cleanPrice} נשלח` };
   } catch (e) {
     return {
@@ -227,7 +238,7 @@ export async function setBotPaused(
         })
         .where(sql`trim(${leads.manychatSubId}) = ${cleanSid}`);
     }
-    revalidatePath("/dashboard/v2", "layout");
+    safeRevalidate("/dashboard/v2", "layout");
     return { ok: true, message: paused ? "הבוט מושהה" : "הבוט פעיל" };
   } catch (e) {
     return {
