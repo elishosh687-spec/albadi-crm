@@ -41,6 +41,15 @@ import {
   eliDecisionEscalationTemplate,
   eliLogoReceivedTemplate,
 } from "../messaging/templates";
+import { generateAndQueueDraft, type MoneyReason } from "../drafts";
+
+const ESCALATION_KIND_TO_MONEY_REASON: Partial<
+  Record<"reject" | "negotiating" | "spec_change" | "question" | "generic", MoneyReason>
+> = {
+  negotiating: "negotiation",
+  reject: "discount_request",
+  spec_change: "price_question",
+};
 
 const CATALOG_URL = "https://bag-quote-app.vercel.app/catalog";
 
@@ -189,6 +198,20 @@ async function escalateToEli(
       summary: llmSummary ?? null,
     })
   );
+
+  // Money-moment hook: queue a draft reply for the Retool supervisor console
+  // (no-op when ENABLE_DRAFT_QUEUE != "1"). Only fires for money-related
+  // escalation kinds; pure "question" / "generic" escalations skip this.
+  const moneyReason = ESCALATION_KIND_TO_MONEY_REASON[kind];
+  if (moneyReason) {
+    await generateAndQueueDraft({
+      manychatSubId: ctx.sid,
+      moneyReason,
+      pipelineStage: ctx.pipelineStage,
+      leadName: ctx.name,
+      botSummary: llmSummary ?? reason,
+    });
+  }
 }
 
 function hasDigits(text: string): boolean {

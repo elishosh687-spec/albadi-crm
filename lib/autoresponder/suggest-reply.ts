@@ -138,3 +138,117 @@ export async function suggestReplies(
     return [];
   }
 }
+
+/**
+ * Dedicated single-draft generator for money-moment escalations. Tuned to
+ * (a) NOT commit to discounts, final prices, or timelines on Eli's behalf,
+ * (b) acknowledge + defer politely so the customer is not ignored while
+ * Eli decides, (c) match the Eli voice constraints (1st person singular,
+ * plural-neutral "you", 0-1 emoji, short).
+ *
+ * Soft-fails to null on any error — the caller treats null as "no draft
+ * available, queue stays empty for this escalation" which is fine; the
+ * existing Eli DM still went out.
+ */
+const MONEY_DRAFT_SYSTEM_PROMPT = `אתה כותב טיוטת תגובה אחת בעברית עבור אלי (בעל עסק לשקיות ממותגות, "אלבד") עבור שיחה שבה נקודה כספית עלתה — הצעת מחיר, בקשת הנחה, משא ומתן, או שינוי מפרט שמשפיע על מחיר.
+
+כללי קול קריטיים:
+- גוף ראשון יחיד ("אני", "אחזור אליכם", "אתקשר").
+- פנייה ניטרלית רבים ("אתם / לכם") — לא "אתה".
+- 0 או 1 אימוג'ים. קצר — משפט אחד או שניים.
+- שיחתי, לא תאגידי.
+
+כללים על תוכן (קריטיים — אסור לחרוג):
+- אסור להבטיח הנחה ספציפית באחוזים או בסכום.
+- אסור לתת מחיר סופי או מספר חדש.
+- אסור להתחייב על לוח זמנים מדויק שלא הוסכם.
+- מותר להכיר בבקשה ולומר שאלי בודק / חוזר.
+- מותר להציע פעולה (שיחה, בדיקה) אם זה מקדם את העסקה.
+
+החזר JSON בלבד: { "reply": "..." }. שום טקסט נוסף.`;
+
+export interface DraftMoneyReplyInput {
+  recentMessages: ConversationMessage[];
+  leadName?: string | null;
+  pipelineStage?: string | null;
+  botSummary?: string | null;
+  moneyReason?: string | null;
+}
+
+export async function draftMoneyReply(
+  input: DraftMoneyReplyInput
+): Promise<string | null> {
+  const apiKey = readEnv("OPENAI_API_KEY");
+  if (!apiKey) {
+    console.warn("[draft-money-reply] OPENAI_API_KEY missing");
+    return null;
+  }
+  const model = readEnv("OPENAI_MODEL") || "gpt-4o-mini";
+
+  const ctxLines: string[] = [];
+  if (input.leadName) ctxLines.push(`שם הלקוח: ${input.leadName}`);
+  if (input.pipelineStage) ctxLines.push(`שלב נוכחי: ${input.pipelineStage}`);
+  if (input.botSummary) ctxLines.push(`מה הבוט הבין: ${input.botSummary}`);
+  if (input.moneyReason)
+    ctxLines.push(`סוג נקודת הכסף: ${input.moneyReason}`);
+  if (input.recentMessages.length > 0) {
+    const lines = input.recentMessages.slice(-12).map((m) => {
+      const who = m.direction === "in" ? "לקוח" : "אני";
+      return `${who}: ${m.text}`;
+    });
+    ctxLines.push("שיחה אחרונה:\n" + lines.join("\n"));
+  }
+  const userPrompt = [
+    ctxLines.join("\n\n"),
+    "כתוב טיוטת תגובה אחת. החזר JSON בלבד.",
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+    const res = await fetch(OPENAI_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model,
+        temperature: 0.5,
+        response_format: { type: "json_object" },
+        messages: [
+          { role: "system", content: MONEY_DRAFT_SYSTEM_PROMPT },
+          { role: "user", content: userPrompt },
+        ],
+      }),
+      signal: controller.signal,
+    });
+    clearTimeout(timer);
+    if (!res.ok) {
+      console.error(
+        "[draft-money-reply] openai non-2xx",
+        res.status,
+        (await res.text()).slice(0, 200)
+      );
+      return null;
+    }
+    const data = (await res.json()) as {
+      choices?: { message?: { content?: string } }[];
+    };
+    const raw = data.choices?.[0]?.message?.content;
+    if (!raw) return null;
+    let parsed: any;
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      return null;
+    }
+    const reply = typeof parsed?.reply === "string" ? parsed.reply.trim() : "";
+    return reply || null;
+  } catch (e) {
+    console.error("[draft-money-reply] error", e);
+    return null;
+  }
+}

@@ -11,7 +11,10 @@
     "db:migrate": "drizzle-kit migrate",
     "db:studio": "drizzle-kit studio",
     "bot:setup-manychat": "tsx scripts/setup-manychat-v2.ts",
-    "bot:seed-leads": "tsx scripts/seed-leads.ts"
+    "bot:seed-leads": "tsx scripts/seed-leads.ts",
+    "drafts:seed": "tsx scripts/seed-draft.ts",
+    "drafts:test": "tsx scripts/test-drafts-api.ts",
+    "drafts:backfill-sender": "tsx scripts/backfill-message-sender.ts"
   },
   "dependencies": {
     "@neondatabase/serverless": "^0.10.4",

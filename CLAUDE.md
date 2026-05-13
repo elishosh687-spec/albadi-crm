@@ -133,3 +133,33 @@ We are mid-migration off ManyChat onto a self-hosted whatsapp-bridge-node tenant
 7. Only after a clean week: disable ManyChat Flow webhooks, delete `MANYCHAT_TOKEN`, drop `lib/manychat/client.ts`.
 
 **Rollback:** flip `USE_BRIDGE=0`, redeploy. DB state survives — ManyChat path resumes reading its own fields.
+
+## Supervisor Console migration (READ BEFORE TOUCHING DASHBOARD UI OR THE DECISION FLOW)
+
+We are mid-migration off `/dashboard/v2` onto a Retool app at `https://elishosh.retool.com` (see [docs/plans/2026-05-13-retool-supervisor-console-design.md](docs/plans/2026-05-13-retool-supervisor-console-design.md) for the full design). Retool is UI-only; all business logic stays in this Next.js repo.
+
+**Feature flag:** `ENABLE_DRAFT_QUEUE=1` turns on the money-moment draft queue. Default `0`. When `0`, the decision flow behaves exactly as before — escalations DM Eli and pause the bot but generate no drafts. When `1`, money-related escalations (`negotiating` / `reject` / `spec_change`) ALSO call `generateAndQueueDraft` which uses the existing `suggestReplies` LLM helper to draft a customer reply and store it in `bot_drafts` for Eli's approval in Retool.
+
+**Data model:**
+- `bot_drafts` table — pending/approved/rejected/sent/failed proposals. Always sent via `lib/drafts/approveDraft` (which calls `sendBridgeMessage` under the hood). Never SQL-insert a row with `status='sent'` from outside `approveDraft`; the bridge send + outbound logging must run together.
+- `messages.sender` — `'lead' | 'bot' | 'eli'`. `sendBridgeMessage` pre-inserts the outbound row before the bridge `message.sent` webhook fires (default `'bot'`, override via the new optional 4th arg from `sendManualReply` which passes `'eli'`). The webhook dedupes by `wa_message_id`, so manual replies from the bonded WA Business app reach the webhook first and get tagged `'eli'`. Legacy rows pre-migration are NULL.
+
+**API surface (all auth `Bearer BOT_SECRET`):**
+- `GET /api/drafts/pending` — Retool's queue feed, enriched with lead snapshot + last inbound message.
+- `POST /api/drafts/:id/approve` — `{ edited_text? }` → bridge send + `bot_drafts.status='sent'`.
+- `POST /api/drafts/:id/reject` — `{ reason? }` → `bot_drafts.status='rejected'`, no send.
+- `POST /api/leads/:id/override` — `{ pipeline_stage?, flags?, notes?, bot_paused?, pipeline_flag? }`. `flags` replaces the full set in `lead_tags` for the lead. URL-encode the JID (`%40` for `@`).
+
+**Retool setup:** see [retool/SETUP.md](retool/SETUP.md). Two resources required (`albadi_pg` PG + `albadi_api` REST). Hand-built — no JSON import.
+
+**Test scripts:**
+- `npx tsx scripts/seed-draft.ts [sub_id] [text]` — inject a pending draft for Retool smoke test.
+- `BOT_SECRET=... npx tsx scripts/test-drafts-api.ts` — end-to-end API smoke test against prod (use `SKIP_APPROVE=1` to skip the real bridge send).
+
+**Old `/dashboard/v2` is alive and is the fallback.** Do not delete it until Retool has been running stable for a full week. Server actions in `app/actions/v2.ts` continue to be the source of truth for in-app mutations and still get called from the existing dashboard pages.
+
+**When you add a NEW write surface for the Retool console:**
+1. Prefer a REST endpoint under `/api/...` over a server action — Retool needs HTTP.
+2. Always require `Bearer BOT_SECRET`.
+3. If it sends WhatsApp, route through `sendBridgeMessage` so the outbound row gets sender attribution automatically. Do NOT insert into `messages` directly — `sendBridgeMessage` already does it.
+4. Add a row to [retool/api-cheatsheet.md](retool/api-cheatsheet.md).

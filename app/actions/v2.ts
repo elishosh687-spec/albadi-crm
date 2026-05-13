@@ -241,7 +241,10 @@ export async function sendManualReply(
     if (!row) return { ok: false, error: "lead not found" };
     const recipient = row.jid ?? row.sid;
 
-    await sendBridgeMessage(recipient, cleanText);
+    // sendBridgeMessage pre-inserts the outbound row with sender='eli'
+    // before the bridge `message.sent` webhook fires, so no extra logging
+    // is needed here.
+    await sendBridgeMessage(recipient, cleanText, undefined, "eli");
 
     // Pause bot so cron doesn't pile on; Eli is now driving.
     await db
@@ -252,20 +255,6 @@ export async function sendManualReply(
         updatedAt: new Date(),
       })
       .where(sql`trim(${leads.manychatSubId}) = ${cleanSid}`);
-
-    // Log outbound. If the bridge webhook later fires `message.sent` it'll
-    // insert a separate row keyed by wa_message_id — that's harmless.
-    try {
-      await db.insert(messagesTable).values({
-        manychatSubId: cleanSid,
-        direction: "out",
-        text: cleanText,
-        receivedAt: new Date(),
-        waMessageId: `manual:${Date.now()}`,
-      } as any);
-    } catch (e) {
-      console.warn("[sendManualReply] message log failed", e);
-    }
 
     safeRevalidate("/dashboard/v2", "layout");
     return { ok: true, message: "נשלח" };
