@@ -1,68 +1,22 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
-import { sql } from "drizzle-orm";
+import { leads, leadTags } from "@/drizzle/schema";
+import { and, eq, inArray, isNull } from "drizzle-orm";
 import { Page } from "@/components/ui/Page";
 import { Card } from "@/components/ui/Card";
 import { colors, fontStack, size, space } from "@/lib/ui/tokens";
 import { V2_PIPELINE_STAGES } from "@/lib/manychat/stages";
-import { getSubscriber, getFieldValue } from "@/lib/messaging";
 import { StageList, type StageLeadRow } from "./StageList";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 export const maxDuration = 60;
 
-interface BaseRow {
-  manychatSubId: string;
-  name: string | null;
-  flags: string[];
-  summary: string | null;
-  daysSince: number | null;
-}
-
 function daysSince(d: Date | string | null): number | null {
   if (!d) return null;
   const t = typeof d === "string" ? new Date(d).getTime() : d.getTime();
   return Math.floor((Date.now() - t) / 86400000);
-}
-
-interface LeadCard {
-  notes: string | null;
-  phone: string | null;
-  quoteResult: string | null;
-}
-
-async function pullCards(subIds: string[]): Promise<Map<string, LeadCard>> {
-  const out = new Map<string, LeadCard>();
-  const CONCURRENCY = 10;
-  let cursor = 0;
-  await Promise.all(
-    Array.from({ length: Math.min(CONCURRENCY, subIds.length) }, async () => {
-      while (true) {
-        const i = cursor++;
-        if (i >= subIds.length) return;
-        const sid = subIds[i];
-        try {
-          const sub = await getSubscriber(sid);
-          const n = getFieldValue(sub.custom_fields, "notes");
-          const qr =
-            sub.custom_fields.find((f) => f.name === "quote_result")?.value ??
-            null;
-          const wp = (sub as any).whatsapp_phone as string | null | undefined;
-          const phone = (wp && wp.trim()) || sub.phone || null;
-          out.set(sid, {
-            notes: n ? String(n) : null,
-            phone,
-            quoteResult: qr ? String(qr) : null,
-          });
-        } catch {
-          out.set(sid, { notes: null, phone: null, quoteResult: null });
-        }
-      }
-    })
-  );
-  return out;
 }
 
 export default async function StageDetailPage({
@@ -79,95 +33,66 @@ export default async function StageDetailPage({
     (V2_PIPELINE_STAGES as readonly string[]).includes(stageDecoded);
   if (!isValid) notFound();
 
-  let baseRows: BaseRow[] = [];
-  if (isUnclassified) {
-    const r = await db.execute(sql`
-      SELECT l.manychat_sub_id AS sid, l.name AS name
-      FROM leads l
-      WHERE l.active = true
-        AND NOT EXISTS (
-          SELECT 1 FROM pipeline_suggestions ps
-          WHERE TRIM(ps.manychat_sub_id) = TRIM(l.manychat_sub_id)
-            AND ps.approved_stage IS NOT NULL
-        )
-        AND NOT EXISTS (
-          SELECT 1 FROM pipeline_suggestions ps
-          WHERE TRIM(ps.manychat_sub_id) = TRIM(l.manychat_sub_id)
-            AND ps.status = 'pending_review'
-        )
-      ORDER BY COALESCE(l.name, l.manychat_sub_id)
-    `);
-    baseRows = ((r.rows ?? r) as Array<{ sid: string; name: string | null }>).map((x) => ({
-      manychatSubId: x.sid,
-      name: x.name,
-      flags: [],
-      summary: null,
-      daysSince: null,
-    }));
-  } else {
-    // First take the LATEST approved suggestion per sub_id (globally), then
-    // filter by stage. The old version filtered by stage first and then took
-    // DISTINCT ON sub_id, which meant an older WAITING_CALL row could keep
-    // beating a newer DROPPED row — so stage changes appeared not to update.
-    const r = await db.execute(sql`
-      WITH latest AS (
-        SELECT DISTINCT ON (TRIM(ps.manychat_sub_id))
-          TRIM(ps.manychat_sub_id) AS sid,
-          ps.approved_stage,
-          ps.approved_flags,
-          ps.suggested_summary,
-          ps.reviewed_at
-        FROM pipeline_suggestions ps
-        WHERE ps.approved_stage IS NOT NULL
-        ORDER BY TRIM(ps.manychat_sub_id), ps.reviewed_at DESC NULLS LAST
-      )
-      SELECT
-        latest.sid AS sid,
-        l.name AS name,
-        latest.approved_flags AS flags,
-        latest.suggested_summary AS summary,
-        latest.reviewed_at AS reviewed_at
-      FROM latest
-      LEFT JOIN leads l ON TRIM(l.manychat_sub_id) = latest.sid
-      WHERE latest.approved_stage = ${stageDecoded}
-        AND COALESCE(l.active, true) = true
-    `);
-    type DbRow = {
-      sid: string;
-      name: string | null;
-      flags: string[] | null;
-      summary: string | null;
-      reviewed_at: string | Date | null;
-    };
-    baseRows = ((r.rows ?? r) as DbRow[]).map((x) => ({
-      manychatSubId: x.sid,
-      name: x.name,
-      flags: (x.flags ?? []) as string[],
-      summary: x.summary,
-      daysSince: daysSince(x.reviewed_at),
-    }));
-    baseRows.sort((a, b) =>
-      (a.name ?? a.manychatSubId).localeCompare(b.name ?? b.manychatSubId, "he")
+  const leadRows = await db
+    .select({
+      sid: leads.manychatSubId,
+      name: leads.name,
+      phone: leads.phoneE164,
+      stage: leads.pipelineStage,
+      flag: leads.pipelineFlag,
+      summary: leads.botSummary,
+      notes: leads.notes,
+      qState: leads.qState,
+      updatedAt: leads.updatedAt,
+    })
+    .from(leads)
+    .where(
+      isUnclassified
+        ? and(eq(leads.active, true), isNull(leads.pipelineStage))
+        : and(eq(leads.active, true), eq(leads.pipelineStage, stageDecoded))
     );
+
+  const cleanSids = leadRows.map((r) => r.sid.trim());
+
+  const tagRows = cleanSids.length
+    ? await db
+        .select({ sid: leadTags.manychatSubId, tag: leadTags.tag })
+        .from(leadTags)
+        .where(inArray(leadTags.manychatSubId, cleanSids))
+    : [];
+
+  const tagsBySid = new Map<string, string[]>();
+  for (const t of tagRows) {
+    const k = t.sid.trim();
+    const arr = tagsBySid.get(k) ?? [];
+    arr.push(t.tag);
+    tagsBySid.set(k, arr);
   }
 
-  const cleanSids = baseRows.map((r) => r.manychatSubId.trim());
-  const cardsBySid = await pullCards(cleanSids);
-
-  const rows: StageLeadRow[] = baseRows.map((r) => {
-    const card = cardsBySid.get(r.manychatSubId.trim());
-    return {
-      manychatSubId: r.manychatSubId,
-      name: r.name,
-      flags: r.flags,
-      summary: r.summary,
-      daysSince: r.daysSince,
-      notes: card?.notes ?? null,
-      phone: card?.phone ?? null,
-      quoteResult: card?.quoteResult ?? null,
-      currentStage: isUnclassified ? null : stageDecoded,
-    };
-  });
+  const rows: StageLeadRow[] = leadRows
+    .map((r) => {
+      const sid = r.sid.trim();
+      const tags = tagsBySid.get(sid) ?? [];
+      const flags = r.flag && !tags.includes(r.flag) ? [...tags, r.flag] : tags;
+      const q = (r.qState ?? null) as { quoteResult?: string } | null;
+      return {
+        manychatSubId: r.sid,
+        name: r.name,
+        flags,
+        summary: r.summary,
+        daysSince: daysSince(r.updatedAt),
+        notes: r.notes,
+        phone: r.phone,
+        quoteResult: q?.quoteResult ?? null,
+        currentStage: isUnclassified ? null : stageDecoded,
+      };
+    })
+    .sort((a, b) =>
+      (a.name ?? a.manychatSubId).localeCompare(
+        b.name ?? b.manychatSubId,
+        "he"
+      )
+    );
 
   return (
     <div>
