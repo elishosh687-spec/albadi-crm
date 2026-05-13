@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import Link from "next/link";
 import { sendFinalPrice, setBotPaused } from "@/app/actions/v2";
 import { Card } from "@/components/ui/Card";
 import { colors, fontStack, size, space, weight } from "@/lib/ui/tokens";
@@ -79,6 +80,21 @@ function NeedsEliRow({ lead }: { lead: NeedsEliLead }) {
             {lead.flag ? ` · ${lead.flag}` : ""}
           </div>
         </div>
+        <Link
+          href={`/dashboard/v2/lead/${encodeURIComponent(lead.sid)}`}
+          style={{
+            fontFamily: fontStack.body,
+            fontSize: size.sm,
+            fontWeight: weight.medium,
+            color: colors.accent,
+            textDecoration: "none",
+            padding: `${space.xs}px ${space.md}px`,
+            borderRadius: 4,
+            border: `1px solid ${colors.accent}`,
+          }}
+        >
+          פתח שיחה →
+        </Link>
         <button
           type="button"
           onClick={toggle}

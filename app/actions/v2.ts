@@ -1,9 +1,13 @@
 "use server";
 
 import { db } from "@/lib/db";
-import { leads } from "@/drizzle/schema";
-import { sql } from "drizzle-orm";
+import { leads, messages as messagesTable } from "@/drizzle/schema";
+import { desc, eq, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
+import {
+  suggestReplies as suggestRepliesLLM,
+  type ConversationMessage,
+} from "@/lib/autoresponder/suggest-reply";
 
 // revalidatePath throws "static generation store missing" when called outside
 // a Next.js request context (e.g. from tsx test scripts). Cache invalidation
@@ -209,6 +213,165 @@ export async function sendFinalPrice(
     return {
       ok: false,
       error: e instanceof Error ? e.message : "send failed",
+    };
+  }
+}
+
+/**
+ * Eli sends a manual reply from the dashboard to an escalated (or any) lead.
+ * Pauses the bot first so a cron tick won't race the manual message.
+ * Logs the outbound to `messages` so the conversation thread stays accurate
+ * even if the bridge `message.sent` webhook lags.
+ */
+export async function sendManualReply(
+  manychatSubId: string,
+  text: string
+): Promise<SimpleResult> {
+  const cleanSid = manychatSubId.trim();
+  if (!cleanSid) return { ok: false, error: "missing subscriberId" };
+  const cleanText = text.trim();
+  if (!cleanText) return { ok: false, error: "missing text" };
+
+  try {
+    const [row] = await db
+      .select({ jid: leads.waJid, sid: leads.manychatSubId })
+      .from(leads)
+      .where(sql`trim(${leads.manychatSubId}) = ${cleanSid}`)
+      .limit(1);
+    if (!row) return { ok: false, error: "lead not found" };
+    const recipient = row.jid ?? row.sid;
+
+    await sendBridgeMessage(recipient, cleanText);
+
+    // Pause bot so cron doesn't pile on; Eli is now driving.
+    await db
+      .update(leads)
+      .set({
+        botPaused: true,
+        lastFollowUpAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(sql`trim(${leads.manychatSubId}) = ${cleanSid}`);
+
+    // Log outbound. If the bridge webhook later fires `message.sent` it'll
+    // insert a separate row keyed by wa_message_id — that's harmless.
+    try {
+      await db.insert(messagesTable).values({
+        manychatSubId: cleanSid,
+        direction: "out",
+        text: cleanText,
+        receivedAt: new Date(),
+        waMessageId: `manual:${Date.now()}`,
+      } as any);
+    } catch (e) {
+      console.warn("[sendManualReply] message log failed", e);
+    }
+
+    safeRevalidate("/dashboard/v2", "layout");
+    return { ok: true, message: "נשלח" };
+  } catch (e) {
+    return {
+      ok: false,
+      error: e instanceof Error ? e.message : "send failed",
+    };
+  }
+}
+
+/**
+ * Generate 2-3 Hebrew reply suggestions for an escalated lead. Reads the
+ * last 12 messages + bot summary + stage and asks the LLM. Returns the raw
+ * suggestions for the dashboard to render — Eli picks/edits/sends.
+ */
+export async function suggestRepliesAction(
+  manychatSubId: string,
+  hint?: string
+): Promise<{ ok: true; replies: string[] } | { ok: false; error: string }> {
+  const cleanSid = manychatSubId.trim();
+  if (!cleanSid) return { ok: false, error: "missing subscriberId" };
+
+  try {
+    const [lead] = await db
+      .select({
+        name: leads.name,
+        pipelineStage: leads.pipelineStage,
+        botSummary: leads.botSummary,
+      })
+      .from(leads)
+      .where(sql`trim(${leads.manychatSubId}) = ${cleanSid}`)
+      .limit(1);
+    if (!lead) return { ok: false, error: "lead not found" };
+
+    const rows = await db
+      .select({
+        direction: messagesTable.direction,
+        text: messagesTable.text,
+        receivedAt: messagesTable.receivedAt,
+      })
+      .from(messagesTable)
+      .where(eq(messagesTable.manychatSubId, cleanSid))
+      .orderBy(desc(messagesTable.receivedAt))
+      .limit(15);
+
+    const recentMessages: ConversationMessage[] = rows
+      .filter((r) => r.text && r.text.trim().length > 0)
+      .map((r) => ({
+        direction: r.direction as "in" | "out",
+        text: r.text!,
+        at: r.receivedAt?.toISOString(),
+      }))
+      .reverse();
+
+    const replies = await suggestRepliesLLM({
+      recentMessages,
+      leadName: lead.name,
+      pipelineStage: lead.pipelineStage,
+      botSummary: lead.botSummary,
+      hint: hint?.trim() || null,
+    });
+
+    if (replies.length === 0) {
+      return { ok: false, error: "אין הצעות כרגע" };
+    }
+    return { ok: true, replies };
+  } catch (e) {
+    return {
+      ok: false,
+      error: e instanceof Error ? e.message : "suggest failed",
+    };
+  }
+}
+
+/**
+ * Snooze a lead — push `last_follow_up_at` forward by N hours so the cron
+ * won't nudge until that time. Also clears NEEDS_ELI + un-pauses (Eli is
+ * choosing to let the bot drive again, just not immediately).
+ */
+export async function snoozeLead(
+  manychatSubId: string,
+  hours: number
+): Promise<SimpleResult> {
+  const cleanSid = manychatSubId.trim();
+  if (!cleanSid) return { ok: false, error: "missing subscriberId" };
+  if (!Number.isFinite(hours) || hours <= 0 || hours > 168) {
+    return { ok: false, error: "invalid hours (1-168)" };
+  }
+  try {
+    const future = new Date(Date.now() + hours * 60 * 60 * 1000);
+    await db
+      .update(leads)
+      .set({
+        lastFollowUpAt: future,
+        botPaused: false,
+        pipelineFlag: null,
+        updatedAt: new Date(),
+      })
+      .where(sql`trim(${leads.manychatSubId}) = ${cleanSid}`);
+    safeRevalidate("/dashboard/v2", "layout");
+    return { ok: true, message: `נדחה ב-${hours} שעות` };
+  } catch (e) {
+    return {
+      ok: false,
+      error: e instanceof Error ? e.message : "snooze failed",
     };
   }
 }
