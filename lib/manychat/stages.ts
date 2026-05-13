@@ -9,9 +9,10 @@ export const V2_PIPELINE_STAGES = [
   "QUOTED",
   "AWAITING_DECISION",
   "AWAITING_LOGO",
+  "IN_PROGRESS",
+  "AWAITING_FINAL",
   "NEGOTIATING",
   "WAITING_CALL",
-  "IN_PROGRESS",
   "WON",
   "DROPPED",
 ] as const;

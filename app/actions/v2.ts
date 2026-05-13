@@ -16,6 +16,7 @@ import {
   removeTag,
   setCustomFields,
 } from "@/lib/messaging";
+import { sendBridgeMessage } from "@/lib/bridge/client";
 
 export interface SimpleResult {
   ok: boolean;
@@ -122,6 +123,81 @@ export async function updateLeadNotes(
     return {
       ok: false,
       error: e instanceof Error ? e.message : "save failed",
+    };
+  }
+}
+
+/**
+ * Stage 4 entry — Eli pushes the final price via dashboard, bot takes over
+ * with stage=AWAITING_FINAL and the standard "מתאים?" classifier loop.
+ * Per CUSTOMER-FLOW.md v2 §4 (decision: Eli updates stage manually).
+ *
+ * Side effects:
+ *   - leads.pipelineStage = AWAITING_FINAL
+ *   - leads.quoteTotal    = price (string)
+ *   - leads.botPaused     = false (bot drives Stage 4)
+ *   - leads.pipelineFlag  = null  (cleared — bot owns again)
+ *   - leads.followUpCount = 0 (fresh cadence window 24/36/72h)
+ *   - leads.lastFollowUpAt = now (anchor for next follow-up)
+ *   - qState.decisionState / finalState = null (clean slate)
+ *   - Sends WhatsApp message: "המחיר הסופי X. האם המחיר מתאים לך?"
+ */
+export async function sendFinalPrice(
+  manychatSubId: string,
+  price: string
+): Promise<SimpleResult> {
+  const cleanSid = manychatSubId.trim();
+  if (!cleanSid) return { ok: false, error: "missing subscriberId" };
+  const cleanPrice = price.trim();
+  if (!cleanPrice) return { ok: false, error: "missing price" };
+
+  try {
+    const [row] = await db
+      .select({
+        sid: leads.manychatSubId,
+        jid: leads.waJid,
+        qState: leads.qState,
+      })
+      .from(leads)
+      .where(sql`trim(${leads.manychatSubId}) = ${cleanSid}`)
+      .limit(1);
+    if (!row) return { ok: false, error: "lead not found" };
+
+    const recipient = row.jid ?? row.sid;
+    const message =
+      `המחיר הסופי הוא ${cleanPrice} ש"ח.\n` +
+      `האם המחיר מתאים לך? נשמח לדעת מה דעתך.`;
+
+    // Push WA first — if it fails we don't want to leave DB in the new state.
+    await sendBridgeMessage(recipient, message);
+
+    const cleared = {
+      ...((row.qState as Record<string, unknown> | null) ?? {}),
+      decisionState: null,
+      finalState: null,
+    };
+
+    await db
+      .update(leads)
+      .set({
+        pipelineStage: "AWAITING_FINAL",
+        quoteTotal: cleanPrice,
+        followUpCount: 0,
+        lastFollowUpAt: new Date(),
+        botPaused: false,
+        pipelineFlag: null,
+        botSummary: "Eli sent final price — awaiting customer decision",
+        qState: cleared as any,
+        updatedAt: new Date(),
+      })
+      .where(sql`trim(${leads.manychatSubId}) = ${cleanSid}`);
+
+    revalidatePath("/dashboard/v2", "layout");
+    return { ok: true, message: `המחיר הסופי ${cleanPrice} נשלח` };
+  } catch (e) {
+    return {
+      ok: false,
+      error: e instanceof Error ? e.message : "send failed",
     };
   }
 }

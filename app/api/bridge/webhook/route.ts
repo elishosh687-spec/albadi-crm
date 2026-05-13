@@ -201,7 +201,11 @@ async function handleMessageReceived(evt: BridgeEnvelope): Promise<void> {
       console.log("[bridge.webhook] questionnaire", jid, r);
       return;
     }
-    if (stage === "AWAITING_DECISION" || stage === "AWAITING_LOGO") {
+    if (
+      stage === "AWAITING_DECISION" ||
+      stage === "AWAITING_LOGO" ||
+      stage === "AWAITING_FINAL"
+    ) {
       const r = await handleDecisionInbound({ sid: jid, text, hasMedia: mediaPresent });
       console.log("[bridge.webhook] decision", jid, r);
       return;

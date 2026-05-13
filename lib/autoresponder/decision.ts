@@ -67,6 +67,12 @@ const REPLY_PAYMENT =
 const REPLY_LOGO_FORMAT =
   "כל פורמט בסדר 🙂 תשלח מה שיש לך — תמונה / PDF / קישור — והצוות יסדר את השאר.";
 
+// Stage 4 (AWAITING_FINAL) copies
+const FINAL_ACCEPT_REPLY =
+  "מעולה! 🎉 אנחנו נחזור אליך עם פרטי תשלום והזמנה.";
+const FINAL_HAGGLE_PROMPT =
+  "מה בדיוק לא מתאים? אם יש מחיר שמתאים לך, תגיד לנו ננסה להתאים.";
+
 interface LeadCtx {
   sid: string;
   jid: string;
@@ -167,7 +173,8 @@ export interface DecisionResult {
     | "sub_state_advanced"
     | "escalated"
     | "logo_received"
-    | "logo_reasked";
+    | "logo_reasked"
+    | "won_routed";
   intent?: Intent;
   detail?: string;
 }
@@ -191,6 +198,9 @@ export async function handleDecisionInbound(input: {
   }
   if (stage === "AWAITING_DECISION") {
     return handleDecisionStage(ctx, input.text);
+  }
+  if (stage === "AWAITING_FINAL") {
+    return handleFinalStage(ctx, input.text);
   }
   return { action: "no_op", detail: `stage=${stage}` };
 }
@@ -455,4 +465,152 @@ async function handleLogoStage(
     .where(sql`trim(${leads.manychatSubId}) = ${ctx.sid.trim()}`);
   await sendBridgeMessage(ctx.jid, LOGO_REASK);
   return { action: "logo_reasked", detail: `attempt ${attempt}` };
+}
+
+async function setFinalState(
+  sid: string,
+  finalState: string | null,
+  currentQState: any
+): Promise<void> {
+  const next = { ...(currentQState ?? {}), finalState };
+  await db
+    .update(leads)
+    .set({ qState: next as any, updatedAt: new Date() })
+    .where(sql`trim(${leads.manychatSubId}) = ${sid.trim()}`);
+}
+
+/**
+ * Stage 4 — customer replied to "המחיר הסופי X. מתאים?".
+ * Per CUSTOMER-FLOW.md v2 §4.1-4.5:
+ *   accept                  → WON + Eli DM (close deal)
+ *   reject / negotiating    → ask "מה בדיוק?" (sub-state) → next turn → escalate
+ *   custom_size             → escalate (§4.3 loopback deferred — Eli handles spec change)
+ *   question_payment        → canned 50/50
+ *   question_meeting/other  → escalate
+ *   other                   → no-op (cadence)
+ */
+async function handleFinalStage(
+  ctx: LeadCtx,
+  text: string | null
+): Promise<DecisionResult> {
+  const t = (text ?? "").trim();
+  if (!t) return { action: "no_op", detail: "empty text" };
+
+  const finalState: string | null = ctx.qState?.finalState ?? null;
+  const recent = await loadRecentMessages(ctx.sid);
+  const classification = await classifyIntent({
+    inboundText: t,
+    recentMessages: recent,
+    leadName: ctx.name,
+    pipelineStage: ctx.pipelineStage,
+  });
+
+  if (finalState === "awaiting_haggle_detail") {
+    // §4.2 — customer replied to "מה בדיוק?". Always escalate so Eli decides.
+    await escalateToEli(
+      ctx,
+      "הלקוח נתן פירוט / הצעת מחיר על המחיר הסופי",
+      classification.summary ?? t.slice(0, 120)
+    );
+    return {
+      action: "escalated",
+      intent: classification.intent,
+      detail: "haggle reply",
+    };
+  }
+
+  switch (classification.intent) {
+    case "accept": {
+      const cleared = {
+        ...(ctx.qState ?? {}),
+        finalState: null,
+        decisionState: null,
+      };
+      await db
+        .update(leads)
+        .set({
+          pipelineStage: "WON",
+          pipelineFlag: "NEEDS_ELI",
+          botPaused: true,
+          botSummary: "customer accepted final price — close deal",
+          qState: cleared as any,
+          followUpCount: 0,
+          updatedAt: new Date(),
+        })
+        .where(sql`trim(${leads.manychatSubId}) = ${ctx.sid.trim()}`);
+      await sendBridgeMessage(ctx.jid, FINAL_ACCEPT_REPLY);
+      const who = ctx.name?.trim() || ctx.phone || ctx.sid;
+      await sendEliDM(
+        `✅ ${who} אישר את המחיר הסופי. צריך לסגור עסקה (תשלום + הזמנה).`
+      );
+      return { action: "won_routed", intent: classification.intent };
+    }
+
+    case "reject":
+    case "negotiating": {
+      await setFinalState(ctx.sid, "awaiting_haggle_detail", ctx.qState);
+      await sendBridgeMessage(ctx.jid, FINAL_HAGGLE_PROMPT);
+      return {
+        action: "sub_state_advanced",
+        intent: classification.intent,
+        detail: "final → awaiting_haggle_detail",
+      };
+    }
+
+    case "custom_size": {
+      // §4.3 — spec change. Loopback to questionnaire is risky; escalate so Eli
+      // can decide which fields actually changed and re-quote manually.
+      await escalateToEli(
+        ctx,
+        "הלקוח רוצה לשנות מפרט אחרי שקיבל מחיר סופי",
+        classification.summary
+      );
+      return {
+        action: "escalated",
+        intent: classification.intent,
+        detail: "final spec change",
+      };
+    }
+
+    case "question_payment": {
+      await sendBridgeMessage(ctx.jid, REPLY_PAYMENT);
+      return { action: "canned_reply", intent: classification.intent, detail: "payment" };
+    }
+    case "question_delivery": {
+      await sendBridgeMessage(ctx.jid, REPLY_DELIVERY);
+      return { action: "canned_reply", intent: classification.intent, detail: "delivery" };
+    }
+    case "question_inclusive": {
+      await sendBridgeMessage(ctx.jid, REPLY_INCLUSIVE);
+      return { action: "canned_reply", intent: classification.intent, detail: "inclusive" };
+    }
+    case "question_format": {
+      // Rare at this stage but answer politely.
+      await sendBridgeMessage(ctx.jid, REPLY_LOGO_FORMAT);
+      return { action: "canned_reply", intent: classification.intent, detail: "format" };
+    }
+
+    case "samples_request": {
+      await sendBridgeMessage(ctx.jid, SAMPLES_REPLY);
+      return { action: "samples_sent", intent: classification.intent };
+    }
+
+    case "question_meeting":
+    case "question_other": {
+      await escalateToEli(
+        ctx,
+        "הלקוח שאל שאלה ב-שלב 4 (מחיר סופי)",
+        classification.summary
+      );
+      return {
+        action: "escalated",
+        intent: classification.intent,
+        detail: classification.summary,
+      };
+    }
+
+    case "other":
+    default:
+      return { action: "no_op", intent: classification.intent, detail: "ambiguous" };
+  }
 }
