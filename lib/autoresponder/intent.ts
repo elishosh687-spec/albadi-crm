@@ -3,15 +3,19 @@
  * the questionnaire). Direct fetch to OpenAI Chat Completions — keeps the
  * dependency surface small and the call easy to replace with another model.
  *
- * The classifier produces a single intent tag the webhook can route on:
- *   - accept           → customer is OK with the quote → AWAITING_LOGO
- *   - reject           → customer says no / not interested → NEEDS_ELI
- *   - negotiating      → customer wants a different price / haggle → NEEDS_ELI
- *   - samples_request  → "have a catalog?" / "send samples" → bot sends link
- *   - custom_size      → customer mentions a non-standard spec → NEEDS_ELI
- *   - question         → factual question we cannot answer deterministically
- *                        ("how long?", "any colors available?") → NEEDS_ELI
- *   - other            → ambiguous / chit-chat → fall back to follow-up loop
+ * Intent categories align with docs/CUSTOMER-FLOW.md v2 sub-flows:
+ *   - accept              → customer ok with quote → next stage
+ *   - reject              → customer says no → ask "יש סיבה?"
+ *   - negotiating         → customer says "יקר" / wants discount → "הצעה מתחרה?"
+ *   - samples_request     → catalog link
+ *   - custom_size         → non-standard spec → escalate (Stage 2) / loopback (Stage 4)
+ *   - question_delivery   → "כמה זמן ייקח?" → canned reply 25/90
+ *   - question_inclusive  → "כולל הכל?" / "כולל משלוח?" → canned "כן הכל כלול"
+ *   - question_payment    → "איך משלמים?" → canned 50/50
+ *   - question_format     → "איזה פורמט לוגו?" → canned "כל פורמט בסדר"
+ *   - question_meeting    → "אפשר בן-אדם?" / "אפשר לדבר?" → escalate
+ *   - question_other      → other factual question we can't answer → escalate
+ *   - other               → chit-chat / ambiguous → cadence keeps nudging
  *
  * Soft-fails to "other" on any error so a flaky API never blocks the webhook.
  */
@@ -31,7 +35,12 @@ export type Intent =
   | "negotiating"
   | "samples_request"
   | "custom_size"
-  | "question"
+  | "question_delivery"
+  | "question_inclusive"
+  | "question_payment"
+  | "question_format"
+  | "question_meeting"
+  | "question_other"
   | "other";
 
 export interface IntentResult {
@@ -41,19 +50,24 @@ export interface IntentResult {
 }
 
 const SYSTEM_PROMPT = `אתה מסווג כוונות של לקוחות בעברית לעסק לייצור שקיות ממותגות (Albadi).
-הלקוח כבר קיבל הצעת מחיר ושלח הודעה תגובתית.
-המשימה: לסווג את ההודעה לאחת מהקטגוריות:
+הלקוח כבר קיבל הצעת מחיר (משוערת או סופית) ושלח הודעה תגובתית.
+המשימה: לסווג את ההודעה לאחת מהקטגוריות הבאות בדיוק:
 
-- "accept" — הלקוח מאשר את ההצעה / מסכים / רוצה להמשיך. דוגמאות: "מתאים", "אישור", "סבבה", "אוקיי", "מקובל", "כן", "ok".
-- "reject" — הלקוח מסרב / לא מעוניין / סוגר. דוגמאות: "לא תודה", "לא מעוניין", "תפסיק", "stop".
-- "negotiating" — הלקוח רוצה הנחה / מתמקח על מחיר. דוגמאות: "המחיר יקר", "תורידו ל-800", "תוכלו להוריד?", "זה הרבה".
-- "samples_request" — הלקוח מבקש דוגמאות / קטלוג. דוגמאות: "יש דוגמאות?", "קטלוג?", "אפשר לראות תמונות?".
-- "custom_size" — הלקוח מבקש מידה או כמות לא סטנדרטית שלא הופיעה בשאלון. דוגמאות: "אני צריך 25x10x35", "אפשר 7500 יחידות?", "יש בגודל אחר?", מספרים עם × או x.
-- "question" — שאלה תוכנית שלא נכנסת לאף קטגוריה: זמן אספקה, תשלום, תמונות מוצר אחרות, חומרים, פגישה. דוגמאות: "כמה זמן ייקח?", "איך משלמים?", "אפשר להיפגש?".
-- "other" — צ'אט סתמי / לא ברור / לא קשור. דוגמאות: "תודה", "אוקיי אחזור אליך", "בוקר טוב".
+- "accept" — הלקוח מאשר את ההצעה / מסכים / רוצה להמשיך. דוגמאות: "מתאים", "אישור", "סבבה", "אוקיי", "מקובל", "כן", "ok", "בא נסגור", "איך מזמינים?".
+- "reject" — הלקוח דוחה / לא מעוניין / סוגר את השיחה ללא רמז למחיר. דוגמאות: "לא תודה", "לא בשבילי", "לא מעוניין", "אני אחפש במקום אחר".
+- "negotiating" — הלקוח רוצה הנחה / אומר שיקר / מציע מחיר נמוך יותר / מציין מתחרה זול יותר. דוגמאות: "יקר", "יקר מדי", "אפשר הנחה?", "אצל המתחרה X זה זול יותר", "תורידו ל-800", "זה הרבה".
+- "samples_request" — הלקוח מבקש לראות דוגמאות / קטלוג / תמונות מוצר. דוגמאות: "יש דוגמאות?", "קטלוג?", "אפשר לראות תמונות?".
+- "custom_size" — הלקוח מבקש מידה או כמות לא סטנדרטית שלא הופיעה בשאלון, או רוצה לשנות את המפרט. דוגמאות: "רוצה 7500 יחידות", "בגודל 25x10x35", "אפשר 2 צבעים במקום 3?", "פחות ידיות". מספרים עם × או x הם רמז חזק.
+- "question_delivery" — שאלה על זמן אספקה / משלוח / מתי מקבלים. דוגמאות: "כמה זמן ייקח?", "מתי תגיע הסחורה?", "כמה זמן אקספרס?", "מתי?".
+- "question_inclusive" — שאלה אם המחיר כולל הכל / משלוח / מע"מ / ידיות / צבעים. דוגמאות: "כולל הכל?", "כולל משלוח?", "המחיר סופי?", "יש מע""מ נוסף?".
+- "question_payment" — שאלה על תנאי תשלום / איך משלמים / מקדמה. דוגמאות: "איך משלמים?", "תנאי תשלום?", "צריך מקדמה?", "כמה אחוז להזמנה?".
+- "question_format" — שאלה על פורמט הלוגו / איך לשלוח לוגו / איזה קובץ צריך. דוגמאות: "איזה פורמט?", "PDF או JPG?", "באיזה גודל לשלוח לוגו?", "וקטור או רגיל?".
+- "question_meeting" — בקשה לדבר עם בן-אדם / פגישה / שיחת טלפון. דוגמאות: "אפשר בן-אדם?", "אפשר לדבר עם מישהו?", "אפשר להיפגש?", "תתקשרו אליי".
+- "question_other" — שאלה תוכנית אחרת שלא נכנסת לקטגוריות לעיל (חומר, בדיקות איכות, אחריות, מפעל, וכו'). דוגמאות: "מה החומר?", "יש אחריות?", "איך הולכת ההדפסה?".
+- "other" — צ'אט סתמי / לא ברור / לא קשור / "אחזור אליך". דוגמאות: "תודה", "אוקיי אחזור אליך", "בוקר טוב", "🙏".
 
 החזר רק JSON במבנה: { "intent": "...", "confidence": 0.0-1.0, "summary": "תיאור קצר באנגלית או עברית (≤80 תווים)" }.
-summary רלוונטי בעיקר כש-intent הוא reject, negotiating, custom_size, או question — תקציר שיעזור לאדם בצוות להבין מה הלקוח רצה.`;
+summary רלוונטי בעיקר כש-intent הוא reject / negotiating / custom_size / question_meeting / question_other — תקציר שיעזור לאדם בצוות להבין מה הלקוח רצה.`;
 
 interface RecentMessage {
   direction: "in" | "out";
@@ -162,7 +176,18 @@ function normalizeIntent(raw: unknown): Intent {
     samples: "samples_request",
     custom_size: "custom_size",
     custom: "custom_size",
-    question: "question",
+    question_delivery: "question_delivery",
+    delivery: "question_delivery",
+    question_inclusive: "question_inclusive",
+    inclusive: "question_inclusive",
+    question_payment: "question_payment",
+    payment: "question_payment",
+    question_format: "question_format",
+    format: "question_format",
+    question_meeting: "question_meeting",
+    meeting: "question_meeting",
+    question_other: "question_other",
+    question: "question_other",
     other: "other",
   };
   return map[t] ?? "other";
