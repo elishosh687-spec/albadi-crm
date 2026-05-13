@@ -9,6 +9,7 @@ import { getSubscriber, getFieldValue } from "@/lib/messaging";
 import { V2_PIPELINE_STAGES, type V2PipelineStage } from "@/lib/manychat/config";
 import { InboxList } from "./InboxList";
 import type { InboxItem } from "./InboxRow";
+import { NeedsEliCard, type NeedsEliLead } from "./NeedsEliCard";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -93,7 +94,7 @@ async function pullLeadSnapshots(subIds: string[]): Promise<LeadSnapshot[]> {
 }
 
 export default async function DashboardV2() {
-  const [pendingRows, activeLeads, latestApprovedRows] = await Promise.all([
+  const [pendingRows, activeLeads, latestApprovedRows, needsEliRows] = await Promise.all([
     db
       .select()
       .from(pipelineSuggestions)
@@ -110,7 +111,29 @@ export default async function DashboardV2() {
       WHERE approved_stage IS NOT NULL
       ORDER BY manychat_sub_id, reviewed_at DESC
     `),
+    db
+      .select({
+        sid: leads.manychatSubId,
+        name: leads.name,
+        phone: leads.phoneE164,
+        stage: leads.pipelineStage,
+        flag: leads.pipelineFlag,
+        botPaused: leads.botPaused,
+        followUpCount: leads.followUpCount,
+      })
+      .from(leads)
+      .where(sql`${leads.active} = true AND (${leads.pipelineFlag} = 'NEEDS_ELI' OR ${leads.botPaused} = true)`),
   ]);
+
+  const needsEliLeads: NeedsEliLead[] = needsEliRows.map((r) => ({
+    sid: r.sid,
+    name: r.name,
+    phone: r.phone,
+    stage: r.stage,
+    flag: r.flag,
+    botPaused: r.botPaused,
+    followUpCount: r.followUpCount,
+  }));
 
   const stageBySid = new Map<string, string>();
   for (const r of (latestApprovedRows.rows ?? latestApprovedRows) as Array<{
@@ -191,6 +214,8 @@ export default async function DashboardV2() {
         title="דאשבורד v2"
         description="כל הצעת סיווג שמחכה לאישור שלך + מבט כללי על ה-Pipeline. אישור = push ל-ManyChat וגם רישום ב-DB."
       />
+
+      <NeedsEliCard leads={needsEliLeads} />
 
       <Card title="Pipeline — סיכום">
         <div

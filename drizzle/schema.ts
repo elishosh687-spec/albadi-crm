@@ -42,6 +42,13 @@ export const leads = pgTable("leads", {
   // Auto-responder questionnaire state. Null = no active questionnaire.
   // Shape: { step: 1..9, shipping?, quantity?, product?, handles?, colors?, quoteResult?, doneAt? }
   qState: jsonb("q_state"),
+
+  // === follow-up engine (spec: docs/FOLLOWUP-SPEC.md) ===
+  followUpCount: integer("follow_up_count").default(0).notNull(),
+  lastFollowUpAt: timestamp("last_follow_up_at", { withTimezone: true }),
+  botPaused: boolean("bot_paused").default(false).notNull(),
+  // Currently single-flag scalar (e.g. 'NEEDS_ELI'). Migrate to array later if needed.
+  pipelineFlag: text("pipeline_flag"),
 });
 
 // DB-owned tags (replaces ManyChat tag IDs). One row per (lead, tag).

@@ -22,14 +22,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { db } from "@/lib/db";
-import { analysisQueue, bridgeEvents } from "@/drizzle/schema";
-import { eq } from "drizzle-orm";
+import { analysisQueue, bridgeEvents, leads } from "@/drizzle/schema";
+import { eq, sql } from "drizzle-orm";
 import {
   insertBridgeMessage,
   upsertLeadFromBridgeEvent,
 } from "@/lib/bridge/client";
 import { BRIDGE_WEBHOOK_SECRET } from "@/lib/bridge/config";
 import { handleInbound } from "@/lib/autoresponder/questionnaire";
+import { isStopWord, eliEscalationTemplate } from "@/lib/messaging/templates";
+import { sendEliDM } from "@/lib/notify/eli";
 
 export const runtime = "nodejs";
 export const maxDuration = 15;
@@ -110,7 +112,59 @@ async function handleMessageReceived(evt: BridgeEnvelope): Promise<void> {
     receivedAt: new Date(evt.occurred_at),
   });
 
-  // Auto-responder first — only acts on NULL/NEW leads. Mid-pipeline
+  // Stop-word check — escalate Eli, pause bot, do not autoresponder.
+  if (isStopWord(text)) {
+    try {
+      const [row] = await db
+        .select({
+          name: leads.name,
+          phone: leads.phoneE164,
+          stage: leads.pipelineStage,
+        })
+        .from(leads)
+        .where(sql`trim(${leads.manychatSubId}) = ${jid.trim()}`)
+        .limit(1);
+      await db
+        .update(leads)
+        .set({
+          botPaused: true,
+          pipelineFlag: "NEEDS_ELI",
+          updatedAt: new Date(),
+        })
+        .where(sql`trim(${leads.manychatSubId}) = ${jid.trim()}`);
+      await sendEliDM(
+        eliEscalationTemplate({
+          name: row?.name ?? null,
+          phone: row?.phone ?? null,
+          stage: row?.stage ?? null,
+          reason: "stop_word",
+        })
+      );
+      console.log("[bridge.webhook] stop-word escalation", jid);
+    } catch (e) {
+      console.error("[bridge.webhook] stop-word handler error", jid, e);
+    }
+    return;
+  }
+
+  // Customer re-engaged — reset follow-up counter and auto-resume bot
+  // (the bot was probably paused after a prior 3-strike escalation; this
+  // gives Eli back an active loop until the customer goes cold again).
+  try {
+    await db
+      .update(leads)
+      .set({
+        followUpCount: 0,
+        botPaused: false,
+        pipelineFlag: null,
+        updatedAt: new Date(),
+      })
+      .where(sql`trim(${leads.manychatSubId}) = ${jid.trim()}`);
+  } catch (e) {
+    console.error("[bridge.webhook] counter reset error", jid, e);
+  }
+
+  // Auto-responder — only acts on NULL/NEW leads. Mid-pipeline
   // leads short-circuit to `no_op` so Eli keeps full control of replies.
   try {
     const r = await handleInbound({ sid: jid, text });

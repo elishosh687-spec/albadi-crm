@@ -5,8 +5,9 @@ import {
   pipelineSuggestions,
   eliDecisions,
   analysisQueue,
+  leads,
 } from "@/drizzle/schema";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import {
   V2_FLAG_TAG_IDS,
@@ -355,6 +356,41 @@ export async function updateLeadNotes(
     return {
       ok: false,
       error: e instanceof Error ? e.message : "save failed",
+    };
+  }
+}
+
+// Toggle bot_paused on a lead. Setting paused=false also clears NEEDS_ELI
+// and resets the follow-up counter (lead is back in the active loop).
+export async function setBotPaused(
+  manychatSubId: string,
+  paused: boolean
+): Promise<SimpleResult> {
+  try {
+    const cleanSid = manychatSubId.trim();
+    if (!cleanSid) return { ok: false, error: "missing subscriberId" };
+    if (paused) {
+      await db
+        .update(leads)
+        .set({ botPaused: true, updatedAt: new Date() })
+        .where(sql`trim(${leads.manychatSubId}) = ${cleanSid}`);
+    } else {
+      await db
+        .update(leads)
+        .set({
+          botPaused: false,
+          pipelineFlag: null,
+          followUpCount: 0,
+          updatedAt: new Date(),
+        })
+        .where(sql`trim(${leads.manychatSubId}) = ${cleanSid}`);
+    }
+    revalidatePath("/dashboard/v2", "layout");
+    return { ok: true, message: paused ? "הבוט מושהה" : "הבוט פעיל" };
+  } catch (e) {
+    return {
+      ok: false,
+      error: e instanceof Error ? e.message : "toggle failed",
     };
   }
 }
