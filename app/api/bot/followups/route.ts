@@ -6,9 +6,9 @@
  *     (Fri/Sat/holiday-eve/holiday via Hebcal).
  *   - Customer-side cadence by stage:
  *       NEW (mid-questionnaire abandoned)     → 1h, 1h, 1h
- *       AWAITING_DECISION (Stage 2)           → 24h, 36h, 72h
- *       AWAITING_LOGO (Stage 3)               → 24h, 36h, 72h
- *       AWAITING_FINAL (Stage 4)              → 24h, 36h, 72h
+ *       AWAITING_DECISION (Stage 2)           → 2h, 12h, 23h
+ *       AWAITING_LOGO (Stage 3)               → 2h, 12h, 23h
+ *       AWAITING_FINAL (Stage 4)              → 2h, 12h, 23h
  *   - WAITING_FACTORY → Eli-only daily reminder (no customer message).
  *   - After 3 unanswered attempts → escalate (NEEDS_ELI + bot_paused + Eli DM).
  *   - Skips leads where bot_paused=true.
@@ -61,20 +61,21 @@ const STAGE_RULES: StageRule[] = [
   },
   {
     // Stage 2 — bot waiting on customer reply to estimated quote.
+    // Cadence per Eli: 2h → 12h → 23h. 3 nudges spread over ~37h total.
     match: (stage) => (stage || "").toUpperCase() === "AWAITING_DECISION",
-    cadences: [24 * HOUR_MS, 36 * HOUR_MS, 72 * HOUR_MS],
+    cadences: [2 * HOUR_MS, 12 * HOUR_MS, 23 * HOUR_MS],
     template: "AWAITING_DECISION",
   },
   {
-    // Stage 3 — bot waiting on logo file.
+    // Stage 3 — bot waiting on logo file. Same cadence.
     match: (stage) => (stage || "").toUpperCase() === "AWAITING_LOGO",
-    cadences: [24 * HOUR_MS, 36 * HOUR_MS, 72 * HOUR_MS],
+    cadences: [2 * HOUR_MS, 12 * HOUR_MS, 23 * HOUR_MS],
     template: "AWAITING_LOGO",
   },
   {
-    // Stage 4 — bot waiting on customer reply to final price.
+    // Stage 4 — bot waiting on customer reply to final price. Same cadence.
     match: (stage) => (stage || "").toUpperCase() === "AWAITING_FINAL",
-    cadences: [24 * HOUR_MS, 36 * HOUR_MS, 72 * HOUR_MS],
+    cadences: [2 * HOUR_MS, 12 * HOUR_MS, 23 * HOUR_MS],
     template: "AWAITING_FINAL",
   },
 ];

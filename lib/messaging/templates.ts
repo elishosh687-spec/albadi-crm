@@ -1,10 +1,13 @@
-// Deterministic follow-up copy keyed by lead stage. Hebrew, free-form
+// Deterministic follow-up + DM copy keyed by lead stage. Hebrew, free-form
 // (new bridge has no 24h limit).
 //
-// Cadence + thresholds are aligned to docs/CUSTOMER-FLOW.md v2:
-//   - Stage 1 (mid-questionnaire, NEW): 1h × 3.
-//   - Stages 2 / 3 / 4: 24h → 36h → 72h.
-// See app/api/bot/followups/route.ts for the cadence rules.
+// Voice: first person singular ("אני / אחזור / אתקשר") — this is Eli, not a
+// "bot" or "team". Plural-neutral address to the customer ("אתם / לכם").
+// Emojis: 0-1 per message, only when they add. See docs/BOT-COPY.md.
+//
+// Cadence + thresholds aligned to docs/BOT-COPY.md (which supersedes v2 spec
+// where they differ — notably AWAITING_FINAL is 2h × 3, not 24/36/72h).
+// See app/api/bot/followups/route.ts for the cadence rules themselves.
 
 export type FollowupStage =
   | "MID_QUESTIONNAIRE"
@@ -13,29 +16,34 @@ export type FollowupStage =
   | "AWAITING_FINAL";
 
 const TEMPLATES: Record<FollowupStage, string[]> = {
-  // pipeline_stage = NEW with q_state mid-flight (not bailed, not done).
+  // Stage 1 — pipeline_stage = NEW with q_state mid-flight (not bailed, not done).
+  // Cadence: 1h × 3.
   MID_QUESTIONNAIRE: [
-    "היי 👋 ראיתי שהתחלנו את השאלון אבל לא סיימנו. רוצה להמשיך? פשוט תכתוב את התשובה לשאלה האחרונה.",
-    "תזכורת קטנה — נשארנו באמצע השאלון להצעת מחיר. תוך דקה אנחנו מסיימים 😊",
-    "מנסה לתפוס אותך שוב — רוצה שנמשיך מאיפה שעצרנו? כתוב לי תשובה ונסיים.",
+    "30 שניות, ויש לכם הצעת מחיר. נמשיך?",
+    "משהו לא ברור בשאלה? תכתבו לי, אעזור.",
+    "אם נוח לכם בטלפון — תגידו, ואתקשר היום-מחר.",
   ],
   // Stage 2 — bot waiting on customer response to estimated quote.
+  // Cadence: 2h / 12h / 23h.
   AWAITING_DECISION: [
-    "היי, רציתי לשמוע מה דעתך על ההצעה ששלחנו 🙏",
-    "מה דעתך על המחיר? משהו לא ברור או שתרצה לשנות?",
-    "תזכורת אחרונה — תרצה שנמשיך הלאה עם ההצעה, או שיש משהו שצריך להתאים?",
+    "היי, חוזר אליכם. רציתי לשמוע מה דעתכם על ההצעה ששלחתי.",
+    "אם נוח לכם בטלפון — תגידו, אתקשר.",
+    "ניסיון אחרון. רוצים שאתקשר, או שנעזוב לעת עתה?",
   ],
   // Stage 3 — bot waiting on logo file.
+  // Cadence: 2h / 12h / 23h.
   AWAITING_LOGO: [
-    "היי 👋 מחכים לקבל את הלוגו כדי להמשיך לציטוט סופי.",
-    "תזכורת קטנה — תשלח לוגו (תמונה / PDF / קישור) ונמשיך הלאה.",
-    "ניסיון אחרון לתפוס אותך — תשלח לוגו ונסגור את ההצעה.",
+    "היי, מחכה ללוגו שלכם כדי לשלוח את המחיר הסופי. אפשר לשלוח עכשיו?",
+    "משהו מעכב את הלוגו? תכתבו לי.",
+    "ניסיון אחרון. רוצים שאתקשר?",
   ],
   // Stage 4 — bot waiting on customer response to final price.
+  // Cadence: 2h / 12h / 23h (same as Stages 2/3). Final price is hot;
+  // we lead with a 2h nudge while the price is still fresh.
   AWAITING_FINAL: [
-    "היי, רציתי לשמוע מה דעתך על המחיר הסופי 🙏",
-    "תזכורת קטנה — תרצה שנתקדם לסגירה, או שיש משהו לא ברור?",
-    "ניסיון אחרון — נשמח לדעת מה דעתך על המחיר הסופי.",
+    "היי, חוזר אליכם לגבי המחיר הסופי. הספקתם לחשוב על ההצעה?",
+    "אם יש משהו שצריך להבהיר — תכתבו לי. אם לא — אעביר את זה לסיים בטלפון.",
+    "אם לא מתאים עכשיו — אין בעיה, תחזרו אליי כשתרצו. אחרת אתקשר היום-מחר.",
   ],
 };
 
@@ -53,17 +61,27 @@ export function followupTemplate(
   return list[idx];
 }
 
-/** Eli-only daily reminder while a lead sits in WAITING_FACTORY. */
+/**
+ * Eli-only daily reminder while a lead sits in WAITING_FACTORY.
+ * Escalates wording after 3+ days waiting — past 3 days the chance of
+ * losing the lead grows.
+ */
 export function eliFactoryReminderTemplate(input: {
   name: string | null | undefined;
   phone: string | null | undefined;
   daysWaiting: number;
 }): string {
   const who = input.name?.trim() || input.phone || "ליד";
-  return `⏰ ${who} מחכה ${input.daysWaiting} ימים לציטוט מהמפעל. צריך לעדכן את הציטוט בלוח המחוונים.`;
+  if (input.daysWaiting >= 3) {
+    return `🔥 ${who} מחכה ${input.daysWaiting} ימים — הסיכוי שיברח עולה. תתמחר היום.`;
+  }
+  return `⏰ ${who} מחכה ${input.daysWaiting} ימים לציטוט.`;
 }
 
-/** Eli WA DM when a lead crosses the 3-strike escalation threshold. */
+/**
+ * Eli WA DM when a lead crosses the 3-strike escalation threshold from
+ * the follow-up cron or webhook stop-word handler.
+ */
 export function eliEscalationTemplate(input: {
   name: string | null | undefined;
   phone: string | null | undefined;
@@ -72,13 +90,76 @@ export function eliEscalationTemplate(input: {
 }): string {
   const who = input.name?.trim() || input.phone || "ליד";
   const stage = (input.stage || "NEW").trim();
-  const reasonText: Record<typeof input.reason, string> = {
-    no_reply: "קר אחרי 3 פולואפים",
-    stop_word: "ביקש להפסיק / לא מעוניין",
-    bail: "נכשל בשאלון האוטומטי",
-  };
-  return `🚨 ${who} (שלב ${stage}) — ${reasonText[input.reason]}. כדאי להתקשר.`;
+  switch (input.reason) {
+    case "no_reply":
+      return (
+        `⏰ ${who} (שלב ${stage}) — קר אחרי 3 פולואפים.\n` +
+        `📞 שיחה אחרונה לפני שמוחקים.`
+      );
+    case "stop_word":
+      return (
+        `🛑 ${who} (שלב ${stage}) — ביקש להפסיק / לא מעוניין.\n` +
+        `הבוט עוצר אוטומטית.`
+      );
+    case "bail":
+      return (
+        `⚠️ ${who} — לא הצליח בשאלון האוטומטי (שלב ${stage}).\n` +
+        `📞 שיחה ידנית — אולי לקוח רציני שזקוק לעזרה.`
+      );
+  }
 }
+
+/**
+ * Eli WA DM when the decision sub-flow escalates a lead. Picks the right
+ * header per reason so the message is scannable.
+ */
+export function eliDecisionEscalationTemplate(input: {
+  name: string | null | undefined;
+  phone: string | null | undefined;
+  stage: string | null | undefined;
+  /** kind: rejection vs negotiation vs generic question */
+  kind: "reject" | "negotiating" | "spec_change" | "question" | "generic";
+  summary?: string | null;
+}): string {
+  const who = input.name?.trim() || input.phone || "ליד";
+  const stage = (input.stage || "?").trim();
+  const summaryLine = input.summary?.trim() ? `\n📝 ${input.summary.trim()}` : "";
+  switch (input.kind) {
+    case "reject":
+      return `🚨 ${who} (שלב ${stage}) — דחה את ההצעה.${summaryLine}\n📞 כדאי להתקשר תוך 4 שעות.`;
+    case "negotiating":
+      return `💰 ${who} (שלב ${stage}) — מתמקח על המחיר.${summaryLine}\n📞 כדאי להתקשר היום`;
+    case "spec_change":
+      return `🔧 ${who} (שלב ${stage}) — רוצה לשנות מפרט.${summaryLine}\n📞 צריך להתאים מחיר.`;
+    case "question":
+      return `❓ ${who} (שלב ${stage}) — שאל שאלה שדורשת אותך.${summaryLine}\n📞 התקשר אליו.`;
+    case "generic":
+    default:
+      return `🚨 ${who} (שלב ${stage}) — צריך התערבות.${summaryLine}\n📞 כדאי להתקשר.`;
+  }
+}
+
+/**
+ * Eli WA DM when a logo file lands. Includes the preliminary quote so Eli
+ * has the context to send a final price quickly.
+ */
+export function eliLogoReceivedTemplate(input: {
+  name: string | null | undefined;
+  phone: string | null | undefined;
+  quotePrice: string | null | undefined;
+}): string {
+  const who = input.name?.trim() || input.phone || "ליד";
+  const price = input.quotePrice?.trim();
+  const priceLine = price ? `\n💰 מחיר משוער: ${price}` : "";
+  return `✅ ${who} שלח לוגו.${priceLine}\n📞 צריך לשלוח מחיר סופי תוך 24 שעות.`;
+}
+
+/**
+ * Auto-reply sent to the customer when their inbound matches a stop-word.
+ * Sent once; bot then goes silent (bot_paused = true).
+ */
+export const STOP_WORD_REPLY =
+  "הבנתי, לא אטריד יותר. אם תרצו בעתיד — תכתבו לי ואני כאן.";
 
 // Stop-word detection — substring match on lowercased trimmed text.
 // Order: most specific first to keep matching cheap.

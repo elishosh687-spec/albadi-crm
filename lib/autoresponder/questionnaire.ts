@@ -43,7 +43,8 @@ const QUESTIONS: Question[] = [
   {
     step: 3,
     field: "shipping",
-    prompt: "🚚 באיזו שיטת משלוח אתה מעוניין?",
+    prompt:
+      "🚚 באיזו שיטת משלוח אתם מעוניינים?\n(זמן המשלוח משפיע על המחיר)",
     options: [
       { value: "s1", label: "✈️ אקספרס (~25 יום)" },
       { value: "s2", label: "🚢 רגיל (~90 יום)" },
@@ -52,7 +53,7 @@ const QUESTIONS: Question[] = [
   {
     step: 4,
     field: "quantity",
-    prompt: "📦 כמה יחידות אתה צריך?",
+    prompt: "📦 כמה יחידות אתם צריכים?",
     options: [
       { value: "q0", label: "1,000 יחידות" },
       { value: "q1", label: "3,000 יחידות" },
@@ -61,7 +62,8 @@ const QUESTIONS: Question[] = [
       { value: "custom", label: "אחר / כמות מותאמת" },
     ],
     hasCustom: true,
-    customPrompt: "כמה יחידות בדיוק אתה צריך? כתוב מספר (לדוגמה: 7500)",
+    customPrompt:
+      "כמה יחידות אתם צריכים? תכתבו את הכמות בדיוק — לדוגמה 7500.",
   },
   {
     step: 5,
@@ -77,7 +79,8 @@ const QUESTIONS: Question[] = [
       { value: "custom", label: "אחר / מידה מותאמת" },
     ],
     hasCustom: true,
-    customPrompt: "מה המידות שאתה צריך? כתוב באורך × רוחב × גובה ס״מ (לדוגמה: 25×10×35)",
+    customPrompt:
+      "מה המידות שאתם צריכים? תכתבו אורך × רוחב × גובה ס״מ — לדוגמה 25×10×35.",
   },
   {
     step: 6,
@@ -91,7 +94,8 @@ const QUESTIONS: Question[] = [
   {
     step: 7,
     field: "colors",
-    prompt: "🎨 כמה צבעים בלוגו?",
+    prompt:
+      "🎨 כמה צבעים בלוגו?\n(מספר הצבעים משפיע על עלות ההדפסה)",
     options: [
       { value: "1", label: "צבע אחד" },
       { value: "2", label: "2 צבעים" },
@@ -103,9 +107,17 @@ const QUESTIONS: Question[] = [
 const CALC_URL = "https://bag-quote-app.vercel.app/api/quote/calculate";
 
 const DECISION_PROMPT =
-  "האם המחיר מתאים לך? 🤔 תכתוב לי תשובה ונמשיך הלאה.";
+  "מה דעתכם על ההצעה? אם מתאימה — נמשיך ללוגו. אם לא — תגידו לי מה לשנות.";
 const FACTORY_HOLD_MSG =
-  "תודה! 🙏 קיבלנו את המפרט. אנחנו מבררים מחיר מותאם מול המפעל ונחזור אליך תוך 24-48 שעות.";
+  "תודה, קיבלתי את המפרט. חוזר אליכם תוך 24-48 שעות עם המחיר.";
+const BAIL_REPLY =
+  "רגע, נראה לי שעדיף שננהל את זה בטלפון. אחזור אליכם תוך 24 שעות עם המחיר.";
+const REASK_REPLIES = [
+  // attempt #1 (unmatched=1)
+  "🤔 לא הצלחתי להבין. אפשר לבחור מספר מהרשימה?",
+  // attempt #2 (unmatched=2) — softer, blames Eli's phrasing
+  "אני עדיין לא קולט — אולי הניסוח שלי לא ברור. תכתבו מספר מהרשימה, או רק את שם האפשרות.",
+];
 
 interface QState {
   step: number;
@@ -399,21 +411,16 @@ export async function handleInbound(input: {
           updatedAt: new Date(),
         })
         .where(sql`trim(${leads.manychatSubId}) = ${ctx.sid.trim()}`);
-      await sendBridgeMessage(
-        recipient,
-        "תודה, נחזור אליך עם הצעה מותאמת ⏳"
-      );
+      await sendBridgeMessage(recipient, BAIL_REPLY);
       await sendEliDM(
-        `⚠️ ${ctx.name ?? ctx.phone ?? "ליד"} נכשל בשאלון (3 תשובות לא תואמות בשלב ${currentQ.field}). צריך טיפול ידני.`
+        `⚠️ ${ctx.name ?? ctx.phone ?? "ליד"} — לא הצליח בשאלון האוטומטי (שלב ${currentQ.field}).\n📞 שיחה ידנית — אולי לקוח רציני שזקוק לעזרה.`
       );
       return { action: "bailed", detail: "three unmatched answers" };
     }
     const reasked: QState = { ...ctx.qState, unmatchedAt: unmatched };
     await saveState(ctx.sid, reasked);
-    await sendBridgeMessage(
-      recipient,
-      "🤔 לא הצלחתי להבין. אפשר לבחור מספר מהרשימה?"
-    );
+    const reaskIdx = Math.min(unmatched - 1, REASK_REPLIES.length - 1);
+    await sendBridgeMessage(recipient, REASK_REPLIES[reaskIdx]);
     await sendBridgeMessage(recipient, formatQuestion(currentQ));
     return { action: "reasked" };
   }

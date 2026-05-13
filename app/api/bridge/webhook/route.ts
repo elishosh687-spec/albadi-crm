@@ -39,8 +39,13 @@ import {
 import { BRIDGE_WEBHOOK_SECRET } from "@/lib/bridge/config";
 import { handleInbound } from "@/lib/autoresponder/questionnaire";
 import { handleDecisionInbound } from "@/lib/autoresponder/decision";
-import { isStopWord, eliEscalationTemplate } from "@/lib/messaging/templates";
+import {
+  isStopWord,
+  eliEscalationTemplate,
+  STOP_WORD_REPLY,
+} from "@/lib/messaging/templates";
 import { sendEliDM } from "@/lib/notify/eli";
+import { sendBridgeMessage } from "@/lib/bridge/client";
 
 export const runtime = "nodejs";
 export const maxDuration = 15;
@@ -138,7 +143,9 @@ async function handleMessageReceived(evt: BridgeEnvelope): Promise<void> {
     receivedAt: new Date(evt.occurred_at),
   });
 
-  // 1. Stop-word check.
+  // 1. Stop-word check. Send one polite "ok, I won't bother you" reply, then
+  // pause the bot so the cron leaves the lead alone. Eli still gets the DM
+  // so a human can follow up if needed.
   if (isStopWord(text)) {
     try {
       const [row] = await db
@@ -158,6 +165,12 @@ async function handleMessageReceived(evt: BridgeEnvelope): Promise<void> {
           updatedAt: new Date(),
         })
         .where(sql`trim(${leads.manychatSubId}) = ${jid.trim()}`);
+      try {
+        await sendBridgeMessage(jid, STOP_WORD_REPLY);
+      } catch (sendErr) {
+        // Best-effort — even if the reply fails the bot is now paused.
+        console.error("[bridge.webhook] stop-word reply failed", jid, sendErr);
+      }
       await sendEliDM(
         eliEscalationTemplate({
           name: row?.name ?? null,

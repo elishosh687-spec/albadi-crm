@@ -1,5 +1,5 @@
 /**
- * Follow-up cadence smoke test — verifies 24h / 36h / 72h pacing for
+ * Follow-up cadence smoke test — verifies 2h / 12h / 23h pacing for
  * AWAITING_DECISION + escalation after attempt 3.
  *
  * Run:
@@ -74,30 +74,37 @@ async function main(): Promise<void> {
   const r0 = await readLead();
   assert(r0.followUpCount === 0, "no follow-up fires when lastFollowUpAt=now");
 
-  // ----- 1st attempt: 24h cadence -----
-  section("1st attempt fires after 24h elapsed");
-  await updateLastFollowUp(new Date(Date.now() - 25 * HOUR_MS)); // 25h ago
+  // ----- 1st attempt: 2h cadence -----
+  section("1st attempt fires after 2h elapsed");
+  await updateLastFollowUp(new Date(Date.now() - 3 * HOUR_MS)); // 3h ago
   await callCron();
   let r = await readLead();
   assert(r.followUpCount === 1, "1st follow-up sent (count 0→1)");
 
-  // ----- 2nd attempt: 36h cadence (rewrite last to 37h ago) -----
-  section("2nd attempt fires after 36h elapsed");
-  await updateLastFollowUp(new Date(Date.now() - 37 * HOUR_MS));
+  // ----- Premature: 6h < 12h cadence for attempt 2 -----
+  section("2nd attempt does NOT fire after only 6h (need 12h)");
+  await updateLastFollowUp(new Date(Date.now() - 6 * HOUR_MS));
+  await callCron();
+  r = await readLead();
+  assert(r.followUpCount === 1, "no fire — 6h < 12h cadence");
+
+  // ----- 2nd attempt: 12h cadence -----
+  section("2nd attempt fires after 12h elapsed");
+  await updateLastFollowUp(new Date(Date.now() - 13 * HOUR_MS));
   await callCron();
   r = await readLead();
   assert(r.followUpCount === 2, "2nd follow-up sent (count 1→2)");
 
-  // ----- Premature: 30h < 72h cadence for attempt 3 -----
-  section("3rd attempt does NOT fire after only 30h (need 72h)");
-  await updateLastFollowUp(new Date(Date.now() - 30 * HOUR_MS));
+  // ----- Premature: 20h < 23h cadence for attempt 3 -----
+  section("3rd attempt does NOT fire after only 20h (need 23h)");
+  await updateLastFollowUp(new Date(Date.now() - 20 * HOUR_MS));
   await callCron();
   r = await readLead();
-  assert(r.followUpCount === 2, "no fire — 30h < 72h cadence");
+  assert(r.followUpCount === 2, "no fire — 20h < 23h cadence");
 
-  // ----- 3rd attempt: 72h cadence -----
-  section("3rd attempt fires after 72h elapsed → escalate");
-  await updateLastFollowUp(new Date(Date.now() - 73 * HOUR_MS));
+  // ----- 3rd attempt: 23h cadence -----
+  section("3rd attempt fires after 23h elapsed → escalate");
+  await updateLastFollowUp(new Date(Date.now() - 24 * HOUR_MS));
   await callCron();
   r = await readLead();
   assert(r.followUpCount === 3, "3rd follow-up sent (count 2→3)");
@@ -107,28 +114,28 @@ async function main(): Promise<void> {
   );
 
   // ----- AWAITING_LOGO uses same cadence -----
-  section("AWAITING_LOGO also follows 24h cadence (smoke check)");
+  section("AWAITING_LOGO also follows 2h cadence (smoke check)");
   await seedLead({
     stage: "AWAITING_LOGO",
     qState: { step: 9, doneAt: new Date().toISOString() },
     followUpCount: 0,
-    lastFollowUpAt: new Date(Date.now() - 25 * HOUR_MS),
+    lastFollowUpAt: new Date(Date.now() - 3 * HOUR_MS),
   });
   await callCron();
   r = await readLead();
-  assert(r.followUpCount === 1, "AWAITING_LOGO: 1st follow-up after 24h");
+  assert(r.followUpCount === 1, "AWAITING_LOGO: 1st follow-up after 2h");
 
   // ----- AWAITING_FINAL uses same cadence -----
-  section("AWAITING_FINAL also follows 24h cadence (smoke check)");
+  section("AWAITING_FINAL also follows 2h cadence (smoke check)");
   await seedLead({
     stage: "AWAITING_FINAL",
     qState: { step: 9, doneAt: new Date().toISOString() },
     followUpCount: 0,
-    lastFollowUpAt: new Date(Date.now() - 25 * HOUR_MS),
+    lastFollowUpAt: new Date(Date.now() - 3 * HOUR_MS),
   });
   await callCron();
   r = await readLead();
-  assert(r.followUpCount === 1, "AWAITING_FINAL: 1st follow-up after 24h");
+  assert(r.followUpCount === 1, "AWAITING_FINAL: 1st follow-up after 2h");
 
   await finishAndExit("test-cadence");
 }

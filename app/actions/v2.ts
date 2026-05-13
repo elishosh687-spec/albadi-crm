@@ -151,7 +151,7 @@ export async function updateLeadNotes(
  *   - leads.followUpCount = 0 (fresh cadence window 24/36/72h)
  *   - leads.lastFollowUpAt = now (anchor for next follow-up)
  *   - qState.decisionState / finalState = null (clean slate)
- *   - Sends WhatsApp message: "המחיר הסופי X. האם המחיר מתאים לך?"
+ *   - Sends WhatsApp message: "המחיר הסופי X. נשמח לשמוע את דעתכם על ההצעה."
  */
 export async function sendFinalPrice(
   manychatSubId: string,
@@ -176,8 +176,8 @@ export async function sendFinalPrice(
 
     const recipient = row.jid ?? row.sid;
     const message =
-      `המחיר הסופי הוא ${cleanPrice} ש"ח.\n` +
-      `האם המחיר מתאים לך? נשמח לדעת מה דעתך.`;
+      `המחיר הסופי הוא ${cleanPrice} ש"ח.\n\n` +
+      `נשמח לשמוע את דעתכם על ההצעה.`;
 
     // Push WA first — if it fails we don't want to leave DB in the new state.
     await sendBridgeMessage(recipient, message);
