@@ -46,6 +46,7 @@ import {
 } from "@/lib/messaging/templates";
 import { sendEliDM } from "@/lib/notify/eli";
 import { sendBridgeMessage } from "@/lib/bridge/client";
+import { isTestJid } from "@/lib/config/test-jids";
 
 export const runtime = "nodejs";
 export const maxDuration = 15;
@@ -141,6 +142,7 @@ async function handleMessageReceived(evt: BridgeEnvelope): Promise<void> {
     waMessageId,
     payload: d,
     receivedAt: new Date(evt.occurred_at),
+    sender: "lead",
   });
 
   // 1. Stop-word check. Send one polite "ok, I won't bother you" reply, then
@@ -205,6 +207,30 @@ async function handleMessageReceived(evt: BridgeEnvelope): Promise<void> {
     console.error("[bridge.webhook] counter reset error", jid, e);
   }
 
+  // 2.5 Test-JID auto-reset. Configured numbers always re-enter Stage 1
+  // questionnaire so Eli can probe the bot end-to-end from his own phone
+  // without manually wiping state in the DB between runs.
+  if (isTestJid(jid)) {
+    try {
+      await db
+        .update(leads)
+        .set({
+          pipelineStage: null,
+          qState: null,
+          botSummary: null,
+          nextAction: null,
+          pipelineFlag: null,
+          quoteTotal: null,
+          quoteAlt: null,
+          updatedAt: new Date(),
+        })
+        .where(sql`trim(${leads.manychatSubId}) = ${jid.trim()}`);
+      console.log("[bridge.webhook] test-jid reset", jid);
+    } catch (e) {
+      console.error("[bridge.webhook] test-jid reset error", jid, e);
+    }
+  }
+
   // 3. Stage-based routing.
   const stage = ((await getLeadStage(jid)) || "").toUpperCase();
 
@@ -244,6 +270,12 @@ async function handleMessageSent(evt: BridgeEnvelope): Promise<void> {
   const waMessageId =
     pickStr(d, "wa_message_id", "id", "messageId") ?? `bridge:${evt.id}`;
   const text = pickStr(d, "text", "content", "body");
+  // Sender attribution heuristic: if our own code initiated the send it has
+  // already pre-inserted a row with sender='bot' or 'eli' (approveDraft,
+  // sendManualReply, autoresponder paths). insertBridgeMessage dedupes by
+  // waMessageId, so reaching this insert path means the message came from a
+  // surface we did not originate — i.e. Eli replying directly in the WA
+  // Business app on the bonded phone. Default to 'eli' for those.
   await insertBridgeMessage({
     jid,
     direction: "out",
@@ -251,6 +283,7 @@ async function handleMessageSent(evt: BridgeEnvelope): Promise<void> {
     waMessageId,
     payload: d,
     receivedAt: new Date(evt.occurred_at),
+    sender: "eli",
   });
 }
 
