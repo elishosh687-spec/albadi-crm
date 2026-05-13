@@ -1,5 +1,6 @@
 import { Frank_Ruhl_Libre, Heebo } from "next/font/google";
 import { colors, fontStack } from "@/lib/ui/tokens";
+import "./globals.css";
 
 const display = Frank_Ruhl_Libre({
   subsets: ["latin", "hebrew"],
