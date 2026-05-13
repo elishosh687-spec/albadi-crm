@@ -96,6 +96,16 @@ export const messages = pgTable("messages", {
   sender: text("sender"),
 });
 
+// Key/value config table. Pre-existed from the v1 schema; re-declared here
+// so the Settings UI can read/write entries (bot prompts, feature toggles).
+export const botConfig = pgTable("bot_config", {
+  key: text("key").primaryKey(),
+  value: text("value"),
+  updatedAt: timestamp("updated_at", { withTimezone: true })
+    .defaultNow()
+    .notNull(),
+});
+
 // Bot-generated draft replies awaiting Eli's approval. Created when a money
 // moment is detected (stage gate or LLM is_money_moment flag) so Eli can
 // review/edit/approve before the message goes out to the customer.

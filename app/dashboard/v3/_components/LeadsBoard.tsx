@@ -10,6 +10,13 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { STAGE_LABEL, STAGE_TONE, timeAgoHe } from "./stage-meta";
+import {
+  BUCKET_LABEL,
+  BUCKET_ORDER,
+  BUCKET_TONE,
+  bucketOf,
+  type BucketKey,
+} from "./buckets";
 import { LeadDrawer } from "./LeadDrawer";
 
 export interface LeadCardData {
@@ -30,79 +37,68 @@ export interface LeadCardData {
   updatedAt: string;
 }
 
-const PRIORITY_ORDER = [
-  "NEW",
-  "QUOTED",
-  "AWAITING_DECISION",
-  "NEGOTIATING",
-  "AWAITING_FINAL",
-  "AWAITING_LOGO",
-  "WAITING_CALL",
-  "WAITING_FACTORY",
-  "IN_PROGRESS",
-  "WON",
-  "DROPPED",
-  "UNCLASSIFIED",
-];
-
-export function LeadsBoard({
-  cards,
-  stagesOrder,
-}: {
-  cards: LeadCardData[];
-  stagesOrder: string[];
-}) {
+export function LeadsBoard({ cards }: { cards: LeadCardData[] }) {
   const [search, setSearch] = useState("");
+  const [bucketFilter, setBucketFilter] = useState<BucketKey | null>(null);
   const [stageFilter, setStageFilter] = useState<string | null>(null);
-  const [needsEliOnly, setNeedsEliOnly] = useState(false);
   const [selectedSid, setSelectedSid] = useState<string | null>(null);
+
+  const enriched = useMemo(
+    () =>
+      cards.map((c) => ({
+        card: c,
+        bucket: bucketOf({
+          stage: c.stage,
+          pipelineFlag: c.pipelineFlag,
+          botPaused: c.botPaused,
+        }),
+      })),
+    [cards]
+  );
 
   const filtered = useMemo(() => {
     const s = search.trim().toLowerCase();
-    return cards.filter((c) => {
-      if (needsEliOnly && c.pipelineFlag !== "NEEDS_ELI" && !c.botPaused) {
-        return false;
-      }
-      if (stageFilter && c.stage.toUpperCase() !== stageFilter) return false;
+    return enriched.filter(({ card, bucket }) => {
+      if (bucketFilter && bucket !== bucketFilter) return false;
+      if (stageFilter && card.stage.toUpperCase() !== stageFilter) return false;
       if (!s) return true;
       const hay = [
-        c.name,
-        c.phone,
-        c.sid,
-        c.botSummary,
-        c.notes,
-        c.lastInboundText,
+        card.name,
+        card.phone,
+        card.sid,
+        card.botSummary,
+        card.notes,
+        card.lastInboundText,
       ]
         .filter(Boolean)
         .join(" ")
         .toLowerCase();
       return hay.includes(s);
     });
-  }, [cards, search, stageFilter, needsEliOnly]);
+  }, [enriched, search, bucketFilter, stageFilter]);
 
-  const grouped = useMemo(() => {
-    const map = new Map<string, LeadCardData[]>();
-    for (const c of filtered) {
-      const key = (c.stage || "UNCLASSIFIED").toUpperCase();
-      const arr = map.get(key) ?? [];
-      arr.push(c);
-      map.set(key, arr);
+  const groupedByBucket = useMemo(() => {
+    const map = new Map<BucketKey, LeadCardData[]>();
+    for (const b of BUCKET_ORDER) map.set(b, []);
+    for (const { card, bucket } of filtered) {
+      map.get(bucket)!.push(card);
     }
     return map;
   }, [filtered]);
 
-  const stagesShown = PRIORITY_ORDER.filter(
-    (s) => stagesOrder.includes(s) && (grouped.get(s)?.length ?? 0) > 0
-  );
+  const bucketTotals = useMemo(() => {
+    const totals = new Map<BucketKey, number>();
+    for (const b of BUCKET_ORDER) totals.set(b, 0);
+    for (const { bucket } of enriched) {
+      totals.set(bucket, (totals.get(bucket) ?? 0) + 1);
+    }
+    return totals;
+  }, [enriched]);
 
+  const totalShown = filtered.length;
   const selectedLead = selectedSid
     ? cards.find((c) => c.sid === selectedSid) ?? null
     : null;
-
-  const totalShown = filtered.length;
-  const needsEliCount = cards.filter(
-    (c) => c.pipelineFlag === "NEEDS_ELI" || c.botPaused
-  ).length;
 
   return (
     <div className="flex flex-col gap-6">
@@ -116,33 +112,18 @@ export function LeadsBoard({
               לידים
             </h1>
             <p className="text-sm text-muted-foreground mt-1">
-              {totalShown.toLocaleString("he-IL")} לידים פעילים, מקובצים לפי שלב.
+              {totalShown.toLocaleString("he-IL")} לידים בתצוגה, מקובצים לפי
+              סטטוס פעולה.
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setNeedsEliOnly((v) => !v)}
-              className={cn(
-                "inline-flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-medium transition-colors border",
-                needsEliOnly
-                  ? "bg-destructive/15 border-destructive/40 text-destructive"
-                  : "border-border bg-card text-muted-foreground hover:text-foreground"
-              )}
-            >
-              <AlertCircle className="size-3.5" />
-              צריך אותך
-              <span className="rounded-full bg-background/40 px-1.5 py-0.5">
-                {needsEliCount}
-              </span>
-            </button>
             <div className="relative">
               <Search className="absolute right-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground" />
               <input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="חיפוש שם / טלפון / טקסט…"
-                className="w-64 rounded-lg border border-border bg-card pl-3 pr-8 py-2 text-xs placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring/40"
+                className="w-72 rounded-lg border border-border bg-card pl-3 pr-8 py-2 text-xs placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring/40"
               />
             </div>
           </div>
@@ -151,52 +132,58 @@ export function LeadsBoard({
         <div className="flex items-center gap-1.5 flex-wrap">
           <button
             type="button"
-            onClick={() => setStageFilter(null)}
+            onClick={() => {
+              setBucketFilter(null);
+              setStageFilter(null);
+            }}
             className={cn(
               "rounded-full px-3 py-1 text-xs transition-colors border",
-              stageFilter === null
+              bucketFilter === null && stageFilter === null
                 ? "bg-foreground text-background border-foreground"
                 : "border-border text-muted-foreground hover:text-foreground"
             )}
           >
-            הכל ({totalShown})
+            הכל ({cards.length})
           </button>
-          {stagesShown.map((s) => {
-            const count = grouped.get(s)?.length ?? 0;
-            const tone = STAGE_TONE[s];
+          {BUCKET_ORDER.map((b) => {
+            const count = bucketTotals.get(b) ?? 0;
+            const tone = BUCKET_TONE[b];
+            const active = bucketFilter === b;
             return (
               <button
-                key={s}
+                key={b}
                 type="button"
-                onClick={() => setStageFilter(stageFilter === s ? null : s)}
+                onClick={() => {
+                  setBucketFilter(active ? null : b);
+                  setStageFilter(null);
+                }}
                 className={cn(
-                  "rounded-full px-3 py-1 text-xs transition-colors border",
-                  stageFilter === s
+                  "rounded-full px-3 py-1 text-xs transition-colors border flex items-center gap-1.5",
+                  active
                     ? tone.pill
                     : "border-border text-muted-foreground hover:text-foreground"
                 )}
               >
-                {STAGE_LABEL[s] ?? s} ({count})
+                <span className={cn("inline-block size-1.5 rounded-full", tone.dot)} />
+                {BUCKET_LABEL[b]} ({count})
               </button>
             );
           })}
         </div>
       </header>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-        {stagesShown.map((stage) => (
-          <StageColumn
-            key={stage}
-            stage={stage}
-            cards={grouped.get(stage) ?? []}
-            onSelect={setSelectedSid}
-          />
-        ))}
-        {stagesShown.length === 0 && (
-          <div className="col-span-full rounded-xl border border-dashed border-border bg-card/30 p-8 text-center text-sm text-muted-foreground">
-            אין לידים שמתאימים לסינון.
-          </div>
-        )}
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+        {BUCKET_ORDER.map((bucket) => {
+          const items = groupedByBucket.get(bucket) ?? [];
+          return (
+            <BucketColumn
+              key={bucket}
+              bucket={bucket}
+              cards={items}
+              onSelect={setSelectedSid}
+            />
+          );
+        })}
       </div>
 
       {selectedLead && (
@@ -209,31 +196,37 @@ export function LeadsBoard({
   );
 }
 
-function StageColumn({
-  stage,
+function BucketColumn({
+  bucket,
   cards,
   onSelect,
 }: {
-  stage: string;
+  bucket: BucketKey;
   cards: LeadCardData[];
   onSelect: (sid: string) => void;
 }) {
-  const tone = STAGE_TONE[stage];
+  const tone = BUCKET_TONE[bucket];
   return (
     <section className="flex flex-col rounded-xl border border-border bg-card/40 backdrop-blur min-h-32">
       <header className="flex items-center justify-between gap-2 px-4 pt-4 pb-3 border-b border-border/60">
         <div className="flex items-center gap-2 min-w-0">
-          <span className={cn("inline-block size-2 rounded-full", tone.bar)} />
-          <h2 className="text-sm font-medium truncate">{STAGE_LABEL[stage] ?? stage}</h2>
+          <span className={cn("inline-block size-2.5 rounded-full", tone.dot)} />
+          <h2 className="text-sm font-medium truncate">
+            {BUCKET_LABEL[bucket]}
+          </h2>
         </div>
-        <span className="text-xs text-muted-foreground tabular-nums">{cards.length}</span>
+        <span className="text-xs text-muted-foreground tabular-nums">
+          {cards.length}
+        </span>
       </header>
-      <div className="flex flex-col gap-2 p-3 max-h-[70dvh] overflow-y-auto">
+      <div className="flex flex-col gap-2 p-3 max-h-[72dvh] overflow-y-auto">
         {cards.map((c) => (
           <LeadCard key={c.sid} card={c} onClick={() => onSelect(c.sid)} />
         ))}
         {cards.length === 0 && (
-          <div className="text-xs text-muted-foreground text-center py-4">—</div>
+          <div className="text-xs text-muted-foreground text-center py-6">
+            —
+          </div>
         )}
       </div>
     </section>
@@ -247,7 +240,8 @@ function LeadCard({
   card: LeadCardData;
   onClick: () => void;
 }) {
-  const tone = STAGE_TONE[card.stage.toUpperCase()] ?? STAGE_TONE.UNCLASSIFIED;
+  const stageTone =
+    STAGE_TONE[card.stage.toUpperCase()] ?? STAGE_TONE.UNCLASSIFIED;
   const displayName = card.name || card.phone || card.sid;
   const initials = (displayName ?? "?").trim().slice(0, 2);
   const needsEli = card.pipelineFlag === "NEEDS_ELI";
@@ -280,7 +274,7 @@ function LeadCard({
         <div
           className={cn(
             "size-9 shrink-0 rounded-full grid place-items-center text-xs font-medium",
-            tone.pill
+            stageTone.pill
           )}
         >
           {initials}
@@ -298,8 +292,12 @@ function LeadCard({
 
       <div className="flex items-center justify-between gap-2 mt-1">
         <div className="flex items-center gap-1 flex-wrap">
+          <span className={cn("text-[10px] rounded-full px-2 py-0.5", stageTone.pill)}>
+            {STAGE_LABEL[card.stage.toUpperCase()] ?? card.stage}
+          </span>
           {needsEli && (
             <span className="text-[10px] font-medium rounded-full bg-destructive/15 text-destructive border border-destructive/30 px-2 py-0.5">
+              <AlertCircle className="inline size-2.5 -mt-0.5 ml-0.5" />
               צריך אותך
             </span>
           )}
