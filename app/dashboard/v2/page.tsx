@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { db } from "@/lib/db";
-import { leads } from "@/drizzle/schema";
+import { botDrafts, leads } from "@/drizzle/schema";
 import { eq, sql } from "drizzle-orm";
 import { Page } from "@/components/ui/Page";
 import { Card } from "@/components/ui/Card";
@@ -13,7 +13,7 @@ export const revalidate = 0;
 export const maxDuration = 60;
 
 export default async function DashboardV2() {
-  const [activeLeads, needsEliRows] = await Promise.all([
+  const [activeLeads, needsEliRows, pendingDraftRows] = await Promise.all([
     db
       .select({
         id: leads.manychatSubId,
@@ -33,7 +33,12 @@ export default async function DashboardV2() {
       })
       .from(leads)
       .where(sql`${leads.active} = true AND (${leads.pipelineFlag} = 'NEEDS_ELI' OR ${leads.botPaused} = true)`),
+    db
+      .select({ id: botDrafts.id })
+      .from(botDrafts)
+      .where(eq(botDrafts.status, "pending")),
   ]);
+  const pendingDraftCount = pendingDraftRows.length;
 
   const needsEliLeads: NeedsEliLead[] = needsEliRows.map((r) => ({
     sid: r.sid,
@@ -62,6 +67,25 @@ export default async function DashboardV2() {
       <Page
         title="דאשבורד v2"
         description="הבוט מנהל את השאלון, ההצעה, החלטות הלקוח והפולואפים. אתה מטפל רק במה שמסומן NEEDS_ELI."
+        actions={
+          <Link
+            href="/dashboard/v2/drafts"
+            style={{
+              fontFamily: fontStack.body,
+              fontSize: size.sm,
+              fontWeight: weight.medium,
+              color: pendingDraftCount > 0 ? "white" : colors.accent,
+              background: pendingDraftCount > 0 ? colors.accent : "white",
+              border: `1px solid ${colors.accent}`,
+              borderRadius: 6,
+              padding: `${space.sm}px ${space.lg}px`,
+              textDecoration: "none",
+              whiteSpace: "nowrap",
+            }}
+          >
+            תור אישורים {pendingDraftCount > 0 ? `(${pendingDraftCount})` : "→"}
+          </Link>
+        }
       />
 
       <NeedsEliCard leads={needsEliLeads} />

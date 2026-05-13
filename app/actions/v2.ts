@@ -32,6 +32,10 @@ import {
   setCustomFields,
 } from "@/lib/messaging";
 import { sendBridgeMessage } from "@/lib/bridge/client";
+import {
+  approveDraft as approveDraftLib,
+  rejectDraft as rejectDraftLib,
+} from "@/lib/drafts";
 
 export interface SimpleResult {
   ok: boolean;
@@ -398,4 +402,36 @@ export async function setBotPaused(
       error: e instanceof Error ? e.message : "toggle failed",
     };
   }
+}
+
+/**
+ * Approve a pending bot draft. Bridge send + DB update happen inside
+ * lib/drafts.approveDraft. We just wrap it so the in-app drafts page can
+ * call it as a server action without hitting the /api/drafts/:id/approve
+ * REST endpoint.
+ */
+export async function approveDraftAction(
+  draftId: number,
+  editedText?: string
+): Promise<SimpleResult> {
+  if (!Number.isFinite(draftId) || draftId <= 0) {
+    return { ok: false, error: "invalid draft id" };
+  }
+  const r = await approveDraftLib(draftId, editedText);
+  safeRevalidate("/dashboard/v2/drafts", "layout");
+  if (!r.ok) return { ok: false, error: r.error };
+  return { ok: true, message: "נשלח" };
+}
+
+export async function rejectDraftAction(
+  draftId: number,
+  reason?: string
+): Promise<SimpleResult> {
+  if (!Number.isFinite(draftId) || draftId <= 0) {
+    return { ok: false, error: "invalid draft id" };
+  }
+  const r = await rejectDraftLib(draftId, reason);
+  safeRevalidate("/dashboard/v2/drafts", "layout");
+  if (!r.ok) return { ok: false, error: r.error };
+  return { ok: true, message: "נדחה" };
 }
