@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { colors, fontStack, size, space, weight } from "@/lib/ui/tokens";
 import {
-  approveSuggestion,
   setLeadStage,
   updateLeadNotes,
 } from "@/app/actions/v2";
@@ -22,9 +21,6 @@ export interface NotesModalTarget {
   initialNotes: string | null;
   phone?: string | null;
   quoteResult?: string | null;
-  // Inbox mode — there's a pending Claude suggestion on this lead.
-  suggestionId: number | null;
-  suggestedStage: string | null;
   // Stage-detail mode — the lead is already in a stage and we edit it directly.
   currentStage?: string | null;
   currentFlags?: string[] | null;
@@ -48,7 +44,6 @@ export function NotesModal({
   const router = useRouter();
   const [value, setValue] = useState("");
   const [saved, setSaved] = useState("");
-  const [overrideStage, setOverrideStage] = useState<string>("");
   const [directStage, setDirectStage] = useState<string>("");
   const [directFlags, setDirectFlags] = useState<Set<V2FlagName>>(new Set());
   const [pending, start] = useTransition();
@@ -62,7 +57,6 @@ export function NotesModal({
       const v = target.initialNotes ?? "";
       setValue(v);
       setSaved(v);
-      setOverrideStage("");
       setDirectStage(target.currentStage ?? "");
       setDirectFlags(new Set((target.currentFlags ?? []) as V2FlagName[]));
       setMsg(null);
@@ -124,14 +118,12 @@ export function NotesModal({
   function onSaveAll() {
     if (!target) return;
     const notesDirty = value !== saved;
-    const overrideChosen = !!overrideStage; // inbox mode
     const directChanged =
-      target.suggestionId == null &&
       target.currentStage !== undefined &&
       directStage !== "" &&
       (directStage !== (target.currentStage ?? "") ||
         flagsChanged(directFlags, target.currentFlags ?? []));
-    if (!notesDirty && !overrideChosen && !directChanged) {
+    if (!notesDirty && !directChanged) {
       flashMsg("אין שינויים לשמור", false);
       return;
     }
@@ -154,19 +146,7 @@ export function NotesModal({
         }
       }
 
-      if (notesOk && overrideChosen) {
-        const r = await approveSuggestion({
-          suggestionId: target.suggestionId!,
-          stage: overrideStage as V2PipelineStage,
-          overrideReason: `Manual override from ${target.suggestedStage} to ${overrideStage}`,
-        });
-        if (r.ok) {
-          msgParts.push(`stage→${overrideStage}`);
-        } else {
-          stageOk = false;
-          lastError = r.error ?? "כשל בשמירת stage";
-        }
-      } else if (notesOk && directChanged) {
+      if (notesOk && directChanged) {
         const r = await setLeadStage({
           manychatSubId: target.manychatSubId,
           stage: directStage as V2PipelineStage,
@@ -184,7 +164,7 @@ export function NotesModal({
       if (notesOk && stageOk) {
         flashMsg(`נשמר: ${msgParts.join(" + ")}`, true);
         router.refresh();
-        if (overrideChosen || directChanged) onClose();
+        if (directChanged) onClose();
       } else {
         flashMsg(lastError ?? "כשל", false);
       }
@@ -390,54 +370,8 @@ export function NotesModal({
           />
         </section>
 
-        {/* Stage override section — only when there's an active pending suggestion */}
-        {target.suggestionId && target.suggestedStage && (
-          <section
-            style={{
-              borderTop: `1px solid ${colors.ruleSoft}`,
-              paddingTop: space.md,
-              display: "flex",
-              flexDirection: "column",
-              gap: space.sm,
-            }}
-          >
-            <label
-              style={{
-                fontFamily: fontStack.body,
-                fontSize: size.xs,
-                color: colors.inkMuted,
-                fontWeight: weight.medium,
-              }}
-            >
-              העברת stage (Claude הציע: <strong>{target.suggestedStage}</strong>)
-            </label>
-            <select
-              value={overrideStage}
-              onChange={(e) => setOverrideStage(e.target.value)}
-              disabled={pending}
-              style={{
-                fontFamily: fontStack.body,
-                fontSize: size.sm,
-                padding: `${space.sm}px ${space.md}px`,
-                border: `1px solid ${colors.rule}`,
-                borderRadius: 6,
-                background: colors.surface,
-                color: colors.ink,
-                width: "fit-content",
-              }}
-            >
-              <option value="">— השאר על {target.suggestedStage} —</option>
-              {V2_PIPELINE_STAGES.filter((s) => s !== target.suggestedStage).map((s) => (
-                <option key={s} value={s}>
-                  {s}
-                </option>
-              ))}
-            </select>
-          </section>
-        )}
-
-        {/* Direct stage edit — used by stage-detail page (no pending suggestion) */}
-        {!target.suggestionId && target.currentStage !== undefined && (
+        {/* Direct stage edit — used by stage-detail page */}
+        {target.currentStage !== undefined && (
           <section
             style={{
               borderTop: `1px solid ${colors.ruleSoft}`,

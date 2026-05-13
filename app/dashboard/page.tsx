@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
-import { pipelineSuggestions, eliDecisions, leads, messages } from "@/drizzle/schema";
-import { and, eq, gte, sql } from "drizzle-orm";
+import { leads, messages } from "@/drizzle/schema";
+import { eq, gte, sql, and } from "drizzle-orm";
 import Link from "next/link";
 import { Page } from "@/components/ui/Page";
 import { Card } from "@/components/ui/Card";
@@ -11,15 +11,13 @@ export const dynamic = "force-dynamic";
 
 async function getStats() {
   const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
-  const [pending, approvedToday, activeLeads, msgsToday] = await Promise.all([
+  const [needsEli, activeLeads, msgsToday] = await Promise.all([
     db
       .select({ count: sql<number>`count(*)::int` })
-      .from(pipelineSuggestions)
-      .where(eq(pipelineSuggestions.status, "pending_review")),
-    db
-      .select({ count: sql<number>`count(*)::int` })
-      .from(eliDecisions)
-      .where(gte(eliDecisions.decidedAt, dayAgo)),
+      .from(leads)
+      .where(
+        and(eq(leads.active, true), eq(leads.pipelineFlag, "NEEDS_ELI"))
+      ),
     db
       .select({ count: sql<number>`count(*)::int` })
       .from(leads)
@@ -31,15 +29,14 @@ async function getStats() {
   ]);
 
   return {
-    pending: pending[0]?.count ?? 0,
-    approvedToday: approvedToday[0]?.count ?? 0,
+    needsEli: needsEli[0]?.count ?? 0,
     activeLeads: activeLeads[0]?.count ?? 0,
     msgsToday: msgsToday[0]?.count ?? 0,
   };
 }
 
 export default async function DashboardHome() {
-  const { pending, approvedToday, activeLeads, msgsToday } = await getStats();
+  const { needsEli, activeLeads, msgsToday } = await getStats();
   const today = new Date();
   const dateLabel = today.toLocaleDateString("he-IL", {
     weekday: "long",
@@ -53,14 +50,14 @@ export default async function DashboardHome() {
       <Page
         eyebrow={dateLabel}
         title="בית"
-        description="סיכום פעילות. ניהול הצעות והאישורים מתבצע בעמוד v2."
+        description="סיכום פעילות. ניהול לידים מתבצע בעמוד v2."
       />
 
       <Card
         title="סקירה"
         eyebrow="24 שעות אחרונות"
         actions={
-          pending > 0 ? (
+          needsEli > 0 ? (
             <Link
               href="/dashboard/v2"
               style={{
@@ -69,14 +66,13 @@ export default async function DashboardHome() {
                 fontWeight: weight.medium,
               }}
             >
-              עבור ל-Inbox ←
+              צריך אותך ←
             </Link>
           ) : null
         }
       >
         <StatRow>
-          <Stat label="הצעות ממתינות" value={pending} />
-          <Stat label="אישורי אתמול" value={approvedToday} />
+          <Stat label="צריך אותך" value={needsEli} />
           <Stat label="לידים פעילים" value={activeLeads} />
           <Stat label="הודעות נכנסות" value={msgsToday} />
         </StatRow>
@@ -89,8 +85,8 @@ export default async function DashboardHome() {
             marginBottom: 0,
           }}
         >
-          הסקיל <code>albadi-classify</code> רץ מקומית ב-<code>/loop 1h</code> ומייצר הצעות סיווג.
-          אישור בדאשבורד v2 דוחף ל-ManyChat.
+          הבוט מנהל את השאלון, ההצעה, החלטות הלקוח והפולואפים אוטומטית.
+          לידים שסומנו <code>NEEDS_ELI</code> מחכים לטיפול ידני בדאשבורד v2.
         </p>
       </Card>
     </div>

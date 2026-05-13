@@ -1,130 +1,167 @@
-# Albadi Lead Flow & Follow-up Spec
+# Albadi Lead Flow & Bot Spec
 
 Captured 2026-05-13. Single source of truth for the in-house bridge-based bot.
+**The bot owns the entire pipeline.** No standalone classifier — LLM intent
+classification happens inline in the webhook.
 
-## 1. Lead journey
+## 1. Pipeline stages
+
+`V2_PIPELINE_STAGES` (lib/manychat/stages.ts):
 
 ```
-inbound (Meta ads → WhatsApp)
-        ↓
-    NEW (autoresponder eligible)
-        ↓ first inbound (any text)
-    QUESTIONNAIRE   ──┐
-        ↓             │ 2 unmatched answers OR stop-word
-        ↓             ↓
-    WAITING_FACTORY  bailed / DROPPED-by-Eli
-        │ Eli pastes factory price
-        ↓
-    QUOTED
-        ↓ (haggle)     ↓ (asks call)
-    NEGOTIATING ←→ WAITING_CALL
-        ↓ Eli marks accepted
-    IN_PROGRESS
-        ↓ shipped
-    WON
+NEW (autoresponder runs questionnaire while pipeline_stage stays NEW)
+  ↓ questionnaire done, standard spec → calc API → quote sent → AWAITING_DECISION
+  ↓ questionnaire done, custom spec → WAITING_FACTORY (Eli quotes manually)
+  ↓ 2 unmatched answers → NEEDS_ELI flag (lead stays in NEW; Eli takes over)
+
+AWAITING_DECISION (bot asks "המחיר מתאים?", waits for yes/no/other)
+  ↓ accept                            → AWAITING_LOGO
+  ↓ samples_request                   → bot sends catalog link, stays here
+  ↓ reject/negotiating/custom_size/question → NEEDS_ELI + bot_paused
+  ↓ no answer                         → follow-up cron (2h × 3) → NEEDS_ELI
+
+AWAITING_LOGO (bot asked customer to send logo)
+  ↓ any media inbound                 → IN_PROGRESS + NEEDS_ELI (Eli calls)
+  ↓ text-only re-asks                 → up to 3, then NEEDS_ELI
+
+WAITING_FACTORY (Eli is fetching factory price)
+  ↓ Eli sets pipeline_stage = QUOTED  (factory price ready)
+
+QUOTED (Eli manually moved here after a factory quote)
+  → routes through the same intent classifier as AWAITING_DECISION
+
+NEGOTIATING / WAITING_CALL (Eli manually placed)
+  → routes through the same intent classifier
+
+IN_PROGRESS (Eli marked deal accepted)
+  ↓ Eli marks shipped → WON
+
+WON
+DROPPED (Eli-only after a call — bot NEVER sets this)
 ```
 
-- Free-text-spec / keyword detect: **deferred**. Customer always goes through the questionnaire so we capture every field.
-- Stage refactor (collapse WAITING_CALL into NEGOTIATING, drop QUESTIONNAIRE in favor of q_state, demote SILENT to a flag): **deferred**.
+Orthogonal flags on `leads`:
+- `pipeline_flag = 'NEEDS_ELI'` — lead needs human attention.
+- `bot_paused = true` — bot skips this lead entirely.
 
-## 2. Autoresponder (already coded)
+Removed in this refactor: `QUESTIONNAIRE` and `SILENT` stages. SILENT was
+timer-derived (now expressed as `pipeline_flag`); QUESTIONNAIRE state lives
+in `leads.q_state` JSONB while `pipeline_stage` stays `NEW`.
 
-File: `lib/autoresponder/questionnaire.ts`.
+## 2. Questionnaire (lib/autoresponder/questionnaire.ts)
 
-- Runs only on leads with `pipeline_stage IN (NULL, 'NEW')` — Eli's in-flight chats are never hijacked.
-- Trigger: ANY first inbound (no keyword required).
-- 5 list questions (shipping, quantity, product, handles, colors).
-- Off-topic mid-Q → re-ask current question. 2 unmatched → bail (set `q_state.bailed=true`, hand off to Eli).
-- Calc API success → `pipeline_stage = QUOTED`, mark `q_state.doneAt`.
+Runs ONLY when `pipeline_stage IN (NULL, 'NEW')`. Trigger: any first inbound.
 
-## 3. Follow-up engine (new)
+Questions:
+1. Shipping (express / standard)
+2. Quantity (1k / 3k / 5k / 10k / **אחר** — free-text capture)
+3. Product size (6 fixed sizes / **אחר** — free-text capture)
+4. Handles (with / without)
+5. Colors (1 / 2 / 3)
 
-Goal: **squeeze the lead until they buy or say "remove me"**. Eli decides final drop on a call, never the bot.
+When the customer picks "אחר" on Q2 or Q3 the bot:
+1. Sets `q_state.pendingCustomField`, asks "כמה?" / "מה המידות?".
+2. Captures the next inbound as `q_state.quantityCustom` / `productCustom`.
+3. Continues to the next question normally.
 
-### 3.1 Cadence by stage
+End of questionnaire:
+- **No custom fields** → POST to bag-quote-app calc API → `pipeline_stage = QUOTED` → send quote → send "המחיר מתאים?" → flip to `AWAITING_DECISION`.
+- **Any custom field** → skip calc API → `pipeline_stage = WAITING_FACTORY`, `pipeline_flag = NEEDS_ELI`, customer gets hold message, Eli gets DM with the full spec.
 
-| Lead state                     | Sender   | Cadence              | Max sends | Notes |
-| ------------------------------ | -------- | -------------------- | --------- | ----- |
-| Mid-questionnaire abandoned    | customer | every **1 hour**     | 3         | "started Q, didn't finish" |
-| QUOTED (WA-sent, no reply)     | customer | every **2 hours**    | 3         | "how does the offer look" |
-| NEGOTIATING / WAITING_CALL     | customer | every **2 hours**    | 3         | "ready to move forward" |
-| WAITING_FACTORY                | **Eli**  | once **daily**       | n/a       | "lead X has been waiting Y days — chase factory" — **no customer-side msg** while waiting |
+2 unmatched answers in a row → bail: `q_state.bailed = true`, flag NEEDS_ELI, Eli DM. Lead stays in NEW until Eli takes over.
 
-### 3.2 Counter reset
+## 3. Decision sub-flow (lib/autoresponder/decision.ts)
 
-Any inbound from the customer → `follow_up_count = 0`. Fresh 3-send budget.
+Triggered when `pipeline_stage` is `AWAITING_DECISION`, `AWAITING_LOGO`,
+`QUOTED`, `NEGOTIATING`, or `WAITING_CALL`. Calls `lib/autoresponder/intent.ts`
+(OpenAI `gpt-4o-mini`, JSON mode) to classify the inbound text into one of:
 
-### 3.3 Escalation
+| Intent | Bot action |
+| --- | --- |
+| `accept` | move to `AWAITING_LOGO`, ask for logo |
+| `samples_request` | send catalog URL, stay in current stage |
+| `reject` | escalate: NEEDS_ELI + pause + DM "הלקוח דחה את ההצעה" |
+| `negotiating` | escalate: NEEDS_ELI + pause + DM "הלקוח רוצה הנחה" |
+| `custom_size` | escalate: NEEDS_ELI + pause + DM "ביקש מידה לא סטנדרטית" |
+| `question` | escalate: NEEDS_ELI + pause + DM "שאל שאלה שהבוט לא יכול לענות" |
+| `other` | no-op — follow-up cron keeps nudging |
 
-After 3 unanswered follow-ups in a row:
-1. Set `pipeline_flag = NEEDS_ELI` (dashboard inbox shows red flag).
-2. WhatsApp DM to `ELI_NOTIFY_JID`: `"ליד {name} ({phone}) קר אחרי 3 פולואפים בשלב {stage}. תתקשר איתו."`
-3. Set `bot_paused = true` on lead.
-4. Bot ignores this lead until either:
-   - Eli flips `bot_paused = false` in dashboard, OR
-   - Customer sends a new inbound → bot auto-resumes (reset counter to 0, un-pause).
+LLM soft-fails to `other` on any error (missing env, timeout, parse error).
 
-### 3.4 Stop-word handler
+`AWAITING_LOGO` is media-driven, not LLM-driven:
+- Inbound contains media (image/file detected via `data.media_path` / `type !== "text"`) → `IN_PROGRESS` + NEEDS_ELI + DM "התקבל לוגו, צריך להתקשר".
+- Text-only inbound → re-ask via `LOGO_REASK` up to 3 attempts (uses `follow_up_count` as the budget). 4th attempt = escalate.
 
-If inbound text contains any of:
-`stop`, `תפסיק`, `תפסיקו`, `לא מעוניין`, `remove me`, `הסר אותי`, `אל תשלחו`
+Catalog URL: `https://bag-quote-app.vercel.app/catalog`.
 
-→ Set `bot_paused = true`, `pipeline_flag = NEEDS_ELI`, send WA DM to Eli, **do not auto-DROP**. Eli closes on a call.
+## 4. Follow-up engine (app/api/bot/followups/route.ts)
 
-### 3.5 Quiet hours
+Vercel cron, every 15 minutes. Gates: quiet hours (21:00-09:00 Asia/Jerusalem),
+no-send days (Fri / Sat / holiday-eve / holiday via Hebcal API, 6h cache).
 
-- Timezone: `Asia/Jerusalem` (handles DST).
-- No sends between **21:00 and 09:00** local.
-- If cadence elapses inside quiet window, send fires at 09:00 sharp the next day.
+Cadence by stage:
 
-### 3.6 No-send days
+| Stage | Sender | Cadence | Max sends |
+| --- | --- | --- | --- |
+| NEW (mid-questionnaire abandoned) | customer | every **1 hour** | 3 |
+| AWAITING_DECISION | customer | every **2 hours** | 3 |
+| AWAITING_LOGO | customer | every **2 hours** | 3 |
+| QUOTED | customer | every **2 hours** | 3 |
+| NEGOTIATING / WAITING_CALL | customer | every **2 hours** | 3 |
+| WAITING_FACTORY | **Eli** | once **daily** | n/a |
 
-- **Friday** — full day, no sends.
-- **Saturday** — full day, no sends.
-- **Holiday eve** — full day before the holiday (e.g. if holiday falls Tuesday, no sends Monday).
-- **Holiday day** — full day.
+After 3 unanswered customer follow-ups → escalate: `pipeline_flag = NEEDS_ELI`,
+`bot_paused = true`, Eli WA DM. Bot ignores the lead until either Eli flips
+`bot_paused = false` from the dashboard OR the customer sends a new inbound
+(auto-resume: clear flag + paused, reset counter).
 
-Source: [Hebcal API](https://www.hebcal.com/home/195/jewish-calendar-rest-api) (major holidays: Rosh Hashanah, Yom Kippur, Sukkot, Pesach, Shavuot, etc.). Cache day-of-year results locally.
+## 5. Webhook routing (app/api/bridge/webhook/route.ts)
 
-### 3.7 Manual override
+Per inbound `message.received`:
+1. Skip `@broadcast`, `@g.us`, own echoes.
+2. Insert message + upsert lead.
+3. Stop-word check (`isStopWord`) — escalate + pause + return.
+4. Reset counter + `last_follow_up_at = now` + clear `bot_paused` + clear `pipeline_flag`.
+5. Route by current `pipeline_stage`:
+   - `NULL / NEW` → questionnaire autoresponder.
+   - `AWAITING_DECISION / AWAITING_LOGO` → decision sub-flow.
+   - `QUOTED / NEGOTIATING / WAITING_CALL` → decision sub-flow (same LLM router).
+   - `WAITING_FACTORY / IN_PROGRESS / WON / DROPPED` → bot silent (Eli handles).
 
-Boolean `bot_paused` on `leads`. Dashboard exposes a toggle button per lead. Bot checks before any send.
+Stop-word patterns: `stop`, `תפסיק`, `תפסיקו`, `לא מעוניין`, `הסר אותי`,
+`אל תשלחו`, `remove me`, `unsubscribe`.
 
-## 4. Win signal
+## 6. Dashboard surface
 
-No automatic detection. Eli flips `pipeline_stage = IN_PROGRESS` (or `WON` after shipping) in `/dashboard/v2`. Until then, the QUOTED follow-up loop keeps nudging "how does the offer look?" — the goal is to force a yes/no.
+- **`/dashboard`** — overview card: count of NEEDS_ELI leads, active leads, msgs today.
+- **`/dashboard/v2`** — `NeedsEliCard` (each row has a pause/resume toggle) + per-stage counters linking to stage detail pages.
+- **`/dashboard/v2/stage/[stage]`** — leads in a single stage; click "✎ הערות / שנה stage" to open `NotesModal` for direct edit.
+- **No Inbox** — no pending suggestions, no approval queue. The bot writes directly.
 
-## 5. Templates needed (Hebrew, customer-facing)
+## 7. Env vars
 
-All sent free-form via bridge (no 24h limit on the new bridge API → no WhatsApp business template approval needed).
+| Var | Purpose |
+| --- | --- |
+| `OPENAI_API_KEY` | Intent classifier (Chat Completions). |
+| `OPENAI_MODEL` | Defaults to `gpt-4o-mini`. |
+| `ELI_NOTIFY_JID` | WA phone E.164 — bot DMs Eli here on escalation. |
+| `BRIDGE_BASE` / `BRIDGE_TENANT_TOKEN` / `BRIDGE_WEBHOOK_SECRET` | bridge auth. |
+| `BOT_SECRET` / `CRON_SECRET` | accepted by `/api/bot/followups`. |
+| `USE_BRIDGE` | `1` while the bridge is the source of WhatsApp send/receive. |
 
-1. **Mid-questionnaire abandoned** — *"ראיתי שהתחלנו אבל לא סיימנו 😊 רוצה שנמשיך? פשוט תכתוב את התשובה לשאלה האחרונה."*
-2. **Quoted, no reply** — *"מה דעתך על ההצעה? יש משהו שתרצה לשנות?"*
-3. **Negotiating / call pending** — *"רוצה שנקבע שיחה קצרה כדי לסגור פרטים?"*
-4. **Factory-wait Eli reminder (Eli-only)** — *"⏰ ליד {name} מחכה X ימים לציטוט מהמפעל."*
+## 8. What this refactor deleted
 
-Future: LLM-polish each template per-lead from conversation context. For now keep deterministic templates.
+- `app/api/bot/queue-analysis/` (classifier queue producer).
+- `app/api/bot/cron/` (classifier scheduler).
+- `app/api/bot/claude-context/`, `app/api/bot/save-suggestion/` (classifier I/O).
+- `app/dashboard/v2/InboxList.tsx`, `InboxRow.tsx` (approval UI).
+- `analysis_queue`, `pipeline_suggestions`, `eli_decisions` DB tables.
+- `scripts/enqueue-factory-leads.ts`.
+- `V2_PIPELINE_STAGES`: removed `QUESTIONNAIRE` and `SILENT`; added `AWAITING_DECISION` and `AWAITING_LOGO`.
+- `app/actions/v2.ts`: removed `approveSuggestion`, `rejectSuggestion`, `bulkApprove`. Kept `setLeadStage`, `updateLeadNotes`, `setBotPaused` (all write directly).
 
-## 6. Infra needs
+## 9. Open / deferred
 
-- **DB:**
-  - `leads.follow_up_count INT DEFAULT 0`
-  - `leads.last_follow_up_at TIMESTAMP`
-  - `leads.bot_paused BOOLEAN DEFAULT false`
-  - `leads.pipeline_flag TEXT` (`NEEDS_ELI` etc — multi-flag later)
-- **Env:** `ELI_NOTIFY_JID` (E.164 → JID after lid resolve).
-- **Cron:** new route `/api/bot/followups` — runs every 15 min, picks eligible leads, respects quiet-hours/Sabbath/Hebcal, fires `sendBridgeMessage` per stage template, increments counter, escalates on threshold.
-- **Helpers:**
-  - `lib/clock/quiet-hours.ts` — `isQuietNow()`, `nextWakeAt()`.
-  - `lib/clock/hebcal.ts` — `isNoSendDay(date)` cached daily.
-  - `lib/notify/eli.ts` — sends WA DM via bridge to `ELI_NOTIFY_JID`.
-- **Dashboard:**
-  - Per-lead `bot_paused` toggle.
-  - `pipeline_flag = NEEDS_ELI` filter view.
-
-## 7. Open / deferred
-
-- Eli's WA number for `ELI_NOTIFY_JID` — pending from Eli.
-- WAITING_FACTORY → QUOTED transition flow (Eli pastes price in dashboard → triggers customer-facing send + flips stage).
-- Stage simplification pass (10 → 6 stages).
-- LLM template-per-customer polish.
+- LLM template-per-customer polish (today templates are deterministic strings).
+- Win signal automation (Eli still manually moves IN_PROGRESS → WON).
+- Re-design `/dashboard/v2` from scratch — current layout is the old classifier-era UI minus the Inbox. A clean rewrite is planned but separate.

@@ -1,13 +1,8 @@
 "use server";
 
 import { db } from "@/lib/db";
-import {
-  pipelineSuggestions,
-  eliDecisions,
-  analysisQueue,
-  leads,
-} from "@/drizzle/schema";
-import { eq, sql } from "drizzle-orm";
+import { leads } from "@/drizzle/schema";
+import { sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import {
   V2_FLAG_TAG_IDS,
@@ -28,23 +23,15 @@ export interface SimpleResult {
   message?: string;
 }
 
-async function pushToManychat(
+async function pushStageAndFlags(
   sid: string,
   stage: V2PipelineStage,
-  flags: V2FlagName[],
-  nextAction: string | null,
-  botSummary: string | null
+  flags: V2FlagName[]
 ): Promise<void> {
   const cleanSid = sid.trim();
 
   await setCustomFields(cleanSid, [
     { name: "pipeline_stage", value: stage },
-    ...(nextAction !== null
-      ? [{ name: "next_action" as const, value: nextAction }]
-      : []),
-    ...(botSummary !== null
-      ? [{ name: "bot_summary" as const, value: botSummary }]
-      : []),
   ]);
 
   const sub = await getSubscriber(cleanSid);
@@ -79,171 +66,6 @@ async function pushToManychat(
   }
 }
 
-interface ApproveInput {
-  suggestionId: number;
-  // Optional overrides — if absent, uses the suggested values
-  stage?: V2PipelineStage;
-  flags?: V2FlagName[];
-  overrideReason?: string;
-}
-
-export async function approveSuggestion(
-  input: ApproveInput
-): Promise<SimpleResult> {
-  try {
-    const [sugg] = await db
-      .select()
-      .from(pipelineSuggestions)
-      .where(eq(pipelineSuggestions.id, input.suggestionId))
-      .limit(1);
-    if (!sugg) return { ok: false, error: "suggestion not found" };
-    if (sugg.status !== "pending_review") {
-      return { ok: false, error: `already ${sugg.status}` };
-    }
-
-    const stage = (input.stage ?? sugg.suggestedStage) as V2PipelineStage;
-    if (!V2_PIPELINE_STAGES.includes(stage)) {
-      return { ok: false, error: `invalid stage: ${stage}` };
-    }
-    const flags = (input.flags ?? sugg.suggestedFlags ?? []) as V2FlagName[];
-
-    const isOverride =
-      stage !== sugg.suggestedStage ||
-      JSON.stringify(flags.slice().sort()) !==
-        JSON.stringify(((sugg.suggestedFlags ?? []) as string[]).slice().sort());
-
-    await db
-      .update(pipelineSuggestions)
-      .set({
-        status: isOverride ? "overridden" : "approved",
-        approvedStage: stage,
-        approvedFlags: flags,
-        overrideReason: isOverride ? input.overrideReason ?? null : null,
-        reviewedAt: new Date(),
-      })
-      .where(eq(pipelineSuggestions.id, input.suggestionId));
-
-    await db.insert(eliDecisions).values({
-      suggestionId: input.suggestionId,
-      manychatSubId: sugg.manychatSubId,
-      action: isOverride ? "overridden" : "approved",
-      claudeSuggested: {
-        stage: sugg.suggestedStage,
-        flags: sugg.suggestedFlags,
-        next_action: sugg.suggestedNextAction,
-        bot_summary: sugg.suggestedSummary,
-        reason: sugg.reason,
-      },
-      eliChose: { stage, flags },
-      overrideReason: isOverride ? input.overrideReason ?? null : null,
-    });
-
-    try {
-      await pushToManychat(
-        sugg.manychatSubId,
-        stage,
-        flags,
-        sugg.suggestedNextAction,
-        sugg.suggestedSummary
-      );
-      await db
-        .update(pipelineSuggestions)
-        .set({ pushedToManychatAt: new Date() })
-        .where(eq(pipelineSuggestions.id, input.suggestionId));
-    } catch (e) {
-      revalidatePath("/dashboard/v2", "layout");
-      return {
-        ok: false,
-        error: `אישור נשמר ב-DB אך כתיבה ל-ManyChat נכשלה: ${
-          e instanceof Error ? e.message : String(e)
-        }`,
-      };
-    }
-
-    revalidatePath("/dashboard/v2", "layout");
-    return { ok: true, message: isOverride ? "Override נשמר" : "אושר" };
-  } catch (e) {
-    return {
-      ok: false,
-      error: e instanceof Error ? e.message : "approve failed",
-    };
-  }
-}
-
-export async function rejectSuggestion(
-  suggestionId: number,
-  reason?: string
-): Promise<SimpleResult> {
-  try {
-    const [sugg] = await db
-      .select()
-      .from(pipelineSuggestions)
-      .where(eq(pipelineSuggestions.id, suggestionId))
-      .limit(1);
-    if (!sugg) return { ok: false, error: "suggestion not found" };
-    if (sugg.status !== "pending_review") {
-      return { ok: false, error: `already ${sugg.status}` };
-    }
-
-    await db
-      .update(pipelineSuggestions)
-      .set({
-        status: "rejected",
-        overrideReason: reason ?? null,
-        reviewedAt: new Date(),
-      })
-      .where(eq(pipelineSuggestions.id, suggestionId));
-
-    await db.insert(eliDecisions).values({
-      suggestionId,
-      manychatSubId: sugg.manychatSubId,
-      action: "rejected",
-      claudeSuggested: {
-        stage: sugg.suggestedStage,
-        flags: sugg.suggestedFlags,
-        next_action: sugg.suggestedNextAction,
-        bot_summary: sugg.suggestedSummary,
-        reason: sugg.reason,
-      },
-      eliChose: null,
-      overrideReason: reason ?? null,
-    });
-
-    revalidatePath("/dashboard/v2", "layout");
-    return { ok: true, message: "נדחה" };
-  } catch (e) {
-    return {
-      ok: false,
-      error: e instanceof Error ? e.message : "reject failed",
-    };
-  }
-}
-
-export interface BulkResult {
-  ok: boolean;
-  approved: number;
-  failed: number;
-  errors?: string[];
-}
-
-export async function bulkApprove(
-  suggestionIds: number[]
-): Promise<BulkResult> {
-  let approved = 0;
-  let failed = 0;
-  const errors: string[] = [];
-  for (const id of suggestionIds) {
-    const res = await approveSuggestion({ suggestionId: id });
-    if (res.ok) approved++;
-    else {
-      failed++;
-      errors.push(`${id}: ${res.error}`);
-    }
-  }
-  revalidatePath("/dashboard/v2");
-  return { ok: failed === 0, approved, failed, errors: errors.length ? errors : undefined };
-}
-
 interface SetLeadStageInput {
   manychatSubId: string;
   stage: V2PipelineStage;
@@ -266,48 +88,13 @@ export async function setLeadStage(
       }
     }
 
-    const reasonText = input.reason?.trim() || "Manual edit from dashboard";
-
-    const [row] = await db
-      .insert(pipelineSuggestions)
-      .values({
-        manychatSubId: cleanSid,
-        prevStage: null,
-        suggestedStage: input.stage,
-        suggestedFlags: input.flags,
-        suggestedNextAction: null,
-        suggestedSummary: null,
-        reason: reasonText,
-        source: "manual",
-        status: "approved",
-        approvedStage: input.stage,
-        approvedFlags: input.flags,
-        reviewedAt: new Date(),
-      })
-      .returning({ id: pipelineSuggestions.id });
-
-    await db.insert(eliDecisions).values({
-      suggestionId: row.id,
-      manychatSubId: cleanSid,
-      action: "manual_edit",
-      claudeSuggested: null,
-      eliChose: { stage: input.stage, flags: input.flags },
-      overrideReason: input.reason ?? null,
-    });
-
     try {
-      await pushToManychat(cleanSid, input.stage, input.flags, null, null);
-      await db
-        .update(pipelineSuggestions)
-        .set({ pushedToManychatAt: new Date() })
-        .where(eq(pipelineSuggestions.id, row.id));
+      await pushStageAndFlags(cleanSid, input.stage, input.flags);
     } catch (e) {
       revalidatePath("/dashboard/v2", "layout");
       return {
         ok: false,
-        error: `נשמר ב-DB אך כתיבה ל-ManyChat נכשלה: ${
-          e instanceof Error ? e.message : String(e)
-        }`,
+        error: `כתיבה נכשלה: ${e instanceof Error ? e.message : String(e)}`,
       };
     }
 
@@ -329,27 +116,6 @@ export async function updateLeadNotes(
     const cleanSid = manychatSubId.trim();
     if (!cleanSid) return { ok: false, error: "missing subscriberId" };
     await setCustomFields(cleanSid, [{ name: "notes", value: notes }]);
-
-    // Notes are a strong signal that stage may need to change. Enqueue an
-    // analysis so the next /albadi-classify run picks the lead up. Skip if
-    // a pending/analyzing row already exists for the sub_id.
-    try {
-      const openRows = await db
-        .select({ status: analysisQueue.status })
-        .from(analysisQueue)
-        .where(eq(analysisQueue.manychatSubId, cleanSid));
-      const hasOpen = openRows.some(
-        (r) => r.status === "pending" || r.status === "analyzing"
-      );
-      if (!hasOpen) {
-        await db
-          .insert(analysisQueue)
-          .values({ manychatSubId: cleanSid, reason: "notes_updated" });
-      }
-    } catch (e) {
-      console.error("updateLeadNotes: enqueue failed", e);
-    }
-
     revalidatePath("/dashboard/v2", "layout");
     return { ok: true, message: "ההערות נשמרו" };
   } catch (e) {

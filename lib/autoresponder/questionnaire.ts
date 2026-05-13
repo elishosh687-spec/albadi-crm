@@ -1,28 +1,27 @@
 /**
  * WhatsApp bag-quote questionnaire — direct port of the ManyChat Flow
- * documented at bag-quote-app/docs/manychat-flow.html.
+ * documented at bag-quote-app/docs/manychat-flow.html, extended with:
+ *   - "אחר" (custom) options on quantity (Q2) and product (Q3)
+ *   - Custom-spec branch routes to WAITING_FACTORY + NEEDS_ELI + Eli DM at end
+ *   - Standard path triggers AWAITING_DECISION sub-flow (handled in decision.ts)
  *
  * State machine:
- *   step 1: idle (waiting for first inbound) — actually no row, we kick off on first inbound.
- *   step 2: opening message sent → next user message answers shipping.
- *   step 3: answered shipping, asked quantity.
- *   step 4: answered quantity, asked product.
- *   step 5: answered product, asked handles.
- *   step 6: answered handles, asked colors.
- *   step 7: answered colors, calling calc API.
- *   step 8: sent quote → done.
+ *   step 3: asked shipping
+ *   step 4: asked quantity (option 5 = "אחר" → free-text capture in same step)
+ *   step 5: asked product  (option 7 = "אחר" → free-text capture in same step)
+ *   step 6: asked handles
+ *   step 7: asked colors
+ *   step 8: calling calc API (standard path) OR routing to factory (custom path)
+ *   step 9: done
  *
- * We only run the questionnaire for leads with pipeline_stage IN
- * (NULL, 'NEW') so Eli's in-progress conversations are NOT hijacked.
- *
- * On free-text answers we try a best-effort match (numeric position →
- * list value, or list-value literal). One unmatched answer = re-ask.
- * A second unmatched = bail (set q_state.bailed = true so Eli sees it).
+ * Custom branches set q_state.pendingCustomField — on the next inbound the
+ * text is stored in q_state.{field}Custom and the flow advances normally.
  */
 import { db } from "../db";
 import { leads } from "../../drizzle/schema";
-import { eq, sql } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 import { sendBridgeMessage } from "../bridge/client";
+import { sendEliDM } from "../notify/eli";
 
 type ListOption = { value: string; label: string };
 
@@ -31,6 +30,10 @@ interface Question {
   field: "shipping" | "quantity" | "product" | "handles" | "colors";
   prompt: string;
   options: ListOption[];
+  /** When true, picking the last option triggers a free-text capture in the same step. */
+  hasCustom?: boolean;
+  /** Prompt the bot sends when waiting on the free-text custom value. */
+  customPrompt?: string;
 }
 
 const OPENING =
@@ -55,7 +58,10 @@ const QUESTIONS: Question[] = [
       { value: "q1", label: "3,000 יחידות" },
       { value: "q2", label: "5,000 יחידות" },
       { value: "q3", label: "10,000 יחידות" },
+      { value: "custom", label: "אחר / כמות מותאמת" },
     ],
+    hasCustom: true,
+    customPrompt: "כמה יחידות בדיוק אתה צריך? כתוב מספר (לדוגמה: 7500)",
   },
   {
     step: 5,
@@ -68,7 +74,10 @@ const QUESTIONS: Question[] = [
       { value: "p4", label: "40×15×50 ס״מ — פריטים גדולים" },
       { value: "p5", label: "30×40 ס״מ — פריטים רחבים" },
       { value: "p6", label: "20×15 ס״מ — פריטים קטנים" },
+      { value: "custom", label: "אחר / מידה מותאמת" },
     ],
+    hasCustom: true,
+    customPrompt: "מה המידות שאתה צריך? כתוב באורך × רוחב × גובה ס״מ (לדוגמה: 25×10×35)",
   },
   {
     step: 6,
@@ -93,6 +102,11 @@ const QUESTIONS: Question[] = [
 
 const CALC_URL = "https://bag-quote-app.vercel.app/api/quote/calculate";
 
+const DECISION_PROMPT =
+  "האם המחיר מתאים לך? 🤔 תכתוב לי תשובה ונמשיך הלאה.";
+const FACTORY_HOLD_MSG =
+  "תודה! 🙏 קיבלנו את המפרט. אנחנו מבררים מחיר מותאם מול המפעל ונחזור אליך תוך 24-48 שעות.";
+
 interface QState {
   step: number;
   shipping?: string;
@@ -100,10 +114,14 @@ interface QState {
   product?: string;
   handles?: string;
   colors?: string;
+  quantityCustom?: string;
+  productCustom?: string;
+  pendingCustomField?: "quantity" | "product" | null;
   quoteResult?: string;
   bailed?: boolean;
   unmatchedAt?: number;
   doneAt?: string;
+  routedToFactory?: boolean;
 }
 
 function formatQuestion(q: Question): string {
@@ -119,16 +137,13 @@ function formatQuestion(q: Question): string {
 function matchAnswer(text: string, q: Question): string | null {
   const t = text.trim().toLowerCase();
   if (!t) return null;
-  // Numeric position 1..N
   const n = Number(t);
   if (Number.isInteger(n) && n >= 1 && n <= q.options.length) {
     return q.options[n - 1].value;
   }
-  // Exact value
   for (const opt of q.options) {
     if (opt.value.toLowerCase() === t) return opt.value;
   }
-  // Substring of label (handles, "עם", "ללא", etc.)
   for (const opt of q.options) {
     if (opt.label.toLowerCase().includes(t) || t.includes(opt.value.toLowerCase())) {
       return opt.value;
@@ -156,9 +171,6 @@ async function fetchQuote(state: QState): Promise<string> {
     const txt = await res.text();
     throw new Error(`calc ${res.status}: ${txt.slice(0, 200)}`);
   }
-  // Calc API returns flat { text } today; the documented ManyChat Flow
-  // uses path content.messages[0].text — accept both in case ManyChat
-  // adapter is added later.
   const json = (await res.json()) as {
     text?: string;
     content?: { messages?: { text?: string }[] };
@@ -180,6 +192,8 @@ async function saveState(sid: string, state: QState): Promise<void> {
 interface LeadCtx {
   sid: string;
   jid: string;
+  name: string | null;
+  phone: string | null;
   pipelineStage: string | null;
   qState: QState | null;
 }
@@ -189,6 +203,8 @@ export async function loadLeadCtx(sid: string): Promise<LeadCtx | null> {
     .select({
       sid: leads.manychatSubId,
       jid: leads.waJid,
+      name: leads.name,
+      phone: leads.phoneE164,
       pipelineStage: leads.pipelineStage,
       qState: leads.qState,
     })
@@ -199,26 +215,113 @@ export async function loadLeadCtx(sid: string): Promise<LeadCtx | null> {
   return {
     sid: row.sid,
     jid: row.jid ?? sid,
+    name: row.name,
+    phone: row.phone,
     pipelineStage: row.pipelineStage,
     qState: (row.qState as QState | null) ?? null,
   };
 }
 
+function summarizeForFactory(state: QState, name: string | null, phone: string | null): string {
+  const who = name?.trim() || phone || "ליד";
+  const shipMap: Record<string, string> = {
+    s1: "אקספרס",
+    s2: "רגיל",
+  };
+  const qty = state.quantityCustom || state.quantity || "?";
+  const prod = state.productCustom || state.product || "?";
+  const handles = state.handles === "true" ? "עם ידיות" : "ללא ידיות";
+  return [
+    `🏭 בקשת ציטוט מהמפעל — ${who}`,
+    `כמות: ${qty}`,
+    `מידה: ${prod}`,
+    `משלוח: ${shipMap[state.shipping ?? ""] ?? state.shipping ?? "?"}`,
+    `ידיות: ${handles}`,
+    `צבעים: ${state.colors ?? "?"}`,
+  ].join("\n");
+}
+
+async function routeToFactory(
+  ctx: LeadCtx,
+  state: QState
+): Promise<void> {
+  const done: QState = {
+    ...state,
+    step: 9,
+    doneAt: new Date().toISOString(),
+    routedToFactory: true,
+  };
+  await db
+    .update(leads)
+    .set({
+      qState: done as any,
+      pipelineStage: "WAITING_FACTORY",
+      pipelineFlag: "NEEDS_ELI",
+      botSummary: "questionnaire complete, custom spec → factory quote needed",
+      updatedAt: new Date(),
+    })
+    .where(sql`trim(${leads.manychatSubId}) = ${ctx.sid.trim()}`);
+  await sendBridgeMessage(ctx.jid, FACTORY_HOLD_MSG);
+  await sendEliDM(summarizeForFactory(state, ctx.name, ctx.phone));
+}
+
+async function routeToQuoted(
+  ctx: LeadCtx,
+  state: QState
+): Promise<void> {
+  try {
+    const quoteText = await fetchQuote(state);
+    const done: QState = {
+      ...state,
+      step: 9,
+      quoteResult: quoteText,
+      doneAt: new Date().toISOString(),
+    };
+    await db
+      .update(leads)
+      .set({
+        qState: done as any,
+        pipelineStage: "AWAITING_DECISION",
+        botSummary: "questionnaire complete, quote sent, awaiting decision",
+        followUpCount: 0,
+        lastFollowUpAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(sql`trim(${leads.manychatSubId}) = ${ctx.sid.trim()}`);
+    await sendBridgeMessage(ctx.jid, quoteText);
+    await sendBridgeMessage(ctx.jid, DECISION_PROMPT);
+  } catch (e) {
+    const bailed: QState = { ...state, bailed: true };
+    await saveState(ctx.sid, bailed);
+    await db
+      .update(leads)
+      .set({
+        pipelineStage: "WAITING_FACTORY",
+        pipelineFlag: "NEEDS_ELI",
+        botSummary: `calc API failed: ${(e as Error).message}`,
+        updatedAt: new Date(),
+      })
+      .where(sql`trim(${leads.manychatSubId}) = ${ctx.sid.trim()}`);
+    await sendBridgeMessage(ctx.jid, FACTORY_HOLD_MSG);
+    await sendEliDM(
+      `⚠️ calc API נכשל ל-${ctx.name ?? ctx.phone ?? "ליד"} (${(e as Error).message}). השאלון הסתיים — צריך מחיר ידני.`
+    );
+  }
+}
+
 /**
- * Drive the auto-responder for a given lead + inbound text.
- * Returns the action taken (for logging).
+ * Drive the questionnaire for a given lead + inbound text.
  */
 export async function handleInbound(input: {
   sid: string;
   text: string | null;
 }): Promise<{
-  action: "no_op" | "started" | "answered" | "reasked" | "bailed" | "completed";
+  action: "no_op" | "started" | "answered" | "custom_prompt" | "custom_captured" | "reasked" | "bailed" | "completed_standard" | "completed_factory";
   detail?: string;
 }> {
   const ctx = await loadLeadCtx(input.sid);
   if (!ctx) return { action: "no_op", detail: "no lead row" };
 
-  // Only auto-respond to brand-new or unstarted leads.
   const stage = (ctx.pipelineStage ?? "").toUpperCase();
   if (stage && stage !== "NEW") {
     return { action: "no_op", detail: `pipeline_stage=${stage}` };
@@ -227,20 +330,15 @@ export async function handleInbound(input: {
   const text = (input.text ?? "").trim();
   const recipient = ctx.jid;
 
-  // Bailed already — Eli takes over.
   if (ctx.qState?.bailed) {
     return { action: "no_op", detail: "bailed" };
   }
-  // Already done — Eli takes over (lead probably re-engaging).
   if (ctx.qState?.doneAt) {
     return { action: "no_op", detail: "questionnaire already done" };
   }
 
-  // Cold start: no q_state yet → send opening + first question.
+  // Cold start.
   if (!ctx.qState) {
-    if (!text) {
-      // Empty/media-only inbound — still kick off.
-    }
     const first = QUESTIONS[0];
     const newState: QState = { step: first.step };
     await saveState(ctx.sid, newState);
@@ -249,10 +347,39 @@ export async function handleInbound(input: {
     return { action: "started" };
   }
 
-  // Mid-flow: match incoming text against the current question.
+  // Free-text custom answer (e.g. dimensions or custom quantity).
+  if (ctx.qState.pendingCustomField) {
+    if (!text) {
+      return { action: "no_op", detail: "empty custom answer" };
+    }
+    const field = ctx.qState.pendingCustomField;
+    const captured: QState = {
+      ...ctx.qState,
+      pendingCustomField: null,
+      unmatchedAt: 0,
+    };
+    if (field === "quantity") captured.quantityCustom = text;
+    if (field === "product") captured.productCustom = text;
+    const currentQ = QUESTIONS.find((q) => q.step === ctx.qState!.step);
+    const nextQ = currentQ
+      ? QUESTIONS.find((q) => q.step === currentQ.step + 1)
+      : null;
+    if (nextQ) {
+      captured.step = nextQ.step;
+      await saveState(ctx.sid, captured);
+      await sendBridgeMessage(recipient, formatQuestion(nextQ));
+      return { action: "custom_captured", detail: `${field}=${text}` };
+    }
+    // Custom on the LAST question — shouldn't happen since only Q2/Q3 are
+    // custom-enabled, but handle defensively.
+    captured.step = (currentQ?.step ?? 7) + 1;
+    await saveState(ctx.sid, captured);
+    await routeToFactory(ctx, captured);
+    return { action: "completed_factory", detail: "custom on last question" };
+  }
+
   const currentQ = QUESTIONS.find((q) => q.step === ctx.qState!.step);
   if (!currentQ) {
-    // qState is on a non-question step (8/9) but not done? Shouldn't happen — bail.
     const next: QState = { ...ctx.qState, bailed: true };
     await saveState(ctx.sid, next);
     return { action: "bailed", detail: `unexpected step ${ctx.qState.step}` };
@@ -262,11 +389,22 @@ export async function handleInbound(input: {
   if (!match) {
     const unmatched = (ctx.qState.unmatchedAt ?? 0) + 1;
     if (unmatched >= 2) {
+      // Don't drop — escalate so Eli can recover the lead.
       const bailed: QState = { ...ctx.qState, bailed: true, unmatchedAt: unmatched };
       await saveState(ctx.sid, bailed);
+      await db
+        .update(leads)
+        .set({
+          pipelineFlag: "NEEDS_ELI",
+          updatedAt: new Date(),
+        })
+        .where(sql`trim(${leads.manychatSubId}) = ${ctx.sid.trim()}`);
       await sendBridgeMessage(
         recipient,
-        "תודה, אנחנו נחזור אליך עם הצעה מותאמת ⏳"
+        "תודה, נחזור אליך עם הצעה מותאמת ⏳"
+      );
+      await sendEliDM(
+        `⚠️ ${ctx.name ?? ctx.phone ?? "ליד"} נכשל בשאלון (2 תשובות לא תואמות בשלב ${currentQ.field}). צריך טיפול ידני.`
       );
       return { action: "bailed", detail: "two unmatched answers" };
     }
@@ -280,7 +418,20 @@ export async function handleInbound(input: {
     return { action: "reasked" };
   }
 
-  // Store answer, advance.
+  // Custom branch on Q2/Q3 — capture free-text next inbound.
+  if (currentQ.hasCustom && match === "custom") {
+    const pending: QState = {
+      ...ctx.qState,
+      [currentQ.field]: "custom",
+      pendingCustomField: currentQ.field as "quantity" | "product",
+      unmatchedAt: 0,
+    };
+    await saveState(ctx.sid, pending);
+    await sendBridgeMessage(recipient, currentQ.customPrompt ?? "כתוב במילים מה אתה צריך:");
+    return { action: "custom_prompt", detail: currentQ.field };
+  }
+
+  // Standard advance.
   const advanced: QState = {
     ...ctx.qState,
     [currentQ.field]: match,
@@ -294,35 +445,15 @@ export async function handleInbound(input: {
     return { action: "answered", detail: `${currentQ.field}=${match}` };
   }
 
-  // Last question answered → hit calc API.
-  advanced.step = currentQ.step + 1; // step 8 (calculating)
+  // Last question answered → route based on whether any field is custom.
+  advanced.step = currentQ.step + 1; // step 8
   await saveState(ctx.sid, advanced);
-  try {
-    const quoteText = await fetchQuote(advanced);
-    const done: QState = {
-      ...advanced,
-      step: currentQ.step + 2,
-      quoteResult: quoteText,
-      doneAt: new Date().toISOString(),
-    };
-    await db
-      .update(leads)
-      .set({
-        qState: done as any,
-        pipelineStage: "QUOTED",
-        botSummary: "questionnaire auto-completed; quote sent",
-        updatedAt: new Date(),
-      })
-      .where(sql`trim(${leads.manychatSubId}) = ${input.sid.trim()}`);
-    await sendBridgeMessage(recipient, quoteText);
-    return { action: "completed" };
-  } catch (e) {
-    const bailed: QState = { ...advanced, bailed: true };
-    await saveState(ctx.sid, bailed);
-    await sendBridgeMessage(
-      recipient,
-      "תודה! אנחנו עובדים על הצעת המחיר ונחזור אליך בקרוב ⏳"
-    );
-    return { action: "bailed", detail: `calc failed: ${(e as Error).message}` };
+  const isCustom =
+    advanced.quantity === "custom" || advanced.product === "custom";
+  if (isCustom) {
+    await routeToFactory(ctx, advanced);
+    return { action: "completed_factory" };
   }
+  await routeToQuoted(ctx, advanced);
+  return { action: "completed_standard" };
 }

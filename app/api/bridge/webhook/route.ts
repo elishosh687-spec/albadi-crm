@@ -11,25 +11,34 @@
  *   Reject if |now - t| > 5 minutes.
  *
  * Handles:
- *   - message.received → upsert lead (jid), insert message, enqueue analysis.
- *   - message.sent     → insert outbound message (best-effort).
- *   - message.delivered/read/failed → audit-only (logged in bridge_events).
- *   - tenant.paired / tenant.connection_changed → audit-only.
+ *   - message.received → upsert lead, log message, route to autoresponder.
+ *   - message.sent     → log outbound message (best-effort).
+ *   - message.delivered/read/failed → audit-only (bridge_events).
  *
- * Every event lands in bridge_events keyed by evt_id (unique). Duplicate
- * retries are skipped.
+ * Routing in handleMessageReceived (in priority order):
+ *   1. Skip group / status / our-own echoes.
+ *   2. Stop-word in text → escalate Eli + pause bot, do nothing else.
+ *   3. Reset follow_up_count + last_follow_up_at + un-pause + clear flag
+ *      (customer re-engagement = fresh budget).
+ *   4. Route by current pipeline_stage:
+ *        NULL/NEW          → questionnaire autoresponder
+ *        AWAITING_DECISION → LLM intent classifier (decision sub-flow)
+ *        AWAITING_LOGO     → media detection + reask loop
+ *        QUOTED / NEGOTIATING / WAITING_CALL → LLM intent classifier
+ *        WAITING_FACTORY / IN_PROGRESS / WON / DROPPED → no auto-action
  */
 import { NextRequest, NextResponse } from "next/server";
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { db } from "@/lib/db";
-import { analysisQueue, bridgeEvents, leads } from "@/drizzle/schema";
-import { eq, sql } from "drizzle-orm";
+import { bridgeEvents, leads } from "@/drizzle/schema";
+import { sql } from "drizzle-orm";
 import {
   insertBridgeMessage,
   upsertLeadFromBridgeEvent,
 } from "@/lib/bridge/client";
 import { BRIDGE_WEBHOOK_SECRET } from "@/lib/bridge/config";
 import { handleInbound } from "@/lib/autoresponder/questionnaire";
+import { handleDecisionInbound } from "@/lib/autoresponder/decision";
 import { isStopWord, eliEscalationTemplate } from "@/lib/messaging/templates";
 import { sendEliDM } from "@/lib/notify/eli";
 
@@ -80,21 +89,38 @@ function pickStr(o: any, ...keys: string[]): string | null {
   return null;
 }
 
+function hasMedia(d: any): boolean {
+  if (!d) return false;
+  const mediaStr = pickStr(d, "media_path", "media_url", "attachment_url", "image_url");
+  if (mediaStr) return true;
+  const type = typeof d.type === "string" ? d.type.toLowerCase() : "";
+  if (type && type !== "text" && type !== "chat" && type !== "message") return true;
+  if (d.media || d.attachment || d.image) return true;
+  return false;
+}
+
+async function getLeadStage(jid: string): Promise<string | null> {
+  const [row] = await db
+    .select({ stage: leads.pipelineStage })
+    .from(leads)
+    .where(sql`trim(${leads.manychatSubId}) = ${jid.trim()}`)
+    .limit(1);
+  return row?.stage ?? null;
+}
+
 async function handleMessageReceived(evt: BridgeEnvelope): Promise<void> {
   const d = evt.data ?? {};
   const jid = pickStr(d, "chat_jid", "chatJid", "jid");
   if (!jid) return;
-  // Ignore WhatsApp Statuses (stories) and groups — we only care about
-  // 1:1 chats. Group JIDs end @g.us; Status broadcasts use @broadcast.
   if (jid.endsWith("@broadcast") || jid.endsWith("@g.us")) return;
-  // Bridge sends our own outbound as message.received with is_from_me=true
-  // on some configs — skip those, they are echoes.
   if ((d as any)?.is_from_me === true) return;
+
   const waMessageId =
     pickStr(d, "wa_message_id", "id", "messageId") ?? `bridge:${evt.id}`;
   const text = pickStr(d, "text", "content", "body");
   const phone = pickStr(d, "phone");
   const name = pickStr(d, "name", "push_name", "pushName");
+  const mediaPresent = hasMedia(d);
 
   await upsertLeadFromBridgeEvent({
     jid,
@@ -112,7 +138,7 @@ async function handleMessageReceived(evt: BridgeEnvelope): Promise<void> {
     receivedAt: new Date(evt.occurred_at),
   });
 
-  // Stop-word check — escalate Eli, pause bot, do not autoresponder.
+  // 1. Stop-word check.
   if (isStopWord(text)) {
     try {
       const [row] = await db
@@ -147,14 +173,16 @@ async function handleMessageReceived(evt: BridgeEnvelope): Promise<void> {
     return;
   }
 
-  // Customer re-engaged — reset follow-up counter and auto-resume bot
-  // (the bot was probably paused after a prior 3-strike escalation; this
-  // gives Eli back an active loop until the customer goes cold again).
+  // 2. Re-engagement: reset cadence + un-pause. The new lastFollowUpAt
+  //    ensures the follow-up cron waits a fresh cadence window from THIS
+  //    inbound rather than from our last outbound (would otherwise look
+  //    like we ignored the customer's reply).
   try {
     await db
       .update(leads)
       .set({
         followUpCount: 0,
+        lastFollowUpAt: new Date(),
         botPaused: false,
         pipelineFlag: null,
         updatedAt: new Date(),
@@ -164,27 +192,31 @@ async function handleMessageReceived(evt: BridgeEnvelope): Promise<void> {
     console.error("[bridge.webhook] counter reset error", jid, e);
   }
 
-  // Auto-responder — only acts on NULL/NEW leads. Mid-pipeline
-  // leads short-circuit to `no_op` so Eli keeps full control of replies.
-  try {
-    const r = await handleInbound({ sid: jid, text });
-    console.log("[bridge.webhook] autoresponder", jid, r);
-  } catch (e) {
-    console.error("[bridge.webhook] autoresponder error", jid, e);
-  }
+  // 3. Stage-based routing.
+  const stage = ((await getLeadStage(jid)) || "").toUpperCase();
 
-  const open = await db
-    .select({ status: analysisQueue.status })
-    .from(analysisQueue)
-    .where(eq(analysisQueue.manychatSubId, jid));
-  const hasOpen = open.some(
-    (r) => r.status === "pending" || r.status === "analyzing"
-  );
-  if (!hasOpen) {
-    await db.insert(analysisQueue).values({
-      manychatSubId: jid,
-      reason: "new_message",
-    });
+  try {
+    if (!stage || stage === "NEW") {
+      const r = await handleInbound({ sid: jid, text });
+      console.log("[bridge.webhook] questionnaire", jid, r);
+      return;
+    }
+    if (stage === "AWAITING_DECISION" || stage === "AWAITING_LOGO") {
+      const r = await handleDecisionInbound({ sid: jid, text, hasMedia: mediaPresent });
+      console.log("[bridge.webhook] decision", jid, r);
+      return;
+    }
+    if (stage === "QUOTED" || stage === "NEGOTIATING" || stage === "WAITING_CALL") {
+      // Eli manually moved the lead here. Treat inbound as a decision-style
+      // signal so we can route via the same LLM intent classifier.
+      const r = await handleDecisionInbound({ sid: jid, text, hasMedia: mediaPresent });
+      console.log("[bridge.webhook] decision(manual-stage)", jid, stage, r);
+      return;
+    }
+    // WAITING_FACTORY, IN_PROGRESS, WON, DROPPED — bot stays silent. Eli reads.
+    console.log("[bridge.webhook] no_op for stage", jid, stage);
+  } catch (e) {
+    console.error("[bridge.webhook] routing error", jid, e);
   }
 }
 
@@ -206,7 +238,6 @@ async function handleMessageSent(evt: BridgeEnvelope): Promise<void> {
 }
 
 export async function POST(req: NextRequest) {
-  // BRIDGE_WEBHOOK_SECRET is BOM-stripped in lib/bridge/config.ts.
   const secret = BRIDGE_WEBHOOK_SECRET;
   if (!secret) {
     return NextResponse.json(

@@ -133,8 +133,6 @@ export function StageList({
                           initialNotes: r.notes,
                           phone: r.phone,
                           quoteResult: r.quoteResult,
-                          suggestionId: null,
-                          suggestedStage: null,
                           currentStage: r.currentStage,
                           currentFlags: r.flags,
                         })
