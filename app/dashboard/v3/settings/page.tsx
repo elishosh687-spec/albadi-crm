@@ -1,6 +1,8 @@
 import { db } from "@/lib/db";
 import { botConfig } from "@/drizzle/schema";
 import { SettingsForm, type SettingItem } from "./SettingsForm";
+import { FactoryPricingForm } from "./FactoryPricingForm";
+import { getFactoryConfig } from "@/lib/factory/config";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -51,7 +53,10 @@ const SECTION_LABELS = {
 };
 
 export default async function V3SettingsPage() {
-  const rows = await db.select().from(botConfig);
+  const [rows, factoryConfig] = await Promise.all([
+    db.select().from(botConfig),
+    getFactoryConfig(),
+  ]);
   const byKey = new Map(rows.map((r) => [r.key, r.value ?? ""]));
 
   const flags: SettingItem[] = [
@@ -108,12 +113,15 @@ export default async function V3SettingsPage() {
   ];
 
   return (
-    <SettingsForm
-      sections={[
-        { id: "flags", label: SECTION_LABELS.flags, items: flags },
-        { id: "prompts", label: SECTION_LABELS.prompts, items: prompts },
-        { id: "pipeline", label: SECTION_LABELS.pipeline, items: pipeline },
-      ]}
-    />
+    <div className="flex flex-col gap-8 max-w-3xl">
+      <SettingsForm
+        sections={[
+          { id: "flags", label: SECTION_LABELS.flags, items: flags },
+          { id: "prompts", label: SECTION_LABELS.prompts, items: prompts },
+          { id: "pipeline", label: SECTION_LABELS.pipeline, items: pipeline },
+        ]}
+      />
+      <FactoryPricingForm initial={factoryConfig} />
+    </div>
   );
 }

@@ -16,22 +16,28 @@ import {
   Font,
   renderToBuffer,
 } from "@react-pdf/renderer";
+import { readFileSync } from "fs";
+import { join } from "path";
 import type {
   FactoryProductSpec,
   FactoryPricingResult,
 } from "./types";
 
-// Register Heebo for Hebrew rendering. URLs are fetched once at first render
-// and cached in the process.
+// Register Heebo for Hebrew rendering. TTFs are bundled under public/fonts/
+// and loaded from disk at module init — no external network dependency, so
+// Vercel serverless cold starts can't fail on font fetch.
+const FONT_DIR = join(process.cwd(), "public", "fonts");
+// @react-pdf/renderer accepts Node Buffer at runtime but its TS type is too
+// narrow (string only). Cast through unknown.
 Font.register({
   family: "Heebo",
   fonts: [
     {
-      src: "https://fonts.gstatic.com/s/heebo/v26/NGS6v5_NC0k9P9H0TbFzsQ.ttf",
+      src: readFileSync(join(FONT_DIR, "Heebo-Regular.ttf")) as unknown as string,
       fontWeight: 400,
     },
     {
-      src: "https://fonts.gstatic.com/s/heebo/v26/NGS6v5_NC0k9P9mITbFzsQ.ttf",
+      src: readFileSync(join(FONT_DIR, "Heebo-Bold.ttf")) as unknown as string,
       fontWeight: 700,
     },
   ],

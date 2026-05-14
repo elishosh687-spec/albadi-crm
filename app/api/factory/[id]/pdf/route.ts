@@ -47,24 +47,36 @@ export async function GET(
   }
 
   // Re-render on demand.
-  const leadRow = await db
-    .select({ name: leads.name })
-    .from(leads)
-    .where(eq(leads.manychatSubId, row.manychatSubId))
-    .limit(1);
-  const customerName = leadRow[0]?.name ?? "";
+  try {
+    const leadRow = await db
+      .select({ name: leads.name })
+      .from(leads)
+      .where(eq(leads.manychatSubId, row.manychatSubId))
+      .limit(1);
+    const customerName = leadRow[0]?.name ?? "";
 
-  const buf = await renderCustomerQuotePdf({
-    customerName,
-    spec: row.productSpec as FactoryProductSpec,
-    pricing: row.finalPricing as FactoryPricingResult,
-    quotationNo: row.quotationNo ?? id.slice(-8).toUpperCase(),
-  });
+    const buf = await renderCustomerQuotePdf({
+      customerName,
+      spec: row.productSpec as FactoryProductSpec,
+      pricing: row.finalPricing as FactoryPricingResult,
+      quotationNo: row.quotationNo ?? id.slice(-8).toUpperCase(),
+    });
 
-  return new NextResponse(new Uint8Array(buf), {
-    headers: {
-      "Content-Type": "application/pdf",
-      "Content-Disposition": `inline; filename="quote-${row.quotationNo ?? id}.pdf"`,
-    },
-  });
+    return new NextResponse(new Uint8Array(buf), {
+      headers: {
+        "Content-Type": "application/pdf",
+        "Content-Disposition": `inline; filename="quote-${row.quotationNo ?? id}.pdf"`,
+      },
+    });
+  } catch (err) {
+    console.error("[factory/pdf] render failed", { id, err });
+    return NextResponse.json(
+      {
+        error: "pdf_render_failed",
+        message: err instanceof Error ? err.message : String(err),
+        stack: err instanceof Error ? err.stack?.split("\n").slice(0, 5) : undefined,
+      },
+      { status: 500 }
+    );
+  }
 }
