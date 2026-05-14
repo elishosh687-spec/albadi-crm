@@ -70,11 +70,11 @@ export default async function V3ConversationsPage({
   // array into a comma-separated value list, which Postgres handles natively.
   const sidList = sql.join(sids.map((s) => sql`${s}`), sql`, `);
 
-  const [lastMsgRows, unreadRows] =
+  const [lastMsgResp, unreadResp] =
     sids.length === 0
-      ? [[] as LastMsgRow[], [] as UnreadRow[]]
+      ? [{ rows: [] as LastMsgRow[] }, { rows: [] as UnreadRow[] }]
       : await Promise.all([
-          db.execute<LastMsgRow>(sql`
+          db.execute(sql`
             SELECT sid, direction, sender, text, "receivedAt" FROM (
               SELECT
                 trim(manychat_sub_id) AS sid,
@@ -90,7 +90,7 @@ export default async function V3ConversationsPage({
               WHERE trim(manychat_sub_id) IN (${sidList})
             ) t WHERE rn = 1
           `),
-          db.execute<UnreadRow>(sql`
+          db.execute(sql`
             SELECT trim(manychat_sub_id) AS sid, count(*)::int AS count
             FROM messages
             WHERE trim(manychat_sub_id) IN (${sidList})
@@ -100,12 +100,17 @@ export default async function V3ConversationsPage({
           `),
         ]);
 
+  const lastMsgRows = ((lastMsgResp as unknown as { rows?: LastMsgRow[] }).rows ??
+    []) as LastMsgRow[];
+  const unreadRows = ((unreadResp as unknown as { rows?: UnreadRow[] }).rows ??
+    []) as UnreadRow[];
+
   const lastMsgBySid = new Map<string, LastMsgRow>();
-  for (const r of lastMsgRows as unknown as LastMsgRow[]) {
+  for (const r of lastMsgRows) {
     lastMsgBySid.set(r.sid, r);
   }
   const unreadBySid = new Map<string, number>();
-  for (const r of unreadRows as unknown as UnreadRow[]) {
+  for (const r of unreadRows) {
     unreadBySid.set(r.sid, Number(r.count));
   }
 
