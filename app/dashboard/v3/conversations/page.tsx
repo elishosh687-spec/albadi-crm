@@ -51,42 +51,61 @@ export default async function V3ConversationsPage({
     .orderBy(desc(leads.updatedAt));
 
   const sids = leadList.map((l) => l.sid.trim());
-  const [lastMessages, unreadInbound] = await Promise.all([
-    Promise.all(
-      sids.map((sid) =>
-        db
-          .select({
-            direction: messages.direction,
-            sender: messages.sender,
-            text: messages.text,
-            receivedAt: messages.receivedAt,
-          })
-          .from(messages)
-          .where(sql`trim(${messages.manychatSubId}) = ${sid}`)
-          .orderBy(desc(messages.receivedAt))
-          .limit(1)
-          .then((r) => r[0] ?? null)
-      )
-    ),
-    Promise.all(
-      sids.map((sid) =>
-        db
-          .select({ count: sql<number>`count(*)::int` })
-          .from(messages)
-          .where(
-            and(
-              sql`trim(${messages.manychatSubId}) = ${sid}`,
-              eq(messages.direction, "in"),
-              sql`${messages.receivedAt} > now() - interval '24 hours'`
-            )
-          )
-          .then((r) => r[0]?.count ?? 0)
-      )
-    ),
-  ]);
 
-  const unsorted: ConversationRow[] = leadList.map((lead, i) => {
-    const last = lastMessages[i];
+  // Combine the N+1 lookups into TWO single SQL queries (was 240 concurrent
+  // queries before — Neon was returning "too_many_connections" intermittently).
+  // Both use window functions / GROUP BY to fan-out over all leads in one shot.
+  type LastMsgRow = {
+    sid: string;
+    direction: string;
+    sender: string | null;
+    text: string | null;
+    receivedAt: Date;
+  };
+  type UnreadRow = { sid: string; count: number };
+
+  const [lastMsgRows, unreadRows] =
+    sids.length === 0
+      ? [[] as LastMsgRow[], [] as UnreadRow[]]
+      : await Promise.all([
+          db.execute<LastMsgRow>(sql`
+            SELECT sid, direction, sender, text, "receivedAt" FROM (
+              SELECT
+                trim(manychat_sub_id) AS sid,
+                direction,
+                sender,
+                text,
+                received_at AS "receivedAt",
+                ROW_NUMBER() OVER (
+                  PARTITION BY trim(manychat_sub_id)
+                  ORDER BY received_at DESC
+                ) AS rn
+              FROM messages
+              WHERE trim(manychat_sub_id) IN ${sids}
+            ) t WHERE rn = 1
+          `),
+          db.execute<UnreadRow>(sql`
+            SELECT trim(manychat_sub_id) AS sid, count(*)::int AS count
+            FROM messages
+            WHERE trim(manychat_sub_id) IN ${sids}
+              AND direction = 'in'
+              AND received_at > now() - interval '24 hours'
+            GROUP BY trim(manychat_sub_id)
+          `),
+        ]);
+
+  const lastMsgBySid = new Map<string, LastMsgRow>();
+  for (const r of lastMsgRows as unknown as LastMsgRow[]) {
+    lastMsgBySid.set(r.sid, r);
+  }
+  const unreadBySid = new Map<string, number>();
+  for (const r of unreadRows as unknown as UnreadRow[]) {
+    unreadBySid.set(r.sid, Number(r.count));
+  }
+
+  const unsorted: ConversationRow[] = leadList.map((lead) => {
+    const sid = lead.sid.trim();
+    const last = lastMsgBySid.get(sid) ?? null;
     const senderResolved: "lead" | "bot" | "eli" =
       (last?.sender as "lead" | "bot" | "eli" | null) ??
       (last?.direction === "in" ? "lead" : "bot");
@@ -100,8 +119,10 @@ export default async function V3ConversationsPage({
       lastText: last?.text ?? null,
       lastSender: senderResolved,
       lastAt:
-        last?.receivedAt?.toISOString() ?? lead.updatedAt.toISOString(),
-      inboundLast24h: unreadInbound[i] ?? 0,
+        last?.receivedAt
+          ? new Date(last.receivedAt).toISOString()
+          : lead.updatedAt.toISOString(),
+      inboundLast24h: unreadBySid.get(sid) ?? 0,
     };
   });
 
