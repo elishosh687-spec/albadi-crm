@@ -111,14 +111,14 @@ export async function setLeadStage(
     try {
       await pushStageAndFlags(cleanSid, input.stage, input.flags);
     } catch (e) {
-      safeRevalidate("/dashboard/v2", "layout");
+      safeRevalidate("/dashboard/v3", "layout");
       return {
         ok: false,
         error: `כתיבה נכשלה: ${e instanceof Error ? e.message : String(e)}`,
       };
     }
 
-    safeRevalidate("/dashboard/v2", "layout");
+    safeRevalidate("/dashboard/v3", "layout");
     return { ok: true, message: `סטייג ${input.stage} נשמר` };
   } catch (e) {
     return {
@@ -136,7 +136,7 @@ export async function updateLeadNotes(
     const cleanSid = manychatSubId.trim();
     if (!cleanSid) return { ok: false, error: "missing subscriberId" };
     await setCustomFields(cleanSid, [{ name: "notes", value: notes }]);
-    safeRevalidate("/dashboard/v2", "layout");
+    safeRevalidate("/dashboard/v3", "layout");
     return { ok: true, message: "ההערות נשמרו" };
   } catch (e) {
     return {
@@ -211,7 +211,7 @@ export async function sendFinalPrice(
       })
       .where(sql`trim(${leads.manychatSubId}) = ${cleanSid}`);
 
-    safeRevalidate("/dashboard/v2", "layout");
+    safeRevalidate("/dashboard/v3", "layout");
     return { ok: true, message: `המחיר הסופי ${cleanPrice} נשלח` };
   } catch (e) {
     return {
@@ -260,7 +260,7 @@ export async function sendManualReply(
       })
       .where(sql`trim(${leads.manychatSubId}) = ${cleanSid}`);
 
-    safeRevalidate("/dashboard/v2", "layout");
+    safeRevalidate("/dashboard/v3", "layout");
     return { ok: true, message: "נשלח" };
   } catch (e) {
     return {
@@ -359,7 +359,7 @@ export async function snoozeLead(
         updatedAt: new Date(),
       })
       .where(sql`trim(${leads.manychatSubId}) = ${cleanSid}`);
-    safeRevalidate("/dashboard/v2", "layout");
+    safeRevalidate("/dashboard/v3", "layout");
     return { ok: true, message: `נדחה ב-${hours} שעות` };
   } catch (e) {
     return {
@@ -394,7 +394,7 @@ export async function setBotPaused(
         })
         .where(sql`trim(${leads.manychatSubId}) = ${cleanSid}`);
     }
-    safeRevalidate("/dashboard/v2", "layout");
+    safeRevalidate("/dashboard/v3", "layout");
     return { ok: true, message: paused ? "הבוט מושהה" : "הבוט פעיל" };
   } catch (e) {
     return {
@@ -418,7 +418,7 @@ export async function approveDraftAction(
     return { ok: false, error: "invalid draft id" };
   }
   const r = await approveDraftLib(draftId, editedText);
-  safeRevalidate("/dashboard/v2/drafts", "layout");
+  safeRevalidate("/dashboard/v3/drafts", "layout");
   if (!r.ok) return { ok: false, error: r.error };
   return { ok: true, message: "נשלח" };
 }
@@ -431,7 +431,7 @@ export async function rejectDraftAction(
     return { ok: false, error: "invalid draft id" };
   }
   const r = await rejectDraftLib(draftId, reason);
-  safeRevalidate("/dashboard/v2/drafts", "layout");
+  safeRevalidate("/dashboard/v3/drafts", "layout");
   if (!r.ok) return { ok: false, error: r.error };
   return { ok: true, message: "נדחה" };
 }
