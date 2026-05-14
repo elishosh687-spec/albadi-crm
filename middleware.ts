@@ -8,6 +8,16 @@ export function middleware(req: NextRequest) {
     return NextResponse.next();
   }
 
+  // Public: customer-facing PDF download. The URL embeds a random ~8-char
+  // id so it's not enumerable, and is the link we paste into WhatsApp for
+  // the customer to open. GET-only so we don't expose any write surface.
+  if (
+    req.method === "GET" &&
+    /^\/api\/factory\/[^/]+\/pdf$/.test(path)
+  ) {
+    return NextResponse.next();
+  }
+
   // Protect dashboard + actions APIs + factory pipeline APIs
   if (
     path.startsWith("/dashboard") ||
