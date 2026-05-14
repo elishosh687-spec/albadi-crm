@@ -1,7 +1,17 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
-import { X, Pause, Play, ExternalLink, Sparkles, Send, Clock } from "lucide-react";
+import Link from "next/link";
+import {
+  X,
+  Pause,
+  Play,
+  ExternalLink,
+  Sparkles,
+  Send,
+  Clock,
+  MessagesSquare,
+} from "lucide-react";
 import { cn } from "@/lib/cn";
 import {
   setLeadStage,
@@ -197,6 +207,13 @@ export function LeadDrawer({
                 {paused ? <Pause className="size-3.5" /> : <Play className="size-3.5" />}
                 {paused ? "הבוט מושהה" : "הבוט פעיל"}
               </button>
+              <Link
+                href={`/dashboard/v3/conversations?lead=${encodeURIComponent(lead.sid)}`}
+                className="inline-flex items-center gap-2 rounded-lg border border-primary/40 bg-primary/10 px-3 py-2 text-xs font-medium text-primary hover:bg-primary/20"
+              >
+                <MessagesSquare className="size-3.5" />
+                פתח שיחה
+              </Link>
               {waLink && (
                 <a
                   href={waLink}
