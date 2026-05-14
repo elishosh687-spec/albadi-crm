@@ -93,6 +93,7 @@ function formatIls(n: number): string {
 
 function statusBadge(status: FactoryQuoteStatus) {
   const map: Record<FactoryQuoteStatus, { label: string; tone: string }> = {
+    draft: { label: "טיוטה", tone: "bg-muted/40 text-muted-foreground border-border" },
     pending: { label: "ממתין למפעל", tone: "bg-warning/15 text-warning border-warning/30" },
     received: { label: "התקבלה תשובה", tone: "bg-primary/15 text-primary border-primary/30" },
     finalized: { label: "הצעה סופית", tone: "bg-success/15 text-success border-success/30" },
@@ -231,8 +232,10 @@ export function FactoryQuotePanel({
     [load]
   );
 
-  // Active = most recent non-rejected row. We don't have "rejected"; show the latest.
-  const active = rows[0] ?? null;
+  // Active = most recent non-draft row. Drafts are parked alongside the main
+  // pipeline (operator hasn't sent them to Feishu yet) and live exclusively in
+  // the history list, where they can be promoted via send-to-feishu.
+  const active = rows.find((r) => r.factoryStatus !== "draft") ?? null;
 
   const handleSendFromSummary = useCallback(async () => {
     if (!resolvedSpec) return;
@@ -355,6 +358,10 @@ export function FactoryQuotePanel({
           open={extraFormOpen}
           onToggle={() => setExtraFormOpen((v) => !v)}
           onSent={() => {
+            setExtraFormOpen(false);
+            load();
+          }}
+          onSavedDraft={() => {
             setExtraFormOpen(false);
             load();
           }}
@@ -802,6 +809,7 @@ function ExtraQuoteSection({
   open,
   onToggle,
   onSent,
+  onSavedDraft,
 }: {
   leadId: string;
   leadName: string | null;
@@ -810,6 +818,7 @@ function ExtraQuoteSection({
   open: boolean;
   onToggle: () => void;
   onSent: () => void;
+  onSavedDraft: () => void;
 }) {
   // Cast the active row's spec into the "draft" shape that SendToFactoryForm
   // expects. Same field names, so this is a no-op at runtime.
@@ -833,7 +842,10 @@ function ExtraQuoteSection({
         <div className="rounded-md border border-border bg-background/40 p-3">
           <p className="text-[11px] text-muted-foreground mb-2 leading-relaxed">
             ההצעה הקיימת ({activeRow.quotationNo ?? activeRow.id.slice(-6)}) נשארת ב-Feishu.
-            השליחה כאן יוצרת שורה חדשה ב-Feishu עם מספר הצעה חדש.
+            <br />
+            • <strong>שמור כסיכום הזמנה</strong> — טיוטה חדשה תופיע בהיסטוריה, אפשר לערוך ולשלוח ל-Feishu מאוחר יותר.
+            <br />
+            • <strong>שלח ל-Feishu</strong> — שורה חדשה נוצרת מיידית עם מספר הצעה חדש.
           </p>
           <SendToFactoryForm
             leadId={leadId}
@@ -841,6 +853,9 @@ function ExtraQuoteSection({
             qState={qState}
             draft={draftFromActive}
             onSent={onSent}
+            onSavedDraft={onSavedDraft}
+            saveDraftAs="new-quote"
+            saveDraftLabel="שמור כסיכום הזמנה"
             onCancel={onToggle}
           />
         </div>
@@ -899,6 +914,28 @@ function HistoryList({
     }
   };
 
+  const handleSendDraftToFeishu = async (row: FactoryQuoteRow) => {
+    if (!confirm(`לשלוח את הטיוטה ${row.quotationNo ?? row.id.slice(-6)} ל-Feishu?`)) {
+      return;
+    }
+    setBusyId(row.id);
+    try {
+      const res = await fetch(`/api/factory/${row.id}/send-to-feishu`, {
+        method: "POST",
+      });
+      const data = await res.json();
+      if (!data?.ok) {
+        alert(`שגיאה: ${data?.error ?? data?.detail ?? "שליחה נכשלה"}`);
+        return;
+      }
+      await onChange();
+    } catch (err) {
+      alert(`כשל: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setBusyId(null);
+    }
+  };
+
   return (
     <details className="mt-3 text-xs" open>
       <summary className="cursor-pointer text-muted-foreground hover:text-foreground select-none">
@@ -931,15 +968,27 @@ function HistoryList({
                 >
                   <Eye className="size-3" />
                 </button>
-                <button
-                  type="button"
-                  onClick={() => handleResend(r)}
-                  disabled={isBusy}
-                  title="שלח שוב ל-Feishu (שורה חדשה)"
-                  className="size-6 rounded grid place-items-center text-muted-foreground hover:text-primary hover:bg-primary/10 disabled:opacity-60"
-                >
-                  {isBusy ? <Loader2 className="size-3 animate-spin" /> : <Repeat className="size-3" />}
-                </button>
+                {r.factoryStatus === "draft" ? (
+                  <button
+                    type="button"
+                    onClick={() => handleSendDraftToFeishu(r)}
+                    disabled={isBusy}
+                    title="שלח את הטיוטה ל-Feishu"
+                    className="size-6 rounded grid place-items-center text-muted-foreground hover:text-primary hover:bg-primary/10 disabled:opacity-60"
+                  >
+                    {isBusy ? <Loader2 className="size-3 animate-spin" /> : <Send className="size-3" />}
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => handleResend(r)}
+                    disabled={isBusy}
+                    title="שלח שוב ל-Feishu (שורה חדשה)"
+                    className="size-6 rounded grid place-items-center text-muted-foreground hover:text-primary hover:bg-primary/10 disabled:opacity-60"
+                  >
+                    {isBusy ? <Loader2 className="size-3 animate-spin" /> : <Repeat className="size-3" />}
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => handleDelete(r)}
@@ -955,7 +1004,11 @@ function HistoryList({
         })}
       </ul>
       {opened && (
-        <HistoryDetailModal row={opened} onClose={() => setOpened(null)} />
+        <HistoryDetailModal
+          row={opened}
+          onClose={() => setOpened(null)}
+          onChanged={onChange}
+        />
       )}
     </details>
   );

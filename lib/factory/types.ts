@@ -3,7 +3,11 @@
  * Mirrors the schema in drizzle/schema.ts (factoryQuoteRequests JSONB columns).
  */
 
-export type FactoryQuoteStatus = "pending" | "received" | "finalized";
+export type FactoryQuoteStatus =
+  | "draft"
+  | "pending"
+  | "received"
+  | "finalized";
 
 export interface FactoryProductSpec {
   description: string;

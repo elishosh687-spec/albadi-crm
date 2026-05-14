@@ -109,6 +109,8 @@ export function SendToFactoryForm({
   onSent,
   onSavedDraft,
   onCancel,
+  saveDraftAs = "lead-draft",
+  saveDraftLabel,
 }: {
   leadId: string;
   leadName: string | null;
@@ -117,6 +119,12 @@ export function SendToFactoryForm({
   onSent: () => void;
   onSavedDraft?: (saved: Record<string, unknown>) => void;
   onCancel?: () => void;
+  // 'lead-draft'  — PUT /api/leads/[sid]/factory-draft (overwrites the single
+  //                  slot on the lead row; used in the main NoQuoteState flow).
+  // 'new-quote'   — POST /api/factory/quote-draft (creates a new draft row
+  //                  alongside any existing quotes; used for parallel offers).
+  saveDraftAs?: "lead-draft" | "new-quote";
+  saveDraftLabel?: string;
 }) {
   const presets = useMemo(() => {
     // Prefer existing draft (Eli's prior manual entry) over qState defaults.
@@ -275,17 +283,43 @@ export function SendToFactoryForm({
     setSavingDraft(true);
     try {
       const spec = buildSpec();
-      const res = await fetch(`/api/leads/${encodeURIComponent(leadId)}/factory-draft`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(spec),
-      });
+      let res: Response;
+      if (saveDraftAs === "new-quote") {
+        res = await fetch("/api/factory/quote-draft", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            manychatSubId: leadId,
+            customerName: leadName ?? undefined,
+            productSpec: {
+              description: spec.description,
+              material: spec.material,
+              widthCm: spec.widthCm,
+              heightCm: spec.heightCm,
+              depthCm: spec.depthCm,
+              quantity: spec.quantity,
+              printing: spec.printing,
+              finishing: spec.finishing,
+              notes: spec.notes || undefined,
+            },
+          }),
+        });
+      } else {
+        res = await fetch(`/api/leads/${encodeURIComponent(leadId)}/factory-draft`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(spec),
+        });
+      }
       const data = await res.json();
       if (!data?.ok) {
         setError(data?.error ?? data?.detail ?? "כשל בשמירת draft");
         return;
       }
-      onSavedDraft?.(data.draft as Record<string, unknown>);
+      // For 'lead-draft' the response carries the draft object; for 'new-quote'
+      // it carries the new row id. Pass the spec back either way so the caller
+      // can refresh local state.
+      onSavedDraft?.((data.draft as Record<string, unknown>) ?? spec);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -454,7 +488,7 @@ export function SendToFactoryForm({
             type="button"
             onClick={handleSaveDraft}
             disabled={savingDraft || submitting}
-            title="שמור את המפרט בסיכום ההזמנה — תוכל להוסיף הערות ולשלוח משם"
+            title="שמור את המפרט כסיכום הזמנה — תוכל לשלוח ל-Feishu מאוחר יותר"
             className="inline-flex items-center gap-1.5 rounded-md border border-primary bg-primary/5 px-3 py-1.5 text-sm font-medium text-primary hover:bg-primary/10 disabled:opacity-60"
           >
             {savingDraft ? (
@@ -462,7 +496,7 @@ export function SendToFactoryForm({
             ) : (
               <ClipboardCheck className="size-3.5" />
             )}
-            שלח לסיכום הזמנה
+            {saveDraftLabel ?? "שלח לסיכום הזמנה"}
           </button>
         )}
         <button

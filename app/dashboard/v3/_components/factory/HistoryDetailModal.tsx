@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect } from "react";
-import { X, ShoppingBag, Package, Hash, Palette, Truck } from "lucide-react";
+import { useEffect, useState } from "react";
+import { X, ShoppingBag, Package, Hash, Palette, Truck, Send, Loader2 } from "lucide-react";
 import {
   humanizeFinishing,
   humanizeMaterial,
@@ -29,10 +29,13 @@ function formatIls(n: number): string {
 export function HistoryDetailModal({
   row,
   onClose,
+  onChanged,
 }: {
   row: FactoryQuoteRow;
   onClose: () => void;
+  onChanged?: () => void | Promise<void>;
 }) {
+  const [sending, setSending] = useState(false);
   // Close on Esc.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -45,6 +48,28 @@ export function HistoryDetailModal({
   const spec = row.productSpec;
   const resp = row.factoryResponse;
   const p = row.finalPricing;
+  const isDraft = row.factoryStatus === "draft";
+
+  const handleSendToFeishu = async () => {
+    if (!confirm("לשלוח את הטיוטה ל-Feishu? תיווצר שורה חדשה.")) return;
+    setSending(true);
+    try {
+      const res = await fetch(`/api/factory/${row.id}/send-to-feishu`, {
+        method: "POST",
+      });
+      const data = await res.json();
+      if (!data?.ok) {
+        alert(`שגיאה: ${data?.error ?? data?.detail ?? "שליחה נכשלה"}`);
+        return;
+      }
+      await onChanged?.();
+      onClose();
+    } catch (err) {
+      alert(`כשל: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setSending(false);
+    }
+  };
 
   const sizeHe = hebrewSize(spec);
   const materialHe = spec.material ? humanizeMaterial(spec.material) : "";
@@ -164,6 +189,22 @@ export function HistoryDetailModal({
             <div className="text-[10px] text-muted-foreground text-center">
               שורה ב-Feishu: <span className="font-mono">{row.feishuRowIndex}</span>
             </div>
+          )}
+
+          {isDraft && (
+            <button
+              type="button"
+              onClick={handleSendToFeishu}
+              disabled={sending}
+              className="w-full inline-flex items-center justify-center gap-1.5 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
+            >
+              {sending ? (
+                <Loader2 className="size-3.5 animate-spin" />
+              ) : (
+                <Send className="size-3.5" />
+              )}
+              שלח ל-Feishu
+            </button>
           )}
         </div>
       </div>

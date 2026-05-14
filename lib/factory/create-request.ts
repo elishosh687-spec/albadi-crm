@@ -92,3 +92,85 @@ export async function createFactoryRequest(
 
   return { id, quotationNo, feishuRowIndex };
 }
+
+export interface CreateFactoryDraftInput {
+  manychatSubId: string;
+  productSpec: FactoryProductSpec;
+  customerName?: string;
+}
+
+export interface CreateFactoryDraftResult {
+  id: string;
+  quotationNo: string;
+}
+
+// Creates a draft row (status='draft') without touching Feishu. Used when
+// the operator wants to park a parallel quote in the order-summary list and
+// send it to the factory later. Promote via promoteDraftToFeishu.
+export async function createFactoryDraft(
+  input: CreateFactoryDraftInput
+): Promise<CreateFactoryDraftResult> {
+  const id = `fq_${Date.now()}_${shortId()}`;
+  const quotationNo = id.slice(-8).toUpperCase();
+
+  await db.insert(factoryQuoteRequests).values({
+    id,
+    manychatSubId: input.manychatSubId,
+    quotationNo,
+    productSpec: input.productSpec,
+    factoryStatus: "draft",
+  });
+
+  return { id, quotationNo };
+}
+
+// Promotes an existing draft row to pending: appends to Feishu, stores
+// feishuRowIndex, flips status. Throws if the row is missing or not a draft.
+export async function promoteDraftToFeishu(
+  id: string
+): Promise<{ feishuRowIndex: string; quotationNo: string }> {
+  const [row] = await db
+    .select({
+      manychatSubId: factoryQuoteRequests.manychatSubId,
+      quotationNo: factoryQuoteRequests.quotationNo,
+      productSpec: factoryQuoteRequests.productSpec,
+      factoryStatus: factoryQuoteRequests.factoryStatus,
+      customerName: leads.name,
+    })
+    .from(factoryQuoteRequests)
+    .leftJoin(leads, eq(leads.manychatSubId, factoryQuoteRequests.manychatSubId))
+    .where(eq(factoryQuoteRequests.id, id))
+    .limit(1);
+
+  if (!row) throw new Error("draft not found");
+  if (row.factoryStatus !== "draft") {
+    throw new Error(`row is not a draft (status=${row.factoryStatus})`);
+  }
+
+  const spec = row.productSpec as FactoryProductSpec;
+  const quotationNo = row.quotationNo ?? id.slice(-8).toUpperCase();
+  const feishuRowIndex = await appendRow(
+    buildFactoryRow({
+      customer: row.customerName ?? "",
+      quotationNo,
+      pic: spec.picUrl ?? "",
+      description: spec.description,
+      material: spec.material,
+      size: sizeLabel(spec),
+      printing: spec.printing,
+      finishing: spec.finishing,
+      quantity: spec.quantity,
+    })
+  );
+
+  await db
+    .update(factoryQuoteRequests)
+    .set({
+      feishuRowIndex,
+      factoryStatus: "pending",
+      updatedAt: new Date(),
+    })
+    .where(eq(factoryQuoteRequests.id, id));
+
+  return { feishuRowIndex, quotationNo };
+}

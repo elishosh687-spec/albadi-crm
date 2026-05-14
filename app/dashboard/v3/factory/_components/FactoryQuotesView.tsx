@@ -13,6 +13,7 @@ import type { FactoryQuoteStatus } from "@/lib/factory/types";
 type StatusFilter = FactoryQuoteStatus | "all";
 
 const STATUS_LABEL: Record<FactoryQuoteStatus, string> = {
+  draft: "טיוטה",
   pending: "ממתין למפעל",
   received: "התקבלה תשובה",
   finalized: "הצעה סופית",
