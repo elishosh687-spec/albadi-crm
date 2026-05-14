@@ -23,6 +23,7 @@ import { z } from "zod";
 import { priceFactoryQuote } from "@/lib/factory/pricing";
 import { getFactoryConfig } from "@/lib/factory/config";
 import { renderCustomerQuotePdf } from "@/lib/factory/pdf";
+import { computeQuoteBreakdown } from "@/lib/factory/calculator";
 import type {
   FactoryProductSpec,
   FactoryResponse,
@@ -103,6 +104,19 @@ export async function POST(
     .limit(1);
   const customerName = leadRow[0]?.name ?? "";
 
+  // Compute the customer-facing breakdown via the local calculator. Null if
+  // dims don't match one of the 14 fixed products (PDF falls back to 2-row).
+  const breakdown = computeQuoteBreakdown({
+    widthCm: spec.widthCm,
+    heightCm: spec.heightCm,
+    depthCm: spec.depthCm,
+    quantity: spec.quantity,
+    hasHandles: /with handles/i.test(spec.finishing),
+    logoColors: parseInt(spec.printing.match(/^(\d+)/)?.[1] ?? "1", 10),
+    hasLamination: /(?<!not )laminated/i.test(spec.finishing),
+    shippingOptionId: pricing.shippingOptionId,
+  });
+
   // Render PDF + (optionally) upload to Blob.
   let pdfUrl: string | null = req_row.pdfUrl ?? null;
   try {
@@ -110,6 +124,7 @@ export async function POST(
       customerName,
       spec,
       pricing,
+      breakdown,
       quotationNo: req_row.quotationNo ?? id.slice(-8).toUpperCase(),
     });
 

@@ -22,6 +22,8 @@ import { leads } from "../../drizzle/schema";
 import { sql } from "drizzle-orm";
 import { sendBridgeMessage } from "../bridge/client";
 import { sendEliDM } from "../notify/eli";
+import { calculateQuoteByCodes } from "../factory/calculator";
+import { buildQuoteMessage } from "../factory/calculator/message";
 
 type ListOption = { value: string; label: string };
 
@@ -104,7 +106,6 @@ const QUESTIONS: Question[] = [
   },
 ];
 
-const CALC_URL = "https://bag-quote-app.vercel.app/api/quote/calculate";
 
 const DECISION_PROMPT =
   "מה דעתכם על ההצעה? אם מתאימה — נמשיך ללוגו. אם לא — תגידו לי מה לשנות.";
@@ -165,33 +166,50 @@ function matchAnswer(text: string, q: Question): string | null {
 }
 
 async function fetchQuote(state: QState): Promise<string> {
-  const body = {
-    shippingOptionId: state.shipping,
-    quantityTierId: state.quantity,
+  // Local calculator (ported from bag-quote-app). No HTTP roundtrip.
+  if (!state.product || !state.quantity || !state.shipping) {
+    throw new Error(
+      `calc missing required state: product=${state.product} quantity=${state.quantity} shipping=${state.shipping}`
+    );
+  }
+  const calc = calculateQuoteByCodes({
     productId: state.product,
+    quantityTierId: state.quantity,
     hasHandles: state.handles === "true",
-    logoColors: Number(state.colors),
-    selectedFeatureIds: [] as string[],
-  };
-  const res = await fetch(CALC_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-    signal: AbortSignal.timeout(10000),
+    logoColors: Number(state.colors) || 1,
+    hasLamination: false, // questionnaire doesn't ask about lamination
+    shippingOptionId: state.shipping,
   });
-  if (!res.ok) {
-    const txt = await res.text();
-    throw new Error(`calc ${res.status}: ${txt.slice(0, 200)}`);
+  if (!calc) {
+    throw new Error(
+      `calc failed for state=${JSON.stringify({
+        product: state.product,
+        quantity: state.quantity,
+        shipping: state.shipping,
+      })}`
+    );
   }
-  const json = (await res.json()) as {
-    text?: string;
-    content?: { messages?: { text?: string }[] };
-  };
-  const text = json.text ?? json.content?.messages?.[0]?.text;
-  if (!text) {
-    throw new Error(`calc returned no message text: ${JSON.stringify(json).slice(0, 200)}`);
-  }
-  return text;
+  return buildQuoteMessage({
+    dimensions: calc.result.product?.dimensions ?? "",
+    hasHandles: calc.result.hasHandles,
+    hasLamination: false,
+    quantity: calc.result.quantity,
+    logoColors: calc.result.logoColors,
+    shippingName: calc.result.shippingOption?.name ?? "",
+    shippingDays: calc.result.shippingOption?.deliveryDays ?? "",
+    pricePerUnit: calc.result.sellingPricePerUnitIls,
+    totalOrder: calc.result.totalOrderPriceIls,
+    currency: calc.result.currency,
+    appUrl: "https://bag-quote-app.vercel.app",
+    alt: calc.altResult
+      ? {
+          shippingName: calc.altResult.shippingOption?.name ?? "",
+          shippingDays: calc.altResult.shippingOption?.deliveryDays ?? "",
+          pricePerUnit: calc.altResult.sellingPricePerUnitIls,
+          totalOrder: calc.altResult.totalOrderPriceIls,
+        }
+      : null,
+  });
 }
 
 async function saveState(sid: string, state: QState): Promise<void> {

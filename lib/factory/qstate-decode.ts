@@ -102,8 +102,8 @@ export function humanizeFinishing(en: string): string {
 }
 
 export function humanizeMaterial(en: string): string {
-  const m = en.match(/^(\d+)\s*g.*non.?woven/i);
-  if (m) return `אריג לא ארוג ${m[1]} גרם`;
+  const m = en.match(/^(\d+)\s*g/i);
+  if (m) return `${m[1]} גרם`;
   return en;
 }
 

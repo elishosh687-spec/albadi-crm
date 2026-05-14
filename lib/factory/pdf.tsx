@@ -27,6 +27,7 @@ import {
   humanizeFinishing,
   humanizeMaterial,
 } from "./qstate-decode";
+import type { QuoteBreakdown } from "./calculator";
 
 // Register Heebo for Hebrew rendering. TTFs are bundled under public/fonts/
 // and loaded from disk at module init — no external network dependency, so
@@ -221,6 +222,23 @@ const styles = StyleSheet.create({
     textAlign: "right",
     marginBottom: 3,
   },
+  bulletRow: {
+    flexDirection: "row-reverse",
+    alignItems: "flex-start",
+    marginBottom: 3,
+  },
+  bulletMark: {
+    fontSize: 11,
+    color: "#333",
+    width: 12,
+    textAlign: "center",
+  },
+  bulletText: {
+    fontSize: 11,
+    color: "#333",
+    flex: 1,
+    textAlign: "right",
+  },
   notesBlock: {
     marginBottom: 12,
   },
@@ -264,6 +282,13 @@ export interface CustomerQuotePdfProps {
   customerName: string;
   spec: FactoryProductSpec;
   pricing: FactoryPricingResult;
+  /**
+   * When present, the PDF renders a multi-row breakdown (base bag, handles,
+   * color addon, lamination, plate, shipping) and uses the calculator's
+   * total/per-unit numbers. Otherwise falls back to a 2-row honest layout
+   * built from FactoryPricingResult.
+   */
+  breakdown?: QuoteBreakdown | null;
   customerNotes?: string;
   quotationNo?: string;
   validityDays?: number;
@@ -272,56 +297,112 @@ export interface CustomerQuotePdfProps {
 function CustomerQuotePDF(props: CustomerQuotePdfProps) {
   // quotationNo is intentionally unused in the customer-facing layout —
   // it lives in the filename only (Content-Disposition) for tracking.
-  const { customerName, spec, pricing, customerNotes } = props;
+  const { customerName, spec, pricing, breakdown, customerNotes } = props;
   const date = new Date().toLocaleDateString("he-IL", {
     day: "numeric",
     month: "long",
     year: "numeric",
   });
 
-  // Build the breakdown rows. FactoryPricingResult only has unitCost +
-  // unitShipping + unitProfit (no per-feature cost), so we keep 2 honest
-  // rows: bag (production+profit, all-in) and shipping (separate).
   const printingHe = spec.printing ? humanizePrinting(spec.printing) : "";
   const finishingHe = spec.finishing ? humanizeFinishing(spec.finishing) : "";
-  const bagDescParts: string[] = [`${sizeLabel(spec)} — שקית`];
-  if (finishingHe) bagDescParts.push(finishingHe);
-  if (printingHe) bagDescParts.push(printingHe);
-  const bagDesc = bagDescParts.join(" · ");
+  const materialHe = spec.material ? humanizeMaterial(spec.material) : "";
+  const qty = breakdown?.quantity ?? pricing.quantity;
 
-  const hasShippingRow =
-    !!pricing.shippingOptionName && pricing.unitShipping > 0;
-  const bagUnit = r2(pricing.unitCost + pricing.unitProfit);
-  const rows: {
-    desc: string;
-    unit: number;
-    qty: number;
-    total: number;
-  }[] = [
-    {
+  type Row = { desc: string; unit: number; qty: number; total: number };
+  const rows: Row[] = [];
+  let displayTotalOrder: number;
+  let displayUnitPrice: number;
+
+  if (breakdown) {
+    // Multi-row breakdown from the local calculator.
+    const hasShippingRow = breakdown.shippingPerUnit > 0;
+    const baseBagDesc =
+      `${breakdown.dimensions} ס״מ — שקית בסיס` +
+      (hasShippingRow ? "" : " (כולל שילוח רגיל)");
+
+    rows.push({
+      desc: baseBagDesc,
+      unit: breakdown.baseBagPerUnit,
+      qty,
+      total: r2(breakdown.baseBagPerUnit * qty),
+    });
+    if (breakdown.hasHandles && breakdown.handlesPerUnit > 0) {
+      rows.push({
+        desc: "ידיות",
+        unit: breakdown.handlesPerUnit,
+        qty,
+        total: r2(breakdown.handlesPerUnit * qty),
+      });
+    }
+    if (breakdown.logoColors > 1 && breakdown.colorAddonPerUnit > 0) {
+      rows.push({
+        desc: `תוספת צבעים בלוגו (${breakdown.logoColors})`,
+        unit: breakdown.colorAddonPerUnit,
+        qty,
+        total: r2(breakdown.colorAddonPerUnit * qty),
+      });
+    }
+    if (breakdown.hasLamination && breakdown.laminationAddonPerUnit > 0) {
+      rows.push({
+        desc: "למינציה",
+        unit: breakdown.laminationAddonPerUnit,
+        qty,
+        total: r2(breakdown.laminationAddonPerUnit * qty),
+      });
+    }
+    if (breakdown.plateFeePerUnit > 0) {
+      rows.push({
+        desc: `פלייט למינציה (${breakdown.logoColors})`,
+        unit: breakdown.plateFeePerUnit,
+        qty,
+        total: r2(breakdown.plateFeePerUnit * qty),
+      });
+    }
+    if (hasShippingRow) {
+      rows.push({
+        desc: `שילוח · ${breakdown.shippingOptionName ?? ""}`.trim(),
+        unit: breakdown.shippingPerUnit,
+        qty,
+        total: r2(breakdown.shippingPerUnit * qty),
+      });
+    }
+    displayTotalOrder = breakdown.totalOrder;
+    displayUnitPrice = breakdown.totalPerUnit;
+  } else {
+    // Fallback: 2-row honest layout from FactoryPricingResult.
+    const bagDescParts: string[] = [`${sizeLabel(spec)} — שקית`];
+    if (finishingHe) bagDescParts.push(finishingHe);
+    if (printingHe) bagDescParts.push(printingHe);
+    const bagDesc = bagDescParts.join(" · ");
+    const bagUnit = r2(pricing.unitCost + pricing.unitProfit);
+    rows.push({
       desc: bagDesc,
       unit: bagUnit,
       qty: pricing.quantity,
       total: r2(bagUnit * pricing.quantity),
-    },
-  ];
-  if (hasShippingRow) {
-    rows.push({
-      desc: `שילוח · ${pricing.shippingOptionName}`,
-      unit: r2(pricing.unitShipping),
-      qty: pricing.quantity,
-      total: r2(pricing.totalShipping),
     });
+    if (!!pricing.shippingOptionName && pricing.unitShipping > 0) {
+      rows.push({
+        desc: `שילוח · ${pricing.shippingOptionName}`,
+        unit: r2(pricing.unitShipping),
+        qty: pricing.quantity,
+        total: r2(pricing.totalShipping),
+      });
+    }
+    displayTotalOrder = pricing.totalSellingPrice;
+    displayUnitPrice = pricing.unitSellingPrice;
   }
 
-  const materialHe = spec.material ? humanizeMaterial(spec.material) : "";
   const bullets = [
-    `מידות: ${sizeLabel(spec)}`,
-    `כמות: ${spec.quantity.toLocaleString("he-IL")} יח׳`,
+    `מידות: ${breakdown?.dimensions ?? sizeLabel(spec)} ס״מ`,
+    `כמות: ${qty.toLocaleString("he-IL")} יח׳`,
     materialHe ? `חומר: ${materialHe}` : null,
     printingHe ? `הדפסה: ${printingHe}` : null,
     finishingHe ? `גימור: ${finishingHe}` : null,
-    pricing.shippingOptionName ? `שיטת שילוח: ${pricing.shippingOptionName}` : null,
+    (breakdown?.shippingOptionName ?? pricing.shippingOptionName)
+      ? `שיטת שילוח: ${breakdown?.shippingOptionName ?? pricing.shippingOptionName}`
+      : null,
   ].filter(Boolean) as string[];
 
   return (
@@ -336,10 +417,10 @@ function CustomerQuotePDF(props: CustomerQuotePdfProps) {
         </View>
 
         <View style={styles.priceBox}>
-          <Text style={styles.priceMain}>{formatILS(pricing.totalSellingPrice)}</Text>
+          <Text style={styles.priceMain}>{formatILS(displayTotalOrder)}</Text>
           <Text style={styles.priceSub}>
-            מחיר ליחידה: {formatILS(pricing.unitSellingPrice)}   ·   כמות:{" "}
-            {pricing.quantity.toLocaleString("he-IL")}
+            מחיר ליחידה: {formatILS(displayUnitPrice)}   ·   כמות:{" "}
+            {qty.toLocaleString("he-IL")}
           </Text>
         </View>
 
@@ -363,12 +444,12 @@ function CustomerQuotePDF(props: CustomerQuotePdfProps) {
             <Text style={styles.totalLabel}>סה״כ לעסקה</Text>
             <Text style={[styles.th, { flex: 1 }]}></Text>
             <Text style={[styles.th, { flex: 0.8 }]}></Text>
-            <Text style={styles.totalValue}>{formatILS(pricing.totalSellingPrice)}</Text>
+            <Text style={styles.totalValue}>{formatILS(displayTotalOrder)}</Text>
           </View>
         </View>
 
         <Text style={styles.unitPriceNote}>
-          מחיר ליחידה: ~{formatILS(pricing.unitSellingPrice)}
+          מחיר ליחידה: ~{formatILS(displayUnitPrice)}
         </Text>
 
         <View style={styles.vatNote}>
@@ -378,9 +459,10 @@ function CustomerQuotePDF(props: CustomerQuotePdfProps) {
         <View style={styles.bullets}>
           <Text style={styles.bulletsTitle}>סיכום הזמנה</Text>
           {bullets.map((b, i) => (
-            <Text key={i} style={styles.bulletLine}>
-              {"• " + b}
-            </Text>
+            <View key={i} style={styles.bulletRow}>
+              <Text style={styles.bulletMark}>•</Text>
+              <Text style={styles.bulletText}>{b}</Text>
+            </View>
           ))}
         </View>
 
