@@ -33,10 +33,9 @@ export function V2Chrome({ children }: { children: React.ReactNode }) {
         >
           Albadi
         </Link>
-        <NavLink href="/dashboard">בית</NavLink>
         <NavLink href="/dashboard/v2">Inbox + Pipeline</NavLink>
         <NavLink href="/dashboard/v3">v3 (חדש)</NavLink>
-        <NavLink href="/dashboard/instructions">מדריך</NavLink>
+        <NavLink href="/dashboard/v2/instructions">מדריך</NavLink>
       </nav>
       <main
         style={{
