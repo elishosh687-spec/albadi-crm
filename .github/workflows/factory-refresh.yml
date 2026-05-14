@@ -7,9 +7,10 @@ name: Poll factory refresh
 
 on:
   schedule:
-    # GitHub Actions minimum interval is 5 minutes. Schedules can be
-    # delayed during high load — that's acceptable here.
-    - cron: "*/5 * * * *"
+    # Factory replies ~twice a day. Every 30 min is generous: worst-case
+    # latency 30 min, daily invocations capped at 48. workflow_dispatch
+    # lets us trigger on demand from the Actions tab or `gh workflow run`.
+    - cron: "*/30 * * * *"
   workflow_dispatch: {}
 
 jobs:
