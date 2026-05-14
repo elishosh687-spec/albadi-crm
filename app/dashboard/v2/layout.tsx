@@ -1,4 +1,4 @@
-import { V2Chrome } from "../_components/V2Chrome";
+import { V2Chrome } from "./_components/V2Chrome";
 
 export default function DashboardV2Layout({
   children,
