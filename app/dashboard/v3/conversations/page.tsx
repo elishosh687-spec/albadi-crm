@@ -9,7 +9,9 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 export const maxDuration = 30;
 
-const LIST_PAGE_SIZE = 80;
+// Show every lead in the list (not just those with recent messages). The
+// search box in ConversationsLayout filters this superset client-side, so
+// Eli can find any lead by name/phone even if there's no message history.
 const THREAD_LIMIT = 200;
 
 export interface ConversationRow {
@@ -33,91 +35,82 @@ export default async function V3ConversationsPage({
   const { lead: leadParam } = await searchParams;
   const selectedSid = leadParam?.trim() || null;
 
-  // ---- LIST -----------------------------------------------------------------
-  const recentRows = await db
+  // ---- LIST: every active lead, with last-message metadata --------------
+  const leadList = await db
     .select({
-      sid: messages.manychatSubId,
-      lastReceivedAt: sql<string>`max(${messages.receivedAt})::text`,
+      sid: leads.manychatSubId,
+      name: leads.name,
+      phone: leads.phoneE164,
+      stage: leads.pipelineStage,
+      flag: leads.pipelineFlag,
+      botPaused: leads.botPaused,
+      updatedAt: leads.updatedAt,
     })
-    .from(messages)
-    .groupBy(messages.manychatSubId)
-    .orderBy(desc(sql`max(${messages.receivedAt})`))
-    .limit(LIST_PAGE_SIZE);
+    .from(leads)
+    .where(eq(leads.active, true))
+    .orderBy(desc(leads.updatedAt));
 
-  let rows: ConversationRow[] = [];
-  if (recentRows.length > 0) {
-    const sids = recentRows.map((r) => r.sid.trim());
-    const [leadRows, lastMessages, unreadInbound] = await Promise.all([
-      Promise.all(
-        sids.map((sid) =>
-          db
-            .select({
-              sid: leads.manychatSubId,
-              name: leads.name,
-              phone: leads.phoneE164,
-              stage: leads.pipelineStage,
-              flag: leads.pipelineFlag,
-              botPaused: leads.botPaused,
-            })
-            .from(leads)
-            .where(sql`trim(${leads.manychatSubId}) = ${sid}`)
-            .limit(1)
-            .then((r) => r[0] ?? null)
-        )
-      ),
-      Promise.all(
-        sids.map((sid) =>
-          db
-            .select({
-              direction: messages.direction,
-              sender: messages.sender,
-              text: messages.text,
-              receivedAt: messages.receivedAt,
-            })
-            .from(messages)
-            .where(sql`trim(${messages.manychatSubId}) = ${sid}`)
-            .orderBy(desc(messages.receivedAt))
-            .limit(1)
-            .then((r) => r[0] ?? null)
-        )
-      ),
-      Promise.all(
-        sids.map((sid) =>
-          db
-            .select({ count: sql<number>`count(*)::int` })
-            .from(messages)
-            .where(
-              and(
-                sql`trim(${messages.manychatSubId}) = ${sid}`,
-                eq(messages.direction, "in"),
-                sql`${messages.receivedAt} > now() - interval '24 hours'`
-              )
+  const sids = leadList.map((l) => l.sid.trim());
+  const [lastMessages, unreadInbound] = await Promise.all([
+    Promise.all(
+      sids.map((sid) =>
+        db
+          .select({
+            direction: messages.direction,
+            sender: messages.sender,
+            text: messages.text,
+            receivedAt: messages.receivedAt,
+          })
+          .from(messages)
+          .where(sql`trim(${messages.manychatSubId}) = ${sid}`)
+          .orderBy(desc(messages.receivedAt))
+          .limit(1)
+          .then((r) => r[0] ?? null)
+      )
+    ),
+    Promise.all(
+      sids.map((sid) =>
+        db
+          .select({ count: sql<number>`count(*)::int` })
+          .from(messages)
+          .where(
+            and(
+              sql`trim(${messages.manychatSubId}) = ${sid}`,
+              eq(messages.direction, "in"),
+              sql`${messages.receivedAt} > now() - interval '24 hours'`
             )
-            .then((r) => r[0]?.count ?? 0)
-        )
-      ),
-    ]);
+          )
+          .then((r) => r[0]?.count ?? 0)
+      )
+    ),
+  ]);
 
-    rows = recentRows.map((r, i) => {
-      const lead = leadRows[i];
-      const last = lastMessages[i];
-      const senderResolved: "lead" | "bot" | "eli" =
-        (last?.sender as "lead" | "bot" | "eli" | null) ??
-        (last?.direction === "in" ? "lead" : "bot");
-      return {
-        sid: r.sid,
-        name: lead?.name ?? null,
-        phone: lead?.phone ?? null,
-        stage: lead?.stage ?? null,
-        flag: lead?.flag ?? null,
-        botPaused: lead?.botPaused ?? false,
-        lastText: last?.text ?? null,
-        lastSender: senderResolved,
-        lastAt: last?.receivedAt?.toISOString() ?? null,
-        inboundLast24h: unreadInbound[i] ?? 0,
-      };
-    });
-  }
+  const unsorted: ConversationRow[] = leadList.map((lead, i) => {
+    const last = lastMessages[i];
+    const senderResolved: "lead" | "bot" | "eli" =
+      (last?.sender as "lead" | "bot" | "eli" | null) ??
+      (last?.direction === "in" ? "lead" : "bot");
+    return {
+      sid: lead.sid,
+      name: lead.name,
+      phone: lead.phone,
+      stage: lead.stage,
+      flag: lead.flag,
+      botPaused: lead.botPaused,
+      lastText: last?.text ?? null,
+      lastSender: senderResolved,
+      lastAt:
+        last?.receivedAt?.toISOString() ?? lead.updatedAt.toISOString(),
+      inboundLast24h: unreadInbound[i] ?? 0,
+    };
+  });
+
+  // Most-recent activity first (last message, falling back to lead.updatedAt).
+  const rows = unsorted.sort((a, b) => {
+    const ta = a.lastAt ? new Date(a.lastAt).getTime() : 0;
+    const tb = b.lastAt ? new Date(b.lastAt).getTime() : 0;
+    return tb - ta;
+  });
 
   // ---- SELECTED LEAD: full thread + summary --------------------------------
   let selected: {

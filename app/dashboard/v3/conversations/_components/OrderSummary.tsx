@@ -6,13 +6,14 @@ import {
   Banknote,
   ClipboardList,
   FileText,
-  StickyNote,
   Pencil,
   Check,
   X,
 } from "lucide-react";
 import { STAGE_LABEL, STAGE_TONE } from "../../_components/stage-meta";
 import { updateLeadContactAction } from "@/app/actions/v2";
+import { FactoryQuotePanel } from "../../_components/factory/FactoryQuotePanel";
+import { NotesPanel } from "../../_components/NotesPanel";
 
 export interface OrderSummaryData {
   name: string | null;
@@ -137,15 +138,8 @@ export function OrderSummary({
         </Section>
       )}
 
-      {data.notes && (
-        <Section
-          icon={<StickyNote className="size-3.5" />}
-          title="הערות"
-        >
-          <p className="text-sm text-foreground whitespace-pre-wrap">
-            {data.notes}
-          </p>
-        </Section>
+      {sid && (
+        <NotesPanel sid={sid} initialNotes={data.notes} compact />
       )}
 
       {!data.botSummary &&
@@ -156,6 +150,14 @@ export function OrderSummary({
             עוד אין מספיק מידע לסיכום הזמנה. ככל שהשיחה מתקדמת — השלבים, המחירים והתשובות יופיעו פה.
           </div>
         )}
+
+      {sid && (
+        <FactoryQuotePanel
+          leadId={sid}
+          leadName={data.name}
+          qState={data.qState}
+        />
+      )}
     </div>
   );
 }

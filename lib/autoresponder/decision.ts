@@ -132,9 +132,14 @@ async function loadLeadCtx(sid: string): Promise<LeadCtx | null> {
     .where(sql`trim(${leads.manychatSubId}) = ${sid.trim()}`)
     .limit(1);
   if (!row) return null;
+  // Prefer waJid, then phone→JID. Never fall back to sid: for ManyChat-origin
+  // leads sid is a subscriber id, not a phone, so phoneToJid(sid) would synth
+  // a non-existent JID and sends would silently route to nowhere.
+  const jid = row.jid ?? (row.phone ? `${row.phone.replace(/[^0-9]/g, "")}@s.whatsapp.net` : null);
+  if (!jid) return null;
   return {
     sid: row.sid,
-    jid: row.jid ?? sid,
+    jid,
     name: row.name,
     phone: row.phone,
     pipelineStage: row.pipelineStage,

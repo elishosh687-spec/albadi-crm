@@ -12,6 +12,7 @@ import { db } from "@/lib/db";
 import { botDrafts, leads } from "@/drizzle/schema";
 import { and, desc, eq, sql } from "drizzle-orm";
 import { sendBridgeMessage } from "@/lib/bridge/client";
+import { resolveBridgeRecipient } from "@/lib/bridge/jid";
 
 export type DraftStatus = "pending" | "approved" | "rejected" | "sent" | "failed";
 
@@ -152,12 +153,13 @@ export async function approveDraft(
   if (!finalText) return { ok: false, error: "empty text" };
 
   const [leadRow] = await db
-    .select({ jid: leads.waJid, sid: leads.manychatSubId })
+    .select({ jid: leads.waJid, sid: leads.manychatSubId, phone: leads.phoneE164 })
     .from(leads)
     .where(sql`trim(${leads.manychatSubId}) = ${draft.manychatSubId.trim()}`)
     .limit(1);
   if (!leadRow) return { ok: false, error: "lead not found" };
-  const recipient = leadRow.jid ?? leadRow.sid;
+  const recipient = resolveBridgeRecipient({ waJid: leadRow.jid, phoneE164: leadRow.phone });
+  if (!recipient) return { ok: false, error: "lead has no waJid or phone" };
 
   let waMessageId: string;
   try {

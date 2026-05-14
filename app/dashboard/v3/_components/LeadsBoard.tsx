@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   Search,
@@ -8,9 +8,16 @@ import {
   Play,
   AlertCircle,
   MessageSquare,
+  ChevronDown,
+  Loader2,
 } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { STAGE_LABEL, STAGE_TONE, timeAgoHe } from "./stage-meta";
+import { loadLeadThread } from "@/app/actions/v2";
+import {
+  ChatThread,
+  type ChatMessage,
+} from "../conversations/_components/ChatThread";
 import {
   BUCKET_LABEL,
   BUCKET_ORDER,
@@ -250,6 +257,33 @@ function LeadCard({
   const hasPreview =
     !!card.botSummary || !!card.notes || !!card.lastInboundText;
 
+  // Inline thread dropdown — lazy-loads via server action on first open and
+  // caches messages locally so re-toggling is instant. Keeps dropdown closed
+  // by default to avoid loading hundreds of messages on board render.
+  const [threadOpen, setThreadOpen] = useState(false);
+  const [threadMessages, setThreadMessages] = useState<ChatMessage[] | null>(
+    null
+  );
+  const [threadError, setThreadError] = useState<string | null>(null);
+  const [isLoadingThread, startThreadLoad] = useTransition();
+
+  const toggleThread = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const next = !threadOpen;
+    setThreadOpen(next);
+    if (next && threadMessages === null && !isLoadingThread) {
+      startThreadLoad(async () => {
+        const r = await loadLeadThread(card.sid, 200);
+        if (r.ok) {
+          setThreadMessages(r.messages);
+          setThreadError(null);
+        } else {
+          setThreadError(r.error);
+        }
+      });
+    }
+  };
+
   return (
     <div className="relative group">
       <button
@@ -330,6 +364,56 @@ function LeadCard({
         </span>
       </div>
       </button>
+
+      <button
+        type="button"
+        onClick={toggleThread}
+        className={cn(
+          "mt-1 w-full flex items-center justify-center gap-1.5 rounded-md border border-border/60 bg-background/40 px-2 py-1 text-[11px] text-muted-foreground hover:text-foreground hover:bg-background/70 transition-colors",
+          threadOpen && "bg-background/70 text-foreground"
+        )}
+        aria-expanded={threadOpen}
+        aria-controls={`thread-${card.sid}`}
+      >
+        {isLoadingThread ? (
+          <Loader2 className="size-3 animate-spin" />
+        ) : (
+          <ChevronDown
+            className={cn(
+              "size-3 transition-transform",
+              threadOpen && "rotate-180"
+            )}
+          />
+        )}
+        {threadOpen ? "סגור שיחה" : "פתח שיחה מלאה"}
+      </button>
+
+      {threadOpen && (
+        <div
+          id={`thread-${card.sid}`}
+          className="mt-1 rounded-lg border border-border/60 bg-background/40 overflow-hidden"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {threadError ? (
+            <div className="p-3 text-xs text-destructive text-center">
+              שגיאה: {threadError}
+            </div>
+          ) : threadMessages === null ? (
+            <div className="p-3 text-xs text-muted-foreground text-center">
+              טוען…
+            </div>
+          ) : threadMessages.length === 0 ? (
+            <div className="p-3 text-xs text-muted-foreground text-center">
+              אין הודעות בשיחה הזו עדיין.
+            </div>
+          ) : (
+            <div className="max-h-[60dvh] overflow-y-auto p-2">
+              <ChatThread messages={threadMessages} />
+            </div>
+          )}
+        </div>
+      )}
+
       {hasPreview && <LeadHoverPreview card={card} />}
     </div>
   );

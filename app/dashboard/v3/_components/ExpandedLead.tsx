@@ -17,7 +17,6 @@ import {
 import { cn } from "@/lib/cn";
 import {
   setLeadStage,
-  updateLeadNotes,
   setBotPaused,
   snoozeLead,
   suggestRepliesAction,
@@ -34,6 +33,7 @@ import { STAGE_LABEL, STAGE_TONE } from "./stage-meta";
 import { ChatThread, type ChatMessage } from "../conversations/_components/ChatThread";
 import { OrderSummary, type OrderSummaryData } from "../conversations/_components/OrderSummary";
 import { Composer } from "../conversations/_components/Composer";
+import { NotesPanel } from "./NotesPanel";
 
 type TabKey = "overview" | "chat" | "summary";
 
@@ -160,7 +160,6 @@ function OverviewTab({
       V2_FLAG_NAMES.includes(f as V2FlagName)
     ) as V2FlagName[]
   );
-  const [notes, setNotes] = useState(summary.notes ?? "");
   const [paused, setPaused] = useState(summary.botPaused);
   const [name, setName] = useState(summary.name ?? "");
   const [phone, setPhone] = useState(summary.phone ?? "");
@@ -187,13 +186,6 @@ function OverviewTab({
     setMsg(null);
     startTransition(async () => {
       const r = await updateLeadContactAction(sid, { name, phone });
-      setMsg({ ok: r.ok, text: r.ok ? r.message ?? "נשמר" : r.error ?? "כשל" });
-    });
-  };
-  const saveNotes = () => {
-    setMsg(null);
-    startTransition(async () => {
-      const r = await updateLeadNotes(sid, notes);
       setMsg({ ok: r.ok, text: r.ok ? r.message ?? "נשמר" : r.error ?? "כשל" });
     });
   };
@@ -403,26 +395,7 @@ function OverviewTab({
           </button>
         </section>
 
-        <section className="rounded-xl border border-border bg-card p-4 space-y-2">
-          <div className="text-xs uppercase tracking-wider text-muted-foreground">
-            הערות
-          </div>
-          <textarea
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            rows={3}
-            placeholder="הערות פנימיות…"
-            className="w-full bg-background/50 border border-border rounded-lg p-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring/30"
-          />
-          <button
-            type="button"
-            onClick={saveNotes}
-            disabled={isPending}
-            className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background/40 px-3 py-1.5 text-xs font-medium hover:bg-secondary disabled:opacity-60"
-          >
-            שמור הערות
-          </button>
-        </section>
+        <NotesPanel sid={sid} initialNotes={summary.notes} />
 
         <section className="rounded-xl border border-border bg-card p-4 space-y-2">
           <div className="text-xs uppercase tracking-wider text-muted-foreground">

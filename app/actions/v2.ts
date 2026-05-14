@@ -32,6 +32,7 @@ import {
   setCustomFields,
 } from "@/lib/messaging";
 import { sendBridgeMessage } from "@/lib/bridge/client";
+import { resolveBridgeRecipient } from "@/lib/bridge/jid";
 import {
   approveDraft as approveDraftLib,
   rejectDraft as rejectDraftLib,
@@ -146,6 +147,49 @@ export async function updateLeadNotes(
   }
 }
 
+// Append a timestamped note to leads.notes. Each entry is prefixed with
+// [DD/MM/YYYY HH:mm] in Asia/Jerusalem so notes from different days/times
+// stay distinguishable. New entries go on TOP so the most recent appears
+// first when scanning the field.
+export async function appendLeadNote(
+  manychatSubId: string,
+  text: string
+): Promise<{ ok: true; notes: string } | { ok: false; error: string }> {
+  try {
+    const cleanSid = manychatSubId.trim();
+    if (!cleanSid) return { ok: false, error: "missing subscriberId" };
+    const cleanText = text.trim();
+    if (!cleanText) return { ok: false, error: "missing text" };
+
+    const [row] = await db
+      .select({ notes: leads.notes })
+      .from(leads)
+      .where(sql`trim(${leads.manychatSubId}) = ${cleanSid}`)
+      .limit(1);
+    if (!row) return { ok: false, error: "lead not found" };
+
+    const stamp = new Date().toLocaleString("he-IL", {
+      timeZone: "Asia/Jerusalem",
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+    const entry = `[${stamp}] ${cleanText}`;
+    const next = row.notes ? `${entry}\n\n${row.notes}` : entry;
+
+    await setCustomFields(cleanSid, [{ name: "notes", value: next }]);
+    safeRevalidate("/dashboard/v3", "layout");
+    return { ok: true, notes: next };
+  } catch (e) {
+    return {
+      ok: false,
+      error: e instanceof Error ? e.message : "save failed",
+    };
+  }
+}
+
 /**
  * Stage 4 entry — Eli pushes the final price via dashboard, bot takes over
  * with stage=AWAITING_FINAL and the standard "מתאים?" classifier loop.
@@ -175,6 +219,7 @@ export async function sendFinalPrice(
       .select({
         sid: leads.manychatSubId,
         jid: leads.waJid,
+        phone: leads.phoneE164,
         qState: leads.qState,
       })
       .from(leads)
@@ -182,7 +227,8 @@ export async function sendFinalPrice(
       .limit(1);
     if (!row) return { ok: false, error: "lead not found" };
 
-    const recipient = row.jid ?? row.sid;
+    const recipient = resolveBridgeRecipient({ waJid: row.jid, phoneE164: row.phone });
+    if (!recipient) return { ok: false, error: "lead has no waJid or phone" };
     const message =
       `המחיר הסופי הוא ${cleanPrice} ש"ח.\n\n` +
       `נשמח לשמוע את דעתכם על ההצעה.`;
@@ -238,12 +284,13 @@ export async function sendManualReply(
 
   try {
     const [row] = await db
-      .select({ jid: leads.waJid, sid: leads.manychatSubId })
+      .select({ jid: leads.waJid, sid: leads.manychatSubId, phone: leads.phoneE164 })
       .from(leads)
       .where(sql`trim(${leads.manychatSubId}) = ${cleanSid}`)
       .limit(1);
     if (!row) return { ok: false, error: "lead not found" };
-    const recipient = row.jid ?? row.sid;
+    const recipient = resolveBridgeRecipient({ waJid: row.jid, phoneE164: row.phone });
+    if (!recipient) return { ok: false, error: "lead has no waJid or phone" };
 
     // sendBridgeMessage pre-inserts the outbound row with sender='eli'
     // before the bridge `message.sent` webhook fires, so no extra logging
@@ -267,6 +314,51 @@ export async function sendManualReply(
       ok: false,
       error: e instanceof Error ? e.message : "send failed",
     };
+  }
+}
+
+// Conversation thread payload for the inline LeadCard dropdown. Returns the
+// most recent messages in ASCENDING order (oldest → newest) so ChatThread can
+// render bottom-up without re-sorting.
+export interface LeadThreadMessage {
+  id: number;
+  direction: "in" | "out";
+  sender: "lead" | "bot" | "eli" | null;
+  text: string | null;
+  receivedAt: string;
+}
+
+export async function loadLeadThread(
+  manychatSubId: string,
+  limit = 100
+): Promise<
+  { ok: true; messages: LeadThreadMessage[] } | { ok: false; error: string }
+> {
+  const cleanSid = manychatSubId.trim();
+  if (!cleanSid) return { ok: false, error: "missing subscriberId" };
+  try {
+    const rows = await db
+      .select({
+        id: messagesTable.id,
+        direction: messagesTable.direction,
+        sender: messagesTable.sender,
+        text: messagesTable.text,
+        receivedAt: messagesTable.receivedAt,
+      })
+      .from(messagesTable)
+      .where(sql`trim(${messagesTable.manychatSubId}) = ${cleanSid}`)
+      .orderBy(desc(messagesTable.receivedAt))
+      .limit(limit);
+    const messages = rows.reverse().map((m) => ({
+      id: m.id,
+      direction: m.direction as "in" | "out",
+      sender: (m.sender as "lead" | "bot" | "eli" | null) ?? null,
+      text: m.text,
+      receivedAt: m.receivedAt.toISOString(),
+    }));
+    return { ok: true, messages };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "load failed" };
   }
 }
 

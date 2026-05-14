@@ -437,10 +437,23 @@ export async function insertBridgeMessage(input: {
     return null;
   }
 
+  // Resolve JID → canonical lead.manychat_sub_id when a matching lead exists.
+  // The leads table is keyed by manychat_sub_id (which is a JID for
+  // bridge-origin leads but a numeric ManyChat id for legacy ManyChat-origin
+  // leads). Messages must be keyed the same way the lead is, otherwise the
+  // dashboard groups them under a raw JID conversation that's orphaned from
+  // the lead row (no name, no stage, no notes).
+  const lead = await db
+    .select({ sid: leads.manychatSubId })
+    .from(leads)
+    .where(eq(leads.waJid, input.jid))
+    .limit(1);
+  const conversationKey = lead[0]?.sid ?? input.jid;
+
   const [row] = await db
     .insert(messagesTable)
     .values({
-      manychatSubId: input.jid,
+      manychatSubId: conversationKey,
       direction: input.direction,
       text: input.text,
       payload: input.payload as any,

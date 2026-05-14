@@ -18,3 +18,17 @@ export function phoneToJid(phone: string): string {
   const digits = String(phone).replace(/[^0-9]/g, "");
   return `${digits}@s.whatsapp.net`;
 }
+
+// Resolve a lead row to a bridge recipient. Prefer waJid (already a JID),
+// then phoneE164 → JID. Never fall back to manychatSubId as recipient — for
+// ManyChat-origin leads, sid is a subscriber id, NOT a phone, so phoneToJid
+// would synthesize a non-existent JID and the bridge send would silently
+// route to nowhere. Returns null when nothing usable is available.
+export function resolveBridgeRecipient(row: {
+  waJid: string | null;
+  phoneE164?: string | null;
+}): string | null {
+  if (row.waJid) return row.waJid;
+  if (row.phoneE164) return phoneToJid(row.phoneE164);
+  return null;
+}
