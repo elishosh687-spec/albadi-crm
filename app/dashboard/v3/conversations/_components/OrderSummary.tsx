@@ -1,6 +1,18 @@
+"use client";
+
+import { useState, useTransition } from "react";
 import { cn } from "@/lib/cn";
-import { Banknote, ClipboardList, FileText, StickyNote } from "lucide-react";
+import {
+  Banknote,
+  ClipboardList,
+  FileText,
+  StickyNote,
+  Pencil,
+  Check,
+  X,
+} from "lucide-react";
 import { STAGE_LABEL, STAGE_TONE } from "../../_components/stage-meta";
+import { updateLeadContactAction } from "@/app/actions/v2";
 
 export interface OrderSummaryData {
   name: string | null;
@@ -41,7 +53,13 @@ function formatQValue(v: unknown): string {
   return String(v);
 }
 
-export function OrderSummary({ data }: { data: OrderSummaryData }) {
+export function OrderSummary({
+  data,
+  sid,
+}: {
+  data: OrderSummaryData;
+  sid?: string;
+}) {
   const stage = (data.stage ?? "UNCLASSIFIED").toUpperCase();
   const tone = STAGE_TONE[stage] ?? STAGE_TONE.UNCLASSIFIED;
   const qEntries = data.qState
@@ -53,16 +71,7 @@ export function OrderSummary({ data }: { data: OrderSummaryData }) {
 
   return (
     <div className="flex flex-col gap-4">
-      <div>
-        <div
-          className="text-xl font-medium"
-          style={{ fontFamily: "var(--font-display)" }}
-        >
-          {data.name || "(ללא שם)"}
-        </div>
-        <div className="text-xs text-muted-foreground mt-0.5">
-          {data.phone || "—"}
-        </div>
+      <ContactHeader sid={sid} name={data.name} phone={data.phone}>
         <div className="mt-2 flex flex-wrap items-center gap-1.5">
           <span className={cn("text-[10px] rounded-full px-2 py-0.5", tone.pill)}>
             {STAGE_LABEL[stage] ?? stage}
@@ -86,7 +95,7 @@ export function OrderSummary({ data }: { data: OrderSummaryData }) {
             </span>
           ))}
         </div>
-      </div>
+      </ContactHeader>
 
       {(data.quoteTotal || data.quoteAlt) && (
         <Section
@@ -147,6 +156,127 @@ export function OrderSummary({ data }: { data: OrderSummaryData }) {
             עוד אין מספיק מידע לסיכום הזמנה. ככל שהשיחה מתקדמת — השלבים, המחירים והתשובות יופיעו פה.
           </div>
         )}
+    </div>
+  );
+}
+
+function ContactHeader({
+  sid,
+  name,
+  phone,
+  children,
+}: {
+  sid: string | undefined;
+  name: string | null;
+  phone: string | null;
+  children: React.ReactNode;
+}) {
+  const editable = !!sid;
+  const [editing, setEditing] = useState(false);
+  const [nameDraft, setNameDraft] = useState(name ?? "");
+  const [phoneDraft, setPhoneDraft] = useState(phone ?? "");
+  const [isPending, startTransition] = useTransition();
+  const [err, setErr] = useState<string | null>(null);
+
+  const save = () => {
+    if (!sid) return;
+    setErr(null);
+    startTransition(async () => {
+      const r = await updateLeadContactAction(sid, {
+        name: nameDraft,
+        phone: phoneDraft,
+      });
+      if (r.ok) {
+        setEditing(false);
+      } else {
+        setErr(r.error ?? "כשל");
+      }
+    });
+  };
+
+  const cancel = () => {
+    setNameDraft(name ?? "");
+    setPhoneDraft(phone ?? "");
+    setEditing(false);
+    setErr(null);
+  };
+
+  if (editing && editable) {
+    return (
+      <div className="flex flex-col gap-2">
+        <input
+          value={nameDraft}
+          onChange={(e) => setNameDraft(e.target.value)}
+          placeholder="שם הלקוח"
+          autoFocus
+          className="bg-background/50 border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring/30"
+        />
+        <input
+          value={phoneDraft}
+          onChange={(e) => setPhoneDraft(e.target.value)}
+          placeholder="טלפון (E.164: 972...)"
+          dir="ltr"
+          inputMode="tel"
+          className="bg-background/50 border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring/30"
+        />
+        <div className="flex items-center gap-1.5">
+          <button
+            type="button"
+            onClick={save}
+            disabled={isPending}
+            className="inline-flex items-center gap-1 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
+          >
+            <Check className="size-3" />
+            שמור
+          </button>
+          <button
+            type="button"
+            onClick={cancel}
+            disabled={isPending}
+            className="inline-flex items-center gap-1 rounded-md border border-border bg-background/40 px-3 py-1.5 text-xs hover:bg-secondary"
+          >
+            <X className="size-3" />
+            ביטול
+          </button>
+          {err && <span className="text-xs text-destructive">{err}</span>}
+        </div>
+        {children}
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <div className="flex items-start gap-2">
+        <div className="flex-1 min-w-0">
+          <div
+            className="text-xl font-medium truncate"
+            style={{ fontFamily: "var(--font-display)" }}
+          >
+            {name || (
+              <span className="text-muted-foreground italic font-normal">
+                ללא שם — לחץ לעריכה
+              </span>
+            )}
+          </div>
+          <div className="text-xs text-muted-foreground mt-0.5">
+            {phone || (
+              <span className="italic">לחץ לעריכה והוסף טלפון</span>
+            )}
+          </div>
+        </div>
+        {editable && (
+          <button
+            type="button"
+            onClick={() => setEditing(true)}
+            className="size-7 rounded-md grid place-items-center text-muted-foreground hover:text-foreground hover:bg-secondary shrink-0"
+            title="ערוך פרטי קשר"
+          >
+            <Pencil className="size-3.5" />
+          </button>
+        )}
+      </div>
+      {children}
     </div>
   );
 }
