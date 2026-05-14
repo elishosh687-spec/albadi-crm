@@ -1,0 +1,26 @@
+name: Poll factory refresh
+
+# Polls /api/factory/refresh every 5 minutes. We can't use Vercel cron on
+# the Hobby plan (limited to daily), so GitHub Actions schedules it.
+# Required repo secret: VERCEL_CRON_SECRET — must equal the production
+# CRON_SECRET env var in Vercel.
+
+on:
+  schedule:
+    # GitHub Actions minimum interval is 5 minutes. Schedules can be
+    # delayed during high load — that's acceptable here.
+    - cron: "*/5 * * * *"
+  workflow_dispatch: {}
+
+jobs:
+  poll:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Hit refresh endpoint
+        run: |
+          curl --fail --show-error --silent \
+            -H "Authorization: Bearer ${{ secrets.VERCEL_CRON_SECRET }}" \
+            "https://albadi-crm.vercel.app/api/factory/refresh" \
+            | tee response.json
+          echo
+          echo "Done."
