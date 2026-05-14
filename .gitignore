@@ -18,3 +18,5 @@ scripts/tone-samples.json
 
 .vercel
 backups/
+.env*.local
+test-output.pdf

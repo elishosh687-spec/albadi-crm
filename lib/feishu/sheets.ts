@@ -84,6 +84,45 @@ export async function appendRow(values: (string | number)[]): Promise<string> {
 }
 
 /**
+ * Default height (px) applied to rows we append. Matches the existing
+ * factory-side rows visually so the sheet looks consistent for the supplier.
+ */
+export const FEISHU_ROW_HEIGHT_PX = 70;
+
+/**
+ * Set the height (in pixels) of a specific row.
+ *
+ * Feishu API: PUT /open-apis/sheets/v2/spreadsheets/{token}/dimension_range
+ * startIndex/endIndex are 1-based and inclusive; same value targets one row.
+ */
+export async function setRowHeight(
+  rowIndex: string | number,
+  pixels: number
+): Promise<void> {
+  const token = getSpreadsheetToken();
+  const sheetId = await getSheetId();
+  const idx = typeof rowIndex === "string" ? parseInt(rowIndex, 10) : rowIndex;
+  if (!Number.isFinite(idx) || idx <= 0) {
+    throw new Error(`setRowHeight: invalid rowIndex=${rowIndex}`);
+  }
+  await feishuFetch(
+    `/open-apis/sheets/v2/spreadsheets/${token}/dimension_range`,
+    {
+      method: "PUT",
+      body: JSON.stringify({
+        dimension: {
+          sheetId,
+          majorDimension: "ROWS",
+          startIndex: idx,
+          endIndex: idx,
+        },
+        dimensionProperties: { fixedSize: pixels },
+      }),
+    }
+  );
+}
+
+/**
  * Reads a single row across A..R. Returns the raw cell values (18 cells).
  */
 export async function readRow(rowIndex: string | number): Promise<(string | number | null)[]> {

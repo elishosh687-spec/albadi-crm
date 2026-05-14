@@ -25,7 +25,13 @@ const NAV = [
   { href: "/dashboard/v3/settings", label: "הגדרות", icon: Settings },
 ];
 
-export function Sidebar({ pendingDrafts = 0 }: { pendingDrafts?: number }) {
+export function Sidebar({
+  pendingDrafts = 0,
+  factoryReceived = 0,
+}: {
+  pendingDrafts?: number;
+  factoryReceived?: number;
+}) {
   const pathname = usePathname();
   return (
     <aside className="hidden md:flex w-60 shrink-0 flex-col border-l border-border bg-card/60 backdrop-blur p-4 gap-1">
@@ -49,7 +55,9 @@ export function Sidebar({ pendingDrafts = 0 }: { pendingDrafts?: number }) {
           const badge =
             item.href === "/dashboard/v3/drafts" && pendingDrafts > 0
               ? pendingDrafts
-              : null;
+              : item.href === "/dashboard/v3/factory" && factoryReceived > 0
+                ? factoryReceived
+                : null;
           return (
             <Link
               key={item.href}

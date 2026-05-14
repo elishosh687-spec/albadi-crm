@@ -10,7 +10,12 @@
 import { db } from "@/lib/db";
 import { factoryQuoteRequests, leads } from "@/drizzle/schema";
 import { eq, sql } from "drizzle-orm";
-import { appendRow, buildFactoryRow } from "@/lib/feishu/sheets";
+import {
+  appendRow,
+  buildFactoryRow,
+  setRowHeight,
+  FEISHU_ROW_HEIGHT_PX,
+} from "@/lib/feishu/sheets";
 import type { FactoryProductSpec } from "./types";
 
 function sizeLabel(spec: FactoryProductSpec): string {
@@ -77,6 +82,17 @@ export async function createFactoryRequest(
       quantity: spec.quantity,
     })
   );
+
+  // Visual parity with the older factory-side rows. Non-fatal — the row is
+  // already there, height is cosmetic.
+  try {
+    await setRowHeight(feishuRowIndex, FEISHU_ROW_HEIGHT_PX);
+  } catch (err) {
+    console.warn(
+      "[factory/create-request] setRowHeight failed (non-fatal)",
+      err
+    );
+  }
 
   await db
     .update(factoryQuoteRequests)
@@ -162,6 +178,14 @@ export async function promoteDraftToFeishu(
       quantity: spec.quantity,
     })
   );
+  try {
+    await setRowHeight(feishuRowIndex, FEISHU_ROW_HEIGHT_PX);
+  } catch (err) {
+    console.warn(
+      "[factory/promote-draft] setRowHeight failed (non-fatal)",
+      err
+    );
+  }
 
   await db
     .update(factoryQuoteRequests)
