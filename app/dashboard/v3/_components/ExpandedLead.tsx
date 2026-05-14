@@ -22,6 +22,7 @@ import {
   snoozeLead,
   suggestRepliesAction,
   sendManualReply,
+  updateLeadContactAction,
 } from "@/app/actions/v2";
 import {
   V2_FLAG_NAMES,
@@ -161,6 +162,8 @@ function OverviewTab({
   );
   const [notes, setNotes] = useState(summary.notes ?? "");
   const [paused, setPaused] = useState(summary.botPaused);
+  const [name, setName] = useState(summary.name ?? "");
+  const [phone, setPhone] = useState(summary.phone ?? "");
   const [hint, setHint] = useState("");
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [replyText, setReplyText] = useState("");
@@ -177,6 +180,13 @@ function OverviewTab({
     setMsg(null);
     startTransition(async () => {
       const r = await setLeadStage({ manychatSubId: sid, stage, flags });
+      setMsg({ ok: r.ok, text: r.ok ? r.message ?? "נשמר" : r.error ?? "כשל" });
+    });
+  };
+  const saveContact = () => {
+    setMsg(null);
+    startTransition(async () => {
+      const r = await updateLeadContactAction(sid, { name, phone });
       setMsg({ ok: r.ok, text: r.ok ? r.message ?? "נשמר" : r.error ?? "כשל" });
     });
   };
@@ -240,6 +250,40 @@ function OverviewTab({
             <p className="text-sm whitespace-pre-wrap">{summary.botSummary}</p>
           </section>
         )}
+
+        <section className="rounded-xl border border-border bg-card p-4 space-y-2">
+          <div className="text-xs uppercase tracking-wider text-muted-foreground">
+            פרטי קשר
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="שם הלקוח"
+              className="bg-background/50 border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring/30"
+            />
+            <input
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              placeholder="טלפון (E.164: 972...)"
+              dir="ltr"
+              inputMode="tel"
+              className="bg-background/50 border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring/30"
+            />
+          </div>
+          <button
+            type="button"
+            onClick={saveContact}
+            disabled={isPending}
+            className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
+          >
+            שמור פרטי קשר
+          </button>
+          <p className="text-[11px] text-muted-foreground leading-relaxed">
+            הbridge מספק רק chat_jid (לא טלפון). השם מתעדכן ידנית פה ויופיע
+            בכל המסכים.
+          </p>
+        </section>
 
         <section className="rounded-xl border border-border bg-card p-4 space-y-3">
           <div className="text-xs uppercase tracking-wider text-muted-foreground">
