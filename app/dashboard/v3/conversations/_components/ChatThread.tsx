@@ -126,7 +126,16 @@ function Bubble({ message }: { message: ChatMessage }) {
             isOutbound ? "rounded-tr-sm" : "rounded-tl-sm"
           )}
         >
-          {message.text || <span className="text-muted-foreground italic">(הודעה ללא טקסט)</span>}
+          {message.text && message.text.trim().length > 0 ? (
+            message.text
+          ) : (
+            // Empty text on outbound usually means the bridge fired
+            // `message.sent` before our pre-insert landed and we lost the
+            // original copy. Show something honest rather than blank.
+            <span className="text-muted-foreground italic">
+              {isOutbound ? "(תוכן לא נשמר — לפני תיקון race condition)" : "(הודעה ריקה)"}
+            </span>
+          )}
         </div>
         <span className="text-[10px] text-muted-foreground tabular-nums">
           {formatTime(message.receivedAt)}
