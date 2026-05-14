@@ -1,0 +1,328 @@
+# Albadi CRM — Architecture (How it's built today)
+
+> נכתב 2026-05-13. מתאר את המערכת **כפי שהיא בקוד היום**, post-bridge-cutover.
+> לא PRD (why) ולא feature list (what) — זה ה-**how**.
+> מחליף את `archive/FOLLOWUP-SPEC.md` שתיעד את הגרסה הישנה.
+
+---
+
+## 1. System diagram
+
+```
+                  ┌─────────────────┐
+                  │  WhatsApp user  │
+                  └────────┬────────┘
+                           │ DMs
+                  ┌────────▼─────────┐
+                  │  whatsapp-bridge │ (self-hosted Fly.io VPS)
+                  │     tenant       │
+                  └────────┬─────────┘
+                           │ HMAC-signed webhooks
+                  ┌────────▼──────────────────────────────┐
+                  │  Next.js (Vercel)                     │
+                  │  /api/bridge/webhook ──► autoresponder│
+                  │  /api/bot/followups  ──► cron         │
+                  │  /api/drafts/*       ──► Retool       │
+                  │  /api/leads/*        ──► Retool       │
+                  │  /dashboard/v3       ──► Eli          │
+                  └────────┬──────────────────────────────┘
+                           │ Drizzle ORM
+                  ┌────────▼─────────┐
+                  │  Neon Postgres   │
+                  └──────────────────┘
+                           ▲
+                  ┌────────┴─────────┐
+                  │  Retool console  │ (elishosh.retool.com)
+                  └──────────────────┘
+                           ▲
+                  ┌────────┴─────────┐
+                  │       Eli        │
+                  └──────────────────┘
+```
+
+קישוריות נלוות:
+- **Cloud routine** (claude.ai/code) — קורא ל-`/api/bot/followups` כל שעה (גיבוי ל-Vercel cron יומי).
+- **OpenAI** — קריאת LLM אחת לכל הודעת לקוח (intent classification + draft generation).
+- **Eli's WhatsApp** — escalation DMs מהבוט (`sendEliDM`).
+
+---
+
+## 2. Tech stack
+
+| Layer | Tech | למה |
+|---|---|---|
+| App | Next.js App Router | server actions, file-based routes, easy Vercel deploy |
+| Runtime | Vercel Hobby | free, integrated, no devops |
+| DB | Neon Postgres | serverless, free tier, supports Drizzle |
+| ORM | Drizzle | typesafe, no codegen, fast |
+| WhatsApp | whatsapp-bridge-node (self-hosted) | no Cloud API 24h limit, full control |
+| LLM | OpenAI | reliable intent classification |
+| UI extras | Retool | quick supervisor UI for heavy flows |
+| Auth | Cookie (`albadi_auth`) + Bearer | single-user, no SSO |
+
+---
+
+## 3. Database schema
+
+| Table | מטרה |
+|---|---|
+| `leads` | Source of truth לכל מצב של ליד. כל הfields של ManyChat לשעבר חיים כאן. |
+| `lead_tags` | רב-ל-רב: ליד → tag (שם בעברית). דחוף / עסקה_גדולה / etc. |
+| `messages` | היסטוריית WhatsApp בשני הכיוונים. dedupe via `wa_message_id`. |
+| `bridge_events` | Audit log של כל webhook envelope. unique by `evt_id` (dedupe retries). |
+| `bot_drafts` | Money-moment drafts ממתינים לאישור. pending/approved/rejected/sent/failed. |
+| `bot_config` | KV של feature flags / business thresholds עריך מהדאשבורד. |
+
+### עמודות עיקריות על `leads`
+
+```
+manychat_sub_id  PK (JID for bridge / numeric for legacy ManyChat)
+wa_jid           E.164 → JID resolution
+phone_e164       canonical phone
+name             from contact info / manual
+pipeline_stage   NEW | AWAITING_ESTIMATE | AWAITING_LOGO | WAITING_FACTORY | AWAITING_FINAL | WON | DROPPED
+next_action      sub-state inside stage (e.g. awaiting_reason, awaiting_competitor_offer)
+bot_summary      LLM-generated summary for Eli
+notes            free-text Eli notes
+quote_total      ILS estimate (numeric)
+quote_alt        alternative quote (numeric)
+q_state          JSONB (questionnaire step + answers)
+follow_up_count  cadence counter
+last_follow_up_at  timestamp
+bot_paused       boolean — bot silent if true (auto-resets on inbound)
+pipeline_flag    NEEDS_ELI | NULL — escalation flag
+```
+
+### `lead_tags`
+
+```
+manychat_sub_id  FK → leads
+tag              Hebrew name string (דחוף, עסקה_גדולה, ביקש_שיחה, אחרי_החג, מועדף)
+set_at           timestamp
+```
+מספרי ה-ID הישנים של ManyChat שורדים ב-`lib/manychat/config.ts` ל-backward compat בלבד.
+
+### `messages`
+
+```
+manychat_sub_id  FK
+direction        inbound | outbound
+text             body
+payload          JSONB raw webhook
+wa_message_id    UNIQUE (bridge id, used for dedupe)
+sender           lead | bot | eli (NULL on legacy pre-migration rows)
+received_at      WA timestamp
+ingested_at      insert timestamp
+```
+
+### `bot_drafts`
+
+```
+id                  PK
+manychat_sub_id     FK
+draft_text          LLM output
+edited_text         אופציונלי — אלי ערך לפני שליחה
+status              pending | approved | rejected | sent | failed
+money_reason        stage_gate | discount_request | price_question | negotiation | commitment | manual
+llm_confidence      0-1
+pipeline_stage_at_gen  snapshot של ה-stage כשנוצר
+trigger_message_id  FK → messages
+generated_at, decided_at, sent_at  timestamps
+sent_wa_message_id  bridge id אחרי send
+reject_reason       אופציונלי
+```
+
+---
+
+## 4. Messaging adapter
+
+קובץ יחיד: `lib/messaging/index.ts`. כל server-side code חייב לייבא דרכו.
+
+```
+USE_BRIDGE=1  →  re-export מ-lib/bridge/client.ts (DB-authoritative)
+USE_BRIDGE=0  →  re-export מ-lib/manychat/client.ts (legacy)
+```
+
+Public API משותף לשני backends:
+- `getSubscriber(id)` → `{ tags, custom_fields }`
+- `addTag(id, tagId)` / `removeTag(id, tagId)`
+- `setCustomFields(id, [{name, value}])`
+- `getFieldValue(fields, name)`
+- `getActiveSubscriberIds()`
+
+Bridge-only:
+- `sendMessage(recipient, message, mediaPath?)` → `{ wa_message_id }`
+- `resolveJidFromPhone(phone)` → `jid | null`
+
+**`sendBridgeMessage`** wraps `sendMessage` ומבטיח:
+1. Insert outbound row ב-`messages` עם `sender='bot'` (default) או `'eli'` (manual reply).
+2. Bridge send.
+3. Webhook המאוחר יותר עושה dedupe ב-`wa_message_id`.
+
+---
+
+## 5. Bot flow (inbound → outbound)
+
+```
+bridge POST /api/bridge/webhook
+  │
+  ├─ verify HMAC(BRIDGE_WEBHOOK_SECRET)
+  ├─ check timestamp (5min replay window)
+  ├─ insert bridge_events row (UNIQUE evt_id → dedupe)
+  │
+  ├─ if type=message.received:
+  │    1. upsert leads row (auto-create from JID)
+  │    2. insert messages row (sender=lead)
+  │    3. clear bot_paused
+  │    4. clear pipeline_flag=NEEDS_ELI? (no — only stage transition does)
+  │    5. route by leads.pipeline_stage:
+  │         NEW                → questionnaire.handle()
+  │         AWAITING_ESTIMATE  → decision.handleEstimate()
+  │         AWAITING_LOGO      → decision.handleLogo()
+  │         AWAITING_FINAL     → decision.handleFinal()
+  │         else               → set NEEDS_ELI, DM Eli
+  │    6. if reply ready → sendBridgeMessage(sender=bot)
+  │       if money-moment AND ENABLE_DRAFT_QUEUE → queue draft (no send)
+  │
+  ├─ if type=message.sent:
+  │    1. dedupe by wa_message_id
+  │    2. insert/update messages row (sender = inferred from sent_wa_message_id linkage)
+  │
+  └─ if type=delivered|read|failed|tenant.*:
+       audit-log only (bridge_events). no state change.
+```
+
+### Questionnaire engine
+
+`lib/autoresponder/questionnaire.ts` — finite-state machine ב-9 שלבים. State persists ב-`leads.q_state` JSONB. Re-ask עד 3 פעמים, אחרי זה NEEDS_ELI.
+
+### Intent classifier
+
+`lib/autoresponder/intent.ts`:
+- Input: רצף ההודעות האחרונות (תלוי ב-stage).
+- Output: `{ intent, confidence, is_money_moment, reason }`
+- Timeout: 8s (AbortController). Failure → NEEDS_ELI.
+
+### Decision sub-flow
+
+`lib/autoresponder/decision.ts` — switch על intent × stage. Stage 2 ↔ Stage 3 transitions בלבד; כל מה שלא מוכר → NEEDS_ELI.
+
+---
+
+## 6. Follow-ups (cadence)
+
+`app/api/bot/followups/route.ts`:
+- Trigger: Vercel cron יומי + external cloud routine שעתי.
+- Auth: Bearer `BOT_SECRET` (or fallback `CRON_SECRET`).
+- Logic: query לידים שעברו את חלון השקט לפי stage, שלח follow-up אם:
+  - לא `bot_paused`
+  - לא `pipeline_flag=NEEDS_ELI`
+  - בשעות פעילות (אלא אם `FOLLOWUPS_BYPASS_GATES=1`)
+  - `follow_up_count < max_per_stage`
+- אחרי N follow-ups בלי תגובה → אוטומטית NEEDS_ELI (לא DROPPED — רק אלי מוריד ל-DROPPED).
+
+---
+
+## 7. Drafts queue (money moments)
+
+Gate: `ENABLE_DRAFT_QUEUE=1`.
+
+```
+intent classifier sets is_money_moment=true
+  → instead of auto-send: generateAndQueueDraft()
+  → INSERT bot_drafts (status=pending)
+  → no WA send happens
+
+Eli sees draft (Retool feed OR /dashboard/v3/drafts OR /dashboard/v2/drafts)
+  ├─ Approve  → POST /api/drafts/:id/approve
+  │              → optional edited_text
+  │              → sendBridgeMessage (sender=bot)
+  │              → UPDATE bot_drafts status=sent
+  │
+  └─ Reject   → POST /api/drafts/:id/reject
+                 → UPDATE bot_drafts status=rejected
+                 → no send
+```
+
+Money triggers (per `lib/drafts/index.ts`):
+- pipeline_stage ∈ {QUOTED, NEGOTIATING, AWAITING_FINAL, WAITING_CALL} (drift לעומת CUSTOMER-FLOW — ראה §10 below)
+- OR LLM returns `is_money_moment=true`
+
+---
+
+## 8. Security
+
+| Surface | Mechanism |
+|---|---|
+| `/api/bridge/webhook` | HMAC-SHA256 (BRIDGE_WEBHOOK_SECRET) + 5min replay window |
+| `/api/bot/*`, `/api/drafts/*`, `/api/leads/*` | `Authorization: Bearer <BOT_SECRET>` |
+| `/dashboard/*` | cookie `albadi_auth` set by `/api/auth/login` (ADMIN_PASSWORD) |
+| Dashboard layout | `auth guard middleware` redirects to login if missing |
+
+**Known risk:** `BOT_SECRET` משותף לכל endpoint. אין rotation. Single-user, low blast radius.
+
+---
+
+## 9. Deployment
+
+- Push ל-`main` → Vercel auto-deploy.
+- DB migration: `npx drizzle-kit push` ידנית (אין CI/CD למיגרציה).
+- Env vars: 11 משתנים (ראה PRD §5). 4 חיוניים, 3 bridge, 2 feature gates, 1 התראות, 1+ optional.
+- Rollback: revert commit + push. DB state survives.
+- Feature rollback: flip `USE_BRIDGE=0` או `ENABLE_DRAFT_QUEUE=0` ב-Vercel envs, redeploy.
+
+---
+
+## 10. Known drift / debt
+
+> מה ש-code אומר אבל המוצר/PRD לא — או הפוך.
+
+1. **Pipeline stages drift**
+   - קוד: `lib/manychat/stages.ts` מגדיר 11 stages (NEW, WAITING_FACTORY, QUOTED, AWAITING_DECISION, AWAITING_LOGO, IN_PROGRESS, AWAITING_FINAL, NEGOTIATING, WAITING_CALL, WON, DROPPED).
+   - CUSTOMER-FLOW v2: 7 stages (NEW, AWAITING_ESTIMATE, AWAITING_LOGO, WAITING_FACTORY, AWAITING_FINAL, WON, DROPPED).
+   - **Source of truth:** CUSTOMER-FLOW v2. צריך ניקוי קוד.
+
+2. **ManyChat path עוד חי**
+   - `lib/manychat/client.ts`, `app/api/bot/new-lead/route.ts`, `app/api/bot/inbound-message/route.ts`, `app/api/bot/restart-send/route.ts` עוד קיימים.
+   - `USE_BRIDGE=1` בייצור, אבל הקוד עוד מתחזק את שני המסלולים.
+   - **תוכנית:** למחוק אחרי שבוע יציב על bridge.
+
+3. **שני דאשבורדים חיים במקביל**
+   - v2 (`/dashboard/v2/*`) — production, יציב.
+   - v3 (`/dashboard/v3/*`) — חדש, יעד primary.
+   - **תוכנית:** v3 → primary, v2 → archive.
+
+4. **Restart-send בלי bridge**
+   - `app/api/bot/restart-send/route.ts` עדיין דרך ManyChat Flows (templates).
+   - bridge עכשיו תומך free-form בכל זמן, אז template fallback לא נדרש — צריך לכתוב מחדש.
+
+5. **אין test coverage אוטומטי**
+   - יש `scripts/test-stage{1-4}.ts` ידניים בלבד.
+   - PRD §risks: סיכון רגרסיה.
+
+6. **Hardcoded values**
+   - `TAG_IDS` / `FIELD_IDS` ב-`lib/manychat/config.ts` — לא מקור הקובץ (legacy).
+   - `FLOW_NS` ב-`restart-send` — צריך לעבור ל-`.env`.
+   - Business thresholds (10000 NIS high-value, 5d no-contact) hardcoded במקום `bot_config`.
+
+---
+
+## 11. Scripts (operational)
+
+| Script | Purpose |
+|---|---|
+| `seed-leads.ts` | seed initial 39 known subscriber_ids |
+| `backfill-from-manychat.ts` | one-time pull leads → DB (during bridge cutover) |
+| `backfill-message-sender.ts` | one-time fill `messages.sender` for legacy rows |
+| `backfill-lead-names.ts` | one-time hydrate `leads.name` |
+| `test-stage{1-4}.ts` + `test-cadence.ts` | manual E2E flow validation |
+| `test-drafts-api.ts` | draft queue smoke test |
+| `setup-manychat-v2.ts` | (deprecated) configure legacy ManyChat webhook |
+| `eval-llm.ts` | classifier confidence on sample intents |
+| `check-stages.ts`, `check-recent.ts`, `check-mali.ts` | quick state queries |
+| `debug-*.ts`, `trace-inbound.ts`, `inspect-bridge-event.ts` | webhook + DB inspection |
+| `wipe-test-lead.ts`, `reset-test-lead.ts` | test-lead cleanup |
+| `manual-stale-refresh.ts`, `migrate-silent.ts` | state-patch maintenance |
+| `scan-factory-notes.ts` | bulk note scan |
+
+All scripts run via `npx tsx scripts/<name>.ts`. Most respect `BRIDGE_DRY_RUN=1`.

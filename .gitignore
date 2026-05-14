@@ -6,6 +6,8 @@ out/
 build/
 dist/
 *.log
+logs.txt
+logs_dump.txt
 .DS_Store
 .vercel/
 *.tsbuildinfo

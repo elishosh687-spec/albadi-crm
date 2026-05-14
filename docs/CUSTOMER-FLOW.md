@@ -1,8 +1,14 @@
-# Albadi — Customer Flow (bot-agnostic) — **v2 (source of truth)**
+# Albadi — Customer Flow (bot-agnostic) — **source of truth ל-customer journey**
 
-> ✅ **גרסה 2** — מסע הלקוח מנקודת מבט של העסק. כל use case + ההחלטה של אלי.
-> **v1 = [FOLLOWUP-SPEC.md](./FOLLOWUP-SPEC.md)** — תיעוד הנדסי של המימוש הנוכחי.
-> במקרה של סתירה — **v2 (מסמך זה) גובר.** v1 משקף את מה שיש בקוד היום, v2 משקף את מה שצריך להיות.
+> ✅ מסע הלקוח מנקודת מבט של העסק. כל use case + ההחלטה של אלי.
+>
+> מסמכים נלווים:
+> - **PRD** = [PRD.md](./PRD.md) — why + outcomes + מדדים.
+> - **Feature inventory** = [FEATURES.md](./FEATURES.md) — מה shipped/beta/deprecated.
+> - **Architecture** = [ARCHITECTURE.md](./ARCHITECTURE.md) — איך זה בנוי בקוד (מחליף את `archive/FOLLOWUP-SPEC.md`).
+> - **Bot copy** = [BOT-COPY.md](./BOT-COPY.md) — נוסחים מלאים.
+>
+> במקרה של סתירה בין המסמך הזה לבין הקוד — **המסמך הזה גובר.** דרייפט בקוד נרשם ב-ARCHITECTURE §drift.
 
 נכתב 2026-05-13. מתעדים שלב-שלב, כל use case שעולה, וההחלטה של אלי לכל אחד.
 "let's move on" = השלב/תת-נושא הזה סגור, ממשיכים הלאה.

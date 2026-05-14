@@ -126,6 +126,9 @@ async function main(): Promise<void> {
   );
   assert(r.pipelineFlag !== "NEEDS_ELI", "delivery question does NOT escalate");
 
+  // Stage 2 payment question — per BOT-COPY.md §R9, this is premature at
+  // preliminary-quote stage. Bot acks ("זה בטלפון") then escalates so Eli
+  // closes by phone. The 50/50 canned reply lives only at Stage 4.
   await seedAtDecision();
   await handleDecisionInbound({
     sid: TEST_SID,
@@ -134,8 +137,8 @@ async function main(): Promise<void> {
   });
   r = await readLead();
   assert(
-    r.pipelineStage === "AWAITING_DECISION" && r.pipelineFlag !== "NEEDS_ELI",
-    "payment question → canned, no escalate"
+    r.pipelineFlag === "NEEDS_ELI",
+    "payment question at Stage 2 → escalate (premature)"
   );
 
   await seedAtDecision();
@@ -161,8 +164,8 @@ async function main(): Promise<void> {
   r = await readLead();
   assert(r.pipelineFlag === "NEEDS_ELI", "meeting/call request → escalate");
 
-  // ----- 2.5 custom_size → escalate -----
-  section("2.5 spec change ('רוצה כמות אחרת') → escalate");
+  // ----- 2.5 custom_size → ask for details (sub-state) → escalate on turn 2 -----
+  section("2.5 spec change → awaiting_spec_change sub-state → escalate");
   await seedAtDecision();
   await handleDecisionInbound({
     sid: TEST_SID,
@@ -170,7 +173,19 @@ async function main(): Promise<void> {
     hasMedia: false,
   });
   r = await readLead();
-  assert(r.pipelineFlag === "NEEDS_ELI", "custom spec → escalate");
+  assert(
+    r.qState?.decisionState === "awaiting_spec_change",
+    "custom_size sets decisionState=awaiting_spec_change"
+  );
+  assert(r.pipelineStage === "AWAITING_DECISION", "stage stays AWAITING_DECISION on first turn");
+
+  await handleDecisionInbound({
+    sid: TEST_SID,
+    text: "כן, 8500 יחידות בגודל 25x10x35",
+    hasMedia: false,
+  });
+  r = await readLead();
+  assert(r.pipelineFlag === "NEEDS_ELI", "spec details on turn 2 → escalate");
 
   // ----- samples → catalog link, no escalate -----
   section("samples_request → catalog link, stay");

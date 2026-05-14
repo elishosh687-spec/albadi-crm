@@ -1,8 +1,7 @@
-# Albadi Lead Flow & Bot Spec — **v1 (engineering snapshot)**
+# Albadi Lead Flow & Bot Spec — **v1 (ARCHIVED 2026-05-13)**
 
-> ⚠️ **גרסה 1** — תיעוד הנדסי של המימוש הנוכחי (stages, code paths, env, מה נמחק).
-> **v2 = [CUSTOMER-FLOW.md](./CUSTOMER-FLOW.md)** — תיעוד מסע הלקוח (use cases + החלטות, source of truth ל-product).
-> שני המסמכים מתארים את אותו ה-flow מנקודות מבט שונות. במקרה של סתירה — v2 גובר.
+> 🗄️ **מסמך מארכב.** הוחלף על ידי [../ARCHITECTURE.md](../ARCHITECTURE.md) (state-of-code) + [../CUSTOMER-FLOW.md](../CUSTOMER-FLOW.md) (customer journey).
+> נשמר כ-snapshot היסטורי של גרסה ראשונה (bridge cutover). אל תעדכן.
 
 Captured 2026-05-13. Single source of truth for the in-house bridge-based bot.
 **The bot owns the entire pipeline.** No standalone classifier — LLM intent
