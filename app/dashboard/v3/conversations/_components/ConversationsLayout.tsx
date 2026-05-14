@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useTransition } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
@@ -11,6 +11,8 @@ import {
   UserCog,
   PanelLeftClose,
   PanelLeftOpen,
+  Trash2,
+  Loader2,
 } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { STAGE_LABEL, STAGE_TONE, timeAgoHe } from "../../_components/stage-meta";
@@ -18,6 +20,7 @@ import type { ConversationRow } from "../page";
 import { ChatThread, type ChatMessage } from "./ChatThread";
 import { OrderSummary, type OrderSummaryData } from "./OrderSummary";
 import { Composer } from "./Composer";
+import { deleteLeadAction } from "@/app/actions/v2";
 
 const SENDER_TONE: Record<"lead" | "bot" | "eli", string> = {
   lead: "text-sky-300",
@@ -69,6 +72,19 @@ export function ConversationsLayout({
     if (sid) sp.set("lead", sid);
     else sp.delete("lead");
     router.replace(`/dashboard/v3/conversations?${sp.toString()}`);
+  };
+
+  const handleDelete = async (sid: string, label: string) => {
+    if (!confirm(`למחוק את הליד "${label}"? פעולה לא הפיכה.`)) return;
+    const r = await deleteLeadAction(sid);
+    if (!r.ok) {
+      alert(`שגיאה: ${r.error ?? "מחיקה נכשלה"}`);
+      return;
+    }
+    if (selected?.sid === sid) {
+      setLead(null);
+    }
+    router.refresh();
   };
 
   // Mobile: when a lead is selected, hide the list; show only the chat.
@@ -137,6 +153,9 @@ export function ConversationsLayout({
                 row={r}
                 active={selected?.sid === r.sid}
                 onClick={() => setLead(r.sid)}
+                onDelete={() =>
+                  handleDelete(r.sid, r.name || r.phone || r.sid)
+                }
               />
             ))}
             {filtered.length === 0 && (
@@ -261,17 +280,29 @@ function ConversationListItem({
   row,
   active,
   onClick,
+  onDelete,
 }: {
   row: ConversationRow;
   active: boolean;
   onClick: () => void;
+  onDelete: () => void;
 }) {
   const tone =
     STAGE_TONE[(row.stage ?? "UNCLASSIFIED").toUpperCase()] ??
     STAGE_TONE.UNCLASSIFIED;
   const SenderIcon = SENDER_ICON[row.lastSender];
+  const [deleting, startDelete] = useTransition();
+
+  const handleDeleteClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
+    startDelete(async () => {
+      await onDelete();
+    });
+  };
+
   return (
-    <li>
+    <li className="group relative">
       <button
         type="button"
         onClick={onClick}
@@ -313,6 +344,25 @@ function ConversationListItem({
             {row.lastText || "—"}
           </span>
         </div>
+      </button>
+      <button
+        type="button"
+        onClick={handleDeleteClick}
+        disabled={deleting}
+        title="מחק ליד"
+        className={cn(
+          "absolute top-2 left-2 size-7 rounded-md grid place-items-center",
+          "bg-card/80 backdrop-blur-sm border border-border",
+          "text-muted-foreground hover:text-destructive hover:bg-destructive/10",
+          "opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity",
+          "disabled:opacity-60"
+        )}
+      >
+        {deleting ? (
+          <Loader2 className="size-3.5 animate-spin" />
+        ) : (
+          <Trash2 className="size-3.5" />
+        )}
       </button>
     </li>
   );

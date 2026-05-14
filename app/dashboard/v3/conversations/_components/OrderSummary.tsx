@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { cn } from "@/lib/cn";
 import {
   Banknote,
@@ -9,9 +10,11 @@ import {
   Check,
   X,
   ChevronDown,
+  Trash2,
+  Loader2,
 } from "lucide-react";
 import { STAGE_LABEL, STAGE_TONE } from "../../_components/stage-meta";
-import { updateLeadContactAction } from "@/app/actions/v2";
+import { deleteLeadAction, updateLeadContactAction } from "@/app/actions/v2";
 import { NotesPanel } from "../../_components/NotesPanel";
 import { FactoryQuotePanel } from "../../_components/factory/FactoryQuotePanel";
 
@@ -147,12 +150,30 @@ function ContactHeader({
   phone: string | null;
   children: React.ReactNode;
 }) {
+  const router = useRouter();
   const editable = !!sid;
   const [editing, setEditing] = useState(false);
   const [nameDraft, setNameDraft] = useState(name ?? "");
   const [phoneDraft, setPhoneDraft] = useState(phone ?? "");
   const [isPending, startTransition] = useTransition();
+  const [deleting, startDelete] = useTransition();
   const [err, setErr] = useState<string | null>(null);
+
+  const handleDeleteLead = () => {
+    if (!sid) return;
+    const label = name || phone || sid;
+    if (!confirm(`למחוק את הליד "${label}"? פעולה לא הפיכה.`)) return;
+    setErr(null);
+    startDelete(async () => {
+      const r = await deleteLeadAction(sid);
+      if (r.ok) {
+        router.push("/dashboard/v3/conversations");
+        router.refresh();
+      } else {
+        setErr(r.error ?? "מחיקה נכשלה");
+      }
+    });
+  };
 
   const save = () => {
     if (!sid) return;
@@ -242,16 +263,34 @@ function ContactHeader({
           </div>
         </div>
         {editable && (
-          <button
-            type="button"
-            onClick={() => setEditing(true)}
-            className="size-7 rounded-md grid place-items-center text-muted-foreground hover:text-foreground hover:bg-secondary shrink-0"
-            title="ערוך פרטי קשר"
-          >
-            <Pencil className="size-3.5" />
-          </button>
+          <div className="flex items-center gap-1 shrink-0">
+            <button
+              type="button"
+              onClick={() => setEditing(true)}
+              className="size-7 rounded-md grid place-items-center text-muted-foreground hover:text-foreground hover:bg-secondary"
+              title="ערוך פרטי קשר"
+            >
+              <Pencil className="size-3.5" />
+            </button>
+            <button
+              type="button"
+              onClick={handleDeleteLead}
+              disabled={deleting}
+              className="size-7 rounded-md grid place-items-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 disabled:opacity-60"
+              title="מחק ליד"
+            >
+              {deleting ? (
+                <Loader2 className="size-3.5 animate-spin" />
+              ) : (
+                <Trash2 className="size-3.5" />
+              )}
+            </button>
+          </div>
         )}
       </div>
+      {err && (
+        <div className="text-[11px] text-destructive mt-1">{err}</div>
+      )}
       {children}
     </div>
   );

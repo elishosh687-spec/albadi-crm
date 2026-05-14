@@ -5,18 +5,15 @@
  *
  * Inserts a `factory_quote_requests` row (status=pending), then appends the
  * row to the Feishu sheet (A..I). Persists the returned `feishuRowIndex` so
- * the refresh endpoint can read the matching row later.
+ * the refresh endpoint can read the matching row later. Clears the lead's
+ * factorySpecDraft on success (this is the "send-from-draft" path).
  *
  * Auth: dashboard cookie (enforced by middleware.ts).
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { db } from "@/lib/db";
-import { factoryQuoteRequests, leads } from "@/drizzle/schema";
-import { eq, sql } from "drizzle-orm";
 import { z } from "zod";
-import { appendRow, buildFactoryRow } from "@/lib/feishu/sheets";
-import type { FactoryProductSpec } from "@/lib/factory/types";
+import { createFactoryRequest } from "@/lib/factory/create-request";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
@@ -41,18 +38,6 @@ const BodySchema = z.object({
   productSpec: ProductSpecSchema,
 });
 
-function sizeLabel(spec: FactoryProductSpec): string {
-  const parts: string[] = [];
-  if (spec.heightCm) parts.push(`H${spec.heightCm}`);
-  if (spec.depthCm) parts.push(`D${spec.depthCm}`);
-  if (spec.widthCm) parts.push(`W${spec.widthCm}`);
-  return parts.join("*");
-}
-
-function shortId(): string {
-  return Math.random().toString(36).slice(2, 10);
-}
-
 export async function POST(req: NextRequest) {
   let body: z.infer<typeof BodySchema>;
   try {
@@ -64,77 +49,24 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const id = `fq_${Date.now()}_${shortId()}`;
-  const quotationNo = body.quotationNo ?? id.slice(-8).toUpperCase();
-  const spec = body.productSpec as FactoryProductSpec;
-
-  // Resolve customer name: prefer body, fallback to lead.name
-  let customerName = body.customerName ?? "";
-  if (!customerName) {
-    const leadRow = await db
-      .select({ name: leads.name })
-      .from(leads)
-      .where(eq(leads.manychatSubId, body.manychatSubId))
-      .limit(1);
-    customerName = leadRow[0]?.name ?? "";
-  }
-
-  // 1. Insert the DB record first so we have an id to reference even if the
-  // Feishu call fails (we can retry append later).
-  await db.insert(factoryQuoteRequests).values({
-    id,
-    manychatSubId: body.manychatSubId,
-    quotationNo,
-    productSpec: spec,
-    factoryStatus: "pending",
-  });
-
-  // 2. Append to Feishu (A..I).
-  let feishuRowIndex = "";
   try {
-    feishuRowIndex = await appendRow(
-      buildFactoryRow({
-        customer: customerName,
-        quotationNo,
-        pic: spec.picUrl ?? "",
-        description: spec.description,
-        material: spec.material,
-        size: sizeLabel(spec),
-        printing: spec.printing,
-        finishing: spec.finishing,
-        quantity: spec.quantity,
-      })
-    );
-
-    await db
-      .update(factoryQuoteRequests)
-      .set({ feishuRowIndex, updatedAt: new Date() })
-      .where(eq(factoryQuoteRequests.id, id));
-
-    // Clear the lead's draft now that the spec was successfully sent.
-    await db
-      .update(leads)
-      .set({ factorySpecDraft: null, updatedAt: new Date() })
-      .where(sql`trim(${leads.manychatSubId}) = ${body.manychatSubId}`);
+    const result = await createFactoryRequest({
+      manychatSubId: body.manychatSubId,
+      productSpec: body.productSpec,
+      customerName: body.customerName,
+      quotationNo: body.quotationNo,
+      clearDraft: true,
+    });
+    return NextResponse.json({ ok: true, ...result });
   } catch (err) {
-    // DB row remains (status=pending, no rowIndex). The UI can show a retry
-    // affordance and we don't lose the customer's spec.
-    console.error("[factory/quote-request] feishu append failed", err);
+    console.error("[factory/quote-request] failed", err);
     return NextResponse.json(
       {
         ok: false,
-        id,
         error: "feishu_append_failed",
         detail: err instanceof Error ? err.message : String(err),
       },
       { status: 502 }
     );
   }
-
-  return NextResponse.json({
-    ok: true,
-    id,
-    quotationNo,
-    feishuRowIndex,
-  });
 }

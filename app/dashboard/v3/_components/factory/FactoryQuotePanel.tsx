@@ -29,6 +29,12 @@ import {
   Package,
   Palette,
   Truck,
+  TrendingUp,
+  Boxes,
+  CheckCircle2,
+  Eye,
+  Trash2,
+  Repeat,
 } from "lucide-react";
 import { cn } from "@/lib/cn";
 import type {
@@ -40,10 +46,29 @@ import type {
 import {
   decodeQStateToSpec,
   decodeShipping,
+  humanizeFinishing,
+  humanizeMaterial,
+  humanizePrinting,
   PRODUCT_LABEL,
 } from "@/lib/factory/qstate-decode";
 import { SendToFactoryForm } from "./SendToFactoryForm";
 import { FinalizeModal } from "./FinalizeModal";
+import { HistoryDetailModal } from "./HistoryDetailModal";
+
+// Hebrew "W×H×D ס״מ" for the order-summary preview. The factory-facing string
+// stays English ("H20*D8*W25"); this is only for the dashboard operator view.
+function hebrewSize(spec: {
+  widthCm?: number;
+  heightCm?: number;
+  depthCm?: number;
+}): string {
+  const parts: string[] = [];
+  if (spec.widthCm) parts.push(`רוחב ${spec.widthCm}`);
+  if (spec.heightCm) parts.push(`גובה ${spec.heightCm}`);
+  if (spec.depthCm) parts.push(`עומק ${spec.depthCm}`);
+  if (parts.length === 0) return "";
+  return `${parts.join(" × ")} ס״מ`;
+}
 
 export interface FactoryQuoteRow {
   id: string;
@@ -95,6 +120,10 @@ export function FactoryQuotePanel({
   const [rows, setRows] = useState<FactoryQuoteRow[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [formOpen, setFormOpen] = useState(false);
+  // Separate toggle for the "create an additional quote" form that's available
+  // even when an active quote exists (e.g. customer wants a second offer
+  // before the factory returns the first).
+  const [extraFormOpen, setExtraFormOpen] = useState(false);
   const [finalizing, setFinalizing] = useState<FactoryQuoteRow | null>(null);
   const [whatsappLoading, setWhatsappLoading] = useState<string | null>(null);
 
@@ -317,24 +346,23 @@ export function FactoryQuotePanel({
         />
       )}
 
-      {/* History of older rows */}
-      {rows.length > 1 && (
-        <details className="mt-3 text-xs">
-          <summary className="cursor-pointer text-muted-foreground hover:text-foreground">
-            היסטוריה ({rows.length - 1})
-          </summary>
-          <ul className="mt-2 space-y-1">
-            {rows.slice(1).map((r) => (
-              <li key={r.id} className="text-[11px] flex justify-between gap-2">
-                <span>
-                  {new Date(r.createdAt).toLocaleDateString("he-IL")} ·{" "}
-                  {r.quotationNo ?? r.id.slice(-6)}
-                </span>
-                {statusBadge(r.factoryStatus)}
-              </li>
-            ))}
-          </ul>
-        </details>
+      {active && (
+        <ExtraQuoteSection
+          leadId={leadId}
+          leadName={leadName}
+          qState={qState}
+          activeRow={active}
+          open={extraFormOpen}
+          onToggle={() => setExtraFormOpen((v) => !v)}
+          onSent={() => {
+            setExtraFormOpen(false);
+            load();
+          }}
+        />
+      )}
+
+      {rows.length > 0 && (
+        <HistoryList rows={rows} onChange={load} />
       )}
 
       {finalizing && (
@@ -476,13 +504,10 @@ function SpecPreview({
   hasDraft: boolean;
   onClearDraft: () => void;
 }) {
-  const sizeStr = [
-    spec.widthCm ? `W${spec.widthCm}` : null,
-    spec.depthCm ? `D${spec.depthCm}` : null,
-    spec.heightCm ? `H${spec.heightCm}` : null,
-  ]
-    .filter(Boolean)
-    .join("×");
+  const sizeHe = hebrewSize(spec);
+  const materialHe = spec.material ? humanizeMaterial(spec.material) : "";
+  const printingHe = spec.printing ? humanizePrinting(spec.printing) : "";
+  const finishingHe = spec.finishing ? humanizeFinishing(spec.finishing) : "";
   return (
     <div className="rounded-lg border border-border bg-background/40 p-3 space-y-1.5">
       <div className="flex items-center justify-between gap-2 -mt-1">
@@ -508,17 +533,20 @@ function SpecPreview({
       </div>
       <dl className="text-xs">
         <SpecRow icon={<ShoppingBag className="size-3" />} label="מוצר" value={spec.description || "—"} />
-        {sizeStr && (
-          <SpecRow icon={<Package className="size-3" />} label="מידות" value={`${sizeStr} cm`} />
+        {sizeHe && (
+          <SpecRow icon={<Package className="size-3" />} label="מידות" value={sizeHe} />
         )}
         {spec.quantity > 0 && (
           <SpecRow icon={<Hash className="size-3" />} label="כמות" value={spec.quantity.toLocaleString("he-IL") + " יח׳"} />
         )}
-        {spec.printing && (
-          <SpecRow icon={<Palette className="size-3" />} label="הדפסה" value={spec.printing} />
+        {materialHe && (
+          <SpecRow icon={<Package className="size-3" />} label="חומר" value={materialHe} />
         )}
-        {spec.finishing && (
-          <SpecRow icon={<Package className="size-3" />} label="גימור" value={spec.finishing} />
+        {printingHe && (
+          <SpecRow icon={<Palette className="size-3" />} label="הדפסה" value={printingHe} />
+        )}
+        {finishingHe && (
+          <SpecRow icon={<Package className="size-3" />} label="גימור" value={finishingHe} />
         )}
         {spec.shippingCode && (
           <SpecRow icon={<Truck className="size-3" />} label="משלוח" value={decodeShipping(spec.shippingCode)} />
@@ -641,14 +669,15 @@ function FinalizedState({
 }) {
   const p = row.finalPricing!;
   const spec = row.productSpec;
-  const resp = row.factoryResponse;
-  const sizeStr = [
-    spec.widthCm ? `W${spec.widthCm}` : null,
-    spec.depthCm ? `D${spec.depthCm}` : null,
-    spec.heightCm ? `H${spec.heightCm}` : null,
-  ]
-    .filter(Boolean)
-    .join("×");
+  const sizeHe = hebrewSize(spec);
+  const productHe = spec.description
+    ? sizeHe
+      ? `${spec.description} · ${sizeHe}`
+      : spec.description
+    : sizeHe || "—";
+  const materialHe = spec.material ? humanizeMaterial(spec.material) : "";
+  const printingHe = spec.printing ? humanizePrinting(spec.printing) : "";
+  const finishingHe = spec.finishing ? humanizeFinishing(spec.finishing) : "";
 
   return (
     <div className="space-y-3 text-sm">
@@ -664,29 +693,55 @@ function FinalizedState({
         </div>
       </div>
 
-      <div className="rounded-lg border border-border p-3 space-y-1.5">
-        <SummaryLine label="מוצר" value={`${spec.description} · ${sizeStr} cm · ${spec.material}`} />
-        <SummaryLine label="הדפסה / גימור" value={`${spec.printing} · ${spec.finishing}`} />
-        <SummaryLine label="כמות" value={`${spec.quantity.toLocaleString("he-IL")} יח׳`} />
-        {resp?.supplier && <SummaryLine label="ספק" value={resp.supplier} />}
-        <SummaryLine
-          label="רווח"
-          value={`${formatIls(p.unitProfit)}/יח׳ · סה״כ ${formatIls(p.totalProfit)} · ${p.profitMarginPct}%`}
-          highlight
-        />
-        <SummaryLine
-          label="לוגיסטיקה"
-          value={`${p.totalCartons} קרטונים · ${p.totalWeightKg} ק״ג · ${p.totalCbm} CBM`}
-        />
-        {p.shippingOptionName && (
-          <SummaryLine label="שילוח" value={p.shippingOptionName} />
-        )}
-        {row.sentToCustomerAt && (
-          <SummaryLine
-            label="נשלח ללקוח"
-            value={new Date(row.sentToCustomerAt).toLocaleString("he-IL")}
+      {/* Spec — Hebrew icon rows, mirroring the SpecPreview style. Internal
+          panel; the customer never sees it. */}
+      <div className="rounded-lg border border-border bg-background/40 p-3">
+        <dl className="text-xs">
+          <SpecRow icon={<ShoppingBag className="size-3" />} label="מוצר" value={productHe} />
+          {materialHe && (
+            <SpecRow icon={<Package className="size-3" />} label="חומר" value={materialHe} />
+          )}
+          {printingHe && (
+            <SpecRow icon={<Palette className="size-3" />} label="הדפסה" value={printingHe} />
+          )}
+          {finishingHe && (
+            <SpecRow icon={<Package className="size-3" />} label="גימור" value={finishingHe} />
+          )}
+          <SpecRow
+            icon={<Hash className="size-3" />}
+            label="כמות"
+            value={`${spec.quantity.toLocaleString("he-IL")} יח׳`}
           />
-        )}
+          {p.shippingOptionName && (
+            <SpecRow icon={<Truck className="size-3" />} label="שילוח" value={p.shippingOptionName} />
+          )}
+        </dl>
+      </div>
+
+      {/* Internal-only: profit + logistics + sent-at. Lighter background. */}
+      <div className="rounded-lg border border-dashed border-border bg-muted/20 p-3">
+        <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1.5">
+          נתונים פנימיים (לא נראה ללקוח)
+        </div>
+        <dl className="text-xs">
+          <SpecRow
+            icon={<TrendingUp className="size-3 text-success" />}
+            label="רווח"
+            value={`${formatIls(p.unitProfit)}/יח׳ · סה״כ ${formatIls(p.totalProfit)} · ${p.profitMarginPct}%`}
+          />
+          <SpecRow
+            icon={<Boxes className="size-3" />}
+            label="לוגיסטיקה"
+            value={`${p.totalCartons} קרטונים · ${p.totalWeightKg} ק״ג · ${p.totalCbm} CBM`}
+          />
+          {row.sentToCustomerAt && (
+            <SpecRow
+              icon={<CheckCircle2 className="size-3 text-success" />}
+              label="נשלח ללקוח"
+              value={new Date(row.sentToCustomerAt).toLocaleString("he-IL")}
+            />
+          )}
+        </dl>
       </div>
 
       <div className="grid grid-cols-2 gap-2">
@@ -735,21 +790,174 @@ function Row({ label, value }: { label: string; value: string }) {
   );
 }
 
-function SummaryLine({
-  label,
-  value,
-  highlight,
+// Renders a "create an additional quote" button + collapsible form, visible
+// only when an active quote already exists. Pre-fills from the active row's
+// productSpec so the operator only has to tweak what differs (e.g. quantity
+// or size for a second variant offer to the same customer).
+function ExtraQuoteSection({
+  leadId,
+  leadName,
+  qState,
+  activeRow,
+  open,
+  onToggle,
+  onSent,
 }: {
-  label: string;
-  value: string;
-  highlight?: boolean;
+  leadId: string;
+  leadName: string | null;
+  qState: Record<string, unknown> | null;
+  activeRow: FactoryQuoteRow;
+  open: boolean;
+  onToggle: () => void;
+  onSent: () => void;
 }) {
+  // Cast the active row's spec into the "draft" shape that SendToFactoryForm
+  // expects. Same field names, so this is a no-op at runtime.
+  const draftFromActive = activeRow.productSpec as unknown as Record<
+    string,
+    unknown
+  >;
   return (
-    <div className="flex justify-between gap-2 text-xs">
-      <span className="text-muted-foreground shrink-0">{label}:</span>
-      <span className={cn("text-right", highlight && "text-success font-medium")}>
-        {value}
-      </span>
+    <div className="mt-3 space-y-2">
+      <button
+        type="button"
+        onClick={onToggle}
+        className="w-full inline-flex items-center justify-between gap-1.5 rounded-md border border-dashed border-border bg-background/30 px-3 py-2 text-xs text-muted-foreground hover:bg-secondary"
+      >
+        <span className="inline-flex items-center gap-1.5">
+          {open ? <ChevronUp className="size-3.5" /> : <ChevronDown className="size-3.5" />}
+          {open ? "סגור טופס" : "צור הצעה נוספת (הצעה מקבילה)"}
+        </span>
+      </button>
+      {open && (
+        <div className="rounded-md border border-border bg-background/40 p-3">
+          <p className="text-[11px] text-muted-foreground mb-2 leading-relaxed">
+            ההצעה הקיימת ({activeRow.quotationNo ?? activeRow.id.slice(-6)}) נשארת ב-Feishu.
+            השליחה כאן יוצרת שורה חדשה ב-Feishu עם מספר הצעה חדש.
+          </p>
+          <SendToFactoryForm
+            leadId={leadId}
+            leadName={leadName}
+            qState={qState}
+            draft={draftFromActive}
+            onSent={onSent}
+            onCancel={onToggle}
+          />
+        </div>
+      )}
     </div>
   );
 }
+
+function HistoryList({
+  rows,
+  onChange,
+}: {
+  rows: FactoryQuoteRow[];
+  onChange: () => void | Promise<void>;
+}) {
+  const [opened, setOpened] = useState<FactoryQuoteRow | null>(null);
+  const [busyId, setBusyId] = useState<string | null>(null);
+
+  const handleDelete = async (row: FactoryQuoteRow) => {
+    if (!confirm(`למחוק את ההצעה ${row.quotationNo ?? row.id.slice(-6)}? Feishu לא יושפע.`)) {
+      return;
+    }
+    setBusyId(row.id);
+    try {
+      const res = await fetch(`/api/factory/${row.id}`, { method: "DELETE" });
+      const data = await res.json();
+      if (!data?.ok) {
+        alert(`שגיאה: ${data?.error ?? "מחיקה נכשלה"}`);
+        return;
+      }
+      await onChange();
+    } catch (err) {
+      alert(`כשל: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const handleResend = async (row: FactoryQuoteRow) => {
+    if (!confirm(`ליצור שורה חדשה ב-Feishu מההצעה ${row.quotationNo ?? row.id.slice(-6)}?`)) {
+      return;
+    }
+    setBusyId(row.id);
+    try {
+      const res = await fetch(`/api/factory/${row.id}/resend`, { method: "POST" });
+      const data = await res.json();
+      if (!data?.ok) {
+        alert(`שגיאה: ${data?.error ?? data?.detail ?? "שליחה נכשלה"}`);
+        return;
+      }
+      await onChange();
+    } catch (err) {
+      alert(`כשל: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  return (
+    <details className="mt-3 text-xs" open>
+      <summary className="cursor-pointer text-muted-foreground hover:text-foreground select-none">
+        היסטוריית הצעות ({rows.length})
+      </summary>
+      <ul className="mt-2 space-y-1">
+        {rows.map((r) => {
+          const isBusy = busyId === r.id;
+          return (
+            <li
+              key={r.id}
+              className="flex items-center justify-between gap-2 rounded-md border border-border/60 bg-background/40 px-2 py-1.5"
+            >
+              <div className="flex items-center gap-2 min-w-0 flex-1">
+                <span className="text-[11px] text-muted-foreground tabular-nums shrink-0">
+                  {new Date(r.createdAt).toLocaleDateString("he-IL")}
+                </span>
+                <span className="text-[11px] font-mono truncate">
+                  {r.quotationNo ?? r.id.slice(-6)}
+                </span>
+                {statusBadge(r.factoryStatus)}
+              </div>
+              <div className="flex items-center gap-0.5 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setOpened(r)}
+                  disabled={isBusy}
+                  title="פתח מפרט מלא"
+                  className="size-6 rounded grid place-items-center text-muted-foreground hover:text-foreground hover:bg-secondary disabled:opacity-60"
+                >
+                  <Eye className="size-3" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleResend(r)}
+                  disabled={isBusy}
+                  title="שלח שוב ל-Feishu (שורה חדשה)"
+                  className="size-6 rounded grid place-items-center text-muted-foreground hover:text-primary hover:bg-primary/10 disabled:opacity-60"
+                >
+                  {isBusy ? <Loader2 className="size-3 animate-spin" /> : <Repeat className="size-3" />}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleDelete(r)}
+                  disabled={isBusy}
+                  title="מחק הצעה"
+                  className="size-6 rounded grid place-items-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 disabled:opacity-60"
+                >
+                  <Trash2 className="size-3" />
+                </button>
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+      {opened && (
+        <HistoryDetailModal row={opened} onClose={() => setOpened(null)} />
+      )}
+    </details>
+  );
+}
+

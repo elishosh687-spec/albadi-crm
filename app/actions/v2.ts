@@ -1,7 +1,14 @@
 "use server";
 
 import { db } from "@/lib/db";
-import { botConfig, leads, messages as messagesTable } from "@/drizzle/schema";
+import {
+  botConfig,
+  botDrafts,
+  factoryQuoteRequests,
+  leadTags,
+  leads,
+  messages as messagesTable,
+} from "@/drizzle/schema";
 import { desc, eq, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import {
@@ -186,6 +193,128 @@ export async function appendLeadNote(
     return {
       ok: false,
       error: e instanceof Error ? e.message : "save failed",
+    };
+  }
+}
+
+// Entries always begin with "[<stamp>] " at column 0. Split on the \n\n
+// that precedes a "[", so a \n\n inside an entry body doesn't misclassify.
+function parseNoteEntries(blob: string): string[] {
+  if (!blob) return [];
+  return blob.split(/\n\n(?=\[)/g).filter((s) => s.length > 0);
+}
+
+// Pull the "[stamp] " prefix off an entry so we can preserve it when the
+// user edits the body. Returns { stamp, body } where stamp includes the
+// trailing space, or null if the entry doesn't match the expected shape
+// (legacy or hand-edited rows).
+function splitEntry(entry: string): { stamp: string; body: string } {
+  const m = entry.match(/^(\[[^\]]+\]\s*)([\s\S]*)$/);
+  if (!m) return { stamp: "", body: entry };
+  return { stamp: m[1], body: m[2] };
+}
+
+export async function updateLeadNoteAt(
+  manychatSubId: string,
+  index: number,
+  newText: string
+): Promise<{ ok: true; notes: string } | { ok: false; error: string }> {
+  try {
+    const cleanSid = manychatSubId.trim();
+    if (!cleanSid) return { ok: false, error: "missing subscriberId" };
+    const cleanText = newText.trim();
+    if (!cleanText) return { ok: false, error: "missing text" };
+
+    const [row] = await db
+      .select({ notes: leads.notes })
+      .from(leads)
+      .where(sql`trim(${leads.manychatSubId}) = ${cleanSid}`)
+      .limit(1);
+    if (!row) return { ok: false, error: "lead not found" };
+
+    const entries = parseNoteEntries(row.notes ?? "");
+    if (index < 0 || index >= entries.length) {
+      return { ok: false, error: "index out of range" };
+    }
+    const { stamp } = splitEntry(entries[index]);
+    entries[index] = `${stamp}${cleanText}`;
+    const next = entries.join("\n\n");
+
+    await setCustomFields(cleanSid, [{ name: "notes", value: next }]);
+    safeRevalidate("/dashboard/v3", "layout");
+    return { ok: true, notes: next };
+  } catch (e) {
+    return {
+      ok: false,
+      error: e instanceof Error ? e.message : "save failed",
+    };
+  }
+}
+
+export async function deleteLeadNoteAt(
+  manychatSubId: string,
+  index: number
+): Promise<{ ok: true; notes: string } | { ok: false; error: string }> {
+  try {
+    const cleanSid = manychatSubId.trim();
+    if (!cleanSid) return { ok: false, error: "missing subscriberId" };
+
+    const [row] = await db
+      .select({ notes: leads.notes })
+      .from(leads)
+      .where(sql`trim(${leads.manychatSubId}) = ${cleanSid}`)
+      .limit(1);
+    if (!row) return { ok: false, error: "lead not found" };
+
+    const entries = parseNoteEntries(row.notes ?? "");
+    if (index < 0 || index >= entries.length) {
+      return { ok: false, error: "index out of range" };
+    }
+    entries.splice(index, 1);
+    const next = entries.join("\n\n");
+
+    await setCustomFields(cleanSid, [{ name: "notes", value: next }]);
+    safeRevalidate("/dashboard/v3", "layout");
+    return { ok: true, notes: next };
+  } catch (e) {
+    return {
+      ok: false,
+      error: e instanceof Error ? e.message : "save failed",
+    };
+  }
+}
+
+// Hard-delete a lead and its dependent rows. Order matters because no FK
+// CASCADE is declared. bridge_events is intentionally preserved as an
+// audit log (it's keyed by evt_id, not lead).
+export async function deleteLeadAction(
+  manychatSubId: string
+): Promise<SimpleResult> {
+  try {
+    const cleanSid = manychatSubId.trim();
+    if (!cleanSid) return { ok: false, error: "missing subscriberId" };
+
+    await db.delete(leadTags).where(eq(leadTags.manychatSubId, cleanSid));
+    await db.delete(messagesTable).where(eq(messagesTable.manychatSubId, cleanSid));
+    await db.delete(botDrafts).where(eq(botDrafts.manychatSubId, cleanSid));
+    await db
+      .delete(factoryQuoteRequests)
+      .where(eq(factoryQuoteRequests.manychatSubId, cleanSid));
+    const deleted = await db
+      .delete(leads)
+      .where(eq(leads.manychatSubId, cleanSid))
+      .returning({ sid: leads.manychatSubId });
+
+    if (deleted.length === 0) {
+      return { ok: false, error: "lead not found" };
+    }
+
+    safeRevalidate("/dashboard/v3", "layout");
+    return { ok: true, message: "הליד נמחק" };
+  } catch (e) {
+    return {
+      ok: false,
+      error: e instanceof Error ? e.message : "delete failed",
     };
   }
 }

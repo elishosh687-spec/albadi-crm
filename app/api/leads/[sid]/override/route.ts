@@ -51,16 +51,16 @@ interface OverrideBody {
 
 export async function POST(
   req: NextRequest,
-  ctx: { params: Promise<{ id: string }> }
+  ctx: { params: Promise<{ sid: string }> }
 ) {
   if (!authorized(req)) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
-  const { id } = await ctx.params;
-  const sid = decodeURIComponent(id).trim();
+  const { sid: rawSid } = await ctx.params;
+  const sid = decodeURIComponent(rawSid).trim();
   if (!sid) {
-    return NextResponse.json({ error: "missing id" }, { status: 400 });
+    return NextResponse.json({ error: "missing sid" }, { status: 400 });
   }
 
   let body: OverrideBody = {};

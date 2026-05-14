@@ -13,9 +13,34 @@
  * in app/api/factory/quote-request/route.ts.
  */
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Loader2, Send, ClipboardCheck } from "lucide-react";
 import { PRODUCT_LABEL, PRODUCT_DIMS, QUANTITY_VALUE } from "@/lib/factory/qstate-decode";
+
+/**
+ * Build a description string from current W/H/D and (optional) qState product
+ * code. If the dimensions match the catalog product (within rounding), reuse
+ * the canonical label so we don't churn the description on every edit.
+ * Otherwise emit a generic "<dims> ס״מ — מוצר מותאם" string.
+ */
+function regenDescription(
+  w: number,
+  h: number,
+  d: number,
+  productCode: string
+): string {
+  if (productCode && productCode !== "custom" && PRODUCT_DIMS[productCode]) {
+    const cat = PRODUCT_DIMS[productCode];
+    const matches =
+      Math.abs(cat.widthCm - w) < 0.5 &&
+      Math.abs(cat.heightCm - h) < 0.5 &&
+      Math.abs(cat.depthCm - d) < 0.5;
+    if (matches && PRODUCT_LABEL[productCode]) return PRODUCT_LABEL[productCode];
+  }
+  const dimStr = [w, h, d].filter((n) => n > 0).join("×");
+  if (!dimStr) return "מוצר מותאם";
+  return `${dimStr} ס״מ — מוצר מותאם`;
+}
 
 interface ParsedDims {
   widthCm: number;
@@ -166,6 +191,24 @@ export function SendToFactoryForm({
   const [savingDraft, setSavingDraft] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Once the user types into the description field manually, stop auto-regen
+  // from W/H/D. We keep this in a ref so the auto-regen effect doesn't have to
+  // re-run when the flag flips.
+  const descriptionTouchedRef = useRef(false);
+  const productCode = String(qStateGet(qState, "product") ?? "");
+
+  // Auto-regenerate description when dimensions change, unless the user
+  // already overrode it. Runs after the initial state is established.
+  useEffect(() => {
+    if (descriptionTouchedRef.current) return;
+    const w = parseFloat(widthCm) || 0;
+    const h = parseFloat(heightCm) || 0;
+    const d = parseFloat(depthCm) || 0;
+    if (w === 0 && h === 0 && d === 0) return;
+    const next = regenDescription(w, h, d, productCode);
+    setDescription((prev) => (prev === next ? prev : next));
+  }, [widthCm, heightCm, depthCm, productCode]);
+
   // Live preview: W/H/D → "H20*D8*W25"
   const sizePreview = useMemo(
     () =>
@@ -294,7 +337,10 @@ export function SendToFactoryForm({
       <Field
         label="הערות על ההזמנה (Description)"
         value={description}
-        onChange={setDescription}
+        onChange={(v) => {
+          descriptionTouchedRef.current = true;
+          setDescription(v);
+        }}
         placeholder="למשל: שקיות מותאמות לאירוע X"
       />
       <Field

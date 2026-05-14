@@ -76,6 +76,37 @@ export function decodeColors(v: unknown): string {
   return "—";
 }
 
+// English-spec → Hebrew display. The English strings are produced in
+// app/api/factory/quote-request/route.ts and SendToFactoryForm.tsx so the
+// Chinese factory can read them; for the customer PDF and the internal
+// finalized panel we present them in Hebrew.
+export function humanizePrinting(en: string): string {
+  // "1 color(s)" / "2 color" / "3+ color(s)" / "3+ colors"
+  const m = en.match(/^(\d+\+?)\s*colors?/i);
+  if (!m) return en;
+  if (m[1] === "1") return "צבע אחד";
+  return `${m[1]} צבעים`;
+}
+
+export function humanizeFinishing(en: string): string {
+  const handles = /with handles/i.test(en);
+  const noHandles = /no handles|without handles/i.test(en);
+  const notLam = /not laminated/i.test(en);
+  const laminated = /laminated/i.test(en) && !notLam;
+  const parts: string[] = [];
+  if (handles) parts.push("עם ידיות");
+  else if (noHandles) parts.push("ללא ידיות");
+  if (laminated) parts.push("עם למינציה");
+  else if (notLam) parts.push("ללא למינציה");
+  return parts.length ? parts.join(", ") : en;
+}
+
+export function humanizeMaterial(en: string): string {
+  const m = en.match(/^(\d+)\s*g.*non.?woven/i);
+  if (m) return `אריג לא ארוג ${m[1]} גרם`;
+  return en;
+}
+
 export function formatHebrewDate(iso: unknown): string {
   if (!iso) return "—";
   const d = new Date(String(iso));

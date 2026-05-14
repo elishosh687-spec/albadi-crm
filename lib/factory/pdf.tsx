@@ -22,24 +22,27 @@ import type {
   FactoryProductSpec,
   FactoryPricingResult,
 } from "./types";
+import {
+  humanizePrinting,
+  humanizeFinishing,
+  humanizeMaterial,
+} from "./qstate-decode";
 
 // Register Heebo for Hebrew rendering. TTFs are bundled under public/fonts/
 // and loaded from disk at module init — no external network dependency, so
 // Vercel serverless cold starts can't fail on font fetch.
 const FONT_DIR = join(process.cwd(), "public", "fonts");
-// @react-pdf/renderer accepts Node Buffer at runtime but its TS type is too
-// narrow (string only). Cast through unknown.
+// @react-pdf/font calls dataUrl.substring() on `src`, so Buffer fails.
+// Convert TTFs to base64 data URLs at module init.
+function ttfDataUrl(filename: string): string {
+  const buf = readFileSync(join(FONT_DIR, filename));
+  return `data:font/ttf;base64,${buf.toString("base64")}`;
+}
 Font.register({
   family: "Heebo",
   fonts: [
-    {
-      src: readFileSync(join(FONT_DIR, "Heebo-Regular.ttf")) as unknown as string,
-      fontWeight: 400,
-    },
-    {
-      src: readFileSync(join(FONT_DIR, "Heebo-Bold.ttf")) as unknown as string,
-      fontWeight: 700,
-    },
+    { src: ttfDataUrl("Heebo-Regular.ttf"), fontWeight: 400 },
+    { src: ttfDataUrl("Heebo-Bold.ttf"), fontWeight: 700 },
   ],
 });
 
@@ -102,8 +105,26 @@ const styles = StyleSheet.create({
     color: "#555",
     marginTop: 4,
   },
+  tableTitle: {
+    fontSize: 13,
+    fontWeight: 700,
+    color: PRIMARY_DARK,
+    textAlign: "right",
+    marginBottom: 6,
+  },
+  unitPriceNote: {
+    fontSize: 12,
+    fontWeight: 700,
+    color: FG,
+    textAlign: "right",
+    marginBottom: 12,
+  },
   table: {
-    marginBottom: 16,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: BORDER,
+    borderRadius: 6,
+    overflow: "hidden",
   },
   thRow: {
     flexDirection: "row-reverse",
@@ -130,7 +151,7 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   cellDesc: {
-    flex: 2.2,
+    flex: 2.6,
     fontSize: 11,
     paddingHorizontal: 6,
     textAlign: "right",
@@ -153,7 +174,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
   },
   totalLabel: {
-    flex: 2.2,
+    flex: 2.6,
     fontSize: 12,
     fontWeight: 700,
     paddingHorizontal: 6,
@@ -227,8 +248,16 @@ function formatILS(n: number): string {
 }
 
 function sizeLabel(spec: FactoryProductSpec): string {
-  const parts = [`W${spec.widthCm}`, spec.depthCm > 0 ? `D${spec.depthCm}` : null, `H${spec.heightCm}`].filter(Boolean);
-  return parts.join("×") + " cm";
+  const parts = [
+    spec.widthCm ? `${spec.widthCm}` : null,
+    spec.depthCm > 0 ? `${spec.depthCm}` : null,
+    spec.heightCm ? `${spec.heightCm}` : null,
+  ].filter(Boolean);
+  return parts.join("×") + ' ס"מ';
+}
+
+function r2(n: number): number {
+  return Math.round(n * 100) / 100;
 }
 
 export interface CustomerQuotePdfProps {
@@ -241,19 +270,57 @@ export interface CustomerQuotePdfProps {
 }
 
 function CustomerQuotePDF(props: CustomerQuotePdfProps) {
-  const { customerName, spec, pricing, customerNotes, quotationNo, validityDays = 14 } = props;
+  // quotationNo is intentionally unused in the customer-facing layout —
+  // it lives in the filename only (Content-Disposition) for tracking.
+  const { customerName, spec, pricing, customerNotes } = props;
   const date = new Date().toLocaleDateString("he-IL", {
     day: "numeric",
     month: "long",
     year: "numeric",
   });
 
+  // Build the breakdown rows. FactoryPricingResult only has unitCost +
+  // unitShipping + unitProfit (no per-feature cost), so we keep 2 honest
+  // rows: bag (production+profit, all-in) and shipping (separate).
+  const printingHe = spec.printing ? humanizePrinting(spec.printing) : "";
+  const finishingHe = spec.finishing ? humanizeFinishing(spec.finishing) : "";
+  const bagDescParts: string[] = [`${sizeLabel(spec)} — שקית`];
+  if (finishingHe) bagDescParts.push(finishingHe);
+  if (printingHe) bagDescParts.push(printingHe);
+  const bagDesc = bagDescParts.join(" · ");
+
+  const hasShippingRow =
+    !!pricing.shippingOptionName && pricing.unitShipping > 0;
+  const bagUnit = r2(pricing.unitCost + pricing.unitProfit);
+  const rows: {
+    desc: string;
+    unit: number;
+    qty: number;
+    total: number;
+  }[] = [
+    {
+      desc: bagDesc,
+      unit: bagUnit,
+      qty: pricing.quantity,
+      total: r2(bagUnit * pricing.quantity),
+    },
+  ];
+  if (hasShippingRow) {
+    rows.push({
+      desc: `שילוח · ${pricing.shippingOptionName}`,
+      unit: r2(pricing.unitShipping),
+      qty: pricing.quantity,
+      total: r2(pricing.totalShipping),
+    });
+  }
+
+  const materialHe = spec.material ? humanizeMaterial(spec.material) : "";
   const bullets = [
     `מידות: ${sizeLabel(spec)}`,
-    `כמות: ${spec.quantity.toLocaleString("he-IL")} יח'`,
-    spec.material ? `חומר: ${spec.material}` : null,
-    spec.printing ? `הדפסה: ${spec.printing}` : null,
-    spec.finishing ? `גימור: ${spec.finishing}` : null,
+    `כמות: ${spec.quantity.toLocaleString("he-IL")} יח׳`,
+    materialHe ? `חומר: ${materialHe}` : null,
+    printingHe ? `הדפסה: ${printingHe}` : null,
+    finishingHe ? `גימור: ${finishingHe}` : null,
     pricing.shippingOptionName ? `שיטת שילוח: ${pricing.shippingOptionName}` : null,
   ].filter(Boolean) as string[];
 
@@ -265,10 +332,7 @@ function CustomerQuotePDF(props: CustomerQuotePdfProps) {
           {customerName ? (
             <Text style={styles.headerCustomer}>{customerName}</Text>
           ) : null}
-          <Text style={styles.headerDate}>
-            {date}
-            {quotationNo ? `   ·   הצעה #${quotationNo}` : ""}
-          </Text>
+          <Text style={styles.headerDate}>{date}</Text>
         </View>
 
         <View style={styles.priceBox}>
@@ -279,32 +343,36 @@ function CustomerQuotePDF(props: CustomerQuotePdfProps) {
           </Text>
         </View>
 
+        <Text style={styles.tableTitle}>פירוט ההזמנה</Text>
         <View style={styles.table}>
           <View style={styles.thRow}>
-            <Text style={[styles.th, { flex: 2.2, textAlign: "right" }]}>פריט</Text>
+            <Text style={[styles.th, { flex: 2.6, textAlign: "right" }]}>תיאור</Text>
             <Text style={[styles.th, { flex: 1, textAlign: "center" }]}>מחיר ליחידה</Text>
             <Text style={[styles.th, { flex: 0.8, textAlign: "center" }]}>כמות</Text>
-            <Text style={[styles.th, { flex: 1.2, textAlign: "left" }]}>סה"כ</Text>
+            <Text style={[styles.th, { flex: 1.2, textAlign: "left" }]}>סך הכל</Text>
           </View>
-          <View style={styles.tdRow}>
-            <Text style={styles.cellDesc}>
-              {spec.description || "שקיות מותאמות"} ({sizeLabel(spec)})
-              {pricing.shippingOptionName ? ` + שילוח ${pricing.shippingOptionName}` : ""}
-            </Text>
-            <Text style={styles.cellUnit}>{formatILS(pricing.unitSellingPrice)}</Text>
-            <Text style={styles.cellQty}>{pricing.quantity.toLocaleString("he-IL")}</Text>
-            <Text style={styles.cellTotal}>{formatILS(pricing.totalSellingPrice)}</Text>
-          </View>
+          {rows.map((r, idx) => (
+            <View key={idx} style={styles.tdRow}>
+              <Text style={styles.cellDesc}>{r.desc}</Text>
+              <Text style={styles.cellUnit}>~{formatILS(r.unit)}</Text>
+              <Text style={styles.cellQty}>{r.qty.toLocaleString("he-IL")}</Text>
+              <Text style={styles.cellTotal}>~{formatILS(r.total)}</Text>
+            </View>
+          ))}
           <View style={styles.tdRowTotal}>
-            <Text style={styles.totalLabel}>סה"כ</Text>
+            <Text style={styles.totalLabel}>סה״כ לעסקה</Text>
             <Text style={[styles.th, { flex: 1 }]}></Text>
             <Text style={[styles.th, { flex: 0.8 }]}></Text>
             <Text style={styles.totalValue}>{formatILS(pricing.totalSellingPrice)}</Text>
           </View>
         </View>
 
+        <Text style={styles.unitPriceNote}>
+          מחיר ליחידה: ~{formatILS(pricing.unitSellingPrice)}
+        </Text>
+
         <View style={styles.vatNote}>
-          <Text style={styles.vatText}>המחיר אינו כולל מע"מ</Text>
+          <Text style={styles.vatText}>המחיר אינו כולל מע״מ</Text>
         </View>
 
         <View style={styles.bullets}>
@@ -324,7 +392,7 @@ function CustomerQuotePDF(props: CustomerQuotePdfProps) {
         ) : null}
 
         <Text style={styles.footer}>
-          ההצעה בתוקף {validityDays} ימים. מחירים בש"ח, אינם כוללים מע"מ. כפוף לאישור מפרט סופי.
+          ההצעה תקפה ל-14 ימים מיום ההצעה. המחירים נקובים בש״ח וכוללים את כל ההוצאות מלבד מע״מ.
         </Text>
       </Page>
     </Document>
