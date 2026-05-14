@@ -17,7 +17,7 @@
 import { db } from "../db";
 import { leads, leadTags, messages as messagesTable } from "../../drizzle/schema";
 import { and, eq, inArray, sql } from "drizzle-orm";
-import { bridgeFetch } from "./http";
+import { BridgeError, bridgeFetch } from "./http";
 import {
   FIELD_IDS,
   TAG_IDS,
@@ -260,6 +260,55 @@ export async function sendBridgeMessage(
   return result;
 }
 
+export interface BridgeContact {
+  jid: string;
+  pn: string | null;
+  name: string | null;
+  notify: string | null;
+  username: string | null;
+  verified_name?: string | null;
+}
+
+/**
+ * Fetch contact info from the bridge for a given JID. Bridge stores contact
+ * metadata separately from message events; this is how we learn the phone +
+ * push name for a @lid identifier. Returns null on 404 (no contact row yet).
+ */
+export async function fetchBridgeContact(jid: string): Promise<BridgeContact | null> {
+  try {
+    return await bridgeFetch<BridgeContact>(
+      `/v1/contacts/${encodeURIComponent(jid)}`
+    );
+  } catch (e: unknown) {
+    if (e instanceof BridgeError && e.status === 404) return null;
+    throw e;
+  }
+}
+
+/**
+ * Extract a clean E.164-without-plus phone string from the bridge contact's
+ * `pn` field (which carries the WhatsApp `<digits>@s.whatsapp.net` form).
+ */
+export function phoneFromBridgePn(pn: string | null | undefined): string | null {
+  if (!pn) return null;
+  const digits = pn.split("@")[0]?.replace(/[^0-9]/g, "") ?? "";
+  return digits || null;
+}
+
+/**
+ * Pick the best human-facing name from a bridge contact. Prefers the
+ * verified WA business name, then the contact's own `name`, then the push
+ * name that other users see. Returns null if none are usable.
+ */
+export function nameFromBridgeContact(c: BridgeContact | null): string | null {
+  if (!c) return null;
+  for (const candidate of [c.verified_name, c.name, c.notify, c.username]) {
+    const v = candidate?.trim();
+    if (v) return v;
+  }
+  return null;
+}
+
 export async function resolveJidFromPhone(phone: string): Promise<string | null> {
   const digits = String(phone).replace(/[^0-9]/g, "");
   if (!digits) return null;
@@ -275,6 +324,12 @@ export async function resolveJidFromPhone(phone: string): Promise<string | null>
 
 // Internal helper used by the bridge webhook handler. Exported so the
 // route file does not have to import schema directly.
+//
+// On insert (or when the existing row still has null name/phone) we hit the
+// bridge `/v1/contacts/<jid>` endpoint to enrich. Bridge events themselves
+// do not carry name/phone for @lid JIDs — the contact metadata lives on a
+// separate resource that we have to pull explicitly. We swallow errors so a
+// transient bridge hiccup never breaks message ingestion.
 export async function upsertLeadFromBridgeEvent(input: {
   jid: string;
   name?: string;
@@ -282,13 +337,29 @@ export async function upsertLeadFromBridgeEvent(input: {
   source?: string;
 }): Promise<void> {
   const sid = input.jid;
+
+  let enrichedName = input.name ?? null;
+  let enrichedPhone = input.phone ?? null;
+
+  if (!enrichedName || !enrichedPhone) {
+    try {
+      const contact = await fetchBridgeContact(sid);
+      if (contact) {
+        enrichedName = enrichedName ?? nameFromBridgeContact(contact);
+        enrichedPhone = enrichedPhone ?? phoneFromBridgePn(contact.pn);
+      }
+    } catch (e) {
+      console.warn("[upsertLeadFromBridgeEvent] contact fetch failed", sid, e);
+    }
+  }
+
   await db
     .insert(leads)
     .values({
       manychatSubId: sid,
       waJid: sid,
-      phoneE164: input.phone ?? null,
-      name: input.name ?? null,
+      phoneE164: enrichedPhone,
+      name: enrichedName,
       source: input.source ?? "bridge_webhook",
       active: true,
     })
@@ -296,8 +367,10 @@ export async function upsertLeadFromBridgeEvent(input: {
       target: leads.manychatSubId,
       set: {
         waJid: sid,
-        ...(input.name ? { name: input.name } : {}),
-        ...(input.phone ? { phoneE164: input.phone } : {}),
+        // coalesce preserves any value Eli set manually — bridge only fills
+        // in fields that are still null in the DB.
+        name: sql`coalesce(${leads.name}, ${enrichedName})`,
+        phoneE164: sql`coalesce(${leads.phoneE164}, ${enrichedPhone})`,
         updatedAt: new Date(),
       },
     });
