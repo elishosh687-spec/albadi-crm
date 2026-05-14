@@ -437,6 +437,46 @@ export async function rejectDraftAction(
 }
 
 /**
+ * Update the name + phone on a lead. Bridge events do not carry contact
+ * info for lid-based JIDs, so the supervisor sets them manually as they
+ * learn the customer details from the conversation.
+ */
+export async function updateLeadContactAction(
+  manychatSubId: string,
+  patch: { name?: string | null; phone?: string | null }
+): Promise<SimpleResult> {
+  const cleanSid = manychatSubId.trim();
+  if (!cleanSid) return { ok: false, error: "missing subscriberId" };
+
+  const setObj: Record<string, unknown> = { updatedAt: new Date() };
+  if (patch.name !== undefined) {
+    const v = patch.name?.trim();
+    setObj.name = v ? v : null;
+  }
+  if (patch.phone !== undefined) {
+    const cleanPhone = patch.phone?.replace(/[^\d+]/g, "") ?? "";
+    setObj.phoneE164 = cleanPhone ? cleanPhone : null;
+  }
+  if (Object.keys(setObj).length <= 1) {
+    return { ok: false, error: "nothing to update" };
+  }
+  try {
+    await db
+      .update(leads)
+      .set(setObj as any)
+      .where(sql`trim(${leads.manychatSubId}) = ${cleanSid}`);
+    safeRevalidate("/dashboard/v3", "layout");
+    safeRevalidate("/dashboard/v3/conversations", "layout");
+    return { ok: true, message: "נשמר" };
+  } catch (e) {
+    return {
+      ok: false,
+      error: e instanceof Error ? e.message : "save failed",
+    };
+  }
+}
+
+/**
  * Upsert a single key/value into bot_config. Used by the v3 Settings page
  * for editable prompts and pipeline toggles. The bot does not read these
  * values yet — the table is a holding area until the prompt + toggle
