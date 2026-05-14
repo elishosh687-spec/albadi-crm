@@ -18,8 +18,10 @@ export function middleware(req: NextRequest) {
     return NextResponse.next();
   }
 
-  // Protect dashboard + actions APIs + factory pipeline APIs
+  // Protect dashboard + actions APIs + factory pipeline APIs + the root
+  // path (which we internally serve from /dashboard/v3 — see below).
   if (
+    path === "/" ||
     path.startsWith("/dashboard") ||
     path.startsWith("/api/actions/") ||
     path.startsWith("/api/factory/")
@@ -33,9 +35,22 @@ export function middleware(req: NextRequest) {
     }
   }
 
+  // Serve the live dashboard at the root path without changing the URL bar.
+  // Internal rewrite — keeps the address at "/", renders /dashboard/v3.
+  if (path === "/") {
+    const url = req.nextUrl.clone();
+    url.pathname = "/dashboard/v3";
+    return NextResponse.rewrite(url);
+  }
+
   return NextResponse.next();
 }
 
 export const config = {
-  matcher: ["/dashboard/:path*", "/api/actions/:path*", "/api/factory/:path*"],
+  matcher: [
+    "/",
+    "/dashboard/:path*",
+    "/api/actions/:path*",
+    "/api/factory/:path*",
+  ],
 };
