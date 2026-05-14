@@ -13,6 +13,7 @@ import {
 import { STAGE_LABEL, STAGE_TONE } from "../../_components/stage-meta";
 import { updateLeadContactAction } from "@/app/actions/v2";
 import { NotesPanel } from "../../_components/NotesPanel";
+import { FactoryQuotePanel } from "../../_components/factory/FactoryQuotePanel";
 
 export interface OrderSummaryData {
   name: string | null;
@@ -150,6 +151,13 @@ export function OrderSummary({
           </div>
         )}
 
+      {sid && (
+        <FactoryQuotePanel
+          leadId={sid}
+          leadName={data.name}
+          qState={data.qState}
+        />
+      )}
     </div>
   );
 }

@@ -46,7 +46,7 @@ export function ConversationsLayout({
   const params = useSearchParams();
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<"all" | "unread" | "needs_eli">("all");
-  const [summaryOpen, setSummaryOpen] = useState(false);
+  const [summaryOpen, setSummaryOpen] = useState(true);
 
   const filtered = useMemo(() => {
     const s = search.trim().toLowerCase();
