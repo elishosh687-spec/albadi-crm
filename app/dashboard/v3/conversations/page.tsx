@@ -64,6 +64,12 @@ export default async function V3ConversationsPage({
   };
   type UnreadRow = { sid: string; count: number };
 
+  // Build an IN-list for the raw-SQL queries. Drizzle's `sql` template
+  // serializes JS arrays as a single jsonb/record param (not a text[]), so
+  // both `IN ${sids}` and `ANY(${sids}::text[])` fail. `sql.join` expands the
+  // array into a comma-separated value list, which Postgres handles natively.
+  const sidList = sql.join(sids.map((s) => sql`${s}`), sql`, `);
+
   const [lastMsgRows, unreadRows] =
     sids.length === 0
       ? [[] as LastMsgRow[], [] as UnreadRow[]]
@@ -81,13 +87,13 @@ export default async function V3ConversationsPage({
                   ORDER BY received_at DESC
                 ) AS rn
               FROM messages
-              WHERE trim(manychat_sub_id) = ANY(${sids}::text[])
+              WHERE trim(manychat_sub_id) IN (${sidList})
             ) t WHERE rn = 1
           `),
           db.execute<UnreadRow>(sql`
             SELECT trim(manychat_sub_id) AS sid, count(*)::int AS count
             FROM messages
-            WHERE trim(manychat_sub_id) = ANY(${sids}::text[])
+            WHERE trim(manychat_sub_id) IN (${sidList})
               AND direction = 'in'
               AND received_at > now() - interval '24 hours'
             GROUP BY trim(manychat_sub_id)
