@@ -1,10 +1,7 @@
 /**
- * /dashboard parent layout is a passthrough so /dashboard/v2 (light, navbar)
- * and /dashboard/v3 (dark, sidebar) can each own their own chrome without
- * one leaking into the other. The v1 dashboard home page (/dashboard) and
- * the instructions page reach v2 chrome via the v2 layout because the home
- * link still routes there; if a future top-level page needs the v2 chrome
- * directly, wrap it explicitly.
+ * Passthrough layout. v3 owns its own dark-theme chrome inside its layout —
+ * this parent stays clean so any future dashboard sub-app does not inherit
+ * unwanted styling. v2 was removed on 2026-05-14.
  */
 export default function DashboardLayout({
   children,

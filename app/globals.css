@@ -1,8 +1,8 @@
 @import "tailwindcss";
 
-/* Tailwind v4 CSS-first theme. Dashboard v3 uses dark mode by default; the
-   v3 layout adds `.dark` to its <html> so the variables here flip. The
-   legacy `/dashboard/v2` pages use inline styles and are unaffected.        */
+/* Tailwind v4 CSS-first theme. The v3 dashboard runs in dark mode by
+   default; its layout adds `.dark` so the variables below flip. v2 was
+   removed on 2026-05-14 — no special handling needed.                      */
 
 @theme {
   --font-display: var(--font-display, "Frank Ruhl Libre", ui-serif, serif);
