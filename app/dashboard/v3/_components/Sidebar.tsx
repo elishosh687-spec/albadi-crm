@@ -10,6 +10,7 @@ import {
   BarChart3,
   MessageSquare,
   Settings,
+  Factory,
 } from "lucide-react";
 import { cn } from "@/lib/cn";
 
@@ -20,6 +21,7 @@ const NAV = [
   { href: "/dashboard/v3/pipeline", label: "Pipeline", icon: KanbanSquare },
   { href: "/dashboard/v3/analytics", label: "אנליטיקה", icon: BarChart3 },
   { href: "/dashboard/v3/conversations", label: "שיחות", icon: MessageSquare },
+  { href: "/dashboard/v3/factory", label: "הצעות מפעל", icon: Factory },
   { href: "/dashboard/v3/settings", label: "הגדרות", icon: Settings },
 ];
 

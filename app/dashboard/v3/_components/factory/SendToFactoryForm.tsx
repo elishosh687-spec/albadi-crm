@@ -1,0 +1,385 @@
+"use client";
+
+/**
+ * Inline factory-quote form (no modal wrapper). Used in two places:
+ *   - Embedded in FactoryQuotePanel (when no factory request exists yet)
+ *   - Could be reused on the /factory admin page for a "new request" affordance
+ *
+ * Pre-fills from leads.qState when possible (product, size, quantity, handles,
+ * colors) but every field is editable so Eli can override after a phone call.
+ *
+ * The "size preview" line below the W/H/D inputs shows the exact string that
+ * gets written to Feishu column F (e.g. "H20*D8*W25"), matching `sizeLabel()`
+ * in app/api/factory/quote-request/route.ts.
+ */
+
+import { useEffect, useMemo, useState } from "react";
+import { Loader2, Send } from "lucide-react";
+
+interface ParsedDims {
+  widthCm: number;
+  heightCm: number;
+  depthCm: number;
+}
+
+/**
+ * Parse a free-text dimensions string like "H20*D8*W25", "45x40x10",
+ * "W45×H40×D10" into structured W/H/D. Falls back to positional ordering
+ * (W,H,D) or (W,H) when axes aren't labeled.
+ */
+function parseDims(raw: unknown): ParsedDims {
+  if (!raw) return { widthCm: 0, heightCm: 0, depthCm: 0 };
+  const s = String(raw);
+  const re = /([WHD]?)\s*([0-9]+(?:\.[0-9]+)?)/gi;
+  const tokens: { axis: string; val: number }[] = [];
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(s)) !== null) {
+    tokens.push({ axis: m[1].toUpperCase(), val: parseFloat(m[2]) });
+  }
+  const named: Record<string, number> = {};
+  for (const t of tokens) if (t.axis) named[t.axis] = t.val;
+  if (named.W || named.H || named.D) {
+    return {
+      widthCm: named.W ?? 0,
+      heightCm: named.H ?? 0,
+      depthCm: named.D ?? 0,
+    };
+  }
+  const nums = tokens.map((t) => t.val);
+  if (nums.length === 3) return { widthCm: nums[0], heightCm: nums[1], depthCm: nums[2] };
+  if (nums.length === 2) return { widthCm: nums[0], heightCm: nums[1], depthCm: 0 };
+  return { widthCm: 0, heightCm: 0, depthCm: 0 };
+}
+
+/** Mirrors `sizeLabel()` in app/api/factory/quote-request/route.ts. */
+function buildSizeString(w: number, h: number, d: number): string {
+  const parts: string[] = [];
+  if (h) parts.push(`H${h}`);
+  if (d) parts.push(`D${d}`);
+  if (w) parts.push(`W${w}`);
+  return parts.join("*");
+}
+
+function qStateGet(qs: Record<string, unknown> | null, key: string): unknown {
+  return qs?.[key];
+}
+
+export function SendToFactoryForm({
+  leadId,
+  leadName,
+  qState,
+  onSent,
+  onCancel,
+}: {
+  leadId: string;
+  leadName: string | null;
+  qState: Record<string, unknown> | null;
+  onSent: () => void;
+  onCancel?: () => void;
+}) {
+  const presets = useMemo(() => {
+    const productRaw = String(qStateGet(qState, "product") ?? "");
+    const dimsCandidate =
+      qStateGet(qState, "size") ??
+      qStateGet(qState, "dimensions") ??
+      qStateGet(qState, "product") ??
+      "";
+    const dims = parseDims(dimsCandidate);
+    const qtyRaw = qStateGet(qState, "quantity");
+    const qty = typeof qtyRaw === "number" ? qtyRaw : parseInt(String(qtyRaw ?? "0"), 10) || 0;
+    const handlesRaw = qStateGet(qState, "handles");
+    const handles = !!handlesRaw && handlesRaw !== "no" && handlesRaw !== "false";
+    const colors = qStateGet(qState, "colors");
+    const colorsNum =
+      typeof colors === "number"
+        ? colors
+        : parseInt(String(colors ?? "1"), 10) || 1;
+    return {
+      description: productRaw || "שקיות מותאמות",
+      material: "80g non-woven",
+      ...dims,
+      quantity: qty,
+      logoColors: Math.min(4, Math.max(1, colorsNum)),
+      hasHandles: handles,
+      hasLamination: false,
+    };
+  }, [qState]);
+
+  const [description, setDescription] = useState(presets.description);
+  const [material, setMaterial] = useState(presets.material);
+  const [widthCm, setWidthCm] = useState(String(presets.widthCm || ""));
+  const [heightCm, setHeightCm] = useState(String(presets.heightCm || ""));
+  const [depthCm, setDepthCm] = useState(String(presets.depthCm || ""));
+  const [sizeString, setSizeString] = useState("");
+  const [quantity, setQuantity] = useState(String(presets.quantity || ""));
+  const [logoColors, setLogoColors] = useState<number>(presets.logoColors);
+  const [hasHandles, setHasHandles] = useState<boolean>(presets.hasHandles);
+  const [hasLamination, setHasLamination] = useState<boolean>(presets.hasLamination);
+  const [notes, setNotes] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Live preview: W/H/D → "H20*D8*W25"
+  const sizePreview = useMemo(
+    () =>
+      buildSizeString(
+        parseFloat(widthCm) || 0,
+        parseFloat(heightCm) || 0,
+        parseFloat(depthCm) || 0
+      ),
+    [widthCm, heightCm, depthCm]
+  );
+
+  // Keep the manual size string in sync when W/H/D changes via inputs
+  // (only when user isn't actively editing the size string itself).
+  useEffect(() => {
+    setSizeString(sizePreview);
+  }, [sizePreview]);
+
+  // Parse the manual size string when user types into it
+  const handleSizeStringChange = (val: string) => {
+    setSizeString(val);
+    const parsed = parseDims(val);
+    if (parsed.widthCm || parsed.heightCm || parsed.depthCm) {
+      setWidthCm(String(parsed.widthCm || ""));
+      setHeightCm(String(parsed.heightCm || ""));
+      setDepthCm(String(parsed.depthCm || ""));
+    }
+  };
+
+  const handleSubmit = async () => {
+    setError(null);
+    const w = parseFloat(widthCm) || 0;
+    const h = parseFloat(heightCm) || 0;
+    const d = parseFloat(depthCm) || 0;
+    const q = parseInt(quantity, 10) || 0;
+    if (!description.trim()) return setError("חובה תיאור");
+    if (!material.trim()) return setError("חובה חומר");
+    if (!w || !h) return setError("חובה רוחב וגובה");
+    if (q < 1) return setError("חובה כמות חיובית");
+
+    const printingStr = `${logoColors} color${logoColors > 1 ? "s" : ""}`;
+    const finishingParts: string[] = [];
+    finishingParts.push(hasHandles ? "With handles" : "No handles");
+    finishingParts.push(hasLamination ? "Laminated" : "Not laminated");
+    const finishingStr = finishingParts.join(" / ");
+
+    setSubmitting(true);
+    try {
+      const res = await fetch("/api/factory/quote-request", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          manychatSubId: leadId,
+          customerName: leadName ?? undefined,
+          productSpec: {
+            description: description.trim(),
+            material: material.trim(),
+            widthCm: w,
+            heightCm: h,
+            depthCm: d,
+            quantity: q,
+            printing: printingStr,
+            finishing: finishingStr,
+            notes: notes.trim() || undefined,
+          },
+        }),
+      });
+      const data = await res.json();
+      if (data?.ok) {
+        onSent();
+      } else {
+        setError(data?.error ?? data?.detail ?? "כשל בשליחה");
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="space-y-3 text-sm">
+      <Field
+        label="הערות על ההזמנה (Description)"
+        value={description}
+        onChange={setDescription}
+        placeholder="למשל: שקיות מותאמות לאירוע X"
+      />
+      <Field
+        label="חומר (Material)"
+        value={material}
+        onChange={setMaterial}
+        placeholder="80g non-woven"
+      />
+
+      <div>
+        <span className="block text-[11px] text-muted-foreground mb-1 text-right">
+          מידות (cm)
+        </span>
+        <div className="grid grid-cols-3 gap-2">
+          <Field
+            label="W (רוחב)"
+            value={widthCm}
+            onChange={setWidthCm}
+            type="number"
+            compact
+          />
+          <Field
+            label="H (גובה)"
+            value={heightCm}
+            onChange={setHeightCm}
+            type="number"
+            compact
+          />
+          <Field
+            label="D (עומק)"
+            value={depthCm}
+            onChange={setDepthCm}
+            type="number"
+            compact
+          />
+        </div>
+        <div className="mt-2 flex items-center gap-2">
+          <span className="text-[11px] text-muted-foreground shrink-0">
+            או הדבק:
+          </span>
+          <input
+            value={sizeString}
+            onChange={(e) => handleSizeStringChange(e.target.value)}
+            placeholder="H20*D8*W25"
+            className="flex-1 rounded-md border border-border bg-background px-2 py-1 text-xs font-mono text-left"
+            dir="ltr"
+          />
+        </div>
+        {sizePreview && (
+          <div className="mt-1 text-[10px] text-muted-foreground text-right">
+            ייכתב ל-Feishu: <span className="font-mono text-foreground">{sizePreview}</span>
+          </div>
+        )}
+      </div>
+
+      <Field label="כמות" value={quantity} onChange={setQuantity} type="number" />
+
+      <div className="grid grid-cols-3 gap-2">
+        <SelectField
+          label="צבעי לוגו"
+          value={String(logoColors)}
+          onChange={(v) => setLogoColors(parseInt(v, 10))}
+          options={[
+            { value: "1", label: "1 צבע" },
+            { value: "2", label: "2 צבעים" },
+            { value: "3", label: "3 צבעים" },
+            { value: "4", label: "3+ צבעים" },
+          ]}
+        />
+        <SelectField
+          label="ידיות"
+          value={hasHandles ? "yes" : "no"}
+          onChange={(v) => setHasHandles(v === "yes")}
+          options={[
+            { value: "yes", label: "עם ידיות" },
+            { value: "no", label: "ללא ידיות" },
+          ]}
+        />
+        <SelectField
+          label="למינציה"
+          value={hasLamination ? "yes" : "no"}
+          onChange={(v) => setHasLamination(v === "yes")}
+          options={[
+            { value: "no", label: "ללא" },
+            { value: "yes", label: "עם למינציה" },
+          ]}
+        />
+      </div>
+
+      <Field
+        label="הערות למפעל"
+        value={notes}
+        onChange={setNotes}
+        placeholder="(אופציונלי)"
+      />
+
+      {error && <p className="text-xs text-destructive">{error}</p>}
+
+      <div className="flex items-center justify-end gap-2 pt-2 border-t border-border">
+        {onCancel && (
+          <button
+            type="button"
+            onClick={onCancel}
+            className="rounded-md border border-border bg-background/40 px-3 py-1.5 text-sm hover:bg-secondary"
+          >
+            ביטול
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={handleSubmit}
+          disabled={submitting}
+          className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
+        >
+          {submitting ? <Loader2 className="size-3.5 animate-spin" /> : <Send className="size-3.5" />}
+          שלח ל-Feishu
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function SelectField({
+  label,
+  value,
+  onChange,
+  options,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  options: { value: string; label: string }[];
+}) {
+  return (
+    <label className="block">
+      <span className="block text-[11px] text-muted-foreground mb-1 text-right">{label}</span>
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="w-full rounded-md border border-border bg-background px-2 py-1.5 text-xs text-right focus:outline-none focus:ring-2 focus:ring-ring/30"
+      >
+        {options.map((o) => (
+          <option key={o.value} value={o.value}>
+            {o.label}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
+function Field({
+  label,
+  value,
+  onChange,
+  placeholder,
+  type = "text",
+  compact = false,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  placeholder?: string;
+  type?: string;
+  compact?: boolean;
+}) {
+  return (
+    <label className="block">
+      <span className="block text-[11px] text-muted-foreground mb-1 text-right">{label}</span>
+      <input
+        type={type}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        className={`w-full rounded-md border border-border bg-background px-3 ${compact ? "py-1.5 text-xs" : "py-2 text-sm"} text-right focus:outline-none focus:ring-2 focus:ring-ring/30`}
+      />
+    </label>
+  );
+}

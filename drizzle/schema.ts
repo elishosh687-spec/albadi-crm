@@ -135,3 +135,43 @@ export const botDrafts = pgTable("bot_drafts", {
 // when the standalone classifier skill was retired. The bot now writes
 // pipeline_stage / flags directly to `leads` based on LLM intent on
 // each inbound message.
+
+// === Factory quote pipeline (Feishu integration) ===
+
+// k/v table for pricing + shipping + FX config. Keys we use:
+//   'factory_pricing' → JSON with { shippingOptions, exchangeRates, defaultProfitMargin }
+// Kept separate from bot_config to avoid mixing operational bot settings
+// with pricing/business config (different audiences for editing).
+export const appConfig = pgTable("app_config", {
+  key: text("key").primaryKey(),
+  value: jsonb("value").notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true })
+    .defaultNow()
+    .notNull(),
+});
+
+// One row per "send to factory" event. Lifecycle:
+//   pending  — row written to Feishu, awaiting factory to fill J..R
+//   received — refresh pulled J..R, factory cost known, awaiting Eli's
+//              profit-margin pick + finalize
+//   finalized — priceFactoryQuote ran, customer PDF generated and saved
+export const factoryQuoteRequests = pgTable("factory_quote_requests", {
+  id: text("id").primaryKey(),
+  manychatSubId: text("manychat_sub_id").notNull(),
+  quotationNo: text("quotation_no"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  // FactoryProductSpec — { description, material, widthCm, heightCm, depthCm,
+  // quantity, printing, finishing, picUrl?, notes? }
+  productSpec: jsonb("product_spec").notNull(),
+  feishuRowIndex: text("feishu_row_index"),
+  // pending | received | finalized
+  factoryStatus: text("factory_status").notNull().default("pending"),
+  // FactoryResponse — { unitCostCny, cartonQty, cartonLengthCm, cartonWidthCm,
+  // cartonHeightCm, cartonCbm, weightKg, supplier, notes }
+  factoryResponse: jsonb("factory_response"),
+  // FactoryPricingResult — full pricing snapshot at finalize time
+  finalPricing: jsonb("final_pricing"),
+  pdfUrl: text("pdf_url"),
+  sentToCustomerAt: timestamp("sent_to_customer_at", { withTimezone: true }),
+});

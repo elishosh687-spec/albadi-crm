@@ -8,7 +8,8 @@
  * loses all stage/q_state history on every inbound.
  */
 export const TEST_JIDS = new Set<string>([
-  "133144455962747@lid", // Eli — 0525755705
+  // Empty — Eli's JID was removed 2026-05-14 so he can run the full flow
+  // as a real customer would. Add a JID here only for short-lived e2e probes.
 ]);
 
 export function isTestJid(jid: string): boolean {

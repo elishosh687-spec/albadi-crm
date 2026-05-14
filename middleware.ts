@@ -8,8 +8,12 @@ export function middleware(req: NextRequest) {
     return NextResponse.next();
   }
 
-  // Protect dashboard + actions APIs
-  if (path.startsWith("/dashboard") || path.startsWith("/api/actions/")) {
+  // Protect dashboard + actions APIs + factory pipeline APIs
+  if (
+    path.startsWith("/dashboard") ||
+    path.startsWith("/api/actions/") ||
+    path.startsWith("/api/factory/")
+  ) {
     const cookie = req.cookies.get("albadi_auth");
     if (!cookie || cookie.value !== process.env.ADMIN_PASSWORD) {
       const url = req.nextUrl.clone();
@@ -23,5 +27,5 @@ export function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/dashboard/:path*", "/api/actions/:path*"],
+  matcher: ["/dashboard/:path*", "/api/actions/:path*", "/api/factory/:path*"],
 };
