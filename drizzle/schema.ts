@@ -51,6 +51,11 @@ export const leads = pgTable("leads", {
   botPaused: boolean("bot_paused").default(false).notNull(),
   // Currently single-flag scalar (e.g. 'NEEDS_ELI'). Migrate to array later if needed.
   pipelineFlag: text("pipeline_flag"),
+
+  // Manual factory-quote spec that Eli filled but hasn't sent yet.
+  // Shape: FactoryProductSpec + optional notes. Cleared on successful
+  // POST /api/factory/quote-request. See lib/factory/types.ts.
+  factorySpecDraft: jsonb("factory_spec_draft"),
 });
 
 // DB-owned tags (replaces ManyChat tag IDs). One row per (lead, tag).

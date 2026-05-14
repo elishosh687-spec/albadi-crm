@@ -13,7 +13,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { factoryQuoteRequests, leads } from "@/drizzle/schema";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import { appendRow, buildFactoryRow } from "@/lib/feishu/sheets";
 import type { FactoryProductSpec } from "@/lib/factory/types";
@@ -110,6 +110,12 @@ export async function POST(req: NextRequest) {
       .update(factoryQuoteRequests)
       .set({ feishuRowIndex, updatedAt: new Date() })
       .where(eq(factoryQuoteRequests.id, id));
+
+    // Clear the lead's draft now that the spec was successfully sent.
+    await db
+      .update(leads)
+      .set({ factorySpecDraft: null, updatedAt: new Date() })
+      .where(sql`trim(${leads.manychatSubId}) = ${body.manychatSubId}`);
   } catch (err) {
     // DB row remains (status=pending, no rowIndex). The UI can show a retry
     // affordance and we don't lose the customer's spec.

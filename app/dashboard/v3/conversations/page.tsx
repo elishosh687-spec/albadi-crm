@@ -154,6 +154,7 @@ export default async function V3ConversationsPage({
         quoteTotal: leads.quoteTotal,
         quoteAlt: leads.quoteAlt,
         qState: leads.qState,
+        factorySpecDraft: leads.factorySpecDraft,
       })
       .from(leads)
       .where(sql`trim(${leads.manychatSubId}) = ${selectedSid}`)
@@ -191,6 +192,8 @@ export default async function V3ConversationsPage({
         quoteTotal: leadRow.quoteTotal,
         quoteAlt: leadRow.quoteAlt,
         qState: (leadRow.qState as Record<string, unknown> | null) ?? null,
+        factorySpecDraft:
+          (leadRow.factorySpecDraft as Record<string, unknown> | null) ?? null,
       };
 
       const threadMessages: ChatMessage[] = msgRows.map((m) => ({

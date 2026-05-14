@@ -13,8 +13,23 @@
  * after each mutation. No real-time push.
  */
 
-import { useCallback, useEffect, useState } from "react";
-import { Factory, ChevronDown, ChevronUp, RefreshCw, Sparkles, Download, MessageCircle, Loader2 } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  Factory,
+  ChevronDown,
+  ChevronUp,
+  RefreshCw,
+  Sparkles,
+  Download,
+  MessageCircle,
+  Loader2,
+  Send,
+  ShoppingBag,
+  Hash,
+  Package,
+  Palette,
+  Truck,
+} from "lucide-react";
 import { cn } from "@/lib/cn";
 import type {
   FactoryProductSpec,
@@ -22,6 +37,11 @@ import type {
   FactoryPricingResult,
   FactoryQuoteStatus,
 } from "@/lib/factory/types";
+import {
+  decodeQStateToSpec,
+  decodeShipping,
+  PRODUCT_LABEL,
+} from "@/lib/factory/qstate-decode";
 import { SendToFactoryForm } from "./SendToFactoryForm";
 import { FinalizeModal } from "./FinalizeModal";
 
@@ -64,10 +84,12 @@ export function FactoryQuotePanel({
   leadId,
   leadName,
   qState,
+  factorySpecDraft,
 }: {
   leadId: string;
   leadName: string | null;
   qState: Record<string, unknown> | null;
+  factorySpecDraft?: Record<string, unknown> | null;
 }) {
   const [loading, setLoading] = useState(true);
   const [rows, setRows] = useState<FactoryQuoteRow[]>([]);
@@ -75,6 +97,52 @@ export function FactoryQuotePanel({
   const [formOpen, setFormOpen] = useState(false);
   const [finalizing, setFinalizing] = useState<FactoryQuoteRow | null>(null);
   const [whatsappLoading, setWhatsappLoading] = useState<string | null>(null);
+
+  // Local view of the draft so we can update without a full page reload.
+  const [draft, setDraft] = useState<Record<string, unknown> | null>(
+    factorySpecDraft ?? null
+  );
+  useEffect(() => {
+    setDraft(factorySpecDraft ?? null);
+  }, [factorySpecDraft]);
+
+  const [notesDraft, setNotesDraft] = useState<string>(
+    String((factorySpecDraft as Record<string, unknown> | null)?.notes ?? "")
+  );
+  const [sendingSummary, setSendingSummary] = useState(false);
+  const [summaryError, setSummaryError] = useState<string | null>(null);
+
+  // Resolved spec for the inline view: prefer draft, fall back to decoded qState.
+  const resolvedSpec = useMemo(() => {
+    if (draft && Object.keys(draft).length > 0) {
+      return {
+        source: "draft" as const,
+        description: String(draft.description ?? ""),
+        material: String(draft.material ?? ""),
+        widthCm: Number(draft.widthCm) || 0,
+        heightCm: Number(draft.heightCm) || 0,
+        depthCm: Number(draft.depthCm) || 0,
+        quantity: Number(draft.quantity) || 0,
+        printing: String(draft.printing ?? ""),
+        finishing: String(draft.finishing ?? ""),
+        shippingCode: null as string | null,
+      };
+    }
+    const decoded = decodeQStateToSpec(qState);
+    if (!decoded) return null;
+    return {
+      source: "bot" as const,
+      description: decoded.description,
+      material: "80g non-woven",
+      widthCm: decoded.widthCm,
+      heightCm: decoded.heightCm,
+      depthCm: decoded.depthCm,
+      quantity: decoded.quantity,
+      printing: `${decoded.logoColors} color${decoded.logoColors > 1 ? "s" : ""}`,
+      finishing: `${decoded.hasHandles ? "With handles" : "No handles"} / Not laminated`,
+      shippingCode: decoded.shippingOptionCode,
+    };
+  }, [draft, qState]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -137,6 +205,59 @@ export function FactoryQuotePanel({
   // Active = most recent non-rejected row. We don't have "rejected"; show the latest.
   const active = rows[0] ?? null;
 
+  const handleSendFromSummary = useCallback(async () => {
+    if (!resolvedSpec) return;
+    setSummaryError(null);
+    setSendingSummary(true);
+    try {
+      const res = await fetch("/api/factory/quote-request", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          manychatSubId: leadId,
+          customerName: leadName ?? undefined,
+          productSpec: {
+            description: notesDraft.trim() || resolvedSpec.description,
+            material: resolvedSpec.material || "80g non-woven",
+            widthCm: resolvedSpec.widthCm,
+            heightCm: resolvedSpec.heightCm,
+            depthCm: resolvedSpec.depthCm,
+            quantity: resolvedSpec.quantity,
+            printing: resolvedSpec.printing,
+            finishing: resolvedSpec.finishing,
+            notes: notesDraft.trim() || undefined,
+          },
+        }),
+      });
+      const data = await res.json();
+      if (data?.ok) {
+        setDraft(null);
+        setNotesDraft("");
+        await load();
+      } else {
+        setSummaryError(data?.error ?? data?.detail ?? "כשל בשליחה");
+      }
+    } catch (err) {
+      setSummaryError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setSendingSummary(false);
+    }
+  }, [leadId, leadName, resolvedSpec, notesDraft, load]);
+
+  const handleClearDraft = useCallback(async () => {
+    if (!draft) return;
+    if (!confirm("למחוק את הנתונים הידניים שמילאת?")) return;
+    try {
+      await fetch(`/api/leads/${encodeURIComponent(leadId)}/factory-draft`, {
+        method: "DELETE",
+      });
+      setDraft(null);
+      setNotesDraft("");
+    } catch (err) {
+      console.error("[FactoryQuotePanel] clear draft failed", err);
+    }
+  }, [draft, leadId]);
+
   return (
     <section className="rounded-xl border border-border bg-card p-4">
       <header className="flex items-center justify-between gap-1.5 text-xs uppercase tracking-wider text-muted-foreground mb-3">
@@ -153,15 +274,31 @@ export function FactoryQuotePanel({
           טוען…
         </div>
       ) : !active ? (
-        <EmptyState
-          open={formOpen}
-          onToggle={() => setFormOpen((v) => !v)}
+        <NoQuoteState
+          spec={resolvedSpec}
+          notes={notesDraft}
+          onNotesChange={setNotesDraft}
+          sending={sendingSummary}
+          summaryError={summaryError}
+          onSendFromSummary={handleSendFromSummary}
+          hasDraft={!!draft}
+          onClearDraft={handleClearDraft}
+          formOpen={formOpen}
+          onToggleForm={() => setFormOpen((v) => !v)}
           leadId={leadId}
           leadName={leadName}
           qState={qState}
-          onSent={() => {
+          draft={draft}
+          onFormSent={() => {
             setFormOpen(false);
+            setDraft(null);
+            setNotesDraft("");
             load();
+          }}
+          onFormSavedDraft={(saved) => {
+            setDraft(saved);
+            setNotesDraft(String(saved.notes ?? ""));
+            setFormOpen(false);
           }}
         />
       ) : active.factoryStatus === "pending" ? (
@@ -214,49 +351,199 @@ export function FactoryQuotePanel({
   );
 }
 
-function EmptyState({
-  open,
-  onToggle,
+type ResolvedSpec = {
+  source: "bot" | "draft";
+  description: string;
+  material: string;
+  widthCm: number;
+  heightCm: number;
+  depthCm: number;
+  quantity: number;
+  printing: string;
+  finishing: string;
+  shippingCode: string | null;
+};
+
+function NoQuoteState({
+  spec,
+  notes,
+  onNotesChange,
+  sending,
+  summaryError,
+  onSendFromSummary,
+  hasDraft,
+  onClearDraft,
+  formOpen,
+  onToggleForm,
   leadId,
   leadName,
   qState,
-  onSent,
+  draft,
+  onFormSent,
+  onFormSavedDraft,
 }: {
-  open: boolean;
-  onToggle: () => void;
+  spec: ResolvedSpec | null;
+  notes: string;
+  onNotesChange: (v: string) => void;
+  sending: boolean;
+  summaryError: string | null;
+  onSendFromSummary: () => void;
+  hasDraft: boolean;
+  onClearDraft: () => void;
+  formOpen: boolean;
+  onToggleForm: () => void;
   leadId: string;
   leadName: string | null;
   qState: Record<string, unknown> | null;
-  onSent: () => void;
+  draft: Record<string, unknown> | null;
+  onFormSent: () => void;
+  onFormSavedDraft: (saved: Record<string, unknown>) => void;
 }) {
   return (
-    <div className="space-y-2">
-      {!open && (
+    <div className="space-y-3">
+      {spec ? (
+        <SpecPreview
+          spec={spec}
+          hasDraft={hasDraft}
+          onClearDraft={onClearDraft}
+        />
+      ) : (
         <p className="text-xs text-muted-foreground">
-          עוד לא נשלחה הצעה למפעל. פתח טופס למילוי ידני או מאוכלס מתשובות הבוט.
+          עוד לא נשלחה הצעה למפעל ואין נתונים אוטומטיים. מלא ידנית למטה.
         </p>
       )}
+
+      {spec && (
+        <div className="space-y-1.5">
+          <label className="block text-[11px] text-muted-foreground text-right">
+            הערות להזמנה (Description ב-Feishu)
+          </label>
+          <textarea
+            value={notes}
+            onChange={(e) => onNotesChange(e.target.value)}
+            rows={2}
+            placeholder="הערות חופשיות שיוצגו בעמודת התיאור בטבלת המפעל"
+            className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-right focus:outline-none focus:ring-2 focus:ring-ring/30"
+          />
+          {summaryError && (
+            <p className="text-xs text-destructive">{summaryError}</p>
+          )}
+          <button
+            type="button"
+            onClick={onSendFromSummary}
+            disabled={sending}
+            className="w-full inline-flex items-center justify-center gap-1.5 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
+          >
+            {sending ? <Loader2 className="size-3.5 animate-spin" /> : <Send className="size-3.5" />}
+            שלח ל-Feishu מהסיכום
+          </button>
+        </div>
+      )}
+
       <button
         type="button"
-        onClick={onToggle}
-        className="w-full inline-flex items-center justify-between gap-1.5 rounded-md border border-primary/40 bg-primary/5 px-3 py-2 text-sm font-medium text-primary hover:bg-primary/10"
+        onClick={onToggleForm}
+        className="w-full inline-flex items-center justify-between gap-1.5 rounded-md border border-border bg-background/40 px-3 py-2 text-xs text-muted-foreground hover:bg-secondary"
       >
         <span className="inline-flex items-center gap-1.5">
-          {open ? <ChevronUp className="size-3.5" /> : <ChevronDown className="size-3.5" />}
-          {open ? "סגור טופס" : "פתח טופס שליחה למפעל"}
+          {formOpen ? <ChevronUp className="size-3.5" /> : <ChevronDown className="size-3.5" />}
+          {formOpen ? "סגור טופס ידני" : (spec ? "ערוך / החלף ידנית" : "פתח טופס ידני")}
         </span>
       </button>
-      {open && (
+      {formOpen && (
         <div className="rounded-md border border-border bg-background/40 p-3">
           <SendToFactoryForm
             leadId={leadId}
             leadName={leadName}
             qState={qState}
-            onSent={onSent}
-            onCancel={onToggle}
+            draft={draft}
+            onSent={onFormSent}
+            onSavedDraft={(saved) => onFormSavedDraft(saved)}
+            onCancel={onToggleForm}
           />
         </div>
       )}
+    </div>
+  );
+}
+
+function SpecPreview({
+  spec,
+  hasDraft,
+  onClearDraft,
+}: {
+  spec: ResolvedSpec;
+  hasDraft: boolean;
+  onClearDraft: () => void;
+}) {
+  const sizeStr = [
+    spec.widthCm ? `W${spec.widthCm}` : null,
+    spec.depthCm ? `D${spec.depthCm}` : null,
+    spec.heightCm ? `H${spec.heightCm}` : null,
+  ]
+    .filter(Boolean)
+    .join("×");
+  return (
+    <div className="rounded-lg border border-border bg-background/40 p-3 space-y-1.5">
+      <div className="flex items-center justify-between gap-2 -mt-1">
+        <span
+          className={cn(
+            "text-[10px] rounded-full px-2 py-0.5 border",
+            spec.source === "draft"
+              ? "bg-primary/10 text-primary border-primary/30"
+              : "bg-muted/40 text-muted-foreground border-border"
+          )}
+        >
+          {spec.source === "draft" ? "📝 הוזן ידנית" : "🤖 אוטומטית מהבוט"}
+        </span>
+        {hasDraft && (
+          <button
+            type="button"
+            onClick={onClearDraft}
+            className="text-[10px] text-muted-foreground hover:text-destructive underline-offset-2 hover:underline"
+          >
+            מחק נתונים ידניים
+          </button>
+        )}
+      </div>
+      <dl className="text-xs">
+        <SpecRow icon={<ShoppingBag className="size-3" />} label="מוצר" value={spec.description || "—"} />
+        {sizeStr && (
+          <SpecRow icon={<Package className="size-3" />} label="מידות" value={`${sizeStr} cm`} />
+        )}
+        {spec.quantity > 0 && (
+          <SpecRow icon={<Hash className="size-3" />} label="כמות" value={spec.quantity.toLocaleString("he-IL") + " יח׳"} />
+        )}
+        {spec.printing && (
+          <SpecRow icon={<Palette className="size-3" />} label="הדפסה" value={spec.printing} />
+        )}
+        {spec.finishing && (
+          <SpecRow icon={<Package className="size-3" />} label="גימור" value={spec.finishing} />
+        )}
+        {spec.shippingCode && (
+          <SpecRow icon={<Truck className="size-3" />} label="משלוח" value={decodeShipping(spec.shippingCode)} />
+        )}
+      </dl>
+    </div>
+  );
+}
+
+function SpecRow({
+  icon,
+  label,
+  value,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: string;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-2 py-0.5">
+      <dt className="text-muted-foreground inline-flex items-center gap-1 shrink-0">
+        {icon}
+        {label}
+      </dt>
+      <dd className="text-right text-foreground break-words min-w-0">{value}</dd>
     </div>
   );
 }

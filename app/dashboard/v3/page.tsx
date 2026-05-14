@@ -116,6 +116,7 @@ async function ExpandedLeadWrapper({ sid }: { sid: string }) {
       quoteTotal: leads.quoteTotal,
       quoteAlt: leads.quoteAlt,
       qState: leads.qState,
+      factorySpecDraft: leads.factorySpecDraft,
     })
     .from(leads)
     .where(sql`trim(${leads.manychatSubId}) = ${sid}`)
@@ -160,6 +161,8 @@ async function ExpandedLeadWrapper({ sid }: { sid: string }) {
     quoteTotal: leadRow.quoteTotal,
     quoteAlt: leadRow.quoteAlt,
     qState: (leadRow.qState as Record<string, unknown> | null) ?? null,
+    factorySpecDraft:
+      (leadRow.factorySpecDraft as Record<string, unknown> | null) ?? null,
   };
 
   const threadMessages: ChatMessage[] = msgRows.map((m) => ({

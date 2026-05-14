@@ -14,7 +14,8 @@
  */
 
 import { useEffect, useMemo, useState } from "react";
-import { Loader2, Send } from "lucide-react";
+import { Loader2, Send, ClipboardCheck } from "lucide-react";
+import { PRODUCT_LABEL, PRODUCT_DIMS, QUANTITY_VALUE } from "@/lib/factory/qstate-decode";
 
 interface ParsedDims {
   widthCm: number;
@@ -64,46 +65,91 @@ function qStateGet(qs: Record<string, unknown> | null, key: string): unknown {
   return qs?.[key];
 }
 
+function clampColors(v: unknown): number {
+  let n: number;
+  if (typeof v === "number") n = v;
+  else if (typeof v === "string") {
+    const m = v.match(/(\d+)/);
+    n = m ? parseInt(m[1], 10) : 1;
+  } else n = 1;
+  if (!Number.isFinite(n) || n < 1) n = 1;
+  return Math.min(4, n);
+}
+
 export function SendToFactoryForm({
   leadId,
   leadName,
   qState,
+  draft,
   onSent,
+  onSavedDraft,
   onCancel,
 }: {
   leadId: string;
   leadName: string | null;
   qState: Record<string, unknown> | null;
+  draft?: Record<string, unknown> | null;
   onSent: () => void;
+  onSavedDraft?: (saved: Record<string, unknown>) => void;
   onCancel?: () => void;
 }) {
   const presets = useMemo(() => {
-    const productRaw = String(qStateGet(qState, "product") ?? "");
-    const dimsCandidate =
-      qStateGet(qState, "size") ??
-      qStateGet(qState, "dimensions") ??
-      qStateGet(qState, "product") ??
-      "";
-    const dims = parseDims(dimsCandidate);
+    // Prefer existing draft (Eli's prior manual entry) over qState defaults.
+    if (draft && Object.keys(draft).length > 0) {
+      const d = draft as Record<string, unknown>;
+      return {
+        description: String(d.description ?? ""),
+        material: String(d.material ?? "80g non-woven"),
+        widthCm: Number(d.widthCm) || 0,
+        heightCm: Number(d.heightCm) || 0,
+        depthCm: Number(d.depthCm) || 0,
+        quantity: Number(d.quantity) || 0,
+        logoColors: clampColors(d.printing),
+        hasHandles: /with handles/i.test(String(d.finishing ?? "")),
+        hasLamination: /laminated/i.test(String(d.finishing ?? "")) && !/not laminated/i.test(String(d.finishing ?? "")),
+        notes: String(d.notes ?? ""),
+      };
+    }
+
+    const productCode = String(qStateGet(qState, "product") ?? "");
+    const productCustom = String(qStateGet(qState, "productCustom") ?? "");
+
+    // Decode product code → human description; fall back to raw if unknown.
+    const description =
+      productCode === "custom" && productCustom
+        ? productCustom
+        : PRODUCT_LABEL[productCode] ?? productCode ?? "שקיות מותאמות";
+
+    // Dimensions: known product code → lookup; custom → parse the custom string.
+    const dims =
+      productCode === "custom"
+        ? parseDims(productCustom)
+        : PRODUCT_DIMS[productCode] ?? { widthCm: 0, heightCm: 0, depthCm: 0 };
+
     const qtyRaw = qStateGet(qState, "quantity");
-    const qty = typeof qtyRaw === "number" ? qtyRaw : parseInt(String(qtyRaw ?? "0"), 10) || 0;
+    const qtyCustom = qStateGet(qState, "quantityCustom");
+    const qty =
+      qtyRaw === "custom" && qtyCustom
+        ? Number(qtyCustom) || 0
+        : QUANTITY_VALUE[String(qtyRaw ?? "")] ?? Number(qtyRaw) ?? 0;
+
     const handlesRaw = qStateGet(qState, "handles");
-    const handles = !!handlesRaw && handlesRaw !== "no" && handlesRaw !== "false";
+    const handles = handlesRaw === true || handlesRaw === "true";
+
     const colors = qStateGet(qState, "colors");
-    const colorsNum =
-      typeof colors === "number"
-        ? colors
-        : parseInt(String(colors ?? "1"), 10) || 1;
+    const colorsNum = clampColors(colors);
+
     return {
-      description: productRaw || "שקיות מותאמות",
+      description: description || "שקיות מותאמות",
       material: "80g non-woven",
       ...dims,
       quantity: qty,
-      logoColors: Math.min(4, Math.max(1, colorsNum)),
+      logoColors: colorsNum,
       hasHandles: handles,
       hasLamination: false,
+      notes: "",
     };
-  }, [qState]);
+  }, [qState, draft]);
 
   const [description, setDescription] = useState(presets.description);
   const [material, setMaterial] = useState(presets.material);
@@ -115,8 +161,9 @@ export function SendToFactoryForm({
   const [logoColors, setLogoColors] = useState<number>(presets.logoColors);
   const [hasHandles, setHasHandles] = useState<boolean>(presets.hasHandles);
   const [hasLamination, setHasLamination] = useState<boolean>(presets.hasLamination);
-  const [notes, setNotes] = useState("");
+  const [notes, setNotes] = useState(presets.notes ?? "");
   const [submitting, setSubmitting] = useState(false);
+  const [savingDraft, setSavingDraft] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // Live preview: W/H/D → "H20*D8*W25"
@@ -147,23 +194,67 @@ export function SendToFactoryForm({
     }
   };
 
-  const handleSubmit = async () => {
-    setError(null);
+  const buildSpec = () => {
     const w = parseFloat(widthCm) || 0;
     const h = parseFloat(heightCm) || 0;
     const d = parseFloat(depthCm) || 0;
     const q = parseInt(quantity, 10) || 0;
-    if (!description.trim()) return setError("חובה תיאור");
-    if (!material.trim()) return setError("חובה חומר");
-    if (!w || !h) return setError("חובה רוחב וגובה");
-    if (q < 1) return setError("חובה כמות חיובית");
-
     const printingStr = `${logoColors} color${logoColors > 1 ? "s" : ""}`;
     const finishingParts: string[] = [];
     finishingParts.push(hasHandles ? "With handles" : "No handles");
     finishingParts.push(hasLamination ? "Laminated" : "Not laminated");
-    const finishingStr = finishingParts.join(" / ");
+    return {
+      description: description.trim(),
+      material: material.trim(),
+      widthCm: w,
+      heightCm: h,
+      depthCm: d,
+      quantity: q,
+      printing: printingStr,
+      finishing: finishingParts.join(" / "),
+      notes: notes.trim(),
+    };
+  };
 
+  const validate = () => {
+    if (!description.trim()) return "חובה תיאור";
+    if (!material.trim()) return "חובה חומר";
+    if (!(parseFloat(widthCm) > 0 && parseFloat(heightCm) > 0))
+      return "חובה רוחב וגובה";
+    if ((parseInt(quantity, 10) || 0) < 1) return "חובה כמות חיובית";
+    return null;
+  };
+
+  const handleSaveDraft = async () => {
+    setError(null);
+    const v = validate();
+    if (v) return setError(v);
+    setSavingDraft(true);
+    try {
+      const spec = buildSpec();
+      const res = await fetch(`/api/leads/${encodeURIComponent(leadId)}/factory-draft`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(spec),
+      });
+      const data = await res.json();
+      if (!data?.ok) {
+        setError(data?.error ?? data?.detail ?? "כשל בשמירת draft");
+        return;
+      }
+      onSavedDraft?.(data.draft as Record<string, unknown>);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setSavingDraft(false);
+    }
+  };
+
+  const handleSubmit = async () => {
+    setError(null);
+    const v = validate();
+    if (v) return setError(v);
+    const spec = buildSpec();
     setSubmitting(true);
     try {
       const res = await fetch("/api/factory/quote-request", {
@@ -173,15 +264,15 @@ export function SendToFactoryForm({
           manychatSubId: leadId,
           customerName: leadName ?? undefined,
           productSpec: {
-            description: description.trim(),
-            material: material.trim(),
-            widthCm: w,
-            heightCm: h,
-            depthCm: d,
-            quantity: q,
-            printing: printingStr,
-            finishing: finishingStr,
-            notes: notes.trim() || undefined,
+            description: spec.description,
+            material: spec.material,
+            widthCm: spec.widthCm,
+            heightCm: spec.heightCm,
+            depthCm: spec.depthCm,
+            quantity: spec.quantity,
+            printing: spec.printing,
+            finishing: spec.finishing,
+            notes: spec.notes || undefined,
           },
         }),
       });
@@ -302,7 +393,7 @@ export function SendToFactoryForm({
 
       {error && <p className="text-xs text-destructive">{error}</p>}
 
-      <div className="flex items-center justify-end gap-2 pt-2 border-t border-border">
+      <div className="flex items-center justify-end gap-2 pt-2 border-t border-border flex-wrap">
         {onCancel && (
           <button
             type="button"
@@ -312,10 +403,26 @@ export function SendToFactoryForm({
             ביטול
           </button>
         )}
+        {onSavedDraft && (
+          <button
+            type="button"
+            onClick={handleSaveDraft}
+            disabled={savingDraft || submitting}
+            title="שמור את המפרט בסיכום ההזמנה — תוכל להוסיף הערות ולשלוח משם"
+            className="inline-flex items-center gap-1.5 rounded-md border border-primary bg-primary/5 px-3 py-1.5 text-sm font-medium text-primary hover:bg-primary/10 disabled:opacity-60"
+          >
+            {savingDraft ? (
+              <Loader2 className="size-3.5 animate-spin" />
+            ) : (
+              <ClipboardCheck className="size-3.5" />
+            )}
+            שלח לסיכום הזמנה
+          </button>
+        )}
         <button
           type="button"
           onClick={handleSubmit}
-          disabled={submitting}
+          disabled={submitting || savingDraft}
           className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
         >
           {submitting ? <Loader2 className="size-3.5 animate-spin" /> : <Send className="size-3.5" />}
