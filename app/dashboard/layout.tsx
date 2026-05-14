@@ -1,68 +1,15 @@
-import Link from "next/link";
-import { colors, fontStack, size, space, weight } from "@/lib/ui/tokens";
-
+/**
+ * /dashboard parent layout is a passthrough so /dashboard/v2 (light, navbar)
+ * and /dashboard/v3 (dark, sidebar) can each own their own chrome without
+ * one leaking into the other. The v1 dashboard home page (/dashboard) and
+ * the instructions page reach v2 chrome via the v2 layout because the home
+ * link still routes there; if a future top-level page needs the v2 chrome
+ * directly, wrap it explicitly.
+ */
 export default function DashboardLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  return (
-    <div style={{ minHeight: "100vh", background: colors.paper, color: colors.ink }}>
-      <nav
-        style={{
-          background: colors.surface,
-          borderBottom: `1px solid ${colors.rule}`,
-          padding: `${space.lg}px ${space["2xl"]}px`,
-          display: "flex",
-          gap: space.xl,
-          alignItems: "baseline",
-        }}
-      >
-        <Link
-          href="/dashboard"
-          style={{
-            fontFamily: fontStack.display,
-            fontWeight: weight.medium,
-            fontSize: size.xl,
-            letterSpacing: "-0.01em",
-            color: colors.ink,
-            marginInlineEnd: space.lg,
-          }}
-        >
-          Albadi
-        </Link>
-        <NavLink href="/dashboard">בית</NavLink>
-        <NavLink href="/dashboard/v2">Inbox + Pipeline</NavLink>
-        <NavLink href="/dashboard/instructions">מדריך</NavLink>
-      </nav>
-      <main
-        style={{
-          padding: `${space["2xl"]}px ${space["2xl"]}px ${space["4xl"]}px`,
-          maxWidth: 1200,
-          margin: "0 auto",
-        }}
-      >
-        {children}
-      </main>
-    </div>
-  );
-}
-
-function NavLink({ href, children }: { href: string; children: React.ReactNode }) {
-  return (
-    <Link
-      href={href}
-      style={{
-        fontFamily: fontStack.body,
-        fontSize: size.sm,
-        fontWeight: weight.medium,
-        color: colors.inkMuted,
-        padding: `${space.xs}px 0`,
-        borderBottom: "2px solid transparent",
-        transition: "color 150ms, border-color 150ms",
-      }}
-    >
-      {children}
-    </Link>
-  );
+  return <>{children}</>;
 }

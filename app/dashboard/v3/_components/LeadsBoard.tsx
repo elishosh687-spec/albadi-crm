@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   Search,
   Pause,
@@ -17,7 +18,6 @@ import {
   bucketOf,
   type BucketKey,
 } from "./buckets";
-import { LeadDrawer } from "./LeadDrawer";
 
 export interface LeadCardData {
   sid: string;
@@ -38,10 +38,14 @@ export interface LeadCardData {
 }
 
 export function LeadsBoard({ cards }: { cards: LeadCardData[] }) {
+  const router = useRouter();
   const [search, setSearch] = useState("");
   const [bucketFilter, setBucketFilter] = useState<BucketKey | null>(null);
   const [stageFilter, setStageFilter] = useState<string | null>(null);
-  const [selectedSid, setSelectedSid] = useState<string | null>(null);
+
+  const openLead = (sid: string) => {
+    router.push(`/dashboard/v3?lead=${encodeURIComponent(sid)}`);
+  };
 
   const enriched = useMemo(
     () =>
@@ -96,9 +100,6 @@ export function LeadsBoard({ cards }: { cards: LeadCardData[] }) {
   }, [enriched]);
 
   const totalShown = filtered.length;
-  const selectedLead = selectedSid
-    ? cards.find((c) => c.sid === selectedSid) ?? null
-    : null;
 
   return (
     <div className="flex flex-col gap-6">
@@ -180,18 +181,11 @@ export function LeadsBoard({ cards }: { cards: LeadCardData[] }) {
               key={bucket}
               bucket={bucket}
               cards={items}
-              onSelect={setSelectedSid}
+              onSelect={openLead}
             />
           );
         })}
       </div>
-
-      {selectedLead && (
-        <LeadDrawer
-          lead={selectedLead}
-          onClose={() => setSelectedSid(null)}
-        />
-      )}
     </div>
   );
 }

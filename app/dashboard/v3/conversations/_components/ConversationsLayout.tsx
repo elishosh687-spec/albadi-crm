@@ -3,7 +3,15 @@
 import { useState, useMemo } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Search, ChevronRight, Bot, User, UserCog } from "lucide-react";
+import {
+  Search,
+  ChevronRight,
+  Bot,
+  User,
+  UserCog,
+  PanelLeftClose,
+  PanelLeftOpen,
+} from "lucide-react";
 import { cn } from "@/lib/cn";
 import { STAGE_LABEL, STAGE_TONE, timeAgoHe } from "../../_components/stage-meta";
 import type { ConversationRow } from "../page";
@@ -38,6 +46,7 @@ export function ConversationsLayout({
   const params = useSearchParams();
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<"all" | "unread" | "needs_eli">("all");
+  const [summaryOpen, setSummaryOpen] = useState(false);
 
   const filtered = useMemo(() => {
     const s = search.trim().toLowerCase();
@@ -81,8 +90,8 @@ export function ConversationsLayout({
         </div>
       </header>
 
-      <div className="grid grid-cols-1 lg:grid-cols-[320px_1fr_320px] gap-0 lg:gap-3 flex-1 min-h-0">
-        {/* LEFT: list */}
+      <div className="grid grid-cols-1 lg:grid-cols-[240px_1fr] gap-0 lg:gap-3 flex-1 min-h-0">
+        {/* LEFT: contacts list (narrow) */}
         <aside
           className={cn(
             "rounded-xl border border-border bg-card overflow-hidden flex flex-col min-h-0",
@@ -138,39 +147,48 @@ export function ConversationsLayout({
           </ul>
         </aside>
 
-        {/* CENTER: chat */}
+        {/* RIGHT: chat panel + collapsible summary inside */}
         <main
           className={cn(
-            "rounded-xl border border-border bg-card overflow-hidden flex flex-col min-h-0",
+            "relative rounded-xl border border-border bg-card overflow-hidden flex flex-col min-h-0",
             !isChatOpen && "hidden lg:flex"
           )}
         >
           {selected ? (
-            <>
-              <ChatHeader
-                summary={selected.summary}
-                onBack={() => setLead(null)}
-              />
-              <ChatThread messages={selected.messages} />
-              <Composer
-                sid={selected.sid}
-                phone={selected.summary.phone}
-                initialBotPaused={selected.summary.botPaused}
-              />
-            </>
+            <div className="flex-1 grid grid-cols-1 lg:grid-cols-[1fr_auto] min-h-0">
+              {/* Chat column */}
+              <div className="flex flex-col min-h-0">
+                <ChatHeader
+                  summary={selected.summary}
+                  onBack={() => setLead(null)}
+                  summaryOpen={summaryOpen}
+                  onToggleSummary={() => setSummaryOpen((v) => !v)}
+                />
+                <ChatThread messages={selected.messages} />
+                <Composer
+                  sid={selected.sid}
+                  phone={selected.summary.phone}
+                  initialBotPaused={selected.summary.botPaused}
+                />
+              </div>
+              {/* Summary sidebar (collapsible) */}
+              {summaryOpen && (
+                <aside
+                  className={cn(
+                    "w-full lg:w-[300px] border-t lg:border-t-0 lg:border-r border-border bg-background/30",
+                    "overflow-y-auto p-4"
+                  )}
+                >
+                  <OrderSummary data={selected.summary} />
+                </aside>
+              )}
+            </div>
           ) : (
             <div className="flex-1 grid place-items-center text-sm text-muted-foreground p-6 text-center">
               בחר ליד מהרשימה לצפייה בשיחה ובסיכום ההזמנה.
             </div>
           )}
         </main>
-
-        {/* RIGHT: order summary (desktop only when selected) */}
-        {selected && (
-          <aside className="hidden lg:block overflow-y-auto">
-            <OrderSummary data={selected.summary} />
-          </aside>
-        )}
       </div>
     </div>
   );
@@ -179,9 +197,13 @@ export function ConversationsLayout({
 function ChatHeader({
   summary,
   onBack,
+  summaryOpen,
+  onToggleSummary,
 }: {
   summary: OrderSummaryData;
   onBack: () => void;
+  summaryOpen: boolean;
+  onToggleSummary: () => void;
 }) {
   const stage = (summary.stage ?? "UNCLASSIFIED").toUpperCase();
   const tone = STAGE_TONE[stage] ?? STAGE_TONE.UNCLASSIFIED;
@@ -207,11 +229,29 @@ function ChatHeader({
           {summary.phone || "—"}
         </div>
       </div>
+      <button
+        type="button"
+        onClick={onToggleSummary}
+        className={cn(
+          "size-8 rounded-md grid place-items-center transition-colors",
+          summaryOpen
+            ? "bg-primary/15 text-primary"
+            : "text-muted-foreground hover:text-foreground hover:bg-secondary"
+        )}
+        title={summaryOpen ? "סגור סיכום הזמנה" : "פתח סיכום הזמנה"}
+        aria-pressed={summaryOpen}
+      >
+        {summaryOpen ? (
+          <PanelLeftClose className="size-4" />
+        ) : (
+          <PanelLeftOpen className="size-4" />
+        )}
+      </button>
       <Link
         href="/dashboard/v3"
         className="text-xs text-muted-foreground hover:text-foreground hidden sm:inline-flex"
       >
-        חזרה לסקירה
+        חזרה
       </Link>
     </header>
   );

@@ -1,9 +1,11 @@
 import { Page } from "@/components/ui/Page";
 import { Card } from "@/components/ui/Card";
 import { colors, fontStack, leading, radius, size, space, weight } from "@/lib/ui/tokens";
+import { V2Chrome } from "../_components/V2Chrome";
 
 export default function InstructionsPage() {
   return (
+    <V2Chrome>
     <div>
       <Page
         eyebrow="מדריך שימוש"
@@ -129,6 +131,7 @@ export default function InstructionsPage() {
         </P>
       </Card>
     </div>
+    </V2Chrome>
   );
 }
 

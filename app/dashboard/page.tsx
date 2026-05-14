@@ -6,6 +6,7 @@ import { Page } from "@/components/ui/Page";
 import { Card } from "@/components/ui/Card";
 import { Stat, StatRow } from "@/components/ui/Stat";
 import { colors, fontStack, size, space, weight } from "@/lib/ui/tokens";
+import { V2Chrome } from "./_components/V2Chrome";
 
 export const dynamic = "force-dynamic";
 
@@ -46,6 +47,7 @@ export default async function DashboardHome() {
   });
 
   return (
+    <V2Chrome>
     <div>
       <Page
         eyebrow={dateLabel}
@@ -90,5 +92,6 @@ export default async function DashboardHome() {
         </p>
       </Card>
     </div>
+    </V2Chrome>
   );
 }

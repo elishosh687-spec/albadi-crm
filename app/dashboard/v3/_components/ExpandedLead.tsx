@@ -1,0 +1,474 @@
+"use client";
+
+import { useEffect, useState, useTransition } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import {
+  ArrowRight,
+  Pause,
+  Play,
+  ExternalLink,
+  Sparkles,
+  Send,
+  Clock,
+  LayoutDashboard,
+  MessagesSquare,
+  ClipboardList,
+} from "lucide-react";
+import { cn } from "@/lib/cn";
+import {
+  setLeadStage,
+  updateLeadNotes,
+  setBotPaused,
+  snoozeLead,
+  suggestRepliesAction,
+  sendManualReply,
+} from "@/app/actions/v2";
+import {
+  V2_FLAG_NAMES,
+  V2_PIPELINE_STAGES,
+  type V2FlagName,
+  type V2PipelineStage,
+} from "@/lib/manychat/stages";
+import { STAGE_LABEL, STAGE_TONE } from "./stage-meta";
+import { ChatThread, type ChatMessage } from "../conversations/_components/ChatThread";
+import { OrderSummary, type OrderSummaryData } from "../conversations/_components/OrderSummary";
+import { Composer } from "../conversations/_components/Composer";
+
+type TabKey = "overview" | "chat" | "summary";
+
+export interface ExpandedLeadProps {
+  sid: string;
+  summary: OrderSummaryData;
+  messages: ChatMessage[];
+}
+
+export function ExpandedLead({ sid, summary, messages }: ExpandedLeadProps) {
+  const router = useRouter();
+  const params = useSearchParams();
+  const [tab, setTab] = useState<TabKey>("overview");
+
+  const goBack = () => {
+    const sp = new URLSearchParams(params.toString());
+    sp.delete("lead");
+    router.replace(
+      sp.toString() ? `/dashboard/v3?${sp.toString()}` : "/dashboard/v3"
+    );
+  };
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") goBack();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const stage = (summary.stage ?? "UNCLASSIFIED").toUpperCase();
+  const tone = STAGE_TONE[stage] ?? STAGE_TONE.UNCLASSIFIED;
+
+  return (
+    <div className="flex flex-col gap-4 min-h-[calc(100dvh-3rem)]">
+      <header className="flex items-center gap-3 flex-wrap">
+        <button
+          type="button"
+          onClick={goBack}
+          className="inline-flex items-center gap-1.5 rounded-md border border-border bg-card px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground hover:bg-secondary"
+        >
+          <ArrowRight className="size-3.5" />
+          חזרה לרשימה
+        </button>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 min-w-0">
+            <h1
+              className="text-2xl font-medium truncate"
+              style={{ fontFamily: "var(--font-display)" }}
+            >
+              {summary.name || summary.phone || "(ליד)"}
+            </h1>
+            <span className={cn("text-xs rounded-full px-2.5 py-1 shrink-0", tone.pill)}>
+              {STAGE_LABEL[stage] ?? stage}
+            </span>
+          </div>
+          <div className="text-xs text-muted-foreground mt-0.5">
+            {summary.phone || sid}
+          </div>
+        </div>
+      </header>
+
+      <nav className="flex items-center gap-1 border-b border-border">
+        {(
+          [
+            { key: "overview", label: "סקירה", icon: LayoutDashboard },
+            { key: "chat", label: `שיחה (${messages.length})`, icon: MessagesSquare },
+            { key: "summary", label: "סיכום הזמנה", icon: ClipboardList },
+          ] as { key: TabKey; label: string; icon: typeof LayoutDashboard }[]
+        ).map((t) => {
+          const Icon = t.icon;
+          const active = tab === t.key;
+          return (
+            <button
+              key={t.key}
+              type="button"
+              onClick={() => setTab(t.key)}
+              className={cn(
+                "inline-flex items-center gap-1.5 px-4 py-2 -mb-px border-b-2 text-sm transition-colors",
+                active
+                  ? "border-primary text-foreground"
+                  : "border-transparent text-muted-foreground hover:text-foreground"
+              )}
+            >
+              <Icon className="size-3.5" />
+              {t.label}
+            </button>
+          );
+        })}
+      </nav>
+
+      <div className="flex-1 min-h-0">
+        {tab === "overview" && (
+          <OverviewTab sid={sid} summary={summary} />
+        )}
+        {tab === "chat" && (
+          <ChatTab sid={sid} summary={summary} messages={messages} />
+        )}
+        {tab === "summary" && (
+          <div className="max-w-2xl">
+            <OrderSummary data={summary} />
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function OverviewTab({
+  sid,
+  summary,
+}: {
+  sid: string;
+  summary: OrderSummaryData;
+}) {
+  const [stage, setStage] = useState<V2PipelineStage>(
+    (V2_PIPELINE_STAGES.includes((summary.stage ?? "NEW") as V2PipelineStage)
+      ? summary.stage
+      : "NEW") as V2PipelineStage
+  );
+  const [flags, setFlags] = useState<V2FlagName[]>(
+    summary.flags.filter((f) =>
+      V2_FLAG_NAMES.includes(f as V2FlagName)
+    ) as V2FlagName[]
+  );
+  const [notes, setNotes] = useState(summary.notes ?? "");
+  const [paused, setPaused] = useState(summary.botPaused);
+  const [hint, setHint] = useState("");
+  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [replyText, setReplyText] = useState("");
+  const [isPending, startTransition] = useTransition();
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+
+  const toggleFlag = (f: V2FlagName) => {
+    setFlags((cur) =>
+      cur.includes(f) ? cur.filter((x) => x !== f) : [...cur, f]
+    );
+  };
+
+  const saveStage = () => {
+    setMsg(null);
+    startTransition(async () => {
+      const r = await setLeadStage({ manychatSubId: sid, stage, flags });
+      setMsg({ ok: r.ok, text: r.ok ? r.message ?? "נשמר" : r.error ?? "כשל" });
+    });
+  };
+  const saveNotes = () => {
+    setMsg(null);
+    startTransition(async () => {
+      const r = await updateLeadNotes(sid, notes);
+      setMsg({ ok: r.ok, text: r.ok ? r.message ?? "נשמר" : r.error ?? "כשל" });
+    });
+  };
+  const togglePause = () => {
+    setMsg(null);
+    const next = !paused;
+    startTransition(async () => {
+      const r = await setBotPaused(sid, next);
+      if (r.ok) setPaused(next);
+      setMsg({ ok: r.ok, text: r.ok ? r.message ?? "" : r.error ?? "כשל" });
+    });
+  };
+  const snooze = (hours: number) => {
+    setMsg(null);
+    startTransition(async () => {
+      const r = await snoozeLead(sid, hours);
+      setMsg({ ok: r.ok, text: r.ok ? r.message ?? "" : r.error ?? "כשל" });
+    });
+  };
+  const suggest = () => {
+    setMsg(null);
+    startTransition(async () => {
+      const r = await suggestRepliesAction(sid, hint || undefined);
+      if (r.ok) setSuggestions(r.replies);
+      else setMsg({ ok: false, text: r.error });
+    });
+  };
+  const sendReply = () => {
+    const t = replyText.trim();
+    if (!t) return;
+    setMsg(null);
+    startTransition(async () => {
+      const r = await sendManualReply(sid, t);
+      setMsg({ ok: r.ok, text: r.ok ? r.message ?? "נשלח" : r.error ?? "כשל" });
+      if (r.ok) {
+        setReplyText("");
+        setSuggestions([]);
+      }
+    });
+  };
+
+  const waLink = summary.phone
+    ? `https://wa.me/${summary.phone.replace(/[^0-9]/g, "")}`
+    : null;
+
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-5">
+      <div className="space-y-5">
+        {summary.botSummary && (
+          <section className="rounded-xl border border-border bg-card p-4">
+            <div className="text-xs uppercase tracking-wider text-muted-foreground mb-1.5">
+              סיכום הבוט
+            </div>
+            <p className="text-sm whitespace-pre-wrap">{summary.botSummary}</p>
+          </section>
+        )}
+
+        <section className="rounded-xl border border-border bg-card p-4 space-y-3">
+          <div className="text-xs uppercase tracking-wider text-muted-foreground">
+            פעולות
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={togglePause}
+              disabled={isPending}
+              className={cn(
+                "inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-medium",
+                paused
+                  ? "bg-warning/15 border-warning/40 text-warning"
+                  : "bg-success/10 border-success/30 text-success"
+              )}
+            >
+              {paused ? <Pause className="size-3.5" /> : <Play className="size-3.5" />}
+              {paused ? "הבוט מושהה" : "הבוט פעיל"}
+            </button>
+            {waLink && (
+              <a
+                href={waLink}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-background/40 px-3 py-2 text-xs font-medium hover:bg-secondary"
+              >
+                WhatsApp
+                <ExternalLink className="size-3" />
+              </a>
+            )}
+            <div className="flex items-center gap-1 text-xs text-muted-foreground ml-auto">
+              <Clock className="size-3" />
+              <button
+                type="button"
+                onClick={() => snooze(24)}
+                disabled={isPending}
+                className="px-1.5 py-0.5 rounded hover:bg-secondary"
+              >
+                +יום
+              </button>
+              <button
+                type="button"
+                onClick={() => snooze(24 * 3)}
+                disabled={isPending}
+                className="px-1.5 py-0.5 rounded hover:bg-secondary"
+              >
+                +3
+              </button>
+              <button
+                type="button"
+                onClick={() => snooze(24 * 7)}
+                disabled={isPending}
+                className="px-1.5 py-0.5 rounded hover:bg-secondary"
+              >
+                +ש׳
+              </button>
+            </div>
+          </div>
+        </section>
+
+        <section className="rounded-xl border border-border bg-card p-4 space-y-3">
+          <div className="text-xs uppercase tracking-wider text-muted-foreground">
+            שלב
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {V2_PIPELINE_STAGES.map((s) => {
+              const t = STAGE_TONE[s];
+              const active = stage === s;
+              return (
+                <button
+                  key={s}
+                  type="button"
+                  onClick={() => setStage(s)}
+                  className={cn(
+                    "rounded-full text-xs px-2.5 py-1 border transition-colors",
+                    active
+                      ? t.pill
+                      : "border-border text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  {STAGE_LABEL[s] ?? s}
+                </button>
+              );
+            })}
+          </div>
+          <div className="text-xs uppercase tracking-wider text-muted-foreground pt-1">
+            דגלים
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {V2_FLAG_NAMES.map((f) => {
+              const active = flags.includes(f);
+              return (
+                <button
+                  key={f}
+                  type="button"
+                  onClick={() => toggleFlag(f)}
+                  className={cn(
+                    "rounded-full text-xs px-2.5 py-1 border transition-colors",
+                    active
+                      ? "bg-primary/15 border-primary/40 text-primary"
+                      : "border-border text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  {f}
+                </button>
+              );
+            })}
+          </div>
+          <button
+            type="button"
+            onClick={saveStage}
+            disabled={isPending}
+            className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
+          >
+            שמור שלב + דגלים
+          </button>
+        </section>
+
+        <section className="rounded-xl border border-border bg-card p-4 space-y-2">
+          <div className="text-xs uppercase tracking-wider text-muted-foreground">
+            הערות
+          </div>
+          <textarea
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            rows={3}
+            placeholder="הערות פנימיות…"
+            className="w-full bg-background/50 border border-border rounded-lg p-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring/30"
+          />
+          <button
+            type="button"
+            onClick={saveNotes}
+            disabled={isPending}
+            className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background/40 px-3 py-1.5 text-xs font-medium hover:bg-secondary disabled:opacity-60"
+          >
+            שמור הערות
+          </button>
+        </section>
+
+        <section className="rounded-xl border border-border bg-card p-4 space-y-2">
+          <div className="text-xs uppercase tracking-wider text-muted-foreground">
+            הצעות LLM + ענייה ידנית
+          </div>
+          <div className="flex gap-2">
+            <input
+              value={hint}
+              onChange={(e) => setHint(e.target.value)}
+              placeholder="רמז: ‘הצע הנחה 5%’"
+              className="flex-1 bg-background/50 border border-border rounded-lg px-3 py-2 text-xs focus:outline-none"
+            />
+            <button
+              type="button"
+              onClick={suggest}
+              disabled={isPending}
+              className="inline-flex items-center gap-1.5 rounded-md bg-accent px-3 py-2 text-xs font-medium text-accent-foreground hover:opacity-90"
+            >
+              <Sparkles className="size-3" />
+              הצע
+            </button>
+          </div>
+          {suggestions.length > 0 && (
+            <div className="flex flex-col gap-1.5">
+              {suggestions.map((s, i) => (
+                <button
+                  key={i}
+                  type="button"
+                  onClick={() => setReplyText(s)}
+                  className="text-right text-sm border border-border rounded-lg p-2.5 hover:bg-secondary"
+                >
+                  {s}
+                </button>
+              ))}
+            </div>
+          )}
+          <textarea
+            value={replyText}
+            onChange={(e) => setReplyText(e.target.value)}
+            rows={3}
+            placeholder="ענה ידני (משהה את הבוט)…"
+            className="w-full bg-background/50 border border-border rounded-lg p-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring/30"
+          />
+          <button
+            type="button"
+            onClick={sendReply}
+            disabled={isPending || !replyText.trim()}
+            className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-2 text-xs font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
+          >
+            <Send className="size-3" />
+            שלח
+          </button>
+        </section>
+
+        {msg && (
+          <p
+            className={cn(
+              "text-xs",
+              msg.ok ? "text-success" : "text-destructive"
+            )}
+          >
+            {msg.text}
+          </p>
+        )}
+      </div>
+
+      <div className="lg:sticky lg:top-6">
+        <OrderSummary data={summary} />
+      </div>
+    </div>
+  );
+}
+
+function ChatTab({
+  sid,
+  summary,
+  messages,
+}: {
+  sid: string;
+  summary: OrderSummaryData;
+  messages: ChatMessage[];
+}) {
+  return (
+    <div className="flex flex-col rounded-xl border border-border bg-card overflow-hidden h-[calc(100dvh-12rem)] min-h-[400px]">
+      <ChatThread messages={messages} />
+      <Composer
+        sid={sid}
+        phone={summary.phone}
+        initialBotPaused={summary.botPaused}
+      />
+    </div>
+  );
+}
