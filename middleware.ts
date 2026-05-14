@@ -18,6 +18,17 @@ export function middleware(req: NextRequest) {
     return NextResponse.next();
   }
 
+  // External cron: GitHub Actions hits /api/factory/refresh every 5 min
+  // with Authorization: Bearer ${CRON_SECRET}. Let it through cookie auth.
+  if (
+    path === "/api/factory/refresh" &&
+    req.method === "GET" &&
+    process.env.CRON_SECRET &&
+    req.headers.get("authorization") === `Bearer ${process.env.CRON_SECRET}`
+  ) {
+    return NextResponse.next();
+  }
+
   // Protect dashboard + actions APIs + factory pipeline APIs + the root
   // path (which we internally serve from /dashboard/v3 — see below).
   if (
