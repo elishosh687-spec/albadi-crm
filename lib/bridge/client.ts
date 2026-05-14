@@ -319,12 +319,50 @@ export async function insertBridgeMessage(input: {
   // Dedupe by waMessageId — webhooks can retry, and our own pre-insert from
   // approveDraft / sendManualReply / autoresponder paths will already have
   // claimed this id with sender='bot' or 'eli'.
+  //
+  // RACE: the bridge sometimes fires `message.sent` BEFORE our POST /v1/messages
+  // call returns the wa_message_id, so the webhook can insert a placeholder
+  // row with text=null first. When the slower path (sendBridgeMessage) then
+  // tries to pre-insert with the real text, we must PATCH the existing row
+  // rather than no-op — otherwise the conversation thread shows empty bot
+  // bubbles forever. The patch only writes a field when the new value is
+  // strictly more informative than the existing one.
   const existing = await db
-    .select({ id: messagesTable.id })
+    .select({
+      id: messagesTable.id,
+      text: messagesTable.text,
+      sender: messagesTable.sender,
+    })
     .from(messagesTable)
     .where(eq(messagesTable.waMessageId, input.waMessageId))
     .limit(1);
-  if (existing.length > 0) return null;
+  if (existing.length > 0) {
+    const row = existing[0];
+    const patch: Record<string, unknown> = {};
+    if (
+      input.text &&
+      input.text.trim().length > 0 &&
+      (!row.text || row.text.trim().length === 0)
+    ) {
+      patch.text = input.text;
+    }
+    // 'bot' / 'lead' are more specific than the webhook's default 'eli'
+    // fallback for outbound — overwrite when we have stronger evidence.
+    if (
+      input.sender &&
+      input.sender !== row.sender &&
+      (row.sender === null || (row.sender === "eli" && input.sender === "bot"))
+    ) {
+      patch.sender = input.sender;
+    }
+    if (Object.keys(patch).length > 0) {
+      await db
+        .update(messagesTable)
+        .set(patch as any)
+        .where(eq(messagesTable.id, row.id));
+    }
+    return null;
+  }
 
   const [row] = await db
     .insert(messagesTable)

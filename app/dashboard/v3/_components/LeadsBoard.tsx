@@ -227,6 +227,13 @@ function BucketColumn({
   );
 }
 
+function shortSid(sid: string): string {
+  // 133144455962747@lid -> …62747
+  // 1811084322@s.whatsapp.net -> …84322
+  const before = sid.split("@")[0] || sid;
+  return before.length > 5 ? `…${before.slice(-5)}` : before;
+}
+
 function LeadCard({
   card,
   onClick,
@@ -236,19 +243,23 @@ function LeadCard({
 }) {
   const stageTone =
     STAGE_TONE[card.stage.toUpperCase()] ?? STAGE_TONE.UNCLASSIFIED;
-  const displayName = card.name || card.phone || card.sid;
+  const displayName = card.name || card.phone || shortSid(card.sid);
   const initials = (displayName ?? "?").trim().slice(0, 2);
   const needsEli = card.pipelineFlag === "NEEDS_ELI";
 
+  const hasPreview =
+    !!card.botSummary || !!card.notes || !!card.lastInboundText;
+
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={cn(
-        "group relative flex flex-col gap-2 rounded-lg border border-border/80 bg-card hover:bg-card/70 transition-colors p-3 text-right",
-        needsEli && "ring-1 ring-destructive/30"
-      )}
-    >
+    <div className="relative group">
+      <button
+        type="button"
+        onClick={onClick}
+        className={cn(
+          "w-full relative flex flex-col gap-2 rounded-lg border border-border/80 bg-card hover:bg-card/70 transition-colors p-3 text-right",
+          needsEli && "ring-1 ring-destructive/30"
+        )}
+      >
       <div className="flex items-start gap-3">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
@@ -318,6 +329,67 @@ function LeadCard({
           {timeAgoHe(card.lastInboundAt ?? card.updatedAt)}
         </span>
       </div>
-    </button>
+      </button>
+      {hasPreview && <LeadHoverPreview card={card} />}
+    </div>
+  );
+}
+
+function LeadHoverPreview({ card }: { card: LeadCardData }) {
+  return (
+    <div
+      className={cn(
+        // Hidden by default. Shown on hover or focus-within within the group.
+        // Pointer-events-none keeps the preview from stealing clicks; the
+        // underlying card stays the click target.
+        "pointer-events-none absolute z-50 right-0 top-full mt-1 w-80 max-w-[90vw]",
+        "opacity-0 translate-y-[-4px] transition-all duration-150",
+        "group-hover:opacity-100 group-hover:translate-y-0 group-focus-within:opacity-100"
+      )}
+    >
+      <div className="rounded-xl border border-border bg-popover shadow-2xl p-3 text-right space-y-2">
+        <div className="text-xs uppercase tracking-wider text-muted-foreground">
+          תצוגה מקדימה
+        </div>
+        {card.botSummary && (
+          <div>
+            <div className="text-[10px] text-muted-foreground uppercase tracking-wider">
+              סיכום הבוט
+            </div>
+            <p className="text-xs whitespace-pre-wrap line-clamp-4">
+              {card.botSummary}
+            </p>
+          </div>
+        )}
+        {card.notes && (
+          <div>
+            <div className="text-[10px] text-muted-foreground uppercase tracking-wider">
+              הערות
+            </div>
+            <p className="text-xs whitespace-pre-wrap line-clamp-3">
+              {card.notes}
+            </p>
+          </div>
+        )}
+        {card.lastInboundText && (
+          <div>
+            <div className="text-[10px] text-muted-foreground uppercase tracking-wider">
+              הודעה אחרונה מהלקוח
+            </div>
+            <p className="text-xs whitespace-pre-wrap line-clamp-3 bg-background/50 rounded p-1.5 mt-1">
+              {card.lastInboundText}
+            </p>
+          </div>
+        )}
+        {card.quoteTotal && (
+          <div className="flex items-center justify-between text-xs">
+            <span className="text-muted-foreground">הצעת מחיר</span>
+            <span className="tabular-nums font-medium">
+              ₪{card.quoteTotal}
+            </span>
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
