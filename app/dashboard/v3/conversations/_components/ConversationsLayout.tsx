@@ -179,7 +179,7 @@ export function ConversationsLayout({
                     "overflow-y-auto p-4"
                   )}
                 >
-                  <OrderSummary data={selected.summary} />
+                  <OrderSummary data={selected.summary} sid={selected.sid} />
                 </aside>
               )}
             </div>

@@ -135,7 +135,7 @@ export function ExpandedLead({ sid, summary, messages }: ExpandedLeadProps) {
         )}
         {tab === "summary" && (
           <div className="max-w-2xl">
-            <OrderSummary data={summary} />
+            <OrderSummary data={summary} sid={sid} />
           </div>
         )}
       </div>
@@ -490,7 +490,7 @@ function OverviewTab({
       </div>
 
       <div className="lg:sticky lg:top-6">
-        <OrderSummary data={summary} />
+        <OrderSummary data={summary} sid={sid} />
       </div>
     </div>
   );
