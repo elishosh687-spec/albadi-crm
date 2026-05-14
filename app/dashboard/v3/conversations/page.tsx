@@ -81,13 +81,13 @@ export default async function V3ConversationsPage({
                   ORDER BY received_at DESC
                 ) AS rn
               FROM messages
-              WHERE trim(manychat_sub_id) IN ${sids}
+              WHERE trim(manychat_sub_id) = ANY(${sids}::text[])
             ) t WHERE rn = 1
           `),
           db.execute<UnreadRow>(sql`
             SELECT trim(manychat_sub_id) AS sid, count(*)::int AS count
             FROM messages
-            WHERE trim(manychat_sub_id) IN ${sids}
+            WHERE trim(manychat_sub_id) = ANY(${sids}::text[])
               AND direction = 'in'
               AND received_at > now() - interval '24 hours'
             GROUP BY trim(manychat_sub_id)
