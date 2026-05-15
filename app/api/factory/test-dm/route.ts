@@ -13,14 +13,8 @@ import { isJid } from "@/lib/bridge/jid";
 export const runtime = "nodejs";
 export const maxDuration = 30;
 
-export async function GET(req: NextRequest) {
-  const secret = process.env.CRON_SECRET;
-  if (secret) {
-    const auth = req.headers.get("authorization");
-    if (auth !== `Bearer ${secret}`) {
-      return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-    }
-  }
+export async function GET(_req: NextRequest) {
+  // Auth delegated to middleware (cookie or CRON_SECRET bearer both pass through).
 
   const raw = (process.env.ELI_NOTIFY_JID ?? "").replace(/^﻿/, "").trim();
   const dryRun = process.env.BRIDGE_DRY_RUN === "1";
