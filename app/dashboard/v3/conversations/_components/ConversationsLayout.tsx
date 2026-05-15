@@ -409,7 +409,8 @@ function ConversationListItem({
           paused
             ? "border-warning/40 text-warning hover:bg-warning/10"
             : "border-success/40 text-success hover:bg-success/10",
-          "opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity",
+          // Visible always on touch; hover-reveal on desktop.
+          "opacity-100 lg:opacity-0 lg:group-hover:opacity-100 focus:opacity-100 transition-opacity",
           "disabled:opacity-60"
         )}
       >
@@ -430,7 +431,8 @@ function ConversationListItem({
           "absolute top-2 left-2 size-7 rounded-md grid place-items-center",
           "bg-card/80 backdrop-blur-sm border border-border",
           "text-muted-foreground hover:text-destructive hover:bg-destructive/10",
-          "opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity",
+          // Visible always on touch; hover-reveal on desktop.
+          "opacity-100 lg:opacity-0 lg:group-hover:opacity-100 focus:opacity-100 transition-opacity",
           "disabled:opacity-60"
         )}
       >

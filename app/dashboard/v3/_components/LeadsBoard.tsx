@@ -384,7 +384,8 @@ function LeadCard({
         className={cn(
           "absolute top-2 left-2 z-10 grid place-items-center size-6 rounded-md",
           "bg-card/80 backdrop-blur border border-destructive/40 text-destructive",
-          "opacity-0 group-hover:opacity-100 focus:opacity-100",
+          // Visible always on touch; hover-reveal on desktop.
+          "opacity-100 lg:opacity-0 lg:group-hover:opacity-100 focus:opacity-100",
           "transition-opacity hover:bg-destructive/10 disabled:opacity-60"
         )}
       >
