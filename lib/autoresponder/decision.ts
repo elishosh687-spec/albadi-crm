@@ -37,6 +37,7 @@ import { desc, sql, eq } from "drizzle-orm";
 import { sendBridgeMessage } from "../bridge/client";
 import { sendEliDM } from "../notify/eli";
 import { classifyIntent, type Intent } from "./intent";
+import { handleUnmatch, type UnmatchResult } from "./unmatch-agent";
 import {
   eliDecisionEscalationTemplate,
   eliLogoReceivedTemplate,
@@ -176,12 +177,51 @@ async function setDecisionState(
     .where(sql`trim(${leads.manychatSubId}) = ${sid.trim()}`);
 }
 
+/**
+ * Escalate the lead to Eli — sets NEEDS_ELI + bot_paused, fires a DM, optionally
+ * queues a money-moment draft.
+ *
+ * Two call shapes are supported (backward compat — many call sites still use
+ * the positional form):
+ *
+ *   // legacy (positional)
+ *   escalateToEli(ctx, reason, llmSummary, kind)
+ *
+ *   // enriched (options object) — preferred when LLM was in the path
+ *   escalateToEli(ctx, reason, { kind, llmAnalysis, recommendation, llmSummary })
+ *
+ * `llmAnalysis` / `recommendation` come from unmatch-agent or spec-extractor and
+ * land in Eli's DM verbatim. `llmSummary` (legacy) is kept as a fallback line
+ * when neither analysis nor recommendation is provided.
+ */
+interface EscalateOptions {
+  kind?: "reject" | "negotiating" | "spec_change" | "question" | "generic";
+  /** Legacy short summary written into bot_summary + DM fallback line. */
+  llmSummary?: string | null;
+  /** LLM's reading of what the customer wants (Hebrew). */
+  llmAnalysis?: string | null;
+  /** LLM's recommended next move (Hebrew). */
+  recommendation?: string | null;
+}
+
 async function escalateToEli(
   ctx: LeadCtx,
   reason: string,
-  llmSummary?: string,
-  kind: "reject" | "negotiating" | "spec_change" | "question" | "generic" = "generic"
+  optsOrSummary?: EscalateOptions | string,
+  legacyKind: "reject" | "negotiating" | "spec_change" | "question" | "generic" = "generic"
 ): Promise<void> {
+  // Normalize the two signatures into a single opts struct.
+  const opts: EscalateOptions =
+    typeof optsOrSummary === "string"
+      ? { llmSummary: optsOrSummary, kind: legacyKind }
+      : { kind: legacyKind, ...(optsOrSummary ?? {}) };
+  const kind = opts.kind ?? "generic";
+
+  // bot_summary stays short and human-readable for the dashboard. Prefer the
+  // richer LLM analysis when it exists; otherwise fall back to legacy summary.
+  const botSummary =
+    opts.llmAnalysis?.trim() || opts.llmSummary?.trim() || reason;
+
   // Clear any decision sub-state when escalating so re-engagement starts clean.
   const cleared = { ...(ctx.qState ?? {}), decisionState: null };
   await db
@@ -189,7 +229,7 @@ async function escalateToEli(
     .set({
       pipelineFlag: "NEEDS_ELI",
       botPaused: true,
-      botSummary: llmSummary ?? reason,
+      botSummary,
       qState: cleared as any,
       updatedAt: new Date(),
     })
@@ -200,7 +240,9 @@ async function escalateToEli(
       phone: ctx.phone,
       stage: ctx.pipelineStage,
       kind,
-      summary: llmSummary ?? null,
+      summary: opts.llmSummary ?? null,
+      llmAnalysis: opts.llmAnalysis ?? null,
+      recommendation: opts.recommendation ?? null,
     })
   );
 
@@ -214,13 +256,69 @@ async function escalateToEli(
       moneyReason,
       pipelineStage: ctx.pipelineStage,
       leadName: ctx.name,
-      botSummary: llmSummary ?? reason,
+      botSummary,
     });
   }
 }
 
 function hasDigits(text: string): boolean {
   return /\d/.test(text);
+}
+
+/**
+ * Run the unmatch agent and apply its decision: send a reply, escalate with
+ * rich context, or no-op. Returns the agent's verdict so the caller can fold
+ * it into its own DecisionResult.
+ *
+ * Used by the three "we don't know what to do" branches:
+ *   - intent === "other"
+ *   - intent === "question_other"
+ *   - awaiting_competitor_offer with no digits + not a clear reject
+ *
+ * `fallbackEscalateReason` runs when the agent says "escalate" but didn't
+ * provide an analysis — keeps a sensible bot_summary line in the dashboard.
+ */
+async function runUnmatchAgent(
+  ctx: LeadCtx,
+  message: string,
+  reasonLabel: string,
+  fallbackEscalateReason: string,
+  fallbackKind: "reject" | "negotiating" | "spec_change" | "question" | "generic" = "generic"
+): Promise<UnmatchResult> {
+  let result: UnmatchResult;
+  try {
+    result = await handleUnmatch({
+      sid: ctx.sid,
+      message,
+      reason: reasonLabel,
+    });
+  } catch (e) {
+    console.error("[decision] unmatch agent threw", e);
+    // Treat any thrown error as an escalation — same as the agent's own
+    // soft-fail path.
+    result = {
+      action: "escalate",
+      kind: fallbackKind,
+      llmAnalysis: `הבוט לא הצליח לסווג: "${message.slice(0, 120)}"`,
+      recommendation: undefined,
+      confidence: 0,
+    };
+  }
+
+  if (result.action === "reply" && result.replyText) {
+    await sendBridgeMessage(ctx.jid, result.replyText);
+    return result;
+  }
+  if (result.action === "escalate") {
+    await escalateToEli(ctx, fallbackEscalateReason, {
+      kind: result.kind ?? fallbackKind,
+      llmAnalysis: result.llmAnalysis,
+      recommendation: result.recommendation,
+    });
+    return result;
+  }
+  // noop — let cadence handle.
+  return result;
 }
 
 // File-share URL detection for logo-stage inbounds. Match Drive / Dropbox /
@@ -347,18 +445,38 @@ async function handleDecisionStage(
         detail: "no competitor → awaiting_pause_reason",
       };
     }
-    // §2.4.4B — ambiguous → escalate with a short ack so the customer isn't ignored.
-    await sendBridgeMessage(ctx.jid, REPLY_COMPETITOR_AMBIGUOUS_ACK);
-    await escalateToEli(
+    // §2.4.4B — previously: ambiguous reply → instant escalate with an ack.
+    // Now: try the unmatch agent first. It might understand "לא ממש, אבל
+    // יקר לי" as a soft no-competitor reply that we can route to the pause
+    // sub-state, or it might confirm an escalation with a richer summary.
+    const agentResult = await runUnmatchAgent(
       ctx,
+      t,
+      "Stage 2 — customer answered awaiting_competitor_offer ambiguously",
       "הלקוח ענה תשובה לא ברורה על הצעה מתחרה",
-      classification.summary,
       "negotiating"
     );
+    if (agentResult.action === "reply") {
+      return {
+        action: "canned_reply",
+        intent: classification.intent,
+        detail: "competitor_ambiguous → llm-handled",
+      };
+    }
+    if (agentResult.action === "escalate") {
+      return {
+        action: "escalated",
+        intent: classification.intent,
+        detail: agentResult.llmAnalysis ?? "ambiguous competitor reply",
+      };
+    }
+    // Agent said noop — preserve the original behavior with the polite ack
+    // so the customer isn't ghosted.
+    await sendBridgeMessage(ctx.jid, REPLY_COMPETITOR_AMBIGUOUS_ACK);
     return {
-      action: "escalated",
+      action: "no_op",
       intent: classification.intent,
-      detail: "ambiguous competitor reply",
+      detail: "competitor ambiguous, agent said noop",
     };
   }
 
@@ -490,16 +608,33 @@ async function handleDecisionStage(
       };
     }
     case "question_other": {
-      await escalateToEli(
+      // Previously: instant escalate. Now: let the unmatch agent try to
+      // answer from FAQ first; only escalate if the agent decides it can't.
+      const agentResult = await runUnmatchAgent(
         ctx,
+        t,
+        "Stage 2 — customer asked a question the bot can't auto-answer",
         "הלקוח שאל שאלה שהבוט לא יכול לענות עליה",
-        classification.summary,
         "question"
       );
+      if (agentResult.action === "reply") {
+        return {
+          action: "canned_reply",
+          intent: classification.intent,
+          detail: "question_other → llm-answered",
+        };
+      }
+      if (agentResult.action === "escalate") {
+        return {
+          action: "escalated",
+          intent: classification.intent,
+          detail: agentResult.llmAnalysis ?? classification.summary,
+        };
+      }
       return {
-        action: "escalated",
+        action: "no_op",
         intent: classification.intent,
-        detail: classification.summary,
+        detail: "agent said noop",
       };
     }
     case "question_format": {
@@ -510,9 +645,33 @@ async function handleDecisionStage(
     }
 
     case "other":
-    default:
-      // Ambiguous — let the follow-up cron keep nudging on the spec'd cadence.
+    default: {
+      // Previously: no_op while cron nudges. Now: hand to the unmatch agent —
+      // it might understand a compound message ("אקח 1000 כמה יורד?") that
+      // the simple 12-category classifier flagged as "other".
+      const agentResult = await runUnmatchAgent(
+        ctx,
+        t,
+        "Stage 2 — intent=other, unclassified message",
+        "הודעה לא מסווגת מהלקוח"
+      );
+      if (agentResult.action === "reply") {
+        return {
+          action: "canned_reply",
+          intent: classification.intent,
+          detail: "other → llm-handled",
+        };
+      }
+      if (agentResult.action === "escalate") {
+        return {
+          action: "escalated",
+          intent: classification.intent,
+          detail: agentResult.llmAnalysis ?? "ambiguous",
+        };
+      }
+      // Agent said noop → preserve original behavior (cron keeps nudging).
       return { action: "no_op", intent: classification.intent, detail: "ambiguous" };
+    }
   }
 }
 
@@ -777,21 +936,60 @@ async function handleFinalStage(
       };
     }
     case "question_other": {
-      await escalateToEli(
+      // Try unmatch agent (FAQ answer) before falling back to escalate.
+      const agentResult = await runUnmatchAgent(
         ctx,
+        t,
+        "Stage 4 — customer asked a question the bot can't auto-answer",
         "הלקוח שאל שאלה ב-שלב 4 (מחיר סופי)",
-        classification.summary,
         "question"
       );
+      if (agentResult.action === "reply") {
+        return {
+          action: "canned_reply",
+          intent: classification.intent,
+          detail: "question_other → llm-answered",
+        };
+      }
+      if (agentResult.action === "escalate") {
+        return {
+          action: "escalated",
+          intent: classification.intent,
+          detail: agentResult.llmAnalysis ?? classification.summary,
+        };
+      }
       return {
-        action: "escalated",
+        action: "no_op",
         intent: classification.intent,
-        detail: classification.summary,
+        detail: "agent said noop",
       };
     }
 
     case "other":
-    default:
+    default: {
+      // Hand to unmatch agent — catches compound or ambiguous replies that
+      // the classifier flagged as "other".
+      const agentResult = await runUnmatchAgent(
+        ctx,
+        t,
+        "Stage 4 — intent=other, unclassified message after final price",
+        "הודעה לא מסווגת מהלקוח אחרי מחיר סופי"
+      );
+      if (agentResult.action === "reply") {
+        return {
+          action: "canned_reply",
+          intent: classification.intent,
+          detail: "other → llm-handled",
+        };
+      }
+      if (agentResult.action === "escalate") {
+        return {
+          action: "escalated",
+          intent: classification.intent,
+          detail: agentResult.llmAnalysis ?? "ambiguous",
+        };
+      }
       return { action: "no_op", intent: classification.intent, detail: "ambiguous" };
+    }
   }
 }

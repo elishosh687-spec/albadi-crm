@@ -138,8 +138,12 @@ export async function POST(
       });
       pdfUrl = blob.url;
     } else {
-      // No blob configured; the GET /pdf route re-renders on demand.
-      pdfUrl = null;
+      // No Blob token — use the on-demand render endpoint as the public URL.
+      // Middleware exempts GET /api/factory/<id>/pdf from auth so the bridge
+      // can fetch it directly.
+      const host = req.headers.get("host") ?? "albadi-crm.vercel.app";
+      const proto = host.startsWith("localhost") ? "http" : "https";
+      pdfUrl = `${proto}://${host}/api/factory/${id}/pdf`;
     }
   } catch (err) {
     console.error("[factory/finalize] PDF render/upload failed", err);

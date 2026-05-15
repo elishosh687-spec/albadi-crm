@@ -112,6 +112,11 @@ export function eliEscalationTemplate(input: {
 /**
  * Eli WA DM when the decision sub-flow escalates a lead. Picks the right
  * header per reason so the message is scannable.
+ *
+ * `llmAnalysis` + `recommendation` are populated when an LLM (unmatch-agent or
+ * spec-extractor) was in the path and decided to escalate. When present, they
+ * give Eli the "why" and the "what to do next" without him having to scan the
+ * thread. When absent, the DM falls back to the legacy `summary` line.
  */
 export function eliDecisionEscalationTemplate(input: {
   name: string | null | undefined;
@@ -120,22 +125,42 @@ export function eliDecisionEscalationTemplate(input: {
   /** kind: rejection vs negotiation vs generic question */
   kind: "reject" | "negotiating" | "spec_change" | "question" | "generic";
   summary?: string | null;
+  /** LLM's reading of what the customer wants (Hebrew). */
+  llmAnalysis?: string | null;
+  /** LLM's suggested next move for Eli (Hebrew). */
+  recommendation?: string | null;
 }): string {
   const who = input.name?.trim() || input.phone || "ליד";
   const stage = (input.stage || "?").trim();
-  const summaryLine = input.summary?.trim() ? `\n📝 ${input.summary.trim()}` : "";
+
+  // When LLM was in the path, prefer the richer analysis/recommendation block
+  // over the bare `summary` line. Keep `summary` as a fallback for legacy
+  // callers (questionnaire bails, hand-coded escalations).
+  const analysis = input.llmAnalysis?.trim();
+  const recommendation = input.recommendation?.trim();
+  const hasLLM = Boolean(analysis || recommendation);
+
+  const detailLines: string[] = [];
+  if (hasLLM) {
+    if (analysis) detailLines.push(`🤖 ניתוח: ${analysis}`);
+    if (recommendation) detailLines.push(`💡 המלצה: ${recommendation}`);
+  } else if (input.summary?.trim()) {
+    detailLines.push(`📝 ${input.summary.trim()}`);
+  }
+  const detail = detailLines.length ? "\n" + detailLines.join("\n") : "";
+
   switch (input.kind) {
     case "reject":
-      return `🚨 ${who} (שלב ${stage}) — דחה את ההצעה.${summaryLine}\n📞 כדאי להתקשר תוך 4 שעות.`;
+      return `🚨 ${who} (שלב ${stage}) — דחה את ההצעה.${detail}\n📞 כדאי להתקשר תוך 4 שעות.`;
     case "negotiating":
-      return `💰 ${who} (שלב ${stage}) — מתמקח על המחיר.${summaryLine}\n📞 כדאי להתקשר היום`;
+      return `💰 ${who} (שלב ${stage}) — מתמקח על המחיר.${detail}\n📞 כדאי להתקשר היום`;
     case "spec_change":
-      return `🔧 ${who} (שלב ${stage}) — רוצה לשנות מפרט.${summaryLine}\n📞 צריך להתאים מחיר.`;
+      return `🔧 ${who} (שלב ${stage}) — רוצה לשנות מפרט.${detail}\n📞 צריך להתאים מחיר.`;
     case "question":
-      return `❓ ${who} (שלב ${stage}) — שאל שאלה שדורשת אותך.${summaryLine}\n📞 התקשר אליו.`;
+      return `❓ ${who} (שלב ${stage}) — שאל שאלה שדורשת אותך.${detail}\n📞 התקשר אליו.`;
     case "generic":
     default:
-      return `🚨 ${who} (שלב ${stage}) — צריך התערבות.${summaryLine}\n📞 כדאי להתקשר.`;
+      return `🚨 ${who} (שלב ${stage}) — צריך התערבות.${detail}\n📞 כדאי להתקשר.`;
   }
 }
 
