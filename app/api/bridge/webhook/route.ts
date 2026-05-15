@@ -124,6 +124,17 @@ async function handleMessageReceived(evt: BridgeEnvelope): Promise<void> {
   const waMessageId =
     pickStr(d, "wa_message_id", "id", "messageId") ?? `bridge:${evt.id}`;
   const text = pickStr(d, "text", "content", "body");
+  // When the user taps a WhatsApp interactive button, some bridge variants
+  // surface the original button `id` (e.g. "s1") alongside the visible title
+  // text. Prefer it for routing so matchAnswer hits the exact option value
+  // instead of fuzzy-matching the localized label.
+  const buttonReplyId = pickStr(
+    d,
+    "selected_button_id",
+    "button_reply_id",
+    "interactive_reply_id"
+  );
+  const textForRouting = buttonReplyId ?? text;
   const phone = pickStr(d, "phone");
   const name = pickStr(d, "name", "push_name", "pushName");
   const mediaPresent = hasMedia(d);
@@ -236,7 +247,7 @@ async function handleMessageReceived(evt: BridgeEnvelope): Promise<void> {
 
   try {
     if (!stage || stage === "NEW") {
-      const r = await handleInbound({ sid: jid, text });
+      const r = await handleInbound({ sid: jid, text: textForRouting });
       console.log("[bridge.webhook] questionnaire", jid, r);
       return;
     }
@@ -245,14 +256,14 @@ async function handleMessageReceived(evt: BridgeEnvelope): Promise<void> {
       stage === "AWAITING_LOGO" ||
       stage === "AWAITING_FINAL"
     ) {
-      const r = await handleDecisionInbound({ sid: jid, text, hasMedia: mediaPresent });
+      const r = await handleDecisionInbound({ sid: jid, text: textForRouting, hasMedia: mediaPresent });
       console.log("[bridge.webhook] decision", jid, r);
       return;
     }
     if (stage === "QUOTED" || stage === "NEGOTIATING" || stage === "WAITING_CALL") {
       // Eli manually moved the lead here. Treat inbound as a decision-style
       // signal so we can route via the same LLM intent classifier.
-      const r = await handleDecisionInbound({ sid: jid, text, hasMedia: mediaPresent });
+      const r = await handleDecisionInbound({ sid: jid, text: textForRouting, hasMedia: mediaPresent });
       console.log("[bridge.webhook] decision(manual-stage)", jid, stage, r);
       return;
     }

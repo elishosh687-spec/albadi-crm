@@ -227,7 +227,11 @@ export async function sendBridgeMessage(
   // Optional override for the filename WhatsApp shows on a document
   // attachment. When omitted, derived from the URL pathname (often a route
   // segment like `pdf` rather than a real filename).
-  mediaFilename?: string
+  mediaFilename?: string,
+  // Optional WhatsApp interactive buttons (max 3). When present the bridge
+  // sends `type: "buttons"` — `message` becomes the body text, each entry
+  // becomes a tappable reply chip.
+  buttons?: { id: string; title: string }[]
 ): Promise<BridgeSendResult> {
   // Test-only escape hatch — skips the actual WhatsApp send and returns a
   // fake message id. Set BRIDGE_DRY_RUN=1 in local test scripts (see
@@ -239,7 +243,21 @@ export async function sendBridgeMessage(
     return { wa_message_id: fakeId, status: "dryrun" };
   }
   const jid = isJid(recipient) ? recipient : phoneToJid(recipient);
-  const body: Record<string, unknown> = { recipient: jid, message };
+  const body: Record<string, unknown> = { recipient: jid };
+  if (buttons && buttons.length > 0) {
+    if (buttons.length > 3) {
+      throw new Error(
+        `sendBridgeMessage: WhatsApp buttons capped at 3 — got ${buttons.length}`
+      );
+    }
+    // Bridge interactive shape (from /v1/discovery): type=buttons uses `body`
+    // for the prompt text, NOT `message`. Each button is { id, title }.
+    body.type = "buttons";
+    body.body = message;
+    body.buttons = buttons;
+  } else {
+    body.message = message;
+  }
   if (mediaPath) {
     // Bridge requires media to be staged via POST /v1/media first; send with
     // `media_id`. `media_url` is not supported. We download the URL here, push

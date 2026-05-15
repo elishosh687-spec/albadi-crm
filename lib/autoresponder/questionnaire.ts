@@ -29,13 +29,15 @@ type ListOption = { value: string; label: string };
 
 interface Question {
   step: number;
-  field: "shipping" | "quantity" | "product" | "handles" | "colors";
+  field: "shipping" | "quantity" | "product" | "handles" | "lamination" | "colors";
   prompt: string;
   options: ListOption[];
   /** When true, picking the last option triggers a free-text capture in the same step. */
   hasCustom?: boolean;
   /** Prompt the bot sends when waiting on the free-text custom value. */
   customPrompt?: string;
+  /** When true and option count ≤ 3, send as WhatsApp buttons instead of a numbered text list. */
+  buttons?: boolean;
 }
 
 const OPENING =
@@ -45,12 +47,12 @@ const QUESTIONS: Question[] = [
   {
     step: 3,
     field: "shipping",
-    prompt:
-      "🚚 באיזו שיטת משלוח אתם מעוניינים?\n(זמן המשלוח משפיע על המחיר)",
+    prompt: "🚚 שיטת משלוח?",
     options: [
       { value: "s1", label: "✈️ אקספרס (~25 יום)" },
       { value: "s2", label: "🚢 רגיל (~90 יום)" },
     ],
+    buttons: true,
   },
   {
     step: 4,
@@ -92,17 +94,28 @@ const QUESTIONS: Question[] = [
       { value: "true", label: "עם ידיות" },
       { value: "false", label: "ללא ידיות" },
     ],
+    buttons: true,
   },
   {
     step: 7,
+    field: "lamination",
+    prompt: "✨ עם למינציה? (מראה יוקרתי, עמיד יותר, דוחה נוזלים)",
+    options: [
+      { value: "true", label: "עם למינציה" },
+      { value: "false", label: "ללא למינציה" },
+    ],
+    buttons: true,
+  },
+  {
+    step: 8,
     field: "colors",
-    prompt:
-      "🎨 כמה צבעים בלוגו?\n(מספר הצבעים משפיע על עלות ההדפסה)",
+    prompt: "🎨 כמה צבעים בלוגו?",
     options: [
       { value: "1", label: "צבע אחד" },
       { value: "2", label: "2 צבעים" },
       { value: "3", label: "3 צבעים" },
     ],
+    buttons: true,
   },
 ];
 
@@ -126,6 +139,7 @@ interface QState {
   quantity?: string;
   product?: string;
   handles?: string;
+  lamination?: string;
   colors?: string;
   quantityCustom?: string;
   productCustom?: string;
@@ -138,6 +152,13 @@ interface QState {
 }
 
 function formatQuestion(q: Question): string {
+  // When the question goes out as WhatsApp buttons, the options become
+  // tappable chips below the body — no need for a numbered list or a
+  // "reply with 1, 2..." footer (and the bridge caps button title length
+  // independently). Keep the prompt clean.
+  if (q.buttons) {
+    return q.prompt;
+  }
   const lines = [q.prompt, ""];
   q.options.forEach((opt, i) => {
     lines.push(`${i + 1}. ${opt.label}`);
@@ -145,6 +166,31 @@ function formatQuestion(q: Question): string {
   lines.push("");
   lines.push("השב במספר (1, 2, ...) או בטקסט.");
   return lines.join("\n");
+}
+
+function buildButtons(q: Question): { id: string; title: string }[] | null {
+  if (!q.buttons) return null;
+  // Drop "custom" so the bridge stays under WhatsApp's 3-button cap and so
+  // free-text branches still route through the explicit prompt path.
+  const visible = q.options.filter((opt) => opt.value !== "custom");
+  if (visible.length === 0 || visible.length > 3) return null;
+  return visible.map((opt) => ({
+    id: opt.value,
+    // WA caps button titles at 20 chars. Strip leading emojis to save space.
+    title: opt.label.replace(/^[\p{Extended_Pictographic}\s]+/u, "").slice(0, 20),
+  }));
+}
+
+async function askQuestion(recipient: string, q: Question): Promise<void> {
+  const btns = buildButtons(q);
+  await sendBridgeMessage(
+    recipient,
+    formatQuestion(q),
+    undefined,
+    "bot",
+    undefined,
+    btns ?? undefined
+  );
 }
 
 function matchAnswer(text: string, q: Question): string | null {
@@ -172,12 +218,13 @@ async function fetchQuote(state: QState): Promise<string> {
       `calc missing required state: product=${state.product} quantity=${state.quantity} shipping=${state.shipping}`
     );
   }
+  const hasLamination = state.lamination === "true";
   const calc = calculateQuoteByCodes({
     productId: state.product,
     quantityTierId: state.quantity,
     hasHandles: state.handles === "true",
     logoColors: Number(state.colors) || 1,
-    hasLamination: false, // questionnaire doesn't ask about lamination
+    hasLamination,
     shippingOptionId: state.shipping,
   });
   if (!calc) {
@@ -192,7 +239,7 @@ async function fetchQuote(state: QState): Promise<string> {
   return buildQuoteMessage({
     dimensions: calc.result.product?.dimensions ?? "",
     hasHandles: calc.result.hasHandles,
-    hasLamination: false,
+    hasLamination,
     quantity: calc.result.quantity,
     logoColors: calc.result.logoColors,
     shippingName: calc.result.shippingOption?.name ?? "",
@@ -378,7 +425,7 @@ export async function handleInbound(input: {
     const newState: QState = { step: first.step };
     await saveState(ctx.sid, newState);
     await sendBridgeMessage(recipient, OPENING);
-    await sendBridgeMessage(recipient, formatQuestion(first));
+    await askQuestion(recipient, first);
     return { action: "started" };
   }
 
@@ -402,12 +449,12 @@ export async function handleInbound(input: {
     if (nextQ) {
       captured.step = nextQ.step;
       await saveState(ctx.sid, captured);
-      await sendBridgeMessage(recipient, formatQuestion(nextQ));
+      await askQuestion(recipient, nextQ);
       return { action: "custom_captured", detail: `${field}=${text}` };
     }
-    // Custom on the LAST question — shouldn't happen since only Q2/Q3 are
+    // Custom on the LAST question — shouldn't happen since only Q4/Q5 are
     // custom-enabled, but handle defensively.
-    captured.step = (currentQ?.step ?? 7) + 1;
+    captured.step = (currentQ?.step ?? 8) + 1;
     await saveState(ctx.sid, captured);
     await routeToFactory(ctx, captured);
     return { action: "completed_factory", detail: "custom on last question" };
@@ -444,7 +491,7 @@ export async function handleInbound(input: {
     await saveState(ctx.sid, reasked);
     const reaskIdx = Math.min(unmatched - 1, REASK_REPLIES.length - 1);
     await sendBridgeMessage(recipient, REASK_REPLIES[reaskIdx]);
-    await sendBridgeMessage(recipient, formatQuestion(currentQ));
+    await askQuestion(recipient, currentQ);
     return { action: "reasked" };
   }
 
@@ -471,12 +518,12 @@ export async function handleInbound(input: {
   if (nextQ) {
     advanced.step = nextQ.step;
     await saveState(ctx.sid, advanced);
-    await sendBridgeMessage(recipient, formatQuestion(nextQ));
+    await askQuestion(recipient, nextQ);
     return { action: "answered", detail: `${currentQ.field}=${match}` };
   }
 
   // Last question answered → route based on whether any field is custom.
-  advanced.step = currentQ.step + 1; // step 8
+  advanced.step = currentQ.step + 1; // step 9 (was 8 before lamination)
   await saveState(ctx.sid, advanced);
   const isCustom =
     advanced.quantity === "custom" || advanced.product === "custom";
