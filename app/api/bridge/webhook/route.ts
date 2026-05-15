@@ -97,8 +97,24 @@ function pickStr(o: any, ...keys: string[]): string | null {
 
 function hasMedia(d: any): boolean {
   if (!d) return false;
-  const mediaStr = pickStr(d, "media_path", "media_url", "attachment_url", "image_url");
+  // The bridge currently surfaces inbound media on `url` + `media_type` +
+  // `filename`. Older code paths used the older `media_path`/`*_url` aliases,
+  // and other webhook providers (legacy ManyChat shim) used `attachment_url`.
+  // Check all so a real image/document/audio inbound is never mistaken for text.
+  const mediaStr = pickStr(
+    d,
+    "media_path",
+    "media_url",
+    "attachment_url",
+    "image_url",
+    "url"
+  );
   if (mediaStr) return true;
+  const mediaType =
+    typeof d.media_type === "string" ? d.media_type.toLowerCase() : "";
+  if (mediaType && mediaType !== "text") return true;
+  const filename = typeof d.filename === "string" ? d.filename.trim() : "";
+  if (filename) return true;
   const type = typeof d.type === "string" ? d.type.toLowerCase() : "";
   if (type && type !== "text" && type !== "chat" && type !== "message") return true;
   if (d.media || d.attachment || d.image) return true;
