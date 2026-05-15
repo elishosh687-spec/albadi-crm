@@ -331,12 +331,25 @@ function ConversationListItem({
     STAGE_TONE.UNCLASSIFIED;
   const SenderIcon = SENDER_ICON[row.lastSender];
   const [deleting, startDelete] = useTransition();
+  const [paused, setPaused] = useState(row.botPaused);
+  const [toggling, startToggle] = useTransition();
 
   const handleDeleteClick = (e: React.MouseEvent) => {
     e.stopPropagation();
     e.preventDefault();
     startDelete(async () => {
       await onDelete();
+    });
+  };
+
+  const handleBotToggle = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
+    const next = !paused;
+    setPaused(next); // optimistic
+    startToggle(async () => {
+      const r = await setBotPaused(row.sid, next);
+      if (!r?.ok) setPaused(!next); // revert on failure
     });
   };
 
@@ -383,6 +396,30 @@ function ConversationListItem({
             {row.lastText || "—"}
           </span>
         </div>
+      </button>
+      <button
+        type="button"
+        onClick={handleBotToggle}
+        disabled={toggling}
+        title={paused ? "הבוט מושהה — לחץ להפעיל" : "הבוט פעיל — לחץ להשהות"}
+        aria-pressed={!paused}
+        className={cn(
+          "absolute top-2 left-11 size-7 rounded-md grid place-items-center",
+          "bg-card/80 backdrop-blur-sm border",
+          paused
+            ? "border-warning/40 text-warning hover:bg-warning/10"
+            : "border-success/40 text-success hover:bg-success/10",
+          "opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity",
+          "disabled:opacity-60"
+        )}
+      >
+        {toggling ? (
+          <Loader2 className="size-3.5 animate-spin" />
+        ) : paused ? (
+          <BotOff className="size-3.5" />
+        ) : (
+          <Bot className="size-3.5" />
+        )}
       </button>
       <button
         type="button"
