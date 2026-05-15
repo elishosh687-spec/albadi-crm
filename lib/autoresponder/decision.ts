@@ -101,7 +101,7 @@ const REPLY_ORDER_TO_PHONE = "זה כבר בטלפון. אתקשר אליכם ה
 
 // Stage 2 §2.5 — spec change in preliminary stage
 const REPLY_SPEC_CHANGE_ASK =
-  "אין בעיה. מה תרצו לשנות? אפשר לכתוב חופשי בעברית:\n• כמות (לדוגמה: 1500 / 2500)\n• מידה\n• ידיות (עם / בלי)\n• למינציה (עם / בלי)\n• צבעי הדפסה\n\nתכתבו לי הכל בהודעה אחת ואסדר את הפרטים.";
+  "אין בעיה. מה תרצו לשנות?\n\n📦 כמות (לדוגמה: 1500 / 2500)\n📐 מידה\n🛍️ ידיות (עם / בלי)\n✨ למינציה (עם / בלי)\n🎨 צבעי הדפסה\n\nתכתבו חופשי בעברית.";
 const REPLY_SPEC_CHANGE_ACK =
   "מעולה, יש לי את הפרטים. חוזר אליכם תוך 24 שעות עם הצעה מעודכנת.";
 // New (LLM rewrite of spec-change handler) — sent when the LLM couldn't
