@@ -33,27 +33,38 @@ function buildCaption(opts: {
   quotationNo: string;
 }): string {
   const { name, spec, pricing, quotationNo } = opts;
-  const greeting = name ? `היי ${name},` : "היי,";
-  const sizeStr = [
-    spec.widthCm ? `W${spec.widthCm}` : null,
-    spec.depthCm ? `D${spec.depthCm}` : null,
-    spec.heightCm ? `H${spec.heightCm}` : null,
-  ]
-    .filter(Boolean)
+  const greeting = name ? `היי ${name} 👋` : "היי 👋";
+  const dims = [spec.widthCm, spec.depthCm, spec.heightCm]
+    .filter((n) => n && n > 0)
     .join("×");
-  const product = spec.description || "שקיות";
-  return [
+  const product = spec.description?.trim() || "שקיות";
+  const qty = spec.quantity.toLocaleString("he-IL");
+
+  const lines: (string | null)[] = [
     greeting,
-    `מצורפת הצעת מחיר #${quotationNo} ל-${product}.`,
-    `מפרט: ${sizeStr} cm · ${spec.quantity.toLocaleString("he-IL")} יח'.`,
-    `מחיר ליחידה: ${formatIls(pricing.unitSellingPrice)} · סה"כ: ${formatIls(pricing.totalSellingPrice)} (לא כולל מע"מ).`,
-    pricing.shippingOptionName
-      ? `שיטת שילוח: ${pricing.shippingOptionName}.`
-      : null,
-    "ההצעה בתוקף ל-14 יום. נשמח לקבל את אישורך 🙂",
-  ]
-    .filter(Boolean)
-    .join("\n");
+    "",
+    `*הצעת מחיר #${quotationNo}*`,
+    "",
+    "📦 *פרטי המוצר*",
+    product,
+    dims ? `מידות: ${dims} ס״מ` : null,
+    `כמות: ${qty} יח׳`,
+    "",
+    "💰 *תמחור*",
+    `מחיר ליחידה: ${formatIls(pricing.unitSellingPrice)}`,
+    `*סה״כ: ${formatIls(pricing.totalSellingPrice)}*`,
+    "_(לא כולל מע״מ)_",
+  ];
+  if (pricing.shippingOptionName) {
+    lines.push("", "🚚 *שילוח*", pricing.shippingOptionName);
+  }
+  lines.push(
+    "",
+    "━━━━━━━━━━━━━━",
+    "ההצעה בתוקף ל-14 יום",
+    "נשמח לקבל את אישורך 🙂"
+  );
+  return lines.filter((l) => l !== null).join("\n");
 }
 
 export async function POST(
@@ -109,16 +120,24 @@ export async function POST(
     );
   }
 
+  const quotationNo = row.quotationNo ?? id.slice(-8).toUpperCase();
   const caption = buildCaption({
     name: lead.name ?? "",
     spec: row.productSpec as FactoryProductSpec,
     pricing: row.finalPricing as FactoryPricingResult,
-    quotationNo: row.quotationNo ?? id.slice(-8).toUpperCase(),
+    quotationNo,
   });
+  const pdfFilename = `הצעת-מחיר-${quotationNo}.pdf`;
 
   let result: { wa_message_id: string; status?: string };
   try {
-    result = await sendBridgeMessage(recipient, caption, pdfMediaUrl, "eli");
+    result = await sendBridgeMessage(
+      recipient,
+      caption,
+      pdfMediaUrl,
+      "eli",
+      pdfFilename
+    );
   } catch (err) {
     console.error("[factory/send-whatsapp] bridge send failed", err);
     return NextResponse.json(

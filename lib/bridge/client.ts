@@ -223,7 +223,11 @@ export async function sendBridgeMessage(
   // Sender attribution for the pre-inserted outbound `messages` row. Default
   // 'bot' covers the autoresponder/cron/draft-approve paths; pass 'eli' from
   // sendManualReply (dashboard) so manual replies are tagged correctly.
-  sender: "bot" | "eli" = "bot"
+  sender: "bot" | "eli" = "bot",
+  // Optional override for the filename WhatsApp shows on a document
+  // attachment. When omitted, derived from the URL pathname (often a route
+  // segment like `pdf` rather than a real filename).
+  mediaFilename?: string
 ): Promise<BridgeSendResult> {
   // Test-only escape hatch — skips the actual WhatsApp send and returns a
   // fake message id. Set BRIDGE_DRY_RUN=1 in local test scripts (see
@@ -242,7 +246,7 @@ export async function sendBridgeMessage(
     // the bytes to /v1/media, and reference the returned media_id.
     const isUrl = /^https?:\/\//i.test(mediaPath);
     if (isUrl) {
-      const mediaId = await uploadBridgeMediaFromUrl(mediaPath);
+      const mediaId = await uploadBridgeMediaFromUrl(mediaPath, mediaFilename);
       body.media_id = mediaId;
     } else {
       // Local-path callers (rare) can still pass media_path; bridge supports
@@ -288,18 +292,24 @@ interface BridgeMediaUpload {
  * POST /v1/media (raw body, NOT JSON). Returns the staged media_id, which
  * /v1/messages will accept under the `media_id` field.
  */
-async function uploadBridgeMediaFromUrl(url: string): Promise<string> {
+async function uploadBridgeMediaFromUrl(
+  url: string,
+  filenameOverride?: string
+): Promise<string> {
   const res = await fetch(url);
   if (!res.ok) {
     throw new Error(`uploadBridgeMediaFromUrl: fetch ${url} → ${res.status}`);
   }
   const buf = await res.arrayBuffer();
   const mimetype = res.headers.get("content-type") || "application/octet-stream";
-  // Derive a sensible filename from the URL path; bridge stores it as-is and
-  // WhatsApp shows it to the recipient as the document name.
+  // Filename WhatsApp shows on the document tile. Prefer the caller's override
+  // (e.g. "quote-XYZ.pdf") so it reads as a real file; fall back to the URL's
+  // last path segment, which for app routes is usually just the segment name.
   const pathname = new URL(url).pathname;
   const filename =
-    pathname.split("/").filter(Boolean).pop()?.split("?")[0] || "file.bin";
+    filenameOverride ||
+    pathname.split("/").filter(Boolean).pop()?.split("?")[0] ||
+    "file.bin";
 
   const upRes = await fetch(
     `${BRIDGE_BASE}/v1/media?filename=${encodeURIComponent(filename)}`,
