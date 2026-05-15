@@ -78,19 +78,19 @@ const QUESTIONS: Question[] = [
   {
     step: 5,
     field: "product",
-    prompt: "📐 איזה גודל שקית?",
+    prompt: "📐 איזה גודל שקית? (פורמט: H=גובה, D=עומק, W=רוחב, בס״מ)",
     options: [
-      { value: "p1", label: "20×8×25 ס״מ — קוסמטיקה, תכשיטים" },
-      { value: "p2", label: "30×10×30 ס״מ — ביגוד קל, מתנות" },
-      { value: "p3", label: "40×12×30 ס״מ — נעליים, ביגוד" },
-      { value: "p4", label: "40×15×50 ס״מ — פריטים גדולים" },
-      { value: "p5", label: "30×40 ס״מ — פריטים רחבים" },
-      { value: "p6", label: "20×15 ס״מ — פריטים קטנים" },
+      { value: "p1", label: "H25*D8*W20 — קוסמטיקה, תכשיטים" },
+      { value: "p2", label: "H30*D10*W30 — ביגוד קל, מתנות" },
+      { value: "p3", label: "H30*D12*W40 — נעליים, ביגוד" },
+      { value: "p4", label: "H50*D15*W40 — פריטים גדולים" },
+      { value: "p5", label: "H40*W30 — פריטים רחבים" },
+      { value: "p6", label: "H15*W20 — פריטים קטנים" },
       { value: "custom", label: "אחר / מידה מותאמת" },
     ],
     hasCustom: true,
     customPrompt:
-      "מה המידות שאתם צריכים? תכתבו אורך × רוחב × גובה ס״מ — לדוגמה 25×10×35.",
+      "מה המידות שאתם צריכים? פורמט המפעל: גובה × עומק × רוחב (בס״מ).\nדוגמה: H50*D15*W40 (גובה 50, עומק 15, רוחב 40).\nאם אין עומק (שקית שטוחה) — תכתבו רק גובה ורוחב, למשל H40*W30.",
   },
   {
     step: 6,
@@ -268,13 +268,15 @@ const QTY_LABEL: Record<string, string> = {
   q2: "5,000",
   q3: "10,000",
 };
+// Display labels mirror the canonical factory format from
+// lib/factory/calculator/constants.ts (`H{height}*D{depth}*W{width}`).
 const PROD_LABEL: Record<string, string> = {
-  p1: "20×8×25 ס״מ",
-  p2: "30×10×30 ס״מ",
-  p3: "40×12×30 ס״מ",
-  p4: "40×15×50 ס״מ",
-  p5: "30×40 ס״מ",
-  p6: "20×15 ס״מ",
+  p1: "H25*D8*W20 ס״מ",
+  p2: "H30*D10*W30 ס״מ",
+  p3: "H30*D12*W40 ס״מ",
+  p4: "H50*D15*W40 ס״מ",
+  p5: "H40*W30 ס״מ",
+  p6: "H15*W20 ס״מ",
 };
 
 function buildConfirmationMessage(state: QState): string {

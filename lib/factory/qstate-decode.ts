@@ -16,13 +16,15 @@ export const QUANTITY_LABEL: Record<string, string> = {
   q3: "10,000 יח׳",
 };
 
+// Canonical factory format: H{height}*D{depth}*W{width} (depth omitted for
+// flat bags). Source of truth: lib/factory/calculator/constants.ts.
 export const PRODUCT_LABEL: Record<string, string> = {
-  p1: "20×8×25 ס״מ — קוסמטיקה, תכשיטים",
-  p2: "30×10×30 ס״מ — ביגוד קל, מתנות",
-  p3: "40×12×30 ס״מ — נעליים, ביגוד",
-  p4: "40×15×50 ס״מ — פריטים גדולים",
-  p5: "30×40 ס״מ — פריטים רחבים",
-  p6: "20×15 ס״מ — פריטים קטנים",
+  p1: "H25*D8*W20 ס״מ — קוסמטיקה, תכשיטים",
+  p2: "H30*D10*W30 ס״מ — ביגוד קל, מתנות",
+  p3: "H30*D12*W40 ס״מ — נעליים, ביגוד",
+  p4: "H50*D15*W40 ס״מ — פריטים גדולים",
+  p5: "H40*W30 ס״מ — פריטים רחבים",
+  p6: "H15*W20 ס״מ — פריטים קטנים",
 };
 
 /** Approximate width/height/depth in cm parsed from a known product code. */

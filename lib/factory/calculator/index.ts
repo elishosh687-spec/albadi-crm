@@ -37,8 +37,13 @@ export interface QuoteBreakdown {
   profitMargin: number; // %
 }
 
+/**
+ * Canonical factory dimension format: `H{height}*D{depth}*W{width}` (in cm).
+ * Depth omitted when zero (flat bags). Letter prefixes make the dimension
+ * order unambiguous to customers, Eli, and the factory.
+ */
 function dimensionsString(w: number, d: number, h: number): string {
-  return d > 0 ? `${w}×${d}×${h}` : `${w}×${h}`;
+  return d > 0 ? `H${h}*D${d}*W${w}` : `H${h}*W${w}`;
 }
 
 function findProductIdByDims(w: number, d: number, h: number): string | null {
