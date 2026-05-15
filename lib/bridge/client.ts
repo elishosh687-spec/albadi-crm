@@ -329,7 +329,11 @@ export async function resolveJidFromPhone(phone: string): Promise<string | null>
     const res = await bridgeFetch<{ jid?: string; lid?: string }>(
       `/v1/lid/resolve?phone=${digits}`
     );
-    return res.jid ?? res.lid ?? `${digits}@s.whatsapp.net`;
+    // If bridge returns a LID (numeric, no suffix), append @lid so callers
+    // don't mistake it for a phone number and convert it to @s.whatsapp.net.
+    if (res.jid) return res.jid;
+    if (res.lid) return res.lid.includes("@") ? res.lid : `${res.lid}@lid`;
+    return `${digits}@s.whatsapp.net`;
   } catch {
     return `${digits}@s.whatsapp.net`;
   }
