@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Loader2, RefreshCw, Factory, ExternalLink, Sparkles, Download, MessageCircle } from "lucide-react";
+import { Loader2, RefreshCw, Factory, ExternalLink, Sparkles, Download, MessageCircle, Trash2 } from "lucide-react";
 import { cn } from "@/lib/cn";
 import type {
   FactoryQuoteRow,
@@ -31,6 +31,7 @@ export function FactoryQuotesView() {
   const [search, setSearch] = useState("");
   const [finalizing, setFinalizing] = useState<FactoryQuoteRow | null>(null);
   const [whatsapping, setWhatsapping] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -68,6 +69,26 @@ export function FactoryQuotesView() {
       setRefreshing(false);
     }
   }, [load]);
+
+  const handleDelete = useCallback(
+    async (row: FactoryQuoteRow) => {
+      const label = row.quotationNo ?? row.id.slice(-8).toUpperCase();
+      if (!confirm(`למחוק את הצעה ${label}? פעולה לא הפיכה.`)) return;
+      setDeleting(row.id);
+      try {
+        const res = await fetch(`/api/factory/${row.id}`, { method: "DELETE" });
+        if (res.ok) {
+          await load();
+        } else {
+          const data = await res.json().catch(() => ({}));
+          alert(`שגיאה: ${data?.error ?? res.status}`);
+        }
+      } finally {
+        setDeleting(null);
+      }
+    },
+    [load]
+  );
 
   const handleSendWa = useCallback(
     async (row: FactoryQuoteRow) => {
@@ -256,6 +277,19 @@ export function FactoryQuotesView() {
                       </button>
                     </>
                   )}
+                  <button
+                    onClick={() => handleDelete(r)}
+                    disabled={deleting === r.id}
+                    title="מחק הצעה"
+                    className="inline-flex items-center gap-1 rounded-md border border-destructive/40 text-destructive px-2 py-1 text-[11px] hover:bg-destructive/10 disabled:opacity-60"
+                  >
+                    {deleting === r.id ? (
+                      <Loader2 className="size-3 animate-spin" />
+                    ) : (
+                      <Trash2 className="size-3" />
+                    )}
+                    מחק
+                  </button>
                 </div>
               </div>
             </li>

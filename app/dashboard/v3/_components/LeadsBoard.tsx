@@ -8,6 +8,8 @@ import {
   Play,
   AlertCircle,
   MessageSquare,
+  Trash2,
+  Loader2,
 } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { STAGE_LABEL, STAGE_TONE, timeAgoHe } from "./stage-meta";
@@ -42,9 +44,33 @@ export function LeadsBoard({ cards }: { cards: LeadCardData[] }) {
   const [search, setSearch] = useState("");
   const [bucketFilter, setBucketFilter] = useState<BucketKey | null>(null);
   const [stageFilter, setStageFilter] = useState<string | null>(null);
+  const [deletingSid, setDeletingSid] = useState<string | null>(null);
 
   const openLead = (sid: string) => {
     router.push(`/dashboard/v3?lead=${encodeURIComponent(sid)}`);
+  };
+
+  const handleDelete = async (sid: string, displayName: string) => {
+    if (
+      !confirm(
+        `למחוק את הליד ${displayName}?\n\nכל ההיסטוריה (שיחות, הצעות מפעל, טיוטות, תגיות) תימחק. פעולה לא הפיכה.`
+      )
+    )
+      return;
+    setDeletingSid(sid);
+    try {
+      const res = await fetch(`/api/leads/${encodeURIComponent(sid)}`, {
+        method: "DELETE",
+      });
+      if (res.ok) {
+        router.refresh();
+      } else {
+        const data = await res.json().catch(() => ({}));
+        alert(`שגיאה במחיקה: ${data?.error ?? res.status}`);
+      }
+    } finally {
+      setDeletingSid(null);
+    }
   };
 
   const enriched = useMemo(
@@ -182,6 +208,8 @@ export function LeadsBoard({ cards }: { cards: LeadCardData[] }) {
               bucket={bucket}
               cards={items}
               onSelect={openLead}
+              onDelete={handleDelete}
+              deletingSid={deletingSid}
             />
           );
         })}
@@ -194,10 +222,14 @@ function BucketColumn({
   bucket,
   cards,
   onSelect,
+  onDelete,
+  deletingSid,
 }: {
   bucket: BucketKey;
   cards: LeadCardData[];
   onSelect: (sid: string) => void;
+  onDelete: (sid: string, displayName: string) => void;
+  deletingSid: string | null;
 }) {
   const tone = BUCKET_TONE[bucket];
   return (
@@ -215,7 +247,13 @@ function BucketColumn({
       </header>
       <div className="flex flex-col gap-2 p-3 max-h-[72dvh] overflow-y-auto">
         {cards.map((c) => (
-          <LeadCard key={c.sid} card={c} onClick={() => onSelect(c.sid)} />
+          <LeadCard
+            key={c.sid}
+            card={c}
+            onClick={() => onSelect(c.sid)}
+            onDelete={onDelete}
+            isDeleting={deletingSid === c.sid}
+          />
         ))}
         {cards.length === 0 && (
           <div className="text-xs text-muted-foreground text-center py-6">
@@ -237,9 +275,13 @@ function shortSid(sid: string): string {
 function LeadCard({
   card,
   onClick,
+  onDelete,
+  isDeleting,
 }: {
   card: LeadCardData;
   onClick: () => void;
+  onDelete: (sid: string, displayName: string) => void;
+  isDeleting: boolean;
 }) {
   const stageTone =
     STAGE_TONE[card.stage.toUpperCase()] ?? STAGE_TONE.UNCLASSIFIED;
@@ -329,6 +371,28 @@ function LeadCard({
           {timeAgoHe(card.lastInboundAt ?? card.updatedAt)}
         </span>
       </div>
+      </button>
+
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          onDelete(card.sid, displayName);
+        }}
+        disabled={isDeleting}
+        title="מחק ליד וכל ההיסטוריה"
+        className={cn(
+          "absolute top-2 left-2 z-10 grid place-items-center size-6 rounded-md",
+          "bg-card/80 backdrop-blur border border-destructive/40 text-destructive",
+          "opacity-0 group-hover:opacity-100 focus:opacity-100",
+          "transition-opacity hover:bg-destructive/10 disabled:opacity-60"
+        )}
+      >
+        {isDeleting ? (
+          <Loader2 className="size-3 animate-spin" />
+        ) : (
+          <Trash2 className="size-3" />
+        )}
       </button>
 
       {hasPreview && <LeadHoverPreview card={card} />}
