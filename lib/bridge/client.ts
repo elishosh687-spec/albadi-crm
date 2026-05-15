@@ -19,9 +19,11 @@ import { leads, leadTags, messages as messagesTable } from "../../drizzle/schema
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { BridgeError, bridgeFetch } from "./http";
 import {
+  BRIDGE_BASE,
   FIELD_IDS,
   TAG_IDS,
   V2_FLAG_TAG_IDS,
+  requireBridgeToken,
   type FieldName,
   type TagName,
   type V2FlagName,
@@ -235,16 +237,16 @@ export async function sendBridgeMessage(
   const jid = isJid(recipient) ? recipient : phoneToJid(recipient);
   const body: Record<string, unknown> = { recipient: jid, message };
   if (mediaPath) {
-    // The bridge accepts either `media_path` (a path on its own filesystem)
-    // or `media_url` (a public URL the bridge fetches). Detect by scheme so
-    // remote PDFs from Vercel Blob hit the URL path and don't get mistaken
-    // for missing local files. Send both keys for tolerance — bridge picks
-    // whichever it implements.
+    // Bridge requires media to be staged via POST /v1/media first; send with
+    // `media_id`. `media_url` is not supported. We download the URL here, push
+    // the bytes to /v1/media, and reference the returned media_id.
     const isUrl = /^https?:\/\//i.test(mediaPath);
     if (isUrl) {
-      body.media_url = mediaPath;
-      body.media_path = mediaPath;
+      const mediaId = await uploadBridgeMediaFromUrl(mediaPath);
+      body.media_id = mediaId;
     } else {
+      // Local-path callers (rare) can still pass media_path; bridge supports
+      // both modes per discovery: "media (media_id|media_path)".
       body.media_path = mediaPath;
     }
   }
@@ -271,6 +273,53 @@ export async function sendBridgeMessage(
   }
 
   return result;
+}
+
+interface BridgeMediaUpload {
+  media_id: string;
+  kind: string;
+  mimetype: string;
+  size: number;
+  filename: string;
+}
+
+/**
+ * Download a remote URL and push the bytes into the bridge's media store via
+ * POST /v1/media (raw body, NOT JSON). Returns the staged media_id, which
+ * /v1/messages will accept under the `media_id` field.
+ */
+async function uploadBridgeMediaFromUrl(url: string): Promise<string> {
+  const res = await fetch(url);
+  if (!res.ok) {
+    throw new Error(`uploadBridgeMediaFromUrl: fetch ${url} → ${res.status}`);
+  }
+  const buf = await res.arrayBuffer();
+  const mimetype = res.headers.get("content-type") || "application/octet-stream";
+  // Derive a sensible filename from the URL path; bridge stores it as-is and
+  // WhatsApp shows it to the recipient as the document name.
+  const pathname = new URL(url).pathname;
+  const filename =
+    pathname.split("/").filter(Boolean).pop()?.split("?")[0] || "file.bin";
+
+  const upRes = await fetch(
+    `${BRIDGE_BASE}/v1/media?filename=${encodeURIComponent(filename)}`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${requireBridgeToken()}`,
+        "Content-Type": mimetype,
+      },
+      body: buf,
+    }
+  );
+  const text = await upRes.text();
+  if (!upRes.ok) {
+    throw new Error(
+      `uploadBridgeMediaFromUrl: bridge /v1/media → ${upRes.status} ${text.slice(0, 200)}`
+    );
+  }
+  const json = JSON.parse(text) as BridgeMediaUpload;
+  return json.media_id;
 }
 
 export interface BridgeContact {
