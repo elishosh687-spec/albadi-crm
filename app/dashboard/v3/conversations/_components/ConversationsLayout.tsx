@@ -7,6 +7,7 @@ import {
   Search,
   ChevronRight,
   Bot,
+  BotOff,
   User,
   UserCog,
   PanelLeftClose,
@@ -20,7 +21,7 @@ import type { ConversationRow } from "../page";
 import { ChatThread, type ChatMessage } from "./ChatThread";
 import { OrderSummary, type OrderSummaryData } from "./OrderSummary";
 import { Composer } from "./Composer";
-import { deleteLeadAction } from "@/app/actions/v2";
+import { deleteLeadAction, setBotPaused } from "@/app/actions/v2";
 
 const SENDER_TONE: Record<"lead" | "bot" | "eli", string> = {
   lead: "text-sky-300",
@@ -178,6 +179,7 @@ export function ConversationsLayout({
               {/* Chat column */}
               <div className="flex flex-col min-h-0">
                 <ChatHeader
+                  sid={selected.sid}
                   summary={selected.summary}
                   onBack={() => setLead(null)}
                   summaryOpen={summaryOpen}
@@ -214,11 +216,13 @@ export function ConversationsLayout({
 }
 
 function ChatHeader({
+  sid,
   summary,
   onBack,
   summaryOpen,
   onToggleSummary,
 }: {
+  sid: string;
   summary: OrderSummaryData;
   onBack: () => void;
   summaryOpen: boolean;
@@ -226,6 +230,21 @@ function ChatHeader({
 }) {
   const stage = (summary.stage ?? "UNCLASSIFIED").toUpperCase();
   const tone = STAGE_TONE[stage] ?? STAGE_TONE.UNCLASSIFIED;
+  // Local state mirrors summary.botPaused for instant feedback; the server
+  // action is the source of truth and the page re-fetches on next nav.
+  const [paused, setPaused] = useState(summary.botPaused);
+  const [toggling, startToggle] = useTransition();
+  const displayName = summary.name || summary.phone || "(ליד)";
+
+  const onToggleBot = () => {
+    const next = !paused;
+    setPaused(next); // optimistic
+    startToggle(async () => {
+      const r = await setBotPaused(sid, next);
+      if (!r?.ok) setPaused(!next); // revert on failure
+    });
+  };
+
   return (
     <header className="flex items-center gap-3 border-b border-border px-4 py-3 bg-card/80">
       <button
@@ -237,9 +256,29 @@ function ChatHeader({
       </button>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 min-w-0">
-          <span className="text-base font-medium truncate">
-            {summary.name || summary.phone || "(ליד)"}
-          </span>
+          <button
+            type="button"
+            onClick={onToggleBot}
+            disabled={toggling}
+            title={paused ? "הבוט/LLM מושהה — לחץ להפעיל" : "הבוט/LLM פעיל — לחץ להשהות"}
+            aria-pressed={!paused}
+            className={cn(
+              "inline-flex items-center gap-1.5 rounded-full pl-2 pr-1.5 py-0.5 text-base font-medium truncate transition-colors",
+              "hover:bg-secondary disabled:opacity-60",
+              paused
+                ? "text-muted-foreground"
+                : "text-foreground"
+            )}
+          >
+            {toggling ? (
+              <Loader2 className="size-3.5 animate-spin shrink-0" />
+            ) : paused ? (
+              <BotOff className="size-3.5 text-warning shrink-0" />
+            ) : (
+              <Bot className="size-3.5 text-success shrink-0" />
+            )}
+            <span className="truncate">{displayName}</span>
+          </button>
           <span className={cn("text-[10px] rounded-full px-2 py-0.5 shrink-0", tone.pill)}>
             {STAGE_LABEL[stage] ?? stage}
           </span>
