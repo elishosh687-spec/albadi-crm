@@ -10,7 +10,7 @@ on:
     # Factory replies ~twice a day. Every 30 min is generous: worst-case
     # latency 30 min, daily invocations capped at 48. workflow_dispatch
     # lets us trigger on demand from the Actions tab or `gh workflow run`.
-    - cron: "* * * * *"
+    - cron: "0 */2 * * *"
   workflow_dispatch: {}
 
 jobs:
