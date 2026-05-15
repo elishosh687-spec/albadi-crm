@@ -27,6 +27,7 @@ import { buildQuoteMessage } from "../factory/calculator/message";
 import {
   extractSpecFromText,
   extractSingleField,
+  classifyConfirmation,
   type ExtractedSpec,
 } from "./spec-extractor";
 
@@ -152,6 +153,8 @@ const CONFIRM_MAX_ATTEMPTS_MSG =
 
 const CONFIRM_OPTION_PROCEED = "מעולה, נמשיך";
 const CONFIRM_OPTION_CHANGE = "רוצה לשנות";
+const CONFIRM_AMBIGUOUS_BAIL_MSG =
+  "תודה — לא הצלחתי לוודא אם להמשיך או לשנות. אעדכן את אלי שיחזור אליכם תוך 24 שעות.";
 
 const CONFIRMATION_QUESTION: Question = {
   step: 9,
@@ -191,6 +194,11 @@ interface QState {
   // the lead routes to factory (Eli prices manually) to avoid loops.
   confirmationStep?: "awaiting_confirm" | "awaiting_freetext" | null;
   confirmationAttempts?: number;
+  // Bumped each time we can't classify the customer's confirmation reply as
+  // proceed/change (after matchAnswer + regex + LLM all fail). After 2
+  // strikes we route to factory + DM Eli — prevents infinite loops on
+  // off-script replies like "?", "מה?", "...".
+  confirmationAmbiguous?: number;
   orderNotes?: string;
 }
 
@@ -291,6 +299,17 @@ function buildConfirmationMessage(state: QState): string {
     lines.push(`📝 הערות: ${state.orderNotes}`);
   }
   lines.push("", "הכל בסדר, או רוצים לשנות משהו?");
+  // When buttons are disabled the customer doesn't see the proceed/change
+  // chips — surface the same options as numbered text so they know what to
+  // reply. matchAnswer accepts both "1"/"2" and the labels themselves.
+  if (BUTTONS_DISABLED) {
+    lines.push(
+      "",
+      `1. ${CONFIRM_OPTION_PROCEED}`,
+      `2. ${CONFIRM_OPTION_CHANGE}`,
+      "השב במספר (1, 2) או בטקסט."
+    );
+  }
   return lines.join("\n");
 }
 
@@ -881,17 +900,41 @@ async function handleConfirmationStep(
   }
 
   // Default sub-state: awaiting_confirm (or unset on a fresh entry).
-  // Match the customer's reply to one of the two buttons. Accept the
-  // canonical option id ("proceed"/"change"), the button label, or
-  // free-text synonyms like "כן" / "לא".
+  //
+  // Resolution order (cheapest → most expensive):
+  //   1. matchAnswer — catches "1" / "2" / button labels.
+  //   2. keyword regex (substring, NOT anchored) — common Hebrew phrasings.
+  //   3. classifyConfirmation LLM — last resort for off-script replies.
+  //
+  // When BOTH proceed and change signals fire, change wins: an explicit
+  // "no/change" word is a stronger negative signal than a generic affirm.
   const match = matchAnswer(text, CONFIRMATION_QUESTION);
   const lowered = text.trim().toLowerCase();
-  const isProceed =
-    match === "proceed" ||
-    /^(כן|אישור|אוקיי|ok|מעולה|מתאים|טוב|בסדר|המשך)/i.test(lowered);
-  const isChange =
-    match === "change" ||
-    /(שנות|לשנות|לעדכן|שינוי|לתקן|הערה|אחר|לא מתאים|לא נכון)/i.test(lowered);
+
+  const PROCEED_RX =
+    /(?:^|[\s,!.?])(כן|אישור|אוקיי|ok|okay|מעולה|מתאים|טוב|בסדר|המשך|תשלח|סבבה|מעוניין|רוצה את ההצעה|הכל טוב|הכל בסדר|זהו|זה הכל|אפשר להמשיך|נמשיך)(?:[\s,!.?]|$)/i;
+  const CHANGE_RX =
+    /(?:^|[\s,!.?])(לא|שנות|לשנות|לעדכן|שינוי|לתקן|הערה|אחר|לא מתאים|לא נכון|לא רוצה|לבטל|במקום|לשים|לשנות את|להוסיף|להחליף|לא בדיוק|להחזיר)(?:[\s,!.?]|$)/i;
+
+  let isProceed = match === "proceed" || PROCEED_RX.test(lowered);
+  let isChange = match === "change" || CHANGE_RX.test(lowered);
+
+  // Both fired → ambiguous-leaning-to-change. Let the customer correct
+  // rather than commit to a quote they didn't fully approve.
+  if (isProceed && isChange) {
+    isProceed = false;
+  }
+
+  // Neither fired — try LLM. Cheap (~$0.0001) and only runs on miss.
+  if (!isProceed && !isChange && lowered.length >= 2) {
+    try {
+      const verdict = await classifyConfirmation(text);
+      if (verdict === "proceed") isProceed = true;
+      else if (verdict === "change") isChange = true;
+    } catch (e) {
+      console.error("[questionnaire] classifyConfirmation error", e);
+    }
+  }
 
   if (isProceed) {
     const isCustom =
@@ -911,8 +954,23 @@ async function handleConfirmationStep(
     return { action: "confirmation_freetext_prompt" };
   }
 
-  // Ambiguous reply at step 9 → resend the confirmation widget. Don't bail;
-  // this is the customer's choice gate, not a 3-strikes question.
-  await askConfirmation(ctx, state);
-  return { action: "confirmation_sent", detail: "re-asked: ambiguous" };
+  // All three classifiers failed. Cap repeated ambiguity so the customer
+  // doesn't see the same summary forever — after 2 strikes, hand to Eli.
+  const ambiguous = (state.confirmationAmbiguous ?? 0) + 1;
+  if (ambiguous >= 2) {
+    const bailed: QState = { ...state, confirmationAmbiguous: ambiguous };
+    await sendBridgeMessage(ctx.jid, CONFIRM_AMBIGUOUS_BAIL_MSG);
+    await routeToFactory(ctx, bailed);
+    await sendEliDM(
+      `⚠️ ${ctx.name ?? ctx.phone ?? "ליד"} נתקע ב-confirmation gate — לא הצלחתי לסווג proceed/change אחרי 2 ניסיונות. עבר ל-WAITING_FACTORY.`
+    );
+    return { action: "completed_factory", detail: "confirmation ambiguity cap" };
+  }
+  const next: QState = { ...state, confirmationAmbiguous: ambiguous };
+  await saveState(ctx.sid, next);
+  await askConfirmation(ctx, next);
+  return {
+    action: "confirmation_sent",
+    detail: `ambiguous attempt ${ambiguous}`,
+  };
 }

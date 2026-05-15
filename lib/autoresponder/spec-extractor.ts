@@ -242,6 +242,38 @@ export function hasAnyField(spec: ExtractedSpec): boolean {
 }
 
 /**
+ * Classify a customer's reply to the confirmation gate (step 9): is it a
+ * "proceed" ("הכל בסדר, תשלח לי הצעה"), a "change" ("שניה, תחליף את הכמות"),
+ * or unintelligible? Used after the regex/keyword pass fails. Soft-fails to
+ * null so the caller can ambiguity-cap + route-to-factory.
+ */
+export async function classifyConfirmation(
+  text: string
+): Promise<"proceed" | "change" | null> {
+  const clean = text.trim();
+  if (!clean) return null;
+  const result = await callLLM<{
+    intent?: "proceed" | "change" | "unknown";
+    confidence?: number;
+  }>({
+    system:
+      "אתה מסווג תגובה של לקוח לשאלת אישור על הזמנה של שקיות. החזר JSON עם " +
+      '`intent` ("proceed" אם הוא מאשר את ההזמנה ורוצה לקבל מחיר, "change" אם ' +
+      'הוא רוצה לשנות משהו בפרטים, "unknown" אם לא ברור) ו-`confidence` ' +
+      "(0..1). שום טקסט נוסף.",
+    user: clean,
+    temperature: 0,
+    timeoutMs: 5000,
+  });
+  if (!result || !result.intent) return null;
+  if (result.intent === "unknown") return null;
+  if (typeof result.confidence === "number" && result.confidence < 0.55) {
+    return null;
+  }
+  return result.intent;
+}
+
+/**
  * Extract a single field — for matchAnswer fallback in questionnaire.ts.
  * Returns the canonical option code (e.g. "true" for handles, "s1" for
  * shipping) if the LLM confidently extracted it; otherwise null.
