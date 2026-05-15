@@ -37,7 +37,6 @@ function buildCaption(opts: {
   const dims = [spec.widthCm, spec.depthCm, spec.heightCm]
     .filter((n) => n && n > 0)
     .join("×");
-  const product = spec.description?.trim() || "שקיות";
   const qty = spec.quantity.toLocaleString("he-IL");
 
   const lines: (string | null)[] = [
@@ -46,7 +45,6 @@ function buildCaption(opts: {
     `*הצעת מחיר #${quotationNo}*`,
     "",
     "📦 *פרטי המוצר*",
-    product,
     dims ? `מידות: ${dims} ס״מ` : null,
     `כמות: ${qty} יח׳`,
     "",
