@@ -134,10 +134,15 @@ export async function POST(
     );
   }
 
-  await db
-    .update(factoryQuoteRequests)
-    .set({ sentToCustomerAt: new Date(), updatedAt: new Date() })
-    .where(eq(factoryQuoteRequests.id, id));
+  try {
+    await db
+      .update(factoryQuoteRequests)
+      .set({ sentToCustomerAt: new Date(), updatedAt: new Date() })
+      .where(eq(factoryQuoteRequests.id, id));
+  } catch (err) {
+    // Bridge already sent — log and return success so UI doesn't show an error
+    console.warn("[factory/send-whatsapp] db update failed after bridge send", err);
+  }
 
   return NextResponse.json({
     ok: true,

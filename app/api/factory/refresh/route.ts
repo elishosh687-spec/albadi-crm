@@ -29,6 +29,7 @@ interface RefreshResult {
   scanned: number;
   updated: number;
   updates: { id: string; rowIndex: string | null }[];
+  dmResults: { id: string; dmStatus: string }[];
 }
 
 async function handleRefresh(): Promise<RefreshResult> {
@@ -101,6 +102,7 @@ async function handleRefresh(): Promise<RefreshResult> {
   }
 
   // DM Eli per transition. Non-fatal — sendEliDM already soft-fails.
+  const dmResults: { id: string; dmStatus: string }[] = [];
   for (const t of transitioned) {
     try {
       const [leadRow] = await db
@@ -115,13 +117,15 @@ async function handleRefresh(): Promise<RefreshResult> {
         `עלות יחידה: ¥${t.unitCostCny}`,
         `קישור: https://albadi-crm.vercel.app/dashboard/v3/conversations?lead=${encodeURIComponent(t.manychatSubId)}`,
       ];
-      await sendEliDM(lines.join("\n"));
+      const dmStatus = await sendEliDM(lines.join("\n"));
+      dmResults.push({ id: t.id, dmStatus });
     } catch (err) {
       console.warn("[factory/refresh] notify Eli failed", err);
+      dmResults.push({ id: t.id, dmStatus: "error" });
     }
   }
 
-  return { ok: true, scanned: pending.length, updated, updates };
+  return { ok: true, scanned: pending.length, updated, updates, dmResults };
 }
 
 export async function POST() {

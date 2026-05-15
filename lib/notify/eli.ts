@@ -29,22 +29,26 @@ async function resolveEliJid(): Promise<string | null> {
   return jid;
 }
 
-export async function sendEliDM(text: string): Promise<void> {
+export async function sendEliDM(text: string): Promise<"sent" | "dry_run" | "no_jid" | "error"> {
   // Test-only short-circuit (mirrors sendBridgeMessage dry-run). Skips JID
   // resolution AND send so test scripts run without network access.
   if (process.env.BRIDGE_DRY_RUN === "1") {
     const preview = text.length > 100 ? `${text.slice(0, 100)}…` : text;
     console.log(`[notify.eli.dryrun] → ${preview.replace(/\n/g, " ⏎ ")}`);
-    return;
+    return "dry_run";
   }
   try {
     const jid = await resolveEliJid();
     if (!jid) {
-      console.warn("[notify.eli] ELI_NOTIFY_JID not set — skipping DM:", text);
-      return;
+      console.warn("[notify.eli] ELI_NOTIFY_JID not set or unresolvable — skipping DM");
+      return "no_jid";
     }
+    console.log(`[notify.eli] sending DM → jid=${jid.slice(0, 20)}…`);
     await sendBridgeMessage(jid, text);
+    console.log(`[notify.eli] DM sent OK`);
+    return "sent";
   } catch (e) {
     console.error("[notify.eli] failed to send:", e);
+    return "error";
   }
 }
