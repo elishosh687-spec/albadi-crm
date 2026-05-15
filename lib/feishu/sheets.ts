@@ -144,6 +144,42 @@ export async function readRow(rowIndex: string | number): Promise<(string | numb
   return rows[0] ?? [];
 }
 
+/**
+ * Find the actual row index of a quotation by searching column B. Used at
+ * refresh time because stored feishuRowIndex can drift when the operator
+ * deletes/inserts rows in Feishu. Returns null if not found.
+ *
+ * Scans A1:B{maxRows} once and looks for an exact match on column B.
+ */
+export async function findRowByQuotationNo(
+  quotationNo: string,
+  maxRows = 200
+): Promise<string | null> {
+  const token = getSpreadsheetToken();
+  const sheetId = await getSheetId();
+  const range = `${sheetId}!A1:B${maxRows}`;
+  type ReadResp = {
+    data: {
+      valueRange: {
+        values: (string | number | null)[][];
+      };
+    };
+  };
+  const resp = await feishuFetch<ReadResp>(
+    `/open-apis/sheets/v2/spreadsheets/${token}/values/${encodeURIComponent(range)}`,
+    { method: "GET" }
+  );
+  const rows = resp.data?.valueRange?.values ?? [];
+  const needle = quotationNo.trim();
+  for (let i = 0; i < rows.length; i++) {
+    const b = rows[i][1];
+    if (b !== null && b !== undefined && String(b).trim() === needle) {
+      return String(i + 1); // 1-based row index
+    }
+  }
+  return null;
+}
+
 // ------------------------------------------------------------
 // Request (Eli's side, A..I)
 // ------------------------------------------------------------

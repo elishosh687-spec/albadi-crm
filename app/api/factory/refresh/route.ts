@@ -14,7 +14,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { factoryQuoteRequests, leads } from "@/drizzle/schema";
 import { and, eq, isNotNull, sql } from "drizzle-orm";
-import { readRow, parseFactoryResponseRow } from "@/lib/feishu/sheets";
+import {
+  readRow,
+  parseFactoryResponseRow,
+  findRowByQuotationNo,
+} from "@/lib/feishu/sheets";
 import { sendEliDM } from "@/lib/notify/eli";
 
 export const runtime = "nodejs";
@@ -51,7 +55,24 @@ async function handleRefresh(): Promise<RefreshResult> {
   for (const row of pending) {
     if (!row.feishuRowIndex) continue;
     try {
-      const cells = await readRow(row.feishuRowIndex);
+      // Stored feishuRowIndex can drift if the operator deletes/inserts
+      // rows manually. Re-locate by quotationNo (column B). Fall back to
+      // the stored index if no match — preserves the original behavior.
+      let activeIndex: string = row.feishuRowIndex;
+      if (row.quotationNo) {
+        const found = await findRowByQuotationNo(row.quotationNo);
+        if (found && found !== row.feishuRowIndex) {
+          console.log(
+            `[factory/refresh] row index drifted: id=${row.id} quote=${row.quotationNo} stored=${row.feishuRowIndex} actual=${found}`
+          );
+          activeIndex = found;
+        } else if (!found) {
+          console.warn(
+            `[factory/refresh] quote ${row.quotationNo} not found in sheet — using stored idx ${row.feishuRowIndex}`
+          );
+        }
+      }
+      const cells = await readRow(activeIndex);
       const parsed = parseFactoryResponseRow(cells);
       if (!parsed.hasResponse) continue;
       await db
@@ -59,11 +80,12 @@ async function handleRefresh(): Promise<RefreshResult> {
         .set({
           factoryStatus: "received",
           factoryResponse: parsed,
+          feishuRowIndex: activeIndex,
           updatedAt: new Date(),
         })
         .where(eq(factoryQuoteRequests.id, row.id));
       updated += 1;
-      updates.push({ id: row.id, rowIndex: row.feishuRowIndex });
+      updates.push({ id: row.id, rowIndex: activeIndex });
       transitioned.push({
         id: row.id,
         manychatSubId: row.manychatSubId,
