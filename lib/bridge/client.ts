@@ -234,7 +234,20 @@ export async function sendBridgeMessage(
   }
   const jid = isJid(recipient) ? recipient : phoneToJid(recipient);
   const body: Record<string, unknown> = { recipient: jid, message };
-  if (mediaPath) body.media_path = mediaPath;
+  if (mediaPath) {
+    // The bridge accepts either `media_path` (a path on its own filesystem)
+    // or `media_url` (a public URL the bridge fetches). Detect by scheme so
+    // remote PDFs from Vercel Blob hit the URL path and don't get mistaken
+    // for missing local files. Send both keys for tolerance — bridge picks
+    // whichever it implements.
+    const isUrl = /^https?:\/\//i.test(mediaPath);
+    if (isUrl) {
+      body.media_url = mediaPath;
+      body.media_path = mediaPath;
+    } else {
+      body.media_path = mediaPath;
+    }
+  }
   const result = await bridgeFetch<BridgeSendResult>("/v1/messages", {
     method: "POST",
     body: JSON.stringify(body),
