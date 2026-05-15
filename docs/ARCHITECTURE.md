@@ -209,6 +209,87 @@ bridge POST /api/bridge/webhook
 
 ---
 
+## 5b. LLM vs deterministic code — איפה מה רץ
+
+> **Source of truth** למפת ה-AI בבוט. עדכן כאן בכל פעם שמזיזים גבול בין קוד ל-LLM.
+
+### עיקרון מנחה
+
+הקוד הדטרמיניסטי מטפל ב-happy path וב-flows מסודרים. LLM נכנס רק שם שהקוד נכשל
+(unmatch) או שצריך הבנת שפה טבעית עמוקה. כל escalation לאלי מתועד עם
+`llmAnalysis + recommendation` כשהיה LLM ב-path.
+
+### מפה לפי שלב
+
+| שלב / מקום בקוד | קוד דטרמיניסטי | LLM |
+|---|---|---|
+| `questionnaire.ts` — `matchAnswer()` (Q1-Q6) | מספר / value / substring | fallback: spec-extractor כשמחזיר null |
+| `questionnaire.ts` — step 9 confirmation | כפתור "מעולה, נמשיך / רוצה לשנות" | "רוצה לשנות" → טקסט חופשי → spec-extractor → merge |
+| `questionnaire.ts` — pendingCustomField (Q2/Q3 "אחר") | קולט raw text | spec-extractor ב-matchAnswer fallback מזהה inline ("7500 יחידות") |
+| `routeToQuoted()` / `routeToFactory()` | קוד בלבד (calc API) | — |
+| `decision.ts` — intent classification (Stage 2-4) | — | OpenAI gpt-4o-mini (12 categories) |
+| `decision.ts` — intent ידוע (accept/reject/negotiating/question_*) | switch/case מלא | — |
+| `decision.ts` — intent=`other` (Stage 2 + 4) | — | unmatch-agent — מנסה לפתור; אחרת escalate עשיר |
+| `decision.ts` — intent=`question_other` (Stage 2 + 4) | — | unmatch-agent — מנסה לענות מה-FAQ; אחרת escalate |
+| `decision.ts` — `awaiting_competitor_offer` ambiguous | — | unmatch-agent — מבין "לא ממש אבל יקר" |
+| `decision.ts` — Logo stage (media detect, link detect) | regex + media flag | — |
+| Follow-ups cron | rule-based cadence | — |
+| Drafts queue (money moments) | — | OpenAI (draft generation) |
+
+### Models בשימוש
+
+| Model | Purpose | קובץ |
+|---|---|---|
+| `gpt-4o-mini` | intent classification | `lib/autoresponder/intent.ts` |
+| `gpt-4o-mini` | spec-extractor (טקסט חופשי → שדות) | `lib/autoresponder/spec-extractor.ts` |
+| `gpt-4o-mini` | unmatch agent (Stage 2/4 fallback) | `lib/autoresponder/unmatch-agent.ts` |
+| OpenAI | draft generation | `lib/drafts/index.ts` |
+
+כל LLM calls שותפים ל-`OPENAI_API_KEY` + `OPENAI_MODEL` (default `gpt-4o-mini`).
+
+### Shared infra
+
+| Module | Purpose |
+|---|---|
+| `lib/autoresponder/openai-client.ts` | thin Chat Completions wrapper. soft-fail, retry-once, 10s timeout, JSON mode. כל קריאה ב-bot עוברת דרכו. |
+| `lib/autoresponder/llm-context.ts` | `buildLLMContext(sid)` + `renderContextForPrompt(ctx)` — היסטוריה / qState / profile / tags / FAQ / business rules. ~3K tokens. |
+| `docs/PRODUCT-FAQ.md` | תוכן FAQ. נטען בזמן ריצה ב-`llm-context`. עדכון שם → deploy הבא ה-LLM יראה את החדש. |
+
+### Context שכל LLM call מקבל
+
+נטען מ-`buildLLMContext` ב-`llm-context.ts`:
+1. היסטוריית שיחה אחרונה (20 הודעות)
+2. qState מלא של הליד
+3. ליד profile (name, phone, stage, flags, notes, quoteTotal)
+4. tags של הליד
+5. FAQ מוצר (`docs/PRODUCT-FAQ.md`)
+6. כללי עסק (שעות פעילות, חגים, תשלום, אספקה)
+
+### HANDOFF — escalation עם LLM
+
+`escalateToEli()` ב-`decision.ts` מקבל שתי signatures:
+- **Legacy** (positional): `escalateToEli(ctx, reason, llmSummary?, kind?)` — נשאר עובד לכל callers ישנים.
+- **Enriched** (options): `escalateToEli(ctx, reason, { kind, llmAnalysis, recommendation, llmSummary? })` — בשימוש מ-unmatch-agent.
+
+ה-DM של אלי (`eliDecisionEscalationTemplate`) — כשיש `llmAnalysis` / `recommendation` מציג אותם כ:
+```
+🤖 ניתוח: <llmAnalysis>
+💡 המלצה: <recommendation>
+```
+אחרת fallback לתבנית הישנה עם `summary`.
+
+### Kill switches (rollback מהיר)
+
+| ENV var | אפקט |
+|---|---|
+| `LLM_UNMATCH_DISABLED=1` | unmatch-agent בכל call → escalate מיד (legacy behavior) |
+| `LLM_SPEC_EXTRACTOR_DISABLED=1` | spec-extractor מחזיר null → matchAnswer reask כרגיל; step 9 confirmation → factory route |
+| `OPENAI_API_KEY` חסר | כל LLM softfail (זה גם kill switch effective) |
+
+Toggle ב-Vercel envs → redeploy (~30s).
+
+---
+
 ## 6. Follow-ups (cadence)
 
 `app/api/bot/followups/route.ts`:

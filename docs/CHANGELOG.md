@@ -5,6 +5,33 @@
 
 ---
 
+## v3.1 — 2026-05-15 — "LLM integration: spec-extractor + unmatch-agent + rich HANDOFF"
+
+### Added
+- **`lib/autoresponder/openai-client.ts`** — shared OpenAI Chat Completions wrapper. Soft-fail, retry-once, JSON-mode by default. כל קריאות ה-LLM החדשות בבוט עוברות דרכו.
+- **`lib/autoresponder/llm-context.ts`** — `buildLLMContext(sid)` טוען היסטוריה (20 הודעות) + qState + profile + tags + FAQ + business rules. ~3K tokens.
+- **`docs/PRODUCT-FAQ.md`** — FAQ נטען אוטומטית לכל קריאת LLM (חומרים, אספקה, תשלום, אחריות).
+- **`lib/autoresponder/spec-extractor.ts`** — מיפוי טקסט חופשי עברי לשדות שאלון קנוניים. שירות לשני call sites: (1) matchAnswer fallback ("לא חייב"→handles=false, "דחוף"→s1, "אלפיים"→custom+"2000"); (2) step 9 free-text revision.
+- **`lib/autoresponder/unmatch-agent.ts`** — agent שמנסה לטפל ב-3 fallback paths ב-decision.ts לפני escalation. מחזיר reply / escalate / noop. אם reply — לעולם לא יצטט מחיר (post-validation).
+- **Step 9 confirmation gate** ב-`questionnaire.ts` — אחרי הקיום השאלון, סיכום + כפתורים "מעולה, נמשיך / רוצה לשנות". free-text → spec-extractor → merge → re-confirm. max 2 revisions → factory route.
+- **`orderNotes`** ב-qState + ב-DM של אלי ב-factory route.
+- **Rich HANDOFF DM** — `eliDecisionEscalationTemplate` תומך ב-`llmAnalysis` + `recommendation`. כש-LLM היה ב-path, אלי מקבל ניתוח + המלצה במקום סיכום גנרי.
+- **Test script** — `scripts/test-spec-extractor.ts` — bank of 17 Hebrew phrasings.
+
+### Changed
+- **`decision.ts` — 5 fallback paths** עברו ל-unmatch-agent: intent=`other` (Stage 2+4), intent=`question_other` (Stage 2+4), `awaiting_competitor_offer` ambiguous (Stage 2). פחות escalations סה"כ.
+- **`escalateToEli()`** — signature מורחב (positional נשמר ל-backward compat): `escalateToEli(ctx, reason, { kind, llmAnalysis, recommendation, llmSummary? })`.
+- **`questionnaire.ts` matchAnswer** — null → ניסיון נוסף עם spec-extractor (gpt-4o-mini); רק אז reask.
+- **QState** — שדות חדשים: `confirmationStep`, `confirmationAttempts`, `orderNotes`. שלב terminal עבר מ-`step=9` ל-`step=10` (9 = confirmation gate).
+
+### Migration notes
+- כל ה-LLM calls soft-fail → אם OpenAI נופל, fallback לקוד הישן ללא breakage.
+- Kill switches: `LLM_UNMATCH_DISABLED=1`, `LLM_SPEC_EXTRACTOR_DISABLED=1` ב-Vercel envs (redeploy ~30s).
+- שום DB migration. שדות חדשים ב-qState (JSONB), backward compat אוטומטי.
+- Models: כולם `gpt-4o-mini` (זול, מהיר). שדרוג עתידי ל-`gpt-4o` אם edge cases יציפו.
+
+---
+
 ## v3 — 2026-05 — "Dashboard v3 + Retool supervisor console"
 
 ### Added

@@ -30,6 +30,10 @@
 | 1.2.4 | Escalate to NEEDS_ELI after 3 failed re-asks / "אחר" | shipped | `lib/autoresponder/questionnaire.ts` | CUSTOMER-FLOW §1.1 |
 | 1.2.5 | Calc-engine integration → estimate price | shipped | `lib/autoresponder/calc.ts` (TBD path) | CUSTOMER-FLOW §1.2 |
 | 1.2.6 | Custom-spec → WAITING_FACTORY (אלי מתמחר ידני) | shipped | `lib/autoresponder/questionnaire.ts` | CUSTOMER-FLOW §2 |
+| 1.2.7 | LLM fallback ב-matchAnswer ("לא חייב"→false, "דחוף"→s1, "אלפיים"→custom) | shipped (v3.1) | `lib/autoresponder/spec-extractor.ts` | ARCHITECTURE §5b |
+| 1.2.8 | Step 9 confirmation gate — סיכום + "מעולה/רוצה לשנות" | shipped (v3.1) | `lib/autoresponder/questionnaire.ts:handleConfirmationStep` | CHANGELOG v3.1 |
+| 1.2.9 | Free-text spec revision (LLM merge) — max 2 סיבובים | shipped (v3.1) | `lib/autoresponder/questionnaire.ts:mergeExtracted` | CHANGELOG v3.1 |
+| 1.2.10 | `orderNotes` — הערות לקוח מועברות לאלי ב-DM | shipped (v3.1) | `lib/autoresponder/questionnaire.ts:summarizeForFactory` | — |
 
 ### 1.3 Intent Classifier
 
@@ -49,6 +53,9 @@
 | 1.4.3 | Logo request (Stage 3) on accept | shipped | `lib/autoresponder/decision.ts` | CUSTOMER-FLOW §3 |
 | 1.4.4 | Logo received (image) → AWAITING_FINAL + NEEDS_ELI | shipped | `lib/autoresponder/decision.ts` | CUSTOMER-FLOW §3 |
 | 1.4.5 | 3-strike drop-off rule per stage | shipped | `lib/autoresponder/decision.ts` | CUSTOMER-FLOW §4 |
+| 1.4.6 | Unmatch-agent — `intent=other`/`question_other` → LLM מנסה לפתור לפני escalate | shipped (v3.1) | `lib/autoresponder/unmatch-agent.ts` | ARCHITECTURE §5b |
+| 1.4.7 | Rich HANDOFF DM — `llmAnalysis` + `recommendation` ב-`escalateToEli` | shipped (v3.1) | `lib/messaging/templates.ts:eliDecisionEscalationTemplate` | ARCHITECTURE §HANDOFF |
+| 1.4.8 | Price-citation post-validation (LLM reply עם מחיר → downgrade ל-escalate) | shipped (v3.1) | `lib/autoresponder/unmatch-agent.ts:containsPriceLike` | — |
 
 ### 1.5 Follow-ups (Cadence)
 

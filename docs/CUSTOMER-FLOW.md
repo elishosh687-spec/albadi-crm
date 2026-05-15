@@ -357,6 +357,48 @@ flowchart TD
 
 ---
 
+## LLM Context Stack — מה כל קריאת LLM מקבלת
+
+> מפת מידע. ה-mapping של "איפה LLM רץ vs איפה קוד" נמצא ב-`ARCHITECTURE.md §5b`.
+> כאן זה תוכן ההקשר שכל קריאה מקבלת.
+
+| מידע | מקור | תמיד / רק escalation |
+|---|---|---|
+| 20 הודעות אחרונות | `messages` table | תמיד |
+| qState מלא (כל הפרמטרים שנאספו) | `leads.q_state` | תמיד |
+| ליד profile (שם, טלפון, היסטוריה, לידים קודמים) | `leads` row + history | תמיד |
+| FAQ קצר (חומרים, הדפסה, אחריות, מינימום, אספקה) | `docs/PRODUCT-FAQ.md` | תמיד |
+| כללי עסק (שעות פעילות, חגים) | קונפיג / `bot_config` | תמיד |
+| tags + flags של הליד | `lead_tags` + `pipeline_flag` | תמיד |
+| Few-shot examples (טון של אלי) | `lib/autoresponder/examples.ts` | תמיד |
+| טבלת מחירים פנימית | `lib/factory/calculator/` | רק ב-escalation |
+| החלטות עבר של אלי בלידים דומים | `bot_drafts` history + RAG | רק ב-escalation |
+
+**גודל call ממוצע:** ~3K input tokens.
+
+**כללי הגנה:**
+- LLM לעולם לא מצטט מחיר ללקוח (גם אם בידע שלו).
+- LLM לעולם לא מבטיח תאריך אספקה ספציפי.
+- LLM שמכניס המלצה ל-DM של אלי = OK (מידע פנימי).
+
+---
+
+## Bot autonomy — איזה החלטות הקוד לוקח לבד vs מתי LLM נכנס
+
+| החלטה | קוד | LLM |
+|---|---|---|
+| מיפוי תשובת שאלון לאפשרות מהרשימה | matchAnswer() | fallback כשנכשל |
+| מעבר stage (NEW → AWAITING_ESTIMATE) | קוד דטרמיניסטי | — |
+| בחירת canned reply (delivery/payment/inclusive) | switch על intent | — |
+| zיוּוּג intent מתוך 12 קטגוריות | — | OpenAI |
+| תגובה ל-intent="other" | היום: no_op | **חדש:** Claude |
+| תגובה לשאלה לא מוכרת על המוצר | היום: escalate | **חדש:** Claude מ-FAQ |
+| escalation summary לאלי | template סטטי | **חדש:** Claude (`llmAnalysis + recommendation`) |
+| WON marking | קוד | — |
+| DROPPED marking | רק אלי | — |
+
+---
+
 ## סיכום
 
 | שלב | Status |
