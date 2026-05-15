@@ -77,16 +77,12 @@ export async function POST(
       { status: 409 }
     );
   }
-  if (!row.pdfUrl) {
-    return NextResponse.json(
-      {
-        error: "no_pdf_url",
-        message:
-          "PDF must be hosted on a public URL for bridge attachment. Set BLOB_READ_WRITE_TOKEN to enable Vercel Blob upload.",
-      },
-      { status: 409 }
-    );
-  }
+  // Always use the on-demand render endpoint as the PDF URL — it's public
+  // (middleware exempts GET /api/factory/<id>/pdf) and avoids Blob access
+  // issues on the bridge side.
+  const host = _req.headers.get("host") ?? "albadi-crm.vercel.app";
+  const proto = host.startsWith("localhost") ? "http" : "https";
+  const pdfMediaUrl = `${proto}://${host}/api/factory/${id}/pdf`;
 
   const leadRows = await db
     .select({
@@ -122,7 +118,7 @@ export async function POST(
 
   let result: { wa_message_id: string; status?: string };
   try {
-    result = await sendBridgeMessage(recipient, caption, row.pdfUrl, "eli");
+    result = await sendBridgeMessage(recipient, caption, pdfMediaUrl, "eli");
   } catch (err) {
     console.error("[factory/send-whatsapp] bridge send failed", err);
     return NextResponse.json(
