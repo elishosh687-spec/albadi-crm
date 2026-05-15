@@ -158,8 +158,11 @@ ${input.reason ? `\n=== למה הגענו אליך ===\n${input.reason}` : ""}
   }>({
     system: SYSTEM_PROMPT,
     user: userPrompt,
-    // unmatch reasoning needs a bit more room than intent classification.
-    timeoutMs: 12000,
+    // Tight budget — Vercel Hobby caps functions at 10s. Previous 12s value
+    // exceeded the limit and killed the function before sendBridgeMessage or
+    // escalateToEli could run; retries=0 prevents doubling latency.
+    timeoutMs: 7000,
+    retries: 0,
   });
 
   if (!raw) {

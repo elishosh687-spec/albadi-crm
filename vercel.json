@@ -4,5 +4,10 @@
       "path": "/api/bot/followups",
       "schedule": "0 9 * * *"
     }
-  ]
+  ],
+  "functions": {
+    "app/api/bridge/webhook/route.ts": {
+      "maxDuration": 30
+    }
+  }
 }

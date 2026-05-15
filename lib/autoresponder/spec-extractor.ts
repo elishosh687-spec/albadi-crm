@@ -139,6 +139,11 @@ export async function extractSpecFromText(
   }>({
     system: SYSTEM_PROMPT,
     user: userPrompt,
+    // Tight budget — Vercel Hobby kills functions at 10s. Leave headroom for
+    // DB writes + sendBridgeMessage after this call returns. A retry doubles
+    // latency and risks function termination, so retries=0.
+    timeoutMs: 7000,
+    retries: 0,
   });
 
   if (!raw) return null;
