@@ -127,7 +127,7 @@ const QUESTIONS: Question[] = [
 
 
 const DECISION_PROMPT =
-  "מה דעתכם על ההצעה? אם מתאימה — נמשיך ללוגו. אם לא — תגידו לי מה לשנות.";
+  "מה דעתכם על ההצעה?\n\n✅ מתאים → שלחו לנו את הלוגו ונמשיך.\n🔧 רוצים מפרט אחר? אפשר לבקש שינוי בכמות / מידה / ידיות / למינציה / צבעים — תכתבו לי בחופשיות ואחזיר מחיר מעודכן.";
 const FACTORY_HOLD_MSG =
   "תודה, קיבלתי את המפרט. חוזר אליכם תוך 24-48 שעות עם המחיר.";
 const BAIL_REPLY =
@@ -170,7 +170,7 @@ const CONFIRMATION_QUESTION: Question = {
   buttons: true,
 };
 
-interface QState {
+export interface QState {
   step: number;
   shipping?: string;
   quantity?: string;
@@ -199,6 +199,10 @@ interface QState {
   // strikes we route to factory + DM Eli — prevents infinite loops on
   // off-script replies like "?", "מה?", "...".
   confirmationAmbiguous?: number;
+  // Stage-2 (`AWAITING_DECISION`) sub-state `awaiting_spec_change` re-prompt
+  // counter. Bumped when the customer's reply to "מה רוצים לשנות?" doesn't
+  // contain any extractable field. After 2 strikes the lead is escalated.
+  specChangeAttempts?: number;
   orderNotes?: string;
 }
 
@@ -319,7 +323,7 @@ function buildConfirmationMessage(state: QState): string {
  * replaced) to orderNotes so a customer can add multiple comments across
  * rounds. Returns whether at least one field actually changed.
  */
-function mergeExtracted(
+export function mergeExtracted(
   state: QState,
   extracted: ExtractedSpec
 ): { merged: QState; changed: boolean } {
@@ -404,6 +408,45 @@ function matchAnswer(text: string, q: Question): string | null {
   return null;
 }
 
+/**
+ * Parse a customer's free-text custom-quantity into a positive integer.
+ * Returns null when the string has no parseable digits.
+ *
+ * Spec-extractor LLM is instructed to write the canonical number into
+ * `quantityCustom` (e.g. "אלפיים" → "2000"), so most inputs are clean digit
+ * strings. This function also strips non-digit noise as a safety net for
+ * pre-prompt-update rows and direct ManyChat-legacy paths.
+ */
+export function parseCustomQuantity(raw?: string | null): number | null {
+  if (!raw) return null;
+  const digits = raw.replace(/[^\d]/g, "");
+  if (!digits) return null;
+  const n = parseInt(digits, 10);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
+/**
+ * Decide whether a completed questionnaire must wait for Eli to price it
+ * manually (factory route), or whether the in-process calculator can quote
+ * it directly.
+ *
+ * Rules:
+ *   - Custom dimensions → always factory. Calculator has no pricing curve
+ *     for arbitrary box sizes.
+ *   - Custom quantity that parses to ≥ 1000 → calculator. It already snaps
+ *     down to the nearest tier price via `findClosestPrice`, so 1500 →
+ *     tier-1000 unit price × 1500 units. No human needed.
+ *   - Custom quantity < 1000 or unparseable → factory. Below tier floor.
+ */
+export function shouldRouteToFactory(state: QState): boolean {
+  if (state.product === "custom") return true;
+  if (state.quantity === "custom") {
+    const n = parseCustomQuantity(state.quantityCustom);
+    if (n === null || n < 1000) return true;
+  }
+  return false;
+}
+
 async function fetchQuote(state: QState): Promise<string> {
   // Local calculator (ported from bag-quote-app). No HTTP roundtrip.
   if (!state.product || !state.quantity || !state.shipping) {
@@ -412,9 +455,18 @@ async function fetchQuote(state: QState): Promise<string> {
     );
   }
   const hasLamination = state.lamination === "true";
+  // For custom quantity inside the tier range, pass the literal number as
+  // `quantityOverride`. The engine snaps the unit price down to the nearest
+  // tier via findClosestPrice but multiplies by the actual customer quantity.
+  // For tier-based quantity (q0..q3), leave override null.
+  const customQty =
+    state.quantity === "custom"
+      ? parseCustomQuantity(state.quantityCustom)
+      : null;
   const calc = calculateQuoteByCodes({
     productId: state.product,
     quantityTierId: state.quantity,
+    quantityOverride: customQty,
     hasHandles: state.handles === "true",
     logoColors: Number(state.colors) || 1,
     hasLamination,
@@ -590,6 +642,55 @@ async function routeToQuoted(
     await sendEliDM(
       `⚠️ calc API נכשל ל-${ctx.name ?? ctx.phone ?? "ליד"} (${(e as Error).message}). השאלון הסתיים — צריך מחיר ידני.`
     );
+  }
+}
+
+/**
+ * Re-quote a lead after a mid-conversation spec change (e.g. customer
+ * answered the price prompt with "תעשו 2500 יחידות"). Used by
+ * decision.ts `awaiting_spec_change` once the LLM has merged the new
+ * fields into qState. Pre-condition: `shouldRouteToFactory(state) === false`.
+ *
+ * Sends the new quote text + DECISION_PROMPT — the customer is back in
+ * the "decide on this quote" gate, just with updated numbers. Returns
+ * `false` if the calculator failed; caller should escalate.
+ */
+export async function requoteWithUpdatedSpec(input: {
+  sid: string;
+  jid: string;
+  state: QState;
+}): Promise<boolean> {
+  try {
+    const quoteText = await fetchQuote(input.state);
+    const next: QState = {
+      ...input.state,
+      step: 10,
+      confirmationStep: null,
+      quoteResult: quoteText,
+      doneAt: input.state.doneAt ?? new Date().toISOString(),
+      specChangeAttempts: 0,
+    };
+    await db
+      .update(leads)
+      .set({
+        qState: next as any,
+        pipelineStage: "AWAITING_DECISION",
+        botSummary: "spec change auto-requoted via LLM",
+        followUpCount: 0,
+        lastFollowUpAt: new Date(),
+        nextAction: null,
+        updatedAt: new Date(),
+      })
+      .where(sql`trim(${leads.manychatSubId}) = ${input.sid.trim()}`);
+    await sendBridgeMessage(input.jid, quoteText);
+    await sendBridgeMessage(input.jid, DECISION_PROMPT);
+    return true;
+  } catch (e) {
+    console.error(
+      "[questionnaire] requoteWithUpdatedSpec failed",
+      e instanceof Error ? e.message : e
+    );
+    return false;
   }
 }
 
@@ -937,9 +1038,10 @@ async function handleConfirmationStep(
   }
 
   if (isProceed) {
-    const isCustom =
-      state.quantity === "custom" || state.product === "custom";
-    if (isCustom) {
+    // Custom quantity inside the tier range (≥1000) snaps automatically via
+    // calculator.quantityOverride — no need to send Eli. Only true factory
+    // cases (custom dimensions, sub-tier quantity) require manual pricing.
+    if (shouldRouteToFactory(state)) {
       await routeToFactory(ctx, state);
       return { action: "completed_factory" };
     }

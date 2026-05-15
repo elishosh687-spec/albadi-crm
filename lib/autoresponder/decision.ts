@@ -38,6 +38,13 @@ import { sendBridgeMessage } from "../bridge/client";
 import { sendEliDM } from "../notify/eli";
 import { classifyIntent, type Intent } from "./intent";
 import { handleUnmatch, type UnmatchResult } from "./unmatch-agent";
+import { extractSpecFromText, hasAnyField } from "./spec-extractor";
+import {
+  mergeExtracted,
+  requoteWithUpdatedSpec,
+  shouldRouteToFactory,
+  type QState,
+} from "./questionnaire";
 import {
   eliDecisionEscalationTemplate,
   eliLogoReceivedTemplate,
@@ -94,9 +101,19 @@ const REPLY_ORDER_TO_PHONE = "זה כבר בטלפון. אתקשר אליכם ה
 
 // Stage 2 §2.5 — spec change in preliminary stage
 const REPLY_SPEC_CHANGE_ASK =
-  "אין בעיה. מה רוצים לשנות? כמות, מידה, או צבעים? תכתבו לי.";
+  "אין בעיה. מה תרצו לשנות? אפשר לכתוב חופשי בעברית:\n• כמות (לדוגמה: 1500 / 2500)\n• מידה\n• ידיות (עם / בלי)\n• למינציה (עם / בלי)\n• צבעי הדפסה\n\nתכתבו לי הכל בהודעה אחת ואסדר את הפרטים.";
 const REPLY_SPEC_CHANGE_ACK =
   "מעולה, יש לי את הפרטים. חוזר אליכם תוך 24 שעות עם הצעה מעודכנת.";
+// New (LLM rewrite of spec-change handler) — sent when the LLM couldn't
+// extract a single actionable field from the customer's reply. Re-prompts
+// with the same parameter list. After 2 strikes we escalate.
+const REPLY_SPEC_CHANGE_REPROMPT =
+  "לא בטוח שהבנתי מה תרצו לשנות. אפשר לכתוב שוב — איזה פרמטר ובאיזה ערך?\nלדוגמה:\n• \"תעשו 2500 יחידות\"\n• \"בלי ידיות\"\n• \"3 צבעים במקום 2\"\n• \"מידה 30×40 ס\"מ\"";
+// Auto-quote reply when the LLM-extracted spec lands in the calculator's
+// range (≥1000 units, no custom dimensions). The new quote follows on the
+// next line via the existing routeToQuoted message.
+const REPLY_SPEC_CHANGE_AUTO_QUOTE =
+  "סבבה, עדכנתי את הפרטים. הנה ההצעה המעודכנת:";
 
 // Stage 4 (AWAITING_FINAL) copies
 const FINAL_ACCEPT_REPLY =
@@ -321,6 +338,58 @@ async function runUnmatchAgent(
   return result;
 }
 
+/**
+ * Render an LLM-extracted spec change as a short Hebrew clause for the DM
+ * to Eli ("ביקש לשנות: כמות → 2500, ידיות → לא"). Skips undefined fields.
+ */
+function describeSpecChange(extracted: {
+  shipping?: string;
+  quantity?: string;
+  quantityCustom?: string;
+  product?: string;
+  productCustom?: string;
+  handles?: string;
+  lamination?: string;
+  colors?: string;
+  notes?: string;
+}): string {
+  const parts: string[] = [];
+  if (extracted.shipping) {
+    parts.push(
+      `משלוח → ${extracted.shipping === "s1" ? "אקספרס" : "רגיל"}`
+    );
+  }
+  if (extracted.quantity) {
+    const q =
+      extracted.quantity === "custom"
+        ? extracted.quantityCustom ?? "אחר"
+        : extracted.quantity;
+    parts.push(`כמות → ${q}`);
+  }
+  if (extracted.product) {
+    const p =
+      extracted.product === "custom"
+        ? extracted.productCustom ?? "מידה מיוחדת"
+        : extracted.product;
+    parts.push(`מידה → ${p}`);
+  }
+  if (extracted.handles) {
+    parts.push(`ידיות → ${extracted.handles === "true" ? "כן" : "לא"}`);
+  }
+  if (extracted.lamination) {
+    parts.push(
+      `למינציה → ${extracted.lamination === "true" ? "כן" : "לא"}`
+    );
+  }
+  if (extracted.colors) {
+    parts.push(`צבעים → ${extracted.colors}`);
+  }
+  if (extracted.notes) {
+    parts.push(`הערה: ${extracted.notes}`);
+  }
+  return parts.length ? parts.join(", ") : "ללא פירוט";
+}
+
 // File-share URL detection for logo-stage inbounds. Match Drive / Dropbox /
 // WeTransfer / OneDrive / Box and the most common generic shorteners. The
 // regex is permissive — we only need to know that the customer dropped
@@ -481,18 +550,107 @@ async function handleDecisionStage(
   }
 
   if (decisionState === "awaiting_spec_change") {
-    // §2.5.2 — customer described what to change. Ack + escalate (Eli re-quotes).
-    await sendBridgeMessage(ctx.jid, REPLY_SPEC_CHANGE_ACK);
-    await escalateToEli(
-      ctx,
-      "הלקוח ביקש לשנות את המפרט אחרי המחיר המשוער",
-      classification.summary ?? t.slice(0, 120),
-      "spec_change"
-    );
+    // §2.5.2 — customer described what to change. The LLM tries to extract
+    // canonical fields:
+    //   - At least one field extracted + new state is calculator-safe (no
+    //     custom dims, qty ≥ 1000) → auto-requote, no Eli.
+    //   - At least one field extracted + new state still requires manual
+    //     pricing (custom dims / sub-tier qty) → escalate with rich summary
+    //     of WHAT changed (not a generic "wanted spec change").
+    //   - No field extracted (customer asked a question, garbled text) →
+    //     re-prompt with the parameter list. After 2 strikes, escalate.
+    const currentQState: QState = (ctx.qState ?? {}) as QState;
+    const extracted = await extractSpecFromText({ text: t });
+    const hasField = extracted ? hasAnyField(extracted) : false;
+
+    if (!hasField) {
+      const attempts = (currentQState.specChangeAttempts ?? 0) + 1;
+      if (attempts >= 2) {
+        await escalateToEli(ctx, "Lead couldn't articulate spec change", {
+          kind: "spec_change",
+          llmAnalysis:
+            "הלקוח לא הצליח לנסח אילו פרמטרים הוא רוצה לשנות אחרי 2 ניסיונות הבהרה",
+          recommendation: "להתקשר ולתאם ידנית. הסיווג הקודם הוצע: שינוי מפרט.",
+        });
+        return {
+          action: "escalated",
+          intent: classification.intent,
+          detail: "spec_change clarify exhausted",
+        };
+      }
+      const bumped = { ...currentQState, specChangeAttempts: attempts };
+      await db
+        .update(leads)
+        .set({ qState: bumped as any, updatedAt: new Date() })
+        .where(sql`trim(${leads.manychatSubId}) = ${ctx.sid.trim()}`);
+      await sendBridgeMessage(ctx.jid, REPLY_SPEC_CHANGE_REPROMPT);
+      return {
+        action: "sub_state_advanced",
+        intent: classification.intent,
+        detail: `spec_change reprompt ${attempts}/2`,
+      };
+    }
+
+    // Got something extractable — merge into qState.
+    const { merged } = mergeExtracted(currentQState, extracted!);
+    // Clear sub-state + counter as we resolve this turn.
+    merged.specChangeAttempts = 0;
+    const cleared: QState = { ...merged, decisionState: null } as QState & {
+      decisionState: null;
+    };
+
+    if (shouldRouteToFactory(cleared)) {
+      // New spec still needs Eli (custom dims, sub-tier qty). Persist the
+      // merged values for Eli's reference, then escalate with a structured
+      // analysis of WHAT changed.
+      await db
+        .update(leads)
+        .set({
+          qState: cleared as any,
+          updatedAt: new Date(),
+        })
+        .where(sql`trim(${leads.manychatSubId}) = ${ctx.sid.trim()}`);
+
+      const changedSummary = describeSpecChange(extracted!);
+      await sendBridgeMessage(ctx.jid, REPLY_SPEC_CHANGE_ACK);
+      await escalateToEli(ctx, "spec change requires manual pricing", {
+        kind: "spec_change",
+        llmAnalysis: `הלקוח ביקש לשנות: ${changedSummary}`,
+        recommendation:
+          "לתמחר ידנית את המפרט המעודכן ולהחזיר הצעה ללקוח.",
+      });
+      return {
+        action: "escalated",
+        intent: classification.intent,
+        detail: `spec_change → factory: ${changedSummary}`,
+      };
+    }
+
+    // Auto-requote — new spec is inside the calculator's range.
+    await sendBridgeMessage(ctx.jid, REPLY_SPEC_CHANGE_AUTO_QUOTE);
+    const ok = await requoteWithUpdatedSpec({
+      sid: ctx.sid,
+      jid: ctx.jid,
+      state: cleared,
+    });
+    if (!ok) {
+      // Calc failed — fall back to escalation so the customer gets a real
+      // human follow-up rather than silent dead-end.
+      await escalateToEli(ctx, "auto-requote after spec change failed", {
+        kind: "spec_change",
+        llmAnalysis: `הלקוח ביקש שינוי (${describeSpecChange(extracted!)}) — המחשבון נכשל`,
+        recommendation: "לבדוק את המפרט החדש ולתמחר ידנית.",
+      });
+      return {
+        action: "escalated",
+        intent: classification.intent,
+        detail: "requote failed",
+      };
+    }
     return {
-      action: "escalated",
+      action: "canned_reply",
       intent: classification.intent,
-      detail: "spec change captured",
+      detail: `spec_change auto-requoted: ${describeSpecChange(extracted!)}`,
     };
   }
 
