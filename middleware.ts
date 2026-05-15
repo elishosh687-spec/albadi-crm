@@ -18,10 +18,11 @@ export function middleware(req: NextRequest) {
     return NextResponse.next();
   }
 
-  // External cron: GitHub Actions hits /api/factory/refresh every 5 min
-  // with Authorization: Bearer ${CRON_SECRET}. Let it through cookie auth.
+  // External cron + admin debug: GitHub Actions hits /api/factory/refresh
+  // with Authorization: Bearer ${CRON_SECRET}. Same bearer also unlocks
+  // /api/factory/test-dm for one-shot bridge sanity checks.
   if (
-    path === "/api/factory/refresh" &&
+    (path === "/api/factory/refresh" || path === "/api/factory/test-dm") &&
     req.method === "GET" &&
     process.env.CRON_SECRET &&
     req.headers.get("authorization") === `Bearer ${process.env.CRON_SECRET}`
