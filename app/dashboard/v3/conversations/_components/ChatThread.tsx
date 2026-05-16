@@ -10,6 +10,15 @@ export interface ChatMessage {
   sender: "lead" | "bot" | "eli" | null;
   text: string | null;
   receivedAt: string;
+  /**
+   * Set when the bridge payload carries a media URL. The Bubble renders an
+   * `<img>` (kind=image) or a download link (other kinds). Media bytes are
+   * served via /api/bridge/media/[id] so the browser doesn't have to talk
+   * to the bridge directly.
+   */
+  mediaKind?: "image" | "video" | "audio" | "document" | null;
+  /** Original filename when the bridge supplied one. Used as link text. */
+  mediaFilename?: string | null;
 }
 
 const SENDER_META: Record<
@@ -102,6 +111,47 @@ export function ChatThread({ messages }: { messages: ChatMessage[] }) {
   );
 }
 
+function MediaBlock({ message }: { message: ChatMessage }) {
+  if (!message.mediaKind) return null;
+  const src = `/api/bridge/media/${message.id}`;
+  if (message.mediaKind === "image") {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <a href={src} target="_blank" rel="noreferrer" className="block mb-1.5">
+        <img
+          src={src}
+          alt={message.mediaFilename ?? "תמונה מהלקוח"}
+          className="max-w-[260px] max-h-[320px] rounded-lg object-contain bg-background/30"
+          loading="lazy"
+        />
+      </a>
+    );
+  }
+  if (message.mediaKind === "video") {
+    return (
+      <video
+        src={src}
+        controls
+        className="max-w-[260px] max-h-[320px] rounded-lg mb-1.5"
+      />
+    );
+  }
+  if (message.mediaKind === "audio") {
+    return <audio src={src} controls className="block mb-1.5 max-w-full" />;
+  }
+  // document / fallback
+  return (
+    <a
+      href={src}
+      target="_blank"
+      rel="noreferrer"
+      className="block mb-1.5 underline text-xs text-primary"
+    >
+      📎 {message.mediaFilename ?? "הורד קובץ"}
+    </a>
+  );
+}
+
 function Bubble({ message }: { message: ChatMessage }) {
   // Sender resolution: prefer explicit `sender`, fall back to direction for
   // legacy rows pre-attribution.
@@ -126,16 +176,17 @@ function Bubble({ message }: { message: ChatMessage }) {
             isOutbound ? "rounded-tr-sm" : "rounded-tl-sm"
           )}
         >
+          <MediaBlock message={message} />
           {message.text && message.text.trim().length > 0 ? (
             message.text
-          ) : (
-            // Empty text on outbound usually means the bridge fired
+          ) : !message.mediaKind ? (
+            // Empty text + no media on outbound usually means the bridge fired
             // `message.sent` before our pre-insert landed and we lost the
             // original copy. Show something honest rather than blank.
             <span className="text-muted-foreground italic">
               {isOutbound ? "(תוכן לא נשמר — לפני תיקון race condition)" : "(הודעה ריקה)"}
             </span>
-          )}
+          ) : null}
         </div>
         <span className="text-[10px] text-muted-foreground tabular-nums">
           {formatTime(message.receivedAt)}

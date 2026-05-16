@@ -184,6 +184,7 @@ export default async function V3ConversationsPage({
             sender: messages.sender,
             text: messages.text,
             receivedAt: messages.receivedAt,
+            payload: messages.payload,
           })
           .from(messages)
           .where(sql`trim(${messages.manychatSubId}) = ${selectedSid}`)
@@ -207,13 +208,43 @@ export default async function V3ConversationsPage({
           (leadRow.factorySpecDraft as Record<string, unknown> | null) ?? null,
       };
 
-      const threadMessages: ChatMessage[] = msgRows.map((m) => ({
-        id: m.id,
-        direction: m.direction as "in" | "out",
-        sender: (m.sender as "lead" | "bot" | "eli" | null) ?? null,
-        text: m.text,
-        receivedAt: m.receivedAt.toISOString(),
-      }));
+      const threadMessages: ChatMessage[] = msgRows.map((m) => {
+        const p = (m.payload ?? null) as Record<string, unknown> | null;
+        const rawType =
+          typeof p?.media_type === "string"
+            ? (p.media_type as string).toLowerCase()
+            : null;
+        // Bridge sometimes labels images as plain `image`, sometimes
+        // `image/jpeg`. Normalize to the leading kind so the Bubble can
+        // branch on `image` / `video` / `audio` / `document`.
+        const mediaKind = rawType
+          ? rawType.startsWith("image")
+            ? "image"
+            : rawType.startsWith("video")
+            ? "video"
+            : rawType.startsWith("audio")
+            ? "audio"
+            : rawType === "document" || rawType.includes("pdf")
+            ? "document"
+            : null
+          : null;
+        const hasUrl =
+          !!p &&
+          ["url", "media_url", "image_url", "attachment_url", "media_path"].some(
+            (k) => typeof p[k] === "string" && ((p[k] as string).length ?? 0) > 0
+          );
+        const filename =
+          typeof p?.filename === "string" ? (p.filename as string) : null;
+        return {
+          id: m.id,
+          direction: m.direction as "in" | "out",
+          sender: (m.sender as "lead" | "bot" | "eli" | null) ?? null,
+          text: m.text,
+          receivedAt: m.receivedAt.toISOString(),
+          mediaKind: hasUrl ? mediaKind ?? "document" : null,
+          mediaFilename: filename,
+        };
+      });
 
       selected = { sid: selectedSid, summary, messages: threadMessages };
     }
