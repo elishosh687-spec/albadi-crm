@@ -6,7 +6,7 @@
  *     (Fri/Sat/holiday-eve/holiday via Hebcal).
  *   - Customer-side cadence by stage:
  *       NEW (mid-questionnaire abandoned)     → 1h, 1h, 1h
- *       AWAITING_DECISION (Stage 2)           → 2h, 12h, 23h
+ *       AWAITING_ESTIMATE (Stage 2)           → 2h, 12h, 23h
  *       AWAITING_LOGO (Stage 3)               → 2h, 12h, 23h
  *       AWAITING_FINAL (Stage 4)              → 2h, 12h, 23h
  *   - WAITING_FACTORY → Eli-only daily reminder (no customer message).
@@ -62,9 +62,9 @@ const STAGE_RULES: StageRule[] = [
   {
     // Stage 2 — bot waiting on customer reply to estimated quote.
     // Cadence per Eli: 2h → 12h → 23h. 3 nudges spread over ~37h total.
-    match: (stage) => (stage || "").toUpperCase() === "AWAITING_DECISION",
+    match: (stage) => (stage || "").toUpperCase() === "AWAITING_ESTIMATE",
     cadences: [2 * HOUR_MS, 12 * HOUR_MS, 23 * HOUR_MS],
-    template: "AWAITING_DECISION",
+    template: "AWAITING_ESTIMATE",
   },
   {
     // Stage 3 — bot waiting on logo file. Same cadence.
@@ -293,7 +293,7 @@ export async function POST(req: NextRequest) {
       continue;
     }
     // Terminal stages — never follow up.
-    if (stage === "WON" || stage === "DROPPED" || stage === "IN_PROGRESS") {
+    if (stage === "WON" || stage === "DROPPED") {
       continue;
     }
     const r = await processCustomerLead({

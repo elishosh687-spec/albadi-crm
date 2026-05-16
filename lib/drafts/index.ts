@@ -24,11 +24,13 @@ export type MoneyReason =
   | "commitment"
   | "manual";
 
+// Stages where money-moment drafts are queued. Per the 7-stage model,
+// AWAITING_FINAL is the only canonical money-conversation stage; the
+// pre-quote estimate sub-states (negotiation/competitor offer) live inside
+// AWAITING_ESTIMATE via qState.decisionState.
 const MONEY_STAGES = new Set([
-  "QUOTED",
-  "NEGOTIATING",
+  "AWAITING_ESTIMATE",
   "AWAITING_FINAL",
-  "WAITING_CALL",
 ]);
 
 export function isMoneyStage(stage: string | null | undefined): boolean {

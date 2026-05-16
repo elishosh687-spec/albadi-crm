@@ -22,10 +22,9 @@
  *      (customer re-engagement = fresh budget).
  *   4. Route by current pipeline_stage:
  *        NULL/NEW          → questionnaire autoresponder
- *        AWAITING_DECISION → LLM intent classifier (decision sub-flow)
+ *        AWAITING_ESTIMATE → LLM intent classifier (decision sub-flow)
  *        AWAITING_LOGO     → media detection + reask loop
- *        QUOTED / NEGOTIATING / WAITING_CALL → LLM intent classifier
- *        WAITING_FACTORY / IN_PROGRESS / WON / DROPPED → no auto-action
+ *        WAITING_FACTORY / WON / DROPPED → no auto-action
  */
 import { NextRequest, NextResponse } from "next/server";
 import { createHmac, timingSafeEqual } from "node:crypto";
@@ -293,7 +292,7 @@ async function handleMessageReceived(evt: BridgeEnvelope): Promise<void> {
       return;
     }
     if (
-      stage === "AWAITING_DECISION" ||
+      stage === "AWAITING_ESTIMATE" ||
       stage === "AWAITING_LOGO" ||
       stage === "AWAITING_FINAL"
     ) {
@@ -301,14 +300,7 @@ async function handleMessageReceived(evt: BridgeEnvelope): Promise<void> {
       console.log("[bridge.webhook] decision", jid, r);
       return;
     }
-    if (stage === "QUOTED" || stage === "NEGOTIATING" || stage === "WAITING_CALL") {
-      // Eli manually moved the lead here. Treat inbound as a decision-style
-      // signal so we can route via the same LLM intent classifier.
-      const r = await handleDecisionInbound({ sid: jid, text: textForRouting, hasMedia: mediaPresent });
-      console.log("[bridge.webhook] decision(manual-stage)", jid, stage, r);
-      return;
-    }
-    // WAITING_FACTORY, IN_PROGRESS, WON, DROPPED — bot stays silent. Eli reads.
+    // WAITING_FACTORY, WON, DROPPED — bot stays silent. Eli reads.
     console.log("[bridge.webhook] no_op for stage", jid, stage);
   } catch (e) {
     console.error("[bridge.webhook] routing error", jid, e);

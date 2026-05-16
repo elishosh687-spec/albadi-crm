@@ -1,13 +1,11 @@
+// 7 canonical stages — must match V2_PIPELINE_STAGES in lib/manychat/stages.ts
+// and the table in docs/CUSTOMER-FLOW.md §Stages.
 export const STAGE_LABEL: Record<string, string> = {
   NEW: "חדש",
-  WAITING_FACTORY: "ממתין למפעל",
-  QUOTED: "הצעה נשלחה",
-  AWAITING_DECISION: "ממתין להחלטה",
+  AWAITING_ESTIMATE: "ממתין להחלטה",
   AWAITING_LOGO: "ממתין ללוגו",
-  IN_PROGRESS: "בתהליך",
+  WAITING_FACTORY: "ממתין למפעל",
   AWAITING_FINAL: "ממתין למחיר סופי",
-  NEGOTIATING: "במשא ומתן",
-  WAITING_CALL: "ממתין לשיחה",
   WON: "נסגרה",
   DROPPED: "ננטשה",
   UNCLASSIFIED: "לא מסווג",
@@ -24,17 +22,7 @@ export const STAGE_TONE: Record<
     pill: "bg-sky-500/15 text-sky-300 border border-sky-500/20",
     text: "text-sky-300",
   },
-  WAITING_FACTORY: {
-    bar: "bg-amber-500/60",
-    pill: "bg-amber-500/15 text-amber-300 border border-amber-500/20",
-    text: "text-amber-300",
-  },
-  QUOTED: {
-    bar: "bg-violet-500/60",
-    pill: "bg-violet-500/15 text-violet-300 border border-violet-500/20",
-    text: "text-violet-300",
-  },
-  AWAITING_DECISION: {
+  AWAITING_ESTIMATE: {
     bar: "bg-fuchsia-500/60",
     pill: "bg-fuchsia-500/15 text-fuchsia-300 border border-fuchsia-500/20",
     text: "text-fuchsia-300",
@@ -44,25 +32,15 @@ export const STAGE_TONE: Record<
     pill: "bg-cyan-500/15 text-cyan-300 border border-cyan-500/20",
     text: "text-cyan-300",
   },
-  IN_PROGRESS: {
-    bar: "bg-orange-500/60",
-    pill: "bg-orange-500/15 text-orange-300 border border-orange-500/20",
-    text: "text-orange-300",
+  WAITING_FACTORY: {
+    bar: "bg-amber-500/60",
+    pill: "bg-amber-500/15 text-amber-300 border border-amber-500/20",
+    text: "text-amber-300",
   },
   AWAITING_FINAL: {
     bar: "bg-rose-500/60",
     pill: "bg-rose-500/15 text-rose-300 border border-rose-500/20",
     text: "text-rose-300",
-  },
-  NEGOTIATING: {
-    bar: "bg-pink-500/60",
-    pill: "bg-pink-500/15 text-pink-300 border border-pink-500/20",
-    text: "text-pink-300",
-  },
-  WAITING_CALL: {
-    bar: "bg-yellow-500/60",
-    pill: "bg-yellow-500/15 text-yellow-300 border border-yellow-500/20",
-    text: "text-yellow-300",
   },
   WON: {
     bar: "bg-emerald-500/60",

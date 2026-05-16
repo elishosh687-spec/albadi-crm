@@ -242,14 +242,10 @@ function extractFill(stage: string): string {
   // Tailwind reading at runtime). Falls back to muted.
   const map: Record<string, string> = {
     NEW: "#0ea5e9",
-    WAITING_FACTORY: "#f59e0b",
-    QUOTED: "#8b5cf6",
-    AWAITING_DECISION: "#d946ef",
+    AWAITING_ESTIMATE: "#d946ef",
     AWAITING_LOGO: "#06b6d4",
-    IN_PROGRESS: "#f97316",
+    WAITING_FACTORY: "#f59e0b",
     AWAITING_FINAL: "#f43f5e",
-    NEGOTIATING: "#ec4899",
-    WAITING_CALL: "#eab308",
     WON: "#10b981",
     DROPPED: "#64748b",
     UNCLASSIFIED: "#94a3b8",

@@ -9,10 +9,9 @@ export const maxDuration = 30;
 
 const FUNNEL_ORDER = [
   "NEW",
-  "QUOTED",
-  "AWAITING_DECISION",
+  "AWAITING_ESTIMATE",
   "AWAITING_LOGO",
-  "IN_PROGRESS",
+  "WAITING_FACTORY",
   "AWAITING_FINAL",
   "WON",
 ];

@@ -358,10 +358,8 @@ Money triggers (per `lib/drafts/index.ts`):
 
 > מה ש-code אומר אבל המוצר/PRD לא — או הפוך.
 
-1. **Pipeline stages drift**
-   - קוד: `lib/manychat/stages.ts` מגדיר 11 stages (NEW, WAITING_FACTORY, QUOTED, AWAITING_DECISION, AWAITING_LOGO, IN_PROGRESS, AWAITING_FINAL, NEGOTIATING, WAITING_CALL, WON, DROPPED).
-   - CUSTOMER-FLOW v2: 7 stages (NEW, AWAITING_ESTIMATE, AWAITING_LOGO, WAITING_FACTORY, AWAITING_FINAL, WON, DROPPED).
-   - **Source of truth:** CUSTOMER-FLOW v2. צריך ניקוי קוד.
+1. **Pipeline stages drift — RESOLVED 2026-05-16**
+   - קוד יושר ל-7 stages לפי CUSTOMER-FLOW (מקור אמת). `QUOTED, IN_PROGRESS, NEGOTIATING, WAITING_CALL` הוסרו; `AWAITING_DECISION` הוחזר ל-`AWAITING_ESTIMATE`. סאב-state של מיקוח/שיחה זז ל-`qState.decisionState` + tag `ביקש_שיחה` + flag `NEEDS_ELI`. Migration ב-`scripts/migrate-stages-to-7.ts`.
 
 2. **ManyChat path עוד חי**
    - `lib/manychat/client.ts`, `app/api/bot/new-lead/route.ts`, `app/api/bot/inbound-message/route.ts`, `app/api/bot/restart-send/route.ts` עוד קיימים.

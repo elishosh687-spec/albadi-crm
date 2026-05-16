@@ -1,15 +1,16 @@
 /**
- * High-level bucket mapping for the v3 Leads board. The bot internally uses
- * 11 fine-grained pipeline stages (lib/manychat/stages.ts), but the UI groups
+ * High-level bucket mapping for the v3 Leads board. The bot uses 7 canonical
+ * pipeline stages (lib/manychat/stages.ts → V2_PIPELINE_STAGES); the UI groups
  * them into 4 supervisor-facing buckets:
  *
- *   NEEDS_ELI       — needs Eli to act (escalations + Eli-driven stages)
- *   BOT_ACTIVE      — bot in active conversation flow (cron will follow up)
- *   WAITING_CUSTOMER— bot replied, no nudge planned, waiting for customer
+ *   NEEDS_ELI       — escalations (NEEDS_ELI flag, bot_paused) or WAITING_FACTORY
+ *   BOT_ACTIVE      — bot driving the conversation (NEW / AWAITING_ESTIMATE /
+ *                     AWAITING_LOGO / AWAITING_FINAL)
+ *   WAITING_CUSTOMER— reserved for future use (no stage falls here today;
+ *                     a "QUOTED but no customer reply" state would).
  *   CLOSED          — terminal stages (WON / DROPPED)
  *
- * The fine-grained stage is still shown as a chip on each card and is fully
- * editable from the drawer.
+ * The stage chip on each card is still fully editable via StagePicker.
  */
 
 export type BucketKey =
@@ -58,14 +59,14 @@ export const BUCKET_TONE: Record<
   },
 };
 
-const ELI_STAGES = new Set(["WAITING_FACTORY", "IN_PROGRESS", "WAITING_CALL"]);
+const ELI_STAGES = new Set(["WAITING_FACTORY"]);
 const ACTIVE_STAGES = new Set([
   "NEW",
-  "AWAITING_DECISION",
+  "AWAITING_ESTIMATE",
   "AWAITING_LOGO",
   "AWAITING_FINAL",
 ]);
-const WAITING_STAGES = new Set(["QUOTED", "NEGOTIATING"]);
+const WAITING_STAGES = new Set<string>([]); // reserved
 const CLOSED_STAGES = new Set(["WON", "DROPPED"]);
 
 export function bucketOf(lead: {

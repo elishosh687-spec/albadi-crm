@@ -3,7 +3,7 @@
  * documented at bag-quote-app/docs/manychat-flow.html, extended with:
  *   - "אחר" (custom) options on quantity (Q2) and product (Q3)
  *   - Custom-spec branch routes to WAITING_FACTORY + NEEDS_ELI + Eli DM at end
- *   - Standard path triggers AWAITING_DECISION sub-flow (handled in decision.ts)
+ *   - Standard path triggers AWAITING_ESTIMATE sub-flow (handled in decision.ts)
  *
  * State machine:
  *   step 3: asked shipping
@@ -248,7 +248,7 @@ export interface QState {
   // strikes we route to factory + DM Eli — prevents infinite loops on
   // off-script replies like "?", "מה?", "...".
   confirmationAmbiguous?: number;
-  // Stage-2 (`AWAITING_DECISION`) sub-state `awaiting_spec_change` re-prompt
+  // Stage-2 (`AWAITING_ESTIMATE`) sub-state `awaiting_spec_change` re-prompt
   // counter. Bumped when the customer's reply to "מה רוצים לשנות?" doesn't
   // contain any extractable field. After 2 strikes the lead is escalated.
   specChangeAttempts?: number;
@@ -719,7 +719,7 @@ async function routeToQuoted(
       .update(leads)
       .set({
         qState: done as any,
-        pipelineStage: "AWAITING_DECISION",
+        pipelineStage: "AWAITING_ESTIMATE",
         botSummary: "questionnaire complete, quote sent, awaiting decision",
         followUpCount: 0,
         lastFollowUpAt: new Date(),
@@ -785,7 +785,7 @@ export async function requoteWithUpdatedSpec(input: {
       .update(leads)
       .set({
         qState: next as any,
-        pipelineStage: "AWAITING_DECISION",
+        pipelineStage: "AWAITING_ESTIMATE",
         botSummary: "spec change auto-requoted via LLM",
         followUpCount: 0,
         lastFollowUpAt: new Date(),

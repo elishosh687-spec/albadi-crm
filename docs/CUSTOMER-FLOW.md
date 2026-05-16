@@ -21,23 +21,22 @@
 
 ### Stages
 
-מקור אמת = `lib/manychat/stages.ts:V2_PIPELINE_STAGES`. ה-bot כותב חלק מאלה אוטומטית; שאר ה-stages זמינים ל-stage picker ב-`/dashboard/v3` ו-`/dashboard/v3/conversations` (אלי מעדכן ידנית).
+מקור אמת. מקביל ל-`V2_PIPELINE_STAGES` ב-`lib/manychat/stages.ts`. סך הכל 7 stages קנוניים.
 
-| # | Stage | מתי נכנסים | מתי יוצאים | מי משנה | בשימוש כיום (DB)\* |
-|---|---|---|---|---|---|
-| 1 | `NEW` | first inbound | סיום שאלון | בוט | ✓ 3 |
-| 2 | `WAITING_FACTORY` | "אחר"/custom בשאלון, calc API נכשל, או escalation לפני הצעה | אלי שולח מחיר ידני | בוט נכנס, אלי יוצא | ✓ 4 |
-| 3 | `QUOTED` | אלי שלח מחיר ידני (יוצא מ-WAITING_FACTORY) | הסכמה / מיקוח / דחייה | אלי | ✓ 4 |
-| 4 | `AWAITING_DECISION` | סיום שאלון סטנדרטי + נשלח מחיר משוער + "מתאים?" (היה `AWAITING_ESTIMATE` בגרסה קודמת) | הסכמה / דחייה / שינוי מפרט | בוט | ✓ 1 |
-| 5 | `AWAITING_LOGO` | הלקוח הסכים למחיר משוער → התבקש לוגו | לוגו התקבל / drop-off | בוט | — |
-| 6 | `IN_PROGRESS` | לוגו התקבל; אלי בתהליך עיבוד | אלי שולח מחיר סופי / drops | בוט נכנס, אלי יוצא | — |
-| 7 | `AWAITING_FINAL` | אלי שלח מחיר סופי (אחרי לוגו או אחרי factory) | הסכמה → WON / דחייה / מיקוח | בוט | — |
-| 8 | `NEGOTIATING` | הלקוח אמר "יקר" / מיקוח אקטיבי | אלי סוגר / מוריד את המחיר / drops | אלי | ✓ 2 |
-| 9 | `WAITING_CALL` | הלקוח ביקש שיחה / אלי בחר לעבור לטלפון | אלי משלים את השיחה ומעדכן stage | אלי | ✓ 6 |
-| 10 | `WON` | הלקוח הסכים למחיר הסופי | סוף (סטטוס סופי) | בוט / אלי | — |
-| 11 | `DROPPED` | אלי החליט שהליד מת | סוף (סטטוס סופי) | **רק אלי** | ✓ 34 |
+| # | Stage | מתי נכנסים | מתי יוצאים | מי משנה |
+|---|---|---|---|---|
+| 1 | `NEW` | first inbound | סיום שאלון | בוט |
+| 2 | `AWAITING_ESTIMATE` | סיום שאלון סטנדרטי + נשלח מחיר משוער + "מתאים?" | הסכמה / דחייה / שינוי מפרט | בוט |
+| 3 | `AWAITING_LOGO` | הלקוח הסכים למחיר משוער → התבקש לוגו | לוגו התקבל / drop-off | בוט |
+| 4 | `WAITING_FACTORY` | "אחר" בשאלון / calc API נכשל / לוגו התקבל וצריך מחיר סופי / לקוח ביקש שיחה | אלי שולח מחיר ידני / סוגר ידנית | בוט נכנס, אלי יוצא |
+| 5 | `AWAITING_FINAL` | אלי שלח מחיר סופי | הסכמה → WON / דחייה / מיקוח | בוט |
+| 6 | `WON` | הלקוח הסכים למחיר הסופי | סוף (סטטוס סופי) | בוט |
+| 7 | `DROPPED` | אלי החליט שהליד מת | סוף (סטטוס סופי) | **רק אלי** |
 
-\* ספירה לפי `SELECT pipeline_stage, COUNT(*) FROM leads GROUP BY ...` נכון לתאריך עדכון המסמך הזה. 9 לידים ב-`(null)` = פתיחת השיחה אחרי האיפוס של ה-test JID או רשומות לפני השדרוג.
+> **סאב-state ב-qState, לא stage נפרד:**
+> - מיקוח ("יקר") → נשאר ב-`AWAITING_ESTIMATE` עם `qState.decisionState='awaiting_competitor_offer'` ו-NEEDS_ELI flag.
+> - בקשת שיחה → `WAITING_FACTORY` + NEEDS_ELI + tag `ביקש_שיחה`.
+> - לוגו התקבל → `WAITING_FACTORY` + NEEDS_ELI (אלי מעבד לקראת מחיר סופי).
 
 ### Flags (רוחביים — יכולים להתלוות לכל stage)
 
@@ -60,35 +59,28 @@ flowchart TD
     Start([📩 inbound ראשון]) --> NEW
 
     NEW[NEW<br/>שאלון פעיל]
-    NEW -- שאלון סטנדרטי + calc OK --> AD[AWAITING_DECISION<br/>מחיר משוער נשלח]
+    NEW -- שאלון סטנדרטי + calc OK --> AE[AWAITING_ESTIMATE<br/>מחיר משוער נשלח]
     NEW -- 'אחר' או calc נכשל --> WF[WAITING_FACTORY<br/>אלי מתמחר]
     NEW -- 3 reasks כושלים / 3 drop-offs --> NE_NEW[NEEDS_ELI]
 
-    AD -- הסכמה --> AL[AWAITING_LOGO<br/>ממתינים ללוגו]
-    AD -- 'יקר' / מיקוח --> NEG[NEGOTIATING<br/>אלי במשא ומתן]
-    AD -- בקשת שיחה --> WC[WAITING_CALL<br/>שיחה ידנית]
-    AD -- דחייה / שינוי מפרט / 3 drop-offs --> NE_AD[NEEDS_ELI]
+    AE -- הסכמה --> AL[AWAITING_LOGO<br/>ממתינים ללוגו]
+    AE -- דחייה / מיקוח / שינוי מפרט / 3 drop-offs --> NE_AE[NEEDS_ELI]
 
-    AL -- לוגו התקבל --> IP[IN_PROGRESS<br/>אלי מעבד]
+    AL -- לוגו התקבל --> WF
     AL -- 3 drop-offs / 'אין לוגו' --> NE_AL[NEEDS_ELI]
 
-    WF -- אלי שלח מחיר סופי --> Q[QUOTED<br/>מחיר ידני נשלח]
-    IP -- אלי שלח מחיר סופי --> AF[AWAITING_FINAL<br/>מחיר סופי נשלח]
+    WF -- אלי שלח מחיר סופי --> AF[AWAITING_FINAL<br/>מחיר סופי נשלח]
 
-    Q -- הסכמה --> WON([🏆 WON])
-    Q -- מיקוח --> NEG
-    AF -- הסכמה --> WON
+    AF -- הסכמה --> WON([🏆 WON])
     AF -- דחייה / מיקוח / שינוי מפרט / 3 drop-offs --> NE_AF[NEEDS_ELI]
-    NEG -- אלי סגר --> WON
-    WC -- אלי סגר --> WON
 
     NE_NEW -. אלי .-> DROPPED([❌ DROPPED])
-    NE_AD -. אלי .-> DROPPED
+    NE_AE -. אלי .-> DROPPED
     NE_AL -. אלי .-> DROPPED
     NE_AF -. אלי .-> DROPPED
 
     NE_NEW -. הלקוח חוזר .-> NEW
-    NE_AD -. הלקוח חוזר .-> AD
+    NE_AE -. הלקוח חוזר .-> AE
     NE_AL -. הלקוח חוזר .-> AL
     NE_AF -. הלקוח חוזר .-> AF
 ```

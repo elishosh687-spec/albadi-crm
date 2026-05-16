@@ -3,16 +3,16 @@
 // at module load and throws on the client. This file is safe to import
 // from "use client" components.
 
+// Source of truth: docs/CUSTOMER-FLOW.md — 7 canonical stages.
+// Sub-states ("יקר" → awaiting_competitor_offer, "ביקש שיחה" → call follow-up)
+// live on qState/flags rather than as their own stages, so a lead is always
+// in one of the 7 below + optional NEEDS_ELI / bot_paused system flags.
 export const V2_PIPELINE_STAGES = [
   "NEW",
-  "WAITING_FACTORY",
-  "QUOTED",
-  "AWAITING_DECISION",
+  "AWAITING_ESTIMATE",
   "AWAITING_LOGO",
-  "IN_PROGRESS",
+  "WAITING_FACTORY",
   "AWAITING_FINAL",
-  "NEGOTIATING",
-  "WAITING_CALL",
   "WON",
   "DROPPED",
 ] as const;

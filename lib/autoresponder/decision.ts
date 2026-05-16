@@ -1,7 +1,7 @@
 /**
  * Post-questionnaire decision sub-flow. Aligned to docs/CUSTOMER-FLOW.md v2.
  *
- *   AWAITING_DECISION  (Stage 2 — bot asked "המחיר מתאים?")
+ *   AWAITING_ESTIMATE  (Stage 2 — bot asked "המחיר מתאים?")
  *     ├─ accept             → AWAITING_LOGO (bot asks for logo)
  *     ├─ samples_request    → catalog URL, stay
  *     ├─ negotiating ("יקר") → ask "יש לך הצעה מתחרה?" (sub-state)
@@ -13,7 +13,7 @@
  *     ├─ question_meeting / question_other → escalate
  *     └─ other              → no-op (cadence keeps nudging)
  *
- *   Sub-states inside AWAITING_DECISION (qState.decisionState):
+ *   Sub-states inside AWAITING_ESTIMATE (qState.decisionState):
  *     "awaiting_reason":
  *       intent=negotiating ("יקר")  → "awaiting_competitor_offer" + COMPETITOR prompt
  *       anything else              → escalate ("סיבה אחרת")
@@ -25,7 +25,7 @@
  *       has any text → clear sub-state, no-op (cadence picks up 24/36/72h)
  *
  *   AWAITING_LOGO  (Stage 3)
- *     ├─ media inbound (image / file / link) → IN_PROGRESS + NEEDS_ELI + Eli DM
+ *     ├─ media inbound (image / file / link) → WAITING_FACTORY + NEEDS_ELI + Eli DM
  *     ├─ text + intent=question_format        → canned "כל פורמט בסדר", stay
  *     └─ text (other)                          → re-ask up to 3x, then escalate
  *
@@ -417,7 +417,7 @@ export interface DecisionResult {
 }
 
 /**
- * Handle inbound for a lead currently in AWAITING_DECISION or AWAITING_LOGO.
+ * Handle inbound for a lead currently in AWAITING_ESTIMATE or AWAITING_LOGO.
  * Returns no_op for any other stage (caller decides what to do).
  */
 export async function handleDecisionInbound(input: {
@@ -433,7 +433,7 @@ export async function handleDecisionInbound(input: {
   if (stage === "AWAITING_LOGO") {
     return handleLogoStage(ctx, input.text, input.hasMedia);
   }
-  if (stage === "AWAITING_DECISION") {
+  if (stage === "AWAITING_ESTIMATE") {
     return handleDecisionStage(ctx, input.text);
   }
   if (stage === "AWAITING_FINAL") {
@@ -448,7 +448,7 @@ async function handleDecisionStage(
 ): Promise<DecisionResult> {
   const t = (text ?? "").trim();
   if (!t) {
-    // Empty text at AWAITING_DECISION = customer sent media without
+    // Empty text at AWAITING_ESTIMATE = customer sent media without
     // caption (e.g. they accepted the quote and sent a logo eagerly, or
     // a voice note / sticker). The bot can't classify, but silence makes
     // the customer feel ignored. Escalate so Eli sees it in the
@@ -894,7 +894,7 @@ async function handleLogoStage(
     await db
       .update(leads)
       .set({
-        pipelineStage: "IN_PROGRESS",
+        pipelineStage: "WAITING_FACTORY",
         pipelineFlag: "NEEDS_ELI",
         botPaused: true,
         botSummary: "logo received — Eli to send final price within 24h",
@@ -928,7 +928,7 @@ async function handleLogoStage(
     await db
       .update(leads)
       .set({
-        pipelineStage: "IN_PROGRESS",
+        pipelineStage: "WAITING_FACTORY",
         pipelineFlag: "NEEDS_ELI",
         botPaused: true,
         botSummary: "logo link received — Eli to send final price within 24h",
@@ -1026,7 +1026,7 @@ async function handleFinalStage(
 ): Promise<DecisionResult> {
   const t = (text ?? "").trim();
   if (!t) {
-    // Same logic as AWAITING_DECISION: empty text usually means media
+    // Same logic as AWAITING_ESTIMATE: empty text usually means media
     // without caption. Don't ghost the customer — escalate so the lead
     // surfaces in the dashboard for manual reply.
     await escalateToEli(ctx, "Customer sent media-only / empty message at AWAITING_FINAL", {

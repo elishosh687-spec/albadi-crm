@@ -11,7 +11,7 @@
 
 export type FollowupStage =
   | "MID_QUESTIONNAIRE"
-  | "AWAITING_DECISION"
+  | "AWAITING_ESTIMATE"
   | "AWAITING_LOGO"
   | "AWAITING_FINAL";
 
@@ -25,7 +25,7 @@ const TEMPLATES: Record<FollowupStage, string[]> = {
   ],
   // Stage 2 — bot waiting on customer response to estimated quote.
   // Cadence: 2h / 12h / 23h.
-  AWAITING_DECISION: [
+  AWAITING_ESTIMATE: [
     "היי, חוזר אליכם. רציתי לשמוע מה דעתכם על ההצעה ששלחתי.",
     "אם נוח לכם בטלפון — תגידו, אתקשר.",
     "ניסיון אחרון. רוצים שאתקשר, או שנעזוב לעת עתה?",
