@@ -34,7 +34,7 @@
 import { db } from "../db";
 import { leads, messages as messagesTable } from "../../drizzle/schema";
 import { desc, sql, eq } from "drizzle-orm";
-import { sendBridgeMessage } from "../bridge/client";
+import { sendBridgeMessage, sendCompanyTemplate } from "../bridge/client";
 import { sendEliDM } from "../notify/eli";
 import { classifyIntent, type Intent } from "./intent";
 import { handleUnmatch, type UnmatchResult } from "./unmatch-agent";
@@ -831,7 +831,7 @@ async function handleDecisionStage(
       // Customer is verifying who we are — send the about-us card again.
       // Same content the customer saw right after the quote; rendering as
       // a separate message keeps the link previews crisp.
-      await sendBridgeMessage(ctx.jid, COMPANY_TEMPLATE);
+      await sendCompanyTemplate(ctx.jid);
       return {
         action: "canned_reply",
         intent: classification.intent,

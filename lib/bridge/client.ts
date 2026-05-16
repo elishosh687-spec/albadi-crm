@@ -314,6 +314,42 @@ export async function sendBridgeMessage(
   return result;
 }
 
+// media_id for the company-intro video staged on the albadi tenant.
+// To replace: upload new video via POST /v1/media and update this constant.
+export const COMPANY_VIDEO_MEDIA_ID = "mu__3tEVay0D703wO3cSxoPpg";
+
+/**
+ * Send the "who we are" company template as a cta_url message with video
+ * header and Instagram CTA button. Used after quote delivery and on-demand.
+ */
+export async function sendCompanyTemplate(jid: string): Promise<void> {
+  const recipient = isJid(jid) ? jid : phoneToJid(jid);
+  const body = {
+    recipient,
+    type: "cta_url",
+    header: { type: "video", media_id: COMPANY_VIDEO_MEDIA_ID },
+    body:
+      "👋 *קצת עלינו — אלבדי*\n\n" +
+      "חברת אריזות עם 20+ שנה בענף. שותפים במפעל ייצור בסין. מתמחים בשקיות ממותגות לעסקים.\n\n" +
+      "🌐 ecobrotherss.com\n" +
+      "🌐 packiure.com\n" +
+      "🌐 bag-quote-app.vercel.app",
+    cta: { display_text: "📸 עקבו באינסטגרם", url: "https://www.instagram.com/simonsostri" },
+  };
+  try {
+    await bridgeFetch<BridgeSendResult>("/v1/messages", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  } catch (e) {
+    console.warn("[sendCompanyTemplate] failed, falling back to text", e);
+    await sendBridgeMessage(
+      jid,
+      "👋 קצת עלינו — אלבדי\n\nחברת אריזות עם 20+ שנה בענף.\n🌐 ecobrotherss.com\n📸 instagram.com/simonsostri"
+    );
+  }
+}
+
 interface BridgeMediaUpload {
   media_id: string;
   kind: string;

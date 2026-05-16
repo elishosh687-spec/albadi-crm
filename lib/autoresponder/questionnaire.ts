@@ -20,7 +20,7 @@
 import { db } from "../db";
 import { leads } from "../../drizzle/schema";
 import { sql } from "drizzle-orm";
-import { sendBridgeMessage } from "../bridge/client";
+import { sendBridgeMessage, sendCompanyTemplate } from "../bridge/client";
 import { sendEliDM } from "../notify/eli";
 import { calculateQuoteByCodes } from "../factory/calculator";
 import { buildQuoteMessage } from "../factory/calculator/message";
@@ -735,7 +735,7 @@ async function routeToQuoted(
       altTotalIls: quote.altTotalIls,
     });
     await sendBridgeMessage(ctx.jid, quote.text);
-    await sendBridgeMessage(ctx.jid, COMPANY_TEMPLATE);
+    await sendCompanyTemplate(ctx.jid);
     await sendBridgeMessage(ctx.jid, DECISION_PROMPT);
   } catch (e) {
     const bailed: QState = { ...state, bailed: true };
@@ -802,7 +802,7 @@ export async function requoteWithUpdatedSpec(input: {
       altTotalIls: quote.altTotalIls,
     });
     await sendBridgeMessage(input.jid, quote.text);
-    await sendBridgeMessage(input.jid, COMPANY_TEMPLATE);
+    await sendCompanyTemplate(input.jid);
     await sendBridgeMessage(input.jid, DECISION_PROMPT);
     return true;
   } catch (e) {
