@@ -88,7 +88,6 @@ const QUESTIONS: Question[] = [
       { value: "p5", label: "H30*W40 — שטוח רחב" },
       { value: "p6", label: "H15*W20 — שטוח קטן" },
       { value: "more", label: "📐 צריך מידה אחרת" },
-      { value: "custom", label: "אחר / מידה מותאמת" },
     ],
     hasCustom: true,
     customPrompt:
