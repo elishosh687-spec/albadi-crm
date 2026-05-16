@@ -18,7 +18,7 @@ import { db } from "@/lib/db";
 import { botQuotes, leads } from "@/drizzle/schema";
 import { and, eq, sql } from "drizzle-orm";
 import { qStateToFactoryProductSpec } from "@/lib/factory/qstate-decode";
-import { createFactoryRequest } from "@/lib/factory/create-request";
+import { createFactoryDraft } from "@/lib/factory/create-request";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
@@ -85,27 +85,34 @@ export async function POST(
     .limit(1);
 
   try {
-    const result = await createFactoryRequest({
+    // Create a DRAFT (status='draft') — does NOT push to Feishu. The operator
+    // reviews the parked row in FactoryQuotePanel and clicks "שלח ל-Feishu"
+    // there when ready (POST /api/factory/[id]/send-to-feishu, which calls
+    // promoteDraftToFeishu). This keeps "promote from bot history" as a
+    // staging action rather than a live send.
+    const result = await createFactoryDraft({
       manychatSubId: sid,
       productSpec: spec,
       customerName: leadRow?.name ?? undefined,
-      // Don't clear the lead's factorySpecDraft — promoting from history is
-      // additive, not a replacement of whatever manual draft is in progress.
-      clearDraft: false,
     });
-    return NextResponse.json({ ok: true, quoteId, ...result });
+    return NextResponse.json({
+      ok: true,
+      quoteId,
+      mode: "draft",
+      ...result,
+    });
   } catch (err) {
     console.error(
-      "[promote-to-factory] createFactoryRequest failed",
+      "[promote-to-factory] createFactoryDraft failed",
       err
     );
     return NextResponse.json(
       {
         ok: false,
-        error: "factory_create_failed",
+        error: "factory_draft_create_failed",
         detail: err instanceof Error ? err.message : String(err),
       },
-      { status: 502 }
+      { status: 500 }
     );
   }
 }

@@ -389,7 +389,12 @@ function QuoteHistory({ sid }: { sid: string }) {
   const router = useRouter();
 
   const promote = async (quoteId: number) => {
-    if (!confirm("לשלוח את ההצעה הזו לסיכום הזמנה (מפעל)?")) return;
+    if (
+      !confirm(
+        "לשמור את ההצעה כטיוטה בסיכום הזמנה (מפעל)?\nלא נשלח ל-Feishu אוטומטית — תצטרך ללחוץ \"שלח ל-Feishu\" בפאנל המפעל."
+      )
+    )
+      return;
     setPromoting(quoteId);
     try {
       const res = await fetch(
@@ -401,7 +406,7 @@ function QuoteHistory({ sid }: { sid: string }) {
         alert(`כשל: ${data.error ?? `HTTP ${res.status}`}\n${data.detail ?? ""}`);
         return;
       }
-      alert("נשלח לסיכום הזמנה ✓");
+      alert("נשמר כטיוטה ✓\nעבור לפאנל המפעל ולחץ 'שלח ל-Feishu' כשתרצה לשלוח.");
       router.refresh();
     } catch (e) {
       alert(`שגיאה: ${e instanceof Error ? e.message : String(e)}`);
@@ -536,14 +541,14 @@ function QuoteHistory({ sid }: { sid: string }) {
                   onClick={() => promote(r.id)}
                   disabled={promoting === r.id}
                   className="self-end inline-flex items-center gap-1.5 rounded-md border border-border bg-secondary/40 hover:bg-secondary/60 px-2.5 py-1 text-xs font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  title="צור factory_quote_request מההצעה הזו — אותו endpoint שה-FactoryQuotePanel קורא לו"
+                  title="שומר טיוטה ב-factory_quote_requests (status=draft). לא שולח ל-Feishu עד שתלחץ ידנית בפאנל המפעל."
                 >
                   {promoting === r.id ? (
                     <Loader2 className="size-3 animate-spin" />
                   ) : (
                     <Factory className="size-3" />
                   )}
-                  שלח לסיכום הזמנה
+                  שמור כטיוטה לסיכום הזמנה
                 </button>
               </div>
             )}
