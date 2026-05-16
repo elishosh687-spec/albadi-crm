@@ -633,8 +633,18 @@ function summarizeForFactory(state: QState, name: string | null, phone: string |
     s1: "אקספרס",
     s2: "רגיל",
   };
-  const qty = state.quantityCustom || state.quantity || "?";
-  const prod = state.productCustom || state.product || "?";
+  // Decode tier/size codes to the human-readable label Eli sees on his
+  // phone — sending raw `q1` / `p3` is ambiguous and forces a mental lookup.
+  // For custom values, the customer's literal text is already stored on
+  // quantityCustom / productCustom by the questionnaire's free-text branch.
+  const qty =
+    state.quantity === "custom"
+      ? state.quantityCustom || "אחר"
+      : QTY_LABEL[state.quantity ?? ""] ?? state.quantity ?? "?";
+  const prod =
+    state.product === "custom"
+      ? state.productCustom || "מידה מיוחדת"
+      : PROD_LABEL[state.product ?? ""] ?? state.product ?? "?";
   const handles = state.handles === "true" ? "עם ידיות" : "ללא ידיות";
   const lines = [
     `🏭 בקשת ציטוט מהמפעל — ${who}`,
