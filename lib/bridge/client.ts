@@ -331,9 +331,9 @@ export async function sendCompanyTemplate(jid: string): Promise<void> {
     body:
       "👋 *קצת עלינו — אלבדי*\n\n" +
       "חברת אריזות עם 20+ שנה בענף. שותפים במפעל ייצור בסין. מתמחים בשקיות ממותגות לעסקים.\n\n" +
-      "🌐 ecobrotherss.com\n" +
-      "🌐 packiure.com\n" +
-      "🌐 bag-quote-app.vercel.app",
+      "🌐 https://ecobrotherss.com\n" +
+      "🌐 https://packiure.com\n" +
+      "🌐 https://bag-quote-app.vercel.app/landing",
     cta: { display_text: "📸 עקבו באינסטגרם", url: "https://www.instagram.com/simonsostri" },
   };
   try {
