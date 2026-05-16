@@ -46,7 +46,7 @@ interface Question {
   buttons?: boolean;
 }
 
-const OPENING =
+export const OPENING =
   "שלום! 👋 אני אעזור לך לקבל הצעת מחיר מיידית לשקיות ממותגות. זה ייקח כ-2 דקות 😊";
 
 const QUESTIONS: Question[] = [
