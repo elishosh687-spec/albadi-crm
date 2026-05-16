@@ -5,6 +5,27 @@
 
 ---
 
+## v3.2 — 2026-05-16 — "Factory swap: Kunming Shengximengtai"
+
+### Changed
+- **`lib/factory/calculator/constants.ts`** — `DEFAULT_PRODUCTS` rewritten from `newfactory.xlsx` (Kunming Shengximengtai Trading). 14 sizes, all 14 ids preserved (p1..p14, matched by canonical dimension multiset). Mean unit-price reduction ~13% vs prior factory.
+- **`laminationColorPlateFee`** — unified at ¥300/color across all products (was per-product, ranging 345–943).
+- **`DEFAULT_COLOR_ADDONS`** — values verified identical to prior factory (recomputed deltas across all 14 sheets matched current literals exactly), so kept as-is.
+- **Dimension labels** — re-axed where the same physical bag was labeled differently (e.g. `H25*D8*W20` → `H20*D8*W25`). Same multiset, different orientation.
+
+### Added
+- **`scripts/import-new-factory.ts`** — xlsx → TypeScript literal emitter. Re-run when factory provides updated price sheet.
+- **`scripts/verify-new-factory.ts`** — round-trip check: parses xlsx, calls `calculateQuote`, asserts CNY unit-cost match for every (handle × finishing × color × qty) combination. 580 cells covered.
+
+### Unchanged
+- Engine formula (`engine.ts`), types (`types.ts`), shipping options, quantity tiers, exchange rates (`usdToCny=7.2`, `usdToIls=3.6`), profit margin (40%). Pricing **method** identical — only **values**.
+
+### Notes
+- Production-method dimension (`热压` heat-press vs `车缝` stitched) is implicit in the new xlsx: 1000pcs tier uses stitched (more expensive per unit), 3000+ uses heat-press, laminated splits at 3000/5000. Schema unchanged because `prices[qty]` indexing already represents the chosen method per tier.
+- Source file kept in repo root (`newfactory.xlsx`) for re-import.
+
+---
+
 ## v3.1 — 2026-05-15 — "LLM integration: spec-extractor + unmatch-agent + rich HANDOFF"
 
 ### Added
