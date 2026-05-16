@@ -80,14 +80,7 @@ export function OrderSummary({
               bot paused
             </span>
           )}
-          {data.flags.map((f) => (
-            <span
-              key={f}
-              className="text-[10px] rounded-full border border-border bg-background/40 text-muted-foreground px-2 py-0.5"
-            >
-              {f}
-            </span>
-          ))}
+          <TagsPicker sid={sid} currentStage={stage} flags={data.flags} />
         </div>
       </ContactHeader>
 
@@ -260,6 +253,139 @@ function StagePicker({
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * Inline tag editor. Shows the lead's current tags as removable pills plus
+ * a "+ תגית" button that opens a popover with the full V2_FLAG_NAMES set.
+ * Tapping a tag toggles its membership; we then call setLeadStage with the
+ * same stage but the updated flag list (the action writes both at once —
+ * stage and tag membership are stored on the same row, so a single
+ * round-trip keeps them in sync).
+ */
+function TagsPicker({
+  sid,
+  currentStage,
+  flags,
+}: {
+  sid: string | undefined;
+  currentStage: string;
+  flags: string[];
+}) {
+  const router = useRouter();
+  const [open, setOpen] = useState(false);
+  const [isPending, startTransition] = useTransition();
+  const [err, setErr] = useState<string | null>(null);
+
+  if (!sid) {
+    return (
+      <>
+        {flags.map((f) => (
+          <span
+            key={f}
+            className="text-[10px] rounded-full border border-border bg-background/40 text-muted-foreground px-2 py-0.5"
+          >
+            {f}
+          </span>
+        ))}
+      </>
+    );
+  }
+
+  const stageForWrite = (V2_PIPELINE_STAGES as readonly string[]).includes(
+    currentStage
+  )
+    ? (currentStage as V2PipelineStage)
+    : ("NEW" as V2PipelineStage);
+
+  const write = (nextFlags: V2FlagName[]) => {
+    setErr(null);
+    startTransition(async () => {
+      const r = await setLeadStage({
+        manychatSubId: sid,
+        stage: stageForWrite,
+        flags: nextFlags,
+      });
+      if (!r.ok) {
+        setErr(r.error ?? "save failed");
+        return;
+      }
+      router.refresh();
+    });
+  };
+
+  const allowedActive = flags.filter((f): f is V2FlagName =>
+    V2_FLAG_NAMES.includes(f as V2FlagName)
+  );
+  const inactive = V2_FLAG_NAMES.filter((f) => !allowedActive.includes(f));
+
+  const toggle = (f: V2FlagName) => {
+    const next = allowedActive.includes(f)
+      ? allowedActive.filter((x) => x !== f)
+      : [...allowedActive, f];
+    write(next);
+  };
+
+  return (
+    <>
+      {allowedActive.map((f) => (
+        <button
+          key={f}
+          type="button"
+          onClick={() => toggle(f)}
+          disabled={isPending}
+          className="text-[10px] rounded-full border border-primary/30 bg-primary/10 text-primary hover:bg-primary/20 px-2 py-0.5 inline-flex items-center gap-1"
+          title="קליק להסרה"
+        >
+          {f}
+          <X className="size-2.5" />
+        </button>
+      ))}
+      <div className="relative">
+        <button
+          type="button"
+          onClick={() => setOpen((o) => !o)}
+          disabled={isPending}
+          className="text-[10px] rounded-full border border-dashed border-border text-muted-foreground hover:text-foreground hover:border-foreground px-2 py-0.5"
+        >
+          + תגית
+        </button>
+        {open && (
+          <div className="absolute z-20 mt-1 right-0 min-w-[180px] rounded-lg border border-border bg-card shadow-lg p-1.5 space-y-0.5">
+            {V2_FLAG_NAMES.map((f) => {
+              const active = allowedActive.includes(f);
+              return (
+                <button
+                  key={f}
+                  type="button"
+                  onClick={() => {
+                    toggle(f);
+                  }}
+                  disabled={isPending}
+                  className={cn(
+                    "w-full text-right text-xs px-2 py-1.5 rounded-md transition-colors",
+                    active
+                      ? "bg-primary/15 text-primary"
+                      : "hover:bg-secondary text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  {active ? "✓ " : ""}{f}
+                </button>
+              );
+            })}
+            {inactive.length === 0 && (
+              <div className="text-[10px] text-muted-foreground px-2 py-1">
+                כל התגיות פעילות
+              </div>
+            )}
+            {err && (
+              <div className="text-[10px] text-destructive px-2 py-1">{err}</div>
+            )}
+          </div>
+        )}
+      </div>
+    </>
   );
 }
 
