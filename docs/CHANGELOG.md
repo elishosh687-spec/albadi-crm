@@ -5,6 +5,26 @@
 
 ---
 
+## v3.3 — 2026-05-16 — "WA-native polls + bot quote history"
+
+### Added
+- **WhatsApp native polls** for the entire bag-quote questionnaire — shipping / quantity / size / handles / lamination / colors + the step-9 confirmation gate. Customers tap option chips instead of typing. Free-text only when picking "אחר" (custom quantity / dimensions / color count) or "רוצה לשנות" in the confirmation flow.
+  - `sendBridgeMessage` (`lib/bridge/client.ts`) gained a `poll` param emitting `type=poll` against `wa-bridge-yehuda.fly.dev`. Capped at 12 options per WA.
+  - Webhook (`app/api/bridge/webhook/route.ts`) unwraps inbound `data.media_type=poll_vote` events: parses the JSON `content`, takes `selected_options[0]` as plain text, so `matchAnswer` sees "בינוני" instead of raw JSON. `mediaPresent=false` for vote payloads.
+  - `POLLS_ENABLED=true` replaces `BUTTONS_DISABLED` as the active widget mode; the buttons kill-switch stays as a fallback if polls ever regress.
+- **Bot quote history** — append-only `bot_quotes` table captures every WhatsApp quote the bot sends (initial questionnaire completion + auto-requote after spec change). Each row: `lead_sid, source ('initial'|'requote'), q_state snapshot, quote_text, quote_total_ils, quote_alt_total_ils, sent_at`. Indexed `(lead_sid, sent_at DESC)`.
+  - `GET /api/leads/:sid/quotes` returns the timeline (auth: dashboard cookie, capped at 50).
+  - `DELETE /api/leads/:sid` cascades `bot_quotes`.
+  - `QuoteHistory` accordion in OrderSummary renders source badge + price + ILS delta vs. the previous quote; expand a row to see full message text + alt total.
+
+### Changed
+- `fetchQuote` now returns `{ text, totalIls, altTotalIls }` (was raw `string`). `routeToQuoted` and `requoteWithUpdatedSpec` both adopted the structured shape so they can log calc totals into `bot_quotes` without re-running the engine.
+
+### Fixed
+- **Bridge webhook signing-secret bug** — Yehuda's bridge `sub_01KRHJD89E3FQ288S5SRK5MBGT` started returning `"signing secret unavailable (server-side bug)"` on every delivery (status_code/latency both null = never reached our endpoint). Rotated the subscription secret via `POST /v1/subscriptions/:id/rotate-secret`, updated `BRIDGE_WEBHOOK_SECRET` locally + in Vercel production env, and re-deployed. Synthetic ping now delivers 200/1.8s. Also corrected `BRIDGE_SUBSCRIPTION_ID` in `.env` (was pointing at the unrelated albadi22 subscription).
+
+---
+
 ## v3.2 — 2026-05-16 — "Factory swap: Kunming Shengximengtai"
 
 ### Changed
