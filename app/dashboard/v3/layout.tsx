@@ -3,6 +3,7 @@ import { botDrafts, factoryQuoteRequests } from "@/drizzle/schema";
 import { eq } from "drizzle-orm";
 import { Sidebar } from "./_components/Sidebar";
 import { MobileMenu } from "./_components/MobileMenu";
+import { AiChat } from "./_components/AiChat";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -38,6 +39,7 @@ export default async function V3Layout({
           {children}
         </main>
       </div>
+      <AiChat />
     </div>
   );
 }

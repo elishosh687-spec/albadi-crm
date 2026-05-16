@@ -17,6 +17,7 @@
     "drafts:backfill-sender": "tsx scripts/backfill-message-sender.ts"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.96.0",
     "@neondatabase/serverless": "^0.10.4",
     "@react-pdf/renderer": "^4.5.1",
     "@vercel/blob": "^2.3.3",
