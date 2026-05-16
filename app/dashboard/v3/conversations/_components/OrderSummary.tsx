@@ -115,8 +115,13 @@ export function OrderSummary({
       {sid && (
         <CollapsibleSection
           icon={<History className="size-3.5" />}
-          title="היסטוריית הצעות"
+          title="היסטוריית הצעות בוט (אוטומטיות)"
         >
+          <p className="mb-2 text-[11px] leading-snug text-muted-foreground border-r-2 border-muted-foreground/30 pr-2">
+            הצעות מחיר אוטומטיות שהבוט שלח בווצאפ — ראשונית + כל requote
+            שנוצר בעקבות שינוי מפרט. <strong>לא</strong> כולל בקשות שאתה
+            שלחת ידנית למפעל.
+          </p>
           <QuoteHistory sid={sid} />
         </CollapsibleSection>
       )}

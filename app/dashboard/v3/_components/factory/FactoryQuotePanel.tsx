@@ -297,13 +297,18 @@ export function FactoryQuotePanel({
 
   return (
     <section className="rounded-xl border border-border bg-card p-4">
-      <header className="flex items-center justify-between gap-1.5 text-xs uppercase tracking-wider text-muted-foreground mb-3">
+      <header className="flex items-center justify-between gap-1.5 text-xs uppercase tracking-wider text-muted-foreground mb-1">
         <div className="flex items-center gap-1.5">
           <Factory className="size-3.5" />
-          סיכום הזמנה (מפעל)
+          הצעות מפעל (ידניות)
         </div>
         {active && statusBadge(active.factoryStatus)}
       </header>
+      <p className="mb-3 text-[11px] leading-snug text-muted-foreground border-r-2 border-muted-foreground/30 pr-2">
+        בקשות ציטוט מהמפעל ששלחת ידנית ל-Feishu. כל פעם ש-{`"`}שלח לסיכום
+        הזמנה{`"`} נלחץ (מפה או מהיסטוריית הבוט) — נוספת שורה חדשה.{" "}
+        <strong>לא</strong> מתעדכן אוטומטית מההצעות שהבוט שולח ללקוח.
+      </p>
 
       {loading ? (
         <div className="text-xs text-muted-foreground flex items-center gap-2">
