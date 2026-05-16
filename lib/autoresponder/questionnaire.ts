@@ -162,7 +162,9 @@ const CONFIRMATION_QUESTION: Question = {
   // the proceed/change button. The handler in handleInbound branches on
   // confirmationStep, not on this synthetic field.
   field: "shipping" /* placeholder — never read for confirmation */,
-  prompt: "", // built dynamically per-lead via buildConfirmationMessage
+  // Used as the poll question when POLLS_ENABLED. The full summary body is
+  // sent as a preceding text message via buildConfirmationMessage.
+  prompt: "הכל בסדר, או רוצים לשנות משהו?",
   options: [
     { value: "proceed", label: CONFIRM_OPTION_PROCEED },
     { value: "change", label: CONFIRM_OPTION_CHANGE },
@@ -207,11 +209,10 @@ export interface QState {
 }
 
 function formatQuestion(q: Question): string {
-  // When buttons are enabled AND the question is button-eligible, send only
-  // the prompt — the bridge appends the option chips. With BUTTONS_DISABLED
-  // we always render the full numbered list so the customer can reply with
-  // a number or substring.
-  if (!BUTTONS_DISABLED && q.buttons) {
+  // When polls are enabled, send only the prompt — the poll renders the
+  // option chips itself. Same for legacy buttons. Otherwise render the full
+  // numbered list so the customer can reply with a number or substring.
+  if (POLLS_ENABLED || (!BUTTONS_DISABLED && q.buttons)) {
     return q.prompt;
   }
   const lines = [q.prompt, ""];
@@ -223,12 +224,29 @@ function formatQuestion(q: Question): string {
   return lines.join("\n");
 }
 
-// Global kill-switch for outbound interactive buttons. The bridge's `type=buttons`
-// path produces messages whose taps do not round-trip on iOS (taps generate no
-// `message.received` event, so the questionnaire never advances). Until the
-// bridge implements a working tap webhook, every question goes out as plain
-// numbered text. Flip back to `false` once Yehuda confirms taps deliver.
+// Native WhatsApp polls. Vote replies arrive as message.received with
+// data.media_type="poll_vote"; webhook unwraps `selected_options[0]` so the
+// flow sees the option label as if the customer typed it. Single-select
+// (selectable_count=1). Free-text follow-up still triggers when the customer
+// picks "אחר".
+const POLLS_ENABLED = true;
+
+// Legacy interactive buttons kill-switch — kept for fallback if polls ever
+// regress. Taps via `type=buttons` do not round-trip on iOS, so this stays
+// true; the poll path supersedes it.
 const BUTTONS_DISABLED = true;
+
+function buildPoll(q: Question): { question: string; options: string[] } | null {
+  if (!POLLS_ENABLED) return null;
+  if (q.options.length < 2 || q.options.length > 12) return null;
+  // Strip leading emojis from labels — WhatsApp shows them but they crowd
+  // the poll UI on small screens. matchAnswer accepts the cleaned label
+  // because its substring match is case-insensitive over `label`.
+  const options = q.options.map((opt) =>
+    opt.label.replace(/^[\p{Extended_Pictographic}\s]+/u, "").trim()
+  );
+  return { question: q.prompt, options };
+}
 
 function buildButtons(q: Question): { id: string; title: string }[] | null {
   if (BUTTONS_DISABLED) return null;
@@ -245,14 +263,16 @@ function buildButtons(q: Question): { id: string; title: string }[] | null {
 }
 
 async function askQuestion(recipient: string, q: Question): Promise<void> {
-  const btns = buildButtons(q);
+  const poll = buildPoll(q);
+  const btns = poll ? null : buildButtons(q);
   await sendBridgeMessage(
     recipient,
     formatQuestion(q),
     undefined,
     "bot",
     undefined,
-    btns ?? undefined
+    btns ?? undefined,
+    poll ?? undefined
   );
 }
 
@@ -304,10 +324,14 @@ function buildConfirmationMessage(state: QState): string {
   if (state.orderNotes) {
     lines.push(`📝 הערות: ${state.orderNotes}`);
   }
+  // When polls are enabled the confirmation prompt + options live in the
+  // poll itself, so the body stays summary-only. When polls AND buttons are
+  // both off, fall back to the legacy numbered tail so the customer knows
+  // what to type.
+  if (POLLS_ENABLED) {
+    return lines.join("\n");
+  }
   lines.push("", "הכל בסדר, או רוצים לשנות משהו?");
-  // When buttons are disabled the customer doesn't see the proceed/change
-  // chips — surface the same options as numbered text so they know what to
-  // reply. matchAnswer accepts both "1"/"2" and the labels themselves.
   if (BUTTONS_DISABLED) {
     lines.push(
       "",
@@ -905,6 +929,24 @@ export async function handleInbound(input: {
 
 async function askConfirmation(ctx: LeadCtx, state: QState): Promise<void> {
   const body = buildConfirmationMessage(state);
+  if (POLLS_ENABLED) {
+    // Summary first (poll question maxLen ~255 — summary exceeds), then the
+    // proceed/change poll. Two outbound messages but a single UX step from
+    // the customer's perspective — they see the summary above the poll in
+    // the chat thread.
+    await sendBridgeMessage(ctx.jid, body);
+    const poll = buildPoll(CONFIRMATION_QUESTION);
+    await sendBridgeMessage(
+      ctx.jid,
+      "הכל בסדר, או רוצים לשנות משהו?",
+      undefined,
+      "bot",
+      undefined,
+      undefined,
+      poll ?? undefined
+    );
+    return;
+  }
   const btns = buildButtons(CONFIRMATION_QUESTION);
   await sendBridgeMessage(
     ctx.jid,

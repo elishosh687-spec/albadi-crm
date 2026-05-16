@@ -231,7 +231,14 @@ export async function sendBridgeMessage(
   // Optional WhatsApp interactive buttons (max 3). When present the bridge
   // sends `type: "buttons"` — `message` becomes the body text, each entry
   // becomes a tappable reply chip.
-  buttons?: { id: string; title: string }[]
+  buttons?: { id: string; title: string }[],
+  // Optional WhatsApp native poll (2..12 options). When present the bridge
+  // sends `type: "poll"` — `message` is ignored on the wire (we keep it for
+  // the outbound DB row text) and `poll.question` is what WhatsApp displays
+  // above the options. Vote replies arrive as a webhook `message.received`
+  // with `data.media_type="poll_vote"` and JSON content carrying
+  // `selected_options[]`. See app/api/bridge/webhook/route.ts.
+  poll?: { question: string; options: string[]; selectableCount?: number }
 ): Promise<BridgeSendResult> {
   // Test-only escape hatch — skips the actual WhatsApp send and returns a
   // fake message id. Set BRIDGE_DRY_RUN=1 in local test scripts (see
@@ -244,7 +251,17 @@ export async function sendBridgeMessage(
   }
   const jid = isJid(recipient) ? recipient : phoneToJid(recipient);
   const body: Record<string, unknown> = { recipient: jid };
-  if (buttons && buttons.length > 0) {
+  if (poll && poll.options.length >= 2) {
+    if (poll.options.length > 12) {
+      throw new Error(
+        `sendBridgeMessage: WhatsApp poll capped at 12 options — got ${poll.options.length}`
+      );
+    }
+    body.type = "poll";
+    body.question = poll.question;
+    body.options = poll.options;
+    body.selectable_count = poll.selectableCount ?? 1;
+  } else if (buttons && buttons.length > 0) {
     if (buttons.length > 3) {
       throw new Error(
         `sendBridgeMessage: WhatsApp buttons capped at 3 — got ${buttons.length}`

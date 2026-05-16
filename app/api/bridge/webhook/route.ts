@@ -139,7 +139,7 @@ async function handleMessageReceived(evt: BridgeEnvelope): Promise<void> {
 
   const waMessageId =
     pickStr(d, "wa_message_id", "id", "messageId") ?? `bridge:${evt.id}`;
-  const text = pickStr(d, "text", "content", "body");
+  const rawText = pickStr(d, "text", "content", "body");
   // When the user taps a WhatsApp interactive button, some bridge variants
   // surface the original button `id` (e.g. "s1") alongside the visible title
   // text. Prefer it for routing so matchAnswer hits the exact option value
@@ -150,10 +150,35 @@ async function handleMessageReceived(evt: BridgeEnvelope): Promise<void> {
     "button_reply_id",
     "interactive_reply_id"
   );
-  const textForRouting = buttonReplyId ?? text;
+
+  // Poll vote arrives as message.received with data.media_type="poll_vote"
+  // and data.content as a JSON string carrying
+  //   { poll_msg_id, selected_indices[], selected_options[], sender_timestamp_ms }
+  // We unwrap it into the option label so matchAnswer/handleInbound see a
+  // plain text reply like "בינוני" instead of raw JSON.
+  let voteOptionText: string | null = null;
+  const isPollVote = (d as any)?.media_type === "poll_vote";
+  if (isPollVote && rawText) {
+    try {
+      const parsed = JSON.parse(rawText);
+      const sel = Array.isArray(parsed?.selected_options) ? parsed.selected_options : [];
+      if (sel.length > 0 && typeof sel[0] === "string") {
+        voteOptionText = sel[0];
+      }
+    } catch (e) {
+      console.warn("[bridge.webhook] poll_vote parse failed", waMessageId, e);
+    }
+  }
+  // `text` is what we persist to the messages row. For poll votes we store
+  // the human-readable option, not the JSON envelope. `textForRouting` is
+  // what the autoresponder sees. Both prefer the vote when present.
+  const text = voteOptionText ?? rawText;
+  const textForRouting = voteOptionText ?? buttonReplyId ?? rawText;
   const phone = pickStr(d, "phone");
   const name = pickStr(d, "name", "push_name", "pushName");
-  const mediaPresent = hasMedia(d);
+  // Poll votes carry media_type="poll_vote" which hasMedia() would flag as
+  // media — they aren't media, they're textual answers.
+  const mediaPresent = isPollVote ? false : hasMedia(d);
 
   await upsertLeadFromBridgeEvent({
     jid,
