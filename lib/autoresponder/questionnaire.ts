@@ -79,19 +79,20 @@ const QUESTIONS: Question[] = [
   {
     step: 5,
     field: "product",
-    prompt: "📐 איזה גודל שקית? (פורמט: H=גובה, D=עומק, W=רוחב, בס״מ)",
+    prompt: "📐 איזה גודל שקית? (H=גובה, D=עומק, W=רוחב, בס״מ)",
     options: [
-      { value: "p1", label: "H25*D8*W20 — קוסמטיקה, תכשיטים" },
+      { value: "p1", label: "H20*D8*W25 — קוסמטיקה, תכשיטים" },
       { value: "p2", label: "H30*D10*W30 — ביגוד קל, מתנות" },
       { value: "p3", label: "H30*D12*W40 — נעליים, ביגוד" },
-      { value: "p4", label: "H50*D15*W40 — פריטים גדולים" },
-      { value: "p5", label: "H40*W30 — פריטים רחבים" },
-      { value: "p6", label: "H15*W20 — פריטים קטנים" },
+      { value: "p4", label: "H40*D15*W50 — פריטים גדולים" },
+      { value: "p5", label: "H30*W40 — שטוח רחב" },
+      { value: "p6", label: "H15*W20 — שטוח קטן" },
+      { value: "more", label: "📐 צריך מידה אחרת" },
       { value: "custom", label: "אחר / מידה מותאמת" },
     ],
     hasCustom: true,
     customPrompt:
-      "מה המידות שאתם צריכים? פורמט המפעל: גובה × עומק × רוחב (בס״מ).\nדוגמה: H50*D15*W40 (גובה 50, עומק 15, רוחב 40).\nאם אין עומק (שקית שטוחה) — תכתבו רק גובה ורוחב, למשל H40*W30.",
+      "מה המידות שאתם צריכים? פורמט המפעל: גובה × עומק × רוחב (בס״מ).\nדוגמה: H40*D15*W50 (גובה 40, עומק 15, רוחב 50).\nאם אין עומק (שקית שטוחה) — תכתבו רק גובה ורוחב, למשל H30*W40.",
   },
   {
     step: 6,
@@ -126,6 +127,35 @@ const QUESTIONS: Question[] = [
   },
 ];
 
+
+// Step-5 "page 2" — shown when the customer picks "צריך מידה אחרת" from the
+// initial list of 6 popular sizes. Same field/step as the page-1 question;
+// only the option set differs. `getCurrentQuestion()` picks the right page
+// based on qState.sizePage.
+const PRODUCT_QUESTION_PAGE_2: Question = {
+  step: 5,
+  field: "product",
+  prompt: "📐 מידות נוספות:",
+  options: [
+    { value: "p7", label: "H15*D5*W20 — קטן צר, יוקרה" },
+    { value: "p8", label: "H35*D10*W40 — בינוני-גדול" },
+    { value: "p9", label: "H40*D15*W45 — גדול" },
+    { value: "p10", label: "H50*D20*W60 — XL" },
+    { value: "p11", label: "H8*W10 — מיני שטוח" },
+    { value: "p12", label: "H10*W15 — שטוח קטן" },
+    { value: "p13", label: "H25*W25 — ריבועי" },
+    { value: "p14", label: "H35*W50 — שטוח רחב" },
+    { value: "custom", label: "אחר / מידה מותאמת" },
+  ],
+  hasCustom: true,
+  customPrompt:
+    "מה המידות שאתם צריכים? פורמט המפעל: גובה × עומק × רוחב (בס״מ).\nדוגמה: H40*D15*W50 (גובה 40, עומק 15, רוחב 50).\nאם אין עומק (שקית שטוחה) — תכתבו רק גובה ורוחב, למשל H30*W40.",
+};
+
+function getCurrentQuestion(qState: { step: number; sizePage?: 1 | 2 }): Question | null {
+  if (qState.step === 5 && qState.sizePage === 2) return PRODUCT_QUESTION_PAGE_2;
+  return QUESTIONS.find((q) => q.step === qState.step) ?? null;
+}
 
 const DECISION_PROMPT =
   "מה דעתכם על ההצעה?\n\n✅ מתאים → שלחו לנו את הלוגו ונמשיך.\n🔧 רוצים לשנות משהו?";
@@ -189,6 +219,9 @@ export interface QState {
   unmatchedAt?: number;
   doneAt?: string;
   routedToFactory?: boolean;
+  // Page index inside step 5 (product). 1 = popular 6 sizes + "more". 2 =
+  // remaining 8 + custom. Set when the customer picks "צריך מידה אחרת".
+  sizePage?: 1 | 2;
 
   // Step 9 — confirmation gate after the last question. The customer sees a
   // summary + buttons ("מעולה, נמשיך" / "רוצה לשנות"). On "רוצה לשנות" the
@@ -292,12 +325,20 @@ const QTY_LABEL: Record<string, string> = {
 // Display labels mirror the canonical factory format from
 // lib/factory/calculator/constants.ts (`H{height}*D{depth}*W{width}`).
 const PROD_LABEL: Record<string, string> = {
-  p1: "H25*D8*W20 ס״מ",
+  p1: "H20*D8*W25 ס״מ",
   p2: "H30*D10*W30 ס״מ",
   p3: "H30*D12*W40 ס״מ",
-  p4: "H50*D15*W40 ס״מ",
-  p5: "H40*W30 ס״מ",
+  p4: "H40*D15*W50 ס״מ",
+  p5: "H30*W40 ס״מ",
   p6: "H15*W20 ס״מ",
+  p7: "H15*D5*W20 ס״מ",
+  p8: "H35*D10*W40 ס״מ",
+  p9: "H40*D15*W45 ס״מ",
+  p10: "H50*D20*W60 ס״מ",
+  p11: "H8*W10 ס״מ",
+  p12: "H10*W15 ס״מ",
+  p13: "H25*W25 ס״מ",
+  p14: "H35*W50 ס״מ",
 };
 
 function buildConfirmationMessage(state: QState): string {
@@ -761,6 +802,7 @@ export async function handleInbound(input: {
     | "answered"
     | "custom_prompt"
     | "custom_captured"
+    | "size_page_2"
     | "reasked"
     | "bailed"
     | "completed_standard"
@@ -819,7 +861,7 @@ export async function handleInbound(input: {
     };
     if (field === "quantity") captured.quantityCustom = text;
     if (field === "product") captured.productCustom = text;
-    const currentQ = QUESTIONS.find((q) => q.step === ctx.qState!.step);
+    const currentQ = getCurrentQuestion(ctx.qState!);
     const nextQ = currentQ
       ? QUESTIONS.find((q) => q.step === currentQ.step + 1)
       : null;
@@ -837,7 +879,7 @@ export async function handleInbound(input: {
     return { action: "completed_factory", detail: "custom on last question" };
   }
 
-  const currentQ = QUESTIONS.find((q) => q.step === ctx.qState!.step);
+  const currentQ = getCurrentQuestion(ctx.qState!);
   if (!currentQ) {
     const next: QState = { ...ctx.qState, bailed: true };
     await saveState(ctx.sid, next);
@@ -890,6 +932,20 @@ export async function handleInbound(input: {
     await sendBridgeMessage(recipient, REASK_REPLIES[reaskIdx]);
     await askQuestion(recipient, currentQ);
     return { action: "reasked" };
+  }
+
+  // Step-5 page pivot — "צריך מידה אחרת" swaps the option set to page 2.
+  // Stay on step 5; don't advance. matchAnswer can now hit p7..p14 / custom
+  // because getCurrentQuestion will return PRODUCT_QUESTION_PAGE_2 next turn.
+  if (currentQ.field === "product" && match === "more") {
+    const paged: QState = {
+      ...ctx.qState,
+      sizePage: 2,
+      unmatchedAt: 0,
+    };
+    await saveState(ctx.sid, paged);
+    await askQuestion(recipient, PRODUCT_QUESTION_PAGE_2);
+    return { action: "size_page_2", detail: "more sizes requested" };
   }
 
   // Custom branch on Q2/Q3 — capture free-text next inbound.
