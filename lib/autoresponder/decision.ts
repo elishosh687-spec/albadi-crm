@@ -447,7 +447,20 @@ async function handleDecisionStage(
   text: string | null
 ): Promise<DecisionResult> {
   const t = (text ?? "").trim();
-  if (!t) return { action: "no_op", detail: "empty text" };
+  if (!t) {
+    // Empty text at AWAITING_DECISION = customer sent media without
+    // caption (e.g. they accepted the quote and sent a logo eagerly, or
+    // a voice note / sticker). The bot can't classify, but silence makes
+    // the customer feel ignored. Escalate so Eli sees it in the
+    // dashboard and can reply manually.
+    await escalateToEli(ctx, "Customer sent media-only / empty message after quote", {
+      kind: "generic",
+      llmAnalysis:
+        "הלקוח שלח הודעה בלי טקסט (תמונה / קובץ / הקלטה) אחרי שקיבל הצעת מחיר. ייתכן שזה הלוגו או שאלה במדיה.",
+      recommendation: "לבדוק את ההודעה במדיה ולענות ידנית.",
+    });
+    return { action: "escalated", detail: "empty text inbound → escalated" };
+  }
 
   const decisionState: string | null = ctx.qState?.decisionState ?? null;
   const recent = await loadRecentMessages(ctx.sid);
@@ -790,10 +803,22 @@ async function handleDecisionStage(
           detail: agentResult.llmAnalysis ?? classification.summary,
         };
       }
+      // Previously: silent no_op when the agent declined to reply. Per
+      // the operator request: never go silent post-quote — escalate so
+      // the lead surfaces in the dashboard with NEEDS_ELI.
+      await escalateToEli(
+        ctx,
+        "Customer asked a question we couldn't auto-answer",
+        {
+          kind: "question",
+          llmAnalysis: classification.summary ?? agentResult.llmAnalysis ?? null,
+          recommendation: "לענות ללקוח ידנית מה-CRM.",
+        }
+      );
       return {
-        action: "no_op",
+        action: "escalated",
         intent: classification.intent,
-        detail: "agent said noop",
+        detail: "question_other agent noop → escalated",
       };
     }
     case "question_format": {
@@ -839,8 +864,23 @@ async function handleDecisionStage(
           detail: agentResult.llmAnalysis ?? "ambiguous",
         };
       }
-      // Agent said noop → preserve original behavior (cron keeps nudging).
-      return { action: "no_op", intent: classification.intent, detail: "ambiguous" };
+      // Previously: silent no_op when the unmatch-agent declined. Per
+      // operator request: never go silent post-quote — escalate so the
+      // lead surfaces in the dashboard with NEEDS_ELI.
+      await escalateToEli(
+        ctx,
+        "Customer sent an unclassified message after quote",
+        {
+          kind: "generic",
+          llmAnalysis: agentResult.llmAnalysis ?? `הודעה: "${t.slice(0, 120)}"`,
+          recommendation: "לבדוק ולענות ידנית מה-CRM.",
+        }
+      );
+      return {
+        action: "escalated",
+        intent: classification.intent,
+        detail: "other agent noop → escalated",
+      };
     }
   }
 }
@@ -985,7 +1025,18 @@ async function handleFinalStage(
   text: string | null
 ): Promise<DecisionResult> {
   const t = (text ?? "").trim();
-  if (!t) return { action: "no_op", detail: "empty text" };
+  if (!t) {
+    // Same logic as AWAITING_DECISION: empty text usually means media
+    // without caption. Don't ghost the customer — escalate so the lead
+    // surfaces in the dashboard for manual reply.
+    await escalateToEli(ctx, "Customer sent media-only / empty message at AWAITING_FINAL", {
+      kind: "generic",
+      llmAnalysis:
+        "הלקוח שלח הודעה בלי טקסט אחרי המחיר הסופי. ייתכן שזה הלוגו או קובץ עזר.",
+      recommendation: "לבדוק את ההודעה במדיה ולענות ידנית.",
+    });
+    return { action: "escalated", detail: "empty text inbound (final) → escalated" };
+  }
 
   const finalState: string | null = ctx.qState?.finalState ?? null;
   const recent = await loadRecentMessages(ctx.sid);
@@ -1128,10 +1179,21 @@ async function handleFinalStage(
           detail: agentResult.llmAnalysis ?? classification.summary,
         };
       }
+      // No silent path after a final quote — escalate so the lead
+      // surfaces in the dashboard.
+      await escalateToEli(
+        ctx,
+        "Customer asked a question we couldn't auto-answer (Stage 4)",
+        {
+          kind: "question",
+          llmAnalysis: classification.summary ?? agentResult.llmAnalysis ?? null,
+          recommendation: "לענות ללקוח ידנית מה-CRM.",
+        }
+      );
       return {
-        action: "no_op",
+        action: "escalated",
         intent: classification.intent,
-        detail: "agent said noop",
+        detail: "Stage 4 question_other agent noop → escalated",
       };
     }
 
@@ -1159,7 +1221,21 @@ async function handleFinalStage(
           detail: agentResult.llmAnalysis ?? "ambiguous",
         };
       }
-      return { action: "no_op", intent: classification.intent, detail: "ambiguous" };
+      // Stage 4 must never go silent — escalate to dashboard.
+      await escalateToEli(
+        ctx,
+        "Customer sent an unclassified message after final price",
+        {
+          kind: "generic",
+          llmAnalysis: agentResult.llmAnalysis ?? `הודעה: "${t.slice(0, 120)}"`,
+          recommendation: "לבדוק ולענות ידנית מה-CRM.",
+        }
+      );
+      return {
+        action: "escalated",
+        intent: classification.intent,
+        detail: "Stage 4 other agent noop → escalated",
+      };
     }
   }
 }
