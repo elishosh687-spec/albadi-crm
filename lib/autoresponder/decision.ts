@@ -43,6 +43,7 @@ import {
   mergeExtracted,
   requoteWithUpdatedSpec,
   shouldRouteToFactory,
+  COMPANY_TEMPLATE,
   type QState,
 } from "./questionnaire";
 import {
@@ -800,6 +801,17 @@ async function handleDecisionStage(
       // answer it anyway so the customer isn't ignored.
       await sendBridgeMessage(ctx.jid, REPLY_LOGO_FORMAT);
       return { action: "canned_reply", intent: classification.intent, detail: "format" };
+    }
+    case "question_company": {
+      // Customer is verifying who we are — send the about-us card again.
+      // Same content the customer saw right after the quote; rendering as
+      // a separate message keeps the link previews crisp.
+      await sendBridgeMessage(ctx.jid, COMPANY_TEMPLATE);
+      return {
+        action: "canned_reply",
+        intent: classification.intent,
+        detail: "company info sent on-demand",
+      };
     }
 
     case "other":

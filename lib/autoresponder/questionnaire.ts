@@ -160,9 +160,11 @@ const DECISION_PROMPT =
   "מה דעתכם על ההצעה?\n\n✅ מתאים → שלחו לנו את הלוגו ונמשיך.\n🔧 רוצים לשנות משהו?";
 
 // Sent immediately after the quote so the customer has trust-building
-// context (who we are, where to verify us) before they decide. WA renders
-// each URL as a tappable link-preview card, so no buttons needed.
-const COMPANY_TEMPLATE =
+// context (who we are, where to verify us) before they decide. Also
+// re-sent on-demand when the intent classifier flags `question_company`
+// in decision.ts. WA renders each URL as a tappable link-preview card,
+// so no buttons needed.
+export const COMPANY_TEMPLATE =
   "👋 קצת עלינו\n" +
   "אנחנו אלבדי — חברת אריזות, שותפים במפעל ייצור. 20+ שנה בענף.\n\n" +
   "האתרים שלנו:\n" +

@@ -40,6 +40,7 @@ export type Intent =
   | "question_payment"
   | "question_format"
   | "question_meeting"
+  | "question_company"
   | "question_other"
   | "other";
 
@@ -63,7 +64,8 @@ const SYSTEM_PROMPT = `אתה מסווג כוונות של לקוחות בעבר
 - "question_payment" — שאלה על תנאי תשלום / איך משלמים / מקדמה. דוגמאות: "איך משלמים?", "תנאי תשלום?", "צריך מקדמה?", "כמה אחוז להזמנה?".
 - "question_format" — שאלה על פורמט הלוגו / איך לשלוח לוגו / איזה קובץ צריך. דוגמאות: "איזה פורמט?", "PDF או JPG?", "באיזה גודל לשלוח לוגו?", "וקטור או רגיל?".
 - "question_meeting" — בקשה לדבר עם בן-אדם / פגישה / שיחת טלפון. דוגמאות: "אפשר בן-אדם?", "אפשר לדבר עם מישהו?", "אפשר להיפגש?", "תתקשרו אליי".
-- "question_other" — שאלה תוכנית אחרת שלא נכנסת לקטגוריות לעיל (חומר, בדיקות איכות, אחריות, מפעל, וכו'). דוגמאות: "מה החומר?", "יש אחריות?", "איך הולכת ההדפסה?".
+- "question_company" — שאלה על מי אנחנו / החברה / המפעל / הוותק / מה אנחנו עושים. דוגמאות: "מי אתם?", "ספרו על החברה", "מה אתם עושים?", "כמה שנים אתם בשוק?", "אתם המפעל?", "יש לכם אתר?".
+- "question_other" — שאלה תוכנית אחרת שלא נכנסת לקטגוריות לעיל (חומר, בדיקות איכות, אחריות, וכו'). דוגמאות: "מה החומר?", "יש אחריות?", "איך הולכת ההדפסה?".
 - "other" — צ'אט סתמי / לא ברור / לא קשור / "אחזור אליך". דוגמאות: "תודה", "אוקיי אחזור אליך", "בוקר טוב", "🙏".
 
 החזר רק JSON במבנה: { "intent": "...", "confidence": 0.0-1.0, "summary": "תיאור קצר באנגלית או עברית (≤80 תווים)" }.
@@ -186,6 +188,8 @@ function normalizeIntent(raw: unknown): Intent {
     format: "question_format",
     question_meeting: "question_meeting",
     meeting: "question_meeting",
+    question_company: "question_company",
+    company: "question_company",
     question_other: "question_other",
     question: "question_other",
     other: "other",
