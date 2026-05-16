@@ -239,7 +239,13 @@ export function qStateToFactoryProductSpec(
   const decoded = decodeQStateToSpec(q);
   if (!decoded) return null;
   return {
-    description: decoded.description,
+    // Left blank so the operator fills the customer-facing description on
+    // the FactoryQuotePanel draft row before sending to Feishu. Dimensions
+    // are already captured in widthCm/heightCm/depthCm and re-rendered as
+    // H*D*W by lib/factory/create-request.sizeLabel, so this field is a
+    // free-text note (e.g. "logo on front, gold print") rather than a dim
+    // restatement.
+    description: "",
     material: "80g non-woven",
     widthCm: decoded.widthCm,
     heightCm: decoded.heightCm,
