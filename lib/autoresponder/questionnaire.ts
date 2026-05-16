@@ -158,6 +158,18 @@ function getCurrentQuestion(qState: { step: number; sizePage?: 1 | 2 }): Questio
 
 const DECISION_PROMPT =
   "מה דעתכם על ההצעה?\n\n✅ מתאים → שלחו לנו את הלוגו ונמשיך.\n🔧 רוצים לשנות משהו?";
+
+// Sent immediately after the quote so the customer has trust-building
+// context (who we are, where to verify us) before they decide. WA renders
+// each URL as a tappable link-preview card, so no buttons needed.
+const COMPANY_TEMPLATE =
+  "👋 קצת עלינו\n" +
+  "אנחנו אלבדי — חברת אריזות, שותפים במפעל ייצור. 20+ שנה בענף.\n\n" +
+  "האתרים שלנו:\n" +
+  "🌐 https://ecobrotherss.com/\n" +
+  "🌐 https://packiure.com/\n" +
+  "🌐 https://bag-quote-app.vercel.app/\n\n" +
+  "📸 אינסטגרם: https://www.instagram.com/simonsostri/";
 const FACTORY_HOLD_MSG =
   "תודה, קיבלתי את המפרט. חוזר אליכם תוך 24-48 שעות עם המחיר.";
 const BAIL_REPLY =
@@ -721,6 +733,7 @@ async function routeToQuoted(
       altTotalIls: quote.altTotalIls,
     });
     await sendBridgeMessage(ctx.jid, quote.text);
+    await sendBridgeMessage(ctx.jid, COMPANY_TEMPLATE);
     await sendBridgeMessage(ctx.jid, DECISION_PROMPT);
   } catch (e) {
     const bailed: QState = { ...state, bailed: true };
@@ -787,6 +800,7 @@ export async function requoteWithUpdatedSpec(input: {
       altTotalIls: quote.altTotalIls,
     });
     await sendBridgeMessage(input.jid, quote.text);
+    await sendBridgeMessage(input.jid, COMPANY_TEMPLATE);
     await sendBridgeMessage(input.jid, DECISION_PROMPT);
     return true;
   } catch (e) {
