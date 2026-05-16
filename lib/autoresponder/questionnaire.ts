@@ -30,6 +30,7 @@ import {
   classifyConfirmation,
   type ExtractedSpec,
 } from "./spec-extractor";
+import { logBotQuote } from "./quote-log";
 
 type ListOption = { value: string; label: string };
 
@@ -473,7 +474,13 @@ export function shouldRouteToFactory(state: QState): boolean {
   return false;
 }
 
-async function fetchQuote(state: QState): Promise<string> {
+export interface QuoteCalcOutput {
+  text: string;
+  totalIls: number;
+  altTotalIls: number | null;
+}
+
+async function fetchQuote(state: QState): Promise<QuoteCalcOutput> {
   // Local calculator (ported from bag-quote-app). No HTTP roundtrip.
   if (!state.product || !state.quantity || !state.shipping) {
     throw new Error(
@@ -507,7 +514,7 @@ async function fetchQuote(state: QState): Promise<string> {
       })}`
     );
   }
-  return buildQuoteMessage({
+  const text = buildQuoteMessage({
     dimensions: calc.result.product?.dimensions ?? "",
     hasHandles: calc.result.hasHandles,
     hasLamination,
@@ -528,6 +535,11 @@ async function fetchQuote(state: QState): Promise<string> {
         }
       : null,
   });
+  return {
+    text,
+    totalIls: calc.result.totalOrderPriceIls,
+    altTotalIls: calc.altResult?.totalOrderPriceIls ?? null,
+  };
 }
 
 async function saveState(sid: string, state: QState): Promise<void> {
@@ -631,12 +643,12 @@ async function routeToQuoted(
   state: QState
 ): Promise<void> {
   try {
-    const quoteText = await fetchQuote(state);
+    const quote = await fetchQuote(state);
     const done: QState = {
       ...state,
       step: 10, // 9 = confirmation gate; 10 = terminal done state
       confirmationStep: null,
-      quoteResult: quoteText,
+      quoteResult: quote.text,
       doneAt: new Date().toISOString(),
     };
     await db
@@ -650,7 +662,15 @@ async function routeToQuoted(
         updatedAt: new Date(),
       })
       .where(sql`trim(${leads.manychatSubId}) = ${ctx.sid.trim()}`);
-    await sendBridgeMessage(ctx.jid, quoteText);
+    await logBotQuote({
+      leadSid: ctx.sid,
+      source: "initial",
+      state: done,
+      text: quote.text,
+      totalIls: quote.totalIls,
+      altTotalIls: quote.altTotalIls,
+    });
+    await sendBridgeMessage(ctx.jid, quote.text);
     await sendBridgeMessage(ctx.jid, DECISION_PROMPT);
   } catch (e) {
     const bailed: QState = { ...state, bailed: true };
@@ -687,12 +707,12 @@ export async function requoteWithUpdatedSpec(input: {
   state: QState;
 }): Promise<boolean> {
   try {
-    const quoteText = await fetchQuote(input.state);
+    const quote = await fetchQuote(input.state);
     const next: QState = {
       ...input.state,
       step: 10,
       confirmationStep: null,
-      quoteResult: quoteText,
+      quoteResult: quote.text,
       doneAt: input.state.doneAt ?? new Date().toISOString(),
       specChangeAttempts: 0,
     };
@@ -708,7 +728,15 @@ export async function requoteWithUpdatedSpec(input: {
         updatedAt: new Date(),
       })
       .where(sql`trim(${leads.manychatSubId}) = ${input.sid.trim()}`);
-    await sendBridgeMessage(input.jid, quoteText);
+    await logBotQuote({
+      leadSid: input.sid,
+      source: "requote",
+      state: next,
+      text: quote.text,
+      totalIls: quote.totalIls,
+      altTotalIls: quote.altTotalIls,
+    });
+    await sendBridgeMessage(input.jid, quote.text);
     await sendBridgeMessage(input.jid, DECISION_PROMPT);
     return true;
   } catch (e) {

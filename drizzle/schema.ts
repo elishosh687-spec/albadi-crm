@@ -1,11 +1,14 @@
 import {
   pgTable,
   serial,
+  bigserial,
   text,
   timestamp,
   integer,
   boolean,
   jsonb,
+  index,
+  doublePrecision,
 } from "drizzle-orm/pg-core";
 /* eslint-disable @typescript-eslint/no-unused-vars */
 // `integer` kept in import list for forward compat; unused right now.
@@ -180,3 +183,29 @@ export const factoryQuoteRequests = pgTable("factory_quote_requests", {
   pdfUrl: text("pdf_url"),
   sentToCustomerAt: timestamp("sent_to_customer_at", { withTimezone: true }),
 });
+
+// Append-only audit log of every bot-side quote sent on WhatsApp. Captures
+// both the initial quote (after questionnaire completion) and any auto-requote
+// triggered by `requoteWithUpdatedSpec` after a mid-conversation spec change.
+// The `leads.quoteTotal` / `leads.quoteAlt` columns are overwritten on each
+// requote — this table preserves the full timeline so the dashboard can show
+// "quote history" and analytics can compute requote rates / price drift.
+export const botQuotes = pgTable(
+  "bot_quotes",
+  {
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    leadSid: text("lead_sid").notNull(), // = leads.manychat_sub_id
+    source: text("source").notNull(), // 'initial' | 'requote'
+    qState: jsonb("q_state").notNull(), // snapshot of qState at send time
+    quoteText: text("quote_text").notNull(), // the WhatsApp message body
+    quoteTotalIls: doublePrecision("quote_total_ils"), // calc result.totalOrderPriceIls
+    quoteAltTotalIls: doublePrecision("quote_alt_total_ils"), // alt shipping tier total
+    sentAt: timestamp("sent_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => ({
+    leadSidSentAtIdx: index("bot_quotes_lead_sid_sent_at_idx").on(
+      t.leadSid,
+      t.sentAt
+    ),
+  })
+);

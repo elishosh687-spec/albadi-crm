@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/cn";
 import {
@@ -12,6 +12,7 @@ import {
   ChevronDown,
   Trash2,
   Loader2,
+  History,
 } from "lucide-react";
 import { STAGE_LABEL, STAGE_TONE } from "../../_components/stage-meta";
 import { deleteLeadAction, updateLeadContactAction } from "@/app/actions/v2";
@@ -107,6 +108,15 @@ export function OrderSummary({
               <Row label="הצעה משנית" value={`₪${data.quoteAlt}`} />
             )}
           </dl>
+        </CollapsibleSection>
+      )}
+
+      {sid && (
+        <CollapsibleSection
+          icon={<History className="size-3.5" />}
+          title="היסטוריית הצעות"
+        >
+          <QuoteHistory sid={sid} />
         </CollapsibleSection>
       )}
 
@@ -352,5 +362,150 @@ function Row({
         {value}
       </dd>
     </div>
+  );
+}
+
+interface BotQuoteRow {
+  id: number;
+  source: "initial" | "requote";
+  qState: Record<string, unknown>;
+  quoteText: string;
+  quoteTotalIls: number | null;
+  quoteAltTotalIls: number | null;
+  sentAt: string;
+}
+
+function QuoteHistory({ sid }: { sid: string }) {
+  const [rows, setRows] = useState<BotQuoteRow[] | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const [expanded, setExpanded] = useState<number | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(
+          `/api/leads/${encodeURIComponent(sid)}/quotes`,
+          { cache: "no-store" }
+        );
+        const data = await res.json();
+        if (cancelled) return;
+        if (!res.ok || !data.ok) {
+          setErr(data.error ?? `HTTP ${res.status}`);
+          return;
+        }
+        setRows(data.quotes ?? []);
+      } catch (e) {
+        if (!cancelled) setErr(e instanceof Error ? e.message : String(e));
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [sid]);
+
+  if (err) {
+    return <div className="text-xs text-destructive">שגיאה: {err}</div>;
+  }
+  if (!rows) {
+    return (
+      <div className="text-xs text-muted-foreground flex items-center gap-2">
+        <Loader2 className="size-3.5 animate-spin" />
+        טוען…
+      </div>
+    );
+  }
+  if (rows.length === 0) {
+    return (
+      <div className="text-xs text-muted-foreground">
+        עוד לא נשלחו הצעות בוט ללקוח.
+      </div>
+    );
+  }
+
+  const fmt = (n: number | null) =>
+    n === null ? "—" : `₪${n.toLocaleString("he-IL", { maximumFractionDigits: 2 })}`;
+  const fmtDate = (iso: string) =>
+    new Date(iso).toLocaleString("he-IL", {
+      dateStyle: "short",
+      timeStyle: "short",
+    });
+  const sourceLabel = (s: "initial" | "requote") =>
+    s === "initial" ? "ראשונית" : "עדכון";
+
+  // Compute price delta vs. the immediately-newer quote in the list (rows are
+  // sorted DESC by sentAt). Lets the operator see "this requote was +200 ILS
+  // higher than the previous one" at a glance.
+  const deltas = rows.map((r, i) => {
+    if (i === rows.length - 1) return null;
+    const prev = rows[i + 1];
+    if (r.quoteTotalIls === null || prev.quoteTotalIls === null) return null;
+    return r.quoteTotalIls - prev.quoteTotalIls;
+  });
+
+  return (
+    <ul className="flex flex-col gap-2">
+      {rows.map((r, i) => {
+        const isOpen = expanded === r.id;
+        const delta = deltas[i];
+        return (
+          <li
+            key={r.id}
+            className="rounded-lg border border-border/60 bg-background/40"
+          >
+            <button
+              type="button"
+              onClick={() => setExpanded(isOpen ? null : r.id)}
+              className="w-full flex items-center justify-between gap-2 px-3 py-2 text-right hover:bg-secondary/30 transition-colors"
+            >
+              <div className="flex flex-col items-start gap-0.5">
+                <span
+                  className={cn(
+                    "text-[10px] rounded-full px-2 py-0.5 border",
+                    r.source === "initial"
+                      ? "border-success/40 text-success bg-success/10"
+                      : "border-warning/40 text-warning bg-warning/10"
+                  )}
+                >
+                  {sourceLabel(r.source)}
+                </span>
+                <span className="text-[11px] text-muted-foreground tabular-nums">
+                  {fmtDate(r.sentAt)}
+                </span>
+              </div>
+              <div className="flex flex-col items-end gap-0.5">
+                <span className="text-sm font-medium tabular-nums">
+                  {fmt(r.quoteTotalIls)}
+                </span>
+                {delta !== null && delta !== 0 && (
+                  <span
+                    className={cn(
+                      "text-[10px] tabular-nums",
+                      delta > 0 ? "text-destructive" : "text-success"
+                    )}
+                  >
+                    {delta > 0 ? "+" : ""}
+                    {fmt(delta).replace("₪", "₪")}
+                  </span>
+                )}
+              </div>
+            </button>
+            {isOpen && (
+              <div className="px-3 pb-3 pt-1 border-t border-border/60 flex flex-col gap-2 text-xs">
+                {r.quoteAltTotalIls !== null && (
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">הצעה משנית</span>
+                    <span className="tabular-nums">{fmt(r.quoteAltTotalIls)}</span>
+                  </div>
+                )}
+                <pre className="whitespace-pre-wrap font-sans text-foreground bg-card rounded-md p-2 border border-border/40 max-h-60 overflow-y-auto">
+                  {r.quoteText}
+                </pre>
+              </div>
+            )}
+          </li>
+        );
+      })}
+    </ul>
   );
 }

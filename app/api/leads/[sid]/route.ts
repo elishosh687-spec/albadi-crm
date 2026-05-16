@@ -18,6 +18,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import {
   botDrafts,
+  botQuotes,
   factoryQuoteRequests,
   leadTags,
   leads,
@@ -58,6 +59,7 @@ export async function DELETE(
     messages: 0,
     botDrafts: 0,
     factoryQuoteRequests: 0,
+    botQuotes: 0,
     leads: 0,
   };
 
@@ -78,6 +80,12 @@ export async function DELETE(
     .where(factoryMatch)
     .returning({ id: factoryQuoteRequests.id });
   counts.factoryQuoteRequests = factoryDel.length;
+
+  const quoteDel = await db
+    .delete(botQuotes)
+    .where(sql`trim(${botQuotes.leadSid}) = ${sid}`)
+    .returning({ id: botQuotes.id });
+  counts.botQuotes = quoteDel.length;
 
   const leadDel = await db
     .delete(leads)
