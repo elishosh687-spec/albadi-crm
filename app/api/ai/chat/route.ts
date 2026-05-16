@@ -1,13 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
-import Anthropic from "@anthropic-ai/sdk";
 import { db } from "@/lib/db";
 import { leads } from "@/drizzle/schema";
-import { eq, sql } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
 
-const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+const OPENAI_URL = "https://api.openai.com/v1/chat/completions";
 
 const STAGE_LABELS: Record<string, string> = {
   NEW: "חדשים",
@@ -31,7 +30,6 @@ async function fetchLeads(stage?: string) {
     lastFollowUpAt: leads.lastFollowUpAt,
     botPaused: leads.botPaused,
     pipelineFlag: leads.pipelineFlag,
-    updatedAt: leads.updatedAt,
   }).from(leads);
 
   if (stage && stage !== "ALL") {
@@ -54,13 +52,16 @@ function buildLeadContext(rows: Awaited<ReturnType<typeof fetchLeads>>) {
       if (r.followUpCount) parts.push(`   פולואפים: ${r.followUpCount}`);
       if (r.botPaused) parts.push(`   בוט מושהה: כן`);
       if (r.pipelineFlag) parts.push(`   דגל: ${r.pipelineFlag}`);
-      if (r.lastFollowUpAt) parts.push(`   עדכון אחרון: ${new Date(r.lastFollowUpAt).toLocaleDateString("he-IL")}`);
+      if (r.lastFollowUpAt) parts.push(`   עדכון: ${new Date(r.lastFollowUpAt).toLocaleDateString("he-IL")}`);
       return parts.join("\n");
     })
     .join("\n\n");
 }
 
 export async function POST(req: NextRequest) {
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) return NextResponse.json({ error: "no api key" }, { status: 503 });
+
   let body: { message: string; stage?: string; history?: { role: "user" | "assistant"; content: string }[] };
   try {
     body = await req.json();
@@ -74,39 +75,57 @@ export async function POST(req: NextRequest) {
   const rows = await fetchLeads(stage);
   const leadContext = buildLeadContext(rows);
   const stageLabel = stage && stage !== "ALL" ? (STAGE_LABELS[stage] ?? stage) : "כל הלידים";
+  const model = process.env.OPENAI_MODEL || "gpt-4o-mini";
 
   const systemPrompt = `אתה עוזר CRM חכם של אלבדי — חברת שקיות ממותגות.
 אתה עוזר לאלי (המנהל) לנהל את הלידים שלו ולקבל החלטות.
-ענה בעברית. היה תמציתי, ישיר, מועיל. אל תחזור על הנתונים — נתח אותם.
+ענה בעברית. היה תמציתי, ישיר, מועיל. נתח את הנתונים — אל תחזור עליהם כרשימה.
 
-שלב נוכחי שנבחר: ${stageLabel}
-מספר לידים: ${rows.length}
+שלב נוכחי: ${stageLabel} | סה"כ לידים: ${rows.length}
 
 נתוני לידים:
 ${leadContext}`;
 
-  const messages: Anthropic.MessageParam[] = [
-    ...history.map((h) => ({ role: h.role, content: h.content })),
+  const messages = [
+    ...history.slice(-8).map((h) => ({ role: h.role, content: h.content })),
     { role: "user", content: message },
   ];
 
-  const stream = await client.messages.stream({
-    model: "claude-haiku-4-5-20251001",
-    max_tokens: 1024,
-    system: systemPrompt,
-    messages,
+  const upstream = await fetch(OPENAI_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+    body: JSON.stringify({ model, stream: true, temperature: 0.3, max_tokens: 1024, messages: [{ role: "system", content: systemPrompt }, ...messages] }),
   });
 
+  if (!upstream.ok || !upstream.body) {
+    const err = await upstream.text();
+    return NextResponse.json({ error: err }, { status: 502 });
+  }
+
+  // Pass-through the SSE stream, extracting only the text deltas
   const encoder = new TextEncoder();
+  const reader = upstream.body.getReader();
+  const decoder = new TextDecoder();
+
   const readable = new ReadableStream({
     async start(controller) {
+      let buf = "";
       try {
-        for await (const chunk of stream) {
-          if (
-            chunk.type === "content_block_delta" &&
-            chunk.delta.type === "text_delta"
-          ) {
-            controller.enqueue(encoder.encode(chunk.delta.text));
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buf += decoder.decode(value, { stream: true });
+          const lines = buf.split("\n");
+          buf = lines.pop() ?? "";
+          for (const line of lines) {
+            if (!line.startsWith("data: ")) continue;
+            const data = line.slice(6).trim();
+            if (data === "[DONE]") break;
+            try {
+              const json = JSON.parse(data);
+              const text = json.choices?.[0]?.delta?.content;
+              if (text) controller.enqueue(encoder.encode(text));
+            } catch {}
           }
         }
       } finally {
