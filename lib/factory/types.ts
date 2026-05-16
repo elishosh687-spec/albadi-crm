@@ -20,6 +20,12 @@ export interface FactoryProductSpec {
   finishing: string;     // e.g. "Handles / not laminated"
   picUrl?: string;
   notes?: string;
+  // Customer's shipping choice from the bot questionnaire (`s1` / `s2`).
+  // Carried so the FinalizeModal pre-selects what the customer actually
+  // asked for instead of defaulting to the first enabled option (which used
+  // to land on express even when the lead chose sea). Optional for back-compat
+  // with rows written before this field existed.
+  shippingOptionId?: string;
 }
 
 export interface FactoryResponse {

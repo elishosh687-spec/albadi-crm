@@ -258,6 +258,11 @@ export function FactoryQuotePanel({
             printing: resolvedSpec.printing,
             finishing: resolvedSpec.finishing,
             notes: notesDraft.trim() || undefined,
+            // Carry the customer's bot-chosen shipping (s1/s2) so FinalizeModal
+            // defaults to it instead of the first-enabled fallback.
+            ...(resolvedSpec.shippingCode
+              ? { shippingOptionId: resolvedSpec.shippingCode }
+              : {}),
           },
         }),
       });

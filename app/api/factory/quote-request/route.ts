@@ -29,6 +29,7 @@ const ProductSpecSchema = z.object({
   finishing: z.string().default(""),
   picUrl: z.string().optional(),
   notes: z.string().optional(),
+  shippingOptionId: z.string().optional(),
 });
 
 const BodySchema = z.object({

@@ -230,6 +230,7 @@ export interface FactoryProductSpecLike {
   printing: string;
   finishing: string;
   notes?: string;
+  shippingOptionId?: string;
 }
 
 export function qStateToFactoryProductSpec(
@@ -248,5 +249,11 @@ export function qStateToFactoryProductSpec(
     finishing: `${decoded.hasHandles ? "With handles" : "No handles"} / ${
       decoded.hasLamination ? "Laminated" : "Not laminated"
     }`,
+    // Customer's actual shipping pick from the questionnaire. Carried into
+    // FactoryQuotePanel/FinalizeModal so finalize defaults to it instead of
+    // the first-enabled fallback (which used to land on express).
+    ...(decoded.shippingOptionCode
+      ? { shippingOptionId: decoded.shippingOptionCode }
+      : {}),
   };
 }

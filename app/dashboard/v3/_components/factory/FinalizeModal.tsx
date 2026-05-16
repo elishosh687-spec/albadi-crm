@@ -37,7 +37,12 @@ export function FinalizeModal({
     row.finalPricing?.profitMarginPct ?? 40
   );
   const [shippingOptionId, setShippingOptionId] = useState<string>(
-    row.finalPricing?.shippingOptionId ?? ""
+    // Priority: previously-finalized choice (re-finalizing an existing row) →
+    // customer's bot-questionnaire choice (carried via productSpec) → empty
+    // (effect below falls back to the first enabled option).
+    row.finalPricing?.shippingOptionId ??
+      row.productSpec.shippingOptionId ??
+      ""
   );
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
