@@ -157,20 +157,60 @@ export interface DecodedQStateSpec {
   rawShipping: string;
 }
 
+/**
+ * Parse a free-text dimension string from the customer ("10×35×10",
+ * "H10*D35*W10", "H30*W40" ...) into the W/H/D axes. Returns zeros if
+ * nothing parsable was found — caller falls back to standard PRODUCT_DIMS.
+ * Same axis convention as the factory: H = height, D = depth, W = width.
+ */
+function parseProductCustomDims(raw: string): {
+  widthCm: number;
+  heightCm: number;
+  depthCm: number;
+} {
+  if (!raw) return { widthCm: 0, heightCm: 0, depthCm: 0 };
+  const labeled = /[HhWwDd]\s*\d/.test(raw);
+  if (labeled) {
+    const out = { widthCm: 0, heightCm: 0, depthCm: 0 };
+    for (const m of raw.matchAll(/([HhWwDd])\s*(\d+(?:\.\d+)?)/g)) {
+      const v = parseFloat(m[2]);
+      if (!Number.isFinite(v)) continue;
+      const letter = m[1].toUpperCase();
+      if (letter === "H") out.heightCm = v;
+      else if (letter === "W") out.widthCm = v;
+      else if (letter === "D") out.depthCm = v;
+    }
+    return out;
+  }
+  // Legacy numeric: W×D×H for 3D, W×H for 2D.
+  const nums = raw
+    .split(/[×*xX]/)
+    .map((s) => parseFloat(s.replace(/[^0-9.]/g, "")))
+    .filter((n) => Number.isFinite(n) && n > 0);
+  if (nums.length === 3) return { widthCm: nums[0], depthCm: nums[1], heightCm: nums[2] };
+  if (nums.length === 2) return { widthCm: nums[0], depthCm: 0, heightCm: nums[1] };
+  return { widthCm: 0, heightCm: 0, depthCm: 0 };
+}
+
 export function decodeQStateToSpec(
   q: Record<string, unknown> | null | undefined
 ): DecodedQStateSpec | null {
   if (!q) return null;
   const productCode = String(q.product ?? "");
   const productCustom = q.productCustom ? String(q.productCustom) : "";
-  const dims =
-    productCode === "custom" || !PRODUCT_DIMS[productCode]
-      ? { widthCm: 0, heightCm: 0, depthCm: 0 }
-      : PRODUCT_DIMS[productCode];
-  const description =
-    productCode === "custom" && productCustom
-      ? productCustom
-      : PRODUCT_LABEL[productCode] ?? "";
+  let dims: { widthCm: number; heightCm: number; depthCm: number };
+  if (productCode === "custom") {
+    dims = parseProductCustomDims(productCustom);
+  } else if (PRODUCT_DIMS[productCode]) {
+    dims = PRODUCT_DIMS[productCode];
+  } else {
+    dims = { widthCm: 0, heightCm: 0, depthCm: 0 };
+  }
+  // Description always blank — the size column already renders the dims
+  // as H*D*W (via lib/factory/create-request.sizeLabel). The operator
+  // fills description manually with real free-text notes (logo
+  // placement, urgency, etc.) before sending to Feishu.
+  const description = "";
 
   const quantityCode = String(q.quantity ?? "");
   const quantityCustom = q.quantityCustom ? Number(q.quantityCustom) : 0;
