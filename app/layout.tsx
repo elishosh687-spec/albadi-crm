@@ -1,6 +1,12 @@
+import type { Viewport } from "next";
 import { Frank_Ruhl_Libre, Heebo } from "next/font/google";
 import { colors, fontStack } from "@/lib/ui/tokens";
 import "./globals.css";
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+};
 
 const display = Frank_Ruhl_Libre({
   subsets: ["latin", "hebrew"],

@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/cn";
 
-const NAV = [
+export const NAV = [
   { href: "/dashboard/v3", label: "סקירה", icon: LayoutDashboard, exact: true },
   { href: "/dashboard/v3/drafts", label: "תור אישורים", icon: Inbox },
   { href: "/dashboard/v3/leads", label: "לידים", icon: Users },

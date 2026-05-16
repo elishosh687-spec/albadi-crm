@@ -150,7 +150,7 @@ export function LeadsBoard({ cards }: { cards: LeadCardData[] }) {
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="חיפוש שם / טלפון / טקסט…"
-                className="w-72 rounded-lg border border-border bg-card pl-3 pr-8 py-2 text-xs placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring/40"
+                className="w-full sm:w-72 rounded-lg border border-border bg-card pl-3 pr-8 py-2 text-xs placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring/40"
               />
             </div>
           </div>

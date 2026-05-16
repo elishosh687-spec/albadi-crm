@@ -2,6 +2,7 @@ import { db } from "@/lib/db";
 import { botDrafts, factoryQuoteRequests } from "@/drizzle/schema";
 import { eq } from "drizzle-orm";
 import { Sidebar } from "./_components/Sidebar";
+import { MobileMenu } from "./_components/MobileMenu";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -29,7 +30,11 @@ export default async function V3Layout({
           pendingDrafts={pendingDraftsRows.length}
           factoryReceived={factoryReceivedRows.length}
         />
-        <main className="flex-1 min-w-0 p-6 md:p-8 max-w-[1600px]">
+        <MobileMenu
+          pendingDrafts={pendingDraftsRows.length}
+          factoryReceived={factoryReceivedRows.length}
+        />
+        <main className="flex-1 min-w-0 p-4 md:p-8 max-w-[1600px] pt-16 md:pt-8">
           {children}
         </main>
       </div>
