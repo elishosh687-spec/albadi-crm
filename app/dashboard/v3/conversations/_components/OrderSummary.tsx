@@ -13,6 +13,7 @@ import {
   Trash2,
   Loader2,
   History,
+  Factory,
 } from "lucide-react";
 import { STAGE_LABEL, STAGE_TONE } from "../../_components/stage-meta";
 import { deleteLeadAction, updateLeadContactAction } from "@/app/actions/v2";
@@ -379,6 +380,30 @@ function QuoteHistory({ sid }: { sid: string }) {
   const [rows, setRows] = useState<BotQuoteRow[] | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<number | null>(null);
+  const [promoting, setPromoting] = useState<number | null>(null);
+  const router = useRouter();
+
+  const promote = async (quoteId: number) => {
+    if (!confirm("לשלוח את ההצעה הזו לסיכום הזמנה (מפעל)?")) return;
+    setPromoting(quoteId);
+    try {
+      const res = await fetch(
+        `/api/leads/${encodeURIComponent(sid)}/quotes/${quoteId}/promote-to-factory`,
+        { method: "POST" }
+      );
+      const data = await res.json();
+      if (!res.ok || !data.ok) {
+        alert(`כשל: ${data.error ?? `HTTP ${res.status}`}\n${data.detail ?? ""}`);
+        return;
+      }
+      alert("נשלח לסיכום הזמנה ✓");
+      router.refresh();
+    } catch (e) {
+      alert(`שגיאה: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setPromoting(null);
+    }
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -501,6 +526,20 @@ function QuoteHistory({ sid }: { sid: string }) {
                 <pre className="whitespace-pre-wrap font-sans text-foreground bg-card rounded-md p-2 border border-border/40 max-h-60 overflow-y-auto">
                   {r.quoteText}
                 </pre>
+                <button
+                  type="button"
+                  onClick={() => promote(r.id)}
+                  disabled={promoting === r.id}
+                  className="self-end inline-flex items-center gap-1.5 rounded-md border border-border bg-secondary/40 hover:bg-secondary/60 px-2.5 py-1 text-xs font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  title="צור factory_quote_request מההצעה הזו — אותו endpoint שה-FactoryQuotePanel קורא לו"
+                >
+                  {promoting === r.id ? (
+                    <Loader2 className="size-3 animate-spin" />
+                  ) : (
+                    <Factory className="size-3" />
+                  )}
+                  שלח לסיכום הזמנה
+                </button>
               </div>
             )}
           </li>

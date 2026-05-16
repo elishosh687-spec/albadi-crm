@@ -17,14 +17,23 @@ export const QUANTITY_LABEL: Record<string, string> = {
 };
 
 // Canonical factory format: H{height}*D{depth}*W{width} (depth omitted for
-// flat bags). Source of truth: lib/factory/calculator/constants.ts.
+// flat bags). Source of truth: lib/factory/calculator/constants.ts. Synced
+// with QUESTIONS / PRODUCT_QUESTION_PAGE_2 in lib/autoresponder/questionnaire.ts.
 export const PRODUCT_LABEL: Record<string, string> = {
-  p1: "H25*D8*W20 ס״מ — קוסמטיקה, תכשיטים",
+  p1: "H20*D8*W25 ס״מ — קוסמטיקה, תכשיטים",
   p2: "H30*D10*W30 ס״מ — ביגוד קל, מתנות",
   p3: "H30*D12*W40 ס״מ — נעליים, ביגוד",
-  p4: "H50*D15*W40 ס״מ — פריטים גדולים",
-  p5: "H40*W30 ס״מ — פריטים רחבים",
-  p6: "H15*W20 ס״מ — פריטים קטנים",
+  p4: "H40*D15*W50 ס״מ — פריטים גדולים",
+  p5: "H30*W40 ס״מ — שטוח רחב",
+  p6: "H15*W20 ס״מ — שטוח קטן",
+  p7: "H15*D5*W20 ס״מ — קטן צר, יוקרה",
+  p8: "H35*D10*W40 ס״מ — בינוני-גדול",
+  p9: "H40*D15*W45 ס״מ — גדול",
+  p10: "H50*D20*W60 ס״מ — XL",
+  p11: "H8*W10 ס״מ — מיני שטוח",
+  p12: "H10*W15 ס״מ — שטוח קטן",
+  p13: "H25*W25 ס״מ — ריבועי",
+  p14: "H35*W50 ס״מ — שטוח רחב",
 };
 
 /** Approximate width/height/depth in cm parsed from a known product code. */
@@ -32,12 +41,20 @@ export const PRODUCT_DIMS: Record<
   string,
   { widthCm: number; heightCm: number; depthCm: number }
 > = {
-  p1: { widthCm: 20, heightCm: 25, depthCm: 8 },
+  p1: { widthCm: 25, heightCm: 20, depthCm: 8 },
   p2: { widthCm: 30, heightCm: 30, depthCm: 10 },
   p3: { widthCm: 40, heightCm: 30, depthCm: 12 },
-  p4: { widthCm: 40, heightCm: 50, depthCm: 15 },
-  p5: { widthCm: 30, heightCm: 40, depthCm: 0 },
+  p4: { widthCm: 50, heightCm: 40, depthCm: 15 },
+  p5: { widthCm: 40, heightCm: 30, depthCm: 0 },
   p6: { widthCm: 20, heightCm: 15, depthCm: 0 },
+  p7: { widthCm: 20, heightCm: 15, depthCm: 5 },
+  p8: { widthCm: 40, heightCm: 35, depthCm: 10 },
+  p9: { widthCm: 45, heightCm: 40, depthCm: 15 },
+  p10: { widthCm: 60, heightCm: 50, depthCm: 20 },
+  p11: { widthCm: 10, heightCm: 8, depthCm: 0 },
+  p12: { widthCm: 15, heightCm: 10, depthCm: 0 },
+  p13: { widthCm: 25, heightCm: 25, depthCm: 0 },
+  p14: { widthCm: 50, heightCm: 35, depthCm: 0 },
 };
 
 export const QUANTITY_VALUE: Record<string, number> = {
@@ -133,6 +150,7 @@ export interface DecodedQStateSpec {
   depthCm: number;
   quantity: number;
   hasHandles: boolean;
+  hasLamination: boolean;
   logoColors: number;
   shippingOptionCode: string | null;
   rawProduct: string;
@@ -164,6 +182,9 @@ export function decodeQStateToSpec(
   const handlesRaw = q.handles;
   const hasHandles = handlesRaw === true || handlesRaw === "true";
 
+  const laminationRaw = q.lamination;
+  const hasLamination = laminationRaw === true || laminationRaw === "true";
+
   const colorsNum = Number(q.colors);
   const logoColors = Number.isFinite(colorsNum) && colorsNum > 0 ? colorsNum : 1;
 
@@ -174,6 +195,7 @@ export function decodeQStateToSpec(
     description !== "" ||
     quantity > 0 ||
     handlesRaw !== undefined ||
+    laminationRaw !== undefined ||
     q.colors !== undefined ||
     shippingCode !== null;
   if (!hasData) return null;
@@ -183,9 +205,48 @@ export function decodeQStateToSpec(
     ...dims,
     quantity,
     hasHandles,
+    hasLamination,
     logoColors,
     shippingOptionCode: shippingCode,
     rawProduct: productCode,
     rawShipping: shippingCode ?? "",
+  };
+}
+
+/**
+ * Map a decoded qState into the FactoryProductSpec shape consumed by
+ * `POST /api/factory/quote-request`. Used by:
+ *   - FactoryQuotePanel "send from summary" (default current qState)
+ *   - QuoteHistory "promote a historical quote → factory request"
+ * Centralizing keeps the two surfaces in sync if the spec shape changes.
+ */
+export interface FactoryProductSpecLike {
+  description: string;
+  material: string;
+  widthCm: number;
+  heightCm: number;
+  depthCm: number;
+  quantity: number;
+  printing: string;
+  finishing: string;
+  notes?: string;
+}
+
+export function qStateToFactoryProductSpec(
+  q: Record<string, unknown> | null | undefined
+): FactoryProductSpecLike | null {
+  const decoded = decodeQStateToSpec(q);
+  if (!decoded) return null;
+  return {
+    description: decoded.description,
+    material: "80g non-woven",
+    widthCm: decoded.widthCm,
+    heightCm: decoded.heightCm,
+    depthCm: decoded.depthCm,
+    quantity: decoded.quantity,
+    printing: `${decoded.logoColors} color${decoded.logoColors > 1 ? "s" : ""}`,
+    finishing: `${decoded.hasHandles ? "With handles" : "No handles"} / ${
+      decoded.hasLamination ? "Laminated" : "Not laminated"
+    }`,
   };
 }
