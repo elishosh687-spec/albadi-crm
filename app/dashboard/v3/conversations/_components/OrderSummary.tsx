@@ -16,7 +16,13 @@ import {
   Factory,
 } from "lucide-react";
 import { STAGE_LABEL, STAGE_TONE } from "../../_components/stage-meta";
-import { deleteLeadAction, updateLeadContactAction } from "@/app/actions/v2";
+import { deleteLeadAction, setLeadStage, updateLeadContactAction } from "@/app/actions/v2";
+import {
+  V2_PIPELINE_STAGES,
+  V2_FLAG_NAMES,
+  type V2PipelineStage,
+  type V2FlagName,
+} from "@/lib/manychat/stages";
 import { NotesPanel } from "../../_components/NotesPanel";
 import { FactoryQuotePanel } from "../../_components/factory/FactoryQuotePanel";
 
@@ -63,9 +69,7 @@ export function OrderSummary({
     <div className="flex flex-col gap-3">
       <ContactHeader sid={sid} name={data.name} phone={data.phone}>
         <div className="mt-2 flex flex-wrap items-center gap-1.5">
-          <span className={cn("text-[10px] rounded-full px-2 py-0.5", tone.pill)}>
-            {STAGE_LABEL[stage] ?? stage}
-          </span>
+          <StagePicker sid={sid} currentStage={stage} flags={data.flags} />
           {data.flag === "NEEDS_ELI" && (
             <span className="text-[10px] rounded-full px-2 py-0.5 bg-destructive/15 text-destructive border border-destructive/30">
               דורש אותך
@@ -149,6 +153,110 @@ export function OrderSummary({
       {!hasAnyData && (
         <div className="text-xs text-muted-foreground border border-dashed border-border rounded-lg p-4 text-center">
           עוד אין מספיק מידע לסיכום הזמנה. ככל שהשיחה מתקדמת — השלבים, המחירים והתשובות יופיעו פה.
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Clickable stage pill. Tapping opens a popover with all 11 stages; picking
+ * one calls setLeadStage and refreshes the page. flags are carried through
+ * unchanged so we don't accidentally clear tag membership when moving stage.
+ * Falls back to a static badge when the lead has no sid (shouldn't happen
+ * in the conversations layout, but keeps the type contract honest).
+ */
+function StagePicker({
+  sid,
+  currentStage,
+  flags,
+}: {
+  sid: string | undefined;
+  currentStage: string;
+  flags: string[];
+}) {
+  const router = useRouter();
+  const [open, setOpen] = useState(false);
+  const [isPending, startTransition] = useTransition();
+  const [err, setErr] = useState<string | null>(null);
+  const tone = STAGE_TONE[currentStage] ?? STAGE_TONE.UNCLASSIFIED;
+
+  const save = (next: V2PipelineStage) => {
+    if (!sid) return;
+    setErr(null);
+    startTransition(async () => {
+      // setLeadStage validates flags against V2_FLAG_TAG_IDS — drop any
+      // free-form tag that isn't in that map so the action doesn't reject.
+      const allowed = flags.filter((f): f is V2FlagName =>
+        V2_FLAG_NAMES.includes(f as V2FlagName)
+      );
+      const r = await setLeadStage({
+        manychatSubId: sid,
+        stage: next,
+        flags: allowed,
+      });
+      if (!r.ok) {
+        setErr(r.error ?? "save failed");
+        return;
+      }
+      setOpen(false);
+      router.refresh();
+    });
+  };
+
+  if (!sid) {
+    return (
+      <span className={cn("text-[10px] rounded-full px-2 py-0.5", tone.pill)}>
+        {STAGE_LABEL[currentStage] ?? currentStage}
+      </span>
+    );
+  }
+
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        disabled={isPending}
+        className={cn(
+          "text-[10px] rounded-full px-2 py-0.5 inline-flex items-center gap-1 cursor-pointer hover:opacity-80",
+          tone.pill
+        )}
+      >
+        {STAGE_LABEL[currentStage] ?? currentStage}
+        <ChevronDown className="size-3" />
+      </button>
+      {open && (
+        <div className="absolute z-20 mt-1 right-0 min-w-[180px] rounded-lg border border-border bg-card shadow-lg p-1.5 space-y-0.5">
+          {V2_PIPELINE_STAGES.map((s) => {
+            const t = STAGE_TONE[s];
+            const active = s === currentStage;
+            return (
+              <button
+                key={s}
+                type="button"
+                onClick={() => save(s)}
+                disabled={isPending || active}
+                className={cn(
+                  "w-full text-right text-xs px-2 py-1.5 rounded-md transition-colors",
+                  active
+                    ? "bg-secondary text-foreground"
+                    : "hover:bg-secondary text-muted-foreground hover:text-foreground"
+                )}
+              >
+                <span
+                  className={cn(
+                    "inline-block size-2 rounded-full ml-1.5 align-middle",
+                    t?.bar ?? "bg-slate-500/60"
+                  )}
+                />
+                {STAGE_LABEL[s] ?? s}
+              </button>
+            );
+          })}
+          {err && (
+            <div className="text-[10px] text-destructive px-2 py-1">{err}</div>
+          )}
         </div>
       )}
     </div>
