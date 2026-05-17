@@ -15,7 +15,13 @@
  *   That keeps getFieldValue(fields, name) working unchanged.
  */
 import { db } from "../db";
-import { leads, leadTags, messages as messagesTable } from "../../drizzle/schema";
+import {
+  leads,
+  leadTags,
+  messages as messagesTable,
+  botDrafts,
+  factoryQuoteRequests,
+} from "../../drizzle/schema";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { BridgeError, bridgeFetch } from "./http";
 import {
@@ -534,6 +540,59 @@ export async function upsertLeadFromBridgeEvent(input: {
     }
   }
 
+  // Phone-based dedup: if a lead with this phone already exists under a
+  // different sub_id (e.g. ManyChat-origin lead now chatting via @lid),
+  // update their wa_jid instead of creating a duplicate row.
+  if (enrichedPhone) {
+    const existing = await db
+      .select({ sid: leads.manychatSubId })
+      .from(leads)
+      .where(eq(leads.phoneE164, enrichedPhone))
+      .limit(1);
+    if (existing.length > 0 && existing[0].sid !== sid) {
+      const canonicalSid = existing[0].sid;
+      await db
+        .update(leads)
+        .set({
+          waJid: sid,
+          name: sql`coalesce(${leads.name}, ${enrichedName})`,
+          updatedAt: new Date(),
+        })
+        .where(eq(leads.manychatSubId, canonicalSid));
+
+      // If an @lid stub row was created before phone enrichment resolved
+      // (first-message race), absorb it into the canonical lead.
+      const stub = await db
+        .select({ manychatSubId: leads.manychatSubId })
+        .from(leads)
+        .where(sidMatch(sid))
+        .limit(1);
+      if (stub.length > 0) {
+        await mergeLeadInto(sid, canonicalSid);
+      }
+      return;
+    }
+  }
+
+  // JID-based dedup: a different lead already has wa_jid = this JID (set by a
+  // prior phone-based merge). Just refresh enrichment — no new row.
+  const byWaJid = await db
+    .select({ sid: leads.manychatSubId })
+    .from(leads)
+    .where(eq(leads.waJid, sid))
+    .limit(1);
+  if (byWaJid.length > 0 && byWaJid[0].sid !== sid) {
+    await db
+      .update(leads)
+      .set({
+        name: sql`coalesce(${leads.name}, ${enrichedName})`,
+        phoneE164: sql`coalesce(${leads.phoneE164}, ${enrichedPhone})`,
+        updatedAt: new Date(),
+      })
+      .where(eq(leads.manychatSubId, byWaJid[0].sid));
+    return;
+  }
+
   await db
     .insert(leads)
     .values({
@@ -555,6 +614,20 @@ export async function upsertLeadFromBridgeEvent(input: {
         updatedAt: new Date(),
       },
     });
+}
+
+// Re-parent all related data from a @lid stub lead into the canonical lead,
+// then delete the stub. Called when phone enrichment resolves an @lid that
+// was previously inserted as a new lead (first-message race condition).
+async function mergeLeadInto(fromSid: string, toSid: string): Promise<void> {
+  await Promise.all([
+    db.update(messagesTable).set({ manychatSubId: toSid }).where(eq(messagesTable.manychatSubId, fromSid)),
+    db.update(leadTags).set({ manychatSubId: toSid }).where(eq(leadTags.manychatSubId, fromSid)),
+    db.update(botDrafts).set({ manychatSubId: toSid }).where(eq(botDrafts.manychatSubId, fromSid)),
+    db.update(factoryQuoteRequests).set({ manychatSubId: toSid }).where(eq(factoryQuoteRequests.manychatSubId, fromSid)),
+  ]);
+  await db.delete(leads).where(eq(leads.manychatSubId, fromSid));
+  console.log(`[mergeLeadInto] merged @lid stub ${fromSid} → canonical ${toSid}`);
 }
 
 export async function insertBridgeMessage(input: {
