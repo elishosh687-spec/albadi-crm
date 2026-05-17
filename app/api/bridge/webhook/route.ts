@@ -29,8 +29,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { db } from "@/lib/db";
-import { bridgeEvents, leads } from "@/drizzle/schema";
-import { sql } from "drizzle-orm";
+import { bridgeEvents, leads, messages as messagesTable } from "@/drizzle/schema";
+import { desc, eq, sql } from "drizzle-orm";
 import {
   insertBridgeMessage,
   upsertLeadFromBridgeEvent,
@@ -46,6 +46,10 @@ import {
 import { sendEliDM } from "@/lib/notify/eli";
 import { sendBridgeMessage } from "@/lib/bridge/client";
 import { isTestJid } from "@/lib/config/test-jids";
+import { precomputeCandidateAction } from "@/lib/supervisor/candidate";
+import { superviseIncomingMessage } from "@/lib/supervisor/supervise";
+import { logDecision, attachEliFeedback } from "@/lib/supervisor/log";
+import { generateAndQueueDraft } from "@/lib/drafts";
 
 export const runtime = "nodejs";
 export const maxDuration = 15;
@@ -141,7 +145,7 @@ async function handleMessageReceived(evt: BridgeEnvelope): Promise<void> {
     const waMessageId =
       pickStr(d, "wa_message_id", "id", "messageId") ?? `bridge:${evt.id}`;
     const text = pickStr(d, "content", "text", "body");
-    await insertBridgeMessage({
+    const inserted = await insertBridgeMessage({
       jid,
       direction: "out",
       text,
@@ -150,6 +154,17 @@ async function handleMessageReceived(evt: BridgeEnvelope): Promise<void> {
       receivedAt: new Date(evt.occurred_at),
       sender: "eli",
     });
+    // Bot Supervisor Phase 1: if this is a fresh insert (not dedupe of a
+    // bot/eli pre-insert), Eli replied directly from his phone. Attach as
+    // feedback to the most-recent decision log row so the supervisor's
+    // suggestion (if any) gets a verdict.
+    if (inserted && text && text.trim()) {
+      await attachEliFeedback({
+        manychatSubId: jid,
+        eliAction: "direct_whatsapp_reply",
+        eliManualReply: text,
+      });
+    }
     return;
   }
 
@@ -203,7 +218,8 @@ async function handleMessageReceived(evt: BridgeEnvelope): Promise<void> {
     source: "bridge_webhook",
   });
 
-  await insertBridgeMessage({
+  // Capture the inserted message_id for the decision log.
+  const inserted = await insertBridgeMessage({
     jid,
     direction: "in",
     text,
@@ -212,21 +228,27 @@ async function handleMessageReceived(evt: BridgeEnvelope): Promise<void> {
     receivedAt: new Date(evt.occurred_at),
     sender: "lead",
   });
+  const inboundMessageId: number | null = inserted?.id ?? null;
 
-  // 1. Stop-word check. Send one polite "ok, I won't bother you" reply, then
-  // pause the bot so the cron leaves the lead alone. Eli still gets the DM
-  // so a human can follow up if needed.
+  // Load lead snapshot BEFORE auto-unpause so we know the original state.
+  const [leadSnapshot] = await db
+    .select({
+      name: leads.name,
+      phone: leads.phoneE164,
+      stage: leads.pipelineStage,
+      qState: leads.qState,
+      botPaused: leads.botPaused,
+    })
+    .from(leads)
+    .where(sql`trim(${leads.manychatSubId}) = ${jid.trim()}`)
+    .limit(1);
+
+  const wasBotPaused = leadSnapshot?.botPaused === true;
+
+  // 1. Stop-word check — bypasses supervisor. Send one polite reply, pause,
+  // DM Eli. Logged so the row appears in the decision timeline.
   if (isStopWord(text)) {
     try {
-      const [row] = await db
-        .select({
-          name: leads.name,
-          phone: leads.phoneE164,
-          stage: leads.pipelineStage,
-        })
-        .from(leads)
-        .where(sql`trim(${leads.manychatSubId}) = ${jid.trim()}`)
-        .limit(1);
       await db
         .update(leads)
         .set({
@@ -238,14 +260,13 @@ async function handleMessageReceived(evt: BridgeEnvelope): Promise<void> {
       try {
         await sendBridgeMessage(jid, STOP_WORD_REPLY);
       } catch (sendErr) {
-        // Best-effort — even if the reply fails the bot is now paused.
         console.error("[bridge.webhook] stop-word reply failed", jid, sendErr);
       }
       await sendEliDM(
         eliEscalationTemplate({
-          name: row?.name ?? null,
-          phone: row?.phone ?? null,
-          stage: row?.stage ?? null,
+          name: leadSnapshot?.name ?? null,
+          phone: leadSnapshot?.phone ?? null,
+          stage: leadSnapshot?.stage ?? null,
           reason: "stop_word",
         })
       );
@@ -253,13 +274,23 @@ async function handleMessageReceived(evt: BridgeEnvelope): Promise<void> {
     } catch (e) {
       console.error("[bridge.webhook] stop-word handler error", jid, e);
     }
+    await logDecision({
+      manychatSubId: jid,
+      messageId: inboundMessageId,
+      inboundText: text,
+      stageBefore: leadSnapshot?.stage ?? null,
+      stageAfter: leadSnapshot?.stage ?? null,
+      decidedBy: "code",
+      action: "paused",
+      replyText: STOP_WORD_REPLY,
+      escalationKind: "stop_word",
+      metadata: { path: "stop_word_early_exit" },
+    });
     return;
   }
 
-  // 2. Re-engagement: reset cadence + un-pause. The new lastFollowUpAt
-  //    ensures the follow-up cron waits a fresh cadence window from THIS
-  //    inbound rather than from our last outbound (would otherwise look
-  //    like we ignored the customer's reply).
+  // 2. Re-engagement: reset cadence + un-pause. Log if the bot was actually
+  // paused before (so we can audit auto-wakeups).
   try {
     await db
       .update(leads)
@@ -275,9 +306,20 @@ async function handleMessageReceived(evt: BridgeEnvelope): Promise<void> {
     console.error("[bridge.webhook] counter reset error", jid, e);
   }
 
-  // 2.5 Test-JID auto-reset. Configured numbers always re-enter Stage 1
-  // questionnaire so Eli can probe the bot end-to-end from his own phone
-  // without manually wiping state in the DB between runs.
+  if (wasBotPaused) {
+    await logDecision({
+      manychatSubId: jid,
+      messageId: inboundMessageId,
+      inboundText: text,
+      stageBefore: leadSnapshot?.stage ?? null,
+      stageAfter: leadSnapshot?.stage ?? null,
+      decidedBy: "code",
+      action: "unpaused_on_inbound",
+      metadata: { reason: "customer re-engaged, bot_paused → false" },
+    });
+  }
+
+  // 2.5 Test-JID auto-reset (no log row — internal dev path).
   if (isTestJid(jid)) {
     try {
       await db
@@ -299,29 +341,354 @@ async function handleMessageReceived(evt: BridgeEnvelope): Promise<void> {
     }
   }
 
-  // 3. Stage-based routing.
-  const stage = ((await getLeadStage(jid)) || "").toUpperCase();
+  // 3. Supervisor-gated routing. Every inbound passes through the LLM
+  // supervisor BEFORE any reply is sent. Verdict routing below.
+  try {
+    await routeThroughSupervisor({
+      jid,
+      inboundMessageId,
+      text,
+      textForRouting,
+      mediaPresent,
+      wasBotPaused,
+      leadSnapshot,
+    });
+  } catch (e) {
+    console.error("[bridge.webhook] supervisor routing error", jid, e);
+    // Best-effort: log the failure so it's visible in the dashboard.
+    await logDecision({
+      manychatSubId: jid,
+      messageId: inboundMessageId,
+      inboundText: text,
+      stageBefore: leadSnapshot?.stage ?? null,
+      decidedBy: "supervisor_error",
+      action: "no_op",
+      llmRecommended: "supervisor_error",
+      llmReason: `routing exception: ${e instanceof Error ? e.message : String(e)}`,
+      metadata: { source: "routeThroughSupervisor catch" },
+    });
+  }
+}
+
+/**
+ * Load recent 20 messages for supervisor context.
+ */
+async function loadRecentForSupervisor(
+  sid: string
+): Promise<{ direction: "in" | "out"; text: string }[]> {
+  const rows = await db
+    .select({
+      direction: messagesTable.direction,
+      text: messagesTable.text,
+    })
+    .from(messagesTable)
+    .where(eq(messagesTable.manychatSubId, sid.trim()))
+    .orderBy(desc(messagesTable.receivedAt))
+    .limit(20);
+  return rows
+    .filter((r) => r.text && r.text.trim().length > 0)
+    .map((r) => ({ direction: r.direction as "in" | "out", text: r.text! }))
+    .reverse();
+}
+
+interface SupervisorRouteInput {
+  jid: string;
+  inboundMessageId: number | null;
+  text: string | null;
+  textForRouting: string | null;
+  mediaPresent: boolean;
+  wasBotPaused: boolean;
+  leadSnapshot: {
+    name: string | null;
+    phone: string | null;
+    stage: string | null;
+    qState: any;
+    botPaused: boolean | null;
+  } | null;
+}
+
+async function routeThroughSupervisor(input: SupervisorRouteInput): Promise<void> {
+  const { jid, inboundMessageId, text, textForRouting, mediaPresent, wasBotPaused } = input;
+
+  // Reload stage in case test-JID reset just cleared it.
+  const stage = ((await getLeadStage(jid)) || "").toUpperCase() || null;
+  const [freshLead] = await db
+    .select({
+      name: leads.name,
+      phone: leads.phoneE164,
+      qState: leads.qState,
+    })
+    .from(leads)
+    .where(sql`trim(${leads.manychatSubId}) = ${jid.trim()}`)
+    .limit(1);
+
+  const inboundText = (text ?? "").trim();
+  // Empty-text inbounds (media-only without caption) — let existing handler
+  // own that decision; supervisor input would be useless without text.
+  // We skip the supervisor and let the legacy handlers do their thing, but
+  // still log a row so the timeline shows the event.
+  if (!inboundText) {
+    if (stage === "AWAITING_LOGO") {
+      // Media without caption at AWAITING_LOGO is the happy path (logo received).
+      // Run the handler; it will transition stage.
+      try {
+        const r = await handleDecisionInbound({
+          sid: jid,
+          text: textForRouting,
+          hasMedia: mediaPresent,
+        });
+        await logDecision({
+          manychatSubId: jid,
+          messageId: inboundMessageId,
+          inboundText: "(media-only)",
+          stageBefore: stage,
+          decidedBy: "code",
+          action: r.action === "escalated" ? "escalated" : "stage_transition",
+          metadata: { handler: "handleDecisionInbound", result: r, reason: "media-only at AWAITING_LOGO" },
+        });
+        return;
+      } catch (e) {
+        console.error("[supervisor.route] AWAITING_LOGO media handler error", e);
+      }
+    }
+    // Other stages with empty text — let the legacy handler decide (it usually escalates).
+    await runLegacyHandlerAndLog({
+      jid,
+      stage,
+      inboundMessageId,
+      text: textForRouting,
+      mediaPresent,
+      inboundLogText: "(empty)",
+    });
+    return;
+  }
+
+  const recent = await loadRecentForSupervisor(jid);
+
+  const candidate = await precomputeCandidateAction({
+    stage,
+    inboundText,
+    hasMedia: mediaPresent,
+    qState: freshLead?.qState ?? null,
+    recentMessages: recent,
+    leadName: freshLead?.name ?? null,
+  });
+
+  const verdict = await superviseIncomingMessage({
+    sid: jid,
+    jid,
+    inboundText,
+    stage,
+    qState: freshLead?.qState ?? null,
+    recentMessages: recent,
+    leadName: freshLead?.name ?? null,
+    phone: freshLead?.phone ?? null,
+    botPaused: wasBotPaused,
+    candidate,
+  });
+
+  const logBase = {
+    manychatSubId: jid,
+    messageId: inboundMessageId,
+    inboundText,
+    stageBefore: stage,
+    llmIntent: verdict.intent,
+    llmConfidence: verdict.confidence,
+    llmRecommended: verdict.recommended,
+    llmReason: verdict.reason,
+    llmRiskFlags: verdict.riskFlags,
+  };
+
+  if (verdict.recommended === "supervisor_error") {
+    await logDecision({
+      ...logBase,
+      decidedBy: "supervisor_error",
+      action: "no_op",
+      metadata: { candidate: candidate.kind, rawJson: verdict.rawJson },
+    });
+    return;
+  }
+
+  if (verdict.recommended === "silence") {
+    await logDecision({
+      ...logBase,
+      decidedBy: "silent",
+      action: "no_op",
+      metadata: { candidate: candidate.kind, rawJson: verdict.rawJson },
+    });
+    return;
+  }
+
+  if (verdict.recommended === "escalate_to_eli") {
+    let draftId: number | null = null;
+    try {
+      draftId = await generateAndQueueDraft({
+        manychatSubId: jid,
+        moneyReason: "manual",
+        pipelineStage: stage,
+        leadName: freshLead?.name ?? null,
+        botSummary: verdict.reason,
+        triggerMessageId: inboundMessageId,
+      });
+    } catch (e) {
+      console.error("[supervisor.route] draft generation failed", e);
+    }
+    try {
+      const who = freshLead?.name?.trim() || freshLead?.phone || jid;
+      await sendEliDM(
+        `🤖 Supervisor escalation — ${who} (${stage ?? "no stage"})\n` +
+          `Inbound: "${inboundText.slice(0, 200)}"\n` +
+          `LLM reason: ${verdict.reason}\n` +
+          (draftId ? `Draft #${draftId} ready in /dashboard/v3/drafts` : "Draft generation failed — reply manually from CRM.")
+      );
+    } catch (e) {
+      console.error("[supervisor.route] eli DM failed", e);
+    }
+    await logDecision({
+      ...logBase,
+      decidedBy: "code",
+      action: draftId ? "draft_queued" : "escalated",
+      escalationKind: "supervisor_decision",
+      draftId,
+      metadata: { candidate: candidate.kind, rawJson: verdict.rawJson },
+    });
+    return;
+  }
+
+  if (verdict.recommended === "override_with_text") {
+    if (!verdict.overrideText) {
+      // LLM said override but didn't supply text. Treat as approve_code.
+      console.warn("[supervisor.route] override_with_text with no text — falling back to approve_code");
+    } else {
+      try {
+        await sendBridgeMessage(jid, verdict.overrideText);
+      } catch (e) {
+        console.error("[supervisor.route] override send failed", e);
+        await logDecision({
+          ...logBase,
+          decidedBy: "llm_override",
+          action: "no_op",
+          replyText: verdict.overrideText,
+          metadata: { candidate: candidate.kind, sendError: e instanceof Error ? e.message : String(e), rawJson: verdict.rawJson },
+        });
+        return;
+      }
+      await logDecision({
+        ...logBase,
+        decidedBy: "llm_override",
+        action: "reply_sent",
+        replyText: verdict.overrideText,
+        metadata: { candidate: candidate.kind, rawJson: verdict.rawJson, note: "override skipped existing handler — stage NOT transitioned" },
+      });
+      return;
+    }
+  }
+
+  // approve_code (and fallback from missing-override-text). Run the legacy handler.
+  await runLegacyHandlerAndLog({
+    jid,
+    stage,
+    inboundMessageId,
+    text: textForRouting,
+    mediaPresent,
+    inboundLogText: inboundText,
+    supervisor: {
+      intent: verdict.intent,
+      confidence: verdict.confidence,
+      recommended: verdict.recommended,
+      reason: verdict.reason,
+      riskFlags: verdict.riskFlags,
+      candidate: candidate.kind,
+      rawJson: verdict.rawJson,
+    },
+  });
+}
+
+async function runLegacyHandlerAndLog(args: {
+  jid: string;
+  stage: string | null;
+  inboundMessageId: number | null;
+  text: string | null;
+  mediaPresent: boolean;
+  inboundLogText: string;
+  supervisor?: {
+    intent: string | null;
+    confidence: number | null;
+    recommended: string;
+    reason: string;
+    riskFlags: string[];
+    candidate: string;
+    rawJson: string | null;
+  };
+}): Promise<void> {
+  const { jid, stage, inboundMessageId, text, mediaPresent, inboundLogText } = args;
+  let result: any = null;
+  let handlerName = "noop";
 
   try {
     if (!stage || stage === "NEW") {
-      const r = await handleInbound({ sid: jid, text: textForRouting });
-      console.log("[bridge.webhook] questionnaire", jid, r);
-      return;
-    }
-    if (
+      handlerName = "handleInbound";
+      result = await handleInbound({ sid: jid, text });
+    } else if (
       stage === "AWAITING_ESTIMATE" ||
       stage === "AWAITING_LOGO" ||
       stage === "AWAITING_FINAL"
     ) {
-      const r = await handleDecisionInbound({ sid: jid, text: textForRouting, hasMedia: mediaPresent });
-      console.log("[bridge.webhook] decision", jid, r);
-      return;
+      handlerName = "handleDecisionInbound";
+      result = await handleDecisionInbound({ sid: jid, text, hasMedia: mediaPresent });
+    } else {
+      // WAITING_FACTORY / WON / DROPPED — supervisor said approve_code but
+      // there's no handler. This is a no_op the supervisor probably should
+      // have escalated; log it so we catch the case.
+      console.log("[supervisor.route] approve_code for silent stage — no handler", jid, stage);
     }
-    // WAITING_FACTORY, WON, DROPPED — bot stays silent. Eli reads.
-    console.log("[bridge.webhook] no_op for stage", jid, stage);
   } catch (e) {
-    console.error("[bridge.webhook] routing error", jid, e);
+    console.error("[supervisor.route] legacy handler error", handlerName, e);
   }
+
+  // Reload stage AFTER the handler runs so we capture stage transitions.
+  const stageAfter = ((await getLeadStage(jid)) || "").toUpperCase() || null;
+
+  await logDecision({
+    manychatSubId: jid,
+    messageId: inboundMessageId,
+    inboundText: inboundLogText,
+    stageBefore: stage,
+    stageAfter,
+    llmIntent: args.supervisor?.intent ?? null,
+    llmConfidence: args.supervisor?.confidence ?? null,
+    llmRecommended: (args.supervisor?.recommended as any) ?? null,
+    llmReason: args.supervisor?.reason ?? null,
+    llmRiskFlags: args.supervisor?.riskFlags ?? null,
+    decidedBy: "code",
+    action: mapHandlerResultToAction(result),
+    replyText: null, // handler did its own send; reply text recovery would require deeper refactor
+    metadata: {
+      candidate: args.supervisor?.candidate ?? null,
+      handler: handlerName,
+      handlerResult: result,
+      rawJson: args.supervisor?.rawJson ?? null,
+    },
+  });
+}
+
+function mapHandlerResultToAction(result: any): "reply_sent" | "sub_state_advanced" | "escalated" | "stage_transition" | "no_op" {
+  const a = result?.action;
+  if (a === "escalated") return "escalated";
+  if (a === "sub_state_advanced") return "sub_state_advanced";
+  if (
+    a === "accept_routed" ||
+    a === "logo_received" ||
+    a === "won_routed"
+  )
+    return "stage_transition";
+  if (
+    a === "samples_sent" ||
+    a === "canned_reply" ||
+    a === "logo_reasked"
+  )
+    return "reply_sent";
+  return "no_op";
 }
 
 async function handleMessageSent(evt: BridgeEnvelope): Promise<void> {

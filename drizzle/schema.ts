@@ -352,3 +352,59 @@ export const messageTemplates = pgTable("message_templates", {
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 });
+
+// Bot Supervisor Phase 1 — one row per inbound message. Carries:
+//   1. What the LLM supervisor recommended (or a Langfuse trace_id pointing to the full LLM trace).
+//   2. What the deterministic code actually did.
+//   3. What Eli ultimately decided when he interacted (filled in later, nullable).
+// Discrimination of who acted is by entry point, never by guessing.
+export const botDecisionLog = pgTable(
+  "bot_decision_log",
+  {
+    id: serial("id").primaryKey(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    manychatSubId: text("manychat_sub_id").notNull(),
+    messageId: integer("message_id"), // soft link to messages.id
+    inboundText: text("inbound_text"),
+    stageBefore: text("stage_before"),
+    stageAfter: text("stage_after"),
+
+    // Langfuse linkage (full LLM input/output lives there)
+    langfuseTraceId: text("langfuse_trace_id"),
+
+    // Supervisor verdict (denormalized cache; canonical lives in Langfuse trace)
+    llmIntent: text("llm_intent"),
+    llmConfidence: doublePrecision("llm_confidence"),
+    llmRecommended: text("llm_recommended"), // approve_code | override_with_text | escalate_to_eli | silence | supervisor_error
+    llmReason: text("llm_reason"),
+    llmRiskFlags: jsonb("llm_risk_flags"),
+
+    // What actually happened
+    decidedBy: text("decided_by").notNull(), // code | llm_override | llm_unmatch | llm_spec | eli | supervisor_error | silent
+    action: text("action").notNull(), // reply_sent | sub_state_advanced | escalated | stage_transition | no_op | paused | unpaused_on_inbound | draft_queued
+    replyText: text("reply_text"),
+    escalationKind: text("escalation_kind"),
+    draftId: integer("draft_id"), // soft link to bot_drafts.id
+    metadata: jsonb("metadata"),
+
+    // Eli feedback (nullable; filled later)
+    eliAction: text("eli_action"), // approved_as_is | edited_draft | rejected_draft | manual_reply | stage_override | unpaused | paused | direct_whatsapp_reply
+    eliEditText: text("eli_edit_text"),
+    eliRejectReason: text("eli_reject_reason"),
+    eliManualReply: text("eli_manual_reply"),
+    eliStageFrom: text("eli_stage_from"),
+    eliStageTo: text("eli_stage_to"),
+    eliDecidedAt: timestamp("eli_decided_at", { withTimezone: true }),
+  },
+  (t) => ({
+    sidCreatedIdx: index("bot_decision_log_sid_created_idx").on(
+      t.manychatSubId,
+      t.createdAt
+    ),
+    divergenceIdx: index("bot_decision_log_divergence_idx").on(
+      t.llmRecommended,
+      t.decidedBy
+    ),
+    eliActionIdx: index("bot_decision_log_eli_action_idx").on(t.eliAction),
+  })
+);
