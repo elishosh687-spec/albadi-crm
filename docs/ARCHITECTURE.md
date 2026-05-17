@@ -72,6 +72,17 @@
 | `bridge_events` | Audit log של כל webhook envelope. unique by `evt_id` (dedupe retries). |
 | `bot_drafts` | Money-moment drafts ממתינים לאישור. pending/approved/rejected/sent/failed. |
 | `bot_config` | KV של feature flags / business thresholds עריך מהדאשבורד. |
+| `app_config` | KV (JSONB value) לתמחור + shipping + FX. מופרד מ-bot_config (קהל עורכים שונה). |
+| `factory_quote_requests` | Row לכל "שלח לפבריקה". lifecycle: pending → received → finalized. |
+| `bot_quotes` | Append-only audit של כל הצעת מחיר שהבוט שלח. initial + requote. |
+| `crm_contacts` | גוף contact (phone unique). נפרד מ-leads כי contact = אדם, lead = עסקה. |
+| `crm_lead_episodes` | Episode = מחזור חיים של ליד (lifecycle_stage, operational_status, score). |
+| `crm_tasks` | משימות follow-up לאלי (open/completed, due_at). |
+| `crm_sla_timers` | SLA timers per lead — starts_at / due_at / breached_at / resolved_at. |
+| `lead_score_snapshots` | Append-only snapshot של lead score (fit/intent/engagement/friction → total). |
+| `source_touches` | Multi-touch attribution — ערוץ ראשון + detail. |
+| `opportunities` | Opportunity per lead (pipeline_stage, value_ils, won_at/lost_at). |
+| `consent_records` | Audit של הסכמת לקוח (type, status, captured_at/revoked_at). |
 
 ### עמודות עיקריות על `leads`
 
@@ -366,10 +377,15 @@ Money triggers (per `lib/drafts/index.ts`):
    - `USE_BRIDGE=1` בייצור, אבל הקוד עוד מתחזק את שני המסלולים.
    - **תוכנית:** למחוק אחרי שבוע יציב על bridge.
 
-3. **שני דאשבורדים חיים במקביל**
+3. **CRM operating-layer טבלאות בפרודקשיין — קוד מוכן, UI בבנייה**
+   - טבלאות `crm_*` + `lead_score_snapshots` + `source_touches` + `opportunities` + `consent_records` עלו ב-migration 2026-05-16.
+   - Dashboard v3 command center (`9599a4f`) צורך חלק מהנתונים; שאר ה-endpoints טרם נכתבו.
+   - **תוכנית:** server actions / API routes לכל CRM entity לפי priority.
+
+4. **שני דאשבורדים חיים במקביל**
    - v2 (`/dashboard/v2/*`) — production, יציב.
-   - v3 (`/dashboard/v3/*`) — חדש, יעד primary.
-   - **תוכנית:** v3 → primary, v2 → archive.
+   - v3 (`/dashboard/v3/*`) — primary.
+   - **תוכנית:** v3 → sole dashboard, v2 → archive.
 
 4. **Restart-send בלי bridge**
    - `app/api/bot/restart-send/route.ts` עדיין דרך ManyChat Flows (templates).

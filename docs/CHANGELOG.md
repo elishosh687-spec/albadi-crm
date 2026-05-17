@@ -5,6 +5,30 @@
 
 ---
 
+## v3.4 — 2026-05-16 — "Dashboard v3 command center + CRM operating layer"
+
+### Added
+- **Dashboard v3 command center** (`/dashboard/v3`) — redesigned supervisor console. Commit `9599a4f`. See `app/dashboard/v3/README.md`.
+- **CRM operating-layer schema** — 8 new tables migrated to Neon 2026-05-16:
+  - `crm_contacts` — contact entity (phone unique, separate from lead episodes)
+  - `crm_lead_episodes` — lifecycle + operational status + score + owner + queue per lead
+  - `crm_tasks` — open/completed follow-up tasks with due_at
+  - `crm_sla_timers` — SLA breach tracking per lead
+  - `lead_score_snapshots` — append-only fit/intent/engagement/friction score history
+  - `source_touches` — multi-touch attribution
+  - `opportunities` — deal record (value_ils, pipeline_stage, won/lost timestamps)
+  - `consent_records` — WA consent audit trail
+- **`app_config` table** — JSONB KV for pricing + shipping + FX (factory use case, separate from `bot_config`).
+- **`factory_quote_requests` table** — factory quote lifecycle: pending → received → finalized. Feishu row index + factory response + final pricing snapshot.
+- **`bot_quotes` table** — append-only audit of every WA quote sent by bot (initial + requote). Indexed `(lead_sid, sent_at)`.
+
+### Migration notes
+- `npx drizzle-kit push` run manually 2026-05-16 after Vercel deploy.
+- All new tables are additive — no existing columns dropped. Zero downtime.
+- CRM table APIs / server actions not yet wired; tables ready for next phase.
+
+---
+
 ## v3.3 — 2026-05-16 — "WA-native polls + bot quote history"
 
 ### Added
