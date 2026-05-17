@@ -20,7 +20,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { leads, messages } from "@/drizzle/schema";
-import { and, eq, isNotNull, isNull, or, sql } from "drizzle-orm";
+import { and, desc, eq, isNotNull, isNull, or, sql } from "drizzle-orm";
 import { isQuietNow } from "@/lib/clock/quiet-hours";
 import { isNoSendDay } from "@/lib/clock/hebcal";
 import { sendBridgeMessage } from "@/lib/bridge/client";
@@ -31,6 +31,9 @@ import {
   type FollowupStage,
 } from "@/lib/messaging/templates";
 import { sendEliDM } from "@/lib/notify/eli";
+import { superviseFollowup } from "@/lib/supervisor/followup-supervisor";
+import { logDecision } from "@/lib/supervisor/log";
+import { generateAndQueueDraft } from "@/lib/drafts";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -128,6 +131,8 @@ async function processCustomerLead(row: {
   followUpCount: number;
   lastFollowUpAt: Date | null;
   botPaused: boolean;
+  notes: string | null;
+  botSummary: string | null;
 }): Promise<ProcessedLead> {
   if (row.botPaused) {
     return { sid: row.sid, action: "skipped_paused" };
@@ -138,8 +143,8 @@ async function processCustomerLead(row: {
     return { sid: row.sid, action: "no_rule" };
   }
 
+  // HARD LIMIT — 3 attempts max, supervisor cannot override.
   if (row.followUpCount >= MAX_FOLLOWUPS) {
-    // Threshold already crossed somehow without escalation — escalate now.
     await escalateLead({
       sid: row.sid,
       name: row.name,
@@ -147,11 +152,18 @@ async function processCustomerLead(row: {
       stage: row.pipelineStage,
       reason: "no_reply",
     });
+    await logDecision({
+      manychatSubId: row.sid,
+      stageBefore: row.pipelineStage,
+      decidedBy: "code",
+      action: "escalated",
+      escalationKind: "max_followups",
+      metadata: { attempt: row.followUpCount, max: MAX_FOLLOWUPS },
+    });
     return { sid: row.sid, action: "escalated", detail: "count>=max" };
   }
 
   const now = Date.now();
-  // cadences[N] = wait before attempt #(N+1). followUpCount=0 → first send uses cadences[0].
   const cadenceIdx = Math.min(row.followUpCount, rule.cadences.length - 1);
   const waitMs = rule.cadences[cadenceIdx];
   if (row.lastFollowUpAt) {
@@ -163,11 +175,164 @@ async function processCustomerLead(row: {
 
   const recipient = row.jid || row.sid;
   const attempt = row.followUpCount + 1;
-  const text = followupTemplate(rule.template, attempt);
+  const candidateText = followupTemplate(rule.template, attempt);
+
+  // Load recent thread for supervisor context.
+  const recentRows = await db
+    .select({
+      direction: messages.direction,
+      text: messages.text,
+      sender: messages.sender,
+    })
+    .from(messages)
+    .where(eq(messages.manychatSubId, row.sid.trim()))
+    .orderBy(desc(messages.receivedAt))
+    .limit(15);
+  const recent = recentRows
+    .filter((r) => r.text && r.text.trim().length > 0)
+    .map((r) => ({
+      direction: r.direction as "in" | "out",
+      text: r.text!,
+      sender: r.sender as string | null,
+    }))
+    .reverse();
+
+  const gapHours = row.lastFollowUpAt
+    ? (now - row.lastFollowUpAt.getTime()) / (60 * 60 * 1000)
+    : null;
+
+  const verdict = await superviseFollowup({
+    sid: row.sid,
+    jid: recipient,
+    leadName: row.name,
+    phone: row.phone,
+    stage: row.pipelineStage,
+    qState: row.qState,
+    recentMessages: recent,
+    templateLabel: rule.template,
+    attempt,
+    cadenceMs: waitMs,
+    gapHours,
+    candidateTemplate: candidateText,
+    notes: row.notes,
+    botSummary: row.botSummary,
+  });
+
+  const replayMeta = {
+    prompt_version: verdict.promptVersion,
+    model: verdict.model,
+    template_label: rule.template,
+    attempt,
+    cadence_ms: waitMs,
+    gap_hours: gapHours,
+    candidate_template: candidateText,
+    trigger: "followup_cron",
+  };
+
+  const logBase = {
+    manychatSubId: row.sid,
+    stageBefore: row.pipelineStage,
+    llmConfidence: verdict.confidence,
+    llmRecommended: verdict.recommended as any,
+    llmReason: verdict.reason,
+    llmRiskFlags: verdict.riskFlags,
+  };
+
+  // --- Execute verdict ---
+
+  if (verdict.recommended === "supervisor_error") {
+    // DM already sent inside supervisor. No state change.
+    await logDecision({
+      ...logBase,
+      decidedBy: "supervisor_error",
+      action: "no_op",
+      metadata: { ...replayMeta, rawJson: verdict.rawJson },
+    });
+    return { sid: row.sid, action: "error", detail: verdict.reason };
+  }
+
+  if (verdict.recommended === "silence") {
+    // Skip this cycle. Don't consume attempt — bump lastFollowUpAt so we don't
+    // immediately retry on the next cron tick, but DO NOT increment followUpCount.
+    await db
+      .update(leads)
+      .set({
+        lastFollowUpAt: new Date(now),
+        updatedAt: new Date(now),
+      })
+      .where(sql`trim(${leads.manychatSubId}) = ${row.sid.trim()}`);
+    await logDecision({
+      ...logBase,
+      decidedBy: "silent",
+      action: "no_op",
+      metadata: { ...replayMeta, rawJson: verdict.rawJson, note: "supervisor said silence — attempt NOT consumed" },
+    });
+    return { sid: row.sid, action: "skipped_cadence", detail: "supervisor_silence" };
+  }
+
+  if (verdict.recommended === "escalate_to_eli") {
+    let draftId: number | null = null;
+    try {
+      draftId = await generateAndQueueDraft({
+        manychatSubId: row.sid,
+        moneyReason: "manual",
+        pipelineStage: row.pipelineStage,
+        leadName: row.name,
+        botSummary: verdict.reason,
+      });
+    } catch (e) {
+      console.error("[followups] draft generation failed", e);
+    }
+    try {
+      const who = row.name?.trim() || row.phone || row.sid;
+      await sendEliDM(
+        `🤖 Followup supervisor escalation — ${who} (stage=${row.pipelineStage ?? "?"}, attempt ${attempt})\n` +
+          `Reason: ${verdict.reason}\n` +
+          (draftId ? `Draft #${draftId} ready in /dashboard/v3/drafts` : "Draft generation failed — handle manually.")
+      );
+    } catch (e) {
+      console.error("[followups] eli DM failed", e);
+    }
+    // Mark as escalated state on the lead.
+    await escalateLead({
+      sid: row.sid,
+      name: row.name,
+      phone: row.phone,
+      stage: row.pipelineStage,
+      reason: "no_reply",
+    });
+    await logDecision({
+      ...logBase,
+      decidedBy: "code",
+      action: draftId ? "draft_queued" : "escalated",
+      escalationKind: "supervisor_decision",
+      draftId,
+      metadata: { ...replayMeta, rawJson: verdict.rawJson },
+    });
+    return { sid: row.sid, action: "escalated", detail: "supervisor_escalation" };
+  }
+
+  // approve_template or override_with_text — actually send.
+  let textToSend: string;
+  let decidedBy: "code" | "llm_override";
+  if (verdict.recommended === "override_with_text" && verdict.overrideText) {
+    textToSend = verdict.overrideText;
+    decidedBy = "llm_override";
+  } else {
+    textToSend = candidateText;
+    decidedBy = "code";
+  }
 
   try {
-    await sendBridgeMessage(recipient, text);
+    await sendBridgeMessage(recipient, textToSend);
   } catch (e) {
+    await logDecision({
+      ...logBase,
+      decidedBy,
+      action: "no_op",
+      replyText: textToSend,
+      metadata: { ...replayMeta, rawJson: verdict.rawJson, sendError: (e as Error).message },
+    });
     return {
       sid: row.sid,
       action: "error",
@@ -184,6 +349,15 @@ async function processCustomerLead(row: {
     })
     .where(sql`trim(${leads.manychatSubId}) = ${row.sid.trim()}`);
 
+  await logDecision({
+    ...logBase,
+    decidedBy,
+    action: "reply_sent",
+    replyText: textToSend,
+    metadata: { ...replayMeta, rawJson: verdict.rawJson },
+  });
+
+  // HARD LIMIT — if this was the 3rd attempt, escalate now.
   if (attempt >= MAX_FOLLOWUPS) {
     await escalateLead({
       sid: row.sid,
@@ -195,7 +369,11 @@ async function processCustomerLead(row: {
     return { sid: row.sid, action: "escalated", detail: "after final send" };
   }
 
-  return { sid: row.sid, action: "sent", detail: `${rule.template}#${attempt}` };
+  return {
+    sid: row.sid,
+    action: "sent",
+    detail: `${rule.template}#${attempt}${decidedBy === "llm_override" ? " (override)" : ""}`,
+  };
 }
 
 async function processFactoryLead(row: {
@@ -271,6 +449,8 @@ export async function POST(req: NextRequest) {
       botPaused: leads.botPaused,
       pipelineFlag: leads.pipelineFlag,
       updatedAt: leads.updatedAt,
+      notes: leads.notes,
+      botSummary: leads.botSummary,
     })
     .from(leads)
     .where(eq(leads.active, true));
@@ -306,6 +486,8 @@ export async function POST(req: NextRequest) {
       followUpCount: row.followUpCount,
       lastFollowUpAt: row.lastFollowUpAt,
       botPaused: row.botPaused,
+      notes: row.notes,
+      botSummary: row.botSummary,
     });
     customerResults.push(r);
   }
