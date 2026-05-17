@@ -134,7 +134,24 @@ async function handleMessageReceived(evt: BridgeEnvelope): Promise<void> {
   const jid = pickStr(d, "chat_jid", "chatJid", "jid");
   if (!jid) return;
   if (jid.endsWith("@broadcast") || jid.endsWith("@g.us")) return;
-  if ((d as any)?.is_from_me === true) return;
+  if ((d as any)?.is_from_me === true) {
+    // Echo of a message Eli sent from the WA Business app. Store for CRM
+    // display. insertBridgeMessage dedupes by waMessageId so bot messages
+    // that were already pre-inserted (sender='bot') are not overwritten.
+    const waMessageId =
+      pickStr(d, "wa_message_id", "id", "messageId") ?? `bridge:${evt.id}`;
+    const text = pickStr(d, "content", "text", "body");
+    await insertBridgeMessage({
+      jid,
+      direction: "out",
+      text,
+      waMessageId,
+      payload: d,
+      receivedAt: new Date(evt.occurred_at),
+      sender: "eli",
+    });
+    return;
+  }
 
   const waMessageId =
     pickStr(d, "wa_message_id", "id", "messageId") ?? `bridge:${evt.id}`;
