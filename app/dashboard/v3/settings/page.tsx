@@ -2,6 +2,7 @@ import { db } from "@/lib/db";
 import { botConfig } from "@/drizzle/schema";
 import { SettingsForm, type SettingItem } from "./SettingsForm";
 import { FactoryPricingForm } from "./FactoryPricingForm";
+import { TemplatesSection } from "./TemplatesSection";
 import { getFactoryConfig } from "@/lib/factory/config";
 
 export const dynamic = "force-dynamic";
@@ -122,6 +123,7 @@ export default async function V3SettingsPage() {
         ]}
       />
       <FactoryPricingForm initial={factoryConfig} />
+      <TemplatesSection />
     </div>
   );
 }

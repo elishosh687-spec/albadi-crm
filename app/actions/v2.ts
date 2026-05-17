@@ -10,11 +10,12 @@ import {
   leadTags,
   leadScoreSnapshots,
   leads,
+  messageTemplates,
   messages as messagesTable,
   opportunities,
   sourceTouches,
 } from "@/drizzle/schema";
-import { desc, eq, sql } from "drizzle-orm";
+import { asc, desc, eq, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import {
   suggestReplies as suggestRepliesLLM,
@@ -43,7 +44,7 @@ import {
   removeTag,
   setCustomFields,
 } from "@/lib/messaging";
-import { sendBridgeMessage } from "@/lib/bridge/client";
+import { sendBridgeMessage, sendCtaUrlMessage } from "@/lib/bridge/client";
 import { resolveBridgeRecipient } from "@/lib/bridge/jid";
 import {
   approveDraft as approveDraftLib,
@@ -907,5 +908,143 @@ export async function openOpportunityAction(input: {
     return { ok: true, message: "Opportunity נפתח" };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "opportunity failed" };
+  }
+}
+
+// ─── Message Templates ────────────────────────────────────────────────────────
+
+export interface TemplateRow {
+  id: number;
+  name: string;
+  type: string;
+  body: string;
+  headerType: string | null;
+  mediaId: string | null;
+  ctaLabel: string | null;
+  ctaUrl: string | null;
+  sortOrder: number;
+  active: boolean;
+}
+
+export async function listTemplatesAction(): Promise<{
+  ok: boolean;
+  templates?: TemplateRow[];
+  error?: string;
+}> {
+  try {
+    const rows = await db
+      .select({
+        id: messageTemplates.id,
+        name: messageTemplates.name,
+        type: messageTemplates.type,
+        body: messageTemplates.body,
+        headerType: messageTemplates.headerType,
+        mediaId: messageTemplates.mediaId,
+        ctaLabel: messageTemplates.ctaLabel,
+        ctaUrl: messageTemplates.ctaUrl,
+        sortOrder: messageTemplates.sortOrder,
+        active: messageTemplates.active,
+      })
+      .from(messageTemplates)
+      .orderBy(asc(messageTemplates.sortOrder), asc(messageTemplates.id));
+    return { ok: true, templates: rows };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "db error" };
+  }
+}
+
+export async function saveTemplateAction(data: {
+  id?: number;
+  name: string;
+  type: string;
+  body: string;
+  headerType?: string | null;
+  mediaId?: string | null;
+  ctaLabel?: string | null;
+  ctaUrl?: string | null;
+  sortOrder?: number;
+}): Promise<SimpleResult> {
+  const name = data.name.trim();
+  const body = data.body.trim();
+  if (!name) return { ok: false, error: "שם חסר" };
+  if (!body) return { ok: false, error: "גוף ההודעה חסר" };
+  if (!["text", "cta_url"].includes(data.type)) {
+    return { ok: false, error: "סוג לא תקין" };
+  }
+  try {
+    const values = {
+      name,
+      type: data.type,
+      body,
+      headerType: data.headerType?.trim() || null,
+      mediaId: data.mediaId?.trim() || null,
+      ctaLabel: data.ctaLabel?.trim() || null,
+      ctaUrl: data.ctaUrl?.trim() || null,
+      sortOrder: typeof data.sortOrder === "number" ? data.sortOrder : 0,
+      updatedAt: new Date(),
+    };
+    if (data.id) {
+      await db
+        .update(messageTemplates)
+        .set(values)
+        .where(eq(messageTemplates.id, data.id));
+    } else {
+      await db.insert(messageTemplates).values(values);
+    }
+    safeRevalidate("/dashboard/v3/settings", "page");
+    return { ok: true, message: "נשמר" };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "db error" };
+  }
+}
+
+export async function deleteTemplateAction(id: number): Promise<SimpleResult> {
+  try {
+    await db.delete(messageTemplates).where(eq(messageTemplates.id, id));
+    safeRevalidate("/dashboard/v3/settings", "page");
+    return { ok: true, message: "נמחק" };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "db error" };
+  }
+}
+
+export async function sendTemplateAction(
+  manychatSubId: string,
+  templateId: number
+): Promise<SimpleResult> {
+  const cleanSid = manychatSubId.trim();
+  if (!cleanSid) return { ok: false, error: "missing sid" };
+  try {
+    const [[leadRow], [tmpl]] = await Promise.all([
+      db
+        .select({ jid: leads.waJid, phone: leads.phoneE164 })
+        .from(leads)
+        .where(sql`trim(${leads.manychatSubId}) = ${cleanSid}`)
+        .limit(1),
+      db
+        .select()
+        .from(messageTemplates)
+        .where(eq(messageTemplates.id, templateId))
+        .limit(1),
+    ]);
+    if (!leadRow) return { ok: false, error: "ליד לא נמצא" };
+    if (!tmpl) return { ok: false, error: "תבנית לא נמצאת" };
+    const jid = leadRow.jid ?? leadRow.phone;
+    if (!jid) return { ok: false, error: "אין JID/טלפון לליד" };
+
+    if (tmpl.type === "cta_url") {
+      await sendCtaUrlMessage(jid, {
+        body: tmpl.body,
+        headerType: (tmpl.headerType as "video" | "image" | null) ?? null,
+        mediaId: tmpl.mediaId,
+        ctaLabel: tmpl.ctaLabel,
+        ctaUrl: tmpl.ctaUrl,
+      });
+    } else {
+      await sendBridgeMessage(jid, tmpl.body);
+    }
+    return { ok: true, message: "נשלח" };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "שגיאת שליחה" };
   }
 }

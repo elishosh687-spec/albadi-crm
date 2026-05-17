@@ -26,6 +26,9 @@ import {
   createSlaTimerAction,
   saveLeadScoreSnapshotAction,
   openOpportunityAction,
+  listTemplatesAction,
+  sendTemplateAction,
+  type TemplateRow,
 } from "@/app/actions/v2";
 import {
   V2_FLAG_NAMES,
@@ -262,6 +265,14 @@ function OverviewTab({
   const [replyText, setReplyText] = useState("");
   const [isPending, startTransition] = useTransition();
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [templates, setTemplates] = useState<TemplateRow[]>([]);
+  const [showTemplatePicker, setShowTemplatePicker] = useState(false);
+
+  useEffect(() => {
+    listTemplatesAction().then((r) => {
+      if (r.ok) setTemplates((r.templates ?? []).filter((t) => t.active));
+    });
+  }, []);
 
   const toggleFlag = (f: V2FlagName) => {
     setFlags((cur) =>
@@ -318,6 +329,15 @@ function OverviewTab({
         setReplyText("");
         setSuggestions([]);
       }
+    });
+  };
+
+  const sendTemplate = (templateId: number) => {
+    setShowTemplatePicker(false);
+    setMsg(null);
+    startTransition(async () => {
+      const r = await sendTemplateAction(sid, templateId);
+      setMsg({ ok: r.ok, text: r.ok ? "נשלח" : r.error ?? "כשל" });
     });
   };
 
@@ -401,6 +421,35 @@ function OverviewTab({
                 <ExternalLink className="size-3" />
               </a>
             )}
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setShowTemplatePicker((v) => !v)}
+                disabled={isPending || templates.length === 0}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-background/40 px-3 py-2 text-xs font-medium hover:bg-secondary disabled:opacity-50"
+                title={templates.length === 0 ? "אין תבניות — הוסף בהגדרות" : undefined}
+              >
+                <Send className="size-3.5" />
+                {templates.length === 0 ? "אין תבניות" : "שלח תבנית"}
+              </button>
+              {showTemplatePicker && templates.length > 0 && (
+                <div className="absolute top-full mt-1 left-0 z-30 min-w-[200px] rounded-lg border border-border bg-card shadow-xl py-1">
+                  {templates.map((t) => (
+                    <button
+                      key={t.id}
+                      type="button"
+                      onClick={() => sendTemplate(t.id)}
+                      className="w-full text-right px-3 py-2 text-xs hover:bg-secondary flex items-center justify-between gap-2"
+                    >
+                      <span className="truncate">{t.name}</span>
+                      {t.type === "cta_url" && (
+                        <span className="shrink-0 text-[10px] text-muted-foreground">CTA</span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
             <div className="flex items-center gap-1 text-xs text-muted-foreground ml-auto">
               <Clock className="size-3" />
               <button

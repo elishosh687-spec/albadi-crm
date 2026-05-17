@@ -337,3 +337,18 @@ export const consentRecords = pgTable("consent_records", {
   capturedAt: timestamp("captured_at", { withTimezone: true }).defaultNow().notNull(),
   revokedAt: timestamp("revoked_at", { withTimezone: true }),
 });
+
+export const messageTemplates = pgTable("message_templates", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  type: text("type").notNull().default("text"), // "text" | "cta_url"
+  body: text("body").notNull(),
+  headerType: text("header_type"), // null | "video" | "image"
+  mediaId: text("media_id"),
+  ctaLabel: text("cta_label"),
+  ctaUrl: text("cta_url"),
+  sortOrder: integer("sort_order").notNull().default(0),
+  active: boolean("active").notNull().default(true),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+});

@@ -350,6 +350,45 @@ export async function sendCompanyTemplate(jid: string): Promise<void> {
   }
 }
 
+export interface CtaUrlPayload {
+  body: string;
+  headerType?: "video" | "image" | null;
+  mediaId?: string | null;
+  ctaLabel?: string | null;
+  ctaUrl?: string | null;
+}
+
+/**
+ * Send a cta_url message with optional media header and CTA button.
+ * Used by the template picker in the dashboard.
+ */
+export async function sendCtaUrlMessage(
+  jid: string,
+  payload: CtaUrlPayload
+): Promise<void> {
+  const recipient = isJid(jid) ? jid : phoneToJid(jid);
+  const body: Record<string, unknown> = {
+    recipient,
+    type: "cta_url",
+    body: payload.body,
+  };
+  if (payload.headerType && payload.mediaId) {
+    body.header = { type: payload.headerType, media_id: payload.mediaId };
+  }
+  if (payload.ctaLabel && payload.ctaUrl) {
+    body.cta = { display_text: payload.ctaLabel, url: payload.ctaUrl };
+  }
+  try {
+    await bridgeFetch<BridgeSendResult>("/v1/messages", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  } catch (e) {
+    console.warn("[sendCtaUrlMessage] cta_url failed, falling back to text", e);
+    await sendBridgeMessage(jid, payload.body);
+  }
+}
+
 interface BridgeMediaUpload {
   media_id: string;
   kind: string;
