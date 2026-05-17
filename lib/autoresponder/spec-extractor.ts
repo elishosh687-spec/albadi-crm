@@ -309,9 +309,10 @@ export async function classifyConfirmation(
 export async function extractSingleField(
   text: string,
   field: "shipping" | "quantity" | "product" | "handles" | "lamination" | "colors",
-  minConfidence = 0.7
+  minConfidence = 0.7,
+  context?: string
 ): Promise<{ value: string; quantityCustom?: string; productCustom?: string } | null> {
-  const spec = await extractSpecFromText({ text });
+  const spec = await extractSpecFromText({ text, context });
   if (!spec) return null;
   if (spec.confidence < minConfidence) return null;
   const value = spec[field];

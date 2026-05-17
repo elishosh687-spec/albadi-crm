@@ -30,6 +30,7 @@ import {
   classifyConfirmation,
   type ExtractedSpec,
 } from "./spec-extractor";
+import { buildLLMContext, renderContextForPrompt } from "./llm-context";
 import { logBotQuote } from "./quote-log";
 
 type ListOption = { value: string; label: string };
@@ -916,12 +917,16 @@ export async function handleInbound(input: {
   // LLM fallback — when the dumb substring matcher returns null, ask
   // spec-extractor to map the customer's Hebrew to a canonical option.
   // This catches: "דחוף" → s1, "לא חייב" → false, "אלפיים" → custom+"2000".
+  // Full conversation context is passed so the LLM understands what was
+  // already answered and what the bot is currently asking.
   // Soft-fails on any LLM error — the original reask path runs unchanged.
   let llmCustomQuantity: string | undefined;
   let llmCustomProduct: string | undefined;
   if (!match) {
     try {
-      const llm = await extractSingleField(text, currentQ.field as any, 0.7);
+      const llmCtx = await buildLLMContext(ctx.sid);
+      const context = llmCtx ? renderContextForPrompt(llmCtx) : undefined;
+      const llm = await extractSingleField(text, currentQ.field as any, 0.7, context);
       if (llm) {
         match = llm.value;
         if (llm.quantityCustom) llmCustomQuantity = llm.quantityCustom;
@@ -954,7 +959,11 @@ export async function handleInbound(input: {
     const reasked: QState = { ...ctx.qState, unmatchedAt: unmatched };
     await saveState(ctx.sid, reasked);
     const reaskIdx = Math.min(unmatched - 1, REASK_REPLIES.length - 1);
-    await sendBridgeMessage(recipient, REASK_REPLIES[reaskIdx]);
+    const reaskText =
+      currentQ.field === "shipping" && unmatched >= 2
+        ? "אני שואל קודם כל על שיטת המשלוח (זמן האספקה). תבחרו: אקספרס (~25 יום) או רגיל (~90 יום). על המידות ושאר הפרטים נגיע אחר כך."
+        : REASK_REPLIES[reaskIdx];
+    await sendBridgeMessage(recipient, reaskText);
     await askQuestion(recipient, currentQ);
     return { action: "reasked" };
   }
