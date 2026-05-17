@@ -25,7 +25,7 @@ export const DEFAULT_FACTORY_CONFIG: FactoryPricingConfig = {
       name: "ים — סטנדרט",
       type: "sea",
       enabled: true,
-      seaRate: 220, // USD per CBM (default Israel sea rate ballpark)
+      seaRate: 500, // USD per CBM
     },
     {
       id: "air-express",
