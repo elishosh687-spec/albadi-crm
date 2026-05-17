@@ -487,6 +487,57 @@ async function routeThroughSupervisor(input: SupervisorRouteInput): Promise<void
     candidate,
   });
 
+  // Auto-send lane — overrule the LLM when it conservatively escalated a
+  // low-stakes canned-reply intent. Saves Eli a draft approval on no-brainers
+  // (samples, delivery time, format, who-we-are, "is it all included").
+  // Only fires when candidate predicted a canned_reply with high intent
+  // confidence AND supervisor had no risk flags.
+  const SAFE_AUTOSEND_INTENTS = new Set([
+    "samples_request",
+    "question_delivery",
+    "question_format",
+    "question_company",
+    "question_inclusive",
+  ]);
+  if (
+    verdict.recommended === "escalate_to_eli" &&
+    !verdict.overrideText &&
+    verdict.riskFlags.length === 0 &&
+    candidate.kind === "canned_reply" &&
+    candidate.intent &&
+    SAFE_AUTOSEND_INTENTS.has(candidate.intent) &&
+    (candidate.intentConfidence ?? 0) >= 0.85 &&
+    (verdict.confidence ?? 0) < 0.6 // only override LOW-confidence escalations
+  ) {
+    console.log(
+      "[supervisor.route] auto-send override:",
+      jid,
+      candidate.intent,
+      `cand.conf=${candidate.intentConfidence}`,
+      `sup.conf=${verdict.confidence}`
+    );
+    verdict.recommended = "approve_code";
+    verdict.reason = `auto_send_lane: ${candidate.intent} is a safe canned reply, supervisor escalation overruled. Original reason: ${verdict.reason}`;
+    verdict.riskFlags = [...verdict.riskFlags, "auto_send_override"];
+  }
+
+  // Replay metadata — store enough to re-run this decision after a prompt
+  // change. promptVersion + model lets `WHERE prompt_version=...` queries
+  // bucket history by supervisor version; candidate snapshot captures what
+  // the deterministic side saw at the moment.
+  const replayMeta = {
+    prompt_version: verdict.promptVersion,
+    model: verdict.model,
+    candidate: {
+      kind: candidate.kind,
+      intent: candidate.intent,
+      intent_confidence: candidate.intentConfidence,
+      intent_summary: candidate.intentSummary,
+      description: candidate.description,
+      canned_reply_label: candidate.cannedReplyLabel ?? null,
+    },
+  };
+
   const logBase = {
     manychatSubId: jid,
     messageId: inboundMessageId,
@@ -504,7 +555,7 @@ async function routeThroughSupervisor(input: SupervisorRouteInput): Promise<void
       ...logBase,
       decidedBy: "supervisor_error",
       action: "no_op",
-      metadata: { candidate: candidate.kind, rawJson: verdict.rawJson },
+      metadata: { ...replayMeta, rawJson: verdict.rawJson },
     });
     return;
   }
@@ -514,7 +565,7 @@ async function routeThroughSupervisor(input: SupervisorRouteInput): Promise<void
       ...logBase,
       decidedBy: "silent",
       action: "no_op",
-      metadata: { candidate: candidate.kind, rawJson: verdict.rawJson },
+      metadata: { ...replayMeta, rawJson: verdict.rawJson },
     });
     return;
   }
@@ -550,7 +601,7 @@ async function routeThroughSupervisor(input: SupervisorRouteInput): Promise<void
       action: draftId ? "draft_queued" : "escalated",
       escalationKind: "supervisor_decision",
       draftId,
-      metadata: { candidate: candidate.kind, rawJson: verdict.rawJson },
+      metadata: { ...replayMeta, rawJson: verdict.rawJson },
     });
     return;
   }
@@ -569,7 +620,7 @@ async function routeThroughSupervisor(input: SupervisorRouteInput): Promise<void
           decidedBy: "llm_override",
           action: "no_op",
           replyText: verdict.overrideText,
-          metadata: { candidate: candidate.kind, sendError: e instanceof Error ? e.message : String(e), rawJson: verdict.rawJson },
+          metadata: { ...replayMeta, sendError: e instanceof Error ? e.message : String(e), rawJson: verdict.rawJson },
         });
         return;
       }
@@ -578,7 +629,7 @@ async function routeThroughSupervisor(input: SupervisorRouteInput): Promise<void
         decidedBy: "llm_override",
         action: "reply_sent",
         replyText: verdict.overrideText,
-        metadata: { candidate: candidate.kind, rawJson: verdict.rawJson, note: "override skipped existing handler — stage NOT transitioned" },
+        metadata: { ...replayMeta, rawJson: verdict.rawJson, note: "override skipped existing handler — stage NOT transitioned" },
       });
       return;
     }
@@ -600,6 +651,7 @@ async function routeThroughSupervisor(input: SupervisorRouteInput): Promise<void
       riskFlags: verdict.riskFlags,
       candidate: candidate.kind,
       rawJson: verdict.rawJson,
+      replayMeta,
     },
   });
 }
@@ -619,6 +671,7 @@ async function runLegacyHandlerAndLog(args: {
     riskFlags: string[];
     candidate: string;
     rawJson: string | null;
+    replayMeta?: Record<string, unknown>;
   };
 }): Promise<void> {
   const { jid, stage, inboundMessageId, text, mediaPresent, inboundLogText } = args;
@@ -664,7 +717,8 @@ async function runLegacyHandlerAndLog(args: {
     action: mapHandlerResultToAction(result),
     replyText: null, // handler did its own send; reply text recovery would require deeper refactor
     metadata: {
-      candidate: args.supervisor?.candidate ?? null,
+      ...(args.supervisor?.replayMeta ?? {}),
+      candidate_kind: args.supervisor?.candidate ?? null,
       handler: handlerName,
       handlerResult: result,
       rawJson: args.supervisor?.rawJson ?? null,

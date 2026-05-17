@@ -546,6 +546,7 @@ export interface BotDecisionRowDto {
   draftId: number | null;
   metadata: Record<string, unknown> | null;
   eliAction: string | null;
+  eliCorrectionType: string | null;
   eliEditText: string | null;
   eliRejectReason: string | null;
   eliManualReply: string | null;
@@ -590,6 +591,7 @@ export async function loadBotDecisionsAction(
       draftId: r.draftId,
       metadata: r.metadata as Record<string, unknown> | null,
       eliAction: r.eliAction,
+      eliCorrectionType: r.eliCorrectionType,
       eliEditText: r.eliEditText,
       eliRejectReason: r.eliRejectReason,
       eliManualReply: r.eliManualReply,

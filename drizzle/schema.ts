@@ -389,6 +389,10 @@ export const botDecisionLog = pgTable(
 
     // Eli feedback (nullable; filled later)
     eliAction: text("eli_action"), // approved_as_is | edited_draft | rejected_draft | manual_reply | stage_override | unpaused | paused | direct_whatsapp_reply
+    // Classification of WHAT Eli corrected. Lets Phase 2 rule-mining ignore
+    // pure rewording (content) and only extract rules from routing/policy
+    // overrides. NULL when the action is implicitly typed (e.g. approved_as_is).
+    eliCorrectionType: text("eli_correction_type"), // routing | policy | content
     eliEditText: text("eli_edit_text"),
     eliRejectReason: text("eli_reject_reason"),
     eliManualReply: text("eli_manual_reply"),

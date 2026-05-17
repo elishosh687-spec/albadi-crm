@@ -175,7 +175,14 @@ function DecisionCard({ row }: { row: DecisionRow }) {
         >
           {row.eliAction ? (
             <>
-              <Badge variant="success">{row.eliAction}</Badge>
+              <div className="flex flex-wrap gap-1">
+                <Badge variant="success">{row.eliAction}</Badge>
+                {row.eliCorrectionType && (
+                  <Badge variant={row.eliCorrectionType === "content" ? "default" : "warning"}>
+                    {row.eliCorrectionType}
+                  </Badge>
+                )}
+              </div>
               {row.eliEditText && (
                 <div className="text-muted-foreground italic line-clamp-3">
                   "{row.eliEditText}"

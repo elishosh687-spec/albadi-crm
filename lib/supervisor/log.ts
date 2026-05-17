@@ -49,6 +49,37 @@ export type EliAction =
   | "paused"
   | "direct_whatsapp_reply";
 
+/**
+ * Classification of what Eli's correction is ABOUT. Phase 2 rule-mining
+ * should only convert routing/policy patterns into deterministic rules.
+ * Pure rewording (content) means the bot's decision was correct — only the
+ * phrasing differed — so it should NOT become a rule.
+ */
+export type EliCorrectionType = "routing" | "policy" | "content";
+
+/**
+ * Heuristic — infer the correction type when caller didn't supply one.
+ * Used so existing call sites don't all need updates.
+ */
+function inferCorrectionType(input: AttachEliFeedbackInput): EliCorrectionType | null {
+  if (input.eliCorrectionType) return input.eliCorrectionType;
+  switch (input.eliAction) {
+    case "stage_override":
+    case "rejected_draft":
+    case "paused":
+    case "unpaused":
+      return "routing";
+    case "edited_draft":
+      return "content"; // assumption: edits to a draft are usually rewording
+    case "manual_reply":
+    case "direct_whatsapp_reply":
+      return "content"; // typed a fresh reply — usually phrasing-level
+    case "approved_as_is":
+    default:
+      return null;
+  }
+}
+
 export interface LogDecisionInput {
   manychatSubId: string;
   messageId?: number | null;
@@ -112,6 +143,7 @@ export async function logDecision(
 export interface AttachEliFeedbackInput {
   manychatSubId: string;
   eliAction: EliAction;
+  eliCorrectionType?: EliCorrectionType | null;
   eliEditText?: string | null;
   eliRejectReason?: string | null;
   eliManualReply?: string | null;
@@ -155,6 +187,7 @@ export async function attachEliFeedback(
       .update(botDecisionLog)
       .set({
         eliAction: input.eliAction,
+        eliCorrectionType: inferCorrectionType(input),
         eliEditText: truncate(input.eliEditText, 4000),
         eliRejectReason: truncate(input.eliRejectReason, 1000),
         eliManualReply: truncate(input.eliManualReply, 4000),

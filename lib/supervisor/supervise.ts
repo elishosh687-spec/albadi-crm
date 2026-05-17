@@ -26,6 +26,13 @@ function readEnv(key: string): string {
 const OPENAI_URL = "https://api.openai.com/v1/chat/completions";
 const TIMEOUT_MS = 12_000;
 
+/**
+ * Version tag for the supervisor system prompt. Bump this when you edit
+ * SYSTEM_PROMPT below so the decision log can filter by prompt version and
+ * replay past inbounds against any historical prompt (Phase 2 / 3).
+ */
+export const SUPERVISOR_PROMPT_VERSION = "supervisor-v1.0.0";
+
 export type SupervisorRecommendation =
   | "approve_code"
   | "override_with_text"
@@ -42,6 +49,10 @@ export interface SupervisorVerdict {
   riskFlags: string[];
   /** Raw LLM response for log / debugging. */
   rawJson: string | null;
+  /** Prompt version used (for replay + A/B). */
+  promptVersion: string;
+  /** Model used (for replay + cost analysis). */
+  model: string;
 }
 
 interface SuperviseInput {
@@ -146,6 +157,8 @@ function buildUserPrompt(input: SuperviseInput): string {
 export async function superviseIncomingMessage(
   input: SuperviseInput
 ): Promise<SupervisorVerdict> {
+  const model = readEnv("SUPERVISOR_MODEL") || "gpt-4o-mini";
+
   // Allow emergency bypass via env (e.g. supervisor broken in prod).
   if (readEnv("SUPERVISOR_BYPASS") === "1") {
     return {
@@ -156,6 +169,8 @@ export async function superviseIncomingMessage(
       overrideText: null,
       riskFlags: ["bypass_enabled"],
       rawJson: null,
+      promptVersion: SUPERVISOR_PROMPT_VERSION,
+      model: "bypass",
     };
   }
 
@@ -163,11 +178,10 @@ export async function superviseIncomingMessage(
   if (!apiKey) {
     return await onSupervisorFailure(
       input,
-      "OPENAI_API_KEY missing — supervisor cannot run"
+      "OPENAI_API_KEY missing — supervisor cannot run",
+      model
     );
   }
-
-  const model = readEnv("SUPERVISOR_MODEL") || "gpt-4o-mini";
 
   try {
     const controller = new AbortController();
@@ -197,7 +211,8 @@ export async function superviseIncomingMessage(
       console.error("[supervisor] non-2xx", res.status, txt.slice(0, 300));
       return await onSupervisorFailure(
         input,
-        `OpenAI ${res.status}: ${txt.slice(0, 200)}`
+        `OpenAI ${res.status}: ${txt.slice(0, 200)}`,
+        model
       );
     }
 
@@ -206,7 +221,7 @@ export async function superviseIncomingMessage(
     };
     const raw = data.choices?.[0]?.message?.content ?? null;
     if (!raw) {
-      return await onSupervisorFailure(input, "empty LLM response");
+      return await onSupervisorFailure(input, "empty LLM response", model);
     }
 
     let parsed: any;
@@ -214,7 +229,7 @@ export async function superviseIncomingMessage(
       parsed = JSON.parse(raw);
     } catch {
       console.error("[supervisor] non-JSON", raw.slice(0, 200));
-      return await onSupervisorFailure(input, "LLM returned non-JSON");
+      return await onSupervisorFailure(input, "LLM returned non-JSON", model);
     }
 
     return {
@@ -235,18 +250,22 @@ export async function superviseIncomingMessage(
             .map((s: string) => s.slice(0, 60))
         : [],
       rawJson: raw,
+      promptVersion: SUPERVISOR_PROMPT_VERSION,
+      model,
     };
   } catch (e) {
     return await onSupervisorFailure(
       input,
-      `exception: ${e instanceof Error ? e.message : String(e)}`
+      `exception: ${e instanceof Error ? e.message : String(e)}`,
+      model
     );
   }
 }
 
 async function onSupervisorFailure(
   input: SuperviseInput,
-  errorDetail: string
+  errorDetail: string,
+  model: string
 ): Promise<SupervisorVerdict> {
   // Best-effort Eli DM. Don't let DM failure cascade.
   try {
@@ -265,6 +284,8 @@ async function onSupervisorFailure(
     overrideText: null,
     riskFlags: ["supervisor_error"],
     rawJson: null,
+    promptVersion: SUPERVISOR_PROMPT_VERSION,
+    model,
   };
 }
 
