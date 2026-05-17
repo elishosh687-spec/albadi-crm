@@ -447,12 +447,23 @@ function DecisionCard({
             <div className="text-muted-foreground">escalation: {row.escalationKind}</div>
           )}
 
-          {/* Stage feedback — only when a stage transition actually happened. */}
-          {stageTransitioned && (
-            <div className="mt-2 border-t border-border/50 pt-2">
-              <div className="text-xs text-muted-foreground mb-1">
-                stage: {row.stageBefore} → <strong>{row.stageAfter}</strong>
-              </div>
+          {/* Stage feedback — always visible. Shows current stage info + thumbs. */}
+          <div className="mt-2 border-t border-border/50 pt-2">
+            <div className="text-xs text-muted-foreground mb-1">
+              {stageTransitioned ? (
+                <>
+                  stage: {row.stageBefore ?? "—"} →{" "}
+                  <strong>{row.stageAfter}</strong>
+                </>
+              ) : row.stageBefore || row.stageAfter ? (
+                <>
+                  stage נשאר:{" "}
+                  <strong>{row.stageAfter ?? row.stageBefore}</strong>
+                </>
+              ) : (
+                <>ללא stage</>
+              )}
+            </div>
               {stageCorrected ? (
                 <div className="flex items-center gap-1 text-amber-600 dark:text-amber-400">
                   <ThumbsDown className="size-3" />
@@ -528,8 +539,7 @@ function DecisionCard({
                   </div>
                 </div>
               )}
-            </div>
-          )}
+          </div>
         </Lane>
 
         <Lane
