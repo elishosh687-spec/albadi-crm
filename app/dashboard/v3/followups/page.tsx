@@ -11,6 +11,47 @@ export const maxDuration = 30;
 
 const HOUR_MS = 60 * 60 * 1000;
 const MAX_FOLLOWUPS = 3;
+const QUIET_START = 21; // 21:00 IL
+const QUIET_END = 9;    // 09:00 IL
+
+/** Hour-of-day in Asia/Jerusalem for a UTC Date. */
+function jerusalemHour(d: Date): number {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Asia/Jerusalem",
+    hour: "numeric",
+    hour12: false,
+  }).formatToParts(d);
+  const hourPart = parts.find((p) => p.type === "hour");
+  return hourPart ? Number(hourPart.value) : 0;
+}
+
+function isQuietAt(at: Date): boolean {
+  const h = jerusalemHour(at);
+  return h >= QUIET_START || h < QUIET_END;
+}
+
+/**
+ * If `at` falls inside quiet hours (21:00-09:00 IL), advance to the next
+ * minute-of-day where it's active. Brute-force 30-min steps — accurate
+ * enough for display, no edge cases with DST or month boundaries.
+ */
+function adjustForQuietHours(at: Date): { adjusted: Date; deferred: boolean } {
+  if (!isQuietAt(at)) return { adjusted: at, deferred: false };
+  let candidate = new Date(at);
+  // Advance until we hit an active hour. Bounded loop — max ~24 iterations of 30min.
+  for (let i = 0; i < 50; i++) {
+    candidate = new Date(candidate.getTime() + 30 * 60 * 1000);
+    if (!isQuietAt(candidate)) {
+      // Snap to the start of the active hour (round down to :00) for clean display.
+      const h = jerusalemHour(candidate);
+      if (h === QUIET_END) {
+        // We're inside the first hour of active window. Use it as-is.
+      }
+      return { adjusted: candidate, deferred: true };
+    }
+  }
+  return { adjusted: candidate, deferred: true };
+}
 
 // Cadence rules — MUST match app/api/bot/followups/route.ts STAGE_RULES.
 const CADENCE_BY_STAGE: Record<string, number[]> = {
@@ -29,6 +70,7 @@ interface QueueRow {
   lastFollowUpAt: Date | null;
   nextEligibleAt: Date;
   hoursUntil: number; // negative if already due
+  deferredByQuietHours: boolean;
   botPaused: boolean;
   pipelineFlag: string | null;
   notes: string | null;
@@ -106,7 +148,11 @@ async function loadQueue(): Promise<QueueRow[]> {
     const cadenceIdx = Math.min(attempt, cadences.length - 1);
     const waitMs = cadences[cadenceIdx];
     const lastTs = r.lastFollowUpAt?.getTime() ?? now; // if never sent, treat as "now" → eligible immediately
-    const nextEligibleAt = new Date(lastTs + waitMs);
+    const rawNext = new Date(lastTs + waitMs);
+    // Cron skips entirely during quiet hours (21:00–09:00 IL). Adjust the
+    // displayed "next eligible" to the realistic send time.
+    const { adjusted: nextEligibleAt, deferred: deferredByQuietHours } =
+      adjustForQuietHours(rawNext);
     const hoursUntil = (nextEligibleAt.getTime() - now) / HOUR_MS;
 
     queue.push({
@@ -118,6 +164,7 @@ async function loadQueue(): Promise<QueueRow[]> {
       lastFollowUpAt: r.lastFollowUpAt,
       nextEligibleAt,
       hoursUntil,
+      deferredByQuietHours,
       botPaused: r.botPaused ?? false,
       pipelineFlag: r.pipelineFlag,
       notes: r.notes,
@@ -264,6 +311,14 @@ function QueueCard({ q }: { q: QueueRow }) {
             })}{" "}
             IL
           </div>
+          {q.deferredByQuietHours && (
+            <span
+              className="text-[10px] rounded px-1.5 py-0.5 bg-indigo-500/15 text-indigo-700 dark:text-indigo-300 border border-indigo-500/30"
+              title="הזמן המתמטי נפל בשעות שקט (21:00-09:00 IL). דחיתי ל-09:00."
+            >
+              דחוי משעות שקט
+            </span>
+          )}
           <Link
             href={`/dashboard/v3?lead=${encodeURIComponent(q.sid)}`}
             className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
