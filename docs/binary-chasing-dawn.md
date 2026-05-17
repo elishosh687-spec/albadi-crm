@@ -102,3 +102,51 @@ Langfuse env vars (deferred): `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`.
 4. Set `OPENAI_API_KEY=invalid` → next inbound logs `decided_by='supervisor_error'`, DM sent, no customer reply. Restore key.
 5. Open `/dashboard/v3/leads/<sid>` → "החלטות בוט" tab → see the 3-lane timeline.
 6. Approve a draft with edits in `/dashboard/v3/drafts` → return to the lead's decisions tab → see `eli_action='edited_draft'` on the relevant row.
+
+---
+
+## Roadmap — phases beyond this build
+
+The supervisor is a measurement system, not a self-improving bot. Each later phase is OPTIONAL and triggered by data, not by a calendar.
+
+### Phase 1.5 — Langfuse integration (~half a day)
+**What:** wrap the supervisor LLM call in `langfuse.trace()`, persist `trace_id` into `bot_decision_log`, mirror every `attachEliFeedback` call as a `langfuse.score`.
+**Payoff:** cost/latency dashboard, prompt version management, side-by-side prompt comparisons. None of this required at current volume — Phase 1 stores intent/confidence/reason in DB columns already.
+**Trigger:** want to see LLM cost trends, or about to A/B-test prompt revisions.
+
+### Phase 2 — Few-shot retrieval from Eli's feedback
+**What:** before each supervisor LLM call, pull 5-10 past `bot_decision_log` rows where `eli_action IS NOT NULL` and (same `intent` OR same `stage_before`), inject as examples in the supervisor prompt: *"Here is how Eli decided in similar cases."*
+**Payoff:** the supervisor's outputs converge toward Eli's actual judgment without any fine-tuning. This is where "the bot learns from Eli" stops being aspirational.
+**Trigger:** ~50+ rows with `eli_action` set. At current volume (~75 inbounds/day, ~30% with eventual feedback) this is ~1 week of operating data.
+
+### Phase 3 — Rule extraction
+**What:** identify high-frequency patterns in the log (e.g. "100x LLM said escalate on intent=question_delivery, Eli always answered with the canned 'אקספרס 25 יום, רגיל 90 יום'"). Convert each into a deterministic rule in the existing autoresponder code. The supervisor short-circuits — no LLM call for that intent.
+**Payoff:** fewer LLM calls = lower latency, lower cost, and zero-variance behavior on the long tail of common questions.
+**Trigger:** after 4+ weeks of data, when the same intent keeps recurring with the same Eli answer.
+
+### Phase 4 — Bot QA dashboard page
+**What:** aggregated view: decisions/day by `decided_by` and `llm_recommended`, divergence rate, top reasons LLM escalates, top intents Eli overrides, prompt version performance. Built as a new page under `/dashboard/v3/bot-qa`.
+**Payoff:** zoom out from per-lead to system-level health. Spot regressions after a prompt change.
+**Trigger:** when scrolling per-lead timelines stops scaling.
+
+### Phase 5 — Override stage transitions
+**Current limitation:** when the supervisor returns `override_with_text`, the LLM's text is sent but the existing handler is skipped — so stage transitions (e.g. `AWAITING_ESTIMATE → AWAITING_LOGO` on accept) don't fire. Today this is acceptable because override is rare.
+**Fix:** schema-extend the supervisor JSON output to include an optional `stage_transition` field. The route executes it after sending the override text.
+**Trigger:** when log shows override is being chosen for inbounds that should transition.
+
+### Phase 6 — Fine-tuning a private model (LONG-TERM, OPTIONAL)
+**What:** train a custom small model on the `bot_decision_log + eli_action` corpus. The supervisor becomes a model that genuinely speaks like Eli.
+**Payoff:** lowest-cost, lowest-latency, and stylistically consistent.
+**Trigger:** Phase 2 (few-shot) hits a ceiling AND there are >1000 high-quality `eli_action` rows. Likely far off.
+
+---
+
+## Mental model
+
+**Phase 1 captures decisions. Eli converts decisions into policy.** The model never updates itself in real-time. Every phase above is Eli choosing which signal in the log becomes:
+- a **prompt instruction** (system prompt edit) → cheap, fast iteration
+- a **few-shot example** (Phase 2) → automated, but Eli still decides which rows are training-eligible
+- a **deterministic rule** (Phase 3) → permanent, no LLM in path
+- a **fine-tune** (Phase 6) → only after exhausting the above
+
+The log is the substrate. Eli is the supervisor of the supervisor.
