@@ -6,7 +6,7 @@ import {
   leads,
   messages,
 } from "@/drizzle/schema";
-import { and, asc, desc, eq, sql } from "drizzle-orm";
+import { and, asc, desc, eq, isNull, notInArray, or, sql } from "drizzle-orm";
 import type { LeadCardData } from "./_components/LeadsBoard";
 import {
   CommandCenter,
@@ -187,7 +187,12 @@ async function loadLeadCards(): Promise<{
       updatedAt: leads.updatedAt,
     })
     .from(leads)
-    .where(eq(leads.active, true))
+    .where(
+      and(
+        eq(leads.active, true),
+        or(isNull(leads.pipelineStage), notInArray(leads.pipelineStage, ["DROPPED", "WON"]))
+      )
+    )
     .orderBy(desc(leads.updatedAt));
 
   const sids = rows.map((r) => r.sid.trim());
