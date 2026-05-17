@@ -209,3 +209,131 @@ export const botQuotes = pgTable(
     ),
   })
 );
+
+// === CRM operating layer (additive v1) ===
+
+export const crmContacts = pgTable("crm_contacts", {
+  id: serial("id").primaryKey(),
+  phoneE164: text("phone_e164").unique(),
+  fullName: text("full_name"),
+  businessName: text("business_name"),
+  email: text("email"),
+  locale: text("locale").default("he-IL"),
+  timezone: text("timezone").default("Asia/Jerusalem"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+export const crmLeadEpisodes = pgTable("crm_lead_episodes", {
+  id: serial("id").primaryKey(),
+  manychatSubId: text("manychat_sub_id").notNull(),
+  contactId: integer("contact_id"),
+  lifecycleStage: text("lifecycle_stage").notNull().default("NEW_INQUIRY"),
+  operationalStatus: text("operational_status").notNull().default("NEW"),
+  ownerId: text("owner_id"),
+  queueId: text("queue_id"),
+  priorityBand: text("priority_band").notNull().default("LOW"),
+  scoreTotal: integer("score_total").notNull().default(0),
+  firstContactAt: timestamp("first_contact_at", { withTimezone: true }),
+  lastActivityAt: timestamp("last_activity_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+export const crmTasks = pgTable(
+  "crm_tasks",
+  {
+    id: serial("id").primaryKey(),
+    manychatSubId: text("manychat_sub_id").notNull(),
+    taskType: text("task_type").notNull().default("follow_up"),
+    title: text("title").notNull(),
+    status: text("status").notNull().default("open"),
+    assignedTo: text("assigned_to"),
+    dueAt: timestamp("due_at", { withTimezone: true }),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => ({
+    sidStatusIdx: index("crm_tasks_sid_status_idx").on(t.manychatSubId, t.status),
+  })
+);
+
+export const crmSlaTimers = pgTable(
+  "crm_sla_timers",
+  {
+    id: serial("id").primaryKey(),
+    manychatSubId: text("manychat_sub_id").notNull(),
+    slaType: text("sla_type").notNull(),
+    startsAt: timestamp("starts_at", { withTimezone: true }).defaultNow().notNull(),
+    dueAt: timestamp("due_at", { withTimezone: true }).notNull(),
+    breachedAt: timestamp("breached_at", { withTimezone: true }),
+    resolvedAt: timestamp("resolved_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => ({
+    sidDueIdx: index("crm_sla_timers_sid_due_idx").on(t.manychatSubId, t.dueAt),
+  })
+);
+
+export const leadScoreSnapshots = pgTable(
+  "lead_score_snapshots",
+  {
+    id: serial("id").primaryKey(),
+    manychatSubId: text("manychat_sub_id").notNull(),
+    fitScore: integer("fit_score").notNull().default(0),
+    intentScore: integer("intent_score").notNull().default(0),
+    engagementScore: integer("engagement_score").notNull().default(0),
+    frictionPenalty: integer("friction_penalty").notNull().default(0),
+    scoreTotal: integer("score_total").notNull(),
+    scoreBand: text("score_band").notNull(),
+    scoreVersion: text("score_version").notNull().default("v1"),
+    reason: text("reason"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => ({
+    sidCreatedIdx: index("lead_score_snapshots_sid_created_idx").on(
+      t.manychatSubId,
+      t.createdAt
+    ),
+  })
+);
+
+export const sourceTouches = pgTable(
+  "source_touches",
+  {
+    id: serial("id").primaryKey(),
+    manychatSubId: text("manychat_sub_id").notNull(),
+    sourcePrimary: text("source_primary").notNull(),
+    sourceDetail1: text("source_detail_1"),
+    sourceDetail2: text("source_detail_2"),
+    recordSource: text("record_source"),
+    touchAt: timestamp("touch_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => ({
+    sidTouchIdx: index("source_touches_sid_touch_idx").on(t.manychatSubId, t.touchAt),
+  })
+);
+
+export const opportunities = pgTable("opportunities", {
+  id: serial("id").primaryKey(),
+  manychatSubId: text("manychat_sub_id").notNull(),
+  pipelineStage: text("pipeline_stage").notNull().default("open"),
+  valueIls: doublePrecision("value_ils"),
+  currency: text("currency").default("ILS"),
+  openedAt: timestamp("opened_at", { withTimezone: true }).defaultNow().notNull(),
+  wonAt: timestamp("won_at", { withTimezone: true }),
+  lostAt: timestamp("lost_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+export const consentRecords = pgTable("consent_records", {
+  id: serial("id").primaryKey(),
+  contactId: integer("contact_id"),
+  manychatSubId: text("manychat_sub_id"),
+  consentType: text("consent_type").notNull(),
+  status: text("status").notNull(),
+  capturedAt: timestamp("captured_at", { withTimezone: true }).defaultNow().notNull(),
+  revokedAt: timestamp("revoked_at", { withTimezone: true }),
+});

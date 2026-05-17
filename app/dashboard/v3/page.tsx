@@ -1,7 +1,17 @@
 import { db } from "@/lib/db";
-import { leadTags, leads, messages } from "@/drizzle/schema";
+import {
+  botDrafts,
+  factoryQuoteRequests,
+  leadTags,
+  leads,
+  messages,
+} from "@/drizzle/schema";
 import { and, asc, desc, eq, sql } from "drizzle-orm";
-import { LeadsBoard, type LeadCardData } from "./_components/LeadsBoard";
+import type { LeadCardData } from "./_components/LeadsBoard";
+import {
+  CommandCenter,
+  type CommandCenterData,
+} from "./_components/CommandCenter";
 import { ExpandedLead } from "./_components/ExpandedLead";
 import type { ChatMessage } from "./conversations/_components/ChatThread";
 import type { OrderSummaryData } from "./conversations/_components/OrderSummary";
@@ -24,16 +34,149 @@ export default async function V3LeadsPage({
     return <ExpandedLeadWrapper sid={selectedSid} />;
   }
 
-  return <LeadsBoardWrapper />;
+  return <CommandCenterWrapper />;
 }
 
-async function LeadsBoardWrapper() {
+async function CommandCenterWrapper() {
+  const [{ cards }, pendingDraftRows, factoryReceivedRows] =
+    await Promise.all([
+      loadLeadCards(),
+      db
+        .select({
+          id: botDrafts.id,
+          sid: botDrafts.manychatSubId,
+          moneyReason: botDrafts.moneyReason,
+          generatedAt: botDrafts.generatedAt,
+        })
+        .from(botDrafts)
+        .where(eq(botDrafts.status, "pending"))
+        .orderBy(desc(botDrafts.generatedAt)),
+      db
+        .select({
+          id: factoryQuoteRequests.id,
+          sid: factoryQuoteRequests.manychatSubId,
+          updatedAt: factoryQuoteRequests.updatedAt,
+        })
+        .from(factoryQuoteRequests)
+        .where(eq(factoryQuoteRequests.factoryStatus, "received"))
+        .orderBy(desc(factoryQuoteRequests.updatedAt)),
+    ]);
+  const [crmTasks, crmSla, latestScores] = await Promise.all([
+    loadOpenCrmTasks(),
+    loadOpenSlaTimers(),
+    loadLatestScoreSnapshots(),
+  ]);
+
+  const data: CommandCenterData = {
+    cards,
+    pendingDrafts: pendingDraftRows.length,
+    pendingDraftSids: pendingDraftRows.map((row) => row.sid.trim()),
+    factoryReceived: factoryReceivedRows.length,
+    factoryReceivedSids: factoryReceivedRows.map((row) => row.sid.trim()),
+    crmTasks,
+    crmSla,
+    latestScores,
+  };
+
+  return <CommandCenter data={data} />;
+}
+
+async function loadOpenCrmTasks(): Promise<
+  Array<{
+    id: number;
+    sid: string;
+    title: string;
+    taskType: string;
+    dueAt: string | null;
+    status: string;
+  }>
+> {
+  try {
+    const res = await db.execute(sql`
+      SELECT id, manychat_sub_id AS sid, title, task_type AS "taskType",
+             due_at AS "dueAt", status
+      FROM crm_tasks
+      WHERE status = 'open'
+      ORDER BY due_at NULLS LAST, created_at DESC
+      LIMIT 30
+    `);
+    const rows = ((res as unknown as { rows?: any[] }).rows ?? []) as any[];
+    return rows.map((row) => ({
+      id: Number(row.id),
+      sid: String(row.sid),
+      title: String(row.title),
+      taskType: String(row.taskType),
+      dueAt: row.dueAt ? new Date(row.dueAt).toISOString() : null,
+      status: String(row.status),
+    }));
+  } catch {
+    return [];
+  }
+}
+
+async function loadOpenSlaTimers(): Promise<
+  Array<{ id: number; sid: string; slaType: string; dueAt: string; breached: boolean }>
+> {
+  try {
+    const res = await db.execute(sql`
+      SELECT id, manychat_sub_id AS sid, sla_type AS "slaType", due_at AS "dueAt",
+             (breached_at IS NOT NULL OR due_at < now()) AS breached
+      FROM crm_sla_timers
+      WHERE resolved_at IS NULL
+      ORDER BY due_at ASC
+      LIMIT 30
+    `);
+    const rows = ((res as unknown as { rows?: any[] }).rows ?? []) as any[];
+    return rows.map((row) => ({
+      id: Number(row.id),
+      sid: String(row.sid),
+      slaType: String(row.slaType),
+      dueAt: new Date(row.dueAt).toISOString(),
+      breached: Boolean(row.breached),
+    }));
+  } catch {
+    return [];
+  }
+}
+
+async function loadLatestScoreSnapshots(): Promise<
+  Array<{ sid: string; scoreTotal: number; scoreBand: string; reason: string | null }>
+> {
+  try {
+    const res = await db.execute(sql`
+      SELECT DISTINCT ON (manychat_sub_id)
+        manychat_sub_id AS sid,
+        score_total AS "scoreTotal",
+        score_band AS "scoreBand",
+        reason
+      FROM lead_score_snapshots
+      ORDER BY manychat_sub_id, created_at DESC
+      LIMIT 200
+    `);
+    const rows = ((res as unknown as { rows?: any[] }).rows ?? []) as any[];
+    return rows.map((row) => ({
+      sid: String(row.sid),
+      scoreTotal: Number(row.scoreTotal),
+      scoreBand: String(row.scoreBand),
+      reason: row.reason ? String(row.reason) : null,
+    }));
+  } catch {
+    return [];
+  }
+}
+
+async function loadLeadCards(): Promise<{
+  cards: LeadCardData[];
+  tagsBySid: Map<string, string[]>;
+}> {
   const rows = await db
     .select({
       sid: leads.manychatSubId,
       name: leads.name,
       phone: leads.phoneE164,
       jid: leads.waJid,
+      source: leads.source,
+      leadSource: leads.leadSource,
       stage: leads.pipelineStage,
       flag: leads.pipelineFlag,
       botSummary: leads.botSummary,
@@ -86,6 +229,8 @@ async function LeadsBoardWrapper() {
     name: r.name,
     phone: r.phone,
     jid: r.jid,
+    source: r.source,
+    leadSource: r.leadSource,
     stage: r.stage ?? "NEW",
     pipelineFlag: r.flag,
     flags: tagsBySid.get(r.sid.trim()) ?? [],
@@ -99,7 +244,7 @@ async function LeadsBoardWrapper() {
     updatedAt: r.updatedAt.toISOString(),
   }));
 
-  return <LeadsBoard cards={cards} />;
+  return { cards, tagsBySid };
 }
 
 async function ExpandedLeadWrapper({ sid }: { sid: string }) {
@@ -108,6 +253,8 @@ async function ExpandedLeadWrapper({ sid }: { sid: string }) {
       sid: leads.manychatSubId,
       name: leads.name,
       phone: leads.phoneE164,
+      source: leads.source,
+      leadSource: leads.leadSource,
       stage: leads.pipelineStage,
       flag: leads.pipelineFlag,
       botPaused: leads.botPaused,
@@ -152,6 +299,8 @@ async function ExpandedLeadWrapper({ sid }: { sid: string }) {
   const summary: OrderSummaryData = {
     name: leadRow.name,
     phone: leadRow.phone,
+    source: leadRow.source,
+    leadSource: leadRow.leadSource,
     stage: leadRow.stage,
     flag: leadRow.flag,
     flags: tagRows.map((t) => t.tag),

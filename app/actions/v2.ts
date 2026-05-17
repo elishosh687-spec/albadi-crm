@@ -4,10 +4,15 @@ import { db } from "@/lib/db";
 import {
   botConfig,
   botDrafts,
+  crmSlaTimers,
+  crmTasks,
   factoryQuoteRequests,
   leadTags,
+  leadScoreSnapshots,
   leads,
   messages as messagesTable,
+  opportunities,
+  sourceTouches,
 } from "@/drizzle/schema";
 import { desc, eq, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
@@ -724,5 +729,183 @@ export async function saveBotConfigAction(
       ok: false,
       error: e instanceof Error ? e.message : "save failed",
     };
+  }
+}
+
+export async function createCrmTaskAction(input: {
+  manychatSubId: string;
+  title: string;
+  taskType?: string;
+  dueAt?: string | null;
+  assignedTo?: string | null;
+}): Promise<SimpleResult> {
+  try {
+    const cleanSid = input.manychatSubId.trim();
+    const title = input.title.trim();
+    if (!cleanSid) return { ok: false, error: "missing subscriberId" };
+    if (!title) return { ok: false, error: "missing title" };
+    const due = input.dueAt ? new Date(input.dueAt) : null;
+    await db.insert(crmTasks).values({
+      manychatSubId: cleanSid,
+      title,
+      taskType: input.taskType?.trim() || "follow_up",
+      dueAt: due && Number.isFinite(due.getTime()) ? due : null,
+      assignedTo: input.assignedTo?.trim() || null,
+    });
+    safeRevalidate("/dashboard/v3", "layout");
+    return { ok: true, message: "משימה נוצרה" };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "task failed" };
+  }
+}
+
+export async function completeCrmTaskAction(taskId: number): Promise<SimpleResult> {
+  try {
+    if (!Number.isFinite(taskId) || taskId <= 0) {
+      return { ok: false, error: "invalid task id" };
+    }
+    await db
+      .update(crmTasks)
+      .set({ status: "completed", completedAt: new Date(), updatedAt: new Date() })
+      .where(eq(crmTasks.id, taskId));
+    safeRevalidate("/dashboard/v3", "layout");
+    return { ok: true, message: "משימה טופלה" };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "task failed" };
+  }
+}
+
+export async function createSlaTimerAction(input: {
+  manychatSubId: string;
+  slaType: string;
+  dueAt: string;
+}): Promise<SimpleResult> {
+  try {
+    const cleanSid = input.manychatSubId.trim();
+    const slaType = input.slaType.trim();
+    const dueAt = new Date(input.dueAt);
+    if (!cleanSid) return { ok: false, error: "missing subscriberId" };
+    if (!slaType) return { ok: false, error: "missing sla type" };
+    if (!Number.isFinite(dueAt.getTime())) return { ok: false, error: "invalid dueAt" };
+    await db.insert(crmSlaTimers).values({
+      manychatSubId: cleanSid,
+      slaType,
+      dueAt,
+    });
+    safeRevalidate("/dashboard/v3", "layout");
+    return { ok: true, message: "SLA נוצר" };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "sla failed" };
+  }
+}
+
+export async function resolveSlaTimerAction(timerId: number): Promise<SimpleResult> {
+  try {
+    if (!Number.isFinite(timerId) || timerId <= 0) {
+      return { ok: false, error: "invalid timer id" };
+    }
+    await db
+      .update(crmSlaTimers)
+      .set({ resolvedAt: new Date() })
+      .where(eq(crmSlaTimers.id, timerId));
+    safeRevalidate("/dashboard/v3", "layout");
+    return { ok: true, message: "SLA נסגר" };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "sla failed" };
+  }
+}
+
+export async function saveLeadScoreSnapshotAction(input: {
+  manychatSubId: string;
+  fitScore: number;
+  intentScore: number;
+  engagementScore: number;
+  frictionPenalty: number;
+  reason?: string | null;
+}): Promise<SimpleResult> {
+  try {
+    const cleanSid = input.manychatSubId.trim();
+    if (!cleanSid) return { ok: false, error: "missing subscriberId" };
+    const scoreTotal = Math.max(
+      0,
+      Math.min(
+        100,
+        Math.round(
+          input.fitScore +
+            input.intentScore +
+            input.engagementScore -
+            input.frictionPenalty
+        )
+      )
+    );
+    const scoreBand =
+      scoreTotal >= 75
+        ? "HOT"
+        : scoreTotal >= 55
+          ? "WARM"
+          : scoreTotal >= 35
+            ? "NURTURE"
+            : "LOW";
+    await db.insert(leadScoreSnapshots).values({
+      manychatSubId: cleanSid,
+      fitScore: Math.round(input.fitScore),
+      intentScore: Math.round(input.intentScore),
+      engagementScore: Math.round(input.engagementScore),
+      frictionPenalty: Math.round(input.frictionPenalty),
+      scoreTotal,
+      scoreBand,
+      reason: input.reason?.trim() || null,
+    });
+    safeRevalidate("/dashboard/v3", "layout");
+    return { ok: true, message: `ניקוד נשמר: ${scoreTotal}` };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "score failed" };
+  }
+}
+
+export async function logSourceTouchAction(input: {
+  manychatSubId: string;
+  sourcePrimary: string;
+  sourceDetail1?: string | null;
+  sourceDetail2?: string | null;
+  recordSource?: string | null;
+}): Promise<SimpleResult> {
+  try {
+    const cleanSid = input.manychatSubId.trim();
+    const sourcePrimary = input.sourcePrimary.trim();
+    if (!cleanSid) return { ok: false, error: "missing subscriberId" };
+    if (!sourcePrimary) return { ok: false, error: "missing source" };
+    await db.insert(sourceTouches).values({
+      manychatSubId: cleanSid,
+      sourcePrimary,
+      sourceDetail1: input.sourceDetail1?.trim() || null,
+      sourceDetail2: input.sourceDetail2?.trim() || null,
+      recordSource: input.recordSource?.trim() || "dashboard",
+    });
+    safeRevalidate("/dashboard/v3", "layout");
+    return { ok: true, message: "מקור נשמר" };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "source failed" };
+  }
+}
+
+export async function openOpportunityAction(input: {
+  manychatSubId: string;
+  valueIls?: number | null;
+}): Promise<SimpleResult> {
+  try {
+    const cleanSid = input.manychatSubId.trim();
+    if (!cleanSid) return { ok: false, error: "missing subscriberId" };
+    await db.insert(opportunities).values({
+      manychatSubId: cleanSid,
+      valueIls:
+        typeof input.valueIls === "number" && Number.isFinite(input.valueIls)
+          ? input.valueIls
+          : null,
+    });
+    safeRevalidate("/dashboard/v3", "layout");
+    return { ok: true, message: "Opportunity נפתח" };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "opportunity failed" };
   }
 }

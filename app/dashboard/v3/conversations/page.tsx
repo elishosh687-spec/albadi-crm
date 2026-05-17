@@ -157,6 +157,8 @@ export default async function V3ConversationsPage({
         sid: leads.manychatSubId,
         name: leads.name,
         phone: leads.phoneE164,
+        source: leads.source,
+        leadSource: leads.leadSource,
         stage: leads.pipelineStage,
         flag: leads.pipelineFlag,
         botPaused: leads.botPaused,
@@ -195,6 +197,8 @@ export default async function V3ConversationsPage({
       const summary: OrderSummaryData = {
         name: leadRow.name,
         phone: leadRow.phone,
+        source: leadRow.source,
+        leadSource: leadRow.leadSource,
         stage: leadRow.stage,
         flag: leadRow.flag,
         flags: tagRows.map((t) => t.tag),

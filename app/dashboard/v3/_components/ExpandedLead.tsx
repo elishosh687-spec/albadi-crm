@@ -22,6 +22,10 @@ import {
   suggestRepliesAction,
   sendManualReply,
   updateLeadContactAction,
+  createCrmTaskAction,
+  createSlaTimerAction,
+  saveLeadScoreSnapshotAction,
+  openOpportunityAction,
 } from "@/app/actions/v2";
 import {
   V2_FLAG_NAMES,
@@ -30,6 +34,13 @@ import {
   type V2PipelineStage,
 } from "@/lib/manychat/stages";
 import { STAGE_LABEL, STAGE_TONE } from "./stage-meta";
+import {
+  LIFECYCLE_LABEL,
+  PRIORITY_LABEL,
+  lifecycleOf,
+  quoteNumber,
+  type PriorityBand,
+} from "./crm-insights";
 import { ChatThread, type ChatMessage } from "../conversations/_components/ChatThread";
 import { OrderSummary, type OrderSummaryData } from "../conversations/_components/OrderSummary";
 import { Composer } from "../conversations/_components/Composer";
@@ -46,7 +57,7 @@ export interface ExpandedLeadProps {
 export function ExpandedLead({ sid, summary, messages }: ExpandedLeadProps) {
   const router = useRouter();
   const params = useSearchParams();
-  const [tab, setTab] = useState<TabKey>("overview");
+  const [tab, setTab] = useState<TabKey>("chat");
 
   const goBack = () => {
     const sp = new URLSearchParams(params.toString());
@@ -67,6 +78,17 @@ export function ExpandedLead({ sid, summary, messages }: ExpandedLeadProps) {
 
   const stage = (summary.stage ?? "UNCLASSIFIED").toUpperCase();
   const tone = STAGE_TONE[stage] ?? STAGE_TONE.UNCLASSIFIED;
+  const needsHuman =
+    summary.flag === "NEEDS_ELI" || summary.flags.includes("NEEDS_ELI");
+  const quoteValue = quoteNumber(summary.quoteTotal);
+  const sourceLabel = summary.leadSource || summary.source || "לא ידוע";
+  const lifecycle = lifecycleOf(summary.stage);
+  const priority: PriorityBand =
+    needsHuman || summary.botPaused || quoteValue >= 10000
+      ? "HOT"
+      : quoteValue > 0 || stage === "WAITING_FACTORY" || stage === "AWAITING_FINAL"
+        ? "WARM"
+        : "LOW";
 
   return (
     <div className="flex flex-col gap-4 min-h-[calc(100dvh-3rem)]">
@@ -96,6 +118,54 @@ export function ExpandedLead({ sid, summary, messages }: ExpandedLeadProps) {
           </div>
         </div>
       </header>
+
+      <section className="grid grid-cols-2 gap-2 lg:grid-cols-6">
+        <StatusTile
+          label="סטטוס טיפול"
+          value={needsHuman ? "צריך אותך" : "בוט מטפל"}
+          tone={needsHuman ? "danger" : "success"}
+        />
+        <StatusTile
+          label="בוט"
+          value={summary.botPaused ? "מושעה" : "פעיל"}
+          tone={summary.botPaused ? "warning" : "success"}
+        />
+        <StatusTile
+          label="הצעת מחיר"
+          value={
+            quoteValue > 0
+              ? `₪${quoteValue.toLocaleString("he-IL")}`
+              : "אין סכום"
+          }
+          tone={quoteValue >= 10000 ? "success" : "muted"}
+        />
+        <StatusTile
+          label="מחזור חיים"
+          value={LIFECYCLE_LABEL[lifecycle]}
+          tone="muted"
+        />
+        <StatusTile
+          label="עדיפות"
+          value={PRIORITY_LABEL[priority]}
+          tone={priority === "HOT" ? "danger" : priority === "WARM" ? "warning" : "muted"}
+        />
+        <StatusTile
+          label="מקור"
+          value={sourceLabel}
+          tone="muted"
+        />
+        <StatusTile
+          label="פעולה הבאה"
+          value={
+            summary.botPaused
+              ? "להחליט על הבוט"
+              : needsHuman
+                ? "לענות ידנית"
+                : "לעקוב"
+          }
+          tone={summary.botPaused || needsHuman ? "warning" : "muted"}
+        />
+      </section>
 
       <nav className="flex items-center gap-1 border-b border-border">
         {(
@@ -139,6 +209,30 @@ export function ExpandedLead({ sid, summary, messages }: ExpandedLeadProps) {
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+function StatusTile({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: string;
+  tone: "danger" | "warning" | "success" | "muted";
+}) {
+  const toneClass = {
+    danger: "border-rose-500/40 bg-rose-500/10 text-rose-200",
+    warning: "border-amber-500/40 bg-amber-500/10 text-amber-200",
+    success: "border-emerald-500/40 bg-emerald-500/10 text-emerald-200",
+    muted: "border-border bg-card/60 text-foreground",
+  }[tone];
+
+  return (
+    <div className={cn("rounded-lg border p-3", toneClass)}>
+      <div className="text-[11px] text-muted-foreground">{label}</div>
+      <div className="mt-1 truncate text-sm font-medium">{value}</div>
     </div>
   );
 }
@@ -337,6 +431,8 @@ function OverviewTab({
           </div>
         </section>
 
+        <CrmOpsPanel sid={sid} quoteTotal={summary.quoteTotal} />
+
         <section className="rounded-xl border border-border bg-card p-4 space-y-3">
           <div className="text-xs uppercase tracking-wider text-muted-foreground">
             שלב
@@ -466,6 +562,139 @@ function OverviewTab({
         <OrderSummary data={summary} sid={sid} />
       </div>
     </div>
+  );
+}
+
+function CrmOpsPanel({
+  sid,
+  quoteTotal,
+}: {
+  sid: string;
+  quoteTotal: string | null;
+}) {
+  const [taskTitle, setTaskTitle] = useState("לחזור לליד");
+  const [scoreReason, setScoreReason] = useState("");
+  const [isPending, startTransition] = useTransition();
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+
+  const setResult = (r: { ok: boolean; message?: string; error?: string }) => {
+    setMsg({ ok: r.ok, text: r.ok ? r.message ?? "נשמר" : r.error ?? "נכשל" });
+  };
+
+  const createTask = () => {
+    startTransition(async () => {
+      const due = new Date(Date.now() + 24 * 3600 * 1000).toISOString();
+      setResult(
+        await createCrmTaskAction({
+          manychatSubId: sid,
+          title: taskTitle,
+          taskType: "follow_up",
+          dueAt: due,
+          assignedTo: "eli",
+        })
+      );
+    });
+  };
+
+  const createSla = () => {
+    startTransition(async () => {
+      const due = new Date(Date.now() + 2 * 3600 * 1000).toISOString();
+      setResult(
+        await createSlaTimerAction({
+          manychatSubId: sid,
+          slaType: "human_response",
+          dueAt: due,
+        })
+      );
+    });
+  };
+
+  const saveScore = () => {
+    startTransition(async () => {
+      const quote = quoteNumber(quoteTotal);
+      setResult(
+        await saveLeadScoreSnapshotAction({
+          manychatSubId: sid,
+          fitScore: quote >= 10000 ? 20 : quote > 0 ? 12 : 6,
+          intentScore: quote > 0 ? 28 : 12,
+          engagementScore: 15,
+          frictionPenalty: 0,
+          reason: scoreReason || "ניקוד ידני מהדאשבורד",
+        })
+      );
+    });
+  };
+
+  const openOpp = () => {
+    startTransition(async () => {
+      setResult(
+        await openOpportunityAction({
+          manychatSubId: sid,
+          valueIls: quoteNumber(quoteTotal) || null,
+        })
+      );
+    });
+  };
+
+  return (
+    <section className="rounded-xl border border-border bg-card p-4 space-y-3">
+      <div className="text-xs uppercase tracking-wider text-muted-foreground">
+        CRM מתקדם
+      </div>
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+        <input
+          value={taskTitle}
+          onChange={(e) => setTaskTitle(e.target.value)}
+          className="rounded-lg border border-border bg-background/50 px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-ring/30"
+          placeholder="כותרת משימה"
+        />
+        <input
+          value={scoreReason}
+          onChange={(e) => setScoreReason(e.target.value)}
+          className="rounded-lg border border-border bg-background/50 px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-ring/30"
+          placeholder="סיבת ניקוד"
+        />
+      </div>
+      <div className="flex flex-wrap gap-2">
+        <button
+          type="button"
+          onClick={createTask}
+          disabled={isPending || !taskTitle.trim()}
+          className="rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground disabled:opacity-60"
+        >
+          צור משימה 24ש׳
+        </button>
+        <button
+          type="button"
+          onClick={createSla}
+          disabled={isPending}
+          className="rounded-md border border-border bg-background/40 px-3 py-1.5 text-xs hover:bg-secondary disabled:opacity-60"
+        >
+          פתח SLA 2ש׳
+        </button>
+        <button
+          type="button"
+          onClick={saveScore}
+          disabled={isPending}
+          className="rounded-md border border-border bg-background/40 px-3 py-1.5 text-xs hover:bg-secondary disabled:opacity-60"
+        >
+          שמור ניקוד
+        </button>
+        <button
+          type="button"
+          onClick={openOpp}
+          disabled={isPending}
+          className="rounded-md border border-success/40 bg-success/10 px-3 py-1.5 text-xs text-success hover:bg-success/15 disabled:opacity-60"
+        >
+          פתח Opportunity
+        </button>
+      </div>
+      {msg && (
+        <p className={cn("text-xs", msg.ok ? "text-success" : "text-destructive")}>
+          {msg.text}
+        </p>
+      )}
+    </section>
   );
 }
 

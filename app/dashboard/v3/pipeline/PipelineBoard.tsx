@@ -56,10 +56,10 @@ export function PipelineBoard({
             className="text-3xl font-medium tracking-tight"
             style={{ fontFamily: "var(--font-display)" }}
           >
-            Pipeline
+            משפך
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
-            תצוגת kanban מפורטת — 11 שלבים של הבוט. Drag-drop יגיע בעדכון הבא.
+            תצוגת kanban מפורטת לפי שלבי הבוט. העריכה היומית מתחילה בחדר הבקרה.
           </p>
         </div>
         <label className="inline-flex items-center gap-2 text-xs cursor-pointer select-none">

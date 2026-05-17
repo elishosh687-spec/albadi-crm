@@ -26,6 +26,8 @@ export interface LeadCardData {
   name: string | null;
   phone: string | null;
   jid: string | null;
+  source?: string | null;
+  leadSource?: string | null;
   stage: string;
   pipelineFlag: string | null;
   flags: string[];

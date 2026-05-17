@@ -8,6 +8,13 @@
       "when": 1778106741336,
       "tag": "0000_true_bug",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1779020000000,
+      "tag": "0001_crm_operating_layer",
+      "breakpoints": true
     }
   ]
 }

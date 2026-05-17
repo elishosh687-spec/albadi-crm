@@ -29,6 +29,8 @@ import { FactoryQuotePanel } from "../../_components/factory/FactoryQuotePanel";
 export interface OrderSummaryData {
   name: string | null;
   phone: string | null;
+  source?: string | null;
+  leadSource?: string | null;
   stage: string | null;
   flag: string | null;
   flags: string[];
