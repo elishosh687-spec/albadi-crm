@@ -14,6 +14,7 @@ import {
   Loader2,
   History,
   Factory,
+  LayoutDashboard,
 } from "lucide-react";
 import { STAGE_LABEL, STAGE_TONE } from "../../_components/stage-meta";
 import { deleteLeadAction, setLeadStage, updateLeadContactAction } from "@/app/actions/v2";
@@ -84,6 +85,15 @@ export function OrderSummary({
           )}
           <TagsPicker sid={sid} currentStage={stage} flags={data.flags} />
         </div>
+        {sid && (
+          <a
+            href={`/dashboard/v3?lead=${encodeURIComponent(sid)}`}
+            className="mt-2 inline-flex items-center gap-1.5 rounded-md border border-primary/30 bg-primary/10 px-2.5 py-1 text-xs text-primary hover:bg-primary/20 transition-colors"
+          >
+            <LayoutDashboard className="size-3.5" />
+            כרטיס מלא + החלטות בוט
+          </a>
+        )}
       </ContactHeader>
 
       {sid && (

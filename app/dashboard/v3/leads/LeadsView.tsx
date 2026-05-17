@@ -79,8 +79,8 @@ function LeadCard({ lead, onPreview }: { lead: LeadRow; onPreview: (l: LeadRow) 
         </p>
       )}
 
-      {/* Actions — relative z-10 so they sit ABOVE the whole-card link. */}
-      <div className="relative z-10 flex gap-2 pt-1 opacity-0 group-hover:opacity-100 md:transition-opacity duration-150 md:opacity-0 max-md:opacity-100">
+      {/* Actions — always visible (mobile has no hover, desktop also benefits from clarity). */}
+      <div className="relative z-10 flex gap-2 pt-1">
         <a
           href={`/dashboard/v3/conversations?lead=${encodeURIComponent(lead.sid)}`}
           className="flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-border bg-muted/40 px-3 py-1.5 text-xs hover:bg-muted transition-colors"

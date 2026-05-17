@@ -14,6 +14,7 @@ import {
   PanelLeftOpen,
   Trash2,
   Loader2,
+  LayoutDashboard,
 } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { STAGE_LABEL, STAGE_TONE, timeAgoHe } from "../../_components/stage-meta";
@@ -287,6 +288,13 @@ function ChatHeader({
           {summary.phone || "—"}
         </div>
       </div>
+      <Link
+        href={`/dashboard/v3?lead=${encodeURIComponent(sid)}`}
+        title="פתח כרטיס מלא + החלטות בוט"
+        className="size-8 rounded-md grid place-items-center text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
+      >
+        <LayoutDashboard className="size-4" />
+      </Link>
       <button
         type="button"
         onClick={onToggleSummary}
