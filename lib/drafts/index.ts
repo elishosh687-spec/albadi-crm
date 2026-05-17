@@ -13,6 +13,7 @@ import { botDrafts, leads } from "@/drizzle/schema";
 import { and, desc, eq, sql } from "drizzle-orm";
 import { sendBridgeMessage } from "@/lib/bridge/client";
 import { resolveBridgeRecipient } from "@/lib/bridge/jid";
+import { attachEliFeedback } from "@/lib/supervisor/log";
 
 export type DraftStatus = "pending" | "approved" | "rejected" | "sent" | "failed";
 
@@ -199,6 +200,17 @@ export async function approveDraft(
   // explicit messages.insert is needed here. The webhook dedupes by
   // waMessageId, so a later bridge `message.sent` event is a no-op.
 
+  // Bot Supervisor Phase 1: attach Eli's verdict to the most recent decision log row.
+  const wasEdited =
+    editedText !== undefined &&
+    editedText !== null &&
+    editedText.trim() !== draft.draftText.trim();
+  await attachEliFeedback({
+    manychatSubId: draft.manychatSubId,
+    eliAction: wasEdited ? "edited_draft" : "approved_as_is",
+    eliEditText: wasEdited ? finalText : null,
+  });
+
   return { ok: true, draftId: id, waMessageId, sentText: finalText };
 }
 
@@ -219,6 +231,13 @@ export async function rejectDraft(
       rejectReason: reason?.trim() || null,
     })
     .where(eq(botDrafts.id, id));
+
+  await attachEliFeedback({
+    manychatSubId: draft.manychatSubId,
+    eliAction: "rejected_draft",
+    eliRejectReason: reason?.trim() || null,
+  });
+
   return { ok: true };
 }
 

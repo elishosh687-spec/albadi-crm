@@ -13,6 +13,7 @@ import {
   LayoutDashboard,
   MessagesSquare,
   ClipboardList,
+  Bot,
 } from "lucide-react";
 import { cn } from "@/lib/cn";
 import {
@@ -48,8 +49,9 @@ import { ChatThread, type ChatMessage } from "../conversations/_components/ChatT
 import { OrderSummary, type OrderSummaryData } from "../conversations/_components/OrderSummary";
 import { Composer } from "../conversations/_components/Composer";
 import { NotesPanel } from "./NotesPanel";
+import { BotDecisionsTab } from "./BotDecisionsTab";
 
-type TabKey = "overview" | "chat" | "summary";
+type TabKey = "overview" | "chat" | "summary" | "decisions";
 
 export interface ExpandedLeadProps {
   sid: string;
@@ -176,6 +178,7 @@ export function ExpandedLead({ sid, summary, messages }: ExpandedLeadProps) {
             { key: "overview", label: "סקירה", icon: LayoutDashboard },
             { key: "chat", label: `שיחה (${messages.length})`, icon: MessagesSquare },
             { key: "summary", label: "סיכום הזמנה", icon: ClipboardList },
+            { key: "decisions", label: "החלטות בוט", icon: Bot },
           ] as { key: TabKey; label: string; icon: typeof LayoutDashboard }[]
         ).map((t) => {
           const Icon = t.icon;
@@ -210,6 +213,9 @@ export function ExpandedLead({ sid, summary, messages }: ExpandedLeadProps) {
           <div className="max-w-2xl">
             <OrderSummary data={summary} sid={sid} />
           </div>
+        )}
+        {tab === "decisions" && (
+          <BotDecisionsTab sid={sid} />
         )}
       </div>
     </div>

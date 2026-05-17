@@ -83,6 +83,7 @@
 | `source_touches` | Multi-touch attribution — ערוץ ראשון + detail. |
 | `opportunities` | Opportunity per lead (pipeline_stage, value_ils, won_at/lost_at). |
 | `consent_records` | Audit של הסכמת לקוח (type, status, captured_at/revoked_at). |
+| `bot_decision_log` | **Phase 1 supervisor.** One row per inbound. Captures LLM supervisor verdict + what code did + Eli's later action. Foundation for Phase 2 few-shot + Phase 3 rule extraction. |
 
 ### עמודות עיקריות על `leads`
 
@@ -184,16 +185,20 @@ bridge POST /api/bridge/webhook
   ├─ if type=message.received:
   │    1. upsert leads row (auto-create from JID)
   │    2. insert messages row (sender=lead)
-  │    3. clear bot_paused
-  │    4. clear pipeline_flag=NEEDS_ELI? (no — only stage transition does)
-  │    5. route by leads.pipeline_stage:
-  │         NEW                → questionnaire.handle()
-  │         AWAITING_ESTIMATE  → decision.handleEstimate()
-  │         AWAITING_LOGO      → decision.handleLogo()
-  │         AWAITING_FINAL     → decision.handleFinal()
-  │         else               → set NEEDS_ELI, DM Eli
-  │    6. if reply ready → sendBridgeMessage(sender=bot)
-  │       if money-moment AND ENABLE_DRAFT_QUEUE → queue draft (no send)
+  │    3. stop-word check → if matched: pause + DM + log row + return
+  │    4. clear bot_paused, log auto-unpause if bot was paused
+  │    5. routeThroughSupervisor():
+  │         a. precomputeCandidateAction() — dry-run prediction of existing handler
+  │         b. superviseIncomingMessage() — LLM gate (gpt-4o-mini)
+  │              verdict ∈ {approve_code | override_with_text | escalate_to_eli | silence | supervisor_error}
+  │         c. auto-send lane: if escalate + safe canned reply + high conf + zero risk → overrule to approve_code
+  │         d. execute verdict:
+  │              approve_code        → run handleInbound / handleDecisionInbound (legacy)
+  │              override_with_text  → sendBridgeMessage(LLM text)  — NOT touching stage
+  │              escalate_to_eli     → generateAndQueueDraft + sendEliDM (no auto-send)
+  │              silence             → log only
+  │              supervisor_error    → DM Eli, no send
+  │         e. logDecision() — write row to bot_decision_log with LLM + code + replay metadata
   │
   ├─ if type=message.sent:
   │    1. dedupe by wa_message_id
@@ -254,6 +259,7 @@ bridge POST /api/bridge/webhook
 | `gpt-4o-mini` | intent classification | `lib/autoresponder/intent.ts` |
 | `gpt-4o-mini` | spec-extractor (טקסט חופשי → שדות) | `lib/autoresponder/spec-extractor.ts` |
 | `gpt-4o-mini` | unmatch agent (Stage 2/4 fallback) | `lib/autoresponder/unmatch-agent.ts` |
+| `gpt-4o-mini` | **bot supervisor gate (every inbound, Phase 1)** | `lib/supervisor/supervise.ts` |
 | OpenAI | draft generation | `lib/drafts/index.ts` |
 
 כל LLM calls שותפים ל-`OPENAI_API_KEY` + `OPENAI_MODEL` (default `gpt-4o-mini`).
@@ -293,6 +299,8 @@ bridge POST /api/bridge/webhook
 
 | ENV var | אפקט |
 |---|---|
+| `SUPERVISOR_BYPASS=1` | **bot supervisor disabled** — every inbound runs through the legacy flow as if Phase 1 never shipped. Most important kill switch. |
+| `SUPERVISOR_MODEL` | override model (default `gpt-4o-mini`). |
 | `LLM_UNMATCH_DISABLED=1` | unmatch-agent בכל call → escalate מיד (legacy behavior) |
 | `LLM_SPEC_EXTRACTOR_DISABLED=1` | spec-extractor מחזיר null → matchAnswer reask כרגיל; step 9 confirmation → factory route |
 | `OPENAI_API_KEY` חסר | כל LLM softfail (זה גם kill switch effective) |
@@ -399,6 +407,11 @@ Money triggers (per `lib/drafts/index.ts`):
    - `TAG_IDS` / `FIELD_IDS` ב-`lib/manychat/config.ts` — לא מקור הקובץ (legacy).
    - `FLOW_NS` ב-`restart-send` — צריך לעבור ל-`.env`.
    - Business thresholds (10000 NIS high-value, 5d no-contact) hardcoded במקום `bot_config`.
+
+7. **Bot Supervisor — `override_with_text` doesn't apply stage transitions**
+   - When the LLM supervisor returns `override_with_text`, it sends the override text but skips the existing handler. Stage transitions (e.g. `AWAITING_ESTIMATE → AWAITING_LOGO` on accept) won't fire.
+   - Mitigated by the supervisor prompt telling the LLM not to override on stage-transition intents (accept, logo received).
+   - Phase 5 will fix: add `stage_transition` to the supervisor JSON output.
 
 ---
 

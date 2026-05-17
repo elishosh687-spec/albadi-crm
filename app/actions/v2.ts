@@ -3,6 +3,7 @@
 import { db } from "@/lib/db";
 import {
   botConfig,
+  botDecisionLog,
   botDrafts,
   crmSlaTimers,
   crmTasks,
@@ -50,6 +51,7 @@ import {
   approveDraft as approveDraftLib,
   rejectDraft as rejectDraftLib,
 } from "@/lib/drafts";
+import { attachEliFeedback } from "@/lib/supervisor/log";
 
 export interface SimpleResult {
   ok: boolean;
@@ -122,6 +124,13 @@ export async function setLeadStage(
       }
     }
 
+    // Capture prior stage for the supervisor feedback log.
+    const [prior] = await db
+      .select({ stage: leads.pipelineStage })
+      .from(leads)
+      .where(sql`trim(${leads.manychatSubId}) = ${cleanSid}`)
+      .limit(1);
+
     try {
       await pushStageAndFlags(cleanSid, input.stage, input.flags);
     } catch (e) {
@@ -130,6 +139,15 @@ export async function setLeadStage(
         ok: false,
         error: `כתיבה נכשלה: ${e instanceof Error ? e.message : String(e)}`,
       };
+    }
+
+    if (prior?.stage !== input.stage) {
+      await attachEliFeedback({
+        manychatSubId: cleanSid,
+        eliAction: "stage_override",
+        eliStageFrom: prior?.stage ?? null,
+        eliStageTo: input.stage,
+      });
     }
 
     safeRevalidate("/dashboard/v3", "layout");
@@ -442,6 +460,15 @@ export async function sendManualReply(
       })
       .where(sql`trim(${leads.manychatSubId}) = ${cleanSid}`);
 
+    // Supervisor feedback: Eli sent a manual reply via the dashboard composer.
+    // If the most recent bot_decision_log row was a supervisor escalation,
+    // this attaches the typed text as feedback.
+    await attachEliFeedback({
+      manychatSubId: cleanSid,
+      eliAction: "manual_reply",
+      eliManualReply: cleanText,
+    });
+
     safeRevalidate("/dashboard/v3", "layout");
     return { ok: true, message: "נשלח" };
   } catch (e) {
@@ -492,6 +519,87 @@ export async function loadLeadThread(
       receivedAt: m.receivedAt.toISOString(),
     }));
     return { ok: true, messages };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "load failed" };
+  }
+}
+
+// Bot Supervisor Phase 1 — surface bot decision log to the v3 lead drawer.
+export interface BotDecisionRowDto {
+  id: number;
+  createdAt: string;
+  manychatSubId: string;
+  messageId: number | null;
+  inboundText: string | null;
+  stageBefore: string | null;
+  stageAfter: string | null;
+  langfuseTraceId: string | null;
+  llmIntent: string | null;
+  llmConfidence: number | null;
+  llmRecommended: string | null;
+  llmReason: string | null;
+  llmRiskFlags: string[] | null;
+  decidedBy: string;
+  action: string;
+  replyText: string | null;
+  escalationKind: string | null;
+  draftId: number | null;
+  metadata: Record<string, unknown> | null;
+  eliAction: string | null;
+  eliCorrectionType: string | null;
+  eliEditText: string | null;
+  eliRejectReason: string | null;
+  eliManualReply: string | null;
+  eliStageFrom: string | null;
+  eliStageTo: string | null;
+  eliDecidedAt: string | null;
+}
+
+export async function loadBotDecisionsAction(
+  manychatSubId: string,
+  limit = 100
+): Promise<
+  { ok: true; rows: BotDecisionRowDto[] } | { ok: false; error: string }
+> {
+  const cleanSid = manychatSubId.trim();
+  if (!cleanSid) return { ok: false, error: "missing subscriberId" };
+  try {
+    const rows = await db
+      .select()
+      .from(botDecisionLog)
+      .where(sql`trim(${botDecisionLog.manychatSubId}) = ${cleanSid}`)
+      .orderBy(desc(botDecisionLog.createdAt))
+      .limit(limit);
+    const dto: BotDecisionRowDto[] = rows.map((r) => ({
+      id: r.id,
+      createdAt: r.createdAt.toISOString(),
+      manychatSubId: r.manychatSubId,
+      messageId: r.messageId,
+      inboundText: r.inboundText,
+      stageBefore: r.stageBefore,
+      stageAfter: r.stageAfter,
+      langfuseTraceId: r.langfuseTraceId,
+      llmIntent: r.llmIntent,
+      llmConfidence: r.llmConfidence,
+      llmRecommended: r.llmRecommended,
+      llmReason: r.llmReason,
+      llmRiskFlags: r.llmRiskFlags as string[] | null,
+      decidedBy: r.decidedBy,
+      action: r.action,
+      replyText: r.replyText,
+      escalationKind: r.escalationKind,
+      draftId: r.draftId,
+      metadata: r.metadata as Record<string, unknown> | null,
+      eliAction: r.eliAction,
+      eliCorrectionType: r.eliCorrectionType,
+      eliEditText: r.eliEditText,
+      eliRejectReason: r.eliRejectReason,
+      eliManualReply: r.eliManualReply,
+      eliStageFrom: r.eliStageFrom,
+      eliStageTo: r.eliStageTo,
+      eliDecidedAt: r.eliDecidedAt ? r.eliDecidedAt.toISOString() : null,
+    }));
+    return { ok: true, rows: dto };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "load failed" };
   }
@@ -621,6 +729,10 @@ export async function setBotPaused(
         })
         .where(sql`trim(${leads.manychatSubId}) = ${cleanSid}`);
     }
+    await attachEliFeedback({
+      manychatSubId: cleanSid,
+      eliAction: paused ? "paused" : "unpaused",
+    });
     safeRevalidate("/dashboard/v3", "layout");
     return { ok: true, message: paused ? "הבוט מושהה" : "הבוט פעיל" };
   } catch (e) {
