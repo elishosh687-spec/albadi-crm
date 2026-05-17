@@ -645,6 +645,10 @@ export async function correctStageDecisionAction(
 
 // Eli marks "the LLM verdict was CORRECT" (thumbs-up). Positive training
 // signal — Phase 2 will use these rows as confirmed-correct examples.
+// IMPORTANT: this OVERWRITES any prior eli_action (e.g. 'direct_whatsapp_reply')
+// because the explicit verdict is the stronger signal — even if Eli had
+// already typed something in the chat, his thumbs-up means "the LLM's
+// classification was right, my reply was just polish".
 export async function confirmLLMDecisionAction(
   rowId: number
 ): Promise<SimpleResult> {
@@ -655,7 +659,7 @@ export async function confirmLLMDecisionAction(
     await db
       .update(botDecisionLog)
       .set({
-        eliAction: sql`COALESCE(${botDecisionLog.eliAction}, 'approved_as_is')`,
+        eliAction: "approved_as_is",
         eliCorrectionType: null,
         eliDecidedAt: new Date(),
       })

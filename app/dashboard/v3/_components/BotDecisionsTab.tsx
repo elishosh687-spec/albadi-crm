@@ -106,7 +106,7 @@ export function BotDecisionsTab({ sid }: { sid: string }) {
             r.id === rowId
               ? {
                   ...r,
-                  eliAction: r.eliAction ?? "approved_as_is",
+                  eliAction: "approved_as_is", // overwrite — explicit verdict is the stronger signal
                   eliCorrectionType: null,
                   eliDecidedAt: new Date().toISOString(),
                 }
@@ -333,7 +333,10 @@ function DecisionCard({
                 </div>
               )}
 
-              {/* Feedback: thumbs-up / thumbs-down on the LLM verdict. */}
+              {/* Feedback: thumbs-up / thumbs-down on the LLM verdict.
+                  Buttons hide only after Eli explicitly rates (correct/wrong)
+                  via this UI. Other feedback (manual reply, direct WA, etc.)
+                  keeps the buttons visible so the rating can still be given. */}
               {row.eliIntentOverride ? (
                 <div className="mt-2 flex items-center gap-1 text-amber-600 dark:text-amber-400">
                   <ThumbsDown className="size-3" />
@@ -341,7 +344,7 @@ function DecisionCard({
                     סווג מחדש כ-<strong>{row.eliIntentOverride}</strong>
                   </span>
                 </div>
-              ) : row.eliAction === "approved_as_is" && !row.draftId ? (
+              ) : row.eliCorrectionType === null && row.eliAction === "approved_as_is" ? (
                 <div className="mt-2 flex items-center gap-1 text-emerald-600 dark:text-emerald-400">
                   <ThumbsUp className="size-3" />
                   <span className="text-xs">הLLM צדק (אישרת)</span>
