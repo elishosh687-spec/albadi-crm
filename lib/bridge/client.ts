@@ -339,7 +339,7 @@ export async function sendCompanyTemplate(jid: string): Promise<void> {
       "חברת אריזות עם 20+ שנה בענף. שותפים במפעל ייצור בסין. מתמחים בשקיות ממותגות לעסקים.\n\n" +
       "🌐 https://ecobrotherss.com\n\n" +
       "🌐 https://packiure.com\n\n" +
-      "🌐 https://bag-quote-app.vercel.app/landing",
+      "🌐 https://albadi.ecobrotherss.com",
     cta: { display_text: "📸 עקבו באינסטגרם", url: "https://www.instagram.com/simonsostri" },
   };
   try {
