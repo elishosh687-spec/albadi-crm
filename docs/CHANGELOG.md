@@ -5,6 +5,42 @@
 
 ---
 
+## v3.5 — 2026-05-17 — "Bot Supervisor Phase 1 — LLM gate + decision log + Eli feedback"
+
+### Added
+- **LLM Supervisor** (`lib/supervisor/supervise.ts`) — gates EVERY inbound message BEFORE any reply leaves. Returns one of: `approve_code` / `override_with_text` / `escalate_to_eli` / `silence`. On error: `supervisor_error` → no send, Eli DM. System prompt v1.1.0 compresses CUSTOMER-FLOW.md decision matrix + BOT-COPY tone rules + price/date guardrails.
+- **`bot_decision_log` table** — one row per inbound. Captures three lanes: (a) what the LLM supervisor recommended, (b) what the deterministic code actually did, (c) what Eli decided later. Schema includes `eli_correction_type` (routing / policy / content) for future Phase 2 rule mining.
+- **Candidate predictor** (`lib/supervisor/candidate.ts`) — lightweight dry-run that maps (stage, qState, classified intent) to a description of what the existing handler would do. Used as context for the supervisor LLM.
+- **Eli feedback hooks** — `attachEliFeedback()` called from `approveDraft`, `rejectDraft`, `sendManualReply`, `setLeadStage`, `setBotPaused`, and the direct-WhatsApp branch of the bridge webhook. Best-effort, never blocks.
+- **Auto-send lane** — when supervisor escalates but the candidate is a known-safe canned reply (samples / delivery / format / company / inclusive) with high intent confidence and zero risk flags, the gate overrules the LLM and lets the handler send. Saves Eli draft-approval on no-brainers.
+- **Replay metadata** — every log row's `metadata` carries `prompt_version`, `model`, and a candidate snapshot. Enables prompt-version analytics + replay of historical inbounds against new prompts.
+- **"החלטות בוט" tab** in the v3 lead drawer — read-only 3-lane timeline. Divergence (LLM said one thing, code did another) and Eli overrides are highlighted.
+- `GET /api/leads/[sid]/decisions` — Bearer-auth endpoint returning the latest 100 decision rows for a lead.
+- `loadBotDecisionsAction` server action — same data, for in-dashboard use.
+
+### Changed
+- **`app/api/bridge/webhook/route.ts`** — full routing refactor. After message insert + stop-word + auto-unpause, every inbound now passes through `routeThroughSupervisor()`. Stop-word path, auto-unpause, and silent stages all write log rows so the timeline is complete.
+- **`lib/drafts/index.ts`** — `approveDraft` / `rejectDraft` attach Eli feedback (approved_as_is / edited_draft / rejected_draft) to the most recent decision log row within a 24h window.
+- **`app/actions/v2.ts`** — `sendManualReply`, `setLeadStage`, `setBotPaused` attach feedback similarly.
+- **Vercel cron** for follow-ups → `0 * * * *` (hourly) instead of daily, so the 2h/12h/23h cadences encoded in `app/api/bot/followups/route.ts` actually fire on time.
+
+### Migration notes
+- `bot_decision_log` table + `eli_correction_type` column created via idempotent scripts (`scripts/_create-bot-decision-log.ts`, `scripts/_add-correction-type.ts`). Both applied to Neon.
+- All new schema additions are additive; zero downtime.
+- New ENV vars (all optional): `SUPERVISOR_MODEL` (default `gpt-4o-mini`), `SUPERVISOR_BYPASS=1` (emergency rollback — falls back to legacy flow without redeploy).
+
+### Known limitations
+- `override_with_text` does NOT apply the candidate's stage transition. Reserve for cases where stage doesn't need to advance (Phase 5 will add `stage_transition` to the supervisor JSON output).
+- Langfuse integration deferred — `langfuse_trace_id` column is in the schema but not populated.
+- Phase 2 (few-shot retrieval from `bot_decision_log` where `eli_action IS NOT NULL`) waits until ~50+ feedback rows accumulate (~1 week of operating data).
+
+### Rationale
+Eli reported leads falling between the chairs — bot answers some, ghosts others, no visibility into bot decisions. Original ask was a multi-section rule engine + QA dashboard + suggested rules queue (~2 weeks). We deliberately shipped a measurement-first MVP: every decision is captured (LLM verdict + code action + Eli's eventual override) so future phases (Phase 2 few-shot, Phase 3 deterministic rule extraction) are driven by real data, not theory.
+
+See `docs/binary-chasing-dawn.md` for architecture, files, ENV, smoke-test, and Phase 1.5–6 roadmap.
+
+---
+
 ## v3.4 — 2026-05-16 — "Dashboard v3 command center + CRM operating layer"
 
 ### Added

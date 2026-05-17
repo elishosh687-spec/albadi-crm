@@ -99,6 +99,26 @@
 | 1.8.1 | Batch send re-engagement (ManyChat templates) | deprecated | `app/api/bot/restart-send/route.ts` | CLAUDE.md §bridge migration |
 | 1.8.2 | Bridge-based re-engagement (free-form) | planned | — | — |
 
+### 1.9 Bot Supervisor (Phase 1)
+
+| # | Feature | Status | קוד | מסמך |
+|---|---|---|---|---|
+| 1.9.1 | LLM supervisor gate on every inbound (`approve_code` / `override_with_text` / `escalate_to_eli` / `silence`) | shipped (v3.5) | `lib/supervisor/supervise.ts` | binary-chasing-dawn.md |
+| 1.9.2 | Candidate predictor (dry-run of existing handler) | shipped (v3.5) | `lib/supervisor/candidate.ts` | — |
+| 1.9.3 | `bot_decision_log` table with 3 lanes (LLM / Code / Eli) | shipped (v3.5) | schema | ARCHITECTURE §db |
+| 1.9.4 | Eli feedback hooks (drafts approve/edit/reject, manual reply, stage override, pause, direct WA) | shipped (v3.5) | `lib/supervisor/log.ts` | — |
+| 1.9.5 | `eli_correction_type` classification (routing / policy / content) | shipped (v3.5) | `lib/supervisor/log.ts:inferCorrectionType` | — |
+| 1.9.6 | Auto-send lane (overrule conservative escalate on safe canned replies) | shipped (v3.5) | `app/api/bridge/webhook/route.ts` | — |
+| 1.9.7 | Replay metadata (`prompt_version` + `model` + candidate snapshot per log row) | shipped (v3.5) | `app/api/bridge/webhook/route.ts` | — |
+| 1.9.8 | "החלטות בוט" tab in v3 lead drawer | shipped (v3.5) | `app/dashboard/v3/_components/BotDecisionsTab.tsx` | — |
+| 1.9.9 | `loadBotDecisionsAction` server action + `GET /api/leads/[sid]/decisions` | shipped (v3.5) | `app/actions/v2.ts` + `app/api/leads/[sid]/decisions/route.ts` | — |
+| 1.9.10 | `SUPERVISOR_BYPASS=1` emergency kill switch | shipped (v3.5) | env | — |
+| 1.9.11 | Langfuse integration (trace_id column ready, code deferred) | planned | — | binary-chasing-dawn.md §Phase 1.5 |
+| 1.9.12 | Few-shot retrieval from past Eli feedback | planned | — | binary-chasing-dawn.md §Phase 2 |
+| 1.9.13 | Deterministic rule extraction from log patterns | planned | — | binary-chasing-dawn.md §Phase 3 |
+| 1.9.14 | Bot QA aggregated stats page | planned | — | binary-chasing-dawn.md §Phase 4 |
+| 1.9.15 | Override stage transitions (LLM returns `stage_transition` in JSON) | planned | — | binary-chasing-dawn.md §Phase 5 |
+
 ---
 
 ## 2. Dashboard Features (Supervisor — Eli only)

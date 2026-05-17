@@ -1,6 +1,8 @@
 # binary-chasing-dawn — Bot Supervisor Phase 1
 
-Branch: `binary-chasing-dawn`
+**Status: SHIPPED (v3.5, 2026-05-17).** Merged to `main`. See `docs/CHANGELOG.md §v3.5` for release notes.
+
+Branch: `binary-chasing-dawn` (merged)
 Plan: `~/.claude/plans/binary-chasing-dawn.md`
 
 ## Goal
