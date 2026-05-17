@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   BarChart3,
+  Clock,
   Factory,
   Inbox,
   LayoutDashboard,
@@ -18,6 +19,7 @@ export const NAV = [
   { href: "/dashboard/v3/conversations", label: "שיחות", icon: MessageSquare },
   { href: "/dashboard/v3/leads", label: "לידים", icon: Users },
   { href: "/dashboard/v3/drafts", label: "אישורים", icon: Inbox },
+  { href: "/dashboard/v3/followups", label: "תור פולואפים", icon: Clock },
   { href: "/dashboard/v3/factory", label: "הצעות מפעל", icon: Factory },
   { href: "/dashboard/v3/analytics", label: "אנליטיקה", icon: BarChart3 },
   { href: "/dashboard/v3/settings", label: "הגדרות", icon: Settings },

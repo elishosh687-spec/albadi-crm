@@ -19,8 +19,11 @@ import {
   loadBotDecisionsAction,
   correctLLMDecisionAction,
   confirmLLMDecisionAction,
+  confirmStageDecisionAction,
+  correctStageDecisionAction,
   type BotDecisionRowDto,
 } from "@/app/actions/v2";
+import { V2_PIPELINE_STAGES } from "@/lib/manychat/stages";
 
 type DecisionRow = BotDecisionRowDto;
 
@@ -113,14 +116,54 @@ export function BotDecisionsTab({ sid }: { sid: string }) {
     );
   };
 
+  const handleStageConfirmed = (rowId: number) => {
+    setRows((prev) =>
+      prev
+        ? prev.map((r) =>
+            r.id === rowId
+              ? {
+                  ...r,
+                  eliStageFrom: r.stageAfter ?? null,
+                  eliStageTo: r.stageAfter ?? null,
+                  eliAction: r.eliAction ?? "approved_as_is",
+                  eliDecidedAt: new Date().toISOString(),
+                }
+              : r
+          )
+        : prev
+    );
+  };
+
+  const handleStageCorrected = (rowId: number, stage: string) => {
+    setRows((prev) =>
+      prev
+        ? prev.map((r) =>
+            r.id === rowId
+              ? {
+                  ...r,
+                  eliStageFrom: r.stageAfter ?? null,
+                  eliStageTo: stage,
+                  eliCorrectionType: "routing",
+                  eliAction: r.eliAction ?? "stage_override",
+                  eliDecidedAt: new Date().toISOString(),
+                }
+              : r
+          )
+        : prev
+    );
+  };
+
   return (
     <div className="flex flex-col gap-2 p-2">
       {rows.map((row) => (
         <DecisionCard
           key={row.id}
           row={row}
+          sid={sid}
           onRowConfirmed={handleRowConfirmed}
           onRowCorrected={handleRowCorrected}
+          onStageConfirmed={handleStageConfirmed}
+          onStageCorrected={handleStageCorrected}
         />
       ))}
     </div>
@@ -129,12 +172,18 @@ export function BotDecisionsTab({ sid }: { sid: string }) {
 
 function DecisionCard({
   row,
+  sid,
   onRowConfirmed,
   onRowCorrected,
+  onStageConfirmed,
+  onStageCorrected,
 }: {
   row: DecisionRow;
+  sid: string;
   onRowConfirmed: (rowId: number) => void;
   onRowCorrected: (rowId: number, intent: string) => void;
+  onStageConfirmed: (rowId: number) => void;
+  onStageCorrected: (rowId: number, stage: string) => void;
 }) {
   const divergence =
     !!row.llmRecommended &&
@@ -178,6 +227,44 @@ function DecisionCard({
         onRowCorrected(row.id, intent);
       } else {
         setError(r.error ?? "save failed");
+      }
+    });
+  };
+
+  // Stage feedback state — separate from intent feedback.
+  const [showStagePicker, setShowStagePicker] = useState(false);
+  const [pickedStage, setPickedStage] = useState<string>("");
+  const [stageError, setStageError] = useState<string | null>(null);
+  const stageTransitioned = !!row.stageAfter && row.stageAfter !== row.stageBefore;
+  const stageFeedbackGiven =
+    row.eliStageFrom !== null && row.eliStageTo !== null;
+  const stageCorrected =
+    stageFeedbackGiven && row.eliStageFrom !== row.eliStageTo;
+  const stageConfirmedExplicit =
+    stageFeedbackGiven && row.eliStageFrom === row.eliStageTo;
+
+  const confirmStage = () => {
+    setStageError(null);
+    startSubmit(async () => {
+      const r = await confirmStageDecisionAction(row.id);
+      if (r.ok) onStageConfirmed(row.id);
+      else setStageError(r.error ?? "save failed");
+    });
+  };
+
+  const submitStageCorrection = () => {
+    if (!pickedStage) {
+      setStageError("בחר שלב");
+      return;
+    }
+    setStageError(null);
+    startSubmit(async () => {
+      const r = await correctStageDecisionAction(row.id, pickedStage, sid);
+      if (r.ok) {
+        setShowStagePicker(false);
+        onStageCorrected(row.id, pickedStage);
+      } else {
+        setStageError(r.error ?? "save failed");
       }
     });
   };
@@ -355,6 +442,90 @@ function DecisionCard({
           )}
           {row.escalationKind && (
             <div className="text-muted-foreground">escalation: {row.escalationKind}</div>
+          )}
+
+          {/* Stage feedback — only when a stage transition actually happened. */}
+          {stageTransitioned && (
+            <div className="mt-2 border-t border-border/50 pt-2">
+              <div className="text-xs text-muted-foreground mb-1">
+                stage: {row.stageBefore} → <strong>{row.stageAfter}</strong>
+              </div>
+              {stageCorrected ? (
+                <div className="flex items-center gap-1 text-amber-600 dark:text-amber-400">
+                  <ThumbsDown className="size-3" />
+                  <span className="text-xs">
+                    תוקן ל-<strong>{row.eliStageTo}</strong>
+                  </span>
+                </div>
+              ) : stageConfirmedExplicit ? (
+                <div className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400">
+                  <ThumbsUp className="size-3" />
+                  <span className="text-xs">השלב נכון (אישרת)</span>
+                </div>
+              ) : !showStagePicker ? (
+                <div className="flex gap-1.5">
+                  <button
+                    onClick={confirmStage}
+                    disabled={submitting}
+                    className="flex-1 inline-flex items-center justify-center gap-1 rounded border border-emerald-500/40 bg-emerald-500/10 px-2 py-1 text-xs text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/20 disabled:opacity-50"
+                  >
+                    <ThumbsUp className="size-3" />
+                    השלב נכון
+                  </button>
+                  <button
+                    onClick={() => setShowStagePicker(true)}
+                    disabled={submitting}
+                    className="flex-1 inline-flex items-center justify-center gap-1 rounded border border-amber-500/40 bg-amber-500/10 px-2 py-1 text-xs text-amber-700 dark:text-amber-300 hover:bg-amber-500/20 disabled:opacity-50"
+                  >
+                    <ThumbsDown className="size-3" />
+                    שלב שגוי
+                  </button>
+                </div>
+              ) : (
+                <div className="flex flex-col gap-1.5 rounded border border-amber-500/30 bg-amber-500/5 p-2">
+                  <div className="text-xs text-muted-foreground">
+                    מה השלב הנכון?
+                  </div>
+                  <select
+                    value={pickedStage}
+                    onChange={(e) => setPickedStage(e.target.value)}
+                    disabled={submitting}
+                    className="text-xs rounded border border-border bg-background px-1.5 py-1"
+                  >
+                    <option value="">בחר שלב…</option>
+                    {V2_PIPELINE_STAGES.map((s) => (
+                      <option key={s} value={s}>
+                        {s}
+                      </option>
+                    ))}
+                  </select>
+                  {stageError && (
+                    <div className="text-xs text-destructive">{stageError}</div>
+                  )}
+                  <div className="flex gap-1.5">
+                    <button
+                      onClick={submitStageCorrection}
+                      disabled={submitting || !pickedStage}
+                      className="flex-1 inline-flex items-center justify-center gap-1 rounded border border-amber-500/50 bg-amber-500/15 px-2 py-1 text-xs text-amber-700 dark:text-amber-300 hover:bg-amber-500/25 disabled:opacity-50"
+                    >
+                      <Check className="size-3" />
+                      {submitting ? "שומר…" : "תקן והעבר"}
+                    </button>
+                    <button
+                      onClick={() => {
+                        setShowStagePicker(false);
+                        setStageError(null);
+                        setPickedStage("");
+                      }}
+                      disabled={submitting}
+                      className="flex-1 inline-flex items-center justify-center rounded border border-border px-2 py-1 text-xs hover:bg-muted disabled:opacity-50"
+                    >
+                      ביטול
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
           )}
         </Lane>
 

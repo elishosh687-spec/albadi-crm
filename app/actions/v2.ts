@@ -556,6 +556,93 @@ export interface BotDecisionRowDto {
   eliDecidedAt: string | null;
 }
 
+// Eli marks "the stage transition was CORRECT" — positive signal that the
+// bot/handler routed the lead to the right stage. Saved on the same row.
+export async function confirmStageDecisionAction(
+  rowId: number
+): Promise<SimpleResult> {
+  try {
+    if (!Number.isFinite(rowId) || rowId <= 0) {
+      return { ok: false, error: "invalid row id" };
+    }
+    await db
+      .update(botDecisionLog)
+      .set({
+        // Reuse eli_stage_from/eli_stage_to to mark "confirmed correct" =
+        // from == to (no change). Phase 2 mining can filter on that.
+        eliStageFrom: sql`${botDecisionLog.stageAfter}`,
+        eliStageTo: sql`${botDecisionLog.stageAfter}`,
+        eliAction: sql`COALESCE(${botDecisionLog.eliAction}, 'approved_as_is')`,
+        eliDecidedAt: new Date(),
+      })
+      .where(eq(botDecisionLog.id, rowId));
+    safeRevalidate("/dashboard/v3", "layout");
+    return { ok: true, message: "אישור שלב נשמר" };
+  } catch (e) {
+    return {
+      ok: false,
+      error: e instanceof Error ? e.message : "save failed",
+    };
+  }
+}
+
+// Eli marks "the stage transition was WRONG" — supplies the correct stage.
+// This ALSO physically moves the lead to the correct stage (via setLeadStage)
+// since you typically want the actual stage to match what you believe is right.
+export async function correctStageDecisionAction(
+  rowId: number,
+  correctStage: string,
+  sid: string
+): Promise<SimpleResult> {
+  try {
+    if (!Number.isFinite(rowId) || rowId <= 0) {
+      return { ok: false, error: "invalid row id" };
+    }
+    if (!V2_PIPELINE_STAGES.includes(correctStage as any)) {
+      return { ok: false, error: `invalid stage: ${correctStage}` };
+    }
+
+    // 1. Get the current stage_after to record as the "from" of the correction.
+    const [row] = await db
+      .select({ stageAfter: botDecisionLog.stageAfter })
+      .from(botDecisionLog)
+      .where(eq(botDecisionLog.id, rowId))
+      .limit(1);
+
+    // 2. Update the log row.
+    await db
+      .update(botDecisionLog)
+      .set({
+        eliStageFrom: row?.stageAfter ?? null,
+        eliStageTo: correctStage,
+        eliCorrectionType: "routing",
+        eliAction: sql`COALESCE(${botDecisionLog.eliAction}, 'stage_override')`,
+        eliDecidedAt: new Date(),
+      })
+      .where(eq(botDecisionLog.id, rowId));
+
+    // 3. Physically move the lead to the correct stage.
+    if (sid?.trim()) {
+      const r = await setLeadStage({
+        manychatSubId: sid,
+        stage: correctStage as V2PipelineStage,
+        flags: [],
+      });
+      if (!r.ok) {
+        return { ok: false, error: `signal saved but stage change failed: ${r.error}` };
+      }
+    }
+
+    safeRevalidate("/dashboard/v3", "layout");
+    return { ok: true, message: "תיקון שלב נשמר ובוצע" };
+  } catch (e) {
+    return {
+      ok: false,
+      error: e instanceof Error ? e.message : "save failed",
+    };
+  }
+}
+
 // Eli marks "the LLM verdict was CORRECT" (thumbs-up). Positive training
 // signal — Phase 2 will use these rows as confirmed-correct examples.
 export async function confirmLLMDecisionAction(
