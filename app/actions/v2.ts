@@ -556,6 +556,33 @@ export interface BotDecisionRowDto {
   eliDecidedAt: string | null;
 }
 
+// Eli marks "the LLM verdict was CORRECT" (thumbs-up). Positive training
+// signal — Phase 2 will use these rows as confirmed-correct examples.
+export async function confirmLLMDecisionAction(
+  rowId: number
+): Promise<SimpleResult> {
+  try {
+    if (!Number.isFinite(rowId) || rowId <= 0) {
+      return { ok: false, error: "invalid row id" };
+    }
+    await db
+      .update(botDecisionLog)
+      .set({
+        eliAction: sql`COALESCE(${botDecisionLog.eliAction}, 'approved_as_is')`,
+        eliCorrectionType: null,
+        eliDecidedAt: new Date(),
+      })
+      .where(eq(botDecisionLog.id, rowId));
+    safeRevalidate("/dashboard/v3", "layout");
+    return { ok: true, message: "אישור נשמר" };
+  } catch (e) {
+    return {
+      ok: false,
+      error: e instanceof Error ? e.message : "save failed",
+    };
+  }
+}
+
 // Eli marks "the LLM misclassified". Writes eli_intent_override on the row
 // AND flips eli_correction_type to 'routing' (because changing the intent is
 // a routing-level correction, not content). Phase 2 few-shot will pull rows

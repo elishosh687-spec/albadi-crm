@@ -13,34 +13,29 @@
  */
 
 import { useEffect, useState, useTransition } from "react";
-import { Code, User, AlertTriangle, Sparkles, AlertCircle, Check } from "lucide-react";
+import { Code, User, AlertTriangle, Sparkles, ThumbsUp, ThumbsDown, Check } from "lucide-react";
 import { cn } from "@/lib/cn";
 import {
   loadBotDecisionsAction,
   correctLLMDecisionAction,
+  confirmLLMDecisionAction,
   type BotDecisionRowDto,
 } from "@/app/actions/v2";
 
 type DecisionRow = BotDecisionRowDto;
 
-// Canonical intents the supervisor / classifier uses, plus "אחר" for free text.
+// Top 10 most common intents — short list for fast picking.
 const INTENT_OPTIONS = [
-  { value: "accept", label: "אישור (accept)" },
-  { value: "reject", label: "דחייה (reject)" },
-  { value: "negotiating", label: "יקר / מיקוח (negotiating)" },
-  { value: "samples_request", label: "בקשת דוגמאות" },
-  { value: "custom_size", label: "מידה/כמות מותאמת" },
-  { value: "question_delivery", label: "שאלה על אספקה" },
-  { value: "question_inclusive", label: "שאלה: כולל הכל?" },
-  { value: "question_payment", label: "שאלה על תשלום" },
-  { value: "question_format", label: "שאלה על פורמט/לוגו" },
-  { value: "question_meeting", label: "בקשת שיחה/פגישה" },
-  { value: "question_company", label: "שאלה על החברה" },
-  { value: "question_other", label: "שאלה אחרת" },
-  { value: "meta_question", label: "שאלה מטא ('למה אתה שואל')" },
+  { value: "accept", label: "אישור" },
+  { value: "reject", label: "דחייה" },
+  { value: "negotiating", label: "יקר / מיקוח" },
+  { value: "question_meeting", label: "בקשת שיחה" },
+  { value: "question_delivery", label: "שאלת אספקה" },
+  { value: "meta_question", label: 'שאלה מטא ("למה שואל")' },
   { value: "frustrated", label: "תסכול / כעס" },
+  { value: "custom_size", label: "מידה/כמות מותאמת" },
   { value: "spec_change", label: "שינוי מפרט" },
-  { value: "other", label: "אחר / לא ברור" },
+  { value: "other", label: "אחר (טקסט חופשי)" },
 ];
 
 export function BotDecisionsTab({ sid }: { sid: string }) {
@@ -83,7 +78,7 @@ export function BotDecisionsTab({ sid }: { sid: string }) {
     );
   }
 
-  const handleRowUpdated = (rowId: number, intent: string) => {
+  const handleRowCorrected = (rowId: number, intent: string) => {
     setRows((prev) =>
       prev
         ? prev.map((r) =>
@@ -101,10 +96,32 @@ export function BotDecisionsTab({ sid }: { sid: string }) {
     );
   };
 
+  const handleRowConfirmed = (rowId: number) => {
+    setRows((prev) =>
+      prev
+        ? prev.map((r) =>
+            r.id === rowId
+              ? {
+                  ...r,
+                  eliAction: r.eliAction ?? "approved_as_is",
+                  eliCorrectionType: null,
+                  eliDecidedAt: new Date().toISOString(),
+                }
+              : r
+          )
+        : prev
+    );
+  };
+
   return (
     <div className="flex flex-col gap-2 p-2">
       {rows.map((row) => (
-        <DecisionCard key={row.id} row={row} onRowUpdated={handleRowUpdated} />
+        <DecisionCard
+          key={row.id}
+          row={row}
+          onRowConfirmed={handleRowConfirmed}
+          onRowCorrected={handleRowCorrected}
+        />
       ))}
     </div>
   );
@@ -112,10 +129,12 @@ export function BotDecisionsTab({ sid }: { sid: string }) {
 
 function DecisionCard({
   row,
-  onRowUpdated,
+  onRowConfirmed,
+  onRowCorrected,
 }: {
   row: DecisionRow;
-  onRowUpdated: (rowId: number, intent: string) => void;
+  onRowConfirmed: (rowId: number) => void;
+  onRowCorrected: (rowId: number, intent: string) => void;
 }) {
   const divergence =
     !!row.llmRecommended &&
@@ -129,6 +148,18 @@ function DecisionCard({
   const [freeText, setFreeText] = useState<string>("");
   const [submitting, startSubmit] = useTransition();
   const [error, setError] = useState<string | null>(null);
+
+  const confirmCorrect = () => {
+    setError(null);
+    startSubmit(async () => {
+      const r = await confirmLLMDecisionAction(row.id);
+      if (r.ok) {
+        onRowConfirmed(row.id);
+      } else {
+        setError(r.error ?? "save failed");
+      }
+    });
+  };
 
   const submitCorrection = () => {
     const intent =
@@ -144,7 +175,7 @@ function DecisionCard({
       const r = await correctLLMDecisionAction(row.id, intent);
       if (r.ok) {
         setShowPicker(false);
-        onRowUpdated(row.id, intent);
+        onRowCorrected(row.id, intent);
       } else {
         setError(r.error ?? "save failed");
       }
@@ -215,31 +246,50 @@ function DecisionCard({
                 </div>
               )}
 
-              {/* "LLM was wrong" reclassification UI */}
+              {/* Feedback: thumbs-up / thumbs-down on the LLM verdict. */}
               {row.eliIntentOverride ? (
                 <div className="mt-2 flex items-center gap-1 text-amber-600 dark:text-amber-400">
-                  <AlertCircle className="size-3" />
+                  <ThumbsDown className="size-3" />
                   <span className="text-xs">
-                    תוקן: <strong>{row.eliIntentOverride}</strong>
+                    סווג מחדש כ-<strong>{row.eliIntentOverride}</strong>
                   </span>
                 </div>
+              ) : row.eliAction === "approved_as_is" && !row.draftId ? (
+                <div className="mt-2 flex items-center gap-1 text-emerald-600 dark:text-emerald-400">
+                  <ThumbsUp className="size-3" />
+                  <span className="text-xs">הLLM צדק (אישרת)</span>
+                </div>
               ) : !showPicker ? (
-                <button
-                  onClick={() => setShowPicker(true)}
-                  className="mt-2 inline-flex items-center gap-1 text-amber-600 hover:text-amber-500 dark:text-amber-400 text-xs hover:underline"
-                >
-                  <AlertCircle className="size-3" />
-                  הLLM טעה — סווג מחדש
-                </button>
+                <div className="mt-2 flex gap-1.5">
+                  <button
+                    onClick={confirmCorrect}
+                    disabled={submitting}
+                    className="flex-1 inline-flex items-center justify-center gap-1 rounded border border-emerald-500/40 bg-emerald-500/10 px-2 py-1 text-xs text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/20 disabled:opacity-50"
+                  >
+                    <ThumbsUp className="size-3" />
+                    הLLM צדק
+                  </button>
+                  <button
+                    onClick={() => setShowPicker(true)}
+                    disabled={submitting}
+                    className="flex-1 inline-flex items-center justify-center gap-1 rounded border border-amber-500/40 bg-amber-500/10 px-2 py-1 text-xs text-amber-700 dark:text-amber-300 hover:bg-amber-500/20 disabled:opacity-50"
+                  >
+                    <ThumbsDown className="size-3" />
+                    הLLM טעה
+                  </button>
+                </div>
               ) : (
                 <div className="mt-2 flex flex-col gap-1.5 rounded border border-amber-500/30 bg-amber-500/5 p-2">
+                  <div className="text-xs text-muted-foreground">
+                    מה היה ה-intent הנכון?
+                  </div>
                   <select
                     value={pickedIntent}
                     onChange={(e) => setPickedIntent(e.target.value)}
                     disabled={submitting}
                     className="text-xs rounded border border-border bg-background px-1.5 py-1"
                   >
-                    <option value="">בחר intent נכון…</option>
+                    <option value="">בחר…</option>
                     {INTENT_OPTIONS.map((opt) => (
                       <option key={opt.value} value={opt.value}>
                         {opt.label}
@@ -251,7 +301,7 @@ function DecisionCard({
                       type="text"
                       value={freeText}
                       onChange={(e) => setFreeText(e.target.value)}
-                      placeholder="intent חופשי (באנגלית, snake_case)"
+                      placeholder="כתוב intent בעברית או באנגלית"
                       className="text-xs rounded border border-border bg-background px-1.5 py-1"
                     />
                   )}
