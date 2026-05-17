@@ -595,13 +595,34 @@ async function routeThroughSupervisor(input: SupervisorRouteInput): Promise<void
     } catch (e) {
       console.error("[supervisor.route] eli DM failed", e);
     }
+
+    // AUTO-ACK to customer — never let an escalation feel like a ghost.
+    // Supervisor decided to hand off to Eli, but the customer just sent a
+    // message and would otherwise see nothing. Short, neutral ack so they
+    // know we received it. Eli's draft / manual reply follows up later.
+    // Skip auto-ack if the candidate already produced a canned reply that
+    // would have been informative — avoids double-messaging on edge cases.
+    let ackSent = false;
+    try {
+      await sendBridgeMessage(
+        jid,
+        "תודה על ההודעה 🙏 אבדוק ואחזור אליכם בהקדם."
+      );
+      ackSent = true;
+    } catch (e) {
+      console.error("[supervisor.route] auto-ack send failed", e);
+    }
+
     await logDecision({
       ...logBase,
       decidedBy: "code",
       action: draftId ? "draft_queued" : "escalated",
       escalationKind: "supervisor_decision",
       draftId,
-      metadata: { ...replayMeta, rawJson: verdict.rawJson },
+      replyText: ackSent
+        ? "תודה על ההודעה 🙏 אבדוק ואחזור אליכם בהקדם."
+        : null,
+      metadata: { ...replayMeta, rawJson: verdict.rawJson, auto_ack_sent: ackSent },
     });
     return;
   }
@@ -752,6 +773,18 @@ async function runLegacyHandlerAndLog(args: {
       console.error("[supervisor.route] safety-net escalation failed", e);
     }
 
+    // AUTO-ACK to customer so they don't see a ghost.
+    let safetyAckSent = false;
+    try {
+      await sendBridgeMessage(
+        jid,
+        "תודה על ההודעה 🙏 אבדוק ואחזור אליכם בהקדם."
+      );
+      safetyAckSent = true;
+    } catch (e) {
+      console.error("[supervisor.route] safety-net auto-ack failed", e);
+    }
+
     await logDecision({
       manychatSubId: jid,
       messageId: inboundMessageId,
@@ -767,6 +800,9 @@ async function runLegacyHandlerAndLog(args: {
       action: draftId ? "draft_queued" : "escalated",
       escalationKind: "safety_net_silent_handler",
       draftId,
+      replyText: safetyAckSent
+        ? "תודה על ההודעה 🙏 אבדוק ואחזור אליכם בהקדם."
+        : null,
       metadata: {
         ...(args.supervisor?.replayMeta ?? {}),
         candidate_kind: args.supervisor?.candidate ?? null,
@@ -774,6 +810,7 @@ async function runLegacyHandlerAndLog(args: {
         handlerResult: result,
         rawJson: args.supervisor?.rawJson ?? null,
         safety_net_triggered: true,
+        auto_ack_sent: safetyAckSent,
       },
     });
     return;
