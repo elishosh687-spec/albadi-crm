@@ -842,21 +842,29 @@ async function runLegacyHandlerAndLog(args: {
 
 function mapHandlerResultToAction(result: any): "reply_sent" | "sub_state_advanced" | "escalated" | "stage_transition" | "no_op" {
   const a = result?.action;
-  if (a === "escalated") return "escalated";
+  if (!a) return "no_op";
+
+  // Explicit no-op / escalation paths.
+  if (a === "no_op") return "no_op";
+  if (a === "escalated" || a === "bailed") return "escalated";
   if (a === "sub_state_advanced") return "sub_state_advanced";
+
+  // Stage transitions / lifecycle completions.
   if (
     a === "accept_routed" ||
     a === "logo_received" ||
-    a === "won_routed"
+    a === "won_routed" ||
+    a === "completed_standard" ||
+    a === "completed_factory"
   )
     return "stage_transition";
-  if (
-    a === "samples_sent" ||
-    a === "canned_reply" ||
-    a === "logo_reasked"
-  )
-    return "reply_sent";
-  return "no_op";
+
+  // Everything else from the questionnaire / decision engines is a reply
+  // the bot actually sent (started, reasked, answered, custom_prompt,
+  // custom_captured, size_page_2, confirmation_*, samples_sent, canned_reply,
+  // logo_reasked, etc.). Treat as reply_sent so the safety net doesn't
+  // mistakenly fire an auto-ack on top of an already-delivered reply.
+  return "reply_sent";
 }
 
 async function handleMessageSent(evt: BridgeEnvelope): Promise<void> {
