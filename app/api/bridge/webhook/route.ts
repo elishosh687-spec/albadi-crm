@@ -701,6 +701,83 @@ async function runLegacyHandlerAndLog(args: {
 
   // Reload stage AFTER the handler runs so we capture stage transitions.
   const stageAfter = ((await getLeadStage(jid)) || "").toUpperCase() || null;
+  const handlerAction = mapHandlerResultToAction(result);
+
+  // SAFETY NET: supervisor approved code, but code silently no_op'd
+  // (e.g. questionnaire bailed, unknown stage, edge case the handler can't
+  // resolve). Customer would be ghosted. Auto-escalate so Eli sees it.
+  // This is the "never silent after approve_code" promise.
+  const handlerSilent =
+    handlerAction === "no_op" &&
+    (args.supervisor?.recommended === "approve_code" || !args.supervisor);
+  if (handlerSilent && inboundLogText !== "(empty)" && inboundLogText !== "(media-only)") {
+    console.warn(
+      "[supervisor.route] safety net: handler silent after approve_code, escalating",
+      jid,
+      handlerName
+    );
+    let draftId: number | null = null;
+    try {
+      const [leadRow] = await db
+        .select({ name: leads.name, phone: leads.phoneE164 })
+        .from(leads)
+        .where(sql`trim(${leads.manychatSubId}) = ${jid.trim()}`)
+        .limit(1);
+      try {
+        draftId = await generateAndQueueDraft({
+          manychatSubId: jid,
+          moneyReason: "manual",
+          pipelineStage: stage,
+          leadName: leadRow?.name ?? null,
+          botSummary: `Handler ${handlerName} returned no_op after supervisor approve_code — auto-escalated to avoid ghosting`,
+          triggerMessageId: inboundMessageId,
+        });
+      } catch (e) {
+        console.error("[supervisor.route] safety-net draft generation failed", e);
+      }
+      try {
+        const who = leadRow?.name?.trim() || leadRow?.phone || jid;
+        await sendEliDM(
+          `⚠️ Safety net — ${who} (${stage ?? "no stage"})\n` +
+            `Inbound: "${inboundLogText.slice(0, 200)}"\n` +
+            `Bot silently no-op'd (${handlerName}). Customer awaits reply.\n` +
+            (draftId
+              ? `Draft #${draftId} ready in /dashboard/v3/drafts`
+              : "Draft generation failed — reply manually from CRM.")
+        );
+      } catch (e) {
+        console.error("[supervisor.route] safety-net Eli DM failed", e);
+      }
+    } catch (e) {
+      console.error("[supervisor.route] safety-net escalation failed", e);
+    }
+
+    await logDecision({
+      manychatSubId: jid,
+      messageId: inboundMessageId,
+      inboundText: inboundLogText,
+      stageBefore: stage,
+      stageAfter,
+      llmIntent: args.supervisor?.intent ?? null,
+      llmConfidence: args.supervisor?.confidence ?? null,
+      llmRecommended: (args.supervisor?.recommended as any) ?? null,
+      llmReason: args.supervisor?.reason ?? null,
+      llmRiskFlags: args.supervisor?.riskFlags ?? null,
+      decidedBy: "code",
+      action: draftId ? "draft_queued" : "escalated",
+      escalationKind: "safety_net_silent_handler",
+      draftId,
+      metadata: {
+        ...(args.supervisor?.replayMeta ?? {}),
+        candidate_kind: args.supervisor?.candidate ?? null,
+        handler: handlerName,
+        handlerResult: result,
+        rawJson: args.supervisor?.rawJson ?? null,
+        safety_net_triggered: true,
+      },
+    });
+    return;
+  }
 
   await logDecision({
     manychatSubId: jid,
@@ -714,7 +791,7 @@ async function runLegacyHandlerAndLog(args: {
     llmReason: args.supervisor?.reason ?? null,
     llmRiskFlags: args.supervisor?.riskFlags ?? null,
     decidedBy: "code",
-    action: mapHandlerResultToAction(result),
+    action: handlerAction,
     replyText: null, // handler did its own send; reply text recovery would require deeper refactor
     metadata: {
       ...(args.supervisor?.replayMeta ?? {}),

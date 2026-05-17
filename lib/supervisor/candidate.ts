@@ -56,6 +56,21 @@ export async function precomputeCandidateAction(
   // Stage 1 — NEW. Bot will advance the questionnaire (no classifyIntent needed).
   if (!stage || stage === "NEW") {
     const step = input.qState?.step;
+    const bailed = input.qState?.bailed === true;
+
+    // BAILED: handler stopped the questionnaire after too many unmatched answers.
+    // Any new inbound is post-bail — the deterministic handler will NOT respond.
+    // Supervisor MUST escalate or override; never approve_code here.
+    if (bailed) {
+      return {
+        kind: "no_op",
+        intent: null,
+        intentConfidence: null,
+        intentSummary: null,
+        description: `NEW stage but questionnaire BAILED (step=${step}, unmatchedAt=${input.qState?.unmatchedAt}). Handler will NOT respond — customer would be ghosted. Supervisor MUST escalate_to_eli or override_with_text.`,
+      };
+    }
+
     if (typeof step === "number" && step >= 1 && step <= 7) {
       return {
         kind: "questionnaire_step",
