@@ -34,11 +34,19 @@ function LeadCard({ lead, onPreview }: { lead: LeadRow; onPreview: (l: LeadRow) 
   const pill = STAGE_TONE[lead.stage ?? ""]?.pill ?? "bg-muted text-muted-foreground";
   const stageLabel = STAGE_LABEL[lead.stage ?? ""] ?? lead.stage ?? "—";
   const updatedAt = lead.updatedAt ? new Date(lead.updatedAt).toLocaleDateString("he-IL") : "—";
+  const fullCardHref = `/dashboard/v3?lead=${encodeURIComponent(lead.sid)}`;
 
   return (
     <div className="group relative flex flex-col gap-2 rounded-xl border border-border bg-card p-4 hover:border-primary/40 hover:shadow-md transition-all duration-150">
+      {/* Whole-card click opens the FULL lead card (ExpandedLead with 4 tabs incl. החלטות בוט). */}
+      <a
+        href={fullCardHref}
+        aria-label={`פתח כרטיס מלא של ${lead.name ?? "ליד"}`}
+        className="absolute inset-0 z-0"
+      />
+
       {/* Top row */}
-      <div className="flex items-start justify-between gap-2">
+      <div className="relative z-10 flex items-start justify-between gap-2">
         <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${pill}`}>
           {stageLabel}
         </span>
@@ -50,29 +58,29 @@ function LeadCard({ lead, onPreview }: { lead: LeadRow; onPreview: (l: LeadRow) 
       </div>
 
       {/* Name */}
-      <div className="font-semibold text-base leading-tight">{lead.name ?? "ללא שם"}</div>
+      <div className="relative z-10 font-semibold text-base leading-tight pointer-events-none">{lead.name ?? "ללא שם"}</div>
 
       {/* Phone */}
       {lead.phone && (
-        <div className="text-sm text-muted-foreground" dir="ltr">{lead.phone}</div>
+        <div className="relative z-10 text-sm text-muted-foreground pointer-events-none" dir="ltr">{lead.phone}</div>
       )}
 
       {/* Quote */}
       {lead.quoteTotal && (
-        <div className="text-sm font-medium text-emerald-400">
+        <div className="relative z-10 text-sm font-medium text-emerald-400 pointer-events-none">
           ₪{Number(lead.quoteTotal).toLocaleString("he-IL")}
         </div>
       )}
 
       {/* Summary */}
       {(lead.botSummary || lead.notes) && (
-        <p className="text-xs text-muted-foreground line-clamp-2 leading-relaxed">
+        <p className="relative z-10 text-xs text-muted-foreground line-clamp-2 leading-relaxed pointer-events-none">
           {lead.botSummary ?? lead.notes}
         </p>
       )}
 
-      {/* Actions — visible on hover (desktop) or always (mobile) */}
-      <div className="flex gap-2 pt-1 opacity-0 group-hover:opacity-100 md:transition-opacity duration-150 md:opacity-0 max-md:opacity-100">
+      {/* Actions — relative z-10 so they sit ABOVE the whole-card link. */}
+      <div className="relative z-10 flex gap-2 pt-1 opacity-0 group-hover:opacity-100 md:transition-opacity duration-150 md:opacity-0 max-md:opacity-100">
         <a
           href={`/dashboard/v3/conversations?lead=${encodeURIComponent(lead.sid)}`}
           className="flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-border bg-muted/40 px-3 py-1.5 text-xs hover:bg-muted transition-colors"
@@ -81,7 +89,11 @@ function LeadCard({ lead, onPreview }: { lead: LeadRow; onPreview: (l: LeadRow) 
           פתח שיחה
         </a>
         <button
-          onClick={() => onPreview(lead)}
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            onPreview(lead);
+          }}
           className="flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-primary/30 bg-primary/10 px-3 py-1.5 text-xs text-primary hover:bg-primary/20 transition-colors"
         >
           תצוגה מקדימה
@@ -159,10 +171,16 @@ function PreviewDrawer({ lead, onClose }: { lead: LeadRow; onClose: () => void }
             </div>
           )}
         </div>
-        <div className="border-t border-border p-4">
+        <div className="border-t border-border p-4 space-y-2">
+          <a
+            href={`/dashboard/v3?lead=${encodeURIComponent(lead.sid)}`}
+            className="flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
+          >
+            כרטיס מלא + החלטות בוט
+          </a>
           <a
             href={`/dashboard/v3/conversations?lead=${encodeURIComponent(lead.sid)}`}
-            className="flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
+            className="flex w-full items-center justify-center gap-2 rounded-xl border border-border bg-muted/40 px-4 py-2.5 text-sm hover:bg-muted transition-colors"
           >
             <MessageSquare className="h-4 w-4" />
             פתח שיחה
