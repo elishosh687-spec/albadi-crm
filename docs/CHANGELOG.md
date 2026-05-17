@@ -5,6 +5,33 @@
 
 ---
 
+## v3.6 — 2026-05-17 — "Follow-up Supervisor (Phase 1.5) — LLM gate on cron nudges"
+
+### Added
+- **Follow-up Supervisor** (`lib/supervisor/followup-supervisor.ts`) — the same supervisor pattern from Phase 1, now applied to the cron-triggered follow-up loop. Every eligible nudge passes through an LLM gate before sending. Verdicts:
+  - `approve_template` — send the legacy canned template verbatim (happy path).
+  - `override_with_text` — send a personalized Hebrew message (LLM-authored, references the lead's actual context: notes, date asked for, last reply).
+  - `escalate_to_eli` — don't send; queue draft + DM Eli.
+  - `silence` — skip this cycle, **attempt counter NOT consumed** (lead gets another chance later).
+  - `supervisor_error` — LLM down, DM Eli, no send.
+- `FOLLOWUP_SUPERVISOR_PROMPT_VERSION = "followup-v1.0.0"` (independent version tag from inbound supervisor).
+
+### Changed
+- `app/api/bot/followups/route.ts:processCustomerLead` — full refactor. After cadence check, candidate template + lead context (notes, bot summary, last 15 messages) feed the supervisor. Verdict drives execution + writes a row to `bot_decision_log` (same table as inbound, `metadata.trigger = "followup_cron"`).
+- Cron handler queries now hydrate `notes` + `botSummary` for supervisor context.
+
+### Safety
+- **Hard limit preserved: 3 attempts (`MAX_FOLLOWUPS`).** Supervisor cannot bypass. After 3 → escalate regardless of LLM verdict.
+- `SUPERVISOR_BYPASS=1` kill switch reused — disables both inbound and follow-up supervisors.
+
+### Cost
+- ~$0.5/month at current volume (15 leads × ~5 follow-up cycles × $0.002 per LLM call). Trivial.
+
+### Why
+Generic templates ("חוזר אליכם כמובטח") sent uniformly to every lead lose conversions. With LLM-personalized nudges referencing each lead's actual situation, response rates materially improve. Concrete example: a lead whose notes say "אמר ליצור איתו קשר ב-18.5.26" now gets "אסף, היום ה-18.5 כמו שביקשת — אפשר להתקשר עכשיו?" instead of the generic template.
+
+---
+
 ## v3.5 — 2026-05-17 — "Bot Supervisor Phase 1 — LLM gate + decision log + Eli feedback"
 
 ### Added

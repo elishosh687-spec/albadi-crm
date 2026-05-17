@@ -61,13 +61,14 @@
 
 | # | Feature | Status | קוד | מסמך |
 |---|---|---|---|---|
-| 1.5.1 | Daily Vercel cron @ `/api/bot/followups` (Hobby limit) | shipped | `app/api/bot/followups/route.ts` | — |
+| 1.5.1 | Hourly Vercel cron @ `/api/bot/followups` | shipped | `app/api/bot/followups/route.ts` | — |
 | 1.5.2 | Cloud routine fallback (hourly) | shipped | external (claude.ai/code routine) | — |
 | 1.5.3 | Cadence per stage (per CUSTOMER-FLOW v2) | shipped | `app/api/bot/followups/route.ts` | CUSTOMER-FLOW §cadence |
 | 1.5.4 | Quiet-hours gate (no sends night/weekend) | shipped | `app/api/bot/followups/route.ts` | — |
 | 1.5.5 | Bypass gates flag (`FOLLOWUPS_BYPASS_GATES`) | shipped | env | — |
-| 1.5.6 | Auto-drop after N follow-ups | shipped | `leads.follow_up_count` | CUSTOMER-FLOW §drop |
+| 1.5.6 | Auto-drop after N follow-ups (hard limit, supervisor cannot bypass) | shipped | `leads.follow_up_count` | CUSTOMER-FLOW §drop |
 | 1.5.7 | Cron health check GET endpoint | shipped | `app/api/bot/followups/route.ts:327` | — |
+| 1.5.8 | **LLM follow-up supervisor** — context-aware override / escalate / silence per cycle | shipped (v3.6) | `lib/supervisor/followup-supervisor.ts` | CHANGELOG v3.6 |
 
 ### 1.6 Money-Moment Drafts (Human-in-Loop)
 

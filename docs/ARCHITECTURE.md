@@ -312,14 +312,25 @@ Toggle ב-Vercel envs → redeploy (~30s).
 ## 6. Follow-ups (cadence)
 
 `app/api/bot/followups/route.ts`:
-- Trigger: Vercel cron יומי + external cloud routine שעתי.
+- Trigger: Vercel cron **hourly** (`0 * * * *`) + external cloud routine.
 - Auth: Bearer `BOT_SECRET` (or fallback `CRON_SECRET`).
-- Logic: query לידים שעברו את חלון השקט לפי stage, שלח follow-up אם:
-  - לא `bot_paused`
-  - לא `pipeline_flag=NEEDS_ELI`
-  - בשעות פעילות (אלא אם `FOLLOWUPS_BYPASS_GATES=1`)
-  - `follow_up_count < max_per_stage`
-- אחרי N follow-ups בלי תגובה → אוטומטית NEEDS_ELI (לא DROPPED — רק אלי מוריד ל-DROPPED).
+- Logic: query לידים, לכל אחד:
+  1. Skip if `bot_paused` / quiet hours (unless `FOLLOWUPS_BYPASS_GATES=1`).
+  2. **Hard limit:** if `follow_up_count >= MAX_FOLLOWUPS` (=3) → escalate, no send.
+  3. Cadence check — has enough time elapsed since `lastFollowUpAt` per stage rule.
+  4. **Pick candidate template** (`followupTemplate(stage, attempt)`).
+  5. **Route through follow-up supervisor** (`lib/supervisor/followup-supervisor.ts`):
+     - LLM sees: stage, qState, last 15 messages, lead notes, bot summary, candidate template, attempt#, cadence gap.
+     - Returns: `approve_template` / `override_with_text` / `escalate_to_eli` / `silence` / `supervisor_error`.
+  6. Execute verdict:
+     - `approve_template` → send template verbatim, increment `follow_up_count`.
+     - `override_with_text` → send LLM's Hebrew text, increment `follow_up_count`.
+     - `escalate_to_eli` → no send, `generateAndQueueDraft` + `sendEliDM` + set NEEDS_ELI/bot_paused.
+     - `silence` → no send, `lastFollowUpAt` updated but `follow_up_count` **not** incremented (lead gets another chance later).
+     - `supervisor_error` → no send, DM already fired by supervisor.
+  7. Write row to `bot_decision_log` with `metadata.trigger = "followup_cron"` + `prompt_version` + `template_label` + `attempt` + `gap_hours`.
+- אחרי N follow-ups בלי תגובה → אוטומטית NEEDS_ELI + bot_paused (לא DROPPED — רק אלי).
+- Kill switches: `SUPERVISOR_BYPASS=1` (skips supervisor, falls back to legacy template-only flow), `FOLLOWUPS_BYPASS_GATES=1` (skips quiet-hours/no-send-day).
 
 ---
 

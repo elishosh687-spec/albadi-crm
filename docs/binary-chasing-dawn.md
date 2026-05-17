@@ -111,7 +111,10 @@ Langfuse env vars (deferred): `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`.
 
 The supervisor is a measurement system, not a self-improving bot. Each later phase is OPTIONAL and triggered by data, not by a calendar.
 
-### Phase 1.5 — Langfuse integration (~half a day)
+### Phase 1.5 — Follow-up Supervisor ✅ SHIPPED (v3.6, 2026-05-17)
+Extends the inbound supervisor pattern to cron-triggered follow-ups. Every nudge passes through the LLM gate with full lead context (notes, history, gap, attempt#). Verdicts: `approve_template` / `override_with_text` / `escalate_to_eli` / `silence`. Hard 3-attempt limit preserved upstream. File: `lib/supervisor/followup-supervisor.ts`. See CHANGELOG v3.6.
+
+### Phase 1.6 — Langfuse integration (~half a day)
 **What:** wrap the supervisor LLM call in `langfuse.trace()`, persist `trace_id` into `bot_decision_log`, mirror every `attachEliFeedback` call as a `langfuse.score`.
 **Payoff:** cost/latency dashboard, prompt version management, side-by-side prompt comparisons. None of this required at current volume — Phase 1 stores intent/confidence/reason in DB columns already.
 **Trigger:** want to see LLM cost trends, or about to A/B-test prompt revisions.
