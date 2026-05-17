@@ -87,14 +87,19 @@ export function priceFactoryQuote(
       ? input.profitMarginOverride
       : config.defaultProfitMargin;
 
-  // Pass-through shipping (no margin on shipping)
-  const unitSellingPrice = r2(unitCost * (1 + marginPct / 100) + unitShipping);
-  const unitProfit = r2(unitSellingPrice - unitCost - unitShipping);
+  // Pass-through shipping (no margin on shipping).
+  // Compute selling price exact first, round display only — profit must NOT be derived
+  // from the rounded selling price or a per-unit rounding error compounds over quantity
+  // (e.g. a 0.01 ILS/unit rounding delta × 10 000 units = 100 ILS difference between
+  // sea and air for identical factory cost).
+  const unitSellingPriceExact = unitCost * (1 + marginPct / 100) + unitShipping;
+  const unitSellingPrice = r2(unitSellingPriceExact);
+  const unitProfit = r2(unitCost * (marginPct / 100));
 
   const totalCost = r2(unitCost * quantity);
   const totalShipping = r2(unitShipping * quantity);
-  const totalProfit = r2(unitProfit * quantity);
-  const totalSellingPrice = r2(unitSellingPrice * quantity);
+  const totalProfit = r2(unitCost * (marginPct / 100) * quantity);
+  const totalSellingPrice = r2(unitSellingPriceExact * quantity);
 
   return {
     quantity,
