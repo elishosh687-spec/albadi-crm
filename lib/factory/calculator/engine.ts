@@ -140,13 +140,15 @@ export function calculateQuote(
     adminSettings.globalProfitMargin;
   const shippingPerUnitIls = shippingPerUnitUsd * targetRate;
   const marginableBaseIls = totalCostPerUnitIls - shippingPerUnitIls;
-  const sellingPricePerUnitIls = r2(
-    marginableBaseIls * (1 + profitMargin / 100) + shippingPerUnitIls
-  );
-  const totalOrderPriceIls = r2(sellingPricePerUnitIls * quantity);
+  // Keep exact (unrounded) for profit and total-order calculations so that
+  // changing shipping method does not shift profit via rounding boundaries.
+  const sellingPricePerUnitIlsExact =
+    marginableBaseIls * (1 + profitMargin / 100) + shippingPerUnitIls;
+  const sellingPricePerUnitIls = r2(sellingPricePerUnitIlsExact);
+  const totalOrderPriceIls = r2(sellingPricePerUnitIlsExact * quantity);
 
-  // Step 10: Profit
-  const profitPerUnitIls = r2(sellingPricePerUnitIls - totalCostPerUnitIls);
+  // Step 10: Profit — derived from exact selling price so profit = factory × margin
+  const profitPerUnitIls = r2(sellingPricePerUnitIlsExact - totalCostPerUnitIls);
   const totalProfitIls = r2(profitPerUnitIls * quantity);
 
   // Breakdown for invoice
