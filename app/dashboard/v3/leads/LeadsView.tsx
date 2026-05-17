@@ -74,7 +74,7 @@ function LeadCard({ lead, onPreview }: { lead: LeadRow; onPreview: (l: LeadRow) 
       {/* Actions — visible on hover (desktop) or always (mobile) */}
       <div className="flex gap-2 pt-1 opacity-0 group-hover:opacity-100 md:transition-opacity duration-150 md:opacity-0 max-md:opacity-100">
         <a
-          href={`/dashboard/v3/conversations?jid=${encodeURIComponent(lead.sid)}`}
+          href={`/dashboard/v3/conversations?lead=${encodeURIComponent(lead.sid)}`}
           className="flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-border bg-muted/40 px-3 py-1.5 text-xs hover:bg-muted transition-colors"
         >
           <MessageSquare className="h-3.5 w-3.5" />
@@ -161,7 +161,7 @@ function PreviewDrawer({ lead, onClose }: { lead: LeadRow; onClose: () => void }
         </div>
         <div className="border-t border-border p-4">
           <a
-            href={`/dashboard/v3/conversations?jid=${encodeURIComponent(lead.sid)}`}
+            href={`/dashboard/v3/conversations?lead=${encodeURIComponent(lead.sid)}`}
             className="flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
           >
             <MessageSquare className="h-4 w-4" />
