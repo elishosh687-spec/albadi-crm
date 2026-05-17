@@ -393,6 +393,9 @@ export const botDecisionLog = pgTable(
     // pure rewording (content) and only extract rules from routing/policy
     // overrides. NULL when the action is implicitly typed (e.g. approved_as_is).
     eliCorrectionType: text("eli_correction_type"), // routing | policy | content
+    // Explicit "the LLM misclassified" signal. When Eli sets this, the LLM's
+    // recommended intent was wrong — Phase 2 will train on this directly.
+    eliIntentOverride: text("eli_intent_override"),
     eliEditText: text("eli_edit_text"),
     eliRejectReason: text("eli_reject_reason"),
     eliManualReply: text("eli_manual_reply"),

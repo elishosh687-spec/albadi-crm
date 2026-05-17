@@ -547,12 +547,53 @@ export interface BotDecisionRowDto {
   metadata: Record<string, unknown> | null;
   eliAction: string | null;
   eliCorrectionType: string | null;
+  eliIntentOverride: string | null;
   eliEditText: string | null;
   eliRejectReason: string | null;
   eliManualReply: string | null;
   eliStageFrom: string | null;
   eliStageTo: string | null;
   eliDecidedAt: string | null;
+}
+
+// Eli marks "the LLM misclassified". Writes eli_intent_override on the row
+// AND flips eli_correction_type to 'routing' (because changing the intent is
+// a routing-level correction, not content). Phase 2 few-shot will pull rows
+// with eli_intent_override IS NOT NULL as high-quality training signal.
+export async function correctLLMDecisionAction(
+  rowId: number,
+  correctIntent: string,
+  note?: string
+): Promise<SimpleResult> {
+  try {
+    if (!Number.isFinite(rowId) || rowId <= 0) {
+      return { ok: false, error: "invalid row id" };
+    }
+    const trimmed = (correctIntent ?? "").trim();
+    if (!trimmed) return { ok: false, error: "missing intent" };
+
+    await db
+      .update(botDecisionLog)
+      .set({
+        eliIntentOverride: trimmed.slice(0, 100),
+        eliCorrectionType: "routing",
+        eliRejectReason: note?.trim() ? note.trim().slice(0, 1000) : null,
+        eliDecidedAt: new Date(),
+        // If no other eli_action was set, mark this as an explicit correction.
+        // Don't overwrite if Eli already approved/edited/rejected — that's
+        // a separate action.
+        eliAction: sql`COALESCE(${botDecisionLog.eliAction}, 'stage_override')`,
+      })
+      .where(eq(botDecisionLog.id, rowId));
+
+    safeRevalidate("/dashboard/v3", "layout");
+    return { ok: true, message: "תיקון נשמר" };
+  } catch (e) {
+    return {
+      ok: false,
+      error: e instanceof Error ? e.message : "save failed",
+    };
+  }
 }
 
 export async function loadBotDecisionsAction(
@@ -592,6 +633,7 @@ export async function loadBotDecisionsAction(
       metadata: r.metadata as Record<string, unknown> | null,
       eliAction: r.eliAction,
       eliCorrectionType: r.eliCorrectionType,
+      eliIntentOverride: r.eliIntentOverride,
       eliEditText: r.eliEditText,
       eliRejectReason: r.eliRejectReason,
       eliManualReply: r.eliManualReply,

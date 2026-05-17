@@ -12,15 +12,36 @@
  * To override a stage, use the lead's overview tab.
  */
 
-import { useEffect, useState } from "react";
-import { Code, User, AlertTriangle, Sparkles } from "lucide-react";
+import { useEffect, useState, useTransition } from "react";
+import { Code, User, AlertTriangle, Sparkles, AlertCircle, Check } from "lucide-react";
 import { cn } from "@/lib/cn";
 import {
   loadBotDecisionsAction,
+  correctLLMDecisionAction,
   type BotDecisionRowDto,
 } from "@/app/actions/v2";
 
 type DecisionRow = BotDecisionRowDto;
+
+// Canonical intents the supervisor / classifier uses, plus "אחר" for free text.
+const INTENT_OPTIONS = [
+  { value: "accept", label: "אישור (accept)" },
+  { value: "reject", label: "דחייה (reject)" },
+  { value: "negotiating", label: "יקר / מיקוח (negotiating)" },
+  { value: "samples_request", label: "בקשת דוגמאות" },
+  { value: "custom_size", label: "מידה/כמות מותאמת" },
+  { value: "question_delivery", label: "שאלה על אספקה" },
+  { value: "question_inclusive", label: "שאלה: כולל הכל?" },
+  { value: "question_payment", label: "שאלה על תשלום" },
+  { value: "question_format", label: "שאלה על פורמט/לוגו" },
+  { value: "question_meeting", label: "בקשת שיחה/פגישה" },
+  { value: "question_company", label: "שאלה על החברה" },
+  { value: "question_other", label: "שאלה אחרת" },
+  { value: "meta_question", label: "שאלה מטא ('למה אתה שואל')" },
+  { value: "frustrated", label: "תסכול / כעס" },
+  { value: "spec_change", label: "שינוי מפרט" },
+  { value: "other", label: "אחר / לא ברור" },
+];
 
 export function BotDecisionsTab({ sid }: { sid: string }) {
   const [rows, setRows] = useState<DecisionRow[] | null>(null);
@@ -62,22 +83,73 @@ export function BotDecisionsTab({ sid }: { sid: string }) {
     );
   }
 
+  const handleRowUpdated = (rowId: number, intent: string) => {
+    setRows((prev) =>
+      prev
+        ? prev.map((r) =>
+            r.id === rowId
+              ? {
+                  ...r,
+                  eliIntentOverride: intent,
+                  eliCorrectionType: "routing",
+                  eliAction: r.eliAction ?? "stage_override",
+                  eliDecidedAt: new Date().toISOString(),
+                }
+              : r
+          )
+        : prev
+    );
+  };
+
   return (
     <div className="flex flex-col gap-2 p-2">
       {rows.map((row) => (
-        <DecisionCard key={row.id} row={row} />
+        <DecisionCard key={row.id} row={row} onRowUpdated={handleRowUpdated} />
       ))}
     </div>
   );
 }
 
-function DecisionCard({ row }: { row: DecisionRow }) {
+function DecisionCard({
+  row,
+  onRowUpdated,
+}: {
+  row: DecisionRow;
+  onRowUpdated: (rowId: number, intent: string) => void;
+}) {
   const divergence =
     !!row.llmRecommended &&
     row.llmRecommended !== "approve_code" &&
     row.decidedBy === "code";
 
   const eliOverride = !!row.eliAction;
+
+  const [showPicker, setShowPicker] = useState(false);
+  const [pickedIntent, setPickedIntent] = useState<string>("");
+  const [freeText, setFreeText] = useState<string>("");
+  const [submitting, startSubmit] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+
+  const submitCorrection = () => {
+    const intent =
+      pickedIntent === "other" && freeText.trim()
+        ? freeText.trim()
+        : pickedIntent;
+    if (!intent) {
+      setError("בחר intent");
+      return;
+    }
+    setError(null);
+    startSubmit(async () => {
+      const r = await correctLLMDecisionAction(row.id, intent);
+      if (r.ok) {
+        setShowPicker(false);
+        onRowUpdated(row.id, intent);
+      } else {
+        setError(r.error ?? "save failed");
+      }
+    });
+  };
 
   return (
     <div
@@ -140,6 +212,74 @@ function DecisionCard({ row }: { row: DecisionRow }) {
                       {f}
                     </Badge>
                   ))}
+                </div>
+              )}
+
+              {/* "LLM was wrong" reclassification UI */}
+              {row.eliIntentOverride ? (
+                <div className="mt-2 flex items-center gap-1 text-amber-600 dark:text-amber-400">
+                  <AlertCircle className="size-3" />
+                  <span className="text-xs">
+                    תוקן: <strong>{row.eliIntentOverride}</strong>
+                  </span>
+                </div>
+              ) : !showPicker ? (
+                <button
+                  onClick={() => setShowPicker(true)}
+                  className="mt-2 inline-flex items-center gap-1 text-amber-600 hover:text-amber-500 dark:text-amber-400 text-xs hover:underline"
+                >
+                  <AlertCircle className="size-3" />
+                  הLLM טעה — סווג מחדש
+                </button>
+              ) : (
+                <div className="mt-2 flex flex-col gap-1.5 rounded border border-amber-500/30 bg-amber-500/5 p-2">
+                  <select
+                    value={pickedIntent}
+                    onChange={(e) => setPickedIntent(e.target.value)}
+                    disabled={submitting}
+                    className="text-xs rounded border border-border bg-background px-1.5 py-1"
+                  >
+                    <option value="">בחר intent נכון…</option>
+                    {INTENT_OPTIONS.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
+                  {pickedIntent === "other" && (
+                    <input
+                      type="text"
+                      value={freeText}
+                      onChange={(e) => setFreeText(e.target.value)}
+                      placeholder="intent חופשי (באנגלית, snake_case)"
+                      className="text-xs rounded border border-border bg-background px-1.5 py-1"
+                    />
+                  )}
+                  {error && (
+                    <div className="text-xs text-destructive">{error}</div>
+                  )}
+                  <div className="flex gap-1.5">
+                    <button
+                      onClick={submitCorrection}
+                      disabled={submitting || !pickedIntent}
+                      className="flex-1 inline-flex items-center justify-center gap-1 rounded border border-amber-500/50 bg-amber-500/15 px-2 py-1 text-xs text-amber-700 dark:text-amber-300 hover:bg-amber-500/25 disabled:opacity-50"
+                    >
+                      <Check className="size-3" />
+                      {submitting ? "שומר…" : "שמור"}
+                    </button>
+                    <button
+                      onClick={() => {
+                        setShowPicker(false);
+                        setError(null);
+                        setPickedIntent("");
+                        setFreeText("");
+                      }}
+                      disabled={submitting}
+                      className="flex-1 inline-flex items-center justify-center rounded border border-border px-2 py-1 text-xs hover:bg-muted disabled:opacity-50"
+                    >
+                      ביטול
+                    </button>
+                  </div>
                 </div>
               )}
             </>
