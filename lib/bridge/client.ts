@@ -378,15 +378,10 @@ export async function sendCtaUrlMessage(
   if (payload.ctaLabel && payload.ctaUrl) {
     body.cta = { display_text: payload.ctaLabel, url: payload.ctaUrl };
   }
-  try {
-    await bridgeFetch<BridgeSendResult>("/v1/messages", {
-      method: "POST",
-      body: JSON.stringify(body),
-    });
-  } catch (e) {
-    console.warn("[sendCtaUrlMessage] cta_url failed, falling back to text", e);
-    await sendBridgeMessage(jid, payload.body);
-  }
+  await bridgeFetch<BridgeSendResult>("/v1/messages", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
 }
 
 interface BridgeMediaUpload {
