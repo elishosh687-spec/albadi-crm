@@ -1,12 +1,15 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { Send, Sparkles, ExternalLink } from "lucide-react";
 import { cn } from "@/lib/cn";
 import {
   suggestRepliesAction,
   sendManualReply,
   setBotPaused,
+  listTemplatesAction,
+  sendTemplateAction,
+  type TemplateRow,
 } from "@/app/actions/v2";
 
 export function Composer({
@@ -25,6 +28,23 @@ export function Composer({
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [showPauseAsk, setShowPauseAsk] = useState(false);
   const [pendingText, setPendingText] = useState<string | null>(null);
+  const [templates, setTemplates] = useState<TemplateRow[]>([]);
+  const [showTemplatePicker, setShowTemplatePicker] = useState(false);
+
+  useEffect(() => {
+    listTemplatesAction().then((r) => {
+      if (r.ok) setTemplates((r.templates ?? []).filter((t) => t.active));
+    });
+  }, []);
+
+  const sendTemplate = (templateId: number) => {
+    setShowTemplatePicker(false);
+    setMsg(null);
+    startTransition(async () => {
+      const r = await sendTemplateAction(sid, templateId);
+      setMsg({ ok: r.ok, text: r.ok ? "נשלח" : r.error ?? "כשל" });
+    });
+  };
 
   const waLink = phone
     ? `https://wa.me/${phone.replace(/[^0-9]/g, "")}`
@@ -130,19 +150,49 @@ export function Composer({
         </div>
       </div>
 
-      <div className="flex items-center justify-between gap-2 text-xs">
+      <div className="flex items-center gap-2 text-xs">
         <input
           value={hint}
           onChange={(e) => setHint(e.target.value)}
           placeholder="רמז להצעות (למשל: ‘הצע הנחה 5%’)"
           className="flex-1 bg-background/30 border border-border rounded-md px-2 py-1 text-xs focus:outline-none"
         />
+        {templates.length > 0 && (
+          <div className="relative shrink-0">
+            <button
+              type="button"
+              onClick={() => setShowTemplatePicker((v) => !v)}
+              disabled={isPending}
+              className="inline-flex items-center gap-1 text-muted-foreground hover:text-foreground disabled:opacity-50"
+            >
+              <Send className="size-3" />
+              תבנית
+            </button>
+            {showTemplatePicker && (
+              <div className="absolute bottom-full mb-1 left-0 z-30 min-w-[180px] rounded-lg border border-border bg-card shadow-xl py-1">
+                {templates.map((t) => (
+                  <button
+                    key={t.id}
+                    type="button"
+                    onClick={() => sendTemplate(t.id)}
+                    className="w-full text-right px-3 py-2 text-xs hover:bg-secondary flex items-center justify-between gap-2"
+                  >
+                    <span className="truncate">{t.name}</span>
+                    {t.type === "cta_url" && (
+                      <span className="shrink-0 text-[10px] text-muted-foreground">CTA</span>
+                    )}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
         {waLink && (
           <a
             href={waLink}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-1 text-muted-foreground hover:text-foreground"
+            className="inline-flex items-center gap-1 text-muted-foreground hover:text-foreground shrink-0"
           >
             פתח ב-WhatsApp
             <ExternalLink className="size-3" />
