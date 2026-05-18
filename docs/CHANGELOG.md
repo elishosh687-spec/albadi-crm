@@ -21,6 +21,7 @@
 - **`questionnaire.ts:fetchQuote`** awaits `calculateQuoteByCodes`. No other call sites — `priceFactoryQuote` (manual FinalizeModal) keeps using `getFactoryConfig` directly as before.
 - **`lib/factory/config.ts:normalizeConfig`** — back-compat shim that auto-populates `profitMarginByQuantity` from `defaultProfitMargin` whenever an older row is read. Eliminates the need for a migration script.
 - **`DEFAULT_FACTORY_CONFIG`** seeds the matrix at `{1000:40, 3000:40, 5000:40, 10000:40}` so a brand-new install matches the previously hardcoded behaviour exactly.
+- **Calculator page (`/dashboard/v3/calculator`)** — transparent breakdown view that previews the questionnaire's quote per product/qty/shipping/colors. Same-day refinement (commit `329ae86`): the margin-matrix editor that briefly lived inside the calculator was removed; Settings is now the sole place to edit margins. Calculator reads `initialMargins` from the DB and renders read-only.
 
 ### Why this change
 Until v3.7, the WhatsApp questionnaire ran on a *hardcoded* `DEFAULT_CONFIG` in `lib/factory/calculator/constants.ts` — Settings page edits only affected the manual FinalizeModal. Two parallel pricing universes that drifted (e.g. air rate 13$/kg in code vs 8.5$/kg in DB). v3.8 collapses them: Settings = single source of truth for margin + rates + shipping; catalog stays in code (it's a snapshot of the factory's price sheet that re-imports through `scripts/import-new-factory-bag-quote.ts`).

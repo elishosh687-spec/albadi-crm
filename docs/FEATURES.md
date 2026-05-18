@@ -158,6 +158,7 @@
 | 2.2.9 | In-place expanded lead view | shipped | `app/dashboard/v3/_components/ExpandedLead.tsx` | — |
 | 2.2.10 | Manual name+phone editing (lid JIDs) | shipped | commit 15245f1 | — |
 | 2.2.11 | Dark-mode theme | shipped | v3 layout | — |
+| 2.2.12 | Calculator (transparent price breakdown, read-only) | shipped | `app/dashboard/v3/calculator/CalculatorView.tsx` | — |
 
 ### 2.3 Dashboard v2 (Fallback, deprecated soon)
 
