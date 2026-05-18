@@ -145,6 +145,21 @@ async function handleMessageReceived(evt: BridgeEnvelope): Promise<void> {
     const waMessageId =
       pickStr(d, "wa_message_id", "id", "messageId") ?? `bridge:${evt.id}`;
     const text = pickStr(d, "content", "text", "body");
+    // Ensure a lead row exists — when Eli messages a NEW number from the WA
+    // app, this is the first time we see the contact. Without an upsert
+    // here, the message orphans (no lead → no conversation in dashboard).
+    const phone = pickStr(d, "phone");
+    const name = pickStr(d, "name", "push_name", "pushName");
+    try {
+      await upsertLeadFromBridgeEvent({
+        jid,
+        name: name ?? undefined,
+        phone: phone ?? undefined,
+        source: "eli_outbound_from_wa_app",
+      });
+    } catch (e) {
+      console.error("[bridge.webhook] upsert from is_from_me failed", e);
+    }
     const inserted = await insertBridgeMessage({
       jid,
       direction: "out",
