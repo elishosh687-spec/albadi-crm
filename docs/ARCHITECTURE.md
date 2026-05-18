@@ -424,6 +424,15 @@ Money triggers (per `lib/drafts/index.ts`):
    - Mitigated by the supervisor prompt telling the LLM not to override on stage-transition intents (accept, logo received).
    - Phase 5 will fix: add `stage_transition` to the supervisor JSON output.
 
+8. **Bridge media TTL** (operational)
+   - The bridge tenant evicts uploaded media (videos / images for cta_url headers) after some period. When this happens, `sendCompanyTemplate` Tier 1 fails with `status=404, body="header.media_id not found for tenant"` and falls back to Tier 2 (cta_url with no header — still has Instagram CTA button).
+   - Workaround: re-upload via `npx tsx scripts/_upload-company-video.ts <path>` and update `COMPANY_VIDEO_MEDIA_ID` in `lib/bridge/client.ts`.
+   - Long-term: bridge maintainer needs to raise media TTL or whitelist company-intro media.
+
+9. **Vercel Hobby cron limit**
+   - Vercel Hobby rejects sub-daily cron schedules (`"Hobby accounts are limited to daily cron jobs"`).
+   - `vercel.json` set to `"0 9 * * *"` (daily 09:00 UTC). External Claude cloud routine triggers `/api/bot/followups` hourly to compensate.
+
 ---
 
 ## 11. Scripts (operational)

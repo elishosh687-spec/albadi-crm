@@ -114,11 +114,21 @@
 | 1.9.8 | "החלטות בוט" tab in v3 lead drawer | shipped (v3.5) | `app/dashboard/v3/_components/BotDecisionsTab.tsx` | — |
 | 1.9.9 | `loadBotDecisionsAction` server action + `GET /api/leads/[sid]/decisions` | shipped (v3.5) | `app/actions/v2.ts` + `app/api/leads/[sid]/decisions/route.ts` | — |
 | 1.9.10 | `SUPERVISOR_BYPASS=1` emergency kill switch | shipped (v3.5) | env | — |
-| 1.9.11 | Langfuse integration (trace_id column ready, code deferred) | planned | — | binary-chasing-dawn.md §Phase 1.5 |
-| 1.9.12 | Few-shot retrieval from past Eli feedback | planned | — | binary-chasing-dawn.md §Phase 2 |
-| 1.9.13 | Deterministic rule extraction from log patterns | planned | — | binary-chasing-dawn.md §Phase 3 |
-| 1.9.14 | Bot QA aggregated stats page | planned | — | binary-chasing-dawn.md §Phase 4 |
-| 1.9.15 | Override stage transitions (LLM returns `stage_transition` in JSON) | planned | — | binary-chasing-dawn.md §Phase 5 |
+| 1.9.11 | Auto-ack to customer on every escalate_to_eli / safety-net | shipped (v3.7) | `app/api/bridge/webhook/route.ts` | CHANGELOG v3.7 |
+| 1.9.12 | Safety-net escalation when handler silently no-ops after approve_code | shipped (v3.7) | `app/api/bridge/webhook/route.ts` | CHANGELOG v3.7 |
+| 1.9.13 | Bailed-questionnaire awareness in candidate predictor | shipped (v3.7) | `lib/supervisor/candidate.ts` | CHANGELOG v3.7 |
+| 1.9.14 | Per-row 👍/👎 feedback on LLM verdict + intent override picker | shipped (v3.7) | `app/dashboard/v3/_components/BotDecisionsTab.tsx` + `app/actions/v2.ts` | CHANGELOG v3.7 |
+| 1.9.15 | Per-row 👍/👎 feedback on stage transitions + corrective stage move | shipped (v3.7) | `BotDecisionsTab.tsx` + `correctStageDecisionAction` | CHANGELOG v3.7 |
+| 1.9.16 | Followups queue page (`/dashboard/v3/followups`) with quiet-hours deferral | shipped (v3.7) | `app/dashboard/v3/followups/page.tsx` | CHANGELOG v3.7 |
+| 1.9.17 | New leads default to `pipeline_stage='NEW'` (no more null middle state) | shipped (v3.7) | `lib/bridge/client.ts:upsertLeadFromBridgeEvent` | CHANGELOG v3.7 |
+| 1.9.18 | Direct full-card link from chat header + order summary | shipped (v3.7) | `ConversationsLayout.tsx`, `OrderSummary.tsx` | CHANGELOG v3.7 |
+| 1.9.19 | Whole-card click on leads tab + always-visible action buttons | shipped (v3.7) | `LeadsView.tsx` | CHANGELOG v3.7 |
+| 1.9.20 | Company template 3-tier fallback (video → cta_url → text) + verbose error logging | shipped (v3.7) | `lib/bridge/client.ts:sendCompanyTemplate` | CHANGELOG v3.7 |
+| 1.9.21 | Langfuse integration (trace_id column ready, code deferred) | planned | — | binary-chasing-dawn.md §Phase 1.6 |
+| 1.9.22 | Few-shot retrieval from past Eli feedback | planned | — | binary-chasing-dawn.md §Phase 2 |
+| 1.9.23 | Deterministic rule extraction from log patterns | planned | — | binary-chasing-dawn.md §Phase 3 |
+| 1.9.24 | Bot QA aggregated stats page | planned | — | binary-chasing-dawn.md §Phase 4 |
+| 1.9.25 | Override stage transitions (LLM returns `stage_transition` in JSON) | planned | — | binary-chasing-dawn.md §Phase 5 |
 
 ---
 

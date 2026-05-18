@@ -5,6 +5,48 @@
 
 ---
 
+## v3.7 — 2026-05-18 — "Supervisor hardening + dashboard surfaces + media refresh"
+
+### Added
+- **Per-row feedback in "החלטות בוט" tab** — every supervisor decision now has explicit thumbs-up/down buttons:
+  - 👍 *הLLM צדק* — sets `eli_action='approved_as_is'`, `eli_correction_type=null` (positive training signal).
+  - 👎 *הLLM טעה* — opens a 10-intent picker (or free-text), saves `eli_intent_override` + `eli_correction_type='routing'`.
+  - 👍/👎 also on stage transitions (`stage_before` → `stage_after`). The "fix stage" action writes the override AND physically moves the lead via `setLeadStage`.
+- **New column `eli_intent_override`** (and `eli_correction_type` from v3.5 already in use) — explicit Phase 2 training signal, separate from implicit "Eli replied manually".
+- **Auto-ack to customer on every `escalate_to_eli` and safety-net escalation** — the customer immediately sees "תודה על ההודעה 🙏 אבדוק ואחזור אליכם בהקדם" while Eli gets the DM/draft. No more silent ghosts when supervisor hands off.
+- **Safety-net escalation in `app/api/bridge/webhook/route.ts`** — when the deterministic handler silently no-ops after `approve_code` (e.g. questionnaire bailed, unknown stage edge case), the system auto-escalates: draft queued + Eli DM + customer auto-ack. Log row marked `escalationKind='safety_net_silent_handler'`.
+- **Follow-ups queue page** (`/dashboard/v3/followups`) — surfaces every lead waiting for a cron nudge with stage, attempt #, next eligible time (in Israel TZ), and "deferred by quiet hours" badge when the math-eligible time falls inside 21:00–09:00 IL. Sidebar entry "תור פולואפים".
+- **Direct full-card access from conversations tab** — `LayoutDashboard` icon in `ChatHeader` and a "כרטיס מלא + החלטות בוט" button in `OrderSummary` both link to `/dashboard/v3?lead=<sid>` so the Bot Decisions timeline is one click away from the chat view.
+- **Whole-card click on leads tab** — clicking anywhere on a lead card opens the full lead drawer. Action buttons (פתח שיחה / תצוגה מקדימה) now always visible (no more hover-only on desktop).
+
+### Changed
+- **`upsertLeadFromBridgeEvent`** now creates new leads with `pipeline_stage='NEW'` instead of NULL. Existing rows are also promoted via `coalesce(pipeline_stage, 'NEW')` on conflict. Eliminates the "no stage" middle state that was confusing in the UI. Backfill script `scripts/_backfill-null-stage.ts` ran once and promoted 7 historical rows.
+- **`candidate.ts` (supervisor candidate predictor)** — now detects `qState.bailed === true` and returns `kind: "no_op"` with an explicit description, so the supervisor escalates instead of approving a handler that will silently refuse.
+- **`mapHandlerResultToAction` (webhook)** expanded to recognize all 11+ action names emitted by the questionnaire engine (`started`, `reasked`, `answered`, `custom_prompt`, `custom_captured`, `size_page_2`, `confirmation_sent`, `confirmation_freetext_prompt`, `confirmation_revised`, `completed_standard`, `completed_factory`). Previously these all fell through to `no_op`, which falsely triggered the safety net + an extra auto-ack on top of the legit bot reply.
+- **`SUPERVISOR_PROMPT_VERSION = "supervisor-v1.1.0"`** — system prompt now embeds the CUSTOMER-FLOW.md policy matrix per stage, BOT-COPY.md tone rules (first-person Eli, plural "אתם", 0-1 emoji), and the scheme.txt price/date guardrails ("never quote a price", "never confirm a delivery date"). Replaces the generic v1.0.0 guidance.
+- **Company template 3-tier fallback** in `sendCompanyTemplate` — Tier 1 cta_url+video → Tier 2 cta_url no header (text + Instagram CTA button still works) → Tier 3 plain text. Each tier failure logs the actual bridge error body (`status` + `body`) for diagnosis.
+- **Company video media_id refreshed** — old `mu__3tEVay0D703wO3cSxoPpg` was rejected by the bridge tenant (`"header.media_id not found for tenant"`); uploaded a fresh copy of the factory-walk video as `mu_HA4cbJxkZN7Hfcb-4QMkjA`. Bridge tenant TTL on media is the root cause — operations note: re-upload when bridge logs show 404.
+- **Customer-facing URLs migrated to `albadi.ecobrotherss.com`** — in the bot quote message (`questionnaire.ts:appUrl`), the `COMPANY_TEMPLATE` text fallback, and `sendCompanyTemplate`. Old `bag-quote-app.vercel.app` references removed from customer-facing copy.
+- **UI default stage fallback `'UNCLASSIFIED'` → `'NEW'`** in OrderSummary / ConversationsLayout / ExpandedLead — defensive against any future null slipping through.
+
+### Fixed
+- **"הLLM צדק" button not saving the verdict state** — `confirmLLMDecisionAction` used `COALESCE` which preserved any prior `eli_action` (e.g. `direct_whatsapp_reply`), so the success label never appeared. Now overwrites to `'approved_as_is'` because the explicit thumb is the stronger signal.
+- **`scripts/_merge-lid-duplicates.ts` invalid Drizzle call (`.not()`)** — replaced with `ne()`. Was blocking Vercel TypeScript builds.
+- **Vercel cron schedule** reverted from hourly (`0 * * * *`) to daily (`0 9 * * *`) — Hobby plan rejects sub-daily crons (`"Hobby accounts are limited to daily cron jobs"`). Hourly trigger continues via the external Claude routine. Vercel cron is a backup.
+
+### Migrations
+- Idempotent column add: `scripts/_add-intent-override.ts` (adds `eli_intent_override TEXT`).
+- One-shot backfill: `scripts/_backfill-null-stage.ts` (7 leads NULL → NEW).
+
+### Diagnostic scripts added
+`_audit-history.ts`, `_audit-followup-gap.ts`, `_audit-old-crm-leads.ts`, `_check-cta-failure.ts`, `_check-lead-7716.ts`, `_check-log.ts`, `_check-media.ts`, `_extract-pairs.ts`, `_leads-overview.ts`, `_test-cta-url.ts`, `_test-cta-video.ts`, `_test-supervisor.ts`, `_upload-company-video.ts`. All read-only or one-shot, none on the production code path.
+
+### Notes for operators
+- **Bridge media TTL** — the tenant evicts uploaded media after a period (exact TTL unknown). When Vercel logs show `tier1 (video) failed: status=404 body=header.media_id not found for tenant`, re-upload via `npx tsx scripts/_upload-company-video.ts <path>` and update `COMPANY_VIDEO_MEDIA_ID` in `lib/bridge/client.ts`. Track in operational TODO with bridge maintainer.
+- **Legacy CRM leads (~7 rows)** — `_audit-old-crm-leads.ts` identifies them; cold-outreach is OPTIONAL and not automated. Use `scripts/_send-reengagement-3.ts` style for one-shot batches.
+
+---
+
 ## v3.6 — 2026-05-17 — "Follow-up Supervisor (Phase 1.5) — LLM gate on cron nudges"
 
 ### Added
