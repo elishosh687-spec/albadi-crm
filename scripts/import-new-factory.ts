@@ -50,7 +50,7 @@ interface RowRec {
   carton?: { qty: number; weight: number; length: number; width: number; height: number };
 }
 
-function parseSheet(ws: XLSX.WorkSheet): { dims: string; rows: RowRec[] } {
+function parseSheet(ws: XLSX.WorkSheet): { dims: string; rows: RowRec[]; plateFee: number } {
   const rows = XLSX.utils.sheet_to_json<any[]>(ws, { header: 1, defval: null });
   // Skip first 6 header rows. Data starts at row index 6 (row 7).
   const body = rows.slice(6).filter((r) => r.some((c: any) => c !== null && c !== ""));
@@ -58,12 +58,25 @@ function parseSheet(ws: XLSX.WorkSheet): { dims: string; rows: RowRec[] } {
   let lastHandle: "Handle" | "Non" | null = null;
   let lastFinishing: "non" | "laminating" | null = null;
   let dims = "";
+  let plateFee = 0;
   const out: RowRec[] = [];
 
   for (const r of body) {
     if (r[0]) dims = String(r[0]); // size cell when present
     if (r[1] === "Handle" || r[1] === "Non") lastHandle = r[1];
     if (r[4] === "non" || r[4] === "laminating") lastFinishing = r[4];
+
+    // Plate fee: prefer Remark col 14 "版费：N元/色" — authoritative when col 6
+    // contradicts (e.g. H35*W50 col 6 says 300 but Remark says 400). Fall back
+    // to col 6 "1color:￥N\n...".
+    if (plateFee === 0 && lastFinishing === "laminating") {
+      const cell6 = String(r[6] ?? "");
+      const cell14 = String(r[14] ?? "");
+      const m14 = cell14.match(/版费\s*[:：]\s*(\d+)\s*元/);
+      const m6 = cell6.match(/1color\s*[:：]\s*[￥¥]?\s*(\d+)/);
+      if (m14) plateFee = parseInt(m14[1], 10);
+      else if (m6) plateFee = parseInt(m6[1], 10);
+    }
 
     const qtyCell = r[5];
     const priceCell = r[7];
@@ -98,7 +111,7 @@ function parseSheet(ws: XLSX.WorkSheet): { dims: string; rows: RowRec[] } {
     out.push(rec);
   }
 
-  return { dims, rows: out };
+  return { dims, rows: out, plateFee };
 }
 
 interface Variant {
@@ -174,11 +187,14 @@ function main() {
 
   let sortOrder = 1;
   for (const name of sizeSheets) {
-    const { dims, rows } = parseSheet(wb.Sheets[name]);
+    const { dims, rows, plateFee } = parseSheet(wb.Sheets[name]);
     const key = dimKey(dims);
     const existing = EXISTING[key];
     if (!existing) {
       console.error(`WARN: sheet ${name} dims ${dims} (key ${key}) — no existing match. Using fallback id.`);
+    }
+    if (plateFee === 0) {
+      console.error(`WARN: sheet ${name} — no plate fee parsed from xlsx; defaulting to 300.`);
     }
 
     const withHandles = buildVariant(rows, "Handle");
@@ -189,7 +205,7 @@ function main() {
       dimensions: dims,
       description: existing?.description ?? "",
       sortOrder: sortOrder++,
-      laminationColorPlateFee: 300,
+      laminationColorPlateFee: plateFee > 0 ? plateFee : 300,
       withHandles,
       withoutHandles,
     });

@@ -5,6 +5,17 @@
 
 ---
 
+## 2026-05-18 — "Factory plate fees: per-product from xlsx"
+
+### Fixed
+- **Plate fee (`版费`) was uniform ¥400/color across all 14 products in `lib/factory/calculator/constants.ts` — incorrect.** The `newfactory.xlsx` source-of-truth has per-product fees ranging ¥300–820/color (encoded in each sheet's col 6 `1color:￥N…` and col 14 Remark `版费：N元/色`). Bot lamination quotes were over/under-charging by up to ¥460/color. Updated all 14 `laminationColorPlateFee` values to match xlsx. Verified against 12 user-supplied test cases (11/12 pass; case 12 stale assumption, see commit body).
+- **Importer (`scripts/import-new-factory.ts`) hardcoded plate fee to 300 instead of reading from xlsx** — would silently regress the fix on next re-import. Importer now parses col 14 Remark first (authoritative when col 6 contradicts, e.g. H35×W50), falls back to col 6.
+
+### Notes
+- Plate fees live in code (catalog data), not DB (`app_config.factory_pricing`). DB still owns only admin-tweakables (FX rates, margin matrix, shipping rates). Bot picks up new values automatically via `buildMergedConfig`.
+
+---
+
 ## 2026-05-18 — "Company template: video + Instagram button"
 
 ### Fixed
