@@ -218,6 +218,22 @@ async function handleMessageReceived(evt: BridgeEnvelope): Promise<void> {
     source: "bridge_webhook",
   });
 
+  // Resolve the canonical lead sid. When the bridge sends @lid but the
+  // lead was previously created under a phone-jid (e.g. manual outreach
+  // script), upsert merges by phone but keeps the original sid. We must
+  // route by that sid so handleInbound / supervisor find the qState.
+  // Same logic as insertBridgeMessage's conversationKey resolution.
+  const leadBySid = await db
+    .select({ sid: leads.manychatSubId })
+    .from(leads)
+    .where(sql`${leads.waJid} = ${jid} OR trim(${leads.manychatSubId}) = ${jid.trim()}`)
+    .limit(1);
+  const canonicalSid: string = leadBySid[0]?.sid ?? jid;
+  // Bridge sends still go to the raw jid (the recipient); DB ops use the
+  // canonical sid so we hit the actual lead row even if sid != jid.
+  const bridgeJid = jid;
+  const sid = canonicalSid;
+
   // Capture the inserted message_id for the decision log.
   const inserted = await insertBridgeMessage({
     jid,
@@ -240,7 +256,7 @@ async function handleMessageReceived(evt: BridgeEnvelope): Promise<void> {
       botPaused: leads.botPaused,
     })
     .from(leads)
-    .where(sql`trim(${leads.manychatSubId}) = ${jid.trim()}`)
+    .where(sql`trim(${leads.manychatSubId}) = ${sid.trim()}`)
     .limit(1);
 
   const wasBotPaused = leadSnapshot?.botPaused === true;
@@ -256,11 +272,11 @@ async function handleMessageReceived(evt: BridgeEnvelope): Promise<void> {
           pipelineFlag: "NEEDS_ELI",
           updatedAt: new Date(),
         })
-        .where(sql`trim(${leads.manychatSubId}) = ${jid.trim()}`);
+        .where(sql`trim(${leads.manychatSubId}) = ${sid.trim()}`);
       try {
-        await sendBridgeMessage(jid, STOP_WORD_REPLY);
+        await sendBridgeMessage(bridgeJid, STOP_WORD_REPLY);
       } catch (sendErr) {
-        console.error("[bridge.webhook] stop-word reply failed", jid, sendErr);
+        console.error("[bridge.webhook] stop-word reply failed", bridgeJid, sendErr);
       }
       await sendEliDM(
         eliEscalationTemplate({
@@ -270,12 +286,12 @@ async function handleMessageReceived(evt: BridgeEnvelope): Promise<void> {
           reason: "stop_word",
         })
       );
-      console.log("[bridge.webhook] stop-word escalation", jid);
+      console.log("[bridge.webhook] stop-word escalation", sid);
     } catch (e) {
-      console.error("[bridge.webhook] stop-word handler error", jid, e);
+      console.error("[bridge.webhook] stop-word handler error", sid, e);
     }
     await logDecision({
-      manychatSubId: jid,
+      manychatSubId: sid,
       messageId: inboundMessageId,
       inboundText: text,
       stageBefore: leadSnapshot?.stage ?? null,
@@ -301,14 +317,14 @@ async function handleMessageReceived(evt: BridgeEnvelope): Promise<void> {
         pipelineFlag: null,
         updatedAt: new Date(),
       })
-      .where(sql`trim(${leads.manychatSubId}) = ${jid.trim()}`);
+      .where(sql`trim(${leads.manychatSubId}) = ${sid.trim()}`);
   } catch (e) {
-    console.error("[bridge.webhook] counter reset error", jid, e);
+    console.error("[bridge.webhook] counter reset error", sid, e);
   }
 
   if (wasBotPaused) {
     await logDecision({
-      manychatSubId: jid,
+      manychatSubId: sid,
       messageId: inboundMessageId,
       inboundText: text,
       stageBefore: leadSnapshot?.stage ?? null,
@@ -320,7 +336,7 @@ async function handleMessageReceived(evt: BridgeEnvelope): Promise<void> {
   }
 
   // 2.5 Test-JID auto-reset (no log row — internal dev path).
-  if (isTestJid(jid)) {
+  if (isTestJid(bridgeJid)) {
     try {
       await db
         .update(leads)
@@ -334,10 +350,10 @@ async function handleMessageReceived(evt: BridgeEnvelope): Promise<void> {
           quoteAlt: null,
           updatedAt: new Date(),
         })
-        .where(sql`trim(${leads.manychatSubId}) = ${jid.trim()}`);
-      console.log("[bridge.webhook] test-jid reset", jid);
+        .where(sql`trim(${leads.manychatSubId}) = ${sid.trim()}`);
+      console.log("[bridge.webhook] test-jid reset", sid);
     } catch (e) {
-      console.error("[bridge.webhook] test-jid reset error", jid, e);
+      console.error("[bridge.webhook] test-jid reset error", sid, e);
     }
   }
 
@@ -345,7 +361,8 @@ async function handleMessageReceived(evt: BridgeEnvelope): Promise<void> {
   // supervisor BEFORE any reply is sent. Verdict routing below.
   try {
     await routeThroughSupervisor({
-      jid,
+      sid,
+      bridgeJid,
       inboundMessageId,
       text,
       textForRouting,
@@ -354,10 +371,10 @@ async function handleMessageReceived(evt: BridgeEnvelope): Promise<void> {
       leadSnapshot,
     });
   } catch (e) {
-    console.error("[bridge.webhook] supervisor routing error", jid, e);
+    console.error("[bridge.webhook] supervisor routing error", sid, e);
     // Best-effort: log the failure so it's visible in the dashboard.
     await logDecision({
-      manychatSubId: jid,
+      manychatSubId: sid,
       messageId: inboundMessageId,
       inboundText: text,
       stageBefore: leadSnapshot?.stage ?? null,
@@ -392,7 +409,8 @@ async function loadRecentForSupervisor(
 }
 
 interface SupervisorRouteInput {
-  jid: string;
+  sid: string;
+  bridgeJid: string;
   inboundMessageId: number | null;
   text: string | null;
   textForRouting: string | null;
@@ -408,10 +426,10 @@ interface SupervisorRouteInput {
 }
 
 async function routeThroughSupervisor(input: SupervisorRouteInput): Promise<void> {
-  const { jid, inboundMessageId, text, textForRouting, mediaPresent, wasBotPaused } = input;
+  const { sid, bridgeJid, inboundMessageId, text, textForRouting, mediaPresent, wasBotPaused } = input;
 
   // Reload stage in case test-JID reset just cleared it.
-  const stage = ((await getLeadStage(jid)) || "").toUpperCase() || null;
+  const stage = ((await getLeadStage(sid)) || "").toUpperCase() || null;
   const [freshLead] = await db
     .select({
       name: leads.name,
@@ -419,7 +437,7 @@ async function routeThroughSupervisor(input: SupervisorRouteInput): Promise<void
       qState: leads.qState,
     })
     .from(leads)
-    .where(sql`trim(${leads.manychatSubId}) = ${jid.trim()}`)
+    .where(sql`trim(${leads.manychatSubId}) = ${sid.trim()}`)
     .limit(1);
 
   const inboundText = (text ?? "").trim();
@@ -433,12 +451,12 @@ async function routeThroughSupervisor(input: SupervisorRouteInput): Promise<void
       // Run the handler; it will transition stage.
       try {
         const r = await handleDecisionInbound({
-          sid: jid,
+          sid,
           text: textForRouting,
           hasMedia: mediaPresent,
         });
         await logDecision({
-          manychatSubId: jid,
+          manychatSubId: sid,
           messageId: inboundMessageId,
           inboundText: "(media-only)",
           stageBefore: stage,
@@ -453,7 +471,8 @@ async function routeThroughSupervisor(input: SupervisorRouteInput): Promise<void
     }
     // Other stages with empty text — let the legacy handler decide (it usually escalates).
     await runLegacyHandlerAndLog({
-      jid,
+      sid,
+      bridgeJid,
       stage,
       inboundMessageId,
       text: textForRouting,
@@ -463,7 +482,7 @@ async function routeThroughSupervisor(input: SupervisorRouteInput): Promise<void
     return;
   }
 
-  const recent = await loadRecentForSupervisor(jid);
+  const recent = await loadRecentForSupervisor(sid);
 
   const candidate = await precomputeCandidateAction({
     stage,
@@ -475,8 +494,8 @@ async function routeThroughSupervisor(input: SupervisorRouteInput): Promise<void
   });
 
   const verdict = await superviseIncomingMessage({
-    sid: jid,
-    jid,
+    sid,
+    jid: bridgeJid,
     inboundText,
     stage,
     qState: freshLead?.qState ?? null,
@@ -511,7 +530,7 @@ async function routeThroughSupervisor(input: SupervisorRouteInput): Promise<void
   ) {
     console.log(
       "[supervisor.route] auto-send override:",
-      jid,
+      sid,
       candidate.intent,
       `cand.conf=${candidate.intentConfidence}`,
       `sup.conf=${verdict.confidence}`
@@ -539,7 +558,7 @@ async function routeThroughSupervisor(input: SupervisorRouteInput): Promise<void
   };
 
   const logBase = {
-    manychatSubId: jid,
+    manychatSubId: sid,
     messageId: inboundMessageId,
     inboundText,
     stageBefore: stage,
@@ -574,7 +593,7 @@ async function routeThroughSupervisor(input: SupervisorRouteInput): Promise<void
     let draftId: number | null = null;
     try {
       draftId = await generateAndQueueDraft({
-        manychatSubId: jid,
+        manychatSubId: sid,
         moneyReason: "manual",
         pipelineStage: stage,
         leadName: freshLead?.name ?? null,
@@ -585,7 +604,7 @@ async function routeThroughSupervisor(input: SupervisorRouteInput): Promise<void
       console.error("[supervisor.route] draft generation failed", e);
     }
     try {
-      const who = freshLead?.name?.trim() || freshLead?.phone || jid;
+      const who = freshLead?.name?.trim() || freshLead?.phone || sid;
       await sendEliDM(
         `🤖 Supervisor escalation — ${who} (${stage ?? "no stage"})\n` +
           `Inbound: "${inboundText.slice(0, 200)}"\n` +
@@ -605,7 +624,7 @@ async function routeThroughSupervisor(input: SupervisorRouteInput): Promise<void
     let ackSent = false;
     try {
       await sendBridgeMessage(
-        jid,
+        bridgeJid,
         "תודה על ההודעה 🙏 אבדוק ואחזור אליכם בהקדם."
       );
       ackSent = true;
@@ -633,7 +652,7 @@ async function routeThroughSupervisor(input: SupervisorRouteInput): Promise<void
       console.warn("[supervisor.route] override_with_text with no text — falling back to approve_code");
     } else {
       try {
-        await sendBridgeMessage(jid, verdict.overrideText);
+        await sendBridgeMessage(bridgeJid, verdict.overrideText);
       } catch (e) {
         console.error("[supervisor.route] override send failed", e);
         await logDecision({
@@ -658,7 +677,8 @@ async function routeThroughSupervisor(input: SupervisorRouteInput): Promise<void
 
   // approve_code (and fallback from missing-override-text). Run the legacy handler.
   await runLegacyHandlerAndLog({
-    jid,
+    sid,
+    bridgeJid,
     stage,
     inboundMessageId,
     text: textForRouting,
@@ -678,7 +698,8 @@ async function routeThroughSupervisor(input: SupervisorRouteInput): Promise<void
 }
 
 async function runLegacyHandlerAndLog(args: {
-  jid: string;
+  sid: string;
+  bridgeJid: string;
   stage: string | null;
   inboundMessageId: number | null;
   text: string | null;
@@ -695,33 +716,33 @@ async function runLegacyHandlerAndLog(args: {
     replayMeta?: Record<string, unknown>;
   };
 }): Promise<void> {
-  const { jid, stage, inboundMessageId, text, mediaPresent, inboundLogText } = args;
+  const { sid, bridgeJid, stage, inboundMessageId, text, mediaPresent, inboundLogText } = args;
   let result: any = null;
   let handlerName = "noop";
 
   try {
     if (!stage || stage === "NEW") {
       handlerName = "handleInbound";
-      result = await handleInbound({ sid: jid, text });
+      result = await handleInbound({ sid, text });
     } else if (
       stage === "AWAITING_ESTIMATE" ||
       stage === "AWAITING_LOGO" ||
       stage === "AWAITING_FINAL"
     ) {
       handlerName = "handleDecisionInbound";
-      result = await handleDecisionInbound({ sid: jid, text, hasMedia: mediaPresent });
+      result = await handleDecisionInbound({ sid, text, hasMedia: mediaPresent });
     } else {
       // WAITING_FACTORY / WON / DROPPED — supervisor said approve_code but
       // there's no handler. This is a no_op the supervisor probably should
       // have escalated; log it so we catch the case.
-      console.log("[supervisor.route] approve_code for silent stage — no handler", jid, stage);
+      console.log("[supervisor.route] approve_code for silent stage — no handler", sid, stage);
     }
   } catch (e) {
     console.error("[supervisor.route] legacy handler error", handlerName, e);
   }
 
   // Reload stage AFTER the handler runs so we capture stage transitions.
-  const stageAfter = ((await getLeadStage(jid)) || "").toUpperCase() || null;
+  const stageAfter = ((await getLeadStage(sid)) || "").toUpperCase() || null;
   const handlerAction = mapHandlerResultToAction(result);
 
   // SAFETY NET: supervisor approved code, but code silently no_op'd
@@ -734,7 +755,7 @@ async function runLegacyHandlerAndLog(args: {
   if (handlerSilent && inboundLogText !== "(empty)" && inboundLogText !== "(media-only)") {
     console.warn(
       "[supervisor.route] safety net: handler silent after approve_code, escalating",
-      jid,
+      sid,
       handlerName
     );
     let draftId: number | null = null;
@@ -742,11 +763,11 @@ async function runLegacyHandlerAndLog(args: {
       const [leadRow] = await db
         .select({ name: leads.name, phone: leads.phoneE164 })
         .from(leads)
-        .where(sql`trim(${leads.manychatSubId}) = ${jid.trim()}`)
+        .where(sql`trim(${leads.manychatSubId}) = ${sid.trim()}`)
         .limit(1);
       try {
         draftId = await generateAndQueueDraft({
-          manychatSubId: jid,
+          manychatSubId: sid,
           moneyReason: "manual",
           pipelineStage: stage,
           leadName: leadRow?.name ?? null,
@@ -757,7 +778,7 @@ async function runLegacyHandlerAndLog(args: {
         console.error("[supervisor.route] safety-net draft generation failed", e);
       }
       try {
-        const who = leadRow?.name?.trim() || leadRow?.phone || jid;
+        const who = leadRow?.name?.trim() || leadRow?.phone || sid;
         await sendEliDM(
           `⚠️ Safety net — ${who} (${stage ?? "no stage"})\n` +
             `Inbound: "${inboundLogText.slice(0, 200)}"\n` +
@@ -777,7 +798,7 @@ async function runLegacyHandlerAndLog(args: {
     let safetyAckSent = false;
     try {
       await sendBridgeMessage(
-        jid,
+        bridgeJid,
         "תודה על ההודעה 🙏 אבדוק ואחזור אליכם בהקדם."
       );
       safetyAckSent = true;
@@ -786,7 +807,7 @@ async function runLegacyHandlerAndLog(args: {
     }
 
     await logDecision({
-      manychatSubId: jid,
+      manychatSubId: sid,
       messageId: inboundMessageId,
       inboundText: inboundLogText,
       stageBefore: stage,
@@ -817,7 +838,7 @@ async function runLegacyHandlerAndLog(args: {
   }
 
   await logDecision({
-    manychatSubId: jid,
+    manychatSubId: sid,
     messageId: inboundMessageId,
     inboundText: inboundLogText,
     stageBefore: stage,
