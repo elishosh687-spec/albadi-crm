@@ -13,7 +13,8 @@
 
 import { calculateQuote } from "./engine";
 import { DEFAULT_CONFIG } from "./constants";
-import type { QuoteResult, QuoteFormData } from "./types";
+import type { AppConfig, QuoteResult, QuoteFormData } from "./types";
+import { getFactoryConfig } from "../config";
 
 export { DEFAULT_CONFIG };
 export type { QuoteResult, QuoteFormData };
@@ -168,9 +169,48 @@ export interface CalculateByCodesOutput {
   altResult: QuoteResult | null; // alternative shipping (sea ↔ air)
 }
 
-export function calculateQuoteByCodes(
+/**
+ * Merge admin-editable values from the DB config (`app_config.factory_pricing`)
+ * into the hardcoded catalog `DEFAULT_CONFIG`. Catalog data (products, qty
+ * tiers, color addons, features) stays in code — it's keyed to the factory's
+ * price sheet. Admin tweakables (margin matrix, USD/CNY/ILS rates, shipping
+ * rates) come from the DB so the Settings page actually drives the bot.
+ *
+ * Shipping options are matched by `type` (air ↔ s1, sea ↔ s2) so the
+ * questionnaire IDs remain stable while rates/threshold can be tuned live.
+ */
+async function buildMergedConfig(): Promise<AppConfig> {
+  const dbConfig = await getFactoryConfig();
+  const matrix = dbConfig.profitMarginByQuantity ?? {};
+  const merged: AppConfig = {
+    ...DEFAULT_CONFIG,
+    exchangeRates: {
+      usdToIls: dbConfig.usdToIls,
+      usdToCny: dbConfig.usdToCny,
+    },
+    adminSettings: {
+      globalProfitMargin: dbConfig.defaultProfitMargin,
+      profitMarginByQuantity: { ...matrix },
+    },
+    shippingOptions: DEFAULT_CONFIG.shippingOptions.map((s) => {
+      const dbOpt = dbConfig.shippingOptions.find(
+        (d) => d.type === s.type && d.enabled
+      );
+      if (!dbOpt) return s;
+      return {
+        ...s,
+        enabled: dbOpt.enabled,
+        seaRate: dbOpt.seaRate ?? s.seaRate,
+        airRates: dbOpt.airRates ?? s.airRates,
+      };
+    }),
+  };
+  return merged;
+}
+
+export async function calculateQuoteByCodes(
   input: CalculateByCodesInput
-): CalculateByCodesOutput | null {
+): Promise<CalculateByCodesOutput | null> {
   const form: QuoteFormData = {
     productId: input.productId,
     quantityTierId: input.quantityTierId,
@@ -181,22 +221,20 @@ export function calculateQuoteByCodes(
     selectedFeatureIds: input.hasLamination ? ["f1"] : [],
   };
 
-  const result = calculateQuote(form, DEFAULT_CONFIG);
+  const cfg = await buildMergedConfig();
+
+  const result = calculateQuote(form, cfg);
   if (!result) return null;
 
   const currentType = result.shippingOption?.type;
   const altShipping =
     currentType === "air"
-      ? DEFAULT_CONFIG.shippingOptions.find(
-          (s) => s.enabled && s.type === "sea"
-        )
+      ? cfg.shippingOptions.find((s) => s.enabled && s.type === "sea")
       : currentType === "sea"
-        ? DEFAULT_CONFIG.shippingOptions.find(
-            (s) => s.enabled && s.type === "air"
-          )
+        ? cfg.shippingOptions.find((s) => s.enabled && s.type === "air")
         : null;
   const altResult = altShipping
-    ? calculateQuote({ ...form, shippingOptionId: altShipping.id }, DEFAULT_CONFIG)
+    ? calculateQuote({ ...form, shippingOptionId: altShipping.id }, cfg)
     : null;
 
   return { result, altResult };

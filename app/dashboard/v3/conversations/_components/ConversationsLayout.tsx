@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import {
   Search,
   ChevronRight,
+  ChevronLeft,
   Bot,
   BotOff,
   User,
@@ -91,6 +92,18 @@ export function ConversationsLayout({
 
   // Mobile: when a lead is selected, hide the list; show only the chat.
   const isChatOpen = !!selected;
+
+  // Prev/next navigation among visible (filtered) leads. RTL list — "prev"
+  // visually is the one above (earlier index), "next" is the one below.
+  const neighbors = useMemo(() => {
+    if (!selected) return { prev: null as string | null, next: null as string | null };
+    const idx = filtered.findIndex((r) => r.sid === selected.sid);
+    if (idx === -1) return { prev: null, next: null };
+    return {
+      prev: idx > 0 ? filtered[idx - 1].sid : null,
+      next: idx < filtered.length - 1 ? filtered[idx + 1].sid : null,
+    };
+  }, [filtered, selected]);
 
   return (
     <div className="flex flex-col gap-3 h-[calc(100dvh-3rem)]">
@@ -185,6 +198,8 @@ export function ConversationsLayout({
                   onBack={() => setLead(null)}
                   summaryOpen={summaryOpen}
                   onToggleSummary={() => setSummaryOpen((v) => !v)}
+                  onPrev={neighbors.prev ? () => setLead(neighbors.prev!) : null}
+                  onNext={neighbors.next ? () => setLead(neighbors.next!) : null}
                 />
                 <ChatThread messages={selected.messages} />
                 <Composer
@@ -222,12 +237,16 @@ function ChatHeader({
   onBack,
   summaryOpen,
   onToggleSummary,
+  onPrev,
+  onNext,
 }: {
   sid: string;
   summary: OrderSummaryData;
   onBack: () => void;
   summaryOpen: boolean;
   onToggleSummary: () => void;
+  onPrev: (() => void) | null;
+  onNext: (() => void) | null;
 }) {
   const stage = (summary.stage ?? "NEW").toUpperCase();
   const tone = STAGE_TONE[stage] ?? STAGE_TONE.UNCLASSIFIED;
@@ -287,6 +306,28 @@ function ChatHeader({
         <div className="text-xs text-muted-foreground truncate mt-0.5">
           {summary.phone || "—"}
         </div>
+      </div>
+      <div className="flex items-center gap-0.5 shrink-0">
+        <button
+          type="button"
+          onClick={onPrev ?? undefined}
+          disabled={!onPrev}
+          title="ליד הקודם ברשימה"
+          aria-label="ליד הקודם"
+          className="size-8 rounded-md grid place-items-center text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors disabled:opacity-30 disabled:hover:bg-transparent"
+        >
+          <ChevronRight className="size-4" />
+        </button>
+        <button
+          type="button"
+          onClick={onNext ?? undefined}
+          disabled={!onNext}
+          title="ליד הבא ברשימה"
+          aria-label="ליד הבא"
+          className="size-8 rounded-md grid place-items-center text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors disabled:opacity-30 disabled:hover:bg-transparent"
+        >
+          <ChevronLeft className="size-4" />
+        </button>
       </div>
       <Link
         href={`/dashboard/v3?lead=${encodeURIComponent(sid)}`}
@@ -371,11 +412,21 @@ function ConversationListItem({
           active ? "bg-primary/10" : "hover:bg-card/70"
         )}
       >
-        <div className="flex items-center justify-between gap-2">
-          <span className="text-sm font-medium truncate flex-1 min-w-0">
-            {row.name || row.phone || row.sid}
-          </span>
-          <span className="text-[10px] text-muted-foreground tabular-nums shrink-0">
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex-1 min-w-0">
+            <span className="block text-sm font-medium truncate">
+              {row.name || row.phone || row.sid}
+            </span>
+            {row.name && row.phone && (
+              <span
+                dir="ltr"
+                className="block text-[11px] text-muted-foreground tabular-nums truncate text-left"
+              >
+                {row.phone}
+              </span>
+            )}
+          </div>
+          <span className="text-[10px] text-muted-foreground tabular-nums shrink-0 mt-0.5">
             {timeAgoHe(row.lastAt)}
           </span>
         </div>

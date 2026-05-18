@@ -1245,7 +1245,7 @@ export async function saveTemplateAction(data: {
   const body = data.body.trim();
   if (!name) return { ok: false, error: "שם חסר" };
   if (!body) return { ok: false, error: "גוף ההודעה חסר" };
-  if (!["text", "cta_url"].includes(data.type)) {
+  if (!["text", "cta_url", "restart_questionnaire"].includes(data.type)) {
     return { ok: false, error: "סוג לא תקין" };
   }
   try {
@@ -1317,6 +1317,11 @@ export async function sendTemplateAction(
         ctaLabel: tmpl.ctaLabel,
         ctaUrl: tmpl.ctaUrl,
       });
+    } else if (tmpl.type === "restart_questionnaire") {
+      const { restartQuestionnaire } = await import(
+        "@/lib/autoresponder/questionnaire"
+      );
+      await restartQuestionnaire(cleanSid, tmpl.body);
     } else {
       await sendBridgeMessage(jid, tmpl.body);
     }

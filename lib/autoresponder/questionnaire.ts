@@ -550,7 +550,7 @@ async function fetchQuote(state: QState): Promise<QuoteCalcOutput> {
     state.quantity === "custom"
       ? parseCustomQuantity(state.quantityCustom)
       : null;
-  const calc = calculateQuoteByCodes({
+  const calc = await calculateQuoteByCodes({
     productId: state.product,
     quantityTierId: state.quantity,
     quantityOverride: customQty,
@@ -625,6 +625,46 @@ export async function kickstartQuestionnaire(sid: string): Promise<void> {
   const newState: QState = { step: first.step };
   await saveState(sid, newState);
   await askQuestion(ctx.jid, first);
+}
+
+/**
+ * Force-restart the questionnaire from the first question (shipping). Resets
+ * qState, sends a transition note + OPENING + the first poll. Safe to invoke
+ * mid-flow — the new state overrides whatever step the lead was on. Used by
+ * the CRM "restart questionnaire" template.
+ */
+export async function restartQuestionnaire(
+  sid: string,
+  transitionText?: string
+): Promise<void> {
+  const ctx = await loadLeadCtx(sid);
+  if (!ctx) throw new Error("lead not found");
+  const recipient =
+    ctx.jid ??
+    (ctx.phone
+      ? `${ctx.phone.replace(/[^0-9]/g, "")}@s.whatsapp.net`
+      : ctx.sid);
+  const first = QUESTIONS[0];
+  const newState: QState = { step: first.step };
+  await db
+    .update(leads)
+    .set({
+      qState: newState as any,
+      pipelineFlag: null,
+      botPaused: false,
+      followUpCount: 0,
+      lastFollowUpAt: new Date(),
+      updatedAt: new Date(),
+    })
+    .where(sql`trim(${leads.manychatSubId}) = ${ctx.sid.trim()}`);
+  const transition =
+    transitionText?.trim() ||
+    "סליחה על הבלבול קודם 🙏 בואו נתחיל את השאלון מההתחלה.";
+  await sendBridgeMessage(recipient, transition);
+  await new Promise((r) => setTimeout(r, 800));
+  await sendBridgeMessage(recipient, OPENING);
+  await new Promise((r) => setTimeout(r, 800));
+  await askQuestion(recipient, first);
 }
 
 export async function loadLeadCtx(sid: string): Promise<LeadCtx | null> {

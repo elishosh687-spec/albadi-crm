@@ -59,8 +59,16 @@ export interface FactoryPricingConfig {
   usdToIls: number;
   /** CNY → USD divisor (i.e. 1 USD = X CNY) */
   usdToCny: number;
-  /** Default profit margin % when caller doesn't override */
+  /** Default profit margin % when caller doesn't override and no per-qty value */
   defaultProfitMargin: number;
+  /**
+   * Profit margin % per quantity tier. Keys are quantity strings matching
+   * `quantityTiers[].quantity` (e.g. "1000","3000","5000","10000"). Falls back
+   * to `defaultProfitMargin` when the customer's quantity isn't in the map.
+   * Used by the WhatsApp questionnaire calculator AND the FinalizeModal slider
+   * initial value.
+   */
+  profitMarginByQuantity?: Record<string, number>;
   /** Currency code for customer display; always "ILS" for now */
   currency: "ILS";
 }

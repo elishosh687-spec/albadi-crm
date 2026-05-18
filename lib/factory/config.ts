@@ -42,8 +42,30 @@ export const DEFAULT_FACTORY_CONFIG: FactoryPricingConfig = {
   usdToIls: 3.7,
   usdToCny: 7.2,
   defaultProfitMargin: 40,
+  profitMarginByQuantity: { "1000": 40, "3000": 40, "5000": 40, "10000": 40 },
   currency: "ILS",
 };
+
+/**
+ * Back-compat normalizer: rows written before `profitMarginByQuantity` existed
+ * get the field initialized to `defaultProfitMargin` for every standard tier.
+ * Pure function — does not mutate the input.
+ */
+function normalizeConfig(raw: FactoryPricingConfig): FactoryPricingConfig {
+  if (raw.profitMarginByQuantity && Object.keys(raw.profitMarginByQuantity).length > 0) {
+    return raw;
+  }
+  const fallback = raw.defaultProfitMargin ?? 40;
+  return {
+    ...raw,
+    profitMarginByQuantity: {
+      "1000": fallback,
+      "3000": fallback,
+      "5000": fallback,
+      "10000": fallback,
+    },
+  };
+}
 
 export async function getFactoryConfig(): Promise<FactoryPricingConfig> {
   const now = Date.now();
@@ -56,7 +78,7 @@ export async function getFactoryConfig(): Promise<FactoryPricingConfig> {
     await db.insert(appConfig).values({ key: KEY, value: DEFAULT_FACTORY_CONFIG });
     value = DEFAULT_FACTORY_CONFIG;
   } else {
-    value = rows[0].value as FactoryPricingConfig;
+    value = normalizeConfig(rows[0].value as FactoryPricingConfig);
   }
   cache = { value, expiresAt: now + TTL_MS };
   return value;

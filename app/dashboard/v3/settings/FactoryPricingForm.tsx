@@ -73,6 +73,18 @@ export function FactoryPricingForm({ initial }: { initial: FactoryPricingConfig 
     setState((s) => ({ ...s, [key]: Number.isFinite(num) ? num : 0 }));
   };
 
+  const QTY_TIERS = ["1000", "3000", "5000", "10000"] as const;
+  const updateMarginTier = (qtyKey: string, v: string) => {
+    const num = Number(v);
+    setState((s) => ({
+      ...s,
+      profitMarginByQuantity: {
+        ...(s.profitMarginByQuantity ?? {}),
+        [qtyKey]: Number.isFinite(num) ? num : 0,
+      },
+    }));
+  };
+
   const updateOption = (idx: number, patch: Partial<ShippingOption>) => {
     setState((s) => ({
       ...s,
@@ -143,12 +155,35 @@ export function FactoryPricingForm({ initial }: { initial: FactoryPricingConfig 
         />
         <NumField
           label='רווח ברירת מחדל (%)'
-          hint="מיקום התחלתי של הסליידר בחישוב הצעה סופית"
+          hint="נופל-חזרה כשאין ערך בטבלת הכמויות (לכמויות חופשיות)"
           value={state.defaultProfitMargin}
           step={1}
           onChange={(v) => updateNumber("defaultProfitMargin", v)}
           error={errors.defaultProfitMargin as string | undefined}
         />
+      </div>
+
+      {/* Profit margin per quantity tier — used by the WhatsApp questionnaire */}
+      <div className="mb-6">
+        <h3 className="text-sm font-medium mb-1">אחוזי רווחיות לפי כמות</h3>
+        <p className="text-[11px] text-muted-foreground mb-3">
+          השאלון בווצאפ לוקח את האחוז המתאים לפי הכמות שהלקוח בחר. כמות שלא
+          ברשימה → "רווח ברירת מחדל" שלמעלה.
+        </p>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          {QTY_TIERS.map((q) => (
+            <NumField
+              key={q}
+              label={`${Number(q).toLocaleString()} יח'`}
+              value={
+                state.profitMarginByQuantity?.[q] ?? state.defaultProfitMargin
+              }
+              step={1}
+              onChange={(v) => updateMarginTier(q, v)}
+              error={errors[`margin:${q}`] as string | undefined}
+            />
+          ))}
+        </div>
       </div>
 
       {/* Shipping options */}
@@ -390,6 +425,11 @@ function validate(s: FactoryPricingConfig): Record<string, unknown> {
   if (!(s.usdToIls > 0)) errors.usdToIls = "חובה > 0";
   if (!(s.usdToCny > 0)) errors.usdToCny = "חובה > 0";
   if (!(s.defaultProfitMargin >= 0)) errors.defaultProfitMargin = "חובה ≥ 0";
+  if (s.profitMarginByQuantity) {
+    for (const [qty, pct] of Object.entries(s.profitMarginByQuantity)) {
+      if (!(pct >= 0)) errors[`margin:${qty}`] = "חובה ≥ 0";
+    }
+  }
   s.shippingOptions.forEach((opt, i) => {
     const optErr: Record<string, string> = {};
     if (opt.type === "sea") {

@@ -10,10 +10,12 @@ import {
   type TemplateRow,
 } from "@/app/actions/v2";
 
+type TemplateKind = "text" | "cta_url" | "restart_questionnaire";
+
 const EMPTY_FORM = {
   id: undefined as number | undefined,
   name: "",
-  type: "text" as "text" | "cta_url",
+  type: "text" as TemplateKind,
   body: "",
   headerType: "" as string,
   mediaId: "",
@@ -49,7 +51,7 @@ export function TemplatesSection() {
     setForm({
       id: t.id,
       name: t.name,
-      type: t.type as "text" | "cta_url",
+      type: t.type as TemplateKind,
       body: t.body,
       headerType: t.headerType ?? "",
       mediaId: t.mediaId ?? "",
@@ -180,7 +182,7 @@ export function TemplatesSection() {
                 type="button"
                 onClick={() => setForm((f) => f && { ...f, type: "text" })}
                 className={cn(
-                  "flex-1 rounded-lg border px-3 py-2 text-xs font-medium transition-colors",
+                  "flex-1 rounded-lg border px-2 py-2 text-xs font-medium transition-colors",
                   form.type === "text"
                     ? "bg-primary/15 border-primary/40 text-primary"
                     : "border-border text-muted-foreground hover:text-foreground"
@@ -192,7 +194,7 @@ export function TemplatesSection() {
                 type="button"
                 onClick={() => setForm((f) => f && { ...f, type: "cta_url" })}
                 className={cn(
-                  "flex-1 rounded-lg border px-3 py-2 text-xs font-medium transition-colors",
+                  "flex-1 rounded-lg border px-2 py-2 text-xs font-medium transition-colors",
                   form.type === "cta_url"
                     ? "bg-primary/15 border-primary/40 text-primary"
                     : "border-border text-muted-foreground hover:text-foreground"
@@ -200,8 +202,31 @@ export function TemplatesSection() {
               >
                 CTA
               </button>
+              <button
+                type="button"
+                onClick={() =>
+                  setForm((f) => f && { ...f, type: "restart_questionnaire" })
+                }
+                className={cn(
+                  "flex-1 rounded-lg border px-2 py-2 text-xs font-medium transition-colors",
+                  form.type === "restart_questionnaire"
+                    ? "bg-primary/15 border-primary/40 text-primary"
+                    : "border-border text-muted-foreground hover:text-foreground"
+                )}
+                title="מאפס את השאלון ושולח מהתחלה (transition + opening + שאלת משלוח)"
+              >
+                התחל שאלון מחדש
+              </button>
             </div>
           </div>
+
+          {form.type === "restart_questionnaire" && (
+            <p className="text-[11px] text-muted-foreground bg-muted/40 rounded-md p-2 leading-relaxed">
+              הטקסט שלמטה ישלח כהודעת הקדמה ("סליחה על הבלבול...") לפני שהבוט
+              שולח את ה-OPENING הקבוע והשאלה הראשונה של השאלון (שיטת משלוח).
+              ה-qState של הליד מתאפס.
+            </p>
+          )}
 
           <textarea
             value={form.body}
@@ -321,10 +346,16 @@ export function TemplatesSection() {
                         "rounded-full px-2 py-0.5 text-[10px] font-medium",
                         t.type === "cta_url"
                           ? "bg-primary/15 text-primary"
-                          : "bg-secondary text-muted-foreground"
+                          : t.type === "restart_questionnaire"
+                            ? "bg-amber-500/15 text-amber-400"
+                            : "bg-secondary text-muted-foreground"
                       )}
                     >
-                      {t.type === "cta_url" ? "CTA" : "טקסט"}
+                      {t.type === "cta_url"
+                        ? "CTA"
+                        : t.type === "restart_questionnaire"
+                          ? "שאלון מחדש"
+                          : "טקסט"}
                     </span>
                   </td>
                   <td className="py-2 hidden sm:table-cell text-muted-foreground max-w-[240px] truncate">

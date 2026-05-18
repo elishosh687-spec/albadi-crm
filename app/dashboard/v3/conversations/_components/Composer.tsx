@@ -39,6 +39,13 @@ export function Composer({
 
   const sendTemplate = (templateId: number) => {
     setShowTemplatePicker(false);
+    const tmpl = templates.find((t) => t.id === templateId);
+    if (tmpl?.type === "restart_questionnaire") {
+      const ok = window.confirm(
+        `איפוס שאלון: ה-qState של הליד יתאפס ו-3 הודעות ישלחו (הקדמה + OPENING + שאלת משלוח). להמשיך?`
+      );
+      if (!ok) return;
+    }
     setMsg(null);
     startTransition(async () => {
       const r = await sendTemplateAction(sid, templateId);
@@ -180,6 +187,9 @@ export function Composer({
                     <span className="truncate">{t.name}</span>
                     {t.type === "cta_url" && (
                       <span className="shrink-0 text-[10px] text-muted-foreground">CTA</span>
+                    )}
+                    {t.type === "restart_questionnaire" && (
+                      <span className="shrink-0 text-[10px] text-amber-400">↻</span>
                     )}
                   </button>
                 ))}
