@@ -322,7 +322,7 @@ export async function sendBridgeMessage(
 
 // media_id for the company-intro video staged on the albadi tenant.
 // To replace: upload new video via POST /v1/media and update this constant.
-export const COMPANY_VIDEO_MEDIA_ID = "mu__3tEVay0D703wO3cSxoPpg";
+export const COMPANY_VIDEO_MEDIA_ID = "mu_HA4cbJxkZN7Hfcb-4QMkjA";
 
 /**
  * Send the "who we are" company template as a cta_url message with video
