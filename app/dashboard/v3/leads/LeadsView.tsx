@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Search, MessageSquare, X } from "lucide-react";
 import { STAGE_LABEL, STAGE_TONE } from "@/app/dashboard/v3/_components/stage-meta";
 
@@ -30,11 +31,24 @@ export interface LeadRow {
   updatedAt: Date | null;
 }
 
-function LeadCard({ lead, onPreview }: { lead: LeadRow; onPreview: (l: LeadRow) => void }) {
+function LeadCard({
+  lead,
+  onPreview,
+  activeStage,
+}: {
+  lead: LeadRow;
+  onPreview: (l: LeadRow) => void;
+  activeStage: string;
+}) {
   const pill = STAGE_TONE[lead.stage ?? ""]?.pill ?? "bg-muted text-muted-foreground";
   const stageLabel = STAGE_LABEL[lead.stage ?? ""] ?? lead.stage ?? "—";
   const updatedAt = lead.updatedAt ? new Date(lead.updatedAt).toLocaleDateString("he-IL") : "—";
-  const fullCardHref = `/dashboard/v3/leads?lead=${encodeURIComponent(lead.sid)}`;
+  // Carry the active stage filter into the lead card URL so the card's
+  // prev/next arrows can paginate over the same filtered list the user sees.
+  const fullCardHref =
+    activeStage && activeStage !== "ALL"
+      ? `/dashboard/v3/leads?stage=${encodeURIComponent(activeStage)}&lead=${encodeURIComponent(lead.sid)}`
+      : `/dashboard/v3/leads?lead=${encodeURIComponent(lead.sid)}`;
 
   return (
     <div className="group relative flex flex-col gap-2 rounded-xl border border-border bg-card p-4 hover:border-primary/40 hover:shadow-md transition-all duration-150">
@@ -173,7 +187,7 @@ function PreviewDrawer({ lead, onClose }: { lead: LeadRow; onClose: () => void }
         </div>
         <div className="border-t border-border p-4 space-y-2">
           <a
-            href={`/dashboard/v3?lead=${encodeURIComponent(lead.sid)}`}
+            href={`/dashboard/v3/leads?lead=${encodeURIComponent(lead.sid)}`}
             className="flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
           >
             כרטיס מלא + החלטות בוט
@@ -192,7 +206,17 @@ function PreviewDrawer({ lead, onClose }: { lead: LeadRow; onClose: () => void }
 }
 
 export function LeadsView({ leads }: { leads: LeadRow[] }) {
-  const [activeStage, setActiveStage] = useState("ALL");
+  const router = useRouter();
+  const params = useSearchParams();
+  // Stage filter is URL-persisted so that the lead card (opened via /leads
+  // ?stage=X&lead=Y) can paginate prev/next over the same filtered subset.
+  const activeStage = params.get("stage") ?? "ALL";
+  const setActiveStage = (s: string) => {
+    const sp = new URLSearchParams(params.toString());
+    if (s === "ALL") sp.delete("stage");
+    else sp.set("stage", s);
+    router.replace(sp.toString() ? `/dashboard/v3/leads?${sp.toString()}` : "/dashboard/v3/leads");
+  };
   const [search, setSearch] = useState("");
   const [preview, setPreview] = useState<LeadRow | null>(null);
 
@@ -265,7 +289,7 @@ export function LeadsView({ leads }: { leads: LeadRow[] }) {
       ) : (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {filtered.map((l) => (
-            <LeadCard key={l.sid} lead={l} onPreview={setPreview} />
+            <LeadCard key={l.sid} lead={l} onPreview={setPreview} activeStage={activeStage} />
           ))}
         </div>
       )}

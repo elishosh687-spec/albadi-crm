@@ -14,13 +14,14 @@ const THREAD_LIMIT = 200;
 export default async function LeadsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ lead?: string }>;
+  searchParams: Promise<{ lead?: string; stage?: string }>;
 }) {
-  const { lead: leadParam } = await searchParams;
+  const { lead: leadParam, stage: stageParam } = await searchParams;
   const selectedSid = leadParam?.trim() || null;
+  const stageFilter = stageParam?.trim() || null;
 
   if (selectedSid) {
-    return <ExpandedLeadInLeadsContext sid={selectedSid} />;
+    return <ExpandedLeadInLeadsContext sid={selectedSid} stageFilter={stageFilter} />;
   }
 
   return <LeadsListWrapper />;
@@ -50,15 +51,26 @@ async function LeadsListWrapper() {
 
 /**
  * Loads + renders ExpandedLead for the /leads context. Neighbor list mirrors
- * what LeadsView shows (ALL active leads incl. DROPPED/WON), so prev/next
- * here paginates through the full /leads list rather than the narrower
- * overview list. backHref returns to /dashboard/v3/leads.
+ * what LeadsView shows: ALL active leads, optionally narrowed to a single
+ * pipeline stage when the user is filtered (e.g. ?stage=WAITING_FACTORY).
+ * Prev/next then paginates only inside that subset. backHref preserves the
+ * stage query so returning to the list keeps the same filter.
  */
-async function ExpandedLeadInLeadsContext({ sid }: { sid: string }) {
+async function ExpandedLeadInLeadsContext({
+  sid,
+  stageFilter,
+}: {
+  sid: string;
+  stageFilter: string | null;
+}) {
   const neighborQuery = db
     .select({ sid: leads.manychatSubId })
     .from(leads)
-    .where(eq(leads.active, true))
+    .where(
+      stageFilter
+        ? sql`${leads.active} = true AND ${leads.pipelineStage} = ${stageFilter}`
+        : eq(leads.active, true)
+    )
     .orderBy(desc(leads.updatedAt));
 
   const [leadRow, neighborRows] = await Promise.all([
@@ -145,6 +157,9 @@ async function ExpandedLeadInLeadsContext({ sid }: { sid: string }) {
     receivedAt: m.receivedAt.toISOString(),
   }));
 
+  // backHref stays as a pure path. The current `?stage=…&lead=…` query is
+  // already in useSearchParams() inside ExpandedLead, so goBack/goToNeighbor
+  // automatically preserve stage when they rebuild the URL.
   return (
     <ExpandedLead
       sid={sid}

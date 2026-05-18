@@ -80,7 +80,7 @@ export function ExpandedLead({
 }: ExpandedLeadProps) {
   const router = useRouter();
   const params = useSearchParams();
-  const [tab, setTab] = useState<TabKey>("chat");
+  const [tab, setTab] = useState<TabKey>("overview");
 
   const goBack = () => {
     const sp = new URLSearchParams(params.toString());
