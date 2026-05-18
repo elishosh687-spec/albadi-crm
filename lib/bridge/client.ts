@@ -36,6 +36,13 @@ import {
 } from "./config";
 import { isJid, jidToPhone, phoneToJid } from "./jid";
 
+// When USE_GREEN_API=1, every public send delegates to lib/greenapi/client
+// instead of hitting the Yehuda bridge. Bridge code stays intact so we can
+// flip back instantly by toggling the env var.
+function useGreenApi(): boolean {
+  return process.env.USE_GREEN_API === "1";
+}
+
 export interface SubscriberInfo {
   id: string;
   name?: string;
@@ -255,6 +262,18 @@ export async function sendBridgeMessage(
     console.log(`[bridge.dryrun] → ${recipient}: ${preview.replace(/\n/g, " ⏎ ")}`);
     return { wa_message_id: fakeId, status: "dryrun" };
   }
+  if (useGreenApi()) {
+    const { sendGreenMessage } = await import("../greenapi/client");
+    return sendGreenMessage(
+      recipient,
+      message,
+      mediaPath,
+      sender,
+      mediaFilename,
+      buttons,
+      poll
+    );
+  }
   const jid = isJid(recipient) ? recipient : phoneToJid(recipient);
   const body: Record<string, unknown> = { recipient: jid };
   if (poll && poll.options.length >= 2) {
@@ -342,6 +361,10 @@ const COMPANY_BODY_TEXT =
   "🌐 https://albadi.ecobrotherss.com";
 
 export async function sendCompanyTemplate(jid: string): Promise<void> {
+  if (useGreenApi()) {
+    const { sendGreenCompanyTemplate } = await import("../greenapi/client");
+    return sendGreenCompanyTemplate(jid);
+  }
   const recipient = isJid(jid) ? jid : phoneToJid(jid);
   const ctaBody = {
     recipient,
@@ -406,6 +429,22 @@ export async function sendCtaUrlMessage(
   jid: string,
   payload: CtaUrlPayload
 ): Promise<void> {
+  if (useGreenApi()) {
+    const { sendGreenCtaUrlMessage } = await import("../greenapi/client");
+    await sendGreenCtaUrlMessage(jid, {
+      body: payload.body,
+      headerType: payload.headerType,
+      mediaId: payload.mediaId,
+      // Green has no media_id concept — pass mediaUrl only if the upstream
+      // caller has a public URL. The bridge variant uses media_id which is
+      // tenant-internal; we can't translate. If headers fail, Green client
+      // degrades to text+cta link.
+      mediaUrl: null,
+      ctaLabel: payload.ctaLabel,
+      ctaUrl: payload.ctaUrl,
+    });
+    return;
+  }
   const recipient = isJid(jid) ? jid : phoneToJid(jid);
   const body: Record<string, unknown> = {
     recipient,
