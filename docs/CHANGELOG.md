@@ -5,6 +5,32 @@
 
 ---
 
+## v3.8 — 2026-05-18 — "Settings drives the bot: per-qty margin + restart template + nav polish"
+
+### Added
+- **Per-quantity profit-margin matrix in Settings** — `FactoryPricingConfig` now carries `profitMarginByQuantity: { "1000": …, "3000": …, "5000": …, "10000": … }`. The WhatsApp questionnaire calculator reads margin from this map (falling back to `defaultProfitMargin` for free-form quantities). Settings page (`/dashboard/v3/settings`) has a new "אחוזי רווחיות לפי כמות" section with four numeric inputs.
+- **`restart_questionnaire` template type** — `message_templates.type` now accepts a third value. A row of this type resets the lead's `qState`, then sends: (a) the row's `body` as a transition note, (b) the hardcoded OPENING, (c) the first shipping-method poll. Surfaces:
+  - Settings UI: third type button next to "טקסט"/"CTA" with an explanatory note + amber "שאלון מחדש" badge in the templates table.
+  - Composer "תבנית" dropdown: amber ↻ icon + JS `confirm()` dialog before send (state reset is destructive — Eli must explicitly OK).
+  - Action plumbing: `restartQuestionnaire(sid, transitionText?)` exported from `lib/autoresponder/questionnaire.ts`; dispatched from `sendTemplateAction` when `tmpl.type === 'restart_questionnaire'`. Replaces the ad-hoc `scripts/_restart-questionnaire.ts` for the common case.
+- **Prev/next lead navigation inside the conversation card** — `ChatHeader` shows two new chevron buttons (RTL: right=prev, left=next) computed from the currently filtered list (`search` + `filter` aware). Lets Eli sweep through the queue without bouncing back to the list.
+- **Phone number displayed beneath name in conversations list** — when a lead has both a name and a phone, the list row renders the name on top and the E.164 phone (LTR, tabular) underneath as a second line. Falls back to single-line behaviour when only one is known.
+
+### Changed
+- **`calculateQuoteByCodes` is now async.** Internally it calls `buildMergedConfig` which fetches `app_config.factory_pricing` from the DB and merges admin-editable values (margin matrix + `globalProfitMargin`, USD↔CNY/USD↔ILS rates, shipping `seaRate`/`airRates` matched by `type` between hardcoded `s1`/`s2` and DB options) into the hardcoded catalog (`DEFAULT_CONFIG`). Catalog data — 14 products, qty tiers `q0..q3`, color addons, features — stays in code because it's keyed to the factory's CNY price sheet.
+- **`questionnaire.ts:fetchQuote`** awaits `calculateQuoteByCodes`. No other call sites — `priceFactoryQuote` (manual FinalizeModal) keeps using `getFactoryConfig` directly as before.
+- **`lib/factory/config.ts:normalizeConfig`** — back-compat shim that auto-populates `profitMarginByQuantity` from `defaultProfitMargin` whenever an older row is read. Eliminates the need for a migration script.
+- **`DEFAULT_FACTORY_CONFIG`** seeds the matrix at `{1000:40, 3000:40, 5000:40, 10000:40}` so a brand-new install matches the previously hardcoded behaviour exactly.
+
+### Why this change
+Until v3.7, the WhatsApp questionnaire ran on a *hardcoded* `DEFAULT_CONFIG` in `lib/factory/calculator/constants.ts` — Settings page edits only affected the manual FinalizeModal. Two parallel pricing universes that drifted (e.g. air rate 13$/kg in code vs 8.5$/kg in DB). v3.8 collapses them: Settings = single source of truth for margin + rates + shipping; catalog stays in code (it's a snapshot of the factory's price sheet that re-imports through `scripts/import-new-factory-bag-quote.ts`).
+
+### Operator action required
+- Open `/dashboard/v3/settings`, scroll to "אחוזי רווחיות לפי כמות", set the four percentages and Save. Saved value invalidates the 60-second in-memory cache.
+- If you want a "התחל שאלון מחדש" button to be available from the chat composer, create the template in Settings → "+הוסף תבנית" → choose the "התחל שאלון מחדש" type → name it (e.g. "שאלון מחדש") → body = the transition sentence ("סליחה על הבלבול…") → Save. There is no auto-seed: the row exists only after you create it.
+
+---
+
 ## v3.7 — 2026-05-18 — "Supervisor hardening + dashboard surfaces + media refresh"
 
 ### Added
