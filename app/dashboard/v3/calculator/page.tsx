@@ -5,7 +5,7 @@ import { CalculatorView } from "./CalculatorView";
 export const dynamic = "force-dynamic";
 
 export default async function CalculatorPage() {
-  const dbConfig = await getFactoryConfig();
+  const dbConfig = await getFactoryConfig({ fresh: true });
   const margins = dbConfig.profitMarginByQuantity ?? {
     "1000": dbConfig.defaultProfitMargin,
     "3000": dbConfig.defaultProfitMargin,

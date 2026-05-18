@@ -67,9 +67,16 @@ function normalizeConfig(raw: FactoryPricingConfig): FactoryPricingConfig {
   };
 }
 
-export async function getFactoryConfig(): Promise<FactoryPricingConfig> {
+/**
+ * @param opts.fresh — bypass the 60s in-process cache. Admin paths (settings,
+ *   calculator) MUST pass this so a save on one Vercel container is visible
+ *   when the next request lands on a different (warm) container that still
+ *   holds a stale snapshot. Bot paths (cron, questionnaire) can tolerate the
+ *   60s lag and benefit from the cache.
+ */
+export async function getFactoryConfig(opts?: { fresh?: boolean }): Promise<FactoryPricingConfig> {
   const now = Date.now();
-  if (cache && cache.expiresAt > now) return cache.value;
+  if (!opts?.fresh && cache && cache.expiresAt > now) return cache.value;
 
   const rows = await db.select().from(appConfig).where(eq(appConfig.key, KEY)).limit(1);
   let value: FactoryPricingConfig;

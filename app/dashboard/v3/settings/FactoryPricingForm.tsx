@@ -10,6 +10,7 @@
  */
 
 import { useMemo, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { Save, Plus, Trash2, Ship, Plane } from "lucide-react";
 import { cn } from "@/lib/cn";
 import type {
@@ -29,6 +30,7 @@ function slugify(s: string): string {
 }
 
 export function FactoryPricingForm({ initial }: { initial: FactoryPricingConfig }) {
+  const router = useRouter();
   const [state, setState] = useState<FactoryPricingConfig>(initial);
   const [isPending, startTransition] = useTransition();
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
@@ -53,6 +55,9 @@ export function FactoryPricingForm({ initial }: { initial: FactoryPricingConfig 
         const data = await res.json();
         if (data?.ok) {
           setMsg({ ok: true, text: "נשמר ✓" });
+          // Refresh the RSC page so `initial` prop reflects the saved value;
+          // this resets the dirty check and confirms the round-trip.
+          router.refresh();
         } else {
           setMsg({ ok: false, text: data?.detail ?? data?.error ?? "כשל" });
         }

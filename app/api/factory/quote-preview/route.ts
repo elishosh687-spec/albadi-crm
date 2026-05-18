@@ -49,7 +49,7 @@ export async function GET(req: NextRequest) {
     ? qtyOverrideParsed
     : null;
 
-  const dbConfig = await getFactoryConfig();
+  const dbConfig = await getFactoryConfig({ fresh: true });
   const cfg = buildConfig(dbConfig, marginOverride);
 
   const form: QuoteFormData = {

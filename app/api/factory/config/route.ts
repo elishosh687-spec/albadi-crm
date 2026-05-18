@@ -13,7 +13,9 @@ import { getFactoryConfig, setFactoryConfig } from "@/lib/factory/config";
 export const runtime = "nodejs";
 
 export async function GET() {
-  const config = await getFactoryConfig();
+  // Admin UI (FinalizeModal, Settings reload-after-save) — always bypass the
+  // in-process cache so the latest write is visible immediately.
+  const config = await getFactoryConfig({ fresh: true });
   return NextResponse.json({ ok: true, config });
 }
 
