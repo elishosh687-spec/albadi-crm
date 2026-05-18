@@ -1,0 +1,46 @@
+name: Bulk Personalized Outreach
+
+# Runs once daily at 08:00 UTC (= 11:00 IL summer / 10:00 IL winter).
+# Iterates eligible leads with a 5-min gap between sends.
+# Also triggerable manually from the Actions tab (workflow_dispatch).
+
+on:
+  schedule:
+    - cron: "0 8 * * *"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Dry run (no sends, no DB writes)"
+        type: boolean
+        default: false
+
+jobs:
+  outreach:
+    runs-on: ubuntu-latest
+    # Allow up to 5h — script sleeps 5 min per lead, so 60 leads max under this.
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install deps
+        run: npm ci --no-audit --no-fund
+
+      - name: Run bulk outreach
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          BRIDGE_BASE: ${{ secrets.BRIDGE_BASE }}
+          BRIDGE_TENANT_TOKEN: ${{ secrets.BRIDGE_TENANT_TOKEN }}
+          BOT_SECRET: ${{ secrets.BOT_SECRET }}
+          BRIDGE_WEBHOOK_SECRET: ${{ secrets.BRIDGE_WEBHOOK_SECRET }}
+        run: |
+          if [ "${{ inputs.dry_run }}" = "true" ]; then
+            echo "=== DRY RUN ==="
+            npx tsx scripts/cron-bulk-personalized.ts
+          else
+            npx tsx scripts/cron-bulk-personalized.ts --confirm
+          fi
