@@ -291,27 +291,38 @@ export async function sendGreenMessage(
 }
 
 /**
- * Company-template send. Green has no template/CTA concept — we send the
- * intro video as a file with the body text as caption. The Instagram link
- * inside the caption is auto-rendered by WhatsApp as a link card; no
- * separate CTA button.
+ * Company-template send. Two messages:
+ *   1. video (sendFileByUrl) with short caption
+ *   2. interactive buttons (sendInteractiveButtons) with Instagram URL button
+ *      and sister-site link buttons
+ *
+ * SendInteractiveButtons has no media-header support, so the video has to be
+ * sent as a separate message. Caps: 3 buttons, 25 chars each, body ≤20000.
  */
 export const COMPANY_VIDEO_URL =
   process.env.GREEN_COMPANY_VIDEO_URL ||
   "https://albadi.ecobrotherss.com/company-intro.mp4";
 
-const COMPANY_BODY_TEXT_FALLBACK =
+const COMPANY_VIDEO_CAPTION =
   "👋 *קצת עלינו — אלבדי*\n\n" +
-  "חברת אריזות עם 20+ שנה בענף. שותפים במפעל ייצור בסין. מתמחים בשקיות ממותגות לעסקים.\n\n" +
-  "🌐 https://ecobrotherss.com\n\n" +
-  "🌐 https://packiure.com\n\n" +
-  "🌐 https://albadi.ecobrotherss.com\n\n" +
-  "📸 אינסטגרם: https://www.instagram.com/simonsostri";
+  "חברת אריזות עם 20+ שנה בענף. שותפים במפעל ייצור בסין. מתמחים בשקיות ממותגות לעסקים.";
+
+const COMPANY_BUTTONS_BODY =
+  "🌐 ecobrotherss.com\n" +
+  "🌐 packiure.com\n" +
+  "🌐 albadi.ecobrotherss.com";
+
+const COMPANY_TEXT_ONLY_FALLBACK =
+  COMPANY_VIDEO_CAPTION +
+  "\n\n" +
+  COMPANY_BUTTONS_BODY +
+  "\n\n📸 אינסטגרם: https://www.instagram.com/simonsostri";
 
 export async function sendGreenCompanyTemplate(recipient: string): Promise<void> {
   const chatId = await recipientToChatId(recipient);
-  // Try video + caption first; fall back to plain text if the video URL
-  // isn't reachable from Green's media service.
+
+  // 1. Video with short caption.
+  let videoSent = false;
   try {
     const res = await greenPost<{ idMessage: string }>(
       "sendFileByUrl",
@@ -319,31 +330,67 @@ export async function sendGreenCompanyTemplate(recipient: string): Promise<void>
         chatId,
         urlFile: COMPANY_VIDEO_URL,
         fileName: "albadi-company.mp4",
-        caption: COMPANY_BODY_TEXT_FALLBACK,
+        caption: COMPANY_VIDEO_CAPTION,
       },
       { media: true }
     );
     await insertGreenOutbound({
       chatId,
-      text: COMPANY_BODY_TEXT_FALLBACK,
+      text: COMPANY_VIDEO_CAPTION,
       waMessageId: res.idMessage,
       sender: "bot",
       payload: { from: "sendGreenCompanyTemplate", kind: "video+caption" },
     });
-    return;
+    videoSent = true;
   } catch (err) {
     console.warn(
-      "[greenapi] company video send failed, falling back to text",
+      "[greenapi] company video send failed",
       err instanceof Error ? err.message : err
     );
   }
+
+  // 2. Interactive buttons with Instagram URL.
+  try {
+    const res = await greenPost<{ idMessage: string }>("sendInteractiveButtons", {
+      chatId,
+      body: COMPANY_BUTTONS_BODY,
+      buttons: [
+        {
+          type: "url",
+          buttonId: "ig",
+          buttonText: "📸 אינסטגרם",
+          url: "https://www.instagram.com/simonsostri",
+        },
+      ],
+    });
+    await insertGreenOutbound({
+      chatId,
+      text: COMPANY_BUTTONS_BODY,
+      waMessageId: res.idMessage,
+      sender: "bot",
+      payload: { from: "sendGreenCompanyTemplate", kind: "interactive-buttons" },
+    });
+    return;
+  } catch (err) {
+    console.warn(
+      "[greenapi] interactive buttons failed, sending text fallback",
+      err instanceof Error ? err.message : err
+    );
+  }
+
+  // 3. Last-resort: plain text containing everything (only if buttons failed).
+  //    If the video already went out, send only the button-body text + IG link
+  //    so we don't repeat the caption.
+  const fallbackText = videoSent
+    ? `${COMPANY_BUTTONS_BODY}\n\n📸 אינסטגרם: https://www.instagram.com/simonsostri`
+    : COMPANY_TEXT_ONLY_FALLBACK;
   const res = await greenPost<{ idMessage: string }>("sendMessage", {
     chatId,
-    message: COMPANY_BODY_TEXT_FALLBACK,
+    message: fallbackText,
   });
   await insertGreenOutbound({
     chatId,
-    text: COMPANY_BODY_TEXT_FALLBACK,
+    text: fallbackText,
     waMessageId: res.idMessage,
     sender: "bot",
     payload: { from: "sendGreenCompanyTemplate", kind: "text-fallback" },
