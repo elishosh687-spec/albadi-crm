@@ -131,11 +131,45 @@ interface InsertOutboundParams {
   payload?: Record<string, unknown>;
 }
 
+/**
+ * Look up the canonical lead sid for this Green chatId. Leads created by
+ * /api/leads/facebook-import live under `<phone>@s.whatsapp.net`; leads
+ * created by the green webhook for fresh contacts live under `<phone>@c.us`.
+ * Outbound messages must be stored under the SAME sid as the lead row,
+ * otherwise the CRM conversation view (which filters messages by sid) won't
+ * surface them.
+ */
+async function resolveLeadSidForChatId(chatId: string): Promise<string> {
+  // 1. exact chatId match
+  const byChat = await db
+    .select({ sid: messagesTable.manychatSubId })
+    .from(leads)
+    // reusing messagesTable.manychatSubId as a type-shape trick is messy —
+    // just select from leads.
+    .where(sql`trim(${leads.manychatSubId}) = ${chatId.trim()}`)
+    .limit(1);
+  if (byChat[0]) return chatId;
+  // 2. fall back to phone-based lookup
+  const digits = chatId.endsWith(CHAT_SUFFIX)
+    ? chatId.slice(0, -CHAT_SUFFIX.length)
+    : chatId.replace(/\D/g, "");
+  if (digits) {
+    const byPhone = await db
+      .select({ sid: leads.manychatSubId })
+      .from(leads)
+      .where(sql`${leads.phoneE164} = ${digits}`)
+      .limit(1);
+    if (byPhone[0]) return byPhone[0].sid;
+  }
+  // 3. no lead row yet → use chatId itself; the webhook will reconcile on
+  //    the next inbound.
+  return chatId;
+}
+
 async function insertGreenOutbound(p: InsertOutboundParams): Promise<void> {
-  // Keep manychat_sub_id keyed on chatId (the green-side JID) so subsequent
-  // inbound from the same chat dedupes onto the same lead.
+  const canonicalSid = await resolveLeadSidForChatId(p.chatId);
   await db.insert(messagesTable).values({
-    manychatSubId: p.chatId,
+    manychatSubId: canonicalSid,
     direction: "out",
     text: p.text,
     waMessageId: p.waMessageId,
