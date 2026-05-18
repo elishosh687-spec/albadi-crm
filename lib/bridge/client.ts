@@ -351,7 +351,12 @@ export async function sendCompanyTemplate(jid: string): Promise<void> {
     console.warn("[sendCompanyTemplate] failed, falling back to text", e);
     await sendBridgeMessage(
       jid,
-      "👋 קצת עלינו — אלבדי\n\nחברת אריזות עם 20+ שנה בענף.\n🌐 ecobrotherss.com\n📸 instagram.com/simonsostri"
+      "👋 *קצת עלינו — אלבדי*\n\n" +
+        "חברת אריזות עם 20+ שנה בענף. שותפים במפעל ייצור בסין. מתמחים בשקיות ממותגות לעסקים.\n\n" +
+        "🌐 https://ecobrotherss.com\n\n" +
+        "🌐 https://packiure.com\n\n" +
+        "🌐 https://albadi.ecobrotherss.com\n\n" +
+        "📸 אינסטגרם: https://www.instagram.com/simonsostri"
     );
   }
 }

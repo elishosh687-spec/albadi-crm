@@ -166,13 +166,12 @@ const DECISION_PROMPT =
 // in decision.ts. WA renders each URL as a tappable link-preview card,
 // so no buttons needed.
 export const COMPANY_TEMPLATE =
-  "👋 קצת עלינו\n" +
-  "אנחנו אלבדי — חברת אריזות, שותפים במפעל ייצור. 20+ שנה בענף.\n\n" +
-  "האתרים שלנו:\n" +
-  "🌐 https://ecobrotherss.com/\n" +
-  "🌐 https://packiure.com/\n" +
-  "🌐 https://bag-quote-app.vercel.app/\n\n" +
-  "📸 אינסטגרם: https://www.instagram.com/simonsostri/";
+  "👋 *קצת עלינו — אלבדי*\n\n" +
+  "חברת אריזות עם 20+ שנה בענף. שותפים במפעל ייצור בסין. מתמחים בשקיות ממותגות לעסקים.\n\n" +
+  "🌐 https://ecobrotherss.com\n\n" +
+  "🌐 https://packiure.com\n\n" +
+  "🌐 https://albadi.ecobrotherss.com\n\n" +
+  "📸 אינסטגרם: https://www.instagram.com/simonsostri";
 const FACTORY_HOLD_MSG =
   "תודה, קיבלתי את המפרט. חוזר אליכם תוך 24-48 שעות עם המחיר.";
 const BAIL_REPLY =
@@ -580,7 +579,7 @@ async function fetchQuote(state: QState): Promise<QuoteCalcOutput> {
     pricePerUnit: calc.result.sellingPricePerUnitIls,
     totalOrder: calc.result.totalOrderPriceIls,
     currency: calc.result.currency,
-    appUrl: "https://bag-quote-app.vercel.app",
+    appUrl: "https://albadi.ecobrotherss.com",
     alt: calc.altResult
       ? {
           shippingName: calc.altResult.shippingOption?.name ?? "",
