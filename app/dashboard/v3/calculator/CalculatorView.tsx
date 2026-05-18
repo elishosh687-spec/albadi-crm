@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { Loader2 } from "lucide-react";
 import { cn } from "@/lib/cn";
 import type { Product, QuantityTier, ShippingOption, QuoteResult } from "@/lib/factory/calculator/types";
@@ -34,13 +34,25 @@ export function CalculatorView({ products, quantityTiers, shippingOptions, initi
   const [lamination, setLamination] = useState(false);
   const [colors, setColors]       = useState(1);
   const [shippingId, setShippingId] = useState(shippingOptions.find((s) => s.type === "sea")?.id ?? shippingOptions[0]?.id ?? "s2");
+  const [qtyOverride, setQtyOverride] = useState<string>("");
+  const [reverseMode, setReverseMode] = useState<"total" | "unit">("total");
+  const [reverseInput, setReverseInput] = useState<string>("");
   const [preview, setPreview]     = useState<PreviewResult | null>(null);
   const [loading, setLoading]     = useState(false);
   const [error, setError]         = useState<string | null>(null);
 
   const selectedTier = quantityTiers.find((t) => t.id === qtyId);
-  const qtyKey = String(selectedTier?.quantity ?? 1000);
-  const currentMargin = initialMargins[qtyKey] ?? 40;
+  const overrideParsed = qtyOverride ? parseInt(qtyOverride, 10) : NaN;
+  const overrideValid = Number.isFinite(overrideParsed) && overrideParsed > 0;
+  // For margin lookup we mirror engine's snap-down behaviour client-side so the
+  // displayed margin matches the one used in the API call.
+  const effectiveQty = overrideValid ? overrideParsed : (selectedTier?.quantity ?? 1000);
+  const sortedTierQtys = quantityTiers.map((t) => t.quantity).sort((a, b) => a - b);
+  const snappedTierQty = sortedTierQtys.reduce(
+    (best, q) => (q <= effectiveQty ? q : best),
+    sortedTierQtys[0] ?? 1000
+  );
+  const currentMargin = initialMargins[String(snappedTierQty)] ?? 40;
 
   const fetchPreview = useCallback(async () => {
     setLoading(true);
@@ -55,6 +67,7 @@ export function CalculatorView({ products, quantityTiers, shippingOptions, initi
         shipping: shippingId,
         margin: String(currentMargin),
       });
+      if (overrideValid) params.set("qtyOverride", String(overrideParsed));
       const res = await fetch(`/api/factory/quote-preview?${params}`, { cache: "no-store" });
       const data = await res.json();
       if (!res.ok || !data.ok) {
@@ -69,7 +82,7 @@ export function CalculatorView({ products, quantityTiers, shippingOptions, initi
     } finally {
       setLoading(false);
     }
-  }, [productId, qtyId, handles, lamination, colors, shippingId, currentMargin]);
+  }, [productId, qtyId, handles, lamination, colors, shippingId, currentMargin, overrideValid, overrideParsed]);
 
   useEffect(() => {
     fetchPreview();
@@ -77,6 +90,20 @@ export function CalculatorView({ products, quantityTiers, shippingOptions, initi
 
   const r = preview?.result;
   const c = preview?.computed;
+
+  const reverseResult = useMemo(() => {
+    if (!r || !c) return null;
+    const n = parseFloat(reverseInput);
+    if (!Number.isFinite(n) || n <= 0) return null;
+    const perUnit = reverseMode === "total" ? n / r.quantity : n;
+    const base = r.totalCostPerUnitIls - c.shippingPerUnitIls;
+    if (base <= 0) return null;
+    const marginPct = ((perUnit - c.shippingPerUnitIls) / base - 1) * 100;
+    const profitPerUnit = perUnit - r.totalCostPerUnitIls;
+    const totalProfit = profitPerUnit * r.quantity;
+    const totalPrice = perUnit * r.quantity;
+    return { marginPct, profitPerUnit, totalProfit, perUnit, totalPrice };
+  }, [r, c, reverseInput, reverseMode]);
 
   return (
     <div className="flex flex-col gap-6" dir="rtl">
@@ -105,12 +132,32 @@ export function CalculatorView({ products, quantityTiers, shippingOptions, initi
             <select
               value={qtyId}
               onChange={(e) => setQtyId(e.target.value)}
-              className="bg-background/50 border border-border rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring/30"
+              disabled={overrideValid}
+              className="bg-background/50 border border-border rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring/30 disabled:opacity-50"
             >
               {quantityTiers.map((t) => (
                 <option key={t.id} value={t.id}>{t.label}</option>
               ))}
             </select>
+          </div>
+
+          {/* Custom quantity override */}
+          <div className="flex flex-col gap-1">
+            <label className="text-sm font-medium">כמות מותאמת (אופציונלי)</label>
+            <input
+              type="number"
+              min={1}
+              step={100}
+              placeholder="למשל 2500"
+              value={qtyOverride}
+              onChange={(e) => setQtyOverride(e.target.value)}
+              className="bg-background/50 border border-border rounded-md px-3 py-1.5 text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-ring/30"
+            />
+            <span className="text-[11px] text-muted-foreground">
+              {overrideValid
+                ? `מתומחר לפי טיר ${snappedTierQty.toLocaleString("he-IL")}`
+                : "ריק → משתמש בבחירה למעלה"}
+            </span>
           </div>
 
           {/* Shipping */}
@@ -164,6 +211,95 @@ export function CalculatorView({ products, quantityTiers, shippingOptions, initi
       {r && c && !loading && (
         <BreakdownCard result={r} computed={c} />
       )}
+
+      {/* Reverse margin: given a price, what % is the implied profit? */}
+      {r && c && (
+        <section className="rounded-xl border border-border bg-card p-5 flex flex-col gap-3">
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-medium">בדיקת רווח לפי מחיר</h2>
+            <div className="inline-flex rounded-md border border-border overflow-hidden text-xs">
+              <button
+                type="button"
+                onClick={() => setReverseMode("total")}
+                className={cn(
+                  "px-3 py-1",
+                  reverseMode === "total" ? "bg-primary text-primary-foreground" : "bg-background/30 text-muted-foreground"
+                )}
+              >
+                סכום כולל
+              </button>
+              <button
+                type="button"
+                onClick={() => setReverseMode("unit")}
+                className={cn(
+                  "px-3 py-1 border-r border-border",
+                  reverseMode === "unit" ? "bg-primary text-primary-foreground" : "bg-background/30 text-muted-foreground"
+                )}
+              >
+                מחיר ליחידה
+              </button>
+            </div>
+          </div>
+          <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-end">
+            <div className="flex flex-col gap-1 flex-1">
+              <label className="text-xs text-muted-foreground">
+                {reverseMode === "total"
+                  ? `הכנס סכום עסקה כולל (${r.quantity.toLocaleString("he-IL")} יח')`
+                  : "הכנס מחיר ליחידה"}
+              </label>
+              <div className="relative">
+                <input
+                  type="number"
+                  min={0}
+                  step={reverseMode === "total" ? 100 : 0.01}
+                  value={reverseInput}
+                  onChange={(e) => setReverseInput(e.target.value)}
+                  placeholder={reverseMode === "total" ? "למשל 12000" : "למשל 4.80"}
+                  className="w-full bg-background/50 border border-border rounded-md px-3 py-1.5 text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-ring/30"
+                />
+                <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">₪</span>
+              </div>
+            </div>
+            {reverseResult && (
+              <div className="flex flex-col items-end justify-end min-w-[12rem]">
+                <div className={cn(
+                  "text-2xl font-bold tabular-nums",
+                  reverseResult.marginPct >= (currentMargin) ? "text-success" : reverseResult.marginPct < 0 ? "text-destructive" : "text-foreground"
+                )}>
+                  {r2(reverseResult.marginPct).toLocaleString("he-IL")}%
+                </div>
+                <div className="text-xs text-muted-foreground">אחוז רווח מובלע</div>
+              </div>
+            )}
+          </div>
+          {reverseResult && (
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2 border-t border-border/50 text-xs">
+              <Stat label="מחיר ליחידה" value={`₪${ils(reverseResult.perUnit)}`} />
+              <Stat label="סה״כ עסקה" value={`₪${ils(reverseResult.totalPrice)}`} />
+              <Stat label="רווח ליחידה" value={`₪${ils(reverseResult.profitPerUnit)}`} tone={reverseResult.profitPerUnit < 0 ? "neg" : "pos"} />
+              <Stat label="רווח כולל" value={`₪${ils(reverseResult.totalProfit)}`} tone={reverseResult.totalProfit < 0 ? "neg" : "pos"} />
+            </div>
+          )}
+          <p className="text-[11px] text-muted-foreground">
+            השוואה למרג'ין הנוכחי בהגדרות: {currentMargin}%. צבע ירוק = ≥ ההגדרה.
+          </p>
+        </section>
+      )}
+    </div>
+  );
+}
+
+function Stat({ label, value, tone }: { label: string; value: string; tone?: "pos" | "neg" }) {
+  return (
+    <div className="flex flex-col">
+      <span className="text-muted-foreground">{label}</span>
+      <span className={cn(
+        "tabular-nums font-semibold",
+        tone === "pos" && "text-success",
+        tone === "neg" && "text-destructive"
+      )}>
+        {value}
+      </span>
     </div>
   );
 }

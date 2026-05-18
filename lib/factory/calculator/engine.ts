@@ -134,10 +134,14 @@ export function calculateQuote(
   // Step 8: Total cost per unit
   const totalCostPerUnitIls = finalUnitCostIls + featuresTotalPerUnitIls;
 
-  // Step 9: Selling price with profit margin
+  // Step 9: Selling price with profit margin.
+  // Snap-down on the margin matrix so a custom qty (e.g. 2500) inherits the
+  // 1000-tier margin — matching how prices snap to the lower tier.
+  const marginMatrix = adminSettings.profitMarginByQuantity;
   const profitMargin =
-    adminSettings.profitMarginByQuantity?.[quantityKey] ??
-    adminSettings.globalProfitMargin;
+    marginMatrix && Object.keys(marginMatrix).length > 0
+      ? findClosestPrice(marginMatrix, quantityKey)
+      : adminSettings.globalProfitMargin;
   const shippingPerUnitIls = shippingPerUnitUsd * targetRate;
   const marginableBaseIls = totalCostPerUnitIls - shippingPerUnitIls;
   // Keep exact (unrounded) for profit and total-order calculations so that

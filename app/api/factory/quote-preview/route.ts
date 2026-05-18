@@ -43,6 +43,11 @@ export async function GET(req: NextRequest) {
   const colors    = Math.max(1, parseInt(sp.get("colors") ?? "1", 10) || 1);
   const marginRaw = sp.get("margin");
   const marginOverride = marginRaw !== null ? parseFloat(marginRaw) : null;
+  const qtyOverrideRaw = sp.get("qtyOverride");
+  const qtyOverrideParsed = qtyOverrideRaw ? parseInt(qtyOverrideRaw, 10) : NaN;
+  const qtyOverride = Number.isFinite(qtyOverrideParsed) && qtyOverrideParsed > 0
+    ? qtyOverrideParsed
+    : null;
 
   const dbConfig = await getFactoryConfig();
   const cfg = buildConfig(dbConfig, marginOverride);
@@ -50,7 +55,7 @@ export async function GET(req: NextRequest) {
   const form: QuoteFormData = {
     productId: product,
     quantityTierId: qty,
-    quantityOverride: null,
+    quantityOverride: qtyOverride,
     hasHandles: handles,
     logoColors: colors,
     shippingOptionId: shipping,
