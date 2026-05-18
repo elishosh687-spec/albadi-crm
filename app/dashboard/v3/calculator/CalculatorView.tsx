@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect, useCallback, useTransition } from "react";
-import { Save, Loader2 } from "lucide-react";
+import { useState, useEffect, useCallback } from "react";
+import { Loader2 } from "lucide-react";
 import { cn } from "@/lib/cn";
 import type { Product, QuantityTier, ShippingOption, QuoteResult } from "@/lib/factory/calculator/types";
 
@@ -34,16 +34,13 @@ export function CalculatorView({ products, quantityTiers, shippingOptions, initi
   const [lamination, setLamination] = useState(false);
   const [colors, setColors]       = useState(1);
   const [shippingId, setShippingId] = useState(shippingOptions.find((s) => s.type === "sea")?.id ?? shippingOptions[0]?.id ?? "s2");
-  const [margins, setMargins]     = useState<Record<string, number>>(initialMargins);
   const [preview, setPreview]     = useState<PreviewResult | null>(null);
   const [loading, setLoading]     = useState(false);
   const [error, setError]         = useState<string | null>(null);
-  const [saveMsg, setSaveMsg]     = useState<{ ok: boolean; text: string } | null>(null);
-  const [isPending, startTransition] = useTransition();
 
   const selectedTier = quantityTiers.find((t) => t.id === qtyId);
   const qtyKey = String(selectedTier?.quantity ?? 1000);
-  const currentMargin = margins[qtyKey] ?? 40;
+  const currentMargin = initialMargins[qtyKey] ?? 40;
 
   const fetchPreview = useCallback(async () => {
     setLoading(true);
@@ -77,31 +74,6 @@ export function CalculatorView({ products, quantityTiers, shippingOptions, initi
   useEffect(() => {
     fetchPreview();
   }, [fetchPreview]);
-
-  const saveMargins = () => {
-    setSaveMsg(null);
-    startTransition(async () => {
-      try {
-        const cfgRes = await fetch("/api/factory/config");
-        const cfgData = await cfgRes.json();
-        if (!cfgRes.ok) throw new Error(cfgData.error ?? "load config failed");
-        const updated = { ...cfgData.config, profitMarginByQuantity: margins };
-        const saveRes = await fetch("/api/factory/config", {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(updated),
-        });
-        const saveData = await saveRes.json();
-        if (saveData?.ok) {
-          setSaveMsg({ ok: true, text: "נשמר ✓" });
-        } else {
-          setSaveMsg({ ok: false, text: saveData?.error ?? "כשל" });
-        }
-      } catch (e) {
-        setSaveMsg({ ok: false, text: e instanceof Error ? e.message : String(e) });
-      }
-    });
-  };
 
   const r = preview?.result;
   const c = preview?.computed;
@@ -174,58 +146,6 @@ export function CalculatorView({ products, quantityTiers, shippingOptions, initi
         <div className="flex gap-6">
           <Toggle label="ידיות" value={handles} onChange={setHandles} />
           <Toggle label="למינציה" value={lamination} onChange={setLamination} />
-        </div>
-      </section>
-
-      {/* Margin editors */}
-      <section className="rounded-xl border border-border bg-card p-5">
-        <h2 className="text-sm font-medium mb-3">אחוזי רווח לפי כמות</h2>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
-          {quantityTiers.map((t) => {
-            const key = String(t.quantity);
-            const active = t.id === qtyId;
-            return (
-              <div key={key} className="flex flex-col gap-1">
-                <label className={cn("text-xs", active ? "text-primary font-medium" : "text-muted-foreground")}>
-                  {t.label} {active ? "◀" : ""}
-                </label>
-                <div className="relative">
-                  <input
-                    type="number"
-                    min={0}
-                    max={200}
-                    step={1}
-                    value={margins[key] ?? 40}
-                    onChange={(e) =>
-                      setMargins((m) => ({ ...m, [key]: parseFloat(e.target.value) || 0 }))
-                    }
-                    className={cn(
-                      "w-full bg-background/50 border rounded-md px-3 py-1.5 text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-ring/30",
-                      active ? "border-primary/60" : "border-border"
-                    )}
-                  />
-                  <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">%</span>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-        <div className="flex items-center gap-3">
-          <button
-            type="button"
-            onClick={saveMargins}
-            disabled={isPending}
-            className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
-          >
-            {isPending ? <Loader2 className="size-3 animate-spin" /> : <Save className="size-3" />}
-            שמור לDB
-          </button>
-          {saveMsg && (
-            <span className={cn("text-xs", saveMsg.ok ? "text-success" : "text-destructive")}>
-              {saveMsg.text}
-            </span>
-          )}
-          <span className="text-xs text-muted-foreground">שינויים מיידיים בתצוגה. שמירה מעדכנת את כל הבוטים.</span>
         </div>
       </section>
 
