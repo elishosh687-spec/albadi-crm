@@ -202,11 +202,9 @@ async function main() {
     if (isTestJid(recipient)) continue;
     if (!r.jid && !r.phone) continue; // can't send
 
-    const last = await lastOutboundAt(r.sid);
-    if (last && Date.now() - last.getTime() < RECENT_OUT_WINDOW_MS) {
-      console.log(`SKIP ${r.name ?? r.sid} — outbound in last 24h`);
-      continue;
-    }
+    // NO 24h skip — user explicitly wants outreach to every active lead.
+    // If a lead got a bot message hours ago, the LLM-personalized nudge is
+    // still a fresh touch (different angle, references context).
     eligible.push({
       sid: r.sid,
       name: r.name,
