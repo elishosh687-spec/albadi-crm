@@ -358,6 +358,7 @@ async function ExpandedLeadWrapper({ sid }: { sid: string }) {
       messages={threadMessages}
       prevSid={prevSid}
       nextSid={nextSid}
+      backHref="/dashboard/v3"
     />
   );
 }

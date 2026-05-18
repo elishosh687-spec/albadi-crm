@@ -61,6 +61,13 @@ export interface ExpandedLeadProps {
   messages: ChatMessage[];
   prevSid?: string | null;
   nextSid?: string | null;
+  /**
+   * Origin route — controls where "back" returns and which path the prev/next
+   * router.replace targets. Lets the same component serve `/dashboard/v3` (the
+   * overview "סקירה" context, default) and `/dashboard/v3/leads` (the full
+   * leads list including DROPPED/WON) without cross-context disorientation.
+   */
+  backHref?: string;
 }
 
 export function ExpandedLead({
@@ -69,6 +76,7 @@ export function ExpandedLead({
   messages,
   prevSid,
   nextSid,
+  backHref = "/dashboard/v3",
 }: ExpandedLeadProps) {
   const router = useRouter();
   const params = useSearchParams();
@@ -77,16 +85,14 @@ export function ExpandedLead({
   const goBack = () => {
     const sp = new URLSearchParams(params.toString());
     sp.delete("lead");
-    router.replace(
-      sp.toString() ? `/dashboard/v3?${sp.toString()}` : "/dashboard/v3"
-    );
+    router.replace(sp.toString() ? `${backHref}?${sp.toString()}` : backHref);
   };
 
   const goToNeighbor = (neighborSid: string | null) => {
     if (!neighborSid) return;
     const sp = new URLSearchParams(params.toString());
     sp.set("lead", neighborSid);
-    router.replace(`/dashboard/v3?${sp.toString()}`);
+    router.replace(`${backHref}?${sp.toString()}`);
   };
 
   useEffect(() => {

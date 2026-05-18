@@ -34,7 +34,7 @@ function LeadCard({ lead, onPreview }: { lead: LeadRow; onPreview: (l: LeadRow) 
   const pill = STAGE_TONE[lead.stage ?? ""]?.pill ?? "bg-muted text-muted-foreground";
   const stageLabel = STAGE_LABEL[lead.stage ?? ""] ?? lead.stage ?? "—";
   const updatedAt = lead.updatedAt ? new Date(lead.updatedAt).toLocaleDateString("he-IL") : "—";
-  const fullCardHref = `/dashboard/v3?lead=${encodeURIComponent(lead.sid)}`;
+  const fullCardHref = `/dashboard/v3/leads?lead=${encodeURIComponent(lead.sid)}`;
 
   return (
     <div className="group relative flex flex-col gap-2 rounded-xl border border-border bg-card p-4 hover:border-primary/40 hover:shadow-md transition-all duration-150">
