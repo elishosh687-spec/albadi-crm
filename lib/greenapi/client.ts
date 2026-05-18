@@ -142,10 +142,8 @@ interface InsertOutboundParams {
 async function resolveLeadSidForChatId(chatId: string): Promise<string> {
   // 1. exact chatId match
   const byChat = await db
-    .select({ sid: messagesTable.manychatSubId })
+    .select({ sid: leads.manychatSubId })
     .from(leads)
-    // reusing messagesTable.manychatSubId as a type-shape trick is messy —
-    // just select from leads.
     .where(sql`trim(${leads.manychatSubId}) = ${chatId.trim()}`)
     .limit(1);
   if (byChat[0]) return chatId;
@@ -167,15 +165,25 @@ async function resolveLeadSidForChatId(chatId: string): Promise<string> {
 }
 
 async function insertGreenOutbound(p: InsertOutboundParams): Promise<void> {
-  const canonicalSid = await resolveLeadSidForChatId(p.chatId);
-  await db.insert(messagesTable).values({
-    manychatSubId: canonicalSid,
-    direction: "out",
-    text: p.text,
-    waMessageId: p.waMessageId,
-    sender: p.sender,
-    payload: p.payload ?? { from: "greenapi" },
-  });
+  // Never block the send pipeline on a DB hiccup — the message already went
+  // out over WhatsApp. Log and move on so the bot can keep running.
+  try {
+    const canonicalSid = await resolveLeadSidForChatId(p.chatId);
+    await db.insert(messagesTable).values({
+      manychatSubId: canonicalSid,
+      direction: "out",
+      text: p.text,
+      waMessageId: p.waMessageId,
+      sender: p.sender,
+      payload: p.payload ?? { from: "greenapi" },
+    });
+  } catch (e) {
+    console.error("[greenapi] insertGreenOutbound failed", {
+      chatId: p.chatId,
+      waMessageId: p.waMessageId,
+      err: e instanceof Error ? e.message : String(e),
+    });
+  }
 }
 
 // ───────── public send functions ─────────
