@@ -327,38 +327,67 @@ export const COMPANY_VIDEO_MEDIA_ID = "mu__3tEVay0D703wO3cSxoPpg";
 /**
  * Send the "who we are" company template as a cta_url message with video
  * header and Instagram CTA button. Used after quote delivery and on-demand.
+ *
+ * 3-tier fallback so the customer ALWAYS sees something useful, even if the
+ * bridge rejects video headers or media_id expired:
+ *   1. cta_url + video header  (richest — video plays in WA)
+ *   2. cta_url with no header  (text body + clickable Instagram button)
+ *   3. plain text              (last resort)
  */
+const COMPANY_BODY_TEXT =
+  "👋 *קצת עלינו — אלבדי*\n\n" +
+  "חברת אריזות עם 20+ שנה בענף. שותפים במפעל ייצור בסין. מתמחים בשקיות ממותגות לעסקים.\n\n" +
+  "🌐 https://ecobrotherss.com\n\n" +
+  "🌐 https://packiure.com\n\n" +
+  "🌐 https://albadi.ecobrotherss.com";
+
 export async function sendCompanyTemplate(jid: string): Promise<void> {
   const recipient = isJid(jid) ? jid : phoneToJid(jid);
-  const body = {
+  const ctaBody = {
     recipient,
-    type: "cta_url",
-    header: { type: "video", media_id: COMPANY_VIDEO_MEDIA_ID },
-    body:
-      "👋 *קצת עלינו — אלבדי*\n\n" +
-      "חברת אריזות עם 20+ שנה בענף. שותפים במפעל ייצור בסין. מתמחים בשקיות ממותגות לעסקים.\n\n" +
-      "🌐 https://ecobrotherss.com\n\n" +
-      "🌐 https://packiure.com\n\n" +
-      "🌐 https://albadi.ecobrotherss.com",
+    type: "cta_url" as const,
+    body: COMPANY_BODY_TEXT,
     cta: { display_text: "📸 עקבו באינסטגרם", url: "https://www.instagram.com/simonsostri" },
   };
+
+  // TIER 1 — full template with video header.
   try {
     await bridgeFetch<BridgeSendResult>("/v1/messages", {
       method: "POST",
-      body: JSON.stringify(body),
+      body: JSON.stringify({
+        ...ctaBody,
+        header: { type: "video", media_id: COMPANY_VIDEO_MEDIA_ID },
+      }),
     });
+    return;
   } catch (e) {
-    console.warn("[sendCompanyTemplate] failed, falling back to text", e);
-    await sendBridgeMessage(
-      jid,
-      "👋 *קצת עלינו — אלבדי*\n\n" +
-        "חברת אריזות עם 20+ שנה בענף. שותפים במפעל ייצור בסין. מתמחים בשקיות ממותגות לעסקים.\n\n" +
-        "🌐 https://ecobrotherss.com\n\n" +
-        "🌐 https://packiure.com\n\n" +
-        "🌐 https://albadi.ecobrotherss.com\n\n" +
-        "📸 אינסטגרם: https://www.instagram.com/simonsostri"
-    );
+    const detail =
+      e instanceof BridgeError
+        ? `status=${e.status} body=${e.body.slice(0, 400)}`
+        : (e as Error)?.message;
+    console.warn("[sendCompanyTemplate] tier1 (video) failed:", detail);
   }
+
+  // TIER 2 — cta_url WITHOUT a header (still gets the Instagram button).
+  try {
+    await bridgeFetch<BridgeSendResult>("/v1/messages", {
+      method: "POST",
+      body: JSON.stringify(ctaBody),
+    });
+    return;
+  } catch (e) {
+    const detail =
+      e instanceof BridgeError
+        ? `status=${e.status} body=${e.body.slice(0, 400)}`
+        : (e as Error)?.message;
+    console.warn("[sendCompanyTemplate] tier2 (cta_url) failed:", detail);
+  }
+
+  // TIER 3 — plain text. Always succeeds (if bridge is up at all).
+  await sendBridgeMessage(
+    jid,
+    `${COMPANY_BODY_TEXT}\n\n📸 אינסטגרם: https://www.instagram.com/simonsostri`
+  );
 }
 
 export interface CtaUrlPayload {
