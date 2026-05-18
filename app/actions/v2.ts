@@ -955,6 +955,11 @@ export async function updateLeadContactAction(
   if (patch.phone !== undefined) {
     const cleanPhone = patch.phone?.replace(/[^\d+]/g, "") ?? "";
     setObj.phoneE164 = cleanPhone ? cleanPhone : null;
+    // When phone changes, the old wa_jid no longer points at the right
+    // customer. Clear it so sendBridgeMessage falls back to phoneToJid(new
+    // phone). If the new number is @lid-style, the customer's first reply
+    // will repopulate wa_jid via upsertLeadFromBridgeEvent.
+    setObj.waJid = sql`NULL`;
   }
   if (Object.keys(setObj).length <= 1) {
     return { ok: false, error: "nothing to update" };
