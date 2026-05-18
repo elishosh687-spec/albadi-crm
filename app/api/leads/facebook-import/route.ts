@@ -25,7 +25,7 @@ import { leads, leadTags } from "@/drizzle/schema";
 import { and, eq, or, sql } from "drizzle-orm";
 import { z } from "zod";
 import { sendBridgeMessage } from "@/lib/bridge/client";
-import { OPENING } from "@/lib/autoresponder/questionnaire";
+import { OPENING, kickstartQuestionnaire } from "@/lib/autoresponder/questionnaire";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
@@ -159,6 +159,7 @@ export async function POST(req: NextRequest) {
 
   try {
     await sendBridgeMessage(jid, OPENING, undefined, "bot");
+    await kickstartQuestionnaire(jid);
   } catch (err) {
     // Bridge send failure: lead row + tag are persisted, but the customer
     // didn't get the opening. Caller (Apps Script) sees `send_failed` and

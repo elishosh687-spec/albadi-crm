@@ -612,6 +612,21 @@ interface LeadCtx {
   qState: QState | null;
 }
 
+/**
+ * Initialize questionnaire state for a lead whose OPENING was already sent
+ * externally (e.g. facebook-import). Saves initial qState and asks the first
+ * question without re-sending OPENING.
+ */
+export async function kickstartQuestionnaire(sid: string): Promise<void> {
+  const ctx = await loadLeadCtx(sid);
+  if (!ctx) return;
+  if (ctx.qState) return; // already started — don't overwrite
+  const first = QUESTIONS[0];
+  const newState: QState = { step: first.step };
+  await saveState(sid, newState);
+  await askQuestion(ctx.jid, first);
+}
+
 export async function loadLeadCtx(sid: string): Promise<LeadCtx | null> {
   const [row] = await db
     .select({
