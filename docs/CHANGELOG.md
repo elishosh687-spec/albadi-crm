@@ -5,6 +5,17 @@
 
 ---
 
+## 2026-05-18 — "Company template: video + Instagram button"
+
+### Fixed
+- **Company-intro video now actually arrives.** `https://albadi.ecobrotherss.com/company-intro.mp4` previously returned the SPA `index.html` (Vercel fallback), so Green API forwarded an HTML payload to WhatsApp as a broken attachment. Added the real 8.84 MB MP4 at `public/company-intro.mp4` so the URL serves `Content-Type: video/mp4`.
+- **Instagram button now appears.** `lib/greenapi/client.ts:sendGreenCompanyTemplate` was sending only `sendFileByUrl` + caption (no buttons) — the WhatsApp link card was unreliable and Eli reported "no Instagram button." Refactored to send two messages: video via `sendFileByUrl`, then `sendInteractiveButtons` with one `type: "url"` button to `instagram.com/simonsostri`. `SendInteractiveButtons` has no media-header support so the split is mandatory. Plain-text path kept as last-resort fallback.
+
+### Notes
+- The earlier in-code comment claiming "Green API's button endpoint is unreliable since WhatsApp deprecated it" is correct only for the deprecated `SendButtons` endpoint. `SendInteractiveButtons` (current, 3-button cap, 25 chars each) is supported and is what we now use.
+
+---
+
 ## v3.8 — 2026-05-18 — "Settings drives the bot: per-qty margin + restart template + nav polish"
 
 ### Added
