@@ -35,7 +35,7 @@ export function CalculatorView({ products, quantityTiers, shippingOptions, initi
   const [colors, setColors]       = useState(1);
   const [shippingId, setShippingId] = useState(shippingOptions.find((s) => s.type === "sea")?.id ?? shippingOptions[0]?.id ?? "s2");
   const [qtyOverride, setQtyOverride] = useState<string>("");
-  const [reverseMode, setReverseMode] = useState<"total" | "unit">("total");
+  const [reverseMode, setReverseMode] = useState<"total" | "unit" | "profit">("profit");
   const [reverseInput, setReverseInput] = useState<string>("");
   const [preview, setPreview]     = useState<PreviewResult | null>(null);
   const [loading, setLoading]     = useState(false);
@@ -95,9 +95,16 @@ export function CalculatorView({ products, quantityTiers, shippingOptions, initi
     if (!r || !c) return null;
     const n = parseFloat(reverseInput);
     if (!Number.isFinite(n) || n <= 0) return null;
-    const perUnit = reverseMode === "total" ? n / r.quantity : n;
     const base = r.totalCostPerUnitIls - c.shippingPerUnitIls;
     if (base <= 0) return null;
+    let perUnit: number;
+    if (reverseMode === "profit") {
+      perUnit = r.totalCostPerUnitIls + n / r.quantity;
+    } else if (reverseMode === "total") {
+      perUnit = n / r.quantity;
+    } else {
+      perUnit = n;
+    }
     const marginPct = ((perUnit - c.shippingPerUnitIls) / base - 1) * 100;
     const profitPerUnit = perUnit - r.totalCostPerUnitIls;
     const totalProfit = profitPerUnit * r.quantity;
@@ -215,14 +222,24 @@ export function CalculatorView({ products, quantityTiers, shippingOptions, initi
       {/* Reverse margin: given a price, what % is the implied profit? */}
       {r && c && (
         <section className="rounded-xl border border-border bg-card p-5 flex flex-col gap-3">
-          <div className="flex items-center justify-between">
-            <h2 className="text-sm font-medium">בדיקת רווח לפי מחיר</h2>
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <h2 className="text-sm font-medium">תמחור לפי יעד</h2>
             <div className="inline-flex rounded-md border border-border overflow-hidden text-xs">
+              <button
+                type="button"
+                onClick={() => setReverseMode("profit")}
+                className={cn(
+                  "px-3 py-1",
+                  reverseMode === "profit" ? "bg-primary text-primary-foreground" : "bg-background/30 text-muted-foreground"
+                )}
+              >
+                רווח קבוע (₪)
+              </button>
               <button
                 type="button"
                 onClick={() => setReverseMode("total")}
                 className={cn(
-                  "px-3 py-1",
+                  "px-3 py-1 border-r border-border",
                   reverseMode === "total" ? "bg-primary text-primary-foreground" : "bg-background/30 text-muted-foreground"
                 )}
               >
@@ -243,18 +260,26 @@ export function CalculatorView({ products, quantityTiers, shippingOptions, initi
           <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-end">
             <div className="flex flex-col gap-1 flex-1">
               <label className="text-xs text-muted-foreground">
-                {reverseMode === "total"
-                  ? `הכנס סכום עסקה כולל (${r.quantity.toLocaleString("he-IL")} יח')`
-                  : "הכנס מחיר ליחידה"}
+                {reverseMode === "profit"
+                  ? `הכנס רווח רצוי לעסקה (${r.quantity.toLocaleString("he-IL")} יח')`
+                  : reverseMode === "total"
+                    ? `הכנס סכום עסקה כולל (${r.quantity.toLocaleString("he-IL")} יח')`
+                    : "הכנס מחיר ליחידה"}
               </label>
               <div className="relative">
                 <input
                   type="number"
                   min={0}
-                  step={reverseMode === "total" ? 100 : 0.01}
+                  step={reverseMode === "unit" ? 0.01 : 100}
                   value={reverseInput}
                   onChange={(e) => setReverseInput(e.target.value)}
-                  placeholder={reverseMode === "total" ? "למשל 12000" : "למשל 4.80"}
+                  placeholder={
+                    reverseMode === "profit"
+                      ? "למשל 500"
+                      : reverseMode === "total"
+                        ? "למשל 12000"
+                        : "למשל 4.80"
+                  }
                   className="w-full bg-background/50 border border-border rounded-md px-3 py-1.5 text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-ring/30"
                 />
                 <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">₪</span>
