@@ -166,32 +166,71 @@ function extractVotedOption(
   return null;
 }
 
+/**
+ * Resolve the canonical lead sid for this Green chat. Order:
+ *   1. Lead already keyed on chatId (e.g. created by a prior Green inbound) →
+ *      use that sid.
+ *   2. Lead keyed on phone_e164 (e.g. created by /api/leads/facebook-import
+ *      under the @s.whatsapp.net JID format) → use that sid and update its
+ *      waJid to the Green chatId so future lookups by chatId hit it too.
+ *   3. No lead exists → insert a new row keyed on chatId.
+ *
+ * Returns the canonical sid the rest of the webhook should use for messages,
+ * qState reads, etc.
+ */
 async function upsertLeadFromGreen(input: {
   chatId: string;
   phone: string;
   name?: string;
-}): Promise<void> {
-  await db
-    .insert(leads)
-    .values({
-      manychatSubId: input.chatId,
-      waJid: input.chatId,
-      phoneE164: input.phone,
-      name: input.name ?? null,
-      source: "greenapi_webhook",
-      active: true,
-      pipelineStage: "NEW",
-    })
-    .onConflictDoUpdate({
-      target: leads.manychatSubId,
-      set: {
+}): Promise<string> {
+  // 1. Exact chatId match.
+  const byChat = await db
+    .select({ sid: leads.manychatSubId })
+    .from(leads)
+    .where(sql`trim(${leads.manychatSubId}) = ${input.chatId.trim()}`)
+    .limit(1);
+  if (byChat[0]) {
+    await db
+      .update(leads)
+      .set({
         name: sql`COALESCE(${leads.name}, ${input.name ?? null})`,
-        phoneE164: sql`COALESCE(${leads.phoneE164}, ${input.phone})`,
         waJid: sql`COALESCE(${leads.waJid}, ${input.chatId})`,
-        pipelineStage: sql`COALESCE(${leads.pipelineStage}, 'NEW')`,
         updatedAt: new Date(),
-      },
-    });
+      })
+      .where(sql`trim(${leads.manychatSubId}) = ${byChat[0].sid.trim()}`);
+    return byChat[0].sid;
+  }
+
+  // 2. Match by phone (handles leads inserted via facebook-import under
+  //    `<phone>@s.whatsapp.net`).
+  const byPhone = await db
+    .select({ sid: leads.manychatSubId })
+    .from(leads)
+    .where(eq(leads.phoneE164, input.phone))
+    .limit(1);
+  if (byPhone[0]) {
+    await db
+      .update(leads)
+      .set({
+        waJid: input.chatId,
+        name: sql`COALESCE(${leads.name}, ${input.name ?? null})`,
+        updatedAt: new Date(),
+      })
+      .where(sql`trim(${leads.manychatSubId}) = ${byPhone[0].sid.trim()}`);
+    return byPhone[0].sid;
+  }
+
+  // 3. New lead.
+  await db.insert(leads).values({
+    manychatSubId: input.chatId,
+    waJid: input.chatId,
+    phoneE164: input.phone,
+    name: input.name ?? null,
+    source: "greenapi_webhook",
+    active: true,
+    pipelineStage: "NEW",
+  });
+  return input.chatId;
 }
 
 async function insertGreenMessage(input: {
@@ -243,7 +282,15 @@ async function handleIncoming(evt: GreenWebhook): Promise<void> {
   if (!phone) return;
   const senderName =
     sender.senderContactName || sender.senderName || sender.chatName || undefined;
-  await upsertLeadFromGreen({ chatId, phone, name: senderName });
+  // canonicalSid is the lead row's manychat_sub_id — may equal chatId for
+  // green-native leads or differ (e.g. `<phone>@s.whatsapp.net`) for leads
+  // first created via facebook-import. Use it for every DB op below so we
+  // don't fork into two rows per customer.
+  const canonicalSid = await upsertLeadFromGreen({
+    chatId,
+    phone,
+    name: senderName,
+  });
 
   const msg = evt.messageData;
   const typeMessage = msg?.typeMessage;
@@ -274,13 +321,21 @@ async function handleIncoming(evt: GreenWebhook): Promise<void> {
   }
 
   await insertGreenMessage({
-    chatId,
+    chatId: canonicalSid,
     direction: "in",
     text: textToStore,
     waMessageId,
     sender: "lead",
     payload: evt as unknown as Record<string, unknown>,
   });
+
+  // Skip routing for pollUpdateMessage events that arrive WITHOUT a vote
+  // (e.g. when the poll is opened on the customer side but not yet voted).
+  // Otherwise we feed empty text into handleInbound and trigger the cold-
+  // start path (re-sends OPENING + first question).
+  if (typeMessage === "pollUpdateMessage" && !textForRouting) {
+    return;
+  }
 
   // Stop-word check.
   if (textForRouting && isStopWord(textForRouting)) {
@@ -292,9 +347,9 @@ async function handleIncoming(evt: GreenWebhook): Promise<void> {
           pipelineFlag: "NEEDS_ELI",
           updatedAt: new Date(),
         })
-        .where(sql`trim(${leads.manychatSubId}) = ${chatId.trim()}`);
+        .where(sql`trim(${leads.manychatSubId}) = ${canonicalSid.trim()}`);
       try {
-        await sendBridgeMessage(chatId, STOP_WORD_REPLY);
+        await sendBridgeMessage(canonicalSid, STOP_WORD_REPLY);
       } catch (e) {
         console.error("[green.webhook] stop-word reply failed", e);
       }
@@ -305,7 +360,7 @@ async function handleIncoming(evt: GreenWebhook): Promise<void> {
           stage: leads.pipelineStage,
         })
         .from(leads)
-        .where(sql`trim(${leads.manychatSubId}) = ${chatId.trim()}`)
+        .where(sql`trim(${leads.manychatSubId}) = ${canonicalSid.trim()}`)
         .limit(1);
       await sendEliDM(
         eliEscalationTemplate({
@@ -330,23 +385,23 @@ async function handleIncoming(evt: GreenWebhook): Promise<void> {
       lastFollowUpAt: null,
       updatedAt: new Date(),
     })
-    .where(sql`trim(${leads.manychatSubId}) = ${chatId.trim()}`);
+    .where(sql`trim(${leads.manychatSubId}) = ${canonicalSid.trim()}`);
 
   // Load lead snapshot for routing.
   const [snap] = await db
     .select({ stage: leads.pipelineStage })
     .from(leads)
-    .where(sql`trim(${leads.manychatSubId}) = ${chatId.trim()}`)
+    .where(sql`trim(${leads.manychatSubId}) = ${canonicalSid.trim()}`)
     .limit(1);
 
   const stage = (snap?.stage ?? "NEW").toUpperCase();
 
   try {
     if (!stage || stage === "NEW" || stage === "AWAITING_ESTIMATE") {
-      await handleInbound({ sid: chatId, text: textForRouting ?? "" });
+      await handleInbound({ sid: canonicalSid, text: textForRouting ?? "" });
     } else if (stage === "AWAITING_LOGO" || stage === "AWAITING_FINAL") {
       await handleDecisionInbound({
-        sid: chatId,
+        sid: canonicalSid,
         text: textForRouting,
         hasMedia,
       });
