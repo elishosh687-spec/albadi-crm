@@ -229,7 +229,7 @@ function ChatHeader({
   summaryOpen: boolean;
   onToggleSummary: () => void;
 }) {
-  const stage = (summary.stage ?? "UNCLASSIFIED").toUpperCase();
+  const stage = (summary.stage ?? "NEW").toUpperCase();
   const tone = STAGE_TONE[stage] ?? STAGE_TONE.UNCLASSIFIED;
   // Local state mirrors summary.botPaused for instant feedback; the server
   // action is the source of truth and the page re-fetches on next nav.

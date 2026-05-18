@@ -59,7 +59,7 @@ export function OrderSummary({
   data: OrderSummaryData;
   sid?: string;
 }) {
-  const stage = (data.stage ?? "UNCLASSIFIED").toUpperCase();
+  const stage = (data.stage ?? "NEW").toUpperCase();
   const tone = STAGE_TONE[stage] ?? STAGE_TONE.UNCLASSIFIED;
   const hasAnyData = !!(
     data.botSummary ||

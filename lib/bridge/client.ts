@@ -602,6 +602,7 @@ export async function upsertLeadFromBridgeEvent(input: {
       name: enrichedName,
       source: input.source ?? "bridge_webhook",
       active: true,
+      pipelineStage: "NEW", // every fresh lead starts in NEW; promoted by handlers later
     })
     .onConflictDoUpdate({
       target: leads.manychatSubId,
@@ -611,6 +612,9 @@ export async function upsertLeadFromBridgeEvent(input: {
         // in fields that are still null in the DB.
         name: sql`coalesce(${leads.name}, ${enrichedName})`,
         phoneE164: sql`coalesce(${leads.phoneE164}, ${enrichedPhone})`,
+        // Promote existing rows whose stage is still null to NEW (idempotent —
+        // does not overwrite anything else, including DROPPED/WON).
+        pipelineStage: sql`coalesce(${leads.pipelineStage}, 'NEW')`,
         updatedAt: new Date(),
       },
     });

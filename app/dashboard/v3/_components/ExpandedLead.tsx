@@ -81,7 +81,7 @@ export function ExpandedLead({ sid, summary, messages }: ExpandedLeadProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const stage = (summary.stage ?? "UNCLASSIFIED").toUpperCase();
+  const stage = (summary.stage ?? "NEW").toUpperCase();
   const tone = STAGE_TONE[stage] ?? STAGE_TONE.UNCLASSIFIED;
   const needsHuman =
     summary.flag === "NEEDS_ELI" || summary.flags.includes("NEEDS_ELI");
