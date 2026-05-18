@@ -46,6 +46,11 @@ export function FinalizeModal({
   );
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [reverseMode, setReverseMode] = useState<"profit" | "total" | "unit">("profit");
+  const [reverseInput, setReverseInput] = useState<string>("");
+
+  const MARGIN_MIN = 0;
+  const MARGIN_MAX = 300;
 
   useEffect(() => {
     fetch("/api/factory/config")
@@ -59,8 +64,8 @@ export function FinalizeModal({
             );
             if (first) setShippingOptionId(first.id);
           }
-          if (margin < 30 || margin > 50) {
-            setMargin(Math.min(50, Math.max(30, data.config.defaultProfitMargin)));
+          if (margin < MARGIN_MIN || margin > MARGIN_MAX) {
+            setMargin(Math.min(MARGIN_MAX, Math.max(MARGIN_MIN, data.config.defaultProfitMargin)));
           }
         }
       })
@@ -191,19 +196,35 @@ export function FinalizeModal({
                 </div>
                 <input
                   type="range"
-                  min={30}
-                  max={50}
+                  min={MARGIN_MIN}
+                  max={MARGIN_MAX}
                   step={1}
                   value={margin}
                   onChange={(e) => setMargin(parseInt(e.target.value, 10))}
                   className="w-full accent-[var(--color-primary,#4A7C59)]"
                 />
                 <div className="flex justify-between text-[10px] text-muted-foreground mt-0.5">
-                  <span>30%</span>
-                  <span>40%</span>
-                  <span>50%</span>
+                  <span>0%</span>
+                  <span>100%</span>
+                  <span>200%</span>
+                  <span>300%</span>
                 </div>
               </div>
+
+              {livePricing && (
+                <ReverseTargetPanel
+                  unitCost={livePricing.unitCost}
+                  unitShipping={livePricing.unitShipping}
+                  quantity={row.productSpec.quantity}
+                  mode={reverseMode}
+                  setMode={setReverseMode}
+                  inputValue={reverseInput}
+                  setInputValue={setReverseInput}
+                  marginMin={MARGIN_MIN}
+                  marginMax={MARGIN_MAX}
+                  onApply={(pct) => setMargin(Math.max(MARGIN_MIN, Math.min(MARGIN_MAX, Math.round(pct))))}
+                />
+              )}
 
               {livePricing && (
                 <div className="rounded-lg border border-success/30 bg-success/5 p-3 space-y-1.5 text-sm">
@@ -275,6 +296,140 @@ export function FinalizeModal({
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+function ReverseTargetPanel({
+  unitCost,
+  unitShipping,
+  quantity,
+  mode,
+  setMode,
+  inputValue,
+  setInputValue,
+  marginMin,
+  marginMax,
+  onApply,
+}: {
+  unitCost: number;
+  unitShipping: number;
+  quantity: number;
+  mode: "profit" | "total" | "unit";
+  setMode: (m: "profit" | "total" | "unit") => void;
+  inputValue: string;
+  setInputValue: (v: string) => void;
+  marginMin: number;
+  marginMax: number;
+  onApply: (pct: number) => void;
+}) {
+  // priceFactoryQuote convention: unitCost = production-only (margin base),
+  // unitShipping is separate. selling = unitCost*(1+m/100) + unitShipping.
+  const n = parseFloat(inputValue);
+  const valid = Number.isFinite(n) && n > 0;
+  const base = unitCost;
+  const totalCostPerUnit = unitCost + unitShipping;
+  let perUnit = 0;
+  let marginPct = 0;
+  let profitPerUnit = 0;
+  let totalProfit = 0;
+  let totalPrice = 0;
+  if (valid && base > 0) {
+    if (mode === "profit") perUnit = totalCostPerUnit + n / quantity;
+    else if (mode === "total") perUnit = n / quantity;
+    else perUnit = n;
+    marginPct = ((perUnit - unitShipping) / base - 1) * 100;
+    profitPerUnit = perUnit - totalCostPerUnit;
+    totalProfit = profitPerUnit * quantity;
+    totalPrice = perUnit * quantity;
+  }
+  const outOfRange = valid && (marginPct < marginMin || marginPct > marginMax);
+  const fmt = (x: number) =>
+    `₪${x.toLocaleString("he-IL", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+  return (
+    <div className="rounded-lg border border-border bg-card/40 p-3 space-y-2">
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <span className="text-sm font-medium">תמחור לפי יעד</span>
+        <div className="inline-flex rounded-md border border-border overflow-hidden text-[11px]">
+          <ModeBtn active={mode === "profit"} onClick={() => setMode("profit")}>רווח ₪</ModeBtn>
+          <ModeBtn active={mode === "total"} onClick={() => setMode("total")}>סכום כולל</ModeBtn>
+          <ModeBtn active={mode === "unit"} onClick={() => setMode("unit")}>ליחידה</ModeBtn>
+        </div>
+      </div>
+      <div className="relative">
+        <input
+          type="number"
+          min={0}
+          step={mode === "unit" ? 0.01 : 100}
+          value={inputValue}
+          onChange={(e) => setInputValue(e.target.value)}
+          placeholder={
+            mode === "profit" ? "למשל 500"
+              : mode === "total" ? "למשל 12000"
+                : "למשל 4.80"
+          }
+          className="w-full rounded-md border border-border bg-background/40 px-3 py-1.5 pl-7 text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-ring/30"
+        />
+        <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">₪</span>
+      </div>
+      {valid && base > 0 && (
+        <div className="grid grid-cols-2 gap-2 text-[11px] pt-1 border-t border-border/40">
+          <Stat label="% מובלע" value={`${Math.round(marginPct * 10) / 10}%`} tone={outOfRange ? "neg" : undefined} />
+          <Stat label="מחיר ליחידה" value={fmt(perUnit)} />
+          <Stat label="רווח ליחידה" value={fmt(profitPerUnit)} tone={profitPerUnit < 0 ? "neg" : "pos"} />
+          <Stat label="רווח כולל" value={fmt(totalProfit)} tone={totalProfit < 0 ? "neg" : "pos"} />
+          <Stat label="סה״כ עסקה" value={fmt(totalPrice)} />
+        </div>
+      )}
+      <div className="flex items-center justify-end gap-2 pt-1">
+        {outOfRange && (
+          <span className="text-[11px] text-destructive">
+            {marginPct < marginMin ? "מתחת ל-" : "מעל "}
+            {marginPct < marginMin ? marginMin : marginMax}% — ייחתך
+          </span>
+        )}
+        <button
+          type="button"
+          disabled={!valid || base <= 0}
+          onClick={() => onApply(marginPct)}
+          className="rounded-md border border-primary/40 bg-primary/10 px-2 py-1 text-[11px] text-primary hover:bg-primary/20 disabled:opacity-50"
+        >
+          החל על סליידר
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function ModeBtn({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={[
+        "px-2 py-1 border-l border-border last:border-l-0",
+        active ? "bg-primary text-primary-foreground" : "bg-background/30 text-muted-foreground",
+      ].join(" ")}
+    >
+      {children}
+    </button>
+  );
+}
+
+function Stat({ label, value, tone }: { label: string; value: string; tone?: "pos" | "neg" }) {
+  return (
+    <div className="flex justify-between gap-2">
+      <span className="text-muted-foreground">{label}</span>
+      <span
+        className={[
+          "tabular-nums font-semibold",
+          tone === "pos" ? "text-success" : "",
+          tone === "neg" ? "text-destructive" : "",
+        ].join(" ")}
+      >
+        {value}
+      </span>
     </div>
   );
 }
