@@ -4,6 +4,8 @@ import { useEffect, useState, useTransition } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   ArrowRight,
+  ChevronRight,
+  ChevronLeft,
   Pause,
   Play,
   ExternalLink,
@@ -57,9 +59,17 @@ export interface ExpandedLeadProps {
   sid: string;
   summary: OrderSummaryData;
   messages: ChatMessage[];
+  prevSid?: string | null;
+  nextSid?: string | null;
 }
 
-export function ExpandedLead({ sid, summary, messages }: ExpandedLeadProps) {
+export function ExpandedLead({
+  sid,
+  summary,
+  messages,
+  prevSid,
+  nextSid,
+}: ExpandedLeadProps) {
   const router = useRouter();
   const params = useSearchParams();
   const [tab, setTab] = useState<TabKey>("chat");
@@ -70,6 +80,13 @@ export function ExpandedLead({ sid, summary, messages }: ExpandedLeadProps) {
     router.replace(
       sp.toString() ? `/dashboard/v3?${sp.toString()}` : "/dashboard/v3"
     );
+  };
+
+  const goToNeighbor = (neighborSid: string | null) => {
+    if (!neighborSid) return;
+    const sp = new URLSearchParams(params.toString());
+    sp.set("lead", neighborSid);
+    router.replace(`/dashboard/v3?${sp.toString()}`);
   };
 
   useEffect(() => {
@@ -106,6 +123,28 @@ export function ExpandedLead({ sid, summary, messages }: ExpandedLeadProps) {
           <ArrowRight className="size-3.5" />
           חזרה לרשימה
         </button>
+        <div className="inline-flex items-center gap-1 rounded-md border border-border bg-card p-0.5">
+          <button
+            type="button"
+            onClick={() => goToNeighbor(prevSid ?? null)}
+            disabled={!prevSid}
+            title="ליד הקודם"
+            aria-label="ליד הקודם"
+            className="size-7 rounded grid place-items-center text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors disabled:opacity-30 disabled:hover:bg-transparent"
+          >
+            <ChevronRight className="size-4" />
+          </button>
+          <button
+            type="button"
+            onClick={() => goToNeighbor(nextSid ?? null)}
+            disabled={!nextSid}
+            title="ליד הבא"
+            aria-label="ליד הבא"
+            className="size-7 rounded grid place-items-center text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors disabled:opacity-30 disabled:hover:bg-transparent"
+          >
+            <ChevronLeft className="size-4" />
+          </button>
+        </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 min-w-0">
             <h1
