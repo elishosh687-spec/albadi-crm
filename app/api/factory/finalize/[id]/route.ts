@@ -23,7 +23,6 @@ import { z } from "zod";
 import { priceFactoryQuote } from "@/lib/factory/pricing";
 import { getFactoryConfig } from "@/lib/factory/config";
 import { renderCustomerQuotePdf } from "@/lib/factory/pdf";
-import { computeQuoteBreakdown } from "@/lib/factory/calculator";
 import type {
   FactoryProductSpec,
   FactoryResponse,
@@ -104,18 +103,13 @@ export async function POST(
     .limit(1);
   const customerName = leadRow[0]?.name ?? "";
 
-  // Compute the customer-facing breakdown via the local calculator. Null if
-  // dims don't match one of the 14 fixed products (PDF falls back to 2-row).
-  const breakdown = computeQuoteBreakdown({
-    widthCm: spec.widthCm,
-    heightCm: spec.heightCm,
-    depthCm: spec.depthCm,
-    quantity: spec.quantity,
-    hasHandles: /with handles/i.test(spec.finishing),
-    logoColors: parseInt(spec.printing.match(/^(\d+)/)?.[1] ?? "1", 10),
-    hasLamination: /(?<!not )laminated/i.test(spec.finishing),
-    shippingOptionId: pricing.shippingOptionId,
-  });
+  // Customer PDF must reflect the actual negotiated factory price + margin
+  // (finalPricing). The catalog-derived breakdown (computeQuoteBreakdown)
+  // ignores factoryResponse.unitCostCny and produces a different total —
+  // sending it to the PDF caused customer-facing under-charges (see lead
+  // 972509111981 / quote LHPL3ATC: PDF showed ₪3045 vs WhatsApp text ₪4517).
+  // Force the honest 2-row layout from pricing only.
+  const breakdown = null;
 
   // Render PDF + (optionally) upload to Blob.
   let pdfUrl: string | null = req_row.pdfUrl ?? null;

@@ -13,7 +13,6 @@ import { db } from "@/lib/db";
 import { factoryQuoteRequests, leads } from "@/drizzle/schema";
 import { eq } from "drizzle-orm";
 import { renderCustomerQuotePdf } from "@/lib/factory/pdf";
-import { computeQuoteBreakdown } from "@/lib/factory/calculator";
 import type {
   FactoryProductSpec,
   FactoryPricingResult,
@@ -77,24 +76,15 @@ export async function GET(
     const spec = row.productSpec as FactoryProductSpec;
     const pricing = row.finalPricing as FactoryPricingResult;
 
-    // Run the local calculator with the spec. Returns null if dims don't
-    // match one of the 14 fixed products → PDF falls back to 2-row layout.
-    const breakdown = computeQuoteBreakdown({
-      widthCm: spec.widthCm,
-      heightCm: spec.heightCm,
-      depthCm: spec.depthCm,
-      quantity: spec.quantity,
-      hasHandles: /with handles/i.test(spec.finishing),
-      logoColors: parseInt(spec.printing.match(/^(\d+)/)?.[1] ?? "1", 10),
-      hasLamination: /(?<!not )laminated/i.test(spec.finishing),
-      shippingOptionId: pricing.shippingOptionId,
-    });
-
+    // breakdown=null forces the honest 2-row layout (pricing only). The
+    // catalog-derived breakdown ignores factoryResponse.unitCostCny and
+    // would display a different total than the WhatsApp text (see lead
+    // 972509111981 / quote LHPL3ATC).
     const buf = await renderCustomerQuotePdf({
       customerName,
       spec,
       pricing,
-      breakdown,
+      breakdown: null,
       quotationNo: row.quotationNo ?? id.slice(-8).toUpperCase(),
     });
 
