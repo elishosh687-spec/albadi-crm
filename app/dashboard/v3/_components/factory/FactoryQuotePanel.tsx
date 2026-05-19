@@ -35,6 +35,7 @@ import {
   Eye,
   Trash2,
   Repeat,
+  FileText,
 } from "lucide-react";
 import { cn } from "@/lib/cn";
 import type {
@@ -698,6 +699,7 @@ function FinalizedState({
 }) {
   const p = row.finalPricing!;
   const [cfg, setCfg] = useState<FactoryPricingConfig | null>(null);
+  const [pdfPreviewOpen, setPdfPreviewOpen] = useState(false);
   useEffect(() => {
     fetchFactoryConfigCached().then(setCfg);
   }, []);
@@ -845,7 +847,15 @@ function FinalizedState({
         />
       )}
 
-      <div className="grid grid-cols-2 gap-2">
+      <div className="grid grid-cols-3 gap-2">
+        <button
+          type="button"
+          onClick={() => setPdfPreviewOpen(true)}
+          className="inline-flex items-center justify-center gap-1.5 rounded-md border border-primary/40 bg-primary/5 px-3 py-2 text-sm font-medium text-primary hover:bg-primary/10"
+        >
+          <FileText className="size-3.5" />
+          צפה בהצעה
+        </button>
         <a
           href={`/api/factory/${row.id}/pdf`}
           target="_blank"
@@ -901,6 +911,47 @@ function FinalizedState({
       >
         ערוך ושלח שוב
       </button>
+
+      {pdfPreviewOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+          onClick={() => setPdfPreviewOpen(false)}
+        >
+          <div
+            className="relative flex w-full max-w-4xl flex-col rounded-lg border border-border bg-background shadow-2xl"
+            style={{ height: "90vh" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-border px-4 py-2">
+              <span className="text-sm font-medium">צפייה בהצעה — #{row.quotationNo ?? row.id.slice(-8).toUpperCase()}</span>
+              <div className="flex items-center gap-2">
+                <a
+                  href={`/api/factory/${row.id}/pdf`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 rounded-md border border-border bg-background/40 px-2 py-1 text-xs hover:bg-secondary"
+                >
+                  <Download className="size-3" />
+                  הורד
+                </a>
+                <button
+                  type="button"
+                  onClick={() => setPdfPreviewOpen(false)}
+                  className="rounded-md p-1 text-muted-foreground hover:bg-secondary hover:text-foreground"
+                  aria-label="סגור"
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+            <iframe
+              src={`/api/factory/${row.id}/pdf?stream=1#toolbar=0`}
+              className="flex-1 w-full rounded-b-lg"
+              title="הצעת מחיר"
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

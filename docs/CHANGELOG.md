@@ -5,6 +5,17 @@
 
 ---
 
+## 2026-05-19 — "Lead card 'פתח כרטיס' + in-app PDF preview"
+
+### Changed
+- **Lead card primary button now opens the lead card itself, not the conversation.** The old "פתח שיחה" button took users to `/dashboard/v3/conversations?lead=X`, but clicking anywhere else on the same card opened `/dashboard/v3/leads?lead=X` (ExpandedLead with internal tabs). Confusing — same card = two destinations. Renamed to "פתח כרטיס" and pointed at the same `fullCardHref` the rest of the card uses, so every click on a lead card now lands in the same place. ([LeadsView.tsx](app/dashboard/v3/leads/LeadsView.tsx))
+
+### Added
+- **In-app PDF preview for factory quotes.** "צפה בהצעה" button next to "הורד PDF" opens a modal with iframe preview — no download required. ([FactoryQuotePanel.tsx](app/dashboard/v3/_components/factory/FactoryQuotePanel.tsx))
+- **`?stream=1` mode on `/api/factory/[id]/pdf`** — proxies the PDF bytes through this endpoint instead of 302-redirecting to the Blob URL. The redirect target sets `X-Frame-Options` which blocks `<iframe>` embedding, so the preview modal opted out of the redirect. ([pdf/route.ts](app/api/factory/[id]/pdf/route.ts))
+
+---
+
 ## 2026-05-19 — "Sea shipping: $319/CBM + 1 CBM floor + detailed boss breakdown"
 
 ### Changed

@@ -96,11 +96,11 @@ function LeadCard({
       {/* Actions — always visible (mobile has no hover, desktop also benefits from clarity). */}
       <div className="relative z-10 flex gap-2 pt-1">
         <a
-          href={`/dashboard/v3/conversations?lead=${encodeURIComponent(lead.sid)}`}
+          href={fullCardHref}
           className="flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-border bg-muted/40 px-3 py-1.5 text-xs hover:bg-muted transition-colors"
         >
           <MessageSquare className="h-3.5 w-3.5" />
-          פתח שיחה
+          פתח כרטיס
         </a>
         <button
           onClick={(e) => {

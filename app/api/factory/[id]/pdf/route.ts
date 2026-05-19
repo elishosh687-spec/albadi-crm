@@ -23,10 +23,14 @@ export const runtime = "nodejs";
 export const maxDuration = 30;
 
 export async function GET(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
+  // ?stream=1 proxies the PDF bytes through this endpoint instead of redirecting
+  // to the Blob URL. Used by the in-app iframe preview because vercel-storage
+  // sets X-Frame-Options that blocks <iframe> embedding of the redirect target.
+  const stream = req.nextUrl.searchParams.get("stream") === "1";
   const rows = await db
     .select()
     .from(factoryQuoteRequests)
@@ -44,7 +48,21 @@ export async function GET(
   }
 
   if (row.pdfUrl) {
-    return NextResponse.redirect(row.pdfUrl);
+    if (!stream) return NextResponse.redirect(row.pdfUrl);
+    try {
+      const upstream = await fetch(row.pdfUrl);
+      if (!upstream.ok) throw new Error(`upstream ${upstream.status}`);
+      const buf = await upstream.arrayBuffer();
+      return new NextResponse(new Uint8Array(buf), {
+        headers: {
+          "Content-Type": "application/pdf",
+          "Content-Disposition": `inline; filename="quote-${row.quotationNo ?? id}.pdf"`,
+        },
+      });
+    } catch (err) {
+      console.error("[factory/pdf] stream proxy failed", { id, err });
+      // fall through to re-render
+    }
   }
 
   // Re-render on demand.
