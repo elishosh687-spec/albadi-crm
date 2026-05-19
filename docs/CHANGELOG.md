@@ -5,6 +5,28 @@
 
 ---
 
+## 2026-05-19 — "Factory prices update 2 (Kunming) — broad cuts + plate-fee drops"
+
+### Changed
+- **Factory unit prices for p2–p14 updated** from `newfactoryupdate2.xlsx` (Kunming Shengximengtai). 66 rows changed across 5 sized variants; mostly decreases (~10% avg). Notable per-product cuts: H35*D10*W40 laminated hot-press 5K ¥1.18→¥0.89 (-25%), H30*D12*W40 3-color non-lam 5K ¥1.09→¥0.93. Two upticks: H30*D10*W30 Non/1color non-lam 10K ¥0.55→¥0.58, H40*D15*W50 Handle laminated 10K ¥1.20→¥1.25. Eight products unchanged. ([lib/factory/calculator/constants.ts](lib/factory/calculator/constants.ts))
+- **Plate fee (`laminationColorPlateFee`) cuts**: p2 ¥310→¥290, p3 ¥400→¥390, p4 ¥820→¥615 (-25%), p8 ¥460→¥405 (-12%), p9 ¥600→¥570.
+- **Color addon averages re-computed** from 13 sheets (p1 excluded). 2-color: 5K 0.12→0.09, 10K 0.10→0.08. 3-color: 5K 0.25→0.21, 10K 0.20→0.18. ([DEFAULT_COLOR_ADDONS](lib/factory/calculator/constants.ts))
+
+### Skipped (intentional)
+- **p1 (H20*D8*W25) untouched** — factory renamed the sheet to `H20-D8（9）-W25` and inserted text like `￥0.45\nH20*D9*W25` in some cells, suggesting an ambiguous variant. Holding existing values until clarified with factory.
+- **New factory size `H15*D9*W20` not adopted** — 28 fresh price rows in the file, but the dashboard stack stays at 14 products. Re-evaluate when the new size has real demand.
+
+### Tooling
+- **SheetJS 0.18 cannot read rich-text cells** the factory used in this file (qty cells store text in the `r` rich-text runs, leaving `v` empty). Added `scripts/_flatten-xlsx.py` (openpyxl-based, runs once) that rewrites rich-text cells to plain strings in place; `import-new-factory.ts` then sees them normally.
+- **`SKIP_SHEETS` constant** added to `scripts/import-new-factory.ts` for the two skipped sheets; unknown EXISTING keys now `continue` instead of emitting fallback `pX*` ids.
+- Re-import path is now: `python scripts/_flatten-xlsx.py && npx tsx scripts/import-new-factory.ts > _out.ts`, then splice into `constants.ts`.
+
+### Risks / follow-ups
+- p10 (H50*D20*W60) laminationPrices remain incomplete (only 1000/3000 stitched keys; hot-pressed 5K/10K never were in the data) — calculator already tolerates missing keys.
+- In-flight quotes in `factory_quote_requests` keep their stored `factoryResponse` snapshot; new prices apply only to future quotes.
+
+---
+
 ## 2026-05-19 — "Lead card 'פתח כרטיס' + in-app PDF preview"
 
 ### Changed

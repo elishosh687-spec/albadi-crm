@@ -16,10 +16,13 @@ import type {
   AdminSettings,
 } from "./types";
 
-// Generated from newfactory.xlsx (May 2026 — Kunming Shengximengtai Trading).
+// Generated from newfactory.xlsx (May 2026 update 2 — Kunming Shengximengtai Trading).
 // Values are CNY per unit. Plate fee (laminationColorPlateFee) varies per product
-// per the xlsx 版费 column — ¥300–820/color.
-// To re-import: `npx tsx scripts/import-new-factory.ts`.
+// per the xlsx 版费 column — ¥290–820/color.
+// p1 (H20*D8*W25) kept from prior import — factory renamed sheet to
+// H20*D8（9）*W25 with ambiguous H20*D9 cells, awaiting clarification.
+// New factory size H15*D9*W20 deliberately not adopted (stack kept at 14).
+// To re-import: `npx tsx scripts/_flatten-xlsx.py && npx tsx scripts/import-new-factory.ts`.
 const DEFAULT_PRODUCTS: Product[] = [
   {
     id: "p1", dimensions: "H20*D8*W25", description: "מתאים לקוסמטיקה, תכשיטים, אקססוריז", sortOrder: 1,
@@ -29,21 +32,21 @@ const DEFAULT_PRODUCTS: Product[] = [
   },
   {
     id: "p2", dimensions: "H30*D10*W30", description: "מתאים לביגוד קל, מתנות", sortOrder: 2,
-    laminationColorPlateFee: 310,
-    withHandles: { prices: { "1000": 1.4, "3000": 0.89, "5000": 0.73, "10000": 0.61 }, carton: { qty: 250, weight: 8, length: 45, width: 34, height: 48 }, laminationPrices: { "1000": 2.4, "3000": 1.57, "5000": 0.78, "10000": 0.69 } },
-    withoutHandles: { prices: { "1000": 1.36, "3000": 0.84, "5000": 0.68, "10000": 0.55 }, carton: { qty: 250, weight: 7, length: 34, width: 34, height: 48 }, laminationPrices: { "1000": 2.3, "3000": 1.5, "5000": 0.75, "10000": 0.65 } },
+    laminationColorPlateFee: 290,
+    withHandles: { prices: { "1000": 1.4, "3000": 0.89, "5000": 0.65, "10000": 0.6 }, carton: { qty: 250, weight: 8, length: 45, width: 34, height: 48 }, laminationPrices: { "1000": 2.4, "3000": 1.57, "5000": 0.69, "10000": 0.67 } },
+    withoutHandles: { prices: { "1000": 1.36, "3000": 0.84, "5000": 0.63, "10000": 0.58 }, carton: { qty: 250, weight: 7, length: 34, width: 34, height: 48 }, laminationPrices: { "1000": 2.3, "3000": 1.5, "5000": 0.67, "10000": 0.65 } },
   },
   {
     id: "p3", dimensions: "H30*D12*W40", description: "מתאים לנעליים, ביגוד, קופסאות", sortOrder: 3,
-    laminationColorPlateFee: 400,
-    withHandles: { prices: { "1000": 1.4, "3000": 0.97, "5000": 0.84, "10000": 0.72 }, carton: { qty: 250, weight: 10, length: 45, width: 45, height: 48 }, laminationPrices: { "1000": 2.45, "3000": 1.64, "5000": 0.95, "10000": 0.89 } },
-    withoutHandles: { prices: { "1000": 1.36, "3000": 0.92, "5000": 0.79, "10000": 0.67 }, carton: { qty: 250, weight: 9, length: 45, width: 35, height: 48 }, laminationPrices: { "1000": 2.39, "3000": 1.59, "5000": 0.9, "10000": 0.84 } },
+    laminationColorPlateFee: 390,
+    withHandles: { prices: { "1000": 1.4, "3000": 0.97, "5000": 0.78, "10000": 0.72 }, carton: { qty: 250, weight: 10, length: 45, width: 45, height: 48 }, laminationPrices: { "1000": 2.45, "3000": 1.64, "5000": 0.85, "10000": 0.83 } },
+    withoutHandles: { prices: { "1000": 1.36, "3000": 0.92, "5000": 0.76, "10000": 0.67 }, carton: { qty: 250, weight: 9, length: 45, width: 35, height: 48 }, laminationPrices: { "1000": 2.39, "3000": 1.59, "5000": 0.83, "10000": 0.81 } },
   },
   {
     id: "p4", dimensions: "H40*D15*W50", description: "מתאים לפריטים גדולים", sortOrder: 4,
-    laminationColorPlateFee: 820,
-    withHandles: { prices: { "1000": 2.1, "3000": 1.3, "5000": 1.11, "10000": 1.03 }, carton: { qty: 200, weight: 12, length: 65, width: 45, height: 40 }, laminationPrices: { "1000": 3.1, "3000": 2.3, "5000": 1.3, "10000": 1.2 } },
-    withoutHandles: { prices: { "1000": 2.04, "3000": 1.24, "5000": 1.06, "10000": 0.98 }, carton: { qty: 200, weight: 11.5, length: 55, width: 44, height: 40 }, laminationPrices: { "1000": 2.9, "3000": 2.3, "5000": 1.26, "10000": 1.18 } },
+    laminationColorPlateFee: 615,
+    withHandles: { prices: { "1000": 2.1, "3000": 1.3, "5000": 1.05, "10000": 1 }, carton: { qty: 200, weight: 12, length: 65, width: 45, height: 40 }, laminationPrices: { "1000": 3.1, "3000": 2.3, "5000": 1.27, "10000": 1.25 } },
+    withoutHandles: { prices: { "1000": 2.04, "3000": 1.24, "5000": 1.03, "10000": 0.98 }, carton: { qty: 200, weight: 11.5, length: 55, width: 44, height: 40 }, laminationPrices: { "1000": 2.9, "3000": 2.3, "5000": 1.25, "10000": 1.18 } },
   },
   {
     id: "p5", dimensions: "H30*W40", description: "מתאים לפריטים רחבים", sortOrder: 5,
@@ -65,15 +68,15 @@ const DEFAULT_PRODUCTS: Product[] = [
   },
   {
     id: "p8", dimensions: "H35*D10*W40", description: "תיק בינוני-גדול — מתאים לביגוד וקופסאות", sortOrder: 8,
-    laminationColorPlateFee: 460,
-    withHandles: { prices: { "1000": 1.7, "3000": 1.06, "5000": 0.9, "10000": 0.78 }, carton: { qty: 250, weight: 11, length: 55, width: 40, height: 50 }, laminationPrices: { "1000": 2.7, "3000": 1.83, "5000": 1.18, "10000": 1.1 } },
-    withoutHandles: { prices: { "1000": 1.65, "3000": 0.92, "5000": 0.77, "10000": 0.67 }, carton: { qty: 250, weight: 10, length: 44, width: 40, height: 48 }, laminationPrices: { "1000": 2.6, "3000": 1.78, "5000": 1.13, "10000": 1.03 } },
+    laminationColorPlateFee: 405,
+    withHandles: { prices: { "1000": 1.7, "3000": 1.06, "5000": 0.8, "10000": 0.75 }, carton: { qty: 250, weight: 11, length: 55, width: 40, height: 50 }, laminationPrices: { "1000": 2.7, "3000": 1.83, "5000": 0.89, "10000": 0.87 } },
+    withoutHandles: { prices: { "1000": 1.65, "3000": 0.92, "5000": 0.77, "10000": 0.67 }, carton: { qty: 250, weight: 10, length: 44, width: 40, height: 48 }, laminationPrices: { "1000": 2.6, "3000": 1.78, "5000": 0.87, "10000": 0.85 } },
   },
   {
     id: "p9", dimensions: "H40*D15*W45", description: "תיק גדול — מתאים לאריזות מתנה גדולות", sortOrder: 9,
-    laminationColorPlateFee: 600,
-    withHandles: { prices: { "1000": 1.88, "3000": 1.29, "5000": 1.09, "10000": 0.95 }, carton: { qty: 250, weight: 14.5, length: 55, width: 49, height: 50 }, laminationPrices: { "1000": 2.8, "3000": 2.1, "5000": 1.3, "10000": 1.2 } },
-    withoutHandles: { prices: { "1000": 1.82, "3000": 1.11, "5000": 0.97, "10000": 0.87 }, carton: { qty: 250, weight: 13.2, length: 50, width: 44, height: 48 }, laminationPrices: { "1000": 2.75, "3000": 2.05, "5000": 1.24, "10000": 1.14 } },
+    laminationColorPlateFee: 570,
+    withHandles: { prices: { "1000": 1.88, "3000": 1.29, "5000": 1, "10000": 0.95 }, carton: { qty: 250, weight: 14.5, length: 55, width: 49, height: 50 }, laminationPrices: { "1000": 2.8, "3000": 2.1, "5000": 1.2, "10000": 1.18 } },
+    withoutHandles: { prices: { "1000": 1.82, "3000": 1.11, "5000": 0.97, "10000": 0.87 }, carton: { qty: 250, weight: 13.2, length: 50, width: 44, height: 48 }, laminationPrices: { "1000": 2.75, "3000": 2.05, "5000": 1.18, "10000": 1.14 } },
   },
   {
     id: "p10", dimensions: "H50*D20*W60", description: "תיק XL — מתאים לפריטים גדולים מאוד", sortOrder: 10,
@@ -109,8 +112,8 @@ const DEFAULT_PRODUCTS: Product[] = [
 
 const DEFAULT_COLOR_ADDONS: ColorAddon[] = [
   { colors: 1, pricesByQuantity: { "1000": 0, "3000": 0, "5000": 0, "10000": 0 } },
-  { colors: 2, pricesByQuantity: { "1000": 0.18, "3000": 0.15, "5000": 0.12, "10000": 0.10 } },
-  { colors: 3, pricesByQuantity: { "1000": 0.37, "3000": 0.30, "5000": 0.25, "10000": 0.20 } },
+  { colors: 2, pricesByQuantity: { "1000": 0.18, "3000": 0.15, "5000": 0.09, "10000": 0.08 } },
+  { colors: 3, pricesByQuantity: { "1000": 0.37, "3000": 0.3, "5000": 0.21, "10000": 0.18 } },
 ];
 
 const DEFAULT_QUANTITY_TIERS: QuantityTier[] = [

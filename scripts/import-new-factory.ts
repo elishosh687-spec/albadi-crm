@@ -31,6 +31,15 @@ const EXISTING: Record<string, { id: string; description: string }> = {
   "35,50": { id: "p14", description: "תיק רחב — מתאים לפריטים שטוחים גדולים" },
 };
 
+// Sheets to skip in the May 2026 update 2 import:
+//   H20-D8（9）-W25 — factory renamed sheet with ambiguous H20*D9 cells; keep
+//                    current p1 (H20*D8*W25) values until clarified.
+//   H15-D9-W20     — new size added by factory; product not adopted in stack.
+const SKIP_SHEETS = new Set<string>([
+  "H20-D8（9）-W25",
+  "H15-D9-W20",
+]);
+
 function dimKey(dimsStr: string): string {
   return dimsStr
     .split(/[*xX]/)
@@ -130,10 +139,10 @@ interface Product {
   withoutHandles: Variant;
 }
 
-function buildVariant(rows: RowRec[], handle: "Handle" | "Non"): Variant {
+function buildVariant(rows: RowRec[], handle: "Handle" | "Non", sheetName: string): Variant {
   const variantRows = rows.filter((r) => r.handle === handle);
   const carton = variantRows.find((r) => r.carton)?.carton;
-  if (!carton) throw new Error(`No carton info for ${handle}`);
+  if (!carton) throw new Error(`No carton info for ${handle} (sheet=${sheetName}, variantRows=${variantRows.length})`);
 
   const prices: Record<string, number> = {};
   const laminationPrices: Record<string, number> = {};
@@ -187,18 +196,23 @@ function main() {
 
   let sortOrder = 1;
   for (const name of sizeSheets) {
+    if (SKIP_SHEETS.has(name)) {
+      console.error(`SKIP: sheet ${name} — in SKIP_SHEETS.`);
+      continue;
+    }
     const { dims, rows, plateFee } = parseSheet(wb.Sheets[name]);
     const key = dimKey(dims);
     const existing = EXISTING[key];
     if (!existing) {
-      console.error(`WARN: sheet ${name} dims ${dims} (key ${key}) — no existing match. Using fallback id.`);
+      console.error(`SKIP: sheet ${name} dims ${dims} (key ${key}) — no existing match.`);
+      continue;
     }
     if (plateFee === 0) {
       console.error(`WARN: sheet ${name} — no plate fee parsed from xlsx; defaulting to 300.`);
     }
 
-    const withHandles = buildVariant(rows, "Handle");
-    const withoutHandles = buildVariant(rows, "Non");
+    const withHandles = buildVariant(rows, "Handle", name);
+    const withoutHandles = buildVariant(rows, "Non", name);
 
     products.push({
       id: existing?.id ?? `pX${sortOrder}`,
