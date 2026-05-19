@@ -46,6 +46,7 @@ import type {
   FactoryQuoteStatus,
 } from "@/lib/factory/types";
 import { DetailedBreakdown } from "./DetailedBreakdown";
+import { QuoteHtmlPreview } from "./QuoteHtmlPreview";
 import {
   decodeQStateToSpec,
   decodeShipping,
@@ -944,11 +945,7 @@ function FinalizedState({
                 </button>
               </div>
             </div>
-            <iframe
-              src={`/api/factory/${row.id}/pdf?stream=1#toolbar=0`}
-              className="flex-1 w-full rounded-b-lg"
-              title="הצעת מחיר"
-            />
+            <QuoteHtmlPreview row={row} />
           </div>
         </div>
       )}

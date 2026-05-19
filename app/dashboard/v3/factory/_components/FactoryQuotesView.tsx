@@ -2,12 +2,13 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Loader2, RefreshCw, Factory, ExternalLink, Sparkles, Download, MessageCircle, Trash2 } from "lucide-react";
+import { Loader2, RefreshCw, Factory, ExternalLink, Sparkles, Download, MessageCircle, Trash2, FileText } from "lucide-react";
 import { cn } from "@/lib/cn";
 import type {
   FactoryQuoteRow,
 } from "../../_components/factory/FactoryQuotePanel";
 import { FinalizeModal } from "../../_components/factory/FinalizeModal";
+import { QuoteHtmlPreview } from "../../_components/factory/QuoteHtmlPreview";
 import type { FactoryQuoteStatus } from "@/lib/factory/types";
 
 type StatusFilter = FactoryQuoteStatus | "all";
@@ -32,6 +33,7 @@ export function FactoryQuotesView() {
   const [finalizing, setFinalizing] = useState<FactoryQuoteRow | null>(null);
   const [whatsapping, setWhatsapping] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
+  const [previewing, setPreviewing] = useState<FactoryQuoteRow | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -253,6 +255,13 @@ export function FactoryQuotesView() {
                   )}
                   {r.factoryStatus === "finalized" && (
                     <>
+                      <button
+                        onClick={() => setPreviewing(r)}
+                        className="inline-flex items-center gap-1 rounded-md border border-primary/40 text-primary px-2 py-1 text-[11px] hover:bg-primary/10"
+                      >
+                        <FileText className="size-3" />
+                        צפה
+                      </button>
                       <a
                         href={`/api/factory/${r.id}/pdf`}
                         target="_blank"
@@ -306,6 +315,45 @@ export function FactoryQuotesView() {
             load();
           }}
         />
+      )}
+
+      {previewing && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+          onClick={() => setPreviewing(null)}
+        >
+          <div
+            className="relative flex w-full max-w-4xl flex-col rounded-lg border border-border bg-background shadow-2xl"
+            style={{ height: "90vh" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-border px-4 py-2">
+              <span className="text-sm font-medium">
+                צפייה בהצעה — #{previewing.quotationNo ?? previewing.id.slice(-8).toUpperCase()}
+              </span>
+              <div className="flex items-center gap-2">
+                <a
+                  href={`/api/factory/${previewing.id}/pdf`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 rounded-md border border-border bg-background/40 px-2 py-1 text-xs hover:bg-secondary"
+                >
+                  <Download className="size-3" />
+                  הורד
+                </a>
+                <button
+                  type="button"
+                  onClick={() => setPreviewing(null)}
+                  className="rounded-md p-1 text-muted-foreground hover:bg-secondary hover:text-foreground"
+                  aria-label="סגור"
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+            <QuoteHtmlPreview row={previewing} />
+          </div>
+        </div>
       )}
     </main>
   );
