@@ -19,7 +19,13 @@ export default async function CalculatorPage() {
       <CalculatorView
         products={DEFAULT_CONFIG.products}
         quantityTiers={DEFAULT_CONFIG.quantityTiers}
-        shippingOptions={DEFAULT_CONFIG.shippingOptions.filter((s) => s.enabled)}
+        shippingOptions={DEFAULT_CONFIG.shippingOptions
+          .map((s) => {
+            const dbOpt = dbConfig.shippingOptions.find((d) => d.type === s.type && d.enabled);
+            if (!dbOpt) return s;
+            return { ...s, enabled: dbOpt.enabled, seaRate: dbOpt.seaRate ?? s.seaRate, airRates: dbOpt.airRates ?? s.airRates };
+          })
+          .filter((s) => s.enabled)}
         initialMargins={margins}
       />
     </div>

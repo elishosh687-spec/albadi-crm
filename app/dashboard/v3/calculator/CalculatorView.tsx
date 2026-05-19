@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { Loader2 } from "lucide-react";
 import { cn } from "@/lib/cn";
 import type { Product, QuantityTier, ShippingOption, QuoteResult } from "@/lib/factory/calculator/types";
+import { DetailedBreakdown } from "@/app/dashboard/v3/_components/factory/DetailedBreakdown";
 
 interface Props {
   products: Product[];
@@ -217,6 +218,53 @@ export function CalculatorView({ products, quantityTiers, shippingOptions, initi
       )}
       {r && c && !loading && (
         <BreakdownCard result={r} computed={c} />
+      )}
+
+      {r && c && !loading && (
+        <DetailedBreakdown
+          unitCost={c.productionPerUnitIls}
+          unitShipping={c.shippingPerUnitIls}
+          unitProfit={r.profitPerUnitIls}
+          unitSellingPrice={r.sellingPricePerUnitIls}
+          totalCost={c.productionPerUnitIls * r.quantity}
+          totalShipping={c.shippingPerUnitIls * r.quantity}
+          totalProfit={r.totalProfitIls}
+          totalSellingPrice={r.totalOrderPriceIls}
+          quantity={r.quantity}
+          profitMarginPct={r.profitMargin}
+          totalCartons={r.totalCartons}
+          totalWeightKg={r.totalWeightKg}
+          totalCbm={r.totalCbm}
+          shippingType={r.shippingOption?.type ?? null}
+          factoryUnitCostCny={r.unitProductionCny}
+          usdToIls={c.usdToIls}
+          usdToCny={c.usdToCny}
+          seaRate={
+            r.shippingOption?.type === "sea"
+              ? shippingOptions.find((s) => s.id === r.shippingOption?.id)?.seaRate
+              : undefined
+          }
+          rawCbm={r.totalCbm}
+          seaMinCbm={1}
+          plateFeeCnyPerUnit={r.plateFeeCny}
+          components={{
+            baseBagCny: r.baseBagCny,
+            handlesAddonCny: r.handlesAddonCny,
+            laminationAddonCny: r.laminationAddonCny,
+            plateFeeCny: r.plateFeeCny,
+            logoAddonCny: r.logoAddonCny,
+          }}
+          alt={
+            preview?.altResult
+              ? {
+                  shippingType: preview.altResult.shippingOption?.type ?? "sea",
+                  unitSellingPrice: preview.altResult.sellingPricePerUnitIls,
+                  totalSellingPrice: preview.altResult.totalOrderPriceIls,
+                  shippingName: preview.altResult.shippingOption?.name ?? null,
+                }
+              : null
+          }
+        />
       )}
 
       {/* Reverse margin: given a price, what % is the implied profit? */}

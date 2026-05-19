@@ -33,7 +33,7 @@ export const runtime = "nodejs";
 export const maxDuration = 60;
 
 const BodySchema = z.object({
-  profitMarginOverride: z.number().min(0).max(200).optional(),
+  profitMarginOverride: z.number().min(0).max(300).optional(),
   shippingOptionId: z.string().optional(),
 });
 

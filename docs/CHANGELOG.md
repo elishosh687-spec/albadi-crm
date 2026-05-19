@@ -5,6 +5,33 @@
 
 ---
 
+## 2026-05-19 — "Sea shipping: $319/CBM + 1 CBM floor + detailed boss breakdown"
+
+### Changed
+- **Sea shipping rate $500/CBM → $319/CBM** (forwarder renegotiation). Updated in `app_config.factory_pricing.shippingOptions[type=sea].seaRate` via Settings UI. Code default in `lib/factory/config.ts` left at 500 (DB is source of truth; default only used when seeding an empty install).
+- **Minimum 1 CBM floor on sea shipping.** Even a 0.1 CBM order is billed for 1 full CBM. Two one-line changes:
+  - `lib/factory/calculator/engine.ts:117` (bot questionnaire): `(Math.max(totalCbm, 1) * shippingOption.seaRate) / quantity`
+  - `lib/factory/pricing.ts:40` (FinalizeModal): same. Air shipping unaffected (weight-based).
+  - Rationale: audit (`scripts/_audit-cbm-by-product.ts`) showed 63% of product × qty combos ship at <1 CBM, where the "consolidation will share the LCL container" assumption no longer holds — Albadi pays the carrier's 1 CBM floor regardless.
+
+### Added
+- **DetailedBreakdown component** (`app/dashboard/v3/_components/factory/DetailedBreakdown.tsx`) — collapsible "פירוט מלא לבוס" panel wired into 3 surfaces: FinalizeModal live calc, FactoryQuotePanel finalized state, CalculatorView preview. Shows: FX rates (USD↔ILS, USD↔CNY, derived CNY↔ILS), factory cost in ¥ → $ → ₪, per-component CNY breakdown (base/handles/lamination/plate fee/logo — only when caller has `QuoteResult`), plate fee amortization, sea shipping formula with floor highlight, low-CBM utilization warning (<50%), profit as % of cost AND as % of revenue, air/sea side-by-side comparison.
+- **`lib/factory/breakdown.ts`** — pure `buildBreakdownView()` helper. No JSX. Reused by all three surfaces.
+- **`/api/factory/config` merge in CalculatorView page** — page was passing `DEFAULT_CONFIG.shippingOptions` (hardcoded $500) to the client; now merges DB shipping rates so the live preview matches reality.
+
+### Fixed
+- **FinalizeModal `invalid_body` when margin slider > 200%.** Zod schema in `app/api/factory/finalize/[id]/route.ts:36` capped at 200; slider in `FinalizeModal.tsx:53` allowed up to 300. Bumped schema to `.max(300)`.
+
+### Audit scripts
+- `scripts/_audit-recent-quotes.ts` — replays recent `bot_quotes` rows against current config to flag drift between sent prices and current policy.
+- `scripts/_audit-cbm-by-product.ts` — enumerates all 14 products × 4 qty tiers × handles variants, prints which combos fall under 1 CBM and crossover quantities.
+
+### Notes
+- All code reads from existing `FactoryPricingResult` / `QuoteResult`; no new persisted state. DB migration not required.
+- "Profit as % of revenue" surfaces a real gap: a 174% markup on cost lands at ~40% of revenue once shipping pass-through is in the denominator.
+
+---
+
 ## 2026-05-18 — "Factory plate fees: per-product from xlsx"
 
 ### Fixed

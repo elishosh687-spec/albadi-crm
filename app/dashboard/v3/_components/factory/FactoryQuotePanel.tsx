@@ -41,8 +41,10 @@ import type {
   FactoryProductSpec,
   FactoryResponse,
   FactoryPricingResult,
+  FactoryPricingConfig,
   FactoryQuoteStatus,
 } from "@/lib/factory/types";
+import { DetailedBreakdown } from "./DetailedBreakdown";
 import {
   decodeQStateToSpec,
   decodeShipping,
@@ -673,6 +675,16 @@ function ReceivedState({
   );
 }
 
+let cachedConfigPromise: Promise<FactoryPricingConfig | null> | null = null;
+function fetchFactoryConfigCached(): Promise<FactoryPricingConfig | null> {
+  if (cachedConfigPromise) return cachedConfigPromise;
+  cachedConfigPromise = fetch("/api/factory/config")
+    .then((r) => r.json())
+    .then((d) => (d?.ok && d?.config ? (d.config as FactoryPricingConfig) : null))
+    .catch(() => null);
+  return cachedConfigPromise;
+}
+
 function FinalizedState({
   row,
   onReFinalize,
@@ -685,6 +697,10 @@ function FinalizedState({
   whatsappLoading: boolean;
 }) {
   const p = row.finalPricing!;
+  const [cfg, setCfg] = useState<FactoryPricingConfig | null>(null);
+  useEffect(() => {
+    fetchFactoryConfigCached().then(setCfg);
+  }, []);
   const spec = row.productSpec;
   const sizeHe = hebrewSize(spec);
   const productHe = spec.description
@@ -799,6 +815,35 @@ function FinalizedState({
           )}
         </dl>
       </div>
+
+      {cfg && (
+        <DetailedBreakdown
+          unitCost={p.unitCost}
+          unitShipping={p.unitShipping}
+          unitProfit={p.unitProfit}
+          unitSellingPrice={p.unitSellingPrice}
+          totalCost={p.totalCost}
+          totalShipping={p.totalShipping}
+          totalProfit={p.totalProfit}
+          totalSellingPrice={p.totalSellingPrice}
+          quantity={p.quantity}
+          profitMarginPct={p.profitMarginPct}
+          totalCartons={p.totalCartons}
+          totalWeightKg={p.totalWeightKg}
+          totalCbm={p.totalCbm}
+          shippingType={
+            cfg.shippingOptions.find((s) => s.id === p.shippingOptionId)?.type ?? null
+          }
+          factoryUnitCostCny={row.factoryResponse?.unitCostCny}
+          usdToIls={cfg.usdToIls}
+          usdToCny={cfg.usdToCny}
+          seaRate={
+            cfg.shippingOptions.find((s) => s.id === p.shippingOptionId && s.type === "sea")?.seaRate
+          }
+          rawCbm={p.totalCbm}
+          seaMinCbm={1}
+        />
+      )}
 
       <div className="grid grid-cols-2 gap-2">
         <a

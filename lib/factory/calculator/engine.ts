@@ -114,7 +114,7 @@ export function calculateQuote(
       shippingOption.seaRate &&
       shippingOption.seaRate > 0
     ) {
-      shippingPerUnitUsd = (totalCbm * shippingOption.seaRate) / quantity;
+      shippingPerUnitUsd = (Math.max(totalCbm, 1) * shippingOption.seaRate) / quantity;
     }
   }
 

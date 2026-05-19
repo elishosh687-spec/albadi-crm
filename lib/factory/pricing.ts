@@ -37,7 +37,7 @@ function computeShippingPerUnitUsd(
     return (totalWeightKg * rate) / quantity;
   }
   if (shipping.type === "sea" && shipping.seaRate && shipping.seaRate > 0) {
-    return (totalCbm * shipping.seaRate) / quantity;
+    return (Math.max(totalCbm, 1) * shipping.seaRate) / quantity;
   }
   return 0;
 }

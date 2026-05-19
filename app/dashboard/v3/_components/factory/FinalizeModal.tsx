@@ -18,6 +18,7 @@ import type {
   ShippingOption,
 } from "@/lib/factory/types";
 import { priceFactoryQuote } from "@/lib/factory/pricing";
+import { DetailedBreakdown } from "./DetailedBreakdown";
 
 function formatIls(n: number): string {
   return `₪${n.toLocaleString("he-IL", { maximumFractionDigits: 2 })}`;
@@ -266,6 +267,35 @@ export function FinalizeModal({
                     value={`${livePricing.totalCartons} קרטונים · ${livePricing.totalWeightKg}kg · ${livePricing.totalCbm}m³`}
                   />
                 </div>
+              )}
+
+              {livePricing && config && row.factoryResponse && (
+                <DetailedBreakdown
+                  unitCost={livePricing.unitCost}
+                  unitShipping={livePricing.unitShipping}
+                  unitProfit={livePricing.unitProfit}
+                  unitSellingPrice={livePricing.unitSellingPrice}
+                  totalCost={livePricing.totalCost}
+                  totalShipping={livePricing.totalShipping}
+                  totalProfit={livePricing.totalProfit}
+                  totalSellingPrice={livePricing.totalSellingPrice}
+                  quantity={livePricing.quantity}
+                  profitMarginPct={livePricing.profitMarginPct}
+                  totalCartons={livePricing.totalCartons}
+                  totalWeightKg={livePricing.totalWeightKg}
+                  totalCbm={livePricing.totalCbm}
+                  shippingType={
+                    config.shippingOptions.find((s) => s.id === livePricing.shippingOptionId)?.type ?? null
+                  }
+                  factoryUnitCostCny={row.factoryResponse.unitCostCny}
+                  usdToIls={config.usdToIls}
+                  usdToCny={config.usdToCny}
+                  seaRate={
+                    config.shippingOptions.find((s) => s.id === livePricing.shippingOptionId && s.type === "sea")?.seaRate
+                  }
+                  rawCbm={livePricing.totalCbm}
+                  seaMinCbm={1}
+                />
               )}
 
               {error && <p className="text-xs text-destructive">{error}</p>}
