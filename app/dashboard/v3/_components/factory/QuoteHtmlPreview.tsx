@@ -7,8 +7,13 @@
  * `finalPricing` / `productSpec` data already on the row, no extra fetch.
  */
 
+import { useEffect, useState } from "react";
 import type { FactoryQuoteRow } from "./FactoryQuotePanel";
 import { humanizeMaterial, humanizePrinting, humanizeFinishing } from "@/lib/factory/qstate-decode";
+import { DetailedBreakdown } from "./DetailedBreakdown";
+import type { FactoryPricingConfig } from "@/lib/factory/types";
+
+const PRODUCT_LABEL = "שקית אלבדי";
 
 function fmtIls(n: number, digits = 2): string {
   return `₪${n.toLocaleString("he-IL", { minimumFractionDigits: digits, maximumFractionDigits: digits })}`;
@@ -22,7 +27,23 @@ function dimensionsHe(spec: FactoryQuoteRow["productSpec"]): string {
   return parts.length ? `${parts.join(" × ")} ס"מ` : "";
 }
 
+let cachedCfg: Promise<FactoryPricingConfig | null> | null = null;
+function fetchCfg(): Promise<FactoryPricingConfig | null> {
+  if (cachedCfg) return cachedCfg;
+  cachedCfg = fetch("/api/factory/config")
+    .then((r) => r.json())
+    .then((d) => (d?.ok && d?.config ? (d.config as FactoryPricingConfig) : null))
+    .catch(() => null);
+  return cachedCfg;
+}
+
 export function QuoteHtmlPreview({ row }: { row: FactoryQuoteRow }) {
+  const [mode, setMode] = useState<"customer" | "internal">("customer");
+  const [cfg, setCfg] = useState<FactoryPricingConfig | null>(null);
+  useEffect(() => {
+    if (mode === "internal" && !cfg) fetchCfg().then(setCfg);
+  }, [mode, cfg]);
+
   const p = row.finalPricing;
   if (!p) {
     return (
@@ -40,6 +61,32 @@ export function QuoteHtmlPreview({ row }: { row: FactoryQuoteRow }) {
 
   return (
     <div className="flex-1 w-full overflow-auto bg-white rounded-b-lg" dir="rtl">
+      <div className="sticky top-0 z-10 bg-white/95 backdrop-blur border-b border-gray-200 px-4 py-2">
+        <div className="max-w-2xl mx-auto flex items-center justify-center gap-1">
+          <button
+            type="button"
+            onClick={() => setMode("customer")}
+            className={`rounded-md px-3 py-1 text-xs font-medium transition-colors ${
+              mode === "customer"
+                ? "bg-gray-900 text-white"
+                : "text-gray-600 hover:bg-gray-100"
+            }`}
+          >
+            👤 תצוגת לקוח
+          </button>
+          <button
+            type="button"
+            onClick={() => setMode("internal")}
+            className={`rounded-md px-3 py-1 text-xs font-medium transition-colors ${
+              mode === "internal"
+                ? "bg-gray-900 text-white"
+                : "text-gray-600 hover:bg-gray-100"
+            }`}
+          >
+            🔒 תצוגה פנימית (בוס)
+          </button>
+        </div>
+      </div>
       <div className="max-w-2xl mx-auto p-6 space-y-5 text-gray-900">
         {/* Header */}
         <div className="rounded-lg p-5 text-white" style={{ backgroundColor: "#4A7C59" }}>
@@ -66,9 +113,7 @@ export function QuoteHtmlPreview({ row }: { row: FactoryQuoteRow }) {
           <div className="bg-gray-50 px-4 py-2 text-xs font-semibold text-gray-700">מפרט המוצר</div>
           <table className="w-full text-sm">
             <tbody>
-              {spec.description && (
-                <SpecRow label="תיאור" value={spec.description} />
-              )}
+              <SpecRow label="תיאור" value={PRODUCT_LABEL} />
               {dims && <SpecRow label="מידות" value={dims} />}
               {spec.material && <SpecRow label="חומר" value={humanizeMaterial(spec.material)} />}
               {spec.printing && <SpecRow label="הדפסה" value={humanizePrinting(spec.printing)} />}
@@ -111,6 +156,75 @@ export function QuoteHtmlPreview({ row }: { row: FactoryQuoteRow }) {
         <div className="text-center text-xs text-gray-500 pt-2">
           אלבדי — אריזה ממותגת לעסקים · אריזה ממותגת לסביבה שלך
         </div>
+
+        {mode === "internal" && (
+          <div className="space-y-3 pt-4 mt-2 border-t-2 border-dashed border-gray-300">
+            <div className="rounded-md bg-amber-50 border border-amber-200 px-3 py-2 text-xs text-amber-900 font-semibold">
+              🔒 פרטים פנימיים — לא מופיעים בהצעה ללקוח
+            </div>
+
+            <div className="rounded-lg border border-gray-200 overflow-hidden">
+              <div className="bg-gray-50 px-4 py-2 text-xs font-semibold text-gray-700">
+                סיכום רווחיות
+              </div>
+              <table className="w-full text-sm">
+                <tbody>
+                  <PriceRow label="עלות מפעל ליחידה" value={fmtIls(p.unitCost)} />
+                  <PriceRow label="עלות שילוח ליחידה" value={fmtIls(p.unitShipping)} />
+                  <PriceRow label="סה״כ עלות" value={fmtIls(p.totalCost + p.totalShipping)} bold />
+                  <PriceRow label={`רווח ${p.profitMarginPct}% (מעל עלות מפעל)`} value={fmtIls(p.totalProfit)} bold primary />
+                  <PriceRow
+                    label="רווח כ-% מהכנסה"
+                    value={`${p.totalSellingPrice > 0 ? ((p.totalProfit / p.totalSellingPrice) * 100).toFixed(1) : "0"}%`}
+                  />
+                  <PriceRow
+                    label="לוגיסטיקה"
+                    value={`${p.totalCartons} קרטונים · ${p.totalWeightKg} ק״ג · ${p.totalCbm} m³`}
+                  />
+                  {row.factoryResponse?.unitCostCny != null && (
+                    <PriceRow
+                      label="עלות מפעל מקור (¥)"
+                      value={`¥${row.factoryResponse.unitCostCny}/יח׳`}
+                    />
+                  )}
+                  {row.factoryResponse?.supplier && (
+                    <PriceRow label="ספק" value={row.factoryResponse.supplier} />
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {cfg && (
+              <DetailedBreakdown
+                defaultOpen
+                unitCost={p.unitCost}
+                unitShipping={p.unitShipping}
+                unitProfit={p.unitProfit}
+                unitSellingPrice={p.unitSellingPrice}
+                totalCost={p.totalCost}
+                totalShipping={p.totalShipping}
+                totalProfit={p.totalProfit}
+                totalSellingPrice={p.totalSellingPrice}
+                quantity={p.quantity}
+                profitMarginPct={p.profitMarginPct}
+                totalCartons={p.totalCartons}
+                totalWeightKg={p.totalWeightKg}
+                totalCbm={p.totalCbm}
+                shippingType={
+                  cfg.shippingOptions.find((s) => s.id === p.shippingOptionId)?.type ?? null
+                }
+                factoryUnitCostCny={row.factoryResponse?.unitCostCny}
+                usdToIls={cfg.usdToIls}
+                usdToCny={cfg.usdToCny}
+                seaRate={
+                  cfg.shippingOptions.find((s) => s.id === p.shippingOptionId && s.type === "sea")?.seaRate
+                }
+                rawCbm={p.totalCbm}
+                seaMinCbm={1}
+              />
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
