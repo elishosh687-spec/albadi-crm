@@ -24,7 +24,7 @@ for (const c of cases) {
   let totalCny: number;
   if (c.lam) {
     const base = variant.laminationPrices![String(qty)];
-    totalCny = base * qty + product.laminationColorPlateFee * c.colors;
+    totalCny = base * qty + (product.laminationColorPlateFee ?? 0) * c.colors;
   } else {
     const base = variant.prices[String(qty)];
     const addon = DEFAULT_CONFIG.colorAddons.find((a) => a.colors === c.colors)!.pricesByQuantity[String(qty)];

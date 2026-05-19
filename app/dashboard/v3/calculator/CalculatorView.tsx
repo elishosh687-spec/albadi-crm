@@ -235,7 +235,11 @@ export function CalculatorView({ products, quantityTiers, shippingOptions, initi
           totalCartons={r.totalCartons}
           totalWeightKg={r.totalWeightKg}
           totalCbm={r.totalCbm}
-          shippingType={r.shippingOption?.type ?? null}
+          shippingType={
+            r.shippingOption?.type === "sea" || r.shippingOption?.type === "air"
+              ? r.shippingOption.type
+              : null
+          }
           factoryUnitCostCny={r.unitProductionCny}
           usdToIls={c.usdToIls}
           usdToCny={c.usdToCny}
@@ -257,7 +261,8 @@ export function CalculatorView({ products, quantityTiers, shippingOptions, initi
           alt={
             preview?.altResult
               ? {
-                  shippingType: preview.altResult.shippingOption?.type ?? "sea",
+                  shippingType:
+                    preview.altResult.shippingOption?.type === "air" ? "air" : "sea",
                   unitSellingPrice: preview.altResult.sellingPricePerUnitIls,
                   totalSellingPrice: preview.altResult.totalOrderPriceIls,
                   shippingName: preview.altResult.shippingOption?.name ?? null,

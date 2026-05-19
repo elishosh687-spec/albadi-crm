@@ -152,7 +152,7 @@ async function main() {
       `  lead=${lead?.name ?? "?"} ${lead?.phone ?? sid}  product=${q?.product ?? "?"}  qty=${qty ?? "?"} ship=${q?.shipping ?? "?"} handles=${form.hasHandles} colors=${form.logoColors} lam=${form.selectedFeatureIds.includes("f1")}`,
     );
     console.log(
-      `  stored=₪${stored?.toFixed?.(0) ?? "?"}  bot-recalc(currentDBmargin=${dbMarginCfg.adminSettings.profitMarginByQuantity[String(qty)] ?? dbCfg.defaultProfitMargin}%)=₪${bot?.toFixed?.(0) ?? "?"}  expected@target(${targetMargin}%)=₪${expected?.toFixed?.(0) ?? "?"}  Δ=${delta !== null ? (delta > 0 ? "+" : "") + delta.toFixed(0) : "?"} (${deltaPct !== null ? (deltaPct > 0 ? "+" : "") + deltaPct.toFixed(1) + "%" : "?"})`,
+      `  stored=₪${stored?.toFixed?.(0) ?? "?"}  bot-recalc(currentDBmargin=${dbMarginCfg.adminSettings.profitMarginByQuantity?.[String(qty)] ?? dbCfg.defaultProfitMargin}%)=₪${bot?.toFixed?.(0) ?? "?"}  expected@target(${targetMargin}%)=₪${expected?.toFixed?.(0) ?? "?"}  Δ=${delta !== null ? (delta > 0 ? "+" : "") + delta.toFixed(0) : "?"} (${deltaPct !== null ? (deltaPct > 0 ? "+" : "") + deltaPct.toFixed(1) + "%" : "?"})`,
     );
   }
 
