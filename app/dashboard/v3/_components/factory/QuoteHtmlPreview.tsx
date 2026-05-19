@@ -14,6 +14,8 @@ import { DetailedBreakdown } from "./DetailedBreakdown";
 import type { FactoryPricingConfig } from "@/lib/factory/types";
 
 const PRODUCT_LABEL = "שקית אלבדי";
+const stripCjk = (s: string | null | undefined): string =>
+  s && /[　-鿿＀-￯]/.test(s) ? "" : (s ?? "");
 
 function fmtIls(n: number, digits = 2): string {
   return `₪${n.toLocaleString("he-IL", { minimumFractionDigits: digits, maximumFractionDigits: digits })}`;
@@ -115,9 +117,15 @@ export function QuoteHtmlPreview({ row }: { row: FactoryQuoteRow }) {
             <tbody>
               <SpecRow label="תיאור" value={PRODUCT_LABEL} />
               {dims && <SpecRow label="מידות" value={dims} />}
-              {spec.material && <SpecRow label="חומר" value={humanizeMaterial(spec.material)} />}
-              {spec.printing && <SpecRow label="הדפסה" value={humanizePrinting(spec.printing)} />}
-              {spec.finishing && <SpecRow label="גימור" value={humanizeFinishing(spec.finishing)} />}
+              {stripCjk(spec.material && humanizeMaterial(spec.material)) && (
+                <SpecRow label="חומר" value={stripCjk(humanizeMaterial(spec.material))} />
+              )}
+              {stripCjk(spec.printing && humanizePrinting(spec.printing)) && (
+                <SpecRow label="הדפסה" value={stripCjk(humanizePrinting(spec.printing))} />
+              )}
+              {stripCjk(spec.finishing && humanizeFinishing(spec.finishing)) && (
+                <SpecRow label="גימור" value={stripCjk(humanizeFinishing(spec.finishing))} />
+              )}
               <SpecRow label="כמות" value={`${spec.quantity.toLocaleString("he-IL")} יח׳`} />
               {p.shippingOptionName && <SpecRow label="שיטת שילוח" value={p.shippingOptionName} />}
             </tbody>

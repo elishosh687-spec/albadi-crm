@@ -304,9 +304,12 @@ function CustomerQuotePDF(props: CustomerQuotePdfProps) {
     year: "numeric",
   });
 
-  const printingHe = spec.printing ? humanizePrinting(spec.printing) : "";
-  const finishingHe = spec.finishing ? humanizeFinishing(spec.finishing) : "";
-  const materialHe = spec.material ? humanizeMaterial(spec.material) : "";
+  // Strip any CJK (Chinese/Japanese/Korean) leftover from factory data —
+  // the customer-facing PDF must be Hebrew-only.
+  const stripCjk = (s: string) => (/[　-鿿＀-￯]/.test(s) ? "" : s);
+  const printingHe = stripCjk(spec.printing ? humanizePrinting(spec.printing) : "");
+  const finishingHe = stripCjk(spec.finishing ? humanizeFinishing(spec.finishing) : "");
+  const materialHe = stripCjk(spec.material ? humanizeMaterial(spec.material) : "");
   const qty = breakdown?.quantity ?? pricing.quantity;
 
   type Row = { desc: string; unit: number; qty: number; total: number };
@@ -318,7 +321,7 @@ function CustomerQuotePDF(props: CustomerQuotePdfProps) {
     // Multi-row breakdown from the local calculator.
     const hasShippingRow = breakdown.shippingPerUnit > 0;
     const baseBagDesc =
-      `${breakdown.dimensions} ס״מ — שקית בסיס` +
+      `שקית אלבדי — ${breakdown.dimensions} ס״מ` +
       (hasShippingRow ? "" : " (כולל שילוח רגיל)");
 
     rows.push({
@@ -371,7 +374,7 @@ function CustomerQuotePDF(props: CustomerQuotePdfProps) {
     displayUnitPrice = breakdown.totalPerUnit;
   } else {
     // Fallback: 2-row honest layout from FactoryPricingResult.
-    const bagDescParts: string[] = [`${sizeLabel(spec)} — שקית`];
+    const bagDescParts: string[] = [`שקית אלבדי — ${sizeLabel(spec)}`];
     if (finishingHe) bagDescParts.push(finishingHe);
     if (printingHe) bagDescParts.push(printingHe);
     const bagDesc = bagDescParts.join(" · ");
