@@ -203,6 +203,7 @@ export function QuoteHtmlPreview({ row }: { row: FactoryQuoteRow }) {
             </div>
 
             {cfg && (
+              <div className="dark rounded-lg bg-gray-900 text-gray-100 p-2">
               <DetailedBreakdown
                 defaultOpen
                 unitCost={p.unitCost}
@@ -230,6 +231,7 @@ export function QuoteHtmlPreview({ row }: { row: FactoryQuoteRow }) {
                 rawCbm={p.totalCbm}
                 seaMinCbm={1}
               />
+              </div>
             )}
           </div>
         )}
