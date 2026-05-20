@@ -32,6 +32,15 @@ const GAP_CATEGORY_COLOR: Record<SheetGapRow["category"], string> = {
   other_error: "bg-red-500/20 text-red-400 border-red-500/30",
 };
 
+function lastNoteBody(notes: string | null, maxLen = 90): string | null {
+  if (!notes) return null;
+  const entries = notes.split(/\n\n(?=\[)/g).filter(Boolean);
+  const last = entries.at(-1);
+  if (!last) return null;
+  const body = last.replace(/^(\[[^\]]+\]\s*)/, "").trim();
+  return body ? (body.length > maxLen ? body.slice(0, maxLen) + "…" : body) : null;
+}
+
 function sheetRowDeepLink(spreadsheetId: string | null, rowIndex: number): string | null {
   if (!spreadsheetId) return null;
   return `https://docs.google.com/spreadsheets/d/${spreadsheetId}/edit#gid=0&range=A${rowIndex}`;
@@ -154,11 +163,22 @@ function LeadCard({
       )}
 
       {/* Summary */}
-      {(lead.botSummary || lead.notes) && (
+      {lead.botSummary && (
         <p className="relative z-10 text-xs text-muted-foreground line-clamp-2 leading-relaxed pointer-events-none">
-          {lead.botSummary ?? lead.notes}
+          {lead.botSummary}
         </p>
       )}
+
+      {/* Last note */}
+      {(() => {
+        const note = lastNoteBody(lead.notes);
+        if (!note) return null;
+        return (
+          <p className="relative z-10 text-xs text-muted-foreground/70 line-clamp-1 leading-relaxed pointer-events-none italic border-r-2 border-primary/30 pr-2">
+            {note}
+          </p>
+        );
+      })()}
 
       {/* Actions — always visible (mobile has no hover, desktop also benefits from clarity). */}
       <div className="relative z-10 flex gap-2 pt-1">
@@ -239,12 +259,24 @@ function PreviewDrawer({ lead, onClose }: { lead: LeadRow; onClose: () => void }
               <div className="text-muted-foreground leading-relaxed">{lead.botSummary}</div>
             </div>
           )}
-          {lead.notes && (
-            <div className="space-y-1">
-              <div className="text-xs text-muted-foreground">הערות</div>
-              <div className="text-muted-foreground leading-relaxed">{lead.notes}</div>
-            </div>
-          )}
+          {lead.notes && (() => {
+            const entries = lead.notes.split(/\n\n(?=\[)/g).filter(Boolean);
+            return (
+              <div className="space-y-2">
+                <div className="text-xs text-muted-foreground">הערות ({entries.length})</div>
+                {entries.slice(-3).map((entry, i) => {
+                  const stamp = entry.match(/^(\[[^\]]+\])/)?.[1] ?? "";
+                  const body = entry.replace(/^(\[[^\]]+\]\s*)/, "").trim();
+                  return (
+                    <div key={i} className="border-r-2 border-border pr-2 space-y-0.5">
+                      {stamp && <div className="text-[10px] text-muted-foreground/60">{stamp}</div>}
+                      <div className="text-muted-foreground leading-relaxed text-xs">{body}</div>
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })()}
           {lead.updatedAt && (
             <div className="space-y-1">
               <div className="text-xs text-muted-foreground">עדכון אחרון</div>

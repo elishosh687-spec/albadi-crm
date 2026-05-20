@@ -267,6 +267,15 @@ function BucketColumn({
   );
 }
 
+function lastNoteBody(notes: string | null, maxLen = 90): string | null {
+  if (!notes) return null;
+  const entries = notes.split(/\n\n(?=\[)/g).filter(Boolean);
+  const last = entries.at(-1);
+  if (!last) return null;
+  const body = last.replace(/^(\[[^\]]+\]\s*)/, "").trim();
+  return body ? (body.length > maxLen ? body.slice(0, maxLen) + "…" : body) : null;
+}
+
 function shortSid(sid: string): string {
   // 133144455962747@lid -> …62747
   // 1811084322@s.whatsapp.net -> …84322
@@ -338,6 +347,16 @@ function LeadCard({
           </span>
         </div>
       )}
+
+      {(() => {
+        const note = lastNoteBody(card.notes);
+        if (!note) return null;
+        return (
+          <div className="flex items-start gap-1.5 text-xs border-r-2 border-primary/30 pr-2 text-muted-foreground/80">
+            <span className="line-clamp-1 text-right italic">{note}</span>
+          </div>
+        );
+      })()}
 
       <div className="flex items-center justify-between gap-2 mt-1">
         <div className="flex items-center gap-1 flex-wrap">

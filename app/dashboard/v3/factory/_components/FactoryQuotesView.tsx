@@ -235,6 +235,11 @@ export function FactoryQuotesView() {
                       </span>
                     </div>
                   )}
+                  {r.sentToCustomerAt && (
+                    <div className="text-[10px] text-success mt-0.5">
+                      ✓ נשלח ללקוח · {new Date(r.sentToCustomerAt).toLocaleDateString("he-IL")}
+                    </div>
+                  )}
                 </div>
                 <div className="flex flex-col gap-1 shrink-0">
                   <Link
@@ -273,8 +278,8 @@ export function FactoryQuotesView() {
                       </a>
                       <button
                         onClick={() => handleSendWa(r)}
-                        disabled={whatsapping === r.id || !r.pdfUrl}
-                        title={!r.pdfUrl ? "צריך BLOB_READ_WRITE_TOKEN" : ""}
+                        disabled={whatsapping === r.id || !r.pdfUrl || !!r.sentToCustomerAt}
+                        title={r.sentToCustomerAt ? `נשלח כבר ב-${new Date(r.sentToCustomerAt).toLocaleDateString("he-IL")}` : !r.pdfUrl ? "צריך BLOB_READ_WRITE_TOKEN" : ""}
                         className="inline-flex items-center gap-1 rounded-md bg-[#25D366] px-2 py-1 text-[11px] font-medium text-white hover:bg-[#1da856] disabled:opacity-60"
                       >
                         {whatsapping === r.id ? (
