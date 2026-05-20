@@ -31,6 +31,7 @@ import {
   type FollowupStage,
 } from "@/lib/messaging/templates";
 import { sendEliDM } from "@/lib/notify/eli";
+import { loadSheetGaps } from "@/lib/sheets/lead-gaps";
 import { superviseFollowup } from "@/lib/supervisor/followup-supervisor";
 import { logDecision } from "@/lib/supervisor/log";
 import { generateAndQueueDraft } from "@/lib/drafts";
@@ -497,6 +498,23 @@ export async function POST(req: NextRequest) {
     for (const r of rs) by[r.action] = (by[r.action] ?? 0) + 1;
     return by;
   };
+
+  try {
+    const gaps = await loadSheetGaps();
+    if (gaps.total > 0) {
+      const lines: string[] = [
+        `📋 פערי טופס FB: ${gaps.total}`,
+        `  • ממתינים: ${gaps.pendingCount}`,
+        `  • טלפון פגום: ${gaps.badPhoneCount}`,
+        `  • שליחה נכשלה: ${gaps.sendFailedCount}`,
+      ];
+      if (gaps.otherErrorCount > 0) lines.push(`  • שגיאות אחרות: ${gaps.otherErrorCount}`);
+      lines.push("https://albadi-crm.vercel.app/dashboard/v3/leads?stage=GAPS");
+      await sendEliDM(lines.join("\n"));
+    }
+  } catch (e) {
+    console.warn("[followups] sheet-gap alert failed", e);
+  }
 
   return NextResponse.json({
     ok: true,

@@ -142,6 +142,7 @@ export async function POST(req: NextRequest) {
       source: "facebook_import",
       leadSource: FB_LEAD_SOURCE,
       active: true,
+      pipelineStage: "NEW",
     });
   } catch (err) {
     return NextResponse.json(
