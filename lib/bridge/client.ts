@@ -629,6 +629,7 @@ export async function upsertLeadFromBridgeEvent(input: {
         .set({
           waJid: sid,
           name: sql`coalesce(${leads.name}, ${enrichedName})`,
+          pipelineStage: sql`coalesce(${leads.pipelineStage}, 'NEW')`,
           updatedAt: new Date(),
         })
         .where(eq(leads.manychatSubId, canonicalSid));
@@ -660,6 +661,7 @@ export async function upsertLeadFromBridgeEvent(input: {
       .set({
         name: sql`coalesce(${leads.name}, ${enrichedName})`,
         phoneE164: sql`coalesce(${leads.phoneE164}, ${enrichedPhone})`,
+        pipelineStage: sql`coalesce(${leads.pipelineStage}, 'NEW')`,
         updatedAt: new Date(),
       })
       .where(eq(leads.manychatSubId, byWaJid[0].sid));

@@ -5,6 +5,7 @@ import { LeadsView } from "./LeadsView";
 import { ExpandedLead } from "../_components/ExpandedLead";
 import type { ChatMessage } from "../conversations/_components/ChatThread";
 import type { OrderSummaryData } from "../conversations/_components/OrderSummary";
+import { loadSheetGaps } from "@/lib/sheets/lead-gaps";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -28,25 +29,39 @@ export default async function LeadsPage({
 }
 
 async function LeadsListWrapper() {
-  const rows = await db
-    .select({
-      sid: leads.manychatSubId,
-      name: leads.name,
-      phone: leads.phoneE164,
-      stage: leads.pipelineStage,
-      quoteTotal: leads.quoteTotal,
-      botSummary: leads.botSummary,
-      notes: leads.notes,
-      pipelineFlag: leads.pipelineFlag,
-      botPaused: leads.botPaused,
-      followUpCount: leads.followUpCount,
-      updatedAt: leads.updatedAt,
-    })
-    .from(leads)
-    .where(eq(leads.active, true))
-    .orderBy(desc(leads.updatedAt));
+  const [rows, sheetGaps] = await Promise.all([
+    db
+      .select({
+        sid: leads.manychatSubId,
+        name: leads.name,
+        phone: leads.phoneE164,
+        stage: leads.pipelineStage,
+        quoteTotal: leads.quoteTotal,
+        botSummary: leads.botSummary,
+        notes: leads.notes,
+        pipelineFlag: leads.pipelineFlag,
+        botPaused: leads.botPaused,
+        followUpCount: leads.followUpCount,
+        updatedAt: leads.updatedAt,
+      })
+      .from(leads)
+      .where(eq(leads.active, true))
+      .orderBy(desc(leads.updatedAt)),
+    loadSheetGaps(),
+  ]);
 
-  return <LeadsView leads={rows} />;
+  return (
+    <LeadsView
+      leads={rows}
+      sheetGapsTotal={sheetGaps.total}
+      sheetGapsPendingCount={sheetGaps.pendingCount}
+      sheetGapsBadPhoneCount={sheetGaps.badPhoneCount}
+      sheetGapsSendFailedCount={sheetGaps.sendFailedCount}
+      sheetGapsOtherErrorCount={sheetGaps.otherErrorCount}
+      sheetGapsRows={sheetGaps.rows}
+      sheetGapsSpreadsheetId={sheetGaps.spreadsheetId}
+    />
+  );
 }
 
 /**
