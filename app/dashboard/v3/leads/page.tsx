@@ -6,6 +6,7 @@ import { ExpandedLead } from "../_components/ExpandedLead";
 import type { ChatMessage } from "../conversations/_components/ChatThread";
 import type { OrderSummaryData } from "../conversations/_components/OrderSummary";
 import { loadSheetGaps } from "@/lib/sheets/lead-gaps";
+import { enrichMessagesWithMedia } from "@/lib/dashboard/enrich-media";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -139,6 +140,7 @@ async function ExpandedLeadInLeadsContext({
         sender: messages.sender,
         text: messages.text,
         receivedAt: messages.receivedAt,
+        payload: messages.payload,
       })
       .from(messages)
       .where(sql`trim(${messages.manychatSubId}) = ${sid}`)
@@ -164,13 +166,7 @@ async function ExpandedLeadInLeadsContext({
       (leadRow.factorySpecDraft as Record<string, unknown> | null) ?? null,
   };
 
-  const threadMessages: ChatMessage[] = msgRows.map((m) => ({
-    id: m.id,
-    direction: m.direction as "in" | "out",
-    sender: (m.sender as "lead" | "bot" | "eli" | null) ?? null,
-    text: m.text,
-    receivedAt: m.receivedAt.toISOString(),
-  }));
+  const threadMessages: ChatMessage[] = enrichMessagesWithMedia(msgRows);
 
   // backHref stays as a pure path. The current `?stage=…&lead=…` query is
   // already in useSearchParams() inside ExpandedLead, so goBack/goToNeighbor
