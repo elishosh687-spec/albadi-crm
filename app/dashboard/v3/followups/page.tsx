@@ -320,7 +320,7 @@ function QueueCard({ q }: { q: QueueRow }) {
             </span>
           )}
           <Link
-            href={`/dashboard/v3?lead=${encodeURIComponent(q.sid)}`}
+            href={`/dashboard/v3?lead=${encodeURIComponent(q.sid)}&from=followup`}
             className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
           >
             <LayoutDashboard className="size-3" />

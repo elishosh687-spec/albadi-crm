@@ -1,10 +1,12 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useTransition } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Search, MessageSquare, X, ExternalLink } from "lucide-react";
+import { Search, MessageSquare, X, ExternalLink, Trash2, Loader2 } from "lucide-react";
 import { STAGE_LABEL, STAGE_TONE } from "@/app/dashboard/v3/_components/stage-meta";
 import type { SheetGapRow } from "@/lib/sheets/lead-gaps";
+import { setLeadStage, deleteLeadAction } from "@/app/actions/v2";
+import { V2_PIPELINE_STAGES, type V2PipelineStage } from "@/lib/manychat/stages";
 
 const ALL_STAGES = ["ALL", "NEW", "AWAITING_ESTIMATE", "AWAITING_LOGO", "WAITING_FACTORY", "AWAITING_FINAL", "WON", "DROPPED", "GAPS"] as const;
 const STAGE_FILTER_LABEL: Record<string, string> = {
@@ -116,9 +118,37 @@ function LeadCard({
   onPreview: (l: LeadRow) => void;
   activeStage: string;
 }) {
+  const router = useRouter();
+  const [isPending, startTransition] = useTransition();
+  const [deleting, setDeleting] = useState(false);
   const pill = STAGE_TONE[lead.stage ?? ""]?.pill ?? "bg-muted text-muted-foreground";
   const stageLabel = STAGE_LABEL[lead.stage ?? ""] ?? lead.stage ?? "—";
   const updatedAt = lead.updatedAt ? new Date(lead.updatedAt).toLocaleDateString("he-IL") : "—";
+
+  const handleStageChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const next = e.target.value as V2PipelineStage;
+    if (next === lead.stage) return;
+    startTransition(async () => {
+      const r = await setLeadStage({ manychatSubId: lead.sid, stage: next, flags: [] });
+      if (r.ok) router.refresh();
+      else alert(`שגיאה: ${r.error}`);
+    });
+  };
+
+  const handleDelete = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!confirm(`למחוק את ${lead.name ?? lead.sid}? פעולה לא הפיכה.`)) return;
+    setDeleting(true);
+    startTransition(async () => {
+      const r = await deleteLeadAction(lead.sid);
+      if (r.ok) router.refresh();
+      else {
+        alert(`שגיאה: ${r.error}`);
+        setDeleting(false);
+      }
+    });
+  };
   // Carry the active stage filter into the lead card URL so the card's
   // prev/next arrows can paginate over the same filtered list the user sees.
   const fullCardHref =
@@ -180,6 +210,22 @@ function LeadCard({
         );
       })()}
 
+      {/* Inline stage dropdown */}
+      <div className="relative z-10 flex items-center gap-2">
+        <select
+          value={lead.stage ?? "NEW"}
+          onChange={handleStageChange}
+          disabled={isPending}
+          onClick={(e) => e.stopPropagation()}
+          className="flex-1 text-xs rounded-md border border-border bg-muted/40 px-2 py-1 disabled:opacity-50"
+        >
+          {V2_PIPELINE_STAGES.map((s) => (
+            <option key={s} value={s}>{STAGE_LABEL[s] ?? s}</option>
+          ))}
+        </select>
+        {isPending && <Loader2 className="size-3 animate-spin text-muted-foreground" />}
+      </div>
+
       {/* Actions — always visible (mobile has no hover, desktop also benefits from clarity). */}
       <div className="relative z-10 flex gap-2 pt-1">
         <a
@@ -198,6 +244,14 @@ function LeadCard({
           className="flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-primary/30 bg-primary/10 px-3 py-1.5 text-xs text-primary hover:bg-primary/20 transition-colors"
         >
           תצוגה מקדימה
+        </button>
+        <button
+          onClick={handleDelete}
+          disabled={deleting}
+          title="מחק ליד"
+          className="flex items-center justify-center gap-1.5 rounded-lg border border-destructive/30 bg-destructive/10 px-2 py-1.5 text-xs text-destructive hover:bg-destructive/20 transition-colors disabled:opacity-60"
+        >
+          {deleting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
         </button>
       </div>
     </div>

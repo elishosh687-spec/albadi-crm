@@ -10,6 +10,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import Link from "next/link";
 import { Users, Inbox, Banknote, TrendingUp, Bot, MessageSquare, CheckCircle2, XCircle } from "lucide-react";
 import { STAGE_LABEL, STAGE_TONE } from "../_components/stage-meta";
 import { cn } from "@/lib/cn";
@@ -371,7 +372,12 @@ export function AnalyticsView({ data }: { data: AnalyticsData }) {
                   : null;
               const tone = STAGE_TONE[f.stage] ?? STAGE_TONE.UNCLASSIFIED;
               return (
-                <div key={f.stage} className="flex items-center gap-3">
+                <Link
+                  key={f.stage}
+                  href={`/dashboard/v3/leads?stage=${encodeURIComponent(f.stage)}`}
+                  className="flex items-center gap-3 hover:bg-muted/20 rounded-md transition-colors px-1 -mx-1"
+                  title={`הצג ${STAGE_LABEL[f.stage] ?? f.stage}`}
+                >
                   <div className="w-28 shrink-0 text-xs text-muted-foreground text-right">
                     {STAGE_LABEL[f.stage] ?? f.stage}
                   </div>
@@ -387,7 +393,7 @@ export function AnalyticsView({ data }: { data: AnalyticsData }) {
                   <div className="w-12 shrink-0 text-xs text-muted-foreground tabular-nums">
                     {dropFromPrev !== null && dropFromPrev > 0 ? `-${dropFromPrev}%` : ""}
                   </div>
-                </div>
+                </Link>
               );
             })}
           </div>

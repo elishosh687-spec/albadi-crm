@@ -243,11 +243,11 @@ export function FactoryQuotesView() {
                 </div>
                 <div className="flex flex-col gap-1 shrink-0">
                   <Link
-                    href={`/dashboard/v3/conversations?lead=${encodeURIComponent(r.manychatSubId)}`}
+                    href={`/dashboard/v3?lead=${encodeURIComponent(r.manychatSubId)}&from=factory`}
                     className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-[11px] hover:bg-secondary"
                   >
                     <ExternalLink className="size-3" />
-                    שיחה
+                    כרטיס
                   </Link>
                   {r.factoryStatus === "received" && (
                     <button

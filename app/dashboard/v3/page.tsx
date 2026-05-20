@@ -25,13 +25,13 @@ const THREAD_LIMIT = 200;
 export default async function V3LeadsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ lead?: string }>;
+  searchParams: Promise<{ lead?: string; from?: string }>;
 }) {
-  const { lead: leadParam } = await searchParams;
+  const { lead: leadParam, from } = await searchParams;
   const selectedSid = leadParam?.trim() || null;
 
   if (selectedSid) {
-    return <ExpandedLeadWrapper sid={selectedSid} />;
+    return <ExpandedLeadWrapper sid={selectedSid} from={from} />;
   }
 
   return <CommandCenterWrapper />;
@@ -252,7 +252,13 @@ async function loadLeadCards(): Promise<{
   return { cards, tagsBySid };
 }
 
-async function ExpandedLeadWrapper({ sid }: { sid: string }) {
+async function ExpandedLeadWrapper({ sid, from }: { sid: string; from?: string }) {
+  const backHref =
+    from === "followup"
+      ? "/dashboard/v3/followups"
+      : from === "factory"
+        ? "/dashboard/v3/factory"
+        : "/dashboard/v3";
   // Neighbor sids for prev/next nav inside ExpandedLead — sorted by the same
   // recency order LeadsBoard / overview use so the arrows feel like "next card
   // I would otherwise visit". Filter mirrors loadLeadCards so DROPPED/WON are
@@ -358,7 +364,7 @@ async function ExpandedLeadWrapper({ sid }: { sid: string }) {
       messages={threadMessages}
       prevSid={prevSid}
       nextSid={nextSid}
-      backHref="/dashboard/v3"
+      backHref={backHref}
     />
   );
 }
