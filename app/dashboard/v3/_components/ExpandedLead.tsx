@@ -406,6 +406,20 @@ function OverviewTab({
               סיכום הבוט
             </div>
             <p className="text-sm whitespace-pre-wrap">{summary.botSummary}</p>
+            {summary.notes && (() => {
+              const entries = summary.notes.split(/\n\n(?=\[)/g).filter(Boolean);
+              const last = entries.at(-1);
+              if (!last) return null;
+              const body = last.replace(/^(\[[^\]]+\]\s*)/, "").trim();
+              const stamp = last.match(/^(\[[^\]]+\])/)?.[1] ?? "";
+              if (!body) return null;
+              return (
+                <div className="mt-2 border-r-2 border-border pr-2">
+                  <span className="text-[10px] text-muted-foreground">{stamp} </span>
+                  <span className="text-xs text-muted-foreground">{body.slice(0, 120)}{body.length > 120 ? "…" : ""}</span>
+                </div>
+              );
+            })()}
           </section>
         )}
 

@@ -450,6 +450,7 @@ async function routeThroughSupervisor(input: SupervisorRouteInput): Promise<void
       name: leads.name,
       phone: leads.phoneE164,
       qState: leads.qState,
+      notes: leads.notes,
     })
     .from(leads)
     .where(sql`trim(${leads.manychatSubId}) = ${sid.trim()}`)
@@ -517,6 +518,7 @@ async function routeThroughSupervisor(input: SupervisorRouteInput): Promise<void
     recentMessages: recent,
     leadName: freshLead?.name ?? null,
     phone: freshLead?.phone ?? null,
+    notes: freshLead?.notes ?? null,
     botPaused: wasBotPaused,
     candidate,
   });

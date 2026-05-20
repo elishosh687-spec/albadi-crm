@@ -438,9 +438,9 @@ function CustomerQuotePDF(props: CustomerQuotePdfProps) {
           {rows.map((r, idx) => (
             <View key={idx} style={styles.tdRow}>
               <Text style={styles.cellDesc}>{r.desc}</Text>
-              <Text style={styles.cellUnit}>~{formatILS(r.unit)}</Text>
+              <Text style={styles.cellUnit}>{formatILS(r.unit)}</Text>
               <Text style={styles.cellQty}>{r.qty.toLocaleString("he-IL")}</Text>
-              <Text style={styles.cellTotal}>~{formatILS(r.total)}</Text>
+              <Text style={styles.cellTotal}>{formatILS(r.total)}</Text>
             </View>
           ))}
           <View style={styles.tdRowTotal}>
@@ -452,7 +452,7 @@ function CustomerQuotePDF(props: CustomerQuotePdfProps) {
         </View>
 
         <Text style={styles.unitPriceNote}>
-          מחיר ליחידה: ~{formatILS(displayUnitPrice)}
+          מחיר ליחידה: {formatILS(displayUnitPrice)}
         </Text>
 
         <View style={styles.vatNote}>
@@ -475,6 +475,10 @@ function CustomerQuotePDF(props: CustomerQuotePdfProps) {
             <Text style={styles.notesText}>{customerNotes.trim()}</Text>
           </View>
         ) : null}
+
+        <Text style={{ fontSize: 10, color: "#333", textAlign: "right", marginTop: 12, fontWeight: "bold" }}>
+          מצאתם מחיר זול יותר? שלחו חשבונית ונבדוק אם נוכל להוזיל.
+        </Text>
 
         <Text style={styles.footer}>
           ההצעה תקפה ל-14 ימים מיום ההצעה. המחירים נקובים בש״ח וכוללים את כל ההוצאות מלבד מע״מ.

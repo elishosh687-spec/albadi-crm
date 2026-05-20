@@ -68,6 +68,7 @@ interface SuperviseInput {
   recentMessages: { direction: "in" | "out"; text: string }[];
   leadName: string | null;
   phone: string | null;
+  notes: string | null;
   botPaused: boolean;
   candidate: CandidateAction;
 }
@@ -233,6 +234,13 @@ function buildUserPrompt(input: SuperviseInput): string {
   lines.push(`Stage: ${input.stage ?? "(none)"}`);
   if (input.leadName) lines.push(`Name: ${input.leadName}`);
   if (input.phone) lines.push(`Phone: ${input.phone}`);
+  if (input.notes) {
+    const lastNote = input.notes.split(/\n\n(?=\[)/g).filter(Boolean).at(-1);
+    if (lastNote) {
+      const body = lastNote.replace(/^(\[[^\]]+\]\s*)/, "").trim();
+      if (body) lines.push(`Eli's last note: ${body.slice(0, 200)}`);
+    }
+  }
   if (input.botPaused) lines.push(`bot_paused: true (was manually paused — auto-unpaused on this inbound)`);
   if (input.qState) {
     const q = input.qState;
