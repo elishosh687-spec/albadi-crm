@@ -36,6 +36,8 @@ export function CalculatorView({ products, quantityTiers, shippingOptions, initi
   const [colors, setColors]       = useState(1);
   const [shippingId, setShippingId] = useState(shippingOptions.find((s) => s.type === "sea")?.id ?? shippingOptions[0]?.id ?? "s2");
   const [qtyOverride, setQtyOverride] = useState<string>("");
+  const [marginOverride, setMarginOverride] = useState<string>("");
+  const [minProfit, setMinProfit] = useState<string>("");
   const [reverseMode, setReverseMode] = useState<"total" | "unit" | "profit">("profit");
   const [reverseInput, setReverseInput] = useState<string>("");
   const [preview, setPreview]     = useState<PreviewResult | null>(null);
@@ -53,7 +55,12 @@ export function CalculatorView({ products, quantityTiers, shippingOptions, initi
     (best, q) => (q <= effectiveQty ? q : best),
     sortedTierQtys[0] ?? 1000
   );
-  const currentMargin = initialMargins[String(snappedTierQty)] ?? 40;
+  const defaultMargin = initialMargins[String(snappedTierQty)] ?? 40;
+  const marginOverrideParsed = marginOverride !== "" ? parseFloat(marginOverride) : NaN;
+  const marginOverrideValid = Number.isFinite(marginOverrideParsed) && marginOverrideParsed >= 0 && marginOverrideParsed <= 300;
+  const currentMargin = marginOverrideValid ? marginOverrideParsed : defaultMargin;
+  const minProfitParsed = minProfit !== "" ? parseFloat(minProfit) : NaN;
+  const minProfitValid = Number.isFinite(minProfitParsed) && minProfitParsed > 0;
 
   const fetchPreview = useCallback(async () => {
     setLoading(true);
@@ -202,7 +209,58 @@ export function CalculatorView({ products, quantityTiers, shippingOptions, initi
           <Toggle label="ידיות" value={handles} onChange={setHandles} />
           <Toggle label="למינציה" value={lamination} onChange={setLamination} />
         </div>
+
+        {/* Margin override + min profit (Wave 6: #4, #19) */}
+        <div className="grid grid-cols-2 gap-4 pt-2 border-t border-border/50">
+          <div className="flex flex-col gap-1">
+            <label className="text-sm font-medium">% רווח יעד (override)</label>
+            <input
+              type="number"
+              min={0}
+              max={300}
+              step={1}
+              placeholder={`ברירת מחדל: ${defaultMargin}%`}
+              value={marginOverride}
+              onChange={(e) => setMarginOverride(e.target.value)}
+              className="bg-background/50 border border-border rounded-md px-3 py-1.5 text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-ring/30"
+            />
+            <span className="text-[11px] text-muted-foreground">
+              {marginOverrideValid
+                ? `דורס את הגלובלי לחישוב הזה (${marginOverrideParsed}%)`
+                : "ריק → לפי הגדרות מערכת"}
+            </span>
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-sm font-medium">רווח מינימלי ₪ (אזהרה)</label>
+            <input
+              type="number"
+              min={0}
+              step={100}
+              placeholder="למשל 1000"
+              value={minProfit}
+              onChange={(e) => setMinProfit(e.target.value)}
+              className="bg-background/50 border border-border rounded-md px-3 py-1.5 text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-ring/30"
+            />
+            <span className="text-[11px] text-muted-foreground">
+              {minProfitValid
+                ? `מציג אזהרה אם רווח כולל < ₪${ils(minProfitParsed)}`
+                : "ריק → ללא בדיקה"}
+            </span>
+          </div>
+        </div>
       </section>
+
+      {/* Min-profit warning (Wave 6: #19) */}
+      {r && minProfitValid && r.totalProfitIls < minProfitParsed && (
+        <div className="rounded-lg border border-warning/40 bg-warning/10 p-3 text-sm text-warning flex items-center gap-2">
+          ⚠️ הרווח הכולל ₪{ils(r.totalProfitIls)} נמוך מהמינימום שהוגדר ₪{ils(minProfitParsed)}.
+          {(() => {
+            const totalCost = r.totalCostPerUnitIls * r.quantity;
+            const requiredMarginPct = totalCost > 0 ? ((minProfitParsed / totalCost) * 100) : 0;
+            return ` רווח נדרש כדי להגיע ליעד: ${r2(requiredMarginPct)}%.`;
+          })()}
+        </div>
+      )}
 
       {/* Result */}
       {loading && (
