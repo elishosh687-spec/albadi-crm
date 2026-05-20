@@ -122,6 +122,38 @@ export async function GET(
   if (!row) return NextResponse.json({ error: "not found" }, { status: 404 });
 
   const p = (row.payload ?? {}) as Record<string, unknown>;
+
+  // GreenAPI payloads carry a plaintext downloadUrl on a public CDN — no
+  // decryption required. Just proxy the bytes through so the dashboard
+  // doesn't expose the external URL (and CORS stays simple).
+  const greenApiUrl =
+    (p as any)?.messageData?.fileMessageData?.downloadUrl as string | undefined;
+  const greenApiMime =
+    (p as any)?.messageData?.fileMessageData?.mimeType as string | undefined;
+  const greenApiName =
+    (p as any)?.messageData?.fileMessageData?.fileName as string | undefined;
+  if (typeof greenApiUrl === "string" && greenApiUrl.length > 0) {
+    const r = await fetch(greenApiUrl);
+    if (!r.ok) {
+      return NextResponse.json(
+        { error: `greenapi-cdn ${r.status}` },
+        { status: 502 }
+      );
+    }
+    const bytes = Buffer.from(await r.arrayBuffer());
+    return new NextResponse(new Uint8Array(bytes), {
+      status: 200,
+      headers: {
+        "Content-Type": greenApiMime ?? "application/octet-stream",
+        "Content-Length": String(bytes.length),
+        "Content-Disposition": greenApiName
+          ? `inline; filename="${encodeURIComponent(greenApiName)}"`
+          : "inline",
+        "Cache-Control": "private, max-age=86400",
+      },
+    });
+  }
+
   const waId =
     row.waMessageId ??
     (typeof p.id === "string" ? (p.id as string) : null);
