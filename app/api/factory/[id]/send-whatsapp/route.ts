@@ -49,13 +49,18 @@ function buildCaption(opts: {
     `כמות: ${qty} יח׳`,
     "",
     "💰 *תמחור*",
-    `מחיר ליחידה: ${formatIls(pricing.unitSellingPrice)}`,
-    `*סה״כ: ${formatIls(pricing.totalSellingPrice)}*`,
-    "_(לא כולל מע״מ)_",
+    `📦 ${qty} יחידות × ${formatIls(pricing.unitSellingPrice)}`,
   ];
-  if (pricing.shippingOptionName) {
-    lines.push("", "🚚 *שילוח*", pricing.shippingOptionName);
+  if (pricing.unitShipping > 0) {
+    lines.push(`🚢 שילוח: ${formatIls(pricing.totalShipping)}`);
   }
+  if (pricing.shippingOptionName) {
+    lines.push(`🚚 שיטת שילוח: ${pricing.shippingOptionName}`);
+  }
+  lines.push(
+    `*💵 סה״כ: ${formatIls(pricing.totalSellingPrice)}*`,
+    "_(לא כולל מע״מ)_"
+  );
   lines.push(
     "",
     "━━━━━━━━━━━━━━",
