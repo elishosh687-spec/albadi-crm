@@ -4,6 +4,7 @@ import { and, asc, desc, eq, sql } from "drizzle-orm";
 import { ConversationsLayout } from "./_components/ConversationsLayout";
 import type { ChatMessage } from "./_components/ChatThread";
 import type { OrderSummaryData } from "./_components/OrderSummary";
+import { enrichMessagesWithMedia } from "@/lib/dashboard/enrich-media";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -212,43 +213,7 @@ export default async function V3ConversationsPage({
           (leadRow.factorySpecDraft as Record<string, unknown> | null) ?? null,
       };
 
-      const threadMessages: ChatMessage[] = msgRows.map((m) => {
-        const p = (m.payload ?? null) as Record<string, unknown> | null;
-        const rawType =
-          typeof p?.media_type === "string"
-            ? (p.media_type as string).toLowerCase()
-            : null;
-        // Bridge sometimes labels images as plain `image`, sometimes
-        // `image/jpeg`. Normalize to the leading kind so the Bubble can
-        // branch on `image` / `video` / `audio` / `document`.
-        const mediaKind = rawType
-          ? rawType.startsWith("image")
-            ? "image"
-            : rawType.startsWith("video")
-            ? "video"
-            : rawType.startsWith("audio")
-            ? "audio"
-            : rawType === "document" || rawType.includes("pdf")
-            ? "document"
-            : null
-          : null;
-        const hasUrl =
-          !!p &&
-          ["url", "media_url", "image_url", "attachment_url", "media_path"].some(
-            (k) => typeof p[k] === "string" && ((p[k] as string).length ?? 0) > 0
-          );
-        const filename =
-          typeof p?.filename === "string" ? (p.filename as string) : null;
-        return {
-          id: m.id,
-          direction: m.direction as "in" | "out",
-          sender: (m.sender as "lead" | "bot" | "eli" | null) ?? null,
-          text: m.text,
-          receivedAt: m.receivedAt.toISOString(),
-          mediaKind: hasUrl ? mediaKind ?? "document" : null,
-          mediaFilename: filename,
-        };
-      });
+      const threadMessages: ChatMessage[] = enrichMessagesWithMedia(msgRows);
 
       selected = { sid: selectedSid, summary, messages: threadMessages };
     }
