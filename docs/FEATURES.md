@@ -1,6 +1,6 @@
 # Albadi CRM — Feature Inventory
 
-> נכתב 2026-05-13. רשימת כל הפיצ'רים בשני הצדדים: **בוט** (אוטומטי מול הלקוח) + **דאשבורד** (פיקוח לאלי).
+> עודכן 2026-05-20. רשימת כל הפיצ'רים: **בוט** (אוטומטי מול הלקוח) + **דאשבורד** (פיקוח לאלי) + **אינטגרציות** (WhatsApp, פייסבוק, פייג'ו, גרין-API).
 > Status: `shipped` = פעיל בייצור. `beta` = פעיל מאחורי flag / WIP. `deprecated` = קוד עוד בריפו אבל לא בשימוש. `planned` = לא נכתב.
 > לכל פיצ'ר: בעלים בקוד (קובץ ראשי) + מסמך-מקור (PRD/CUSTOMER-FLOW/ARCHITECTURE).
 
@@ -162,6 +162,21 @@
 | 2.2.13 | Reverse-target pricing widget (calculator + FinalizeModal): רווח₪ / סכום כולל / ליחידה → implied % | shipped | `app/dashboard/v3/calculator/CalculatorView.tsx`, `app/dashboard/v3/_components/factory/FinalizeModal.tsx` | — |
 | 2.2.14 | Custom-quantity input in calculator (snaps margin + price to lower tier) | shipped | `app/dashboard/v3/calculator/CalculatorView.tsx`, `lib/factory/calculator/engine.ts` | — |
 | 2.2.15 | FinalizeModal margin slider widened to 0-300% | shipped | `app/dashboard/v3/_components/factory/FinalizeModal.tsx` | — |
+| 2.2.16 | **פיל "פערי טופס"** — ספירת לידים מהטופס של Meta שלא הגיעו ל-CRM; לחיצה מציגה טבלה + לינק לשורה בשיט | shipped (v3.7) | `app/dashboard/v3/leads/LeadsView.tsx`, `lib/sheets/lead-gaps.ts` | — |
+
+### 2.6 הצעות מפעל (Factory Quotes)
+
+| # | Feature | Status | קוד | מסמך |
+|---|---|---|---|---|
+| 2.6.1 | רשימת הצעות מפעל (`/dashboard/v3/factory`) — כל הבקשות לפי סטטוס (pending/received/finalized) | shipped | `app/dashboard/v3/factory/page.tsx`, `FactoryQuotesView.tsx` | — |
+| 2.6.2 | "שלח לפבריקה" — שולח לאלי DM עם מפרט המוצר + פרטי הליד; שומר שורה ב-`factory_quote_requests` | shipped | `lib/factory/sendToFactory.ts`, `app/api/factory/send/route.ts` | — |
+| 2.6.3 | Feishu integration — ייצוא הצעת מחיר ישירות לשיט הסיני של המפעל (`feat/feishu-export`) | shipped | `lib/feishu/client.ts`, `scripts/_import-factory-quotes-feishu.ts` | — |
+| 2.6.4 | Import מחירים מ-Excel של המפעל (`newfactory.xlsx`) — parsing של 14 מוצרים + per-product plate fees | shipped | `scripts/import-new-factory.ts`, `lib/factory/calculator/constants.ts` | — |
+| 2.6.5 | מנוע תמחור — חישוב עלות CNY → ILS (FX + shipping + מרווח) לכל קומבינציה של מוצר × כמות × גמר | shipped | `lib/factory/calculator/engine.ts` | — |
+| 2.6.6 | Finalize modal — אלי קובע מחיר סופי, מרווח, shipping (sea/air), כותב הערות; יוצר PDF ושולח ללקוח | shipped | `app/dashboard/v3/_components/factory/FinalizeModal.tsx`, `app/api/factory/finalize/[id]/route.ts` | — |
+| 2.6.7 | PDF הצעת מחיר ללקוח — Hebrew-only, branded "שקית אלבדי", מחיר סופי בלבד (ללא breakdown פנימי) | shipped | `app/api/factory/[id]/pdf/route.ts`, `lib/factory/pdf/render.tsx` | — |
+| 2.6.8 | תצוגה מקדימה של הצעת המחיר ("בוס מוד") — customer view + פירוט פנימי (FX, CNY, רווח, shipping) | shipped | `app/dashboard/v3/factory/_components/QuoteHtmlPreview.tsx`, `DetailedBreakdown.tsx` | — |
+| 2.6.9 | Dark theme לכל modal הצעת המפעל | shipped | `QuoteHtmlPreview.tsx` | — |
 
 ### 2.3 Dashboard v2 (Fallback, deprecated soon)
 
@@ -193,18 +208,59 @@
 
 ---
 
-## 3. Cross-cutting / Infrastructure
+## 3. אינטגרציות חיצוניות
+
+### 3.1 Meta Lead Ads → CRM (FB Lead Form pipeline)
+
+| # | Feature | Status | קוד | הערות |
+|---|---|---|---|---|
+| 3.1.1 | Meta Lead Ads → Google Sheets אוטומטי (Meta native) | shipped | Google Sheets (Meta sync) | ללא קוד מצידנו |
+| 3.1.2 | Apps Script — נורמליזציה של טלפון לE.164 (05X → +972X), סינון BAD_PHONE | shipped | Google Apps Script ב-Sheets | `fixPhone()` + regex guard |
+| 3.1.3 | Apps Script — POST ל-`/api/leads/facebook-import` לכל שורה חדשה; כותב SENT / BAD_PHONE בעמודות הביקורת | shipped | Google Apps Script + `app/api/leads/facebook-import/route.ts` | — |
+| 3.1.4 | `facebook-import` endpoint — upsert ליד ב-DB עם `pipelineStage=NEW`, source=facebook_import | shipped | `app/api/leads/facebook-import/route.ts` | — |
+| 3.1.5 | **פערי טופס** — קריאת הShיט ב-CSV ציבורי, סיווג שורות שלא הגיעו ל-CRM (pending / bad_phone / send_failed / other_error) | shipped (v3.7) | `lib/sheets/lead-gaps.ts` | cache 5 דקות, soft-fail |
+| 3.1.6 | DM לאלי בכל ריצת cron אם יש פערים > 0 (ספירה + לינק לדשבורד) | shipped (v3.7) | `app/api/bot/followups/route.ts` | — |
+
+### 3.2 WhatsApp Bridge (messaging)
+
+| # | Feature | Status | קוד | הערות |
+|---|---|---|---|---|
+| 3.2.1 | self-hosted `whatsapp-bridge-node` על Fly.io — שליחה/קבלה ללא 24h limit | shipped | `BRIDGE_BASE` env | מחליף ManyChat לחלוטין |
+| 3.2.2 | Webhook HMAC-SHA256 + replay window 5 דקות | shipped | `app/api/bridge/webhook/route.ts` | — |
+| 3.2.3 | שליחת הודעות free-form (טקסט / מדיה) | shipped | `lib/bridge/client.ts:sendBridgeMessage` | — |
+| 3.2.4 | תבנית company intro — 3-tier fallback: (1) וידאו+כפתור Instagram (2) CTA URL (3) טקסט בלבד | shipped | `lib/bridge/client.ts:sendCompanyTemplate` | — |
+| 3.2.5 | `sendEliDM` — DM לאלי לכל escalation / gap / factory reminder | shipped | `lib/notify/eli.ts` | מבוסס `ELI_NOTIFY_JID` |
+
+### 3.3 Feishu (飞书) — שיתוף מסמכים עם המפעל הסיני
+
+| # | Feature | Status | קוד | הערות |
+|---|---|---|---|---|
+| 3.3.1 | Auth — App ID + App Secret → access token | shipped | `lib/feishu/client.ts` | — |
+| 3.3.2 | קריאת שיט Feishu (factory quote rows) | shipped | `lib/feishu/client.ts` | — |
+| 3.3.3 | ייצוא הצעות מחיר לשיט Feishu (כתיבה לשורות) | shipped | `scripts/_import-factory-quotes-feishu.ts` | — |
+
+### 3.4 Green API (WhatsApp — legacy / company template)
+
+| # | Feature | Status | קוד | הערות |
+|---|---|---|---|---|
+| 3.4.1 | שליחת וידאו company intro דרך Green API | shipped | `lib/greenapi/client.ts:sendFileByUrl` | — |
+| 3.4.2 | שליחת כפתור Instagram (Interactive Buttons) | shipped | `lib/greenapi/client.ts:sendInteractiveButtons` | — |
+| 3.4.3 | Fallback לטקסט בלבד אם Green API נכשל | shipped | `lib/greenapi/client.ts` | — |
+
+---
+
+## 4. Cross-cutting / Infrastructure
 
 | # | Feature | Status | קוד | מסמך |
 |---|---|---|---|---|
-| 3.1 | Drizzle ORM + Neon Postgres | shipped | `lib/db/schema.ts` | ARCHITECTURE §db |
-| 3.2 | DB migrations (`drizzle-kit push`) | shipped | `drizzle.config.ts` | — |
-| 3.3 | Vercel auto-deploy on `main` push | shipped | `vercel.json` | — |
-| 3.4 | Daily cron via Vercel | shipped | `vercel.json` | — |
-| 3.5 | External cron (claude.ai/code routine) | shipped | external | CLAUDE.md |
-| 3.6 | Bridge webhook signing | shipped | `app/api/bridge/webhook/route.ts` | ARCHITECTURE §security |
-| 3.7 | Bearer auth on all `/api/*` (except `/api/auth/*`) | shipped | per-route check | — |
-| 3.8 | Sender attribution (`messages.sender`: lead/bot/eli) | shipped | schema | ARCHITECTURE §db |
+| 4.1 | Drizzle ORM + Neon Postgres | shipped | `lib/db/schema.ts` | ARCHITECTURE §db |
+| 4.2 | DB migrations (`drizzle-kit push`) | shipped | `drizzle.config.ts` | — |
+| 4.3 | Vercel auto-deploy on `main` push | shipped | `vercel.json` | — |
+| 4.4 | Daily cron via Vercel | shipped | `vercel.json` | — |
+| 4.5 | External cron (claude.ai/code routine) | shipped | external | CLAUDE.md |
+| 4.6 | Bridge webhook signing | shipped | `app/api/bridge/webhook/route.ts` | ARCHITECTURE §security |
+| 4.7 | Bearer auth on all `/api/*` (except `/api/auth/*`) | shipped | per-route check | — |
+| 4.8 | Sender attribution (`messages.sender`: lead/bot/eli) | shipped | schema | ARCHITECTURE §db |
 
 ---
 
