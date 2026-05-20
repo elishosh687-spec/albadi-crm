@@ -15,6 +15,8 @@ import {
 import { ExpandedLead } from "./_components/ExpandedLead";
 import type { ChatMessage } from "./conversations/_components/ChatThread";
 import type { OrderSummaryData } from "./conversations/_components/OrderSummary";
+import { loadFollowupQueueSids } from "@/lib/dashboard/followup-queue";
+import { loadFactoryQueueSids } from "@/lib/dashboard/factory-queue";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -259,22 +261,30 @@ async function ExpandedLeadWrapper({ sid, from }: { sid: string; from?: string }
       : from === "factory"
         ? "/dashboard/v3/factory"
         : "/dashboard/v3";
-  // Neighbor sids for prev/next nav inside ExpandedLead — sorted by the same
-  // recency order LeadsBoard / overview use so the arrows feel like "next card
-  // I would otherwise visit". Filter mirrors loadLeadCards so DROPPED/WON are
-  // skipped (they are off-screen anyway).
-  const neighborQuery = db
-    .select({ sid: leads.manychatSubId })
-    .from(leads)
-    .where(
-      and(
-        eq(leads.active, true),
-        or(isNull(leads.pipelineStage), notInArray(leads.pipelineStage, ["DROPPED", "WON"]))
-      )
-    )
-    .orderBy(desc(leads.updatedAt));
+  // Neighbor sids — scope depends on `from`. Followup/factory contexts page
+  // only through that queue so the arrows mirror the list the user came from.
+  // Default = all active non-DROPPED/WON leads (the main overview).
+  const neighborQuery: Promise<string[]> =
+    from === "followup"
+      ? loadFollowupQueueSids()
+      : from === "factory"
+        ? loadFactoryQueueSids()
+        : db
+            .select({ sid: leads.manychatSubId })
+            .from(leads)
+            .where(
+              and(
+                eq(leads.active, true),
+                or(
+                  isNull(leads.pipelineStage),
+                  notInArray(leads.pipelineStage, ["DROPPED", "WON"])
+                )
+              )
+            )
+            .orderBy(desc(leads.updatedAt))
+            .then((rows) => rows.map((r) => r.sid));
 
-  const [leadRow, neighborRows] = await Promise.all([
+  const [leadRow, orderedSids] = await Promise.all([
     db
       .select({
         sid: leads.manychatSubId,
@@ -307,7 +317,6 @@ async function ExpandedLeadWrapper({ sid, from }: { sid: string; from?: string }
     );
   }
 
-  const orderedSids = neighborRows.map((r) => r.sid);
   const idx = orderedSids.findIndex((s) => s.trim() === sid.trim());
   const prevSid = idx > 0 ? orderedSids[idx - 1] : null;
   const nextSid = idx >= 0 && idx < orderedSids.length - 1 ? orderedSids[idx + 1] : null;

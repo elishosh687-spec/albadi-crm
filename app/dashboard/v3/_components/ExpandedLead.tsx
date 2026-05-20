@@ -90,9 +90,16 @@ export function ExpandedLead({
 
   const goToNeighbor = (neighborSid: string | null) => {
     if (!neighborSid) return;
+    // Lead card always lives under /dashboard/v3 — even when backHref points
+    // at /followups or /factory (those routes don't render the card). The
+    // `from` searchParam is preserved automatically by URLSearchParams so
+    // the back button + neighbor scope keep their context.
+    const cardBase = backHref.startsWith("/dashboard/v3/leads")
+      ? "/dashboard/v3/leads"
+      : "/dashboard/v3";
     const sp = new URLSearchParams(params.toString());
     sp.set("lead", neighborSid);
-    router.replace(`${backHref}?${sp.toString()}`);
+    router.replace(`${cardBase}?${sp.toString()}`);
     router.refresh();
   };
 
