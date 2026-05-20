@@ -139,6 +139,28 @@ export const botDrafts = pgTable("bot_drafts", {
   rejectReason: text("reject_reason"),
 });
 
+// Activity log per lead — append-only timeline of significant events:
+//   - stage_change   { from, to, actor }
+//   - note_added     { excerpt, actor }
+//   - note_deleted   { excerpt, actor }
+//   - draft_approved { draftId, actor }
+//   - draft_rejected { draftId, reason, actor }
+//   - manual_reply   { textPreview, actor }
+//   - manual_followup_set / cleared
+//   - lead_deleted
+// Drives the "לוג פעילות" tab in ExpandedLead. Migration is idempotent
+// (CREATE TABLE IF NOT EXISTS) — first write creates the table if absent.
+export const leadEvents = pgTable("lead_events", {
+  id: serial("id").primaryKey(),
+  manychatSubId: text("manychat_sub_id").notNull(),
+  eventType: text("event_type").notNull(),
+  payload: jsonb("payload"),
+  actor: text("actor"),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .defaultNow()
+    .notNull(),
+});
+
 // analysisQueue, pipelineSuggestions, eliDecisions tables were removed
 // when the standalone classifier skill was retired. The bot now writes
 // pipeline_stage / flags directly to `leads` based on LLM intent on

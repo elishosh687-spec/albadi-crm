@@ -18,6 +18,7 @@ import {
   Bot,
   ThumbsUp,
   ThumbsDown,
+  History,
 } from "lucide-react";
 import { cn } from "@/lib/cn";
 import {
@@ -36,6 +37,7 @@ import {
   setManualFollowupAction,
   approveDraftAction,
   rejectDraftAction,
+  loadLeadEventsAction,
   type TemplateRow,
 } from "@/app/actions/v2";
 import {
@@ -58,7 +60,7 @@ import { Composer } from "../conversations/_components/Composer";
 import { NotesPanel } from "./NotesPanel";
 import { BotDecisionsTab } from "./BotDecisionsTab";
 
-type TabKey = "overview" | "chat" | "summary" | "decisions";
+type TabKey = "overview" | "chat" | "summary" | "decisions" | "activity";
 
 export interface PendingDraftInfo {
   id: number;
@@ -247,6 +249,7 @@ export function ExpandedLead({
             { key: "chat", label: `שיחה (${messages.length})`, icon: MessagesSquare },
             { key: "summary", label: "סיכום הזמנה", icon: ClipboardList },
             { key: "decisions", label: "החלטות בוט", icon: Bot },
+            { key: "activity", label: "לוג פעילות", icon: History },
           ] as { key: TabKey; label: string; icon: typeof LayoutDashboard }[]
         ).map((t) => {
           const Icon = t.icon;
@@ -284,6 +287,9 @@ export function ExpandedLead({
         )}
         {tab === "decisions" && (
           <BotDecisionsTab sid={sid} />
+        )}
+        {tab === "activity" && (
+          <ActivityTab sid={sid} />
         )}
       </div>
     </div>
@@ -1019,5 +1025,83 @@ function PendingDraftCard({ draft }: { draft: PendingDraftInfo }) {
       </div>
       {msg && <div className="text-xs text-destructive">{msg}</div>}
     </section>
+  );
+}
+
+const EVENT_LABEL: Record<string, string> = {
+  stage_change: "שינוי שלב",
+  note_added: "הערה",
+  note_deleted: "הערה נמחקה",
+  note_edited: "הערה נערכה",
+  draft_approved: "טיוטה אושרה",
+  draft_rejected: "טיוטה נדחתה",
+  manual_reply: "הודעה ידנית",
+  manual_followup_set: "פולואפ ידני נקבע",
+  manual_followup_cleared: "פולואפ ידני בוטל",
+  lead_deleted: "ליד נמחק",
+  contact_updated: "פרטי קשר עודכנו",
+  bot_paused: "בוט מושעה",
+  bot_resumed: "בוט פעיל",
+};
+
+function ActivityTab({ sid }: { sid: string }) {
+  const [rows, setRows] = useState<Awaited<ReturnType<typeof loadLeadEventsAction>> | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    loadLeadEventsAction(sid).then((r) => {
+      if (!cancelled) setRows(r);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [sid]);
+
+  if (!rows) {
+    return <div className="p-4 text-sm text-muted-foreground">טוען...</div>;
+  }
+  if (!rows.ok) {
+    return <div className="p-4 text-sm text-destructive">שגיאה: {rows.error}</div>;
+  }
+  if (rows.rows.length === 0) {
+    return (
+      <div className="p-4 text-sm text-muted-foreground">
+        אין אירועים שנרשמו עדיין. הלוג מתחיל לרשום מההפעלה.
+      </div>
+    );
+  }
+  return (
+    <div className="p-4 space-y-2">
+      {rows.rows.map((ev) => {
+        const label = EVENT_LABEL[ev.eventType] ?? ev.eventType;
+        const time = new Date(ev.createdAt).toLocaleString("he-IL", {
+          timeZone: "Asia/Jerusalem",
+          day: "2-digit",
+          month: "2-digit",
+          year: "2-digit",
+          hour: "2-digit",
+          minute: "2-digit",
+        });
+        return (
+          <div
+            key={ev.id}
+            className="rounded-lg border border-border bg-card/40 p-3 text-sm"
+          >
+            <div className="flex items-center justify-between gap-2">
+              <span className="font-medium">{label}</span>
+              <span className="text-xs text-muted-foreground tabular-nums">
+                {time}
+                {ev.actor ? ` · ${ev.actor}` : ""}
+              </span>
+            </div>
+            {ev.payload && Object.keys(ev.payload).length > 0 && (
+              <pre className="mt-1 text-[11px] text-muted-foreground whitespace-pre-wrap break-all">
+                {JSON.stringify(ev.payload, null, 0)}
+              </pre>
+            )}
+          </div>
+        );
+      })}
+    </div>
   );
 }

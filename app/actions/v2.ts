@@ -52,6 +52,7 @@ import {
   rejectDraft as rejectDraftLib,
 } from "@/lib/drafts";
 import { attachEliFeedback } from "@/lib/supervisor/log";
+import { logLeadEvent, loadLeadEvents, type LeadEventRow } from "@/lib/events/lead-events";
 
 export interface SimpleResult {
   ok: boolean;
@@ -148,6 +149,11 @@ export async function setLeadStage(
         eliStageFrom: prior?.stage ?? null,
         eliStageTo: input.stage,
       });
+      void logLeadEvent({
+        manychatSubId: cleanSid,
+        eventType: "stage_change",
+        payload: { from: prior?.stage ?? null, to: input.stage, flags: input.flags },
+      });
     }
 
     safeRevalidate("/dashboard/v3", "layout");
@@ -211,6 +217,11 @@ export async function appendLeadNote(
     const next = row.notes ? `${entry}\n\n${row.notes}` : entry;
 
     await setCustomFields(cleanSid, [{ name: "notes", value: next }]);
+    void logLeadEvent({
+      manychatSubId: cleanSid,
+      eventType: "note_added",
+      payload: { excerpt: cleanText.slice(0, 200) },
+    });
     safeRevalidate("/dashboard/v3", "layout");
     return { ok: true, notes: next };
   } catch (e) {
@@ -332,6 +343,12 @@ export async function deleteLeadAction(
     if (deleted.length === 0) {
       return { ok: false, error: "lead not found" };
     }
+
+    void logLeadEvent({
+      manychatSubId: cleanSid,
+      eventType: "lead_deleted",
+      payload: null,
+    });
 
     safeRevalidate("/dashboard/v3", "layout");
     return { ok: true, message: "הליד נמחק" };
@@ -467,6 +484,12 @@ export async function sendManualReply(
       manychatSubId: cleanSid,
       eliAction: "manual_reply",
       eliManualReply: cleanText,
+    });
+
+    void logLeadEvent({
+      manychatSubId: cleanSid,
+      eventType: "manual_reply",
+      payload: { textPreview: cleanText.slice(0, 200) },
     });
 
     safeRevalidate("/dashboard/v3", "layout");
@@ -854,6 +877,11 @@ export async function setManualFollowupAction(
         updatedAt: new Date(),
       })
       .where(sql`trim(${leads.manychatSubId}) = ${cleanSid}`);
+    void logLeadEvent({
+      manychatSubId: cleanSid,
+      eventType: isoDate ? "manual_followup_set" : "manual_followup_cleared",
+      payload: isoDate ? { at: isoDate } : null,
+    });
     safeRevalidate("/dashboard/v3", "layout");
     return { ok: true, message: isoDate ? "פולואפ ידני נשמר" : "פולואפ ידני בוטל" };
   } catch (e) {
@@ -954,6 +982,20 @@ export async function approveDraftAction(
   const r = await approveDraftLib(draftId, editedText);
   safeRevalidate("/dashboard/v3/drafts", "layout");
   if (!r.ok) return { ok: false, error: r.error };
+  try {
+    const [d] = await db
+      .select({ sid: botDrafts.manychatSubId })
+      .from(botDrafts)
+      .where(eq(botDrafts.id, draftId))
+      .limit(1);
+    if (d?.sid) {
+      void logLeadEvent({
+        manychatSubId: d.sid,
+        eventType: "draft_approved",
+        payload: { draftId, edited: !!editedText },
+      });
+    }
+  } catch {}
   return { ok: true, message: "נשלח" };
 }
 
@@ -967,6 +1009,20 @@ export async function rejectDraftAction(
   const r = await rejectDraftLib(draftId, reason);
   safeRevalidate("/dashboard/v3/drafts", "layout");
   if (!r.ok) return { ok: false, error: r.error };
+  try {
+    const [d] = await db
+      .select({ sid: botDrafts.manychatSubId })
+      .from(botDrafts)
+      .where(eq(botDrafts.id, draftId))
+      .limit(1);
+    if (d?.sid) {
+      void logLeadEvent({
+        manychatSubId: d.sid,
+        eventType: "draft_rejected",
+        payload: { draftId, reason: reason ?? null },
+      });
+    }
+  } catch {}
   return { ok: true, message: "נדחה" };
 }
 
@@ -1365,3 +1421,18 @@ export async function sendTemplateAction(
     return { ok: false, error: e instanceof Error ? e.message : "שגיאת שליחה" };
   }
 }
+
+/** Read-only fetch of the lead activity log for the ActivityTab. */
+export async function loadLeadEventsAction(
+  manychatSubId: string
+): Promise<{ ok: true; rows: LeadEventRow[] } | { ok: false; error: string }> {
+  const cleanSid = manychatSubId.trim();
+  if (!cleanSid) return { ok: false, error: 'missing subscriberId' };
+  try {
+    const rows = await loadLeadEvents(cleanSid, 100);
+    return { ok: true, rows };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : 'load failed' };
+  }
+}
+
