@@ -177,6 +177,7 @@ async function ExpandedLeadInLeadsContext({
   // automatically preserve stage when they rebuild the URL.
   return (
     <ExpandedLead
+      key={sid}
       sid={sid}
       summary={summary}
       messages={threadMessages}
