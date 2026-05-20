@@ -885,7 +885,15 @@ function ManualFollowupSection({
   });
   const [pending, startTransition] = useTransition();
   const [msg, setMsg] = useState<string | null>(null);
+  const [templates, setTemplates] = useState<TemplateRow[]>([]);
+  const [tplOpen, setTplOpen] = useState(false);
   const router = useRouter();
+
+  useEffect(() => {
+    listTemplatesAction().then((r) => {
+      if (r.ok && r.templates) setTemplates(r.templates.filter((t) => t.active));
+    });
+  }, []);
 
   const save = () => {
     const iso = date ? new Date(date).toISOString() : null;
@@ -901,6 +909,16 @@ function ManualFollowupSection({
     startTransition(async () => {
       const r = await setManualFollowupAction(sid, null);
       setMsg(r.ok ? "בוטל" : `שגיאה: ${r.error}`);
+      if (r.ok) router.refresh();
+    });
+  };
+
+  const sendTpl = (tpl: TemplateRow) => {
+    if (!confirm(`לשלוח תבנית "${tpl.name}" ללקוח?`)) return;
+    startTransition(async () => {
+      const r = await sendTemplateAction(sid, tpl.id);
+      setMsg(r.ok ? `נשלחה תבנית: ${tpl.name}` : `שגיאה: ${r.error}`);
+      setTplOpen(false);
       if (r.ok) router.refresh();
     });
   };
@@ -933,6 +951,17 @@ function ManualFollowupSection({
         >
           קבע פולואפ
         </button>
+        {templates.length > 0 && (
+          <button
+            type="button"
+            onClick={() => setTplOpen((v) => !v)}
+            disabled={pending}
+            className="inline-flex items-center gap-1 rounded-md border border-primary/40 text-primary px-3 py-1.5 text-xs hover:bg-primary/10"
+          >
+            <Send className="size-3" />
+            שלח תבנית
+          </button>
+        )}
         {initialDate && (
           <button
             type="button"
@@ -944,6 +973,22 @@ function ManualFollowupSection({
           </button>
         )}
       </div>
+      {tplOpen && templates.length > 0 && (
+        <div className="flex flex-col gap-1 pt-1">
+          {templates.map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              onClick={() => sendTpl(t)}
+              disabled={pending}
+              className="text-right text-xs rounded-md border border-border bg-background/40 px-3 py-2 hover:bg-secondary disabled:opacity-60"
+            >
+              <span className="font-medium">{t.name}</span>
+              <span className="text-muted-foreground"> · {t.body.slice(0, 80)}{t.body.length > 80 ? "…" : ""}</span>
+            </button>
+          ))}
+        </div>
+      )}
       {msg && <div className="text-xs text-muted-foreground">{msg}</div>}
     </section>
   );
