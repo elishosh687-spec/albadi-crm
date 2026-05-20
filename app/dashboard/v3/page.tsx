@@ -353,6 +353,7 @@ async function ExpandedLeadWrapper({ sid }: { sid: string }) {
 
   return (
     <ExpandedLead
+      key={sid}
       sid={sid}
       summary={summary}
       messages={threadMessages}

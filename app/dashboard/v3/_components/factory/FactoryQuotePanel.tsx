@@ -1045,7 +1045,7 @@ function HistoryList({
     }
     setBusyId(row.id);
     try {
-      const res = await fetch(`/api/factory/${row.id}`, { method: "DELETE" });
+      const res = await fetch(`/api/factory/${row.id}`, { method: "DELETE", credentials: "include" });
       const data = await res.json();
       if (!data?.ok) {
         alert(`שגיאה: ${data?.error ?? "מחיקה נכשלה"}`);
