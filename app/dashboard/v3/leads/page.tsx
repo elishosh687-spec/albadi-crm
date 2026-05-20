@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
-import { leadTags, leads, messages } from "@/drizzle/schema";
-import { asc, desc, eq, sql } from "drizzle-orm";
+import { leadTags, leads, messages, botDrafts } from "@/drizzle/schema";
+import { and, asc, desc, eq, sql } from "drizzle-orm";
 import { LeadsView } from "./LeadsView";
 import { ExpandedLead } from "../_components/ExpandedLead";
 import type { ChatMessage } from "../conversations/_components/ChatThread";
@@ -129,7 +129,7 @@ async function ExpandedLeadInLeadsContext({
   const nextSid =
     idx >= 0 && idx < orderedSids.length - 1 ? orderedSids[idx + 1] : null;
 
-  const [tagRows, msgRows] = await Promise.all([
+  const [tagRows, msgRows, pendingDraftRow] = await Promise.all([
     db
       .select({ tag: leadTags.tag })
       .from(leadTags)
@@ -147,6 +147,23 @@ async function ExpandedLeadInLeadsContext({
       .where(sql`trim(${messages.manychatSubId}) = ${sid}`)
       .orderBy(asc(messages.receivedAt))
       .limit(THREAD_LIMIT),
+    db
+      .select({
+        id: botDrafts.id,
+        draftText: botDrafts.draftText,
+        moneyReason: botDrafts.moneyReason,
+        generatedAt: botDrafts.generatedAt,
+      })
+      .from(botDrafts)
+      .where(
+        and(
+          sql`trim(${botDrafts.manychatSubId}) = ${sid}`,
+          eq(botDrafts.status, "pending")
+        )
+      )
+      .orderBy(desc(botDrafts.generatedAt))
+      .limit(1)
+      .then((r) => r[0] ?? null),
   ]);
 
   const summary: OrderSummaryData = {
@@ -182,6 +199,16 @@ async function ExpandedLeadInLeadsContext({
       prevSid={prevSid}
       nextSid={nextSid}
       backHref="/dashboard/v3/leads"
+      pendingDraft={
+        pendingDraftRow
+          ? {
+              id: pendingDraftRow.id,
+              text: pendingDraftRow.draftText,
+              moneyReason: pendingDraftRow.moneyReason,
+              generatedAt: pendingDraftRow.generatedAt.toISOString(),
+            }
+          : null
+      }
     />
   );
 }

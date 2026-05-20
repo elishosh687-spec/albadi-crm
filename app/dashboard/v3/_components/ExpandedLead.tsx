@@ -16,6 +16,8 @@ import {
   MessagesSquare,
   ClipboardList,
   Bot,
+  ThumbsUp,
+  ThumbsDown,
 } from "lucide-react";
 import { cn } from "@/lib/cn";
 import {
@@ -32,6 +34,8 @@ import {
   listTemplatesAction,
   sendTemplateAction,
   setManualFollowupAction,
+  approveDraftAction,
+  rejectDraftAction,
   type TemplateRow,
 } from "@/app/actions/v2";
 import {
@@ -56,6 +60,13 @@ import { BotDecisionsTab } from "./BotDecisionsTab";
 
 type TabKey = "overview" | "chat" | "summary" | "decisions";
 
+export interface PendingDraftInfo {
+  id: number;
+  text: string;
+  moneyReason: string | null;
+  generatedAt: string;
+}
+
 export interface ExpandedLeadProps {
   sid: string;
   summary: OrderSummaryData;
@@ -69,6 +80,8 @@ export interface ExpandedLeadProps {
    * leads list including DROPPED/WON) without cross-context disorientation.
    */
   backHref?: string;
+  /** Most-recent pending bot draft (if any) — shown inline in overview tab. */
+  pendingDraft?: PendingDraftInfo | null;
 }
 
 export function ExpandedLead({
@@ -78,6 +91,7 @@ export function ExpandedLead({
   prevSid,
   nextSid,
   backHref = "/dashboard/v3",
+  pendingDraft = null,
 }: ExpandedLeadProps) {
   const router = useRouter();
   const params = useSearchParams();
@@ -258,7 +272,7 @@ export function ExpandedLead({
 
       <div className="flex-1 min-h-0">
         {tab === "overview" && (
-          <OverviewTab sid={sid} summary={summary} />
+          <OverviewTab sid={sid} summary={summary} pendingDraft={pendingDraft} />
         )}
         {tab === "chat" && (
           <ChatTab sid={sid} summary={summary} messages={messages} />
@@ -303,9 +317,11 @@ function StatusTile({
 function OverviewTab({
   sid,
   summary,
+  pendingDraft,
 }: {
   sid: string;
   summary: OrderSummaryData;
+  pendingDraft: PendingDraftInfo | null;
 }) {
   const [stage, setStage] = useState<V2PipelineStage>(
     (V2_PIPELINE_STAGES.includes((summary.stage ?? "NEW") as V2PipelineStage)
@@ -614,6 +630,8 @@ function OverviewTab({
           </button>
         </section>
 
+        {pendingDraft && <PendingDraftCard draft={pendingDraft} />}
+
         <ManualFollowupSection sid={sid} initialDate={summary.followUpDate ?? null} />
 
         <NotesPanel sid={sid} initialNotes={summary.notes} />
@@ -921,6 +939,85 @@ function ManualFollowupSection({
         )}
       </div>
       {msg && <div className="text-xs text-muted-foreground">{msg}</div>}
+    </section>
+  );
+}
+
+function PendingDraftCard({ draft }: { draft: PendingDraftInfo }) {
+  const [edited, setEdited] = useState<string>(draft.text);
+  const [pending, startTransition] = useTransition();
+  const [msg, setMsg] = useState<string | null>(null);
+  const [resolved, setResolved] = useState(false);
+  const router = useRouter();
+
+  if (resolved) return null;
+
+  const approve = () => {
+    startTransition(async () => {
+      const r = await approveDraftAction(draft.id, edited !== draft.text ? edited : undefined);
+      if (r.ok) {
+        setResolved(true);
+        router.refresh();
+      } else {
+        setMsg(`שגיאה: ${r.error}`);
+      }
+    });
+  };
+
+  const reject = () => {
+    if (!confirm("לדחות את הטיוטה?")) return;
+    startTransition(async () => {
+      const r = await rejectDraftAction(draft.id);
+      if (r.ok) {
+        setResolved(true);
+        router.refresh();
+      } else {
+        setMsg(`שגיאה: ${r.error}`);
+      }
+    });
+  };
+
+  return (
+    <section className="rounded-xl border border-warning/40 bg-warning/5 p-4 space-y-2">
+      <div className="flex items-center gap-2 text-xs uppercase tracking-wider text-warning">
+        <Sparkles className="size-3" />
+        טיוטת בוט ממתינה לאישור
+        {draft.moneyReason && (
+          <span className="text-[10px] rounded-full bg-warning/15 text-warning border border-warning/30 px-2 py-0.5">
+            {draft.moneyReason}
+          </span>
+        )}
+        <span className="text-[10px] text-muted-foreground mr-auto">
+          {new Date(draft.generatedAt).toLocaleString("he-IL")}
+        </span>
+      </div>
+      <textarea
+        value={edited}
+        onChange={(e) => setEdited(e.target.value)}
+        rows={3}
+        className="w-full bg-background/50 border border-border rounded-lg p-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring/30"
+      />
+      <div className="flex gap-2 flex-wrap">
+        <button
+          type="button"
+          onClick={approve}
+          disabled={pending}
+          className="inline-flex items-center gap-1 rounded-md bg-success px-3 py-1.5 text-xs font-medium text-success-foreground hover:bg-success/90 disabled:opacity-60"
+        >
+          <ThumbsUp className="size-3" />
+          אשר ושלח
+        </button>
+        <button
+          type="button"
+          onClick={reject}
+          disabled={pending}
+          className="inline-flex items-center gap-1 rounded-md border border-destructive/40 text-destructive px-3 py-1.5 text-xs font-medium hover:bg-destructive/10 disabled:opacity-60"
+        >
+          <ThumbsDown className="size-3" />
+          דחה
+        </button>
+      </div>
+      {msg && <div className="text-xs text-destructive">{msg}</div>}
     </section>
   );
 }
