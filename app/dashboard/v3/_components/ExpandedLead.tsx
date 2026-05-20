@@ -93,6 +93,7 @@ export function ExpandedLead({
     const sp = new URLSearchParams(params.toString());
     sp.set("lead", neighborSid);
     router.replace(`${backHref}?${sp.toString()}`);
+    router.refresh();
   };
 
   useEffect(() => {
