@@ -13,6 +13,7 @@ export const V2_PIPELINE_STAGES = [
   "AWAITING_LOGO",
   "WAITING_FACTORY",
   "AWAITING_FINAL",
+  "CALLBACK_LATER",
   "WON",
   "DROPPED",
 ] as const;

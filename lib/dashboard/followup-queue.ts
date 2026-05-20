@@ -78,6 +78,7 @@ export async function loadFollowupQueue(): Promise<FollowupQueueItem[]> {
     const stage = (r.stage ?? "").toUpperCase();
     if (stage === "WON" || stage === "DROPPED") continue;
     if (stage === "WAITING_FACTORY") continue;
+    if (stage === "CALLBACK_LATER") continue;
 
     let cadences: number[] | null = null;
     if (!stage || stage === "NEW") {

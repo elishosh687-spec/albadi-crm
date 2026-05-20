@@ -830,6 +830,41 @@ export async function suggestRepliesAction(
 }
 
 /**
+ * Set a manual followup date — Eli schedules a date he wants to revisit
+ * the lead. Stored on `leads.follow_up_date` (text ISO). The CommandCenter
+ * surfaces a reminder when this date passes (treated as a soft SLA breach).
+ */
+export async function setManualFollowupAction(
+  manychatSubId: string,
+  isoDate: string | null
+): Promise<SimpleResult> {
+  const cleanSid = manychatSubId.trim();
+  if (!cleanSid) return { ok: false, error: "missing subscriberId" };
+  if (isoDate !== null) {
+    const d = new Date(isoDate);
+    if (Number.isNaN(d.getTime())) {
+      return { ok: false, error: "invalid date" };
+    }
+  }
+  try {
+    await db
+      .update(leads)
+      .set({
+        followUpDate: isoDate,
+        updatedAt: new Date(),
+      })
+      .where(sql`trim(${leads.manychatSubId}) = ${cleanSid}`);
+    safeRevalidate("/dashboard/v3", "layout");
+    return { ok: true, message: isoDate ? "פולואפ ידני נשמר" : "פולואפ ידני בוטל" };
+  } catch (e) {
+    return {
+      ok: false,
+      error: e instanceof Error ? e.message : "save failed",
+    };
+  }
+}
+
+/**
  * Snooze a lead — push `last_follow_up_at` forward by N hours so the cron
  * won't nudge until that time. Also clears NEEDS_ELI + un-pauses (Eli is
  * choosing to let the bot drive again, just not immediately).

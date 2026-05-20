@@ -31,6 +31,7 @@ import {
   openOpportunityAction,
   listTemplatesAction,
   sendTemplateAction,
+  setManualFollowupAction,
   type TemplateRow,
 } from "@/app/actions/v2";
 import {
@@ -613,6 +614,8 @@ function OverviewTab({
           </button>
         </section>
 
+        <ManualFollowupSection sid={sid} initialDate={summary.followUpDate ?? null} />
+
         <NotesPanel sid={sid} initialNotes={summary.notes} />
 
         <section className="rounded-xl border border-border bg-card p-4 space-y-2">
@@ -838,5 +841,86 @@ function ChatTab({
         initialBotPaused={summary.botPaused}
       />
     </div>
+  );
+}
+
+function ManualFollowupSection({
+  sid,
+  initialDate,
+}: {
+  sid: string;
+  initialDate: string | null;
+}) {
+  const [date, setDate] = useState<string>(() => {
+    if (!initialDate) return "";
+    const d = new Date(initialDate);
+    if (Number.isNaN(d.getTime())) return "";
+    // toLocal datetime-local format: YYYY-MM-DDTHH:mm
+    const pad = (n: number) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  });
+  const [pending, startTransition] = useTransition();
+  const [msg, setMsg] = useState<string | null>(null);
+  const router = useRouter();
+
+  const save = () => {
+    const iso = date ? new Date(date).toISOString() : null;
+    startTransition(async () => {
+      const r = await setManualFollowupAction(sid, iso);
+      setMsg(r.ok ? r.message ?? "נשמר" : `שגיאה: ${r.error}`);
+      if (r.ok) router.refresh();
+    });
+  };
+
+  const clear = () => {
+    setDate("");
+    startTransition(async () => {
+      const r = await setManualFollowupAction(sid, null);
+      setMsg(r.ok ? "בוטל" : `שגיאה: ${r.error}`);
+      if (r.ok) router.refresh();
+    });
+  };
+
+  const overdue = initialDate ? new Date(initialDate).getTime() < Date.now() : false;
+
+  return (
+    <section className="rounded-xl border border-border bg-card p-4 space-y-2">
+      <div className="text-xs uppercase tracking-wider text-muted-foreground flex items-center gap-2">
+        <Clock className="size-3" />
+        פולואפ ידני
+        {overdue && (
+          <span className="text-[10px] rounded-full bg-destructive/15 text-destructive border border-destructive/30 px-2 py-0.5">
+            הגיע
+          </span>
+        )}
+      </div>
+      <div className="flex gap-2 items-center flex-wrap">
+        <input
+          type="datetime-local"
+          value={date}
+          onChange={(e) => setDate(e.target.value)}
+          className="bg-background/50 border border-border rounded-lg px-2 py-1.5 text-xs"
+        />
+        <button
+          type="button"
+          onClick={save}
+          disabled={pending || !date}
+          className="inline-flex items-center gap-1 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
+        >
+          קבע פולואפ
+        </button>
+        {initialDate && (
+          <button
+            type="button"
+            onClick={clear}
+            disabled={pending}
+            className="text-xs text-muted-foreground hover:text-destructive"
+          >
+            בטל
+          </button>
+        )}
+      </div>
+      {msg && <div className="text-xs text-muted-foreground">{msg}</div>}
+    </section>
   );
 }

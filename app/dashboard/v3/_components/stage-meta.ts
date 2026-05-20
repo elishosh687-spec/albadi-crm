@@ -6,6 +6,7 @@ export const STAGE_LABEL: Record<string, string> = {
   AWAITING_LOGO: "ממתין ללוגו",
   WAITING_FACTORY: "ממתין למפעל",
   AWAITING_FINAL: "ממתין למחיר סופי",
+  CALLBACK_LATER: "לחזור בעתיד הרחוק",
   WON: "נסגרה",
   DROPPED: "ננטשה",
   UNCLASSIFIED: "לא מסווג",
@@ -41,6 +42,11 @@ export const STAGE_TONE: Record<
     bar: "bg-rose-500/60",
     pill: "bg-rose-500/15 text-rose-300 border border-rose-500/20",
     text: "text-rose-300",
+  },
+  CALLBACK_LATER: {
+    bar: "bg-indigo-500/60",
+    pill: "bg-indigo-500/15 text-indigo-300 border border-indigo-500/20",
+    text: "text-indigo-300",
   },
   WON: {
     bar: "bg-emerald-500/60",

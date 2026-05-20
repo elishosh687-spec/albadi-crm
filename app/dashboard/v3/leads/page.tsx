@@ -106,6 +106,7 @@ async function ExpandedLeadInLeadsContext({
         quoteAlt: leads.quoteAlt,
         qState: leads.qState,
         factorySpecDraft: leads.factorySpecDraft,
+        followUpDate: leads.followUpDate,
       })
       .from(leads)
       .where(sql`trim(${leads.manychatSubId}) = ${sid}`)
@@ -164,6 +165,7 @@ async function ExpandedLeadInLeadsContext({
     qState: (leadRow.qState as Record<string, unknown> | null) ?? null,
     factorySpecDraft:
       (leadRow.factorySpecDraft as Record<string, unknown> | null) ?? null,
+    followUpDate: leadRow.followUpDate ?? null,
   };
 
   const threadMessages: ChatMessage[] = enrichMessagesWithMedia(msgRows);

@@ -129,14 +129,47 @@ async function loadOpenSlaTimers(): Promise<
       ORDER BY due_at ASC
       LIMIT 30
     `);
-    const rows = ((res as unknown as { rows?: any[] }).rows ?? []) as any[];
-    return rows.map((row) => ({
+    const slaRows = ((res as unknown as { rows?: any[] }).rows ?? []) as any[];
+    const slaList = slaRows.map((row) => ({
       id: Number(row.id),
       sid: String(row.sid),
       slaType: String(row.slaType),
       dueAt: new Date(row.dueAt).toISOString(),
       breached: Boolean(row.breached),
     }));
+
+    // Manual followups Eli scheduled (#23/#18). When the date is in the past
+    // it shows up as a soft SLA breach in the command center. follow_up_date
+    // is text (ISO) per the historical schema — coerce client-side.
+    try {
+      const manRes = await db.execute(sql`
+        SELECT manychat_sub_id AS sid, follow_up_date AS "dueAt"
+        FROM leads
+        WHERE active = true
+          AND follow_up_date IS NOT NULL
+          AND follow_up_date <> ''
+        ORDER BY follow_up_date ASC
+        LIMIT 30
+      `);
+      const manRows = ((manRes as unknown as { rows?: any[] }).rows ?? []) as any[];
+      const now = Date.now();
+      for (const row of manRows) {
+        const d = new Date(String(row.dueAt));
+        if (Number.isNaN(d.getTime())) continue;
+        slaList.push({
+          id: -Math.floor(d.getTime() / 1000), // negative ids to avoid collision with crm_sla_timers
+          sid: String(row.sid),
+          slaType: "manual_followup",
+          dueAt: d.toISOString(),
+          breached: d.getTime() < now,
+        });
+      }
+      slaList.sort((a, b) => new Date(a.dueAt).getTime() - new Date(b.dueAt).getTime());
+    } catch {
+      // ignore — manual followups are a soft signal
+    }
+
+    return slaList;
   } catch {
     return [];
   }
@@ -302,6 +335,7 @@ async function ExpandedLeadWrapper({ sid, from }: { sid: string; from?: string }
         quoteAlt: leads.quoteAlt,
         qState: leads.qState,
         factorySpecDraft: leads.factorySpecDraft,
+        followUpDate: leads.followUpDate,
       })
       .from(leads)
       .where(sql`trim(${leads.manychatSubId}) = ${sid}`)
@@ -358,6 +392,7 @@ async function ExpandedLeadWrapper({ sid, from }: { sid: string; from?: string }
     qState: (leadRow.qState as Record<string, unknown> | null) ?? null,
     factorySpecDraft:
       (leadRow.factorySpecDraft as Record<string, unknown> | null) ?? null,
+    followUpDate: leadRow.followUpDate ?? null,
   };
 
   const threadMessages: ChatMessage[] = enrichMessagesWithMedia(msgRows);

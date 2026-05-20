@@ -42,6 +42,7 @@ export interface OrderSummaryData {
   quoteAlt: string | null;
   qState: Record<string, unknown> | null;
   factorySpecDraft?: Record<string, unknown> | null;
+  followUpDate?: string | null;
 }
 
 /**
