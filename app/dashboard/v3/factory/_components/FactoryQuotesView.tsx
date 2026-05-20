@@ -78,7 +78,7 @@ export function FactoryQuotesView() {
       if (!confirm(`למחוק את הצעה ${label}? פעולה לא הפיכה.`)) return;
       setDeleting(row.id);
       try {
-        const res = await fetch(`/api/factory/${row.id}`, { method: "DELETE" });
+        const res = await fetch(`/api/factory/${row.id}`, { method: "DELETE", credentials: "include" });
         if (res.ok) {
           await load();
         } else {
