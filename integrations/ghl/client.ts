@@ -516,10 +516,23 @@ export async function postOutboundMessage(input: {
   attachments?: string[];
   accessToken?: string;
 }): Promise<{ messageId?: string; conversationId?: string }> {
+  // IMPORTANT: route through /conversations/messages/inbound with
+  // direction: "outbound". The /conversations/messages endpoint is for
+  // sends typed in the GHL Inbox UI — GHL records them AND calls the
+  // Custom Provider deliveryUrl to actually deliver via WhatsApp. We
+  // already sent the WhatsApp ourselves (this is a historical mirror,
+  // not a new send), so using that endpoint would trigger a delivery
+  // loop: our /api/integrations/outbound endpoint would receive the
+  // callback and re-send the same text to the customer.
+  //
+  // The /inbound endpoint is documented as "add an external message" and
+  // accepts both directions via the `direction` field. It records the
+  // message in the conversation thread without firing a delivery webhook.
   const body: Record<string, unknown> = {
     type: input.type ?? "SMS",
     contactId: input.contactId,
     message: input.message,
+    direction: "outbound",
   };
   if (input.attachments && input.attachments.length > 0) {
     body.attachments = input.attachments;
@@ -532,5 +545,5 @@ export async function postOutboundMessage(input: {
     body: JSON.stringify(body),
   };
   if (input.accessToken) init.accessToken = input.accessToken;
-  return ghlFetch("/conversations/messages", init);
+  return ghlFetch("/conversations/messages/inbound", init);
 }

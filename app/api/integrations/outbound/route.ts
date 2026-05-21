@@ -24,8 +24,8 @@
  */
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { leads } from "@/drizzle/schema";
-import { eq, or } from "drizzle-orm";
+import { leads, messages } from "@/drizzle/schema";
+import { and, desc, eq, gt, or, sql } from "drizzle-orm";
 import { sendBridgeMessage } from "@/lib/bridge/client";
 
 export const runtime = "nodejs";
@@ -137,6 +137,42 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       { error: "lead has no waJid or phone" },
       { status: 422 }
     );
+  }
+
+  // Safety net dedup. postOutboundMessage now uses the /inbound endpoint
+  // so the delivery loop should not fire — but if GHL ever changes that
+  // behavior, or a future caller posts to /conversations/messages directly,
+  // we'd re-send a message we just sent ourselves and the customer would
+  // receive a duplicate. Block that here: if a fresh outbound row
+  // (sender='eli' OR 'bot') with the same text already exists for this
+  // lead within the last 60 seconds, treat the GHL callback as a redelivery
+  // of our own mirror and skip the send.
+  if (text) {
+    const recent = await db
+      .select({ id: messages.id, waMessageId: messages.waMessageId })
+      .from(messages)
+      .where(
+        and(
+          eq(messages.manychatSubId, lead.manychatSubId),
+          eq(messages.direction, "out"),
+          eq(messages.text, text),
+          gt(messages.receivedAt, sql`now() - interval '60 seconds'`)
+        )
+      )
+      .orderBy(desc(messages.receivedAt))
+      .limit(1);
+    if (recent.length > 0) {
+      console.log("[ghl.outbound] dedup skip — already sent recently", {
+        sid: lead.manychatSubId,
+        wa_message_id: recent[0].waMessageId,
+      });
+      return NextResponse.json({
+        ok: true,
+        skipped: "dedup",
+        wa_message_id: recent[0].waMessageId,
+        lead_sid: lead.manychatSubId,
+      });
+    }
   }
 
   try {
