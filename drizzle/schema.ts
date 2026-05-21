@@ -59,6 +59,10 @@ export const leads = pgTable("leads", {
   // Shape: FactoryProductSpec + optional notes. Cleared on successful
   // POST /api/factory/quote-request. See lib/factory/types.ts.
   factorySpecDraft: jsonb("factory_spec_draft"),
+
+  // GoHighLevel CRM ids. Populated by integrations/ghl/sync.ts on first sync.
+  ghlContactId: text("ghl_contact_id"),
+  ghlOpportunityId: text("ghl_opportunity_id"),
 });
 
 // DB-owned tags (replaces ManyChat tag IDs). One row per (lead, tag).

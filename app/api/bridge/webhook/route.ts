@@ -50,6 +50,10 @@ import { precomputeCandidateAction } from "@/lib/supervisor/candidate";
 import { superviseIncomingMessage } from "@/lib/supervisor/supervise";
 import { logDecision, attachEliFeedback } from "@/lib/supervisor/log";
 import { generateAndQueueDraft } from "@/lib/drafts";
+import {
+  forwardMessage as ghlForwardMessage,
+  syncLeadToGHL,
+} from "@/integrations/ghl/sync";
 
 export const runtime = "nodejs";
 export const maxDuration = 15;
@@ -180,6 +184,14 @@ async function handleMessageReceived(evt: BridgeEnvelope): Promise<void> {
         eliManualReply: text,
       });
     }
+    void ghlForwardMessage({
+      sid: jid,
+      direction: "out",
+      sender: "eli",
+      text,
+      occurredAt: new Date(evt.occurred_at),
+    });
+    void syncLeadToGHL(jid);
     return;
   }
 
@@ -260,6 +272,14 @@ async function handleMessageReceived(evt: BridgeEnvelope): Promise<void> {
     sender: "lead",
   });
   const inboundMessageId: number | null = inserted?.id ?? null;
+
+  void ghlForwardMessage({
+    sid,
+    direction: "in",
+    sender: "lead",
+    text,
+    occurredAt: new Date(evt.occurred_at),
+  });
 
   // Load lead snapshot BEFORE auto-unpause so we know the original state.
   const [leadSnapshot] = await db
@@ -400,6 +420,11 @@ async function handleMessageReceived(evt: BridgeEnvelope): Promise<void> {
       metadata: { source: "routeThroughSupervisor catch" },
     });
   }
+
+  // 4. Push lead state to GHL after handlers complete (so any stage
+  // transition fired by routeThroughSupervisor → handleInbound is captured).
+  // Fire-and-forget. Never throws back into webhook hot path.
+  void syncLeadToGHL(sid);
 }
 
 /**

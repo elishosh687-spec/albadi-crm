@@ -11,6 +11,10 @@ interface Props {
   quantityTiers: QuantityTier[];
   shippingOptions: ShippingOption[];
   initialMargins: Record<string, number>;
+  // Optional widget-mode token. When set, all fetches append
+  // `&widget_token=<value>` so middleware lets the request through without
+  // an albadi_auth cookie. Empty in normal dashboard mode.
+  apiToken?: string;
 }
 
 interface PreviewResult {
@@ -28,7 +32,7 @@ const r2 = (n: number) => Math.round(n * 100) / 100;
 const ils = (n: number) =>
   n.toLocaleString("he-IL", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-export function CalculatorView({ products, quantityTiers, shippingOptions, initialMargins }: Props) {
+export function CalculatorView({ products, quantityTiers, shippingOptions, initialMargins, apiToken }: Props) {
   const [productId, setProductId] = useState(products[0]?.id ?? "p1");
   const [qtyId, setQtyId]         = useState(quantityTiers[0]?.id ?? "q0");
   const [handles, setHandles]     = useState(true);
@@ -76,6 +80,7 @@ export function CalculatorView({ products, quantityTiers, shippingOptions, initi
         margin: String(currentMargin),
       });
       if (overrideValid) params.set("qtyOverride", String(overrideParsed));
+      if (apiToken) params.set("widget_token", apiToken);
       const res = await fetch(`/api/factory/quote-preview?${params}`, { cache: "no-store" });
       const data = await res.json();
       if (!res.ok || !data.ok) {

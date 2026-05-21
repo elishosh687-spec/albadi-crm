@@ -22,6 +22,7 @@ import {
   suggestReplies as suggestRepliesLLM,
   type ConversationMessage,
 } from "@/lib/autoresponder/suggest-reply";
+import { syncLeadToGHL } from "@/integrations/ghl/sync";
 
 // revalidatePath throws "static generation store missing" when called outside
 // a Next.js request context (e.g. from tsx test scripts). Cache invalidation
@@ -427,6 +428,7 @@ export async function sendFinalPrice(
       })
       .where(sql`trim(${leads.manychatSubId}) = ${cleanSid}`);
 
+    void syncLeadToGHL(cleanSid);
     safeRevalidate("/dashboard/v3", "layout");
     return { ok: true, message: `המחיר הסופי ${cleanPrice} נשלח` };
   } catch (e) {
@@ -917,6 +919,7 @@ export async function snoozeLead(
         updatedAt: new Date(),
       })
       .where(sql`trim(${leads.manychatSubId}) = ${cleanSid}`);
+    void syncLeadToGHL(cleanSid);
     safeRevalidate("/dashboard/v3", "layout");
     return { ok: true, message: `נדחה ב-${hours} שעות` };
   } catch (e) {
@@ -956,6 +959,7 @@ export async function setBotPaused(
       manychatSubId: cleanSid,
       eliAction: paused ? "paused" : "unpaused",
     });
+    void syncLeadToGHL(cleanSid);
     safeRevalidate("/dashboard/v3", "layout");
     return { ok: true, message: paused ? "הבוט מושהה" : "הבוט פעיל" };
   } catch (e) {

@@ -30,6 +30,25 @@ export function middleware(req: NextRequest) {
     return NextResponse.next();
   }
 
+  // GHL iframe widgets — anything under /widget/* or /api/widget/* is
+  // public and auth'd by GHL_WIDGET_TOKEN inside route handlers.
+  if (path.startsWith("/widget") || path.startsWith("/api/widget")) {
+    return NextResponse.next();
+  }
+
+  // Widgets calling /api/factory/quote-preview need a backdoor — accept
+  // ?widget_token=<value> matching GHL_WIDGET_TOKEN. GET only, no writes.
+  const widgetTokenQuery = req.nextUrl.searchParams.get("widget_token");
+  const expectedWidgetToken = process.env.GHL_WIDGET_TOKEN;
+  if (
+    expectedWidgetToken &&
+    widgetTokenQuery === expectedWidgetToken &&
+    req.method === "GET" &&
+    path.startsWith("/api/factory/")
+  ) {
+    return NextResponse.next();
+  }
+
   // Protect dashboard + actions APIs + factory pipeline APIs + the root
   // path (which we internally serve from /dashboard/v3 — see below).
   if (
@@ -64,5 +83,7 @@ export const config = {
     "/dashboard/:path*",
     "/api/actions/:path*",
     "/api/factory/:path*",
+    "/widget/:path*",
+    "/api/widget/:path*",
   ],
 };

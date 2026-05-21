@@ -1,0 +1,535 @@
+# Albadi CRM → GoHighLevel — תוכנית מעבר וסטטוס
+
+> מסמך אמת לכל המעבר ל-GHL. מתעדכן בכל phase.
+> כל שינוי כולל **"איך לבדוק ידנית"**.
+
+עדכון אחרון: GHL setup הושלם — Pipeline + 5 custom fields חיים. `.env` מקומי מלא. ממתין הפעלת `ENABLE_GHL_SYNC=1` + Vercel deploy + GHL Custom Menu Link ל-end-to-end test.
+
+---
+
+## תוכן עניינים
+
+1. [Context וארכיטקטורה](#1-context)
+2. [סטטוס phases](#2-status)
+3. [Phase 0 — Foundation](#phase-0--foundation-)
+4. [Phase 1A — Calculator widget](#phase-1a--calculator-widget-)
+5. [Phase 1B — PDF flow](#phase-1b--pdf-flow-)
+6. [Phase 1C — Feishu loop](#phase-1c--feishu-loop-)
+7. [Phase 1D — Settings widget](#phase-1d--settings-widget-)
+8. [Phase 1E — Backfill כל הלידים](#phase-1e--backfill-)
+9. [Phase 1F — Outbound chat](#phase-1f--outbound-chat-)
+10. [Phase 2 — אופציונלי](#phase-2-)
+11. [Manual setup steps ל-GHL UI](#11-manual-setup-steps)
+12. [Convention לעדכוני מסמך](#12-convention)
+
+---
+
+## 1. Context
+
+**מטרה:** מעבר מ-dashboard v3 הקיים ל-GHL כ-UI יחיד. ה-backend הקיים נשאר.
+
+**אילוצים:**
+- משתמש יחיד (אלי)
+- תקציב $300-700/חודש (בפועל ~$100)
+- bridge נשאר — free-form WA 24/7
+- בוט חיצוני — Supervisor / LLM / decision log רצים ב-backend
+- בתוך GHL חייב: Calculator (כולל boss-mode), PDF, Kanban, chat, Settings (currency+margin)
+- **כל הלידים** ב-GHL (גם DROPPED ישנים)
+- Tags ישנים לא מעבירים — אלי יצור חדשים
+
+**ארכיטקטורה:**
+```
+GHL UI  ←(REST + iframe)→  Albadi backend (Vercel)  ←(webhooks)→  bridge (Fly.io)  ←→  WhatsApp
+                              ↕
+                          DB (Neon)
+```
+GHL = display. DB = source of truth. Bridge = WA transport.
+
+**תיקיית קוד:** כל ספק תחת `integrations/<vendor>/` — ראה [integrations/README.md](../integrations/README.md).
+
+---
+
+## 2. Status
+
+| Phase | מה | סטטוס |
+|---|---|---|
+| 0 | Foundation — GHL client, sync, bootstrap, DB columns, webhook wiring | ✅ DONE |
+| 1A | Calculator widget מוטמע ב-GHL contact card | ✅ DONE (קוד; ממתין ל-env + GHL UI setup) |
+| 1B | PDF flow — finalize → GHL Files → send ללקוח | ❌ Not started |
+| 1C | Feishu loop — שלח לפבריקה + cron מחזיר מחיר | ❌ Not started |
+| 1D | Settings widget — currency + margin בתוך GHL | ❌ Not started |
+| 1E | Backfill — כל הלידים מ-DB → GHL | ❌ Not started |
+| 1F | Outbound chat — אלי כותב ב-GHL → bridge → WA | ❌ Not started |
+| 2 | Bot decisions widget, drafts widget, GHL Workflow followup | ❌ Future |
+
+---
+
+## GHL Setup — מה קיים בחשבון GHL עכשיו
+
+יצרתי בחשבון `zo0OlVmtNiXiDAbZj2YW` (דרך bootstrap script + ידנית):
+
+### Pipeline
+| שם | ID |
+|---|---|
+| **albadi** | `JG6rSzAxvlK4gROZ6Ot0` |
+
+### Stages (כולם בתוך albadi pipeline)
+| שם | ID |
+|---|---|
+| NEW | `980f1b2e-7c2c-427e-97ba-184ed64a138f` |
+| AWAITING_ESTIMATE | `83a109c2-9f23-436b-ae57-64356684f51a` |
+| AWAITING_LOGO | `46b83cc8-3fab-4860-b5b7-f6268b585df8` |
+| WAITING_FACTORY | `e89642cb-c832-4417-9ceb-04bbe223c3e1` |
+| AWAITING_FINAL | `d829b841-51df-4f92-b76a-e7496b44ec0c` |
+| CALLBACK_LATER | `78806c17-ba9f-4e5e-87cc-d9c98a8549b7` |
+| WON | `c0bccca4-fbde-4458-8970-db105022281c` |
+| DROPPED | `6b716c7e-0a77-447d-9594-8163c83f5b90` |
+| NEEDS_ELI | _(לא יוצר — נופל ל-NEW עד שניצור ידנית)_ |
+
+### Custom Fields על Contact entity
+| שם | ID | Type |
+|---|---|---|
+| ManyChat sub id / JID | `9YV9MzyTSQO6g1ND7gwm` | TEXT |
+| WhatsApp JID | `alYsHnYu2YLahkp25IwW` | TEXT |
+| Bot summary | `PajtRpfGVqagt5UNEw1H` | LARGE_TEXT |
+| Quote total (ILS) | `Zb8xcXHyPretYFK2fxFA` | MONETORY (GHL typo) |
+| Pipeline flag | `RWIsVudSbh5WKZFEXl1y` | TEXT |
+
+### Token
+- Private Integration Token = `pit-80128d88-...` (ב-`.env` כ-`GHL_API_KEY`)
+- Scopes שעובדים: contacts CRUD, opportunities CRUD, customFields CRUD, conversations CRUD, medias CRUD
+- Scopes חסרים: `pipelines.write` (GHL לא חושף ל-Private Integrations — pipeline יוצר רק ב-UI)
+
+### `.env` מקומי
+כל ה-ids כתובים. `ENABLE_GHL_SYNC=0` עדיין.
+
+---
+
+## בדיקות ידניות — GHL setup
+
+### בדיקה 1: Pipeline + stages קיימים ב-GHL UI
+1. פתח: `https://app.gohighlevel.com/v2/location/zo0OlVmtNiXiDAbZj2YW/opportunities/list`
+2. תפריט dropdown של pipelines למעלה → לחץ
+3. **מצופה:** רואה "albadi" כאופציה
+4. בחר אותו → Kanban view נטען
+5. **מצופה:** 8 columns בסדר: NEW → AWAITING_ESTIMATE → AWAITING_LOGO → WAITING_FACTORY → AWAITING_FINAL → CALLBACK_LATER → WON → DROPPED
+
+### בדיקה 2: Custom Fields קיימים
+1. Settings → Custom Fields → Contacts
+2. **מצופה:** רואה 5 fields חדשים: ManyChat sub id / JID, WhatsApp JID, Bot summary, Quote total (ILS), Pipeline flag
+3. לחץ על אחד — אמור להיות עם dataType נכון (TEXT / LARGE_TEXT / MONETORY)
+
+### בדיקה 3: Token עובד (API call ישיר)
+**מ-PowerShell:**
+```powershell
+$token = "pit-80128d88-b443-4ece-aa66-2e1f6c65dbe8"
+Invoke-RestMethod -Uri "https://services.leadconnectorhq.com/opportunities/pipelines?locationId=zo0OlVmtNiXiDAbZj2YW" -Headers @{
+  "Authorization" = "Bearer $token"
+  "Version" = "2021-07-28"
+  "Accept" = "application/json"
+}
+```
+**מצופה:** JSON עם `pipelines` array שמכיל "albadi" + "Marketing Pipeline".
+
+### בדיקה 4: ה-`.env` מלא נכון
+```powershell
+Select-String -Path .env -Pattern "^GHL_"
+```
+**מצופה:** ~16 שורות `GHL_*` עם ערכים (לא ריקים, חוץ מ-`GHL_ACCESS_TOKEN` ו-`GHL_STAGE_NEEDS_ELI`).
+
+### בדיקה 5: Type-check עדיין נקי
+```powershell
+npx tsc --noEmit
+```
+**מצופה:** אין output.
+
+---
+
+## הצעד הבא — להפעיל sync
+
+עכשיו צריך:
+1. **Vercel envs** — להוסיף את כל ה-`GHL_*` מ-`.env` המקומי ל-Vercel production envs. אני יכול דרך CLI אם אתה מחובר ל-`vercel`, אחרת UI.
+2. **`ENABLE_GHL_SYNC=1`** ב-Vercel
+3. **Redeploy** (push main / manual redeploy)
+4. **שלח הודעת WA test** → אמור להופיע contact + opportunity ב-GHL → ראה Phase 0 verification למטה
+
+---
+
+## Phase 0 — Foundation ✅
+
+**מה זה:** השכבה הבסיסית — REST client ל-GHL, פונקציות sync, schema columns, חיווט לבtridge webhook.
+
+**קבצים שנוצרו:**
+
+| Path | מה זה עושה |
+|---|---|
+| [integrations/ghl/config.ts](../integrations/ghl/config.ts) | env vars + stage mapping + 5 custom field ids |
+| [integrations/ghl/client.ts](../integrations/ghl/client.ts) | REST V2 wrapper ל-`services.leadconnectorhq.com` — contacts/opportunities/pipelines/fields/conversations/notes/files |
+| [integrations/ghl/mapping.ts](../integrations/ghl/mapping.ts) | `pickStageId(lead)` (כולל NEEDS_ELI override) + `pickOpportunityStatus` + `buildCustomFieldsPayload` |
+| [integrations/ghl/sync.ts](../integrations/ghl/sync.ts) | `upsertGHLContact`, `createOrUpdateGHLOpportunity`, `syncLeadToGHL`, `forwardMessage`, `forwardEvent` — fire-and-forget |
+| [integrations/ghl/bootstrap.ts](../integrations/ghl/bootstrap.ts) | CLI: lists pipelines + creates missing custom fields + מדפיס env block |
+| [integrations/ghl/README.md](../integrations/ghl/README.md) | מה זה התיקייה |
+
+**קבצים שעודכנו:**
+
+| Path | שינוי |
+|---|---|
+| [drizzle/schema.ts](../drizzle/schema.ts) | + `leads.ghlContactId`, `leads.ghlOpportunityId` columns |
+| [app/api/bridge/webhook/route.ts](../app/api/bridge/webhook/route.ts) | + `void ghlForwardMessage()` על inbound + outbound, `void syncLeadToGHL(sid)` בסוף `handleMessageReceived` |
+| [app/actions/v2.ts](../app/actions/v2.ts) | + `void syncLeadToGHL(cleanSid)` ב-`setFinalPriceAction`, `snoozeLead`, `setBotPaused` |
+| [.env.example](../.env.example) | + `GHL_API_KEY`, `GHL_LOCATION_ID`, `GHL_PIPELINE_ID`, `ENABLE_GHL_SYNC`, 9 stage ids, 5 field ids |
+
+### איך לבדוק ידנית — Phase 0
+
+**Step 1 — Type check (אפס סיכון):**
+```bash
+npx tsc --noEmit
+# Expect: אין output (clean)
+```
+
+**Step 2 — GHL token + Location ID:**
+1. `app.gohighlevel.com/v2/location/zo0OlVmtNiXiDAbZj2YW/launchpad`
+2. Settings → Integrations → Private Integrations → Create
+3. Scopes: `contacts.write/read`, `opportunities.write/read`, `locations/customFields.write/read`, `conversations.write/read`, `conversations/message.write`, `medias.write/read`
+4. Copy token
+
+**Step 3 — `.env` עדכון:**
+```
+GHL_API_KEY=<token from Step 2>
+GHL_LOCATION_ID=zo0OlVmtNiXiDAbZj2YW
+```
+
+**Step 4 — DB migration:**
+```bash
+npx drizzle-kit push
+# Expect: "Changes applied" + 2 new columns: ghl_contact_id, ghl_opportunity_id
+```
+
+**Step 5 — Pipeline ב-GHL UI:**
+1. CRM → Opportunities → Pipelines → Create
+2. שם: **Albadi**
+3. 8 stages בסדר: NEW, AWAITING_ESTIMATE, AWAITING_LOGO, WAITING_FACTORY, AWAITING_FINAL, CALLBACK_LATER, WON, DROPPED
+4. אופציונלי 9th: NEEDS_ELI
+
+**Step 6 — Bootstrap:**
+```bash
+npx tsx integrations/ghl/bootstrap.ts
+# Expect:
+#   - מציג pipelines קיימים
+#   - מוצא "Albadi" pipeline + מדפיס stage ids
+#   - יוצר 5 custom fields (manychat_sub_id, wa_jid, bot_summary, quote_total, pipeline_flag)
+#   - מדפיס env block בסוף
+```
+
+**Step 7 — הדבק env block לתוך `.env` + Vercel + redeploy.**
+
+**Step 8 — הפעלה:**
+```
+ENABLE_GHL_SYNC=1
+```
+ב-Vercel envs → redeploy.
+
+**Step 9 — End-to-end test:**
+1. שלח הודעת WA אמיתית ממכשיר test ל-business number
+2. בדוק logs ב-Vercel — לא אמור להיות error מ-`[ghl.sync]`
+3. פתח GHL Contacts → אמור להופיע contact חדש עם השם/טלפון
+4. פתח Opportunities → ה-Albadi pipeline → אמור להיות opportunity בstage NEW
+
+**אם נכשל:** flip `ENABLE_GHL_SYNC=0` → bridge ממשיך לעבוד תקין. fail safe.
+
+---
+
+## Phase 1A — Calculator widget ✅
+
+**מה זה:** Calculator הקיים (`/dashboard/v3/calculator`) מוטמע כ-iframe בתוך GHL contact card. אלי לוחץ "🧮 מחשבון" ב-GHL sidebar → המחשבון נטען בתוך GHL, מקבל `contactId` מ-GHL, טוען את הליד מ-DB, מציג שם + stage + כל הUI כולל boss-mode breakdown.
+
+**קבצים שנוצרו:**
+
+| Path | מה זה עושה |
+|---|---|
+| [integrations/ghl/widget-auth.ts](../integrations/ghl/widget-auth.ts) | `verifyWidgetToken()` constant-time compare + iframe CSP headers |
+| [app/widget/layout.tsx](../app/widget/layout.tsx) | nested layout — אין dashboard auth, dark theme container |
+| [app/widget/calculator/page.tsx](../app/widget/calculator/page.tsx) | server component — verify token, טען ליד דרך `ghl_contact_id`, render `CalculatorView` עם `apiToken` |
+| [app/api/widget/lead-context/route.ts](../app/api/widget/lead-context/route.ts) | GET API — contactId → lead snapshot (לwidgets עתידיים) |
+
+**קבצים שעודכנו:**
+
+| Path | שינוי |
+|---|---|
+| [app/dashboard/v3/calculator/CalculatorView.tsx](../app/dashboard/v3/calculator/CalculatorView.tsx) | + `apiToken?: string` prop, מצורף ל-fetch כ-`&widget_token=` |
+| [middleware.ts](../middleware.ts) | allowlist `/widget/*` + `/api/widget/*` + GET `/api/factory/*` עם `?widget_token=<value>` |
+| [next.config.js](../next.config.js) | CSP `frame-ancestors` ל-`/widget/*` — מתיר embedding מ-GHL/LeadConnector |
+| [.env.example](../.env.example) | + `GHL_WIDGET_TOKEN`, `WIDGET_ALLOWED_FRAME_ANCESTORS` |
+
+### איך לבדוק ידנית — Phase 1A
+
+**Step 1 — Type check:**
+```bash
+npx tsc --noEmit
+# Expect: clean
+```
+
+**Step 2 — ייצור secret:**
+PowerShell:
+```powershell
+-join ((1..32) | ForEach-Object { '{0:x2}' -f (Get-Random -Maximum 256) })
+# Expect: 64 hex chars, e.g. "a3f7d8e9c1b2..."
+```
+
+**Step 3 — `.env` עדכון:**
+```
+GHL_WIDGET_TOKEN=<64-hex from Step 2>
+```
+
+**Step 4 — Local dev test (standalone):**
+```bash
+npm run dev
+```
+פתח דפדפן:
+```
+http://localhost:3000/widget/calculator?widget_token=<TOKEN>
+```
+**מצופה:**
+- נטען calculator
+- Banner למעלה: "🧮 מחשבון מחיר · ⚠️ אין contactId — מצב standalone"
+- כל ה-UI עובד: מוצר dropdown, כמות, שילוח, צבעים, slider רווח
+- "פירוט מלא לבוס" נפתח עם FX rates + breakdown
+
+**אם נכשל token:**
+```
+http://localhost:3000/widget/calculator?widget_token=wrong
+```
+**מצופה:** דף שגיאה "אין הרשאה".
+
+**Step 5 — Local test עם contactId (אחרי backfill או מעדכון ידני):**
+```bash
+psql "$DATABASE_URL" -c "UPDATE leads SET ghl_contact_id='test123' WHERE manychat_sub_id='<some_sid>' LIMIT 1"
+```
+פתח:
+```
+http://localhost:3000/widget/calculator?contactId=test123&widget_token=<TOKEN>
+```
+**מצופה:** banner מציג שם הליד + stage בכחול.
+
+**Step 6 — Production deploy:**
+1. הוסף `GHL_WIDGET_TOKEN` ל-Vercel envs (production)
+2. `git push main` → Vercel ידיפלוי אוטומטית
+3. המתן ~30s לbuild
+
+**Step 7 — GHL UI setup (חד-פעמי):**
+1. `app.gohighlevel.com/v2/location/zo0OlVmtNiXiDAbZj2YW/...`
+2. Settings → **Custom Menu Links** → **+ Add**
+3. שם: `🧮 מחשבון`
+4. Icon: calculator
+5. URL:
+   ```
+   https://albadi-crm.vercel.app/widget/calculator?contactId={{contact.id}}&widget_token=<TOKEN>
+   ```
+6. Show On: **Contacts → Detail**
+7. Open In: **Iframe** (לא tab חיצוני)
+8. Save
+
+**Step 8 — End-to-end test ב-GHL:**
+1. CRM → Contacts → פתח contact כלשהו
+2. בsidebar שמאל אמור להיות "🧮 מחשבון" — לחץ
+3. המחשבון נטען בtoכן הראשי של GHL
+4. Banner: שם הliad + stage
+5. כל ה-UI עובד — שלב slider רווח, לחץ "פירוט מלא לבוס", רואה boss breakdown
+
+**אם נכשל:** F12 → Console — חפש CSP errors / token rejection. בדוק `WIDGET_ALLOWED_FRAME_ANCESTORS` ב-Vercel envs.
+
+---
+
+## Phase 1B — PDF flow 🚧
+
+**מה זה:** מ-widget — כפתורים "שמור preview", "סופי + PDF", "שלח ללקוח". PDF נוצר ב-backend, נשמר ב-GHL Files (מצורף לcontact), ונשלח דרך bridge.
+
+**קבצים שייווצרו:**
+
+| Path | מה זה יעשה |
+|---|---|
+| `app/api/widget/save-quote/route.ts` | POST — שומר margin/total ב-`leads` ועדכון `syncLeadToGHL` |
+| `integrations/ghl/upload-file.ts` | helper — bytes → POST `/medias/upload-file` → attach to contact |
+| `app/api/factory/finalize/[id]/route.ts` | קיים — להוסיף PDF upload ל-GHL בסוף |
+| `app/api/widget/send-pdf/route.ts` | POST — bridge.sendMessage(jid, text, mediaPath=pdfUrl) + GHL note |
+| עדכון `app/widget/calculator/page.tsx` | + 3 כפתורי action בתחתית הCalculator |
+
+### איך לבדוק ידנית — Phase 1B (כשייבנה)
+
+**Step 1 — Save quote:**
+1. widget → שנה margin → "שמור preview"
+2. `curl` ל-DB: `SELECT quote_total FROM leads WHERE manychat_sub_id=...`
+3. GHL contact → custom field `quote_total` מעודכן
+
+**Step 2 — PDF generate + upload:**
+1. widget → "סופי + PDF"
+2. בdialog: לראות PDF preview
+3. GHL contact → Files tab → אמור להיות `quote-<id>.pdf`
+
+**Step 3 — Send to customer:**
+1. "שלח ללקוח"
+2. בדוק WhatsApp של test phone — קיבל הודעה + PDF
+3. GHL Activity → note "[PDF sent] quote #X to customer"
+
+---
+
+## Phase 1C — Feishu loop 🚧
+
+**מה זה:** מ-widget — "שלח לפבריקה" יוצר שורה ב-Feishu sheet. Cron שעתי בודק אם המפעל מילא מחיר, ואז מעדכן את הliad + מסנכרן ל-GHL + מתריע לאלי.
+
+**קבצים שייווצרו/יעודכנו:**
+
+| Path | מה זה יעשה |
+|---|---|
+| `app/api/factory/send/route.ts` | קיים — להוסיף `feishu.appendRow()` + `syncLeadToGHL()` בסוף |
+| `app/api/factory/poll-feishu/route.ts` | חדש — cron endpoint, מושך rows שיש להם מחיר, מעדכן DB |
+| `vercel.json` | + cron entry ל-`poll-feishu` |
+| `lib/feishu/client.ts` | קיים — אם חסר `appendRow()` / `listRowsWithFilter()` |
+
+### איך לבדוק ידנית — Phase 1C (כשייבנה)
+
+**Step 1 — Send to factory:**
+1. widget → מילוי מפרט → "שלח לפבריקה"
+2. בדוק Feishu sheet — אמורה להופיע שורה חדשה עם הליד + מפרט + מחיר ריק
+3. GHL stage של הליד → "WAITING_FACTORY"
+4. GHL Activity → note `[factory] sent to Feishu row 42`
+5. WhatsApp שלך → DM מ-Eli notify bot
+
+**Step 2 — Factory מחזיר מחיר:**
+1. ב-Feishu sheet — מילוי עמודה E (`מחיר_מפעל`) במספר
+2. המתן עד cycle של cron (או trigger ידני: `curl -H "Authorization: Bearer $BOT_SECRET" https://.../api/factory/poll-feishu`)
+3. בדוק DB: `SELECT quote_total FROM leads WHERE...` — מעודכן
+4. GHL contact → `quote_total` custom field מעודכן
+5. GHL Activity → note `[factory] price received: 1,234 ILS`
+
+---
+
+## Phase 1D — Settings widget 🚧
+
+**מה זה:** Port `/dashboard/v3/settings` כ-iframe. מאפשר עריכת currency rates + default margin + business thresholds מתוך GHL.
+
+**קבצים שייווצרו:**
+
+| Path | מה זה יעשה |
+|---|---|
+| `app/widget/settings/page.tsx` | iframe wrapper של SettingsView הקיים |
+| עדכון `app/dashboard/v3/settings/*` | + `apiToken?: string` prop כמו ב-CalculatorView |
+
+**GHL UI setup חד-פעמי:** Custom Menu Link "⚙️ הגדרות" → `https://.../widget/settings?widget_token=<TOKEN>` → Show On: Sub-Account → Open: Iframe.
+
+### איך לבדוק ידנית — Phase 1D (כשייבנה)
+
+1. GHL sidebar → "⚙️ הגדרות"
+2. אמור להיטען SettingsView
+3. שנה default margin → Save
+4. בדוק DB: `SELECT * FROM app_config WHERE key='factory_config'` — מעודכן
+5. פתח Calculator widget → ה-default margin החדש הוא ה-default
+
+---
+
+## Phase 1E — Backfill 🚧
+
+**מה זה:** סקריפט one-shot שמעלה את **כל** הלידים מה-DB ל-GHL (גם DROPPED ישנים), שומר `ghl_contact_id` חזרה ב-DB, ויוצר opportunities לפי stage.
+
+**קבצים שייווצרו:**
+
+| Path | מה זה יעשה |
+|---|---|
+| `integrations/ghl/backfill.ts` | CLI — `--dry-run`, `--resume`, rate-limit handling (10 req/sec) |
+
+### איך לבדוק ידנית — Phase 1E (כשייבנה)
+
+**Step 1 — Dry run:**
+```bash
+npx tsx integrations/ghl/backfill.ts --dry-run
+# Expect:
+#   "Found 234 leads"
+#   "Would create 198 contacts (36 already have ghl_contact_id)"
+#   "Would create 198 opportunities"
+```
+
+**Step 2 — Real run:**
+```bash
+npx tsx integrations/ghl/backfill.ts
+# Expect: progress bar, ~5min ל-2K leads
+```
+
+**Step 3 — בדוק GHL:**
+1. CRM → Contacts → צריך להופיע כל הלידים מ-DB
+2. Opportunities → Albadi pipeline → כולם פזורים לפי stage
+3. בדוק שכמה לידים אקראיים יש להם custom fields ממולאים (bot_summary, quote_total)
+
+**Step 4 — בדוק DB:**
+```bash
+psql "$DATABASE_URL" -c "SELECT COUNT(*) FROM leads WHERE ghl_contact_id IS NOT NULL"
+# Expect: == total leads count
+```
+
+**Resume mode:** אם crashed באמצע, רץ שוב — מדלג על לידים עם `ghl_contact_id` כבר מוגדר.
+
+---
+
+## Phase 1F — Outbound chat 🚧
+
+**מה זה:** אלי כותב הודעה ב-GHL chat → GHL webhook → backend → bridge → WhatsApp ללקוח. הbridge.sendMessage מוסיף את ההודעה ל-`messages` table כ-`sender='eli'`. סנכרון חזרה ל-GHL מבטל double-display.
+
+**קבצים שייווצרו:**
+
+| Path | מה זה יעשה |
+|---|---|
+| `integrations/ghl/register-conversation-provider.ts` | one-shot CLI — רושם CUSTOM channel ב-GHL |
+| `app/api/integrations/ghl/outbound/route.ts` | webhook receiver מ-GHL conversation provider |
+
+### איך לבדוק ידנית — Phase 1F (כשייבנה)
+
+1. GHL → Contact → Conversations tab → כתוב הודעה → Send
+2. בדוק לוגים ב-Vercel: `[ghl.outbound] sending to bridge jid=...`
+3. WhatsApp של test phone — קיבל את ההודעה
+4. אחורה ב-GHL — הודעה מסומנת "delivered"
+5. DB: `SELECT * FROM messages WHERE sender='eli' ORDER BY ingested_at DESC LIMIT 1` — קיים
+
+---
+
+## Phase 2 🚧
+
+אופציונלי. לא לפני שכל Phase 1 יציב 2+ שבועות.
+
+- Custom Menu Link "🤖 החלטות בוט" + widget עם 👍/👎 feedback
+- Custom Menu Link "💰 טיוטות" + widget money-moments approval
+- GHL Workflow מחליף Followup cron (visual automation)
+- GHL native Meta Lead Ads (מחליף Apps Script)
+- Media support ב-Conversations (תמונות/PDF inbound מהלקוח)
+
+---
+
+## 11. Manual setup steps ל-GHL UI
+
+צעדים שאני **לא יכול** לעשות (דורש browser session ב-GHL):
+
+| # | מה | מתי |
+|---|---|---|
+| A | Private Integration Token + scopes | לפני Phase 0 |
+| B | Pipeline "Albadi" עם 8 stages | לפני Phase 0 |
+| C | Custom Menu Link "🧮 מחשבון" | אחרי Phase 1A deploy |
+| D | Custom Menu Link "⚙️ הגדרות" | אחרי Phase 1D |
+| E | Custom Conversation Provider אישור | אחרי Phase 1F |
+| F | Facebook Lead Ads native integration | Phase 2 |
+
+פרטי URLs ו-scopes לכל אחד — ראה הphase המתאים למעלה.
+
+---
+
+## 12. Convention לעדכוני מסמך
+
+**כל phase או שינוי משמעותי חייב לכלול ב-המסמך:**
+1. **מה נוצר/שונה** — רשימה של paths + שורה אחת על תפקיד
+2. **איך לבדוק ידנית** — step-by-step: command/click → expected output
+3. **רגרסיה safety** — מה לעשות אם נשבר (kill switch, env flag, revert)
+
+**עדכון סטטוס:**
+- ❌ Not started
+- 🚧 In progress (חצי בקוד, חצי בהפעלה)
+- ✅ DONE
+- 🔥 Blocked (סיבה)
+
+ראה Phase 0 ו-Phase 1A כ-template.
