@@ -7,9 +7,7 @@
  * Consumed by the v3 lead drawer "Bot Decisions" tab.
  */
 import { NextRequest, NextResponse } from "next/server";
-import { db } from "@/lib/db";
-import { botDecisionLog } from "@/drizzle/schema";
-import { desc, sql } from "drizzle-orm";
+import { listDecisions } from "@/lib/supervisor/server/listDecisions";
 
 export const runtime = "nodejs";
 
@@ -33,12 +31,7 @@ export async function GET(
     return NextResponse.json({ error: "missing sid" }, { status: 400 });
   }
 
-  const rows = await db
-    .select()
-    .from(botDecisionLog)
-    .where(sql`trim(${botDecisionLog.manychatSubId}) = ${cleanSid}`)
-    .orderBy(desc(botDecisionLog.createdAt))
-    .limit(100);
+  const rows = await listDecisions({ lead: cleanSid, limit: 100 });
 
   return NextResponse.json({
     ok: true,
