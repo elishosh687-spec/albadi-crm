@@ -3,7 +3,73 @@
 > מסמך אמת לכל המעבר ל-GHL. מתעדכן בכל phase.
 > כל שינוי כולל **"איך לבדוק ידנית"**.
 
-עדכון אחרון: GHL setup הושלם — Pipeline + 5 custom fields חיים. `.env` מקומי מלא. ממתין הפעלת `ENABLE_GHL_SYNC=1` + Vercel deploy + GHL Custom Menu Link ל-end-to-end test.
+עדכון אחרון: Phase 0 + 1A הושלמו במלואם בקוד + Vercel. `ENABLE_GHL_SYNC=0` עדיין. ממתין רק ל-GHL Custom Menu Link יצירה ידנית.
+
+---
+
+## 0. למשיכת עבודה בסשן אחר — קרא קודם
+
+**כל הסטטוס פה. אין צורך בquestions.** מצב לפני המשך:
+
+### ✅ עשינו
+- [drizzle/schema.ts](../drizzle/schema.ts) — נוספו `leads.ghl_contact_id`, `leads.ghl_opportunity_id`. **migration רץ** ב-prod DB (Neon).
+- `integrations/ghl/*` — config, client (REST V2), mapping, sync, bootstrap, widget-auth + README
+- `app/widget/calculator/page.tsx` + `app/widget/layout.tsx` — iframe endpoint
+- `app/api/widget/lead-context/route.ts` — GET lead by ghl_contact_id
+- `middleware.ts` — allowlist widget routes + `widget_token` bypass ל-`/api/factory/*`
+- `next.config.js` — CSP `frame-ancestors` ל-GHL/LeadConnector domains + BOM strip
+- Bridge webhook + v2 actions wired עם `void syncLeadToGHL(sid)`
+- `.env` מקומי מלא עם 19 env vars
+- **Vercel envs production** — 19 vars (כולל `ENABLE_GHL_SYNC=0`)
+- **Deploy ל-production** עבר — `https://albadi-crm.vercel.app/widget/calculator?widget_token=...` מחזיר 200 + CSP נקי
+- GHL UI:
+  - Pipeline "albadi" נוצר ידנית עם 8 stages
+  - 5 custom fields נוצרו אוטומטית דרך bootstrap
+  - Private Integration Token: `pit-80128d88-b443-4ece-aa66-2e1f6c65dbe8`
+
+### ❌ נותר
+- [ ] **GHL Custom Menu Link** — אלי עוד לא יצר ב-Settings. ראה §7-C למטה.
+- [ ] **Backfill** — לידים קיימים בDB לא ב-GHL (`leads.ghl_contact_id` הוא NULL לכולם). ראה Phase 1E.
+- [ ] **`ENABLE_GHL_SYNC=1`** — sync עדיין dormant. הפעל רק אחרי backfill (אחרת inbound חדש יעלה לidf חדש ב-GHL בלי היסטוריה).
+- [ ] **Phase 1B (PDF flow)** — לא התחיל.
+- [ ] **Phase 1C (Feishu loop)** — לא התחיל.
+- [ ] **Phase 1D (Settings widget)** — לא התחיל.
+- [ ] **Phase 1F (Outbound chat)** — לא התחיל.
+
+### IDs קריטיים (כבר ב-`.env` וגם ב-Vercel)
+```
+GHL_API_KEY=pit-80128d88-b443-4ece-aa66-2e1f6c65dbe8
+GHL_LOCATION_ID=zo0OlVmtNiXiDAbZj2YW
+GHL_PIPELINE_ID=JG6rSzAxvlK4gROZ6Ot0  (name: "albadi")
+GHL_WIDGET_TOKEN=50da21955d78a871e4d1ffdd3e44827e2aa4875a3719dce4f009ca569cbb6a7c
+
+# Stages
+NEW              = 980f1b2e-7c2c-427e-97ba-184ed64a138f
+AWAITING_ESTIMATE= 83a109c2-9f23-436b-ae57-64356684f51a
+AWAITING_LOGO    = 46b83cc8-3fab-4860-b5b7-f6268b585df8
+WAITING_FACTORY  = e89642cb-c832-4417-9ceb-04bbe223c3e1
+AWAITING_FINAL   = d829b841-51df-4f92-b76a-e7496b44ec0c
+CALLBACK_LATER   = 78806c17-ba9f-4e5e-87cc-d9c98a8549b7
+WON              = c0bccca4-fbde-4458-8970-db105022281c
+DROPPED          = 6b716c7e-0a77-447d-9594-8163c83f5b90
+
+# Custom fields (on Contact entity)
+GHL_FIELD_MANYCHAT_SUB_ID=9YV9MzyTSQO6g1ND7gwm
+GHL_FIELD_WA_JID         =alYsHnYu2YLahkp25IwW
+GHL_FIELD_BOT_SUMMARY    =PajtRpfGVqagt5UNEw1H
+GHL_FIELD_QUOTE_TOTAL    =Zb8xcXHyPretYFK2fxFA  (type=MONETORY, GHL typo)
+GHL_FIELD_PIPELINE_FLAG  =RWIsVudSbh5WKZFEXl1y
+```
+
+### Git history (השאר אם רוצים git log)
+- `67574e0` feat(ghl): integration foundation + calculator widget
+- `95c81b7` fix(ghl): strip BOM from WIDGET_ALLOWED_FRAME_ANCESTORS env
+
+### הצעד הבא הנכון (אחרי שאלי יוצר Custom Menu Link)
+1. בודק שהiframe נטען ב-GHL contact card → screenshot/אישור
+2. Phase 1E (Backfill) — `integrations/ghl/backfill.ts` חדש. סורק `leads` table, יוצר contact + opportunity לכל אחד, מעדכן `leads.ghl_contact_id`. dry-run mode + resume mode. (לא לפני שאלי מאשר שה-iframe עובד.)
+3. אחרי backfill — set `ENABLE_GHL_SYNC=1` בVercel + redeploy → inbound חדשים יסונכרנו.
+4. Phase 1B (PDF flow), 1C (Feishu loop), 1D (Settings widget), 1F (Outbound chat).
 
 ---
 
