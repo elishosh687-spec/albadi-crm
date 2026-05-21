@@ -77,7 +77,7 @@ Per-lead → רק Contact Detail (GHL bug: `{{contact.id}}` שובר ב-Sidebar)
 ### Sequencing
 
 1. ✅ Phase 1F-prep — rename endpoints (DONE 2026-05-21)
-2. Phase 1G-1 — Order Summary (read-only, ~30 דק)
+2. ✅ Phase 1G-1 — Order Summary (DONE 2026-05-21) — `app/widget/order-summary/` + `components/order-summary/OrderSummaryView.tsx`. Verified locally: 4 states (valid/invalid token/no contact/bogus contact).
 3. Phase 1G-2 — Bot Decisions (read + 2 mutations, ~שעה)
 4. Phase 1G-3 — Factory Quote per-lead (read + 1 mutation, ~שעה)
 5. Phase 1G-4 — Factory Quotes List (read-only, ~30 דק)
