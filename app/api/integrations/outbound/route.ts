@@ -24,7 +24,7 @@
  */
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { leads, messages } from "@/drizzle/schema";
+import { leads, messages, bridgeEvents } from "@/drizzle/schema";
 import { and, desc, eq, gt, or, sql } from "drizzle-orm";
 import { sendBridgeMessage } from "@/lib/bridge/client";
 
@@ -139,14 +139,46 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     );
   }
 
-  // Safety net dedup. postOutboundMessage now uses the /inbound endpoint
-  // so the delivery loop should not fire — but if GHL ever changes that
-  // behavior, or a future caller posts to /conversations/messages directly,
-  // we'd re-send a message we just sent ourselves and the customer would
-  // receive a duplicate. Block that here: if a fresh outbound row
-  // (sender='eli' OR 'bot') with the same text already exists for this
-  // lead within the last 60 seconds, treat the GHL callback as a redelivery
-  // of our own mirror and skip the send.
+  // Dedup safety net — block the GHL delivery-callback loop.
+  //
+  // When our mirror posts an outbound to /conversations/messages, GHL stores
+  // the message AND fires the Custom Provider deliveryUrl webhook (= this
+  // endpoint) so the provider can actually deliver to the customer. Without
+  // dedup, we'd re-send our own mirror to the customer.
+  //
+  // Layer 1 (primary, works for text + media): match GHL messageId against
+  // the ghl_mirror.success audit rows our forwardMessage writes. Exact 1:1.
+  // GHL Inbox UI sends DON'T appear in that audit, so this only catches
+  // self-callbacks.
+  const ghlMessageId = payload.messageId?.trim();
+  if (ghlMessageId) {
+    const seen = await db
+      .select({ id: bridgeEvents.id, payload: bridgeEvents.payload })
+      .from(bridgeEvents)
+      .where(
+        and(
+          eq(bridgeEvents.type, "ghl_mirror.success"),
+          sql`payload->>'messageId' = ${ghlMessageId}`,
+          gt(bridgeEvents.occurredAt, sql`now() - interval '5 minutes'`)
+        )
+      )
+      .limit(1);
+    if (seen.length > 0) {
+      console.log("[ghl.outbound] dedup skip — messageId is our own mirror", {
+        sid: lead.manychatSubId,
+        ghlMessageId,
+      });
+      return NextResponse.json({
+        ok: true,
+        skipped: "dedup_messageId",
+        ghlMessageId,
+        lead_sid: lead.manychatSubId,
+      });
+    }
+  }
+
+  // Layer 2 (fallback for text-only sends if Layer 1 misses): match recent
+  // outbound row text in the messages table.
   if (text) {
     const recent = await db
       .select({ id: messages.id, waMessageId: messages.waMessageId })
@@ -162,13 +194,13 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       .orderBy(desc(messages.receivedAt))
       .limit(1);
     if (recent.length > 0) {
-      console.log("[ghl.outbound] dedup skip — already sent recently", {
+      console.log("[ghl.outbound] dedup skip — recent text match", {
         sid: lead.manychatSubId,
         wa_message_id: recent[0].waMessageId,
       });
       return NextResponse.json({
         ok: true,
-        skipped: "dedup",
+        skipped: "dedup_text",
         wa_message_id: recent[0].waMessageId,
         lead_sid: lead.manychatSubId,
       });
