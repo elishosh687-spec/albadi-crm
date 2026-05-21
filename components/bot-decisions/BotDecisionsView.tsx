@@ -8,7 +8,20 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Loader2, Search, X, User, ChevronDown, ChevronUp } from "lucide-react";
+import { Loader2, Search, X, User, ChevronDown, ChevronUp, ThumbsUp, ThumbsDown, Check } from "lucide-react";
+
+const INTENT_OPTIONS: { value: string; label: string }[] = [
+  { value: "accept", label: "אישור" },
+  { value: "reject", label: "דחייה" },
+  { value: "negotiating", label: "יקר / מיקוח" },
+  { value: "question_meeting", label: "בקשת שיחה" },
+  { value: "question_delivery", label: "שאלת אספקה" },
+  { value: "meta_question", label: 'שאלה מטא ("למה שואל")' },
+  { value: "frustrated", label: "תסכול / כעס" },
+  { value: "custom_size", label: "מידה/כמות מותאמת" },
+  { value: "spec_change", label: "שינוי מפרט" },
+  { value: "other", label: "אחר (טקסט חופשי)" },
+];
 
 interface LeadOption {
   sid: string;
@@ -34,6 +47,8 @@ interface DecisionRow {
   escalationKind: string | null;
   draftId: number | null;
   eliAction: string | null;
+  eliIntentOverride: string | null;
+  eliCorrectionType: string | null;
   // source may not exist yet pre-Track-C1 migration; treat null as 'bridge'.
   source?: string | null;
 }
@@ -295,7 +310,14 @@ export function BotDecisionsView({ apiToken }: { apiToken: string }) {
           ) : (
             <ul className="space-y-2">
               {rows.map((r) => (
-                <DecisionRowCard key={r.id} row={r} />
+                <DecisionRowCard
+                  key={r.id}
+                  row={r}
+                  apiToken={apiToken}
+                  onUpdated={(updated) =>
+                    setRows((prev) => prev.map((p) => (p.id === updated.id ? { ...p, ...updated } : p)))
+                  }
+                />
               ))}
             </ul>
           )}
@@ -305,8 +327,75 @@ export function BotDecisionsView({ apiToken }: { apiToken: string }) {
   );
 }
 
-function DecisionRowCard({ row }: { row: DecisionRow }) {
+function DecisionRowCard({
+  row,
+  apiToken,
+  onUpdated,
+}: {
+  row: DecisionRow;
+  apiToken: string;
+  onUpdated: (patch: Partial<DecisionRow> & { id: number }) => void;
+}) {
   const [expanded, setExpanded] = useState(false);
+  const [showPicker, setShowPicker] = useState(false);
+  const [pickedIntent, setPickedIntent] = useState("");
+  const [freeText, setFreeText] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [fbError, setFbError] = useState<string | null>(null);
+
+  const postFeedback = async (kind: "confirm" | "correct", body?: object) => {
+    setSubmitting(true);
+    setFbError(null);
+    try {
+      const res = await fetch(
+        `/api/widget/decisions/${row.id}/${kind}?widget_token=${apiToken}`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: body ? JSON.stringify(body) : undefined,
+        }
+      );
+      const data = await res.json().catch(() => ({}));
+      if (!data?.ok) {
+        setFbError(data?.error ?? "שמירה נכשלה");
+        return false;
+      }
+      return true;
+    } catch (e) {
+      setFbError(e instanceof Error ? e.message : "שמירה נכשלה");
+      return false;
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleConfirm = async () => {
+    if (await postFeedback("confirm")) {
+      onUpdated({
+        id: row.id,
+        eliAction: "approved_as_is",
+        eliCorrectionType: null,
+      });
+    }
+  };
+
+  const handleSubmitCorrection = async () => {
+    const intent =
+      pickedIntent === "other" && freeText.trim() ? freeText.trim() : pickedIntent;
+    if (!intent) {
+      setFbError("בחר intent");
+      return;
+    }
+    if (await postFeedback("correct", { intent })) {
+      onUpdated({
+        id: row.id,
+        eliIntentOverride: intent,
+        eliCorrectionType: "routing",
+        eliAction: row.eliAction ?? "stage_override",
+      });
+      setShowPicker(false);
+    }
+  };
   const action = ACTION_LABELS[row.action] ?? {
     label: row.action,
     tone: "bg-muted/40 text-muted-foreground border-border",
@@ -416,6 +505,101 @@ function DecisionRowCard({ row }: { row: DecisionRow }) {
           )}
         </div>
       )}
+
+      <div className="mt-2 pt-2 border-t border-border/30">
+        {row.eliIntentOverride ? (
+          <div className="flex items-center gap-1.5 text-[11px] text-amber-500">
+            <ThumbsDown className="size-3" />
+            <span>
+              סווג מחדש כ-<strong>{row.eliIntentOverride}</strong>
+            </span>
+          </div>
+        ) : row.eliAction === "approved_as_is" && row.eliCorrectionType === null ? (
+          <div className="flex items-center gap-1.5 text-[11px] text-emerald-500">
+            <ThumbsUp className="size-3" />
+            <span>אישרת את ההחלטה</span>
+          </div>
+        ) : !showPicker ? (
+          <div className="flex gap-1.5">
+            <button
+              type="button"
+              onClick={handleConfirm}
+              disabled={submitting}
+              className="flex-1 inline-flex items-center justify-center gap-1 rounded border border-emerald-500/40 bg-emerald-500/10 px-2 py-1 text-[11px] text-emerald-400 hover:bg-emerald-500/20 disabled:opacity-50"
+            >
+              <ThumbsUp className="size-3" />
+              ה-LLM צדק
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowPicker(true)}
+              disabled={submitting}
+              className="flex-1 inline-flex items-center justify-center gap-1 rounded border border-amber-500/40 bg-amber-500/10 px-2 py-1 text-[11px] text-amber-400 hover:bg-amber-500/20 disabled:opacity-50"
+            >
+              <ThumbsDown className="size-3" />
+              ה-LLM טעה
+            </button>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-1.5 rounded border border-amber-500/30 bg-amber-500/5 p-2">
+            <div className="text-[11px] text-muted-foreground">
+              מה היה ה-intent הנכון?
+            </div>
+            <select
+              value={pickedIntent}
+              onChange={(e) => setPickedIntent(e.target.value)}
+              disabled={submitting}
+              className="text-[11px] rounded border border-border bg-background px-1.5 py-1"
+            >
+              <option value="">בחר…</option>
+              {INTENT_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+            {pickedIntent === "other" && (
+              <input
+                type="text"
+                value={freeText}
+                onChange={(e) => setFreeText(e.target.value)}
+                placeholder="כתוב intent בעברית או באנגלית"
+                className="text-[11px] rounded border border-border bg-background px-1.5 py-1"
+              />
+            )}
+            {fbError && (
+              <div className="text-[11px] text-destructive">{fbError}</div>
+            )}
+            <div className="flex gap-1.5">
+              <button
+                type="button"
+                onClick={handleSubmitCorrection}
+                disabled={submitting || !pickedIntent}
+                className="flex-1 inline-flex items-center justify-center gap-1 rounded border border-amber-500/50 bg-amber-500/15 px-2 py-1 text-[11px] text-amber-300 hover:bg-amber-500/25 disabled:opacity-50"
+              >
+                <Check className="size-3" />
+                {submitting ? "שומר…" : "שמור"}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowPicker(false);
+                  setPickedIntent("");
+                  setFreeText("");
+                  setFbError(null);
+                }}
+                disabled={submitting}
+                className="px-2 py-1 text-[11px] rounded border border-border text-muted-foreground hover:bg-secondary disabled:opacity-50"
+              >
+                ביטול
+              </button>
+            </div>
+          </div>
+        )}
+        {fbError && !showPicker && (
+          <div className="mt-1 text-[11px] text-destructive">{fbError}</div>
+        )}
+      </div>
     </li>
   );
 }
