@@ -10,7 +10,7 @@
  */
 
 import { verifyWidgetToken } from "@/integrations/ghl/widget-auth";
-import { DraftsView } from "@/components/drafts/DraftsView";
+import { DraftsWithDecisions } from "@/components/drafts/DraftsWithDecisions";
 
 export const dynamic = "force-dynamic";
 
@@ -49,13 +49,13 @@ export default async function DraftsWidgetPage({
           marginBottom: 16,
         }}
       >
-        <strong style={{ fontSize: 16 }}>✋ תור אישורים</strong>
+        <strong style={{ fontSize: 16 }}>🤖 פיקוח על הבוט</strong>
         <span style={{ marginRight: 12, color: "#a1a1aa", fontSize: 13 }}>
-          · אישור/דחייה של הודעות הבוט אחת אחת
+          · תור אישורים + היסטוריית החלטות
         </span>
       </div>
 
-      <DraftsView apiToken={token} />
+      <DraftsWithDecisions apiToken={token} />
     </div>
   );
 }
