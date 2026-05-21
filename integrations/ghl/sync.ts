@@ -109,6 +109,7 @@ async function loadLead(sid: string): Promise<LoadedLead | null> {
       pipelineFlag: leads.pipelineFlag,
       botSummary: leads.botSummary,
       quoteTotal: leads.quoteTotal,
+      lossReason: leads.lossReason,
       ghlContactId: leads.ghlContactId,
       ghlOpportunityId: leads.ghlOpportunityId,
     })

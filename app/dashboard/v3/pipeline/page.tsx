@@ -47,7 +47,7 @@ export default async function V3PipelinePage() {
     sid: r.sid,
     name: r.name,
     phone: r.phone,
-    stage: r.stage ?? "NEW",
+    stage: r.stage ?? "PRE_QUOTE",
     flag: r.flag,
     botPaused: r.botPaused,
     botSummary: r.botSummary,

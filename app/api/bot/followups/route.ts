@@ -1,15 +1,15 @@
 /**
  * Follow-up cron. Designed for Vercel cron at `every 15 minutes`.
  *
- * Per docs/CUSTOMER-FLOW.md v2 (source of truth):
+ * Per docs/CUSTOMER-FLOW.md (8-stage model):
  *   - Gates: quiet hours (21:00-09:00 Asia/Jerusalem), no-send days
  *     (Fri/Sat/holiday-eve/holiday via Hebcal).
  *   - Customer-side cadence by stage:
- *       NEW (mid-questionnaire abandoned)     → 1h, 1h, 1h
- *       AWAITING_ESTIMATE (Stage 2)           → 2h, 12h, 23h
- *       AWAITING_LOGO (Stage 3)               → 2h, 12h, 23h
- *       AWAITING_FINAL (Stage 4)              → 2h, 12h, 23h
- *   - WAITING_FACTORY → Eli-only daily reminder (no customer message).
+ *       (pre-quote, mid-questionnaire abandoned)         → 1h, 1h, 1h
+ *       INITIAL_QUOTE_SENT                               → 2h, 12h, 23h
+ *       FACTORY_CHECK (subFlow=awaiting_logo)            → 2h, 12h, 23h
+ *       FINAL_QUOTE_SENT                                 → 2h, 12h, 23h
+ *   - FACTORY_CHECK (subFlow=awaiting_factory_estimate) → Eli-only daily reminder.
  *   - After 3 unanswered attempts → escalate (NEEDS_ELI + bot_paused + Eli DM).
  *   - Skips leads where bot_paused=true.
  *
@@ -52,10 +52,10 @@ interface StageRule {
 
 const STAGE_RULES: StageRule[] = [
   {
-    // Stage 1 — NEW + questionnaire in-flight (started, not done, not bailed).
+    // Pre-quote (pipeline_stage IS NULL) + questionnaire in-flight (started, not done, not bailed).
     match: (stage, q) => {
       const s = (stage || "").toUpperCase();
-      if (s !== "" && s !== "NEW") return false;
+      if (s !== "") return false;
       if (!q) return false;
       if (q.bailed || q.doneAt) return false;
       return typeof q.step === "number" && q.step >= 2 && q.step <= 7;
@@ -64,23 +64,25 @@ const STAGE_RULES: StageRule[] = [
     template: "MID_QUESTIONNAIRE",
   },
   {
-    // Stage 2 — bot waiting on customer reply to estimated quote.
+    // INITIAL_QUOTE_SENT — bot waiting on customer reply to estimated quote.
     // Cadence per Eli: 2h → 12h → 23h. 3 nudges spread over ~37h total.
-    match: (stage) => (stage || "").toUpperCase() === "AWAITING_ESTIMATE",
+    match: (stage) => (stage || "").toUpperCase() === "INITIAL_QUOTE_SENT",
     cadences: [2 * HOUR_MS, 12 * HOUR_MS, 23 * HOUR_MS],
-    template: "AWAITING_ESTIMATE",
+    template: "INITIAL_QUOTE_SENT",
   },
   {
-    // Stage 3 — bot waiting on logo file. Same cadence.
-    match: (stage) => (stage || "").toUpperCase() === "AWAITING_LOGO",
+    // FACTORY_CHECK (subFlow=awaiting_logo) — bot waiting on logo file.
+    match: (stage, q) =>
+      (stage || "").toUpperCase() === "FACTORY_CHECK" &&
+      (q?.subFlow === "awaiting_logo" || !q?.subFlow),
     cadences: [2 * HOUR_MS, 12 * HOUR_MS, 23 * HOUR_MS],
     template: "AWAITING_LOGO",
   },
   {
-    // Stage 4 — bot waiting on customer reply to final price. Same cadence.
-    match: (stage) => (stage || "").toUpperCase() === "AWAITING_FINAL",
+    // FINAL_QUOTE_SENT — bot waiting on customer reply to final price.
+    match: (stage) => (stage || "").toUpperCase() === "FINAL_QUOTE_SENT",
     cadences: [2 * HOUR_MS, 12 * HOUR_MS, 23 * HOUR_MS],
-    template: "AWAITING_FINAL",
+    template: "FINAL_QUOTE_SENT",
   },
 ];
 
@@ -461,7 +463,10 @@ export async function POST(req: NextRequest) {
 
   for (const row of candidates) {
     const stage = (row.pipelineStage || "").toUpperCase();
-    if (stage === "WAITING_FACTORY") {
+    const subFlow = (row.qState as any)?.subFlow;
+    // FACTORY_CHECK with subFlow=awaiting_factory_estimate = Eli is working
+    // on the price manually. Daily reminder to Eli, no customer message.
+    if (stage === "FACTORY_CHECK" && subFlow === "awaiting_factory_estimate") {
       const r = await processFactoryLead({
         sid: row.sid,
         name: row.name,
@@ -474,7 +479,7 @@ export async function POST(req: NextRequest) {
       continue;
     }
     // Terminal stages — never follow up.
-    if (stage === "WON" || stage === "DROPPED") {
+    if (stage === "WON" || stage === "LOST") {
       continue;
     }
     const r = await processCustomerLead({

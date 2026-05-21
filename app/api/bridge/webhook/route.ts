@@ -20,11 +20,11 @@
  *   2. Stop-word in text → escalate Eli + pause bot, do nothing else.
  *   3. Reset follow_up_count + last_follow_up_at + un-pause + clear flag
  *      (customer re-engagement = fresh budget).
- *   4. Route by current pipeline_stage:
- *        NULL/NEW          → questionnaire autoresponder
- *        AWAITING_ESTIMATE → LLM intent classifier (decision sub-flow)
- *        AWAITING_LOGO     → media detection + reask loop
- *        WAITING_FACTORY / WON / DROPPED → no auto-action
+ *   4. Route by current pipeline_stage (+ qState.subFlow for sub-routing):
+ *        NULL                                           → questionnaire autoresponder
+ *        INITIAL_QUOTE_SENT (subFlow=awaiting_estimate) → LLM intent classifier
+ *        FACTORY_CHECK (subFlow=awaiting_logo)          → media detection + reask loop
+ *        FACTORY_CHECK (subFlow=awaiting_factory_estimate) / WON / LOST → no auto-action
  */
 import { NextRequest, NextResponse } from "next/server";
 import { createHmac, timingSafeEqual } from "node:crypto";
@@ -487,9 +487,15 @@ async function routeThroughSupervisor(input: SupervisorRouteInput): Promise<void
   // We skip the supervisor and let the legacy handlers do their thing, but
   // still log a row so the timeline shows the event.
   if (!inboundText) {
-    if (stage === "AWAITING_LOGO") {
-      // Media without caption at AWAITING_LOGO is the happy path (logo received).
-      // Run the handler; it will transition stage.
+    // FACTORY_CHECK with subFlow=awaiting_logo: media-without-caption is the
+    // happy path (customer sent the logo). Run the handler; it will switch
+    // subFlow to awaiting_factory_estimate, pause the bot, DM Eli.
+    const subFlow =
+      ((freshLead?.qState as Record<string, unknown> | null)?.subFlow as string | undefined) ?? null;
+    const isLogoCollection =
+      subFlow === "awaiting_logo" ||
+      (stage === "FACTORY_CHECK" && !subFlow); // fallback for pre-subFlow leads
+    if (isLogoCollection) {
       try {
         const r = await handleDecisionInbound({
           sid,
@@ -503,11 +509,11 @@ async function routeThroughSupervisor(input: SupervisorRouteInput): Promise<void
           stageBefore: stage,
           decidedBy: "code",
           action: r.action === "escalated" ? "escalated" : "stage_transition",
-          metadata: { handler: "handleDecisionInbound", result: r, reason: "media-only at AWAITING_LOGO" },
+          metadata: { handler: "handleDecisionInbound", result: r, reason: "media-only at FACTORY_CHECK/awaiting_logo" },
         });
         return;
       } catch (e) {
-        console.error("[supervisor.route] AWAITING_LOGO media handler error", e);
+        console.error("[supervisor.route] FACTORY_CHECK/awaiting_logo media handler error", e);
       }
     }
     // Other stages with empty text — let the legacy handler decide (it usually escalates).
@@ -746,20 +752,26 @@ async function runLegacyHandlerAndLog(args: {
   let handlerName = "noop";
 
   try {
-    if (!stage || stage === "NEW") {
+    if (!stage) {
+      // Pre-quote (NULL stage) — questionnaire still running.
       handlerName = "handleInbound";
       result = await handleInbound({ sid, text });
     } else if (
-      stage === "AWAITING_ESTIMATE" ||
-      stage === "AWAITING_LOGO" ||
-      stage === "AWAITING_FINAL"
+      stage === "INITIAL_QUOTE_SENT" ||
+      stage === "FACTORY_CHECK" ||
+      stage === "FINAL_QUOTE_SENT" ||
+      stage === "AWAITING_FIRST_RESPONSE" ||
+      stage === "SHOWED_INTEREST" ||
+      stage === "NEGOTIATING"
     ) {
       handlerName = "handleDecisionInbound";
+      // Internal sub-flow routing (logo vs estimate vs final) lives inside
+      // handleDecisionInbound via qState.subFlow.
       result = await handleDecisionInbound({ sid, text, hasMedia: mediaPresent });
     } else {
-      // WAITING_FACTORY / WON / DROPPED — supervisor said approve_code but
-      // there's no handler. This is a no_op the supervisor probably should
-      // have escalated; log it so we catch the case.
+      // WON / LOST — supervisor said approve_code but there's no handler.
+      // This is a no_op the supervisor probably should have escalated; log
+      // it so we catch the case.
       console.log("[supervisor.route] approve_code for silent stage — no handler", sid, stage);
     }
   } catch (e) {

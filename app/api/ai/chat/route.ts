@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { leads } from "@/drizzle/schema";
-import { eq } from "drizzle-orm";
+import { eq, isNull } from "drizzle-orm";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
@@ -9,13 +9,15 @@ export const maxDuration = 30;
 const OPENAI_URL = "https://api.openai.com/v1/chat/completions";
 
 const STAGE_LABELS: Record<string, string> = {
-  NEW: "חדשים",
-  AWAITING_ESTIMATE: "ממתינים להצעה",
-  AWAITING_LOGO: "ממתינים ללוגו",
-  WAITING_FACTORY: "אצל המפעל",
-  AWAITING_FINAL: "ממתינים לאישור סופי",
-  WON: "נסגרו",
-  DROPPED: "ננטשו",
+  PRE_QUOTE: "בשאלון",
+  INITIAL_QUOTE_SENT: "הצעה ראשונית נשלחה",
+  AWAITING_FIRST_RESPONSE: "ממתין לתגובה ראשונה",
+  SHOWED_INTEREST: "הראה עניין",
+  FACTORY_CHECK: "בדיקת מפעל",
+  FINAL_QUOTE_SENT: "הצעה סופית נשלחה",
+  NEGOTIATING: "משא ומתן",
+  WON: "נסגר",
+  LOST: "לא נסגר",
 };
 
 async function fetchLeads(stage?: string) {
@@ -33,6 +35,9 @@ async function fetchLeads(stage?: string) {
   }).from(leads);
 
   if (stage && stage !== "ALL") {
+    if (stage === "PRE_QUOTE") {
+      return q.where(isNull(leads.pipelineStage)).limit(40);
+    }
     return q.where(eq(leads.pipelineStage, stage)).limit(40);
   }
   return q.limit(60);

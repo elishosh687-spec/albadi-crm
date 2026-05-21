@@ -17,26 +17,47 @@
 
 ## Stages (מצבי ה-lead)
 
-כל lead נמצא ב-**stage** אחד מתוך הרשימה למטה. בנוסף יכול להיות עם **flags** רוחביים.
+כל lead נמצא ב-**stage** אחד מתוך הרשימה למטה. בנוסף יכול להיות עם **flags** רוחביים ועם **`qState.subFlow`** לתת-מצב בתוך השלב.
 
-### Stages
+### Stages — 8-stage journey model
 
-מקור אמת. מקביל ל-`V2_PIPELINE_STAGES` ב-`lib/manychat/stages.ts`. סך הכל 7 stages קנוניים.
+מקור אמת. מקביל ל-`V2_PIPELINE_STAGES` ב-`lib/manychat/stages.ts`. 8 שלבים שמתארים **איפה המכירה נמצאת**, לא מה הפעולה הבאה (פעולות = `crm_tasks` / `crm_sla_timers` / tags).
 
-| # | Stage | מתי נכנסים | מתי יוצאים | מי משנה |
-|---|---|---|---|---|
-| 1 | `NEW` | first inbound | סיום שאלון | בוט |
-| 2 | `AWAITING_ESTIMATE` | סיום שאלון סטנדרטי + נשלח מחיר משוער + "מתאים?" | הסכמה / דחייה / שינוי מפרט | בוט |
-| 3 | `AWAITING_LOGO` | הלקוח הסכים למחיר משוער → התבקש לוגו | לוגו התקבל / drop-off | בוט |
-| 4 | `WAITING_FACTORY` | "אחר" בשאלון / calc API נכשל / לוגו התקבל וצריך מחיר סופי / לקוח ביקש שיחה | אלי שולח מחיר ידני / סוגר ידנית | בוט נכנס, אלי יוצא |
-| 5 | `AWAITING_FINAL` | אלי שלח מחיר סופי | הסכמה → WON / דחייה / מיקוח | בוט |
-| 6 | `WON` | הלקוח הסכים למחיר הסופי | סוף (סטטוס סופי) | בוט |
-| 7 | `DROPPED` | אלי החליט שהליד מת | סוף (סטטוס סופי) | **רק אלי** |
+| # | Stage | תווית עברית | מתי נכנסים | מתי יוצאים | מי משנה |
+|---|---|---|---|---|---|
+| 0 | `NULL` | בשאלון | first inbound (pre-quote) | סיום שאלון → שלב 1 | בוט |
+| 1 | `INITIAL_QUOTE_SENT` | הצעה ראשונית נשלחה | בוט שלח מחיר משוער + "מתאים?" | הסכמה / דחייה / שינוי מפרט / 24h ללא תגובה | בוט |
+| 2 | `AWAITING_FIRST_RESPONSE` | ממתין לתגובה ראשונה | חלפו 24h+ ללא תגובה אחרי שלב 1 | לקוח מגיב | בוט (cron) |
+| 3 | `SHOWED_INTEREST` | הראה עניין | לקוח שאל שאלה / ביקש שינוי / ביקש להמשיך | אלי החליט אם לשלוח למפעל | בוט / אלי |
+| 4 | `FACTORY_CHECK` | בדיקת מפעל | לקוח הסכים → איסוף לוגו / "אחר" → מפעל / calc API נכשל | תשובת מפעל מוכנה | בוט (subFlow=awaiting_logo) / אלי (subFlow=awaiting_factory_estimate) |
+| 5 | `FINAL_QUOTE_SENT` | הצעה סופית נשלחה | אלי שלח מחיר סופי | הסכמה → WON / דחייה / מיקוח | בוט |
+| 6 | `NEGOTIATING` | במשא ומתן / החלטה | לקוח מתמקח / מתלבט / מבקש הנחה | סגירה / נטישה | בוט / אלי |
+| 7 | `WON` | נסגר | הלקוח אישר / שילם / הוזמן | סוף (סטטוס סופי) | בוט / אלי |
+| 8 | `LOST` | לא נסגר | סירוב מפורש / 3+ פולואפים בלי תגובה / מצא ספק אחר | סוף — חייב למלא `loss_reason` | **רק אלי** |
 
-> **סאב-state ב-qState, לא stage נפרד:**
-> - מיקוח ("יקר") → נשאר ב-`AWAITING_ESTIMATE` עם `qState.decisionState='awaiting_competitor_offer'` ו-NEEDS_ELI flag.
-> - בקשת שיחה → `WAITING_FACTORY` + NEEDS_ELI + tag `ביקש_שיחה`.
-> - לוגו התקבל → `WAITING_FACTORY` + NEEDS_ELI (אלי מעבד לקראת מחיר סופי).
+### qState.subFlow — תת-מצבים פנימיים של הבוט
+
+**`subFlow` הוא state machine פנימי של ה-autoresponder.** לקוח־רגיל לעולם לא רואה אותו; ה-pipeline_stage מספק את התצוגה החיצונית. ה-subFlow קובע איזה handler ירוץ על inbound ב-decision.ts.
+
+| subFlow | בתוך stage | משמעות |
+|---|---|---|
+| `awaiting_estimate_decision` | `INITIAL_QUOTE_SENT` | בוט שאל "מתאים?", מחכה לתגובה (accept / negotiate / reject) |
+| `awaiting_logo` | `FACTORY_CHECK` | לקוח הסכים — בוט אוסף לוגו |
+| `awaiting_factory_estimate` | `FACTORY_CHECK` | לוגו / מפרט אצל מפעל — אלי עובד ידנית |
+| `awaiting_final_decision` | `FINAL_QUOTE_SENT` | בוט שולח את ההצעה הסופית ומחכה לתגובה |
+
+### `loss_reason` (חובה ב-LOST)
+
+כאשר ה-stage עובר ל-`LOST`, חובה למלא `leads.loss_reason` באחד מ:
+
+- `יקר_לו`
+- `לא_ענה`
+- `לא_רלוונטי`
+- `מצא_ספק_אחר`
+- `זמן_אספקה`
+- `כמות`
+
+מקור: `LOSS_REASONS` ב-`lib/manychat/stages.ts`.
 
 ### Flags (רוחביים — יכולים להתלוות לכל stage)
 

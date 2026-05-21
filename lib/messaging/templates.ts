@@ -5,42 +5,45 @@
 // "bot" or "team". Plural-neutral address to the customer ("אתם / לכם").
 // Emojis: 0-1 per message, only when they add. See docs/BOT-COPY.md.
 //
-// Cadence + thresholds aligned to docs/BOT-COPY.md (which supersedes v2 spec
-// where they differ — notably AWAITING_FINAL is 2h × 3, not 24/36/72h).
-// See app/api/bot/followups/route.ts for the cadence rules themselves.
+// Cadence + thresholds aligned to docs/BOT-COPY.md. See
+// app/api/bot/followups/route.ts for the cadence rules themselves.
+//
+// Labels here are autoresponder-template keys (not pipeline_stage values).
+// AWAITING_LOGO is the logo-collection follow-up template used while
+// pipeline_stage=FACTORY_CHECK + qState.subFlow=awaiting_logo.
 
 export type FollowupStage =
   | "MID_QUESTIONNAIRE"
-  | "AWAITING_ESTIMATE"
+  | "INITIAL_QUOTE_SENT"
   | "AWAITING_LOGO"
-  | "AWAITING_FINAL";
+  | "FINAL_QUOTE_SENT";
 
 const TEMPLATES: Record<FollowupStage, string[]> = {
-  // Stage 1 — pipeline_stage = NEW with q_state mid-flight (not bailed, not done).
+  // pre-quote — questionnaire mid-flight (not bailed, not done).
   // Cadence: 1h × 3.
   MID_QUESTIONNAIRE: [
     "30 שניות, ויש לכם הצעת מחיר. נמשיך?",
     "משהו לא ברור בשאלה? תכתבו לי, אעזור.",
     "אם נוח לכם בטלפון — תגידו, ואתקשר היום-מחר.",
   ],
-  // Stage 2 — bot waiting on customer response to estimated quote.
+  // INITIAL_QUOTE_SENT — bot waiting on customer response to estimated quote.
   // Cadence: 2h / 12h / 23h.
-  AWAITING_ESTIMATE: [
+  INITIAL_QUOTE_SENT: [
     "היי, חוזר אליכם. רציתי לשמוע מה דעתכם על ההצעה ששלחתי.",
     "אם נוח לכם בטלפון — תגידו, אתקשר.",
     "ניסיון אחרון. רוצים שאתקשר, או שנעזוב לעת עתה?",
   ],
-  // Stage 3 — bot waiting on logo file.
+  // FACTORY_CHECK (subFlow=awaiting_logo) — bot waiting on logo file.
   // Cadence: 2h / 12h / 23h.
   AWAITING_LOGO: [
     "היי, מחכה ללוגו שלכם כדי לשלוח את המחיר הסופי. אפשר לשלוח עכשיו?",
     "משהו מעכב את הלוגו? תכתבו לי.",
     "ניסיון אחרון. רוצים שאתקשר?",
   ],
-  // Stage 4 — bot waiting on customer response to final price.
-  // Cadence: 2h / 12h / 23h (same as Stages 2/3). Final price is hot;
-  // we lead with a 2h nudge while the price is still fresh.
-  AWAITING_FINAL: [
+  // FINAL_QUOTE_SENT — bot waiting on customer response to final price.
+  // Cadence: 2h / 12h / 23h. Final price is hot; we lead with a 2h nudge
+  // while the price is still fresh.
+  FINAL_QUOTE_SENT: [
     "היי, חוזר אליכם לגבי המחיר הסופי. הספקתם לחשוב על ההצעה?",
     "אם יש משהו שצריך להבהיר — תכתבו לי. אם לא — אעביר את זה לסיים בטלפון.",
     "אם לא מתאים עכשיו — אין בעיה, תחזרו אליי כשתרצו. אחרת אתקשר היום-מחר.",
@@ -62,7 +65,7 @@ export function followupTemplate(
 }
 
 /**
- * Eli-only daily reminder while a lead sits in WAITING_FACTORY.
+ * Eli-only daily reminder while a lead sits in FACTORY_CHECK (subFlow=awaiting_factory_estimate).
  * Escalates wording after 3+ days waiting — past 3 days the chance of
  * losing the lead grows.
  */

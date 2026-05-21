@@ -1,35 +1,34 @@
 /**
- * Post-questionnaire decision sub-flow. Aligned to docs/CUSTOMER-FLOW.md v2.
+ * Post-questionnaire decision sub-flow. Aligned to docs/CUSTOMER-FLOW.md.
  *
- *   AWAITING_ESTIMATE  (Stage 2 — bot asked "המחיר מתאים?")
- *     ├─ accept             → AWAITING_LOGO (bot asks for logo)
+ * Stage values use the 8-stage journey model from lib/manychat/stages.ts.
+ * Internal autoresponder sub-flow is tracked on qState.subFlow:
+ *
+ *   subFlow="awaiting_estimate_decision"  (stage = INITIAL_QUOTE_SENT)
+ *     bot asked "המחיר מתאים?"
+ *     ├─ accept             → FACTORY_CHECK + subFlow="awaiting_logo"
  *     ├─ samples_request    → catalog URL, stay
- *     ├─ negotiating ("יקר") → ask "יש לך הצעה מתחרה?" (sub-state)
- *     ├─ reject             → ask "יש סיבה ספציפית?" (sub-state)
- *     ├─ custom_size        → escalate (Stage 2.5 — Eli prices manually)
+ *     ├─ negotiating ("יקר") → ask "יש לך הצעה מתחרה?" (decisionState sub-sub-state)
+ *     ├─ reject             → ask "יש סיבה ספציפית?" (decisionState)
+ *     ├─ custom_size        → escalate (Eli prices manually)
  *     ├─ question_delivery  → canned 25/90 days, stay
  *     ├─ question_inclusive → canned "כן הכל כלול", stay
  *     ├─ question_payment   → canned 50/50, stay
  *     ├─ question_meeting / question_other → escalate
  *     └─ other              → no-op (cadence keeps nudging)
  *
- *   Sub-states inside AWAITING_ESTIMATE (qState.decisionState):
- *     "awaiting_reason":
- *       intent=negotiating ("יקר")  → "awaiting_competitor_offer" + COMPETITOR prompt
- *       anything else              → escalate ("סיבה אחרת")
- *     "awaiting_competitor_offer":
- *       text contains digits / negotiating → escalate (Eli decides on match)
- *       intent=reject                       → "awaiting_pause_reason" + PAUSE prompt
- *       anything else                       → escalate
- *     "awaiting_pause_reason":
- *       has any text → clear sub-state, no-op (cadence picks up 24/36/72h)
+ *   subFlow="awaiting_logo"  (stage = FACTORY_CHECK)
+ *     ├─ media inbound (image / file / link) → subFlow="awaiting_factory_estimate" + NEEDS_ELI + Eli DM
+ *     ├─ text + intent=question_format       → canned "כל פורמט בסדר", stay
+ *     └─ text (other)                         → re-ask up to 3x, then escalate
  *
- *   AWAITING_LOGO  (Stage 3)
- *     ├─ media inbound (image / file / link) → WAITING_FACTORY + NEEDS_ELI + Eli DM
- *     ├─ text + intent=question_format        → canned "כל פורמט בסדר", stay
- *     └─ text (other)                          → re-ask up to 3x, then escalate
+ *   subFlow="awaiting_factory_estimate"  (stage = FACTORY_CHECK)
+ *     bot is paused — Eli/factory works the price manually.
  *
- * Both sub-flows respect bot_paused (caller skips this module when paused).
+ *   subFlow="awaiting_final_decision"  (stage = FINAL_QUOTE_SENT)
+ *     Eli sent final price; bot watches for customer reaction.
+ *
+ * Sub-flows respect bot_paused (caller skips this module when paused).
  */
 import { db } from "../db";
 import { leads, messages as messagesTable } from "../../drizzle/schema";
@@ -116,7 +115,7 @@ const REPLY_SPEC_CHANGE_REPROMPT =
 const REPLY_SPEC_CHANGE_AUTO_QUOTE =
   "סבבה, עדכנתי את הפרטים. הנה ההצעה המעודכנת:";
 
-// Stage 4 (AWAITING_FINAL) copies
+// FINAL_QUOTE_SENT (subFlow=awaiting_final_decision) copies
 const FINAL_ACCEPT_REPLY =
   "מעולה 🎉 אתקשר אליכם תוך כמה שעות עם פרטי תשלום ולוחות זמנים.";
 const FINAL_HAGGLE_PROMPT =
@@ -417,8 +416,10 @@ export interface DecisionResult {
 }
 
 /**
- * Handle inbound for a lead currently in AWAITING_ESTIMATE or AWAITING_LOGO.
- * Returns no_op for any other stage (caller decides what to do).
+ * Handle inbound for a lead in one of the post-quote autoresponder sub-flows.
+ * Routes by qState.subFlow (set when entering each sub-flow); falls back to
+ * deriving from pipeline_stage for leads written before the subFlow refactor.
+ * Returns no_op for anything outside the autoresponder's scope.
  */
 export async function handleDecisionInbound(input: {
   sid: string;
@@ -429,17 +430,33 @@ export async function handleDecisionInbound(input: {
   if (!ctx) return { action: "no_op", detail: "no lead row" };
 
   const stage = (ctx.pipelineStage ?? "").toUpperCase();
+  const subFlow =
+    ((ctx.qState as Record<string, unknown> | null)?.subFlow as string | undefined) ?? null;
 
-  if (stage === "AWAITING_LOGO") {
+  // subFlow is authoritative when present.
+  if (subFlow === "awaiting_logo") {
     return handleLogoStage(ctx, input.text, input.hasMedia);
   }
-  if (stage === "AWAITING_ESTIMATE") {
+  if (subFlow === "awaiting_estimate_decision") {
     return handleDecisionStage(ctx, input.text);
   }
-  if (stage === "AWAITING_FINAL") {
+  if (subFlow === "awaiting_final_decision") {
     return handleFinalStage(ctx, input.text);
   }
-  return { action: "no_op", detail: `stage=${stage}` };
+
+  // Fallback for leads written before subFlow existed. FACTORY_CHECK without
+  // a subFlow most commonly means awaiting_logo (the bot-driven happy path);
+  // awaiting_factory_estimate is set explicitly elsewhere.
+  if (stage === "FACTORY_CHECK") {
+    return handleLogoStage(ctx, input.text, input.hasMedia);
+  }
+  if (stage === "INITIAL_QUOTE_SENT") {
+    return handleDecisionStage(ctx, input.text);
+  }
+  if (stage === "FINAL_QUOTE_SENT") {
+    return handleFinalStage(ctx, input.text);
+  }
+  return { action: "no_op", detail: `stage=${stage} subFlow=${subFlow}` };
 }
 
 async function handleDecisionStage(
@@ -448,7 +465,7 @@ async function handleDecisionStage(
 ): Promise<DecisionResult> {
   const t = (text ?? "").trim();
   if (!t) {
-    // Empty text at AWAITING_ESTIMATE = customer sent media without
+    // Empty text at INITIAL_QUOTE_SENT = customer sent media without
     // caption (e.g. they accepted the quote and sent a logo eagerly, or
     // a voice note / sticker). The bot can't classify, but silence makes
     // the customer feel ignored. Escalate so Eli sees it in the
@@ -683,11 +700,15 @@ async function handleDecisionStage(
   // --- Fresh inbound (no sub-state) ---
   switch (classification.intent) {
     case "accept": {
-      const cleared = { ...(ctx.qState ?? {}), decisionState: null };
+      const cleared = {
+        ...(ctx.qState ?? {}),
+        decisionState: null,
+        subFlow: "awaiting_logo",
+      };
       await db
         .update(leads)
         .set({
-          pipelineStage: "AWAITING_LOGO",
+          pipelineStage: "FACTORY_CHECK",
           followUpCount: 0,
           lastFollowUpAt: new Date(),
           botSummary: "customer accepted quote — awaiting logo",
@@ -822,7 +843,7 @@ async function handleDecisionStage(
       };
     }
     case "question_format": {
-      // Format question makes more sense at AWAITING_LOGO, but if it lands here,
+      // Format question makes more sense at subFlow=awaiting_logo, but if it lands here,
       // answer it anyway so the customer isn't ignored.
       await sendBridgeMessage(ctx.jid, REPLY_LOGO_FORMAT);
       return { action: "canned_reply", intent: classification.intent, detail: "format" };
@@ -891,10 +912,12 @@ async function handleLogoStage(
   hasMedia: boolean
 ): Promise<DecisionResult> {
   if (hasMedia) {
+    const next = { ...(ctx.qState ?? {}), subFlow: "awaiting_factory_estimate" };
     await db
       .update(leads)
       .set({
-        pipelineStage: "WAITING_FACTORY",
+        qState: next as any,
+        pipelineStage: "FACTORY_CHECK",
         pipelineFlag: "NEEDS_ELI",
         botPaused: true,
         botSummary: "logo received — Eli to send final price within 24h",
@@ -925,10 +948,12 @@ async function handleLogoStage(
   // §3.6 — text contains a file-share URL (Drive / Dropbox / WeTransfer / etc).
   // Treat as logo received — same flow as hasMedia.
   if (t && hasLogoLink(t)) {
+    const next = { ...(ctx.qState ?? {}), subFlow: "awaiting_factory_estimate" };
     await db
       .update(leads)
       .set({
-        pipelineStage: "WAITING_FACTORY",
+        qState: next as any,
+        pipelineStage: "FACTORY_CHECK",
         pipelineFlag: "NEEDS_ELI",
         botPaused: true,
         botSummary: "logo link received — Eli to send final price within 24h",
@@ -1026,10 +1051,10 @@ async function handleFinalStage(
 ): Promise<DecisionResult> {
   const t = (text ?? "").trim();
   if (!t) {
-    // Same logic as AWAITING_ESTIMATE: empty text usually means media
+    // Same logic as INITIAL_QUOTE_SENT: empty text usually means media
     // without caption. Don't ghost the customer — escalate so the lead
     // surfaces in the dashboard for manual reply.
-    await escalateToEli(ctx, "Customer sent media-only / empty message at AWAITING_FINAL", {
+    await escalateToEli(ctx, "Customer sent media-only / empty message at FINAL_QUOTE_SENT", {
       kind: "generic",
       llmAnalysis:
         "הלקוח שלח הודעה בלי טקסט אחרי המחיר הסופי. ייתכן שזה הלוגו או קובץ עזר.",

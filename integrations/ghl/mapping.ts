@@ -20,6 +20,7 @@ export interface LocalLeadSnapshot {
   pipelineFlag?: string | null;
   botSummary?: string | null;
   quoteTotal?: string | null;
+  lossReason?: string | null;
 }
 
 /**
@@ -37,8 +38,10 @@ export function pickStageId(lead: LocalLeadSnapshot): string | null {
   if (lead.pipelineFlag === "NEEDS_ELI" && GHL_STAGE_IDS.NEEDS_ELI) {
     return GHL_STAGE_IDS.NEEDS_ELI;
   }
-  const stage = (lead.pipelineStage as LocalStage | null) ?? "NEW";
-  const id = GHL_STAGE_IDS[stage] || GHL_STAGE_IDS.NEW;
+  // pipeline_stage = NULL means pre-quote (questionnaire); no GHL opportunity
+  // stage to assign — fall back to INITIAL_QUOTE_SENT (closest sensible default).
+  const stage = (lead.pipelineStage as LocalStage | null) ?? "INITIAL_QUOTE_SENT";
+  const id = GHL_STAGE_IDS[stage] || GHL_STAGE_IDS.INITIAL_QUOTE_SENT;
   return id || null;
 }
 
@@ -51,7 +54,7 @@ export function pickOpportunityStatus(
   lead: LocalLeadSnapshot
 ): "open" | "won" | "lost" | "abandoned" {
   if (lead.pipelineStage === "WON") return "won";
-  if (lead.pipelineStage === "DROPPED") return "lost";
+  if (lead.pipelineStage === "LOST") return "lost";
   return "open";
 }
 
@@ -87,6 +90,7 @@ export function buildCustomFieldsPayload(
   add(out, "bot_summary", lead.botSummary);
   add(out, "quote_total", lead.quoteTotal ? Number(lead.quoteTotal) : null);
   add(out, "pipeline_flag", lead.pipelineFlag);
+  add(out, "loss_reason", lead.lossReason);
   return out;
 }
 

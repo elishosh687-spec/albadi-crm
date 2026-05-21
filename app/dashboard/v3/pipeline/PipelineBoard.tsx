@@ -42,7 +42,7 @@ export function PipelineBoard({
   const visibleStages = useMemo(
     () =>
       stages.filter((s) => {
-        if (!showClosed && (s === "WON" || s === "DROPPED")) return false;
+        if (!showClosed && (s === "WON" || s === "LOST")) return false;
         return (grouped.get(s)?.length ?? 0) > 0;
       }),
     [stages, grouped, showClosed]
@@ -69,7 +69,7 @@ export function PipelineBoard({
             onChange={(e) => setShowClosed(e.target.checked)}
             className="rounded border-border bg-card"
           />
-          הראה סגורים (WON / DROPPED)
+          הראה סגורים (WON / LOST)
         </label>
       </header>
 

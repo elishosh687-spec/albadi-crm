@@ -5,6 +5,27 @@
 
 ---
 
+## 2026-05-21 — "Pipeline refactor: 7-stage → 8-stage journey model"
+
+### Changed
+- **Pipeline stages refactored to 8-stage journey model.** Replaced the old action-state-mixing 7-stage enum (`NEW / AWAITING_ESTIMATE / AWAITING_LOGO / WAITING_FACTORY / AWAITING_FINAL / CALLBACK_LATER / WON / DROPPED`) with a journey-only model: `NULL (pre-quote) / INITIAL_QUOTE_SENT / AWAITING_FIRST_RESPONSE / SHOWED_INTEREST / FACTORY_CHECK / FINAL_QUOTE_SENT / NEGOTIATING / WON / LOST`. Stages now describe **where the sale is**, not what action the bot should take next; per-lead tasks (`crm_tasks`) and `qState.subFlow` handle the operational layer. ([lib/manychat/stages.ts](lib/manychat/stages.ts), [docs/CUSTOMER-FLOW.md](docs/CUSTOMER-FLOW.md))
+- **Internal autoresponder sub-state moved to `qState.subFlow`.** Values: `awaiting_estimate_decision` (inside INITIAL_QUOTE_SENT), `awaiting_logo` (inside FACTORY_CHECK — bot collecting logo), `awaiting_factory_estimate` (inside FACTORY_CHECK — Eli/factory works price), `awaiting_final_decision` (inside FINAL_QUOTE_SENT). Routing in `handleDecisionInbound` checks subFlow first, falls back to stage. ([lib/autoresponder/decision.ts](lib/autoresponder/decision.ts), [lib/autoresponder/questionnaire.ts](lib/autoresponder/questionnaire.ts))
+- **New leads schema columns**: `last_response_at` (customer's last reply timestamp, distinct from `last_follow_up_at`), `loss_reason` (required when stage=LOST — one of `יקר_לו / לא_ענה / לא_רלוונטי / מצא_ספק_אחר / זמן_אספקה / כמות`), `priority` (low|normal|high|urgent), `owner_id` (denormalized from `crm_lead_episodes.owner_id`). ([drizzle/schema.ts](drizzle/schema.ts))
+- **Auto-task hook on stage change** in `setLeadStage`. Every stage transition (except `AWAITING_FIRST_RESPONSE`) creates a `crm_tasks` row with a stage-appropriate title + dueAt: 24h for `INITIAL_QUOTE_SENT`/`FACTORY_CHECK`/`FINAL_QUOTE_SENT`/`WON`, 2h for `SHOWED_INTEREST`, 4h for `NEGOTIATING`. ([app/actions/v2.ts](app/actions/v2.ts))
+- **GHL pipeline mirror updated** — `GHL_STAGE_IDS` env keys renamed to the 8 new stages; new custom field `loss_reason` added to `GHL_FIELD_DEFINITIONS`; `pickOpportunityStatus` maps `LOST → "lost"`. Re-run `npx tsx integrations/ghl/bootstrap.ts` after creating the 8 stages in GHL UI to populate the env block. ([integrations/ghl/config.ts](integrations/ghl/config.ts), [integrations/ghl/mapping.ts](integrations/ghl/mapping.ts), [integrations/ghl/bootstrap.ts](integrations/ghl/bootstrap.ts))
+- **Bridge webhook routing** + greenapi webhook routing updated to dispatch new stages to `handleDecisionInbound` and read `qState.subFlow` for media-only fast-path. ([app/api/bridge/webhook/route.ts](app/api/bridge/webhook/route.ts), [app/api/greenapi/webhook/route.ts](app/api/greenapi/webhook/route.ts))
+- **Tags extended** with name-only flags: `לקוח_חם` (auto-set on SHOWED_INTEREST), `לא_ענה`, `מחכה_למפעל`. Numeric ManyChat tag IDs in `V2_FLAG_TAG_IDS` remain for the existing 5 flags (vestigial post-bridge-cutover). New tags write directly to `lead_tags` table; legacy `addTag(sid, tagId)` path skipped silently. ([lib/manychat/stages.ts](lib/manychat/stages.ts), [app/actions/v2.ts](app/actions/v2.ts))
+- **Dashboard v3 + analytics + supervisor prompts** rewritten for new stage labels, colors, funnel order, bucket categorization, and LLM-guidance examples.
+- **`new-lead` upsert** no longer sets `pipeline_stage='NEW'`. Pre-quote leads sit at `pipeline_stage=NULL` until the bot's `routeToQuoted` writes `INITIAL_QUOTE_SENT`. ([lib/bridge/client.ts](lib/bridge/client.ts))
+
+### Required follow-up actions (manual)
+1. `npx drizzle-kit push` — adds `last_response_at`, `loss_reason`, `priority`, `owner_id` columns.
+2. `psql "$DATABASE_URL" -f scripts/_migrate-stage-rename.sql` — backfills `leads.pipeline_stage`, `opportunities.pipeline_stage`, and `qState.subFlow`. Idempotent.
+3. In GHL UI → Opportunities → Pipelines → Albadi: rename or recreate the 8 stages to match the new model.
+4. Re-run `npx tsx integrations/ghl/bootstrap.ts` and paste the printed `GHL_STAGE_*` + `GHL_FIELD_LOSS_REASON` env block into Vercel (prod + preview).
+
+---
+
 ## 2026-05-21 — "GHL outbound mirror: include `sender='eli'`"
 
 ### Fixed

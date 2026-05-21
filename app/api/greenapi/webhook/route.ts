@@ -232,7 +232,8 @@ async function upsertLeadFromGreen(input: {
     name: input.name ?? null,
     source: "greenapi_webhook",
     active: true,
-    pipelineStage: "NEW",
+    // pipeline_stage = NULL while the questionnaire runs (pre-quote).
+    pipelineStage: null,
   });
   return input.chatId;
 }
@@ -419,19 +420,29 @@ async function handleIncoming(evt: GreenWebhook): Promise<void> {
     .where(sql`trim(${leads.manychatSubId}) = ${canonicalSid.trim()}`)
     .limit(1);
 
-  const stage = (snap?.stage ?? "NEW").toUpperCase();
+  const stage = (snap?.stage ?? "").toUpperCase();
 
   try {
-    if (!stage || stage === "NEW" || stage === "AWAITING_ESTIMATE") {
+    if (!stage) {
+      // Pre-quote — questionnaire path.
       await handleInbound({ sid: canonicalSid, text: textForRouting ?? "" });
-    } else if (stage === "AWAITING_LOGO" || stage === "AWAITING_FINAL") {
+    } else if (
+      stage === "INITIAL_QUOTE_SENT" ||
+      stage === "FACTORY_CHECK" ||
+      stage === "FINAL_QUOTE_SENT" ||
+      stage === "AWAITING_FIRST_RESPONSE" ||
+      stage === "SHOWED_INTEREST" ||
+      stage === "NEGOTIATING"
+    ) {
+      // Internal subFlow routing (logo vs estimate vs final) lives inside
+      // handleDecisionInbound via qState.subFlow.
       await handleDecisionInbound({
         sid: canonicalSid,
         text: textForRouting,
         hasMedia,
       });
     }
-    // WAITING_FACTORY / WON / DROPPED → no-op
+    // WON / LOST → no-op
   } catch (e) {
     console.error("[green.webhook] handler failed", e);
   }

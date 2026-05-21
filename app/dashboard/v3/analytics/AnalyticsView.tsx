@@ -504,13 +504,15 @@ function extractFill(stage: string): string {
   // Map the Tailwind tone -> approximate fill color for recharts (no dynamic
   // Tailwind reading at runtime). Falls back to muted.
   const map: Record<string, string> = {
-    NEW: "#0ea5e9",
-    AWAITING_ESTIMATE: "#d946ef",
-    AWAITING_LOGO: "#06b6d4",
-    WAITING_FACTORY: "#f59e0b",
-    AWAITING_FINAL: "#f43f5e",
+    INITIAL_QUOTE_SENT: "#0ea5e9",
+    AWAITING_FIRST_RESPONSE: "#d946ef",
+    SHOWED_INTEREST: "#06b6d4",
+    FACTORY_CHECK: "#f59e0b",
+    FINAL_QUOTE_SENT: "#f43f5e",
+    NEGOTIATING: "#a855f7",
     WON: "#10b981",
-    DROPPED: "#64748b",
+    LOST: "#64748b",
+    PRE_QUOTE: "#94a3b8",
     UNCLASSIFIED: "#94a3b8",
   };
   return map[stage] ?? "#64748b";

@@ -221,12 +221,13 @@ async function loadLeadCards(): Promise<{
       botPaused: leads.botPaused,
       followUpCount: leads.followUpCount,
       updatedAt: leads.updatedAt,
+      qState: leads.qState,
     })
     .from(leads)
     .where(
       and(
         eq(leads.active, true),
-        or(isNull(leads.pipelineStage), notInArray(leads.pipelineStage, ["DROPPED", "WON"]))
+        or(isNull(leads.pipelineStage), notInArray(leads.pipelineStage, ["LOST", "WON"]))
       )
     )
     .orderBy(desc(leads.updatedAt));
@@ -272,7 +273,8 @@ async function loadLeadCards(): Promise<{
     jid: r.jid,
     source: r.source,
     leadSource: r.leadSource,
-    stage: r.stage ?? "NEW",
+    stage: r.stage ?? null,
+    qState: r.qState as Record<string, unknown> | null,
     pipelineFlag: r.flag,
     flags: tagsBySid.get(r.sid.trim()) ?? [],
     botSummary: r.botSummary,
@@ -297,7 +299,7 @@ async function ExpandedLeadWrapper({ sid, from }: { sid: string; from?: string }
         : "/dashboard/v3";
   // Neighbor sids — scope depends on `from`. Followup/factory contexts page
   // only through that queue so the arrows mirror the list the user came from.
-  // Default = all active non-DROPPED/WON leads (the main overview).
+  // Default = all active non-LOST/WON leads (the main overview).
   const neighborQuery: Promise<string[]> =
     from === "followup"
       ? loadFollowupQueueSids()
@@ -311,7 +313,7 @@ async function ExpandedLeadWrapper({ sid, from }: { sid: string; from?: string }
                 eq(leads.active, true),
                 or(
                   isNull(leads.pipelineStage),
-                  notInArray(leads.pipelineStage, ["DROPPED", "WON"])
+                  notInArray(leads.pipelineStage, ["LOST", "WON"])
                 )
               )
             )

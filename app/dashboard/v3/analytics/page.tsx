@@ -13,11 +13,12 @@ export const revalidate = 0;
 export const maxDuration = 30;
 
 const FUNNEL_ORDER = [
-  "NEW",
-  "AWAITING_ESTIMATE",
-  "AWAITING_LOGO",
-  "WAITING_FACTORY",
-  "AWAITING_FINAL",
+  "INITIAL_QUOTE_SENT",
+  "AWAITING_FIRST_RESPONSE",
+  "SHOWED_INTEREST",
+  "FACTORY_CHECK",
+  "FINAL_QUOTE_SENT",
+  "NEGOTIATING",
   "WON",
 ];
 
@@ -136,7 +137,7 @@ export default async function V3AnalyticsPage() {
       .where(
         and(
           eq(leads.active, true),
-          sql`${leads.pipelineStage} NOT IN ('WON', 'DROPPED')`,
+          sql`${leads.pipelineStage} NOT IN ('WON', 'LOST')`,
           sql`${leads.updatedAt} < ${staleSince}`
         )
       ),
@@ -157,7 +158,13 @@ export default async function V3AnalyticsPage() {
     db
       .select({ count: sql<number>`count(*)::int` })
       .from(leads)
-      .where(and(eq(leads.active, true), eq(leads.pipelineStage, "WAITING_FACTORY"))),
+      .where(
+        and(
+          eq(leads.active, true),
+          eq(leads.pipelineStage, "FACTORY_CHECK"),
+          sql`${leads.qState}->>'subFlow' = 'awaiting_factory_estimate'`
+        )
+      ),
     db
       .select({
         active: sql<number>`count(*) filter (where ${leads.qState} is not null and ${leads.qState}->>'doneAt' is null and coalesce(${leads.qState}->>'bailed', 'false') <> 'true')::int`,

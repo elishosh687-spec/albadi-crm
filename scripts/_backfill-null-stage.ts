@@ -3,6 +3,7 @@
  * Doesn't touch leads with any explicit stage (incl. DROPPED/WON).
  * Idempotent.
  */
+import "dotenv/config";
 import { db } from "../lib/db";
 import { sql } from "drizzle-orm";
 

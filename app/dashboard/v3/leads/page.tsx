@@ -68,7 +68,7 @@ async function LeadsListWrapper() {
 /**
  * Loads + renders ExpandedLead for the /leads context. Neighbor list mirrors
  * what LeadsView shows: ALL active leads, optionally narrowed to a single
- * pipeline stage when the user is filtered (e.g. ?stage=WAITING_FACTORY).
+ * pipeline stage when the user is filtered (e.g. ?stage=FACTORY_CHECK).
  * Prev/next then paginates only inside that subset. backHref preserves the
  * stage query so returning to the list keeps the same filter.
  */

@@ -60,7 +60,7 @@ export function OrderSummary({
   data: OrderSummaryData;
   sid?: string;
 }) {
-  const stage = (data.stage ?? "NEW").toUpperCase();
+  const stage = (data.stage ?? "PRE_QUOTE").toUpperCase();
   const tone = STAGE_TONE[stage] ?? STAGE_TONE.UNCLASSIFIED;
   const hasAnyData = !!(
     data.botSummary ||
@@ -310,7 +310,7 @@ function TagsPicker({
     currentStage
   )
     ? (currentStage as V2PipelineStage)
-    : ("NEW" as V2PipelineStage);
+    : ("INITIAL_QUOTE_SENT" as V2PipelineStage);
 
   const write = (nextFlags: V2FlagName[]) => {
     setErr(null);

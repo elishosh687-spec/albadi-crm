@@ -55,10 +55,25 @@ export const leads = pgTable("leads", {
   // Currently single-flag scalar (e.g. 'NEEDS_ELI'). Migrate to array later if needed.
   pipelineFlag: text("pipeline_flag"),
 
+  // === 8-stage pipeline refactor (see lib/manychat/stages.ts) ===
+  // When the customer last replied (≠ lastFollowUpAt which is when WE last touched).
+  lastResponseAt: timestamp("last_response_at", { withTimezone: true }),
+  // Required when pipeline_stage = LOST. Enum-by-convention; values defined
+  // in lib/manychat/stages.ts → LOSS_REASONS.
+  lossReason: text("loss_reason"),
+  // Lead priority for sorting/filtering — low|normal|high|urgent.
+  priority: text("priority"),
+  // Denormalized from crm_lead_episodes.ownerId for fast filtering.
+  ownerId: text("owner_id"),
+
   // Manual factory-quote spec that Eli filled but hasn't sent yet.
   // Shape: FactoryProductSpec + optional notes. Cleared on successful
   // POST /api/factory/quote-request. See lib/factory/types.ts.
   factorySpecDraft: jsonb("factory_spec_draft"),
+
+  // Legacy Kommo CRM id — preserved from earlier CRM. Not actively used by
+  // the current code but kept to avoid losing historical mapping.
+  kommoLeadId: text("kommo_lead_id"),
 
   // GoHighLevel CRM ids. Populated by integrations/ghl/sync.ts on first sync.
   ghlContactId: text("ghl_contact_id"),

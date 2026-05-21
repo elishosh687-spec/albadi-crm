@@ -54,11 +54,12 @@ function adjustForQuietHours(at: Date): { adjusted: Date; deferred: boolean } {
 }
 
 // Cadence rules — MUST match app/api/bot/followups/route.ts STAGE_RULES.
+// "PRE_QUOTE" is the sentinel for pipeline_stage IS NULL with active questionnaire.
 const CADENCE_BY_STAGE: Record<string, number[]> = {
-  NEW: [1 * HOUR_MS, 1 * HOUR_MS, 1 * HOUR_MS],
-  AWAITING_ESTIMATE: [2 * HOUR_MS, 12 * HOUR_MS, 23 * HOUR_MS],
-  AWAITING_LOGO: [2 * HOUR_MS, 12 * HOUR_MS, 23 * HOUR_MS],
-  AWAITING_FINAL: [2 * HOUR_MS, 12 * HOUR_MS, 23 * HOUR_MS],
+  PRE_QUOTE: [1 * HOUR_MS, 1 * HOUR_MS, 1 * HOUR_MS],
+  INITIAL_QUOTE_SENT: [2 * HOUR_MS, 12 * HOUR_MS, 23 * HOUR_MS],
+  FACTORY_CHECK: [2 * HOUR_MS, 12 * HOUR_MS, 23 * HOUR_MS],
+  FINAL_QUOTE_SENT: [2 * HOUR_MS, 12 * HOUR_MS, 23 * HOUR_MS],
 };
 
 interface QueueRow {
@@ -126,17 +127,18 @@ async function loadQueue(): Promise<QueueRow[]> {
     const stage = (r.stage ?? "").toUpperCase();
 
     // Skip terminal stages.
-    if (stage === "WON" || stage === "DROPPED") continue;
-    // Skip stages that don't have customer-side follow-ups.
-    if (stage === "WAITING_FACTORY") continue;
+    if (stage === "WON" || stage === "LOST") continue;
+    // FACTORY_CHECK split: Eli-only sub-flow has no customer-side follow-ups.
+    const subFlow = (r.qState as any)?.subFlow;
+    if (stage === "FACTORY_CHECK" && subFlow === "awaiting_factory_estimate") continue;
 
-    // Pick cadence — NEW also requires q_state mid-flight (matches cron logic).
+    // Pick cadence — pre-quote also requires q_state mid-flight (matches cron logic).
     let cadences: number[] | null = null;
-    if (!stage || stage === "NEW") {
+    if (!stage) {
       const q = r.qState as any;
       if (!q || q.bailed || q.doneAt) continue;
       if (typeof q.step !== "number" || q.step < 2 || q.step > 7) continue;
-      cadences = CADENCE_BY_STAGE.NEW;
+      cadences = CADENCE_BY_STAGE.PRE_QUOTE;
     } else if (CADENCE_BY_STAGE[stage]) {
       cadences = CADENCE_BY_STAGE[stage];
     }
@@ -159,7 +161,7 @@ async function loadQueue(): Promise<QueueRow[]> {
       sid: r.sid,
       name: r.name,
       phone: r.phone,
-      stage: stage || "NEW",
+      stage: stage || "PRE_QUOTE",
       attemptNext: attempt + 1, // human-readable: "attempt 1" not "0"
       lastFollowUpAt: r.lastFollowUpAt,
       nextEligibleAt,

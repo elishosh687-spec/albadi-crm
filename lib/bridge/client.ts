@@ -707,7 +707,9 @@ export async function upsertLeadFromBridgeEvent(input: {
       name: enrichedName,
       source: input.source ?? "bridge_webhook",
       active: true,
-      pipelineStage: "NEW", // every fresh lead starts in NEW; promoted by handlers later
+      // pipeline_stage = NULL while questionnaire runs (pre-quote); promoted
+      // to INITIAL_QUOTE_SENT by routeToQuoted when the first quote goes out.
+      pipelineStage: null,
     })
     .onConflictDoUpdate({
       target: leads.manychatSubId,

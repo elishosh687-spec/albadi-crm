@@ -1,7 +1,7 @@
 /**
  * Bulk personalized outreach — one-shot.
  *
- * For every active lead (excluding WON/DROPPED and test JID), use an LLM to
+ * For every active lead (excluding WON/LOST and test JID), use an LLM to
  * compose a 1-2 sentence Hebrew message tailored to the lead's context
  * (notes, recent thread, stage, qState), send via bridge, and log to
  * bot_decision_log. 5 minute gap between sends.
@@ -10,7 +10,7 @@
  *   - bot_paused (we don't override Eli's explicit pause)
  *   - last outbound from bot/eli within 24h (avoid spamming)
  *   - test JIDs
- *   - WON / DROPPED / WAITING_FACTORY (terminal or Eli-only stages)
+ *   - WON / LOST / FACTORY_CHECK with subFlow=awaiting_factory_estimate (terminal or Eli-only stages)
  *
  * Run modes:
  *   --dry        print what WOULD be sent, no API calls, no DB writes
@@ -196,7 +196,11 @@ async function main() {
   const eligible: LeadRow[] = [];
   for (const r of candidates) {
     const stage = (r.stage ?? "").toUpperCase();
-    if (stage === "WON" || stage === "DROPPED" || stage === "WAITING_FACTORY") continue;
+    if (stage === "WON" || stage === "LOST") continue;
+    if (
+      stage === "FACTORY_CHECK" &&
+      (r.qState as any)?.subFlow === "awaiting_factory_estimate"
+    ) continue;
     if (r.botPaused) continue;
     const recipient = r.jid || r.sid;
     if (isTestJid(recipient)) continue;

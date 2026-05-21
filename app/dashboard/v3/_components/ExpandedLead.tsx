@@ -79,7 +79,7 @@ export interface ExpandedLeadProps {
    * Origin route — controls where "back" returns and which path the prev/next
    * router.replace targets. Lets the same component serve `/dashboard/v3` (the
    * overview "סקירה" context, default) and `/dashboard/v3/leads` (the full
-   * leads list including DROPPED/WON) without cross-context disorientation.
+   * leads list including LOST/WON) without cross-context disorientation.
    */
   backHref?: string;
   /** Most-recent pending bot draft (if any) — shown inline in overview tab. */
@@ -129,7 +129,7 @@ export function ExpandedLead({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const stage = (summary.stage ?? "NEW").toUpperCase();
+  const stage = (summary.stage ?? "PRE_QUOTE").toUpperCase();
   const tone = STAGE_TONE[stage] ?? STAGE_TONE.UNCLASSIFIED;
   const needsHuman =
     summary.flag === "NEEDS_ELI" || summary.flags.includes("NEEDS_ELI");
@@ -139,7 +139,10 @@ export function ExpandedLead({
   const priority: PriorityBand =
     needsHuman || summary.botPaused || quoteValue >= 10000
       ? "HOT"
-      : quoteValue > 0 || stage === "WAITING_FACTORY" || stage === "AWAITING_FINAL"
+      : quoteValue > 0 ||
+          stage === "FACTORY_CHECK" ||
+          stage === "FINAL_QUOTE_SENT" ||
+          stage === "NEGOTIATING"
         ? "WARM"
         : "LOW";
 
@@ -330,9 +333,11 @@ function OverviewTab({
   pendingDraft: PendingDraftInfo | null;
 }) {
   const [stage, setStage] = useState<V2PipelineStage>(
-    (V2_PIPELINE_STAGES.includes((summary.stage ?? "NEW") as V2PipelineStage)
+    (V2_PIPELINE_STAGES.includes(
+      (summary.stage ?? "INITIAL_QUOTE_SENT") as V2PipelineStage
+    )
       ? summary.stage
-      : "NEW") as V2PipelineStage
+      : "INITIAL_QUOTE_SENT") as V2PipelineStage
   );
   const [flags, setFlags] = useState<V2FlagName[]>(
     summary.flags.filter((f) =>

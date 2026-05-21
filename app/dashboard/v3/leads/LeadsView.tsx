@@ -8,17 +8,30 @@ import type { SheetGapRow } from "@/lib/sheets/lead-gaps";
 import { setLeadStage, deleteLeadAction } from "@/app/actions/v2";
 import { V2_PIPELINE_STAGES, type V2PipelineStage } from "@/lib/manychat/stages";
 
-const ALL_STAGES = ["ALL", "NEW", "AWAITING_ESTIMATE", "AWAITING_LOGO", "WAITING_FACTORY", "AWAITING_FINAL", "CALLBACK_LATER", "WON", "DROPPED", "GAPS"] as const;
+const ALL_STAGES = [
+  "ALL",
+  "PRE_QUOTE",
+  "INITIAL_QUOTE_SENT",
+  "AWAITING_FIRST_RESPONSE",
+  "SHOWED_INTEREST",
+  "FACTORY_CHECK",
+  "FINAL_QUOTE_SENT",
+  "NEGOTIATING",
+  "WON",
+  "LOST",
+  "GAPS",
+] as const;
 const STAGE_FILTER_LABEL: Record<string, string> = {
   ALL: "הכל",
-  NEW: "חדשים",
-  AWAITING_ESTIMATE: "ממתינים להצעה",
-  AWAITING_LOGO: "ממתינים ללוגו",
-  WAITING_FACTORY: "אצל המפעל",
-  AWAITING_FINAL: "אישור סופי",
-  CALLBACK_LATER: "לחזור בעתיד הרחוק",
-  WON: "נסגרו",
-  DROPPED: "ננטשו",
+  PRE_QUOTE: "בשאלון",
+  INITIAL_QUOTE_SENT: "הצעה ראשונית נשלחה",
+  AWAITING_FIRST_RESPONSE: "ממתין לתגובה ראשונה",
+  SHOWED_INTEREST: "הראה עניין",
+  FACTORY_CHECK: "בדיקת מפעל",
+  FINAL_QUOTE_SENT: "הצעה סופית נשלחה",
+  NEGOTIATING: "משא ומתן",
+  WON: "נסגר",
+  LOST: "לא נסגר",
   GAPS: "פערי טופס",
 };
 

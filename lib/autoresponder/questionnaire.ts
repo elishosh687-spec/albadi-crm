@@ -2,8 +2,8 @@
  * WhatsApp bag-quote questionnaire — direct port of the ManyChat Flow
  * documented at bag-quote-app/docs/manychat-flow.html, extended with:
  *   - "אחר" (custom) options on quantity (Q2) and product (Q3)
- *   - Custom-spec branch routes to WAITING_FACTORY + NEEDS_ELI + Eli DM at end
- *   - Standard path triggers AWAITING_ESTIMATE sub-flow (handled in decision.ts)
+ *   - Custom-spec branch routes to FACTORY_CHECK (subFlow=awaiting_factory_estimate) + NEEDS_ELI + Eli DM at end
+ *   - Standard path triggers INITIAL_QUOTE_SENT (subFlow=awaiting_estimate_decision) sub-flow (handled in decision.ts)
  *
  * State machine:
  *   step 3: asked shipping
@@ -248,7 +248,7 @@ export interface QState {
   // strikes we route to factory + DM Eli — prevents infinite loops on
   // off-script replies like "?", "מה?", "...".
   confirmationAmbiguous?: number;
-  // Stage-2 (`AWAITING_ESTIMATE`) sub-state `awaiting_spec_change` re-prompt
+  // INITIAL_QUOTE_SENT (subFlow=awaiting_estimate_decision) sub-state `awaiting_spec_change` re-prompt
   // counter. Bumped when the customer's reply to "מה רוצים לשנות?" doesn't
   // contain any extractable field. After 2 strikes the lead is escalated.
   specChangeAttempts?: number;
@@ -746,8 +746,8 @@ async function routeToFactory(
   await db
     .update(leads)
     .set({
-      qState: done as any,
-      pipelineStage: "WAITING_FACTORY",
+      qState: { ...(done as any), subFlow: "awaiting_factory_estimate" },
+      pipelineStage: "FACTORY_CHECK",
       pipelineFlag: "NEEDS_ELI",
       botSummary: "questionnaire complete, custom spec → factory quote needed",
       updatedAt: new Date(),
@@ -773,8 +773,8 @@ async function routeToQuoted(
     await db
       .update(leads)
       .set({
-        qState: done as any,
-        pipelineStage: "AWAITING_ESTIMATE",
+        qState: { ...(done as any), subFlow: "awaiting_estimate_decision" },
+        pipelineStage: "INITIAL_QUOTE_SENT",
         botSummary: "questionnaire complete, quote sent, awaiting decision",
         followUpCount: 0,
         lastFollowUpAt: new Date(),
@@ -798,7 +798,8 @@ async function routeToQuoted(
     await db
       .update(leads)
       .set({
-        pipelineStage: "WAITING_FACTORY",
+        qState: { ...(bailed as any), subFlow: "awaiting_factory_estimate" },
+        pipelineStage: "FACTORY_CHECK",
         pipelineFlag: "NEEDS_ELI",
         botSummary: `calc API failed: ${(e as Error).message}`,
         updatedAt: new Date(),
@@ -839,8 +840,8 @@ export async function requoteWithUpdatedSpec(input: {
     await db
       .update(leads)
       .set({
-        qState: next as any,
-        pipelineStage: "AWAITING_ESTIMATE",
+        qState: { ...(next as any), subFlow: "awaiting_estimate_decision" },
+        pipelineStage: "INITIAL_QUOTE_SENT",
         botSummary: "spec change auto-requoted via LLM",
         followUpCount: 0,
         lastFollowUpAt: new Date(),
@@ -897,7 +898,9 @@ export async function handleInbound(input: {
   if (!ctx) return { action: "no_op", detail: "no lead row" };
 
   const stage = (ctx.pipelineStage ?? "").toUpperCase();
-  if (stage && stage !== "NEW") {
+  // Any classified stage means the lead is past the questionnaire — skip.
+  // Pre-quote leads have pipeline_stage = NULL.
+  if (stage) {
     return { action: "no_op", detail: `pipeline_stage=${stage}` };
   }
 
@@ -1280,7 +1283,7 @@ async function handleConfirmationStep(
     await sendBridgeMessage(ctx.jid, CONFIRM_AMBIGUOUS_BAIL_MSG);
     await routeToFactory(ctx, bailed);
     await sendEliDM(
-      `⚠️ ${ctx.name ?? ctx.phone ?? "ליד"} נתקע ב-confirmation gate — לא הצלחתי לסווג proceed/change אחרי 2 ניסיונות. עבר ל-WAITING_FACTORY.`
+      `⚠️ ${ctx.name ?? ctx.phone ?? "ליד"} נתקע ב-confirmation gate — לא הצלחתי לסווג proceed/change אחרי 2 ניסיונות. עבר ל-FACTORY_CHECK.`
     );
     return { action: "completed_factory", detail: "confirmation ambiguity cap" };
   }

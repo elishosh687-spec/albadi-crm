@@ -49,15 +49,16 @@ export const ENABLE_GHL_SYNC = readEnv("ENABLE_GHL_SYNC") === "1";
 // ---- Pipeline stage mapping ----
 // Local stage  →  GHL Opportunity Stage ID (UUID)
 // User fills these after running scripts/_ghl-bootstrap.ts.
+// Mirrors lib/manychat/stages.ts → V2_PIPELINE_STAGES (8-stage journey model).
 export const GHL_STAGE_IDS: Record<string, string> = {
-  NEW: readEnv("GHL_STAGE_NEW"),
-  AWAITING_ESTIMATE: readEnv("GHL_STAGE_AWAITING_ESTIMATE"),
-  AWAITING_LOGO: readEnv("GHL_STAGE_AWAITING_LOGO"),
-  WAITING_FACTORY: readEnv("GHL_STAGE_WAITING_FACTORY"),
-  AWAITING_FINAL: readEnv("GHL_STAGE_AWAITING_FINAL"),
-  CALLBACK_LATER: readEnv("GHL_STAGE_CALLBACK_LATER"),
+  INITIAL_QUOTE_SENT: readEnv("GHL_STAGE_INITIAL_QUOTE_SENT"),
+  AWAITING_FIRST_RESPONSE: readEnv("GHL_STAGE_AWAITING_FIRST_RESPONSE"),
+  SHOWED_INTEREST: readEnv("GHL_STAGE_SHOWED_INTEREST"),
+  FACTORY_CHECK: readEnv("GHL_STAGE_FACTORY_CHECK"),
+  FINAL_QUOTE_SENT: readEnv("GHL_STAGE_FINAL_QUOTE_SENT"),
+  NEGOTIATING: readEnv("GHL_STAGE_NEGOTIATING"),
   WON: readEnv("GHL_STAGE_WON"),
-  DROPPED: readEnv("GHL_STAGE_DROPPED"),
+  LOST: readEnv("GHL_STAGE_LOST"),
   // Virtual stage triggered when leads.pipeline_flag = 'NEEDS_ELI'.
   // Overrides whatever local pipeline_stage says (escalations bubble up).
   NEEDS_ELI: readEnv("GHL_STAGE_NEEDS_ELI"),
@@ -70,18 +71,20 @@ export const GHL_STAGE_IDS: Record<string, string> = {
 // hold the questionnaire fields. Only what Eli needs to SEE/SEARCH inside
 // the GHL native UI without opening the calc.
 //
-// 5 fields total:
+// 6 fields total:
 //   - manychat_sub_id  → sync key (mapping back to Albadi DB)
 //   - wa_jid           → debugging
 //   - bot_summary      → one-line status on lead card
 //   - quote_total      → monetary value (also sets Opportunity.monetaryValue)
 //   - pipeline_flag    → NEEDS_ELI escalation visibility (search/filter)
+//   - loss_reason      → required when stage = LOST (one of LOSS_REASONS)
 export const GHL_FIELD_IDS: Record<string, string> = {
   manychat_sub_id: readEnv("GHL_FIELD_MANYCHAT_SUB_ID"),
   wa_jid: readEnv("GHL_FIELD_WA_JID"),
   bot_summary: readEnv("GHL_FIELD_BOT_SUMMARY"),
   quote_total: readEnv("GHL_FIELD_QUOTE_TOTAL"),
   pipeline_flag: readEnv("GHL_FIELD_PIPELINE_FLAG"),
+  loss_reason: readEnv("GHL_FIELD_LOSS_REASON"),
 };
 
 // Names used when creating fields in the bootstrap script. The bootstrap
@@ -107,6 +110,11 @@ export const GHL_FIELD_DEFINITIONS = [
   {
     envKey: "GHL_FIELD_PIPELINE_FLAG",
     name: "Pipeline flag",
+    dataType: "TEXT",
+  },
+  {
+    envKey: "GHL_FIELD_LOSS_REASON",
+    name: "Loss reason",
     dataType: "TEXT",
   },
 ] as const;

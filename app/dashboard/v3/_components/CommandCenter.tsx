@@ -89,7 +89,8 @@ function buildQueueItem(
   factoryReceivedSids: Set<string>
 ): WorkQueueItem {
   const sid = card.sid.trim();
-  const stage = (card.stage ?? "NEW").toUpperCase();
+  const stage = (card.stage ?? "").toUpperCase();
+  const subFlow = (card.qState as any)?.subFlow ?? null;
   const q = quoteNumber(card.quoteTotal);
   const staleHours = leadAgeHours(card);
   const reasons: QueueReason[] = [];
@@ -122,7 +123,10 @@ function buildQueueItem(
     });
     score += 90;
   }
-  if (factoryReceivedSids.has(sid) || stage === "WAITING_FACTORY") {
+  if (
+    factoryReceivedSids.has(sid) ||
+    (stage === "FACTORY_CHECK" && subFlow === "awaiting_factory_estimate")
+  ) {
     reasons.push({
       key: "factory",
       label: "מחכה לתמחור",
@@ -149,7 +153,7 @@ function buildQueueItem(
     });
     score += 55;
   }
-  if (staleHours >= 48 && stage !== "WON" && stage !== "DROPPED") {
+  if (staleHours >= 48 && stage !== "WON" && stage !== "LOST") {
     reasons.push({
       key: "stale",
       label: "אין פעילות 48ש׳+",
@@ -229,8 +233,8 @@ export function CommandCenter({ data }: { data: CommandCenterData }) {
     () =>
       data.cards
         .filter((card) => {
-          const stage = (card.stage ?? "NEW").toUpperCase();
-          return stage !== "WON" && stage !== "DROPPED" && leadAgeHours(card) >= 48;
+          const stage = (card.stage ?? "").toUpperCase();
+          return stage !== "WON" && stage !== "LOST" && leadAgeHours(card) >= 48;
         })
         .sort((a, b) => leadAgeHours(b) - leadAgeHours(a))
         .slice(0, 5),
@@ -485,7 +489,7 @@ export function CommandCenter({ data }: { data: CommandCenterData }) {
                     </span>
                   </div>
                   <div className="mt-1 text-xs text-muted-foreground">
-                    {STAGE_LABEL[(card.stage ?? "NEW").toUpperCase()] ?? card.stage}
+                    {STAGE_LABEL[(card.stage ?? "PRE_QUOTE").toUpperCase()] ?? card.stage}
                   </div>
                 </button>
               ))}
@@ -626,7 +630,7 @@ function WorkQueueRow({
   onOpen: () => void;
 }) {
   const { card, reasons } = item;
-  const stage = (card.stage ?? "NEW").toUpperCase();
+  const stage = (card.stage ?? "PRE_QUOTE").toUpperCase();
   const stageTone = STAGE_TONE[stage] ?? STAGE_TONE.UNCLASSIFIED;
   const displayName = card.name || card.phone || shortSid(card.sid);
   const priority = priorityOf(card);

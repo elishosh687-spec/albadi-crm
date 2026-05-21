@@ -5,13 +5,15 @@ import { MessageSquare, X, Send, Loader2, ChevronDown } from "lucide-react";
 
 const STAGES = [
   { value: "ALL", label: "כל הלידים" },
-  { value: "NEW", label: "חדשים" },
-  { value: "AWAITING_ESTIMATE", label: "ממתינים להצעה" },
-  { value: "AWAITING_LOGO", label: "ממתינים ללוגו" },
-  { value: "WAITING_FACTORY", label: "אצל המפעל" },
-  { value: "AWAITING_FINAL", label: "ממתינים לאישור סופי" },
-  { value: "WON", label: "נסגרו" },
-  { value: "DROPPED", label: "ננטשו" },
+  { value: "PRE_QUOTE", label: "בשאלון" },
+  { value: "INITIAL_QUOTE_SENT", label: "הצעה ראשונית נשלחה" },
+  { value: "AWAITING_FIRST_RESPONSE", label: "ממתין לתגובה ראשונה" },
+  { value: "SHOWED_INTEREST", label: "הראה עניין" },
+  { value: "FACTORY_CHECK", label: "בדיקת מפעל" },
+  { value: "FINAL_QUOTE_SENT", label: "הצעה סופית נשלחה" },
+  { value: "NEGOTIATING", label: "משא ומתן" },
+  { value: "WON", label: "נסגר" },
+  { value: "LOST", label: "לא נסגר" },
 ];
 
 interface Message {

@@ -92,8 +92,13 @@ manychat_sub_id  PK (JID for bridge / numeric for legacy ManyChat)
 wa_jid           E.164 → JID resolution
 phone_e164       canonical phone
 name             from contact info / manual
-pipeline_stage   NEW | AWAITING_ESTIMATE | AWAITING_LOGO | WAITING_FACTORY | AWAITING_FINAL | WON | DROPPED
+pipeline_stage   NULL (pre-quote) | INITIAL_QUOTE_SENT | AWAITING_FIRST_RESPONSE | SHOWED_INTEREST | FACTORY_CHECK | FINAL_QUOTE_SENT | NEGOTIATING | WON | LOST
+                 (LOST requires loss_reason; FACTORY_CHECK uses qState.subFlow=awaiting_logo|awaiting_factory_estimate)
 next_action      sub-state inside stage (e.g. awaiting_reason, awaiting_competitor_offer)
+last_response_at when the customer last replied
+loss_reason      required when pipeline_stage=LOST — one of LOSS_REASONS (lib/manychat/stages.ts)
+priority         low | normal | high | urgent
+owner_id         denormalized from crm_lead_episodes.owner_id
 bot_summary      LLM-generated summary for Eli
 notes            free-text Eli notes
 quote_total      ILS estimate (numeric)
@@ -329,7 +334,7 @@ Toggle ב-Vercel envs → redeploy (~30s).
      - `silence` → no send, `lastFollowUpAt` updated but `follow_up_count` **not** incremented (lead gets another chance later).
      - `supervisor_error` → no send, DM already fired by supervisor.
   7. Write row to `bot_decision_log` with `metadata.trigger = "followup_cron"` + `prompt_version` + `template_label` + `attempt` + `gap_hours`.
-- אחרי N follow-ups בלי תגובה → אוטומטית NEEDS_ELI + bot_paused (לא DROPPED — רק אלי).
+- אחרי N follow-ups בלי תגובה → אוטומטית NEEDS_ELI + bot_paused (לא LOST — רק אלי).
 - Kill switches: `SUPERVISOR_BYPASS=1` (skips supervisor, falls back to legacy template-only flow), `FOLLOWUPS_BYPASS_GATES=1` (skips quiet-hours/no-send-day).
 
 ---
@@ -356,7 +361,7 @@ Eli sees draft (Retool feed OR /dashboard/v3/drafts OR /dashboard/v2/drafts)
 ```
 
 Money triggers (per `lib/drafts/index.ts`):
-- pipeline_stage ∈ {QUOTED, NEGOTIATING, AWAITING_FINAL, WAITING_CALL} (drift לעומת CUSTOMER-FLOW — ראה §10 below)
+- pipeline_stage ∈ {INITIAL_QUOTE_SENT, FINAL_QUOTE_SENT, NEGOTIATING}
 - OR LLM returns `is_money_moment=true`
 
 ---
@@ -388,8 +393,8 @@ Money triggers (per `lib/drafts/index.ts`):
 
 > מה ש-code אומר אבל המוצר/PRD לא — או הפוך.
 
-1. **Pipeline stages drift — RESOLVED 2026-05-16**
-   - קוד יושר ל-7 stages לפי CUSTOMER-FLOW (מקור אמת). `QUOTED, IN_PROGRESS, NEGOTIATING, WAITING_CALL` הוסרו; `AWAITING_DECISION` הוחזר ל-`AWAITING_ESTIMATE`. סאב-state של מיקוח/שיחה זז ל-`qState.decisionState` + tag `ביקש_שיחה` + flag `NEEDS_ELI`. Migration ב-`scripts/migrate-stages-to-7.ts`.
+1. **Pipeline stages refactor — 8-stage journey model — RESOLVED 2026-05-21**
+   - קוד יושר ל-8 stages: `INITIAL_QUOTE_SENT, AWAITING_FIRST_RESPONSE, SHOWED_INTEREST, FACTORY_CHECK, FINAL_QUOTE_SENT, NEGOTIATING, WON, LOST` (לפני שאלון נשלם — `pipeline_stage IS NULL`). שלבים מתארים מצב מכירה בלבד; pulse פנימי של ה-autoresponder עבר ל-`qState.subFlow` (`awaiting_estimate_decision` / `awaiting_logo` / `awaiting_factory_estimate` / `awaiting_final_decision`). Loss reason חובה ב-LOST. Migration ב-`scripts/_migrate-stage-rename.sql`.
 
 2. **ManyChat path עוד חי**
    - `lib/manychat/client.ts`, `app/api/bot/new-lead/route.ts`, `app/api/bot/inbound-message/route.ts`, `app/api/bot/restart-send/route.ts` עוד קיימים.
@@ -420,7 +425,7 @@ Money triggers (per `lib/drafts/index.ts`):
    - Business thresholds (10000 NIS high-value, 5d no-contact) hardcoded במקום `bot_config`.
 
 7. **Bot Supervisor — `override_with_text` doesn't apply stage transitions**
-   - When the LLM supervisor returns `override_with_text`, it sends the override text but skips the existing handler. Stage transitions (e.g. `AWAITING_ESTIMATE → AWAITING_LOGO` on accept) won't fire.
+   - When the LLM supervisor returns `override_with_text`, it sends the override text but skips the existing handler. Stage transitions (e.g. `INITIAL_QUOTE_SENT → FACTORY_CHECK` on accept, with subFlow=awaiting_logo) won't fire.
    - Mitigated by the supervisor prompt telling the LLM not to override on stage-transition intents (accept, logo received).
    - Phase 5 will fix: add `stage_transition` to the supervisor JSON output.
 
