@@ -36,7 +36,10 @@ function safeRevalidate(path: string, type: "layout" | "page" = "layout"): void 
 }
 import {
   V2_FLAG_TAG_IDS,
+  V2_FLAG_NAMES,
+  V2_EXTRA_FLAG_NAMES,
   V2_PIPELINE_STAGES,
+  flagHasNumericId,
   type V2FlagName,
   type V2PipelineStage,
 } from "@/lib/manychat/config";
@@ -72,34 +75,58 @@ async function pushStageAndFlags(
     { name: "pipeline_stage", value: stage },
   ]);
 
+  // Numeric-ID flags go through the legacy addTag/removeTag (ManyChat-style)
+  // path; non-numeric flags (post-bridge-cutover names like "לקוח_חם") write
+  // straight to lead_tags by name.
+  const numericFlags = flags.filter(flagHasNumericId);
+  const nameOnlyFlags = flags.filter((f) => !flagHasNumericId(f));
+
   const sub = await getSubscriber(cleanSid);
   const v2FlagTagIdValues = Object.values(V2_FLAG_TAG_IDS) as number[];
   const currentV2FlagTagIds: Set<number> = new Set(
     sub.tags.map((t) => t.id).filter((id) => v2FlagTagIdValues.includes(id))
   );
+  const currentV2FlagNames: Set<string> = new Set(
+    sub.tags.map((t) => t.name).filter((n): n is string => !!n)
+  );
 
   const desiredFlagTagIds: Set<number> = new Set(
-    flags
-      .map((name) => V2_FLAG_TAG_IDS[name] as number)
+    numericFlags
+      .map((name) => V2_FLAG_TAG_IDS[name as keyof typeof V2_FLAG_TAG_IDS] as number)
       .filter((id): id is number => typeof id === "number")
   );
 
   for (const desired of desiredFlagTagIds) {
     if (!currentV2FlagTagIds.has(desired)) {
-      try {
-        await addTag(cleanSid, desired);
-      } catch {
-        /* swallow */
-      }
+      try { await addTag(cleanSid, desired); } catch { /* swallow */ }
     }
   }
   for (const current of currentV2FlagTagIds) {
     if (!desiredFlagTagIds.has(current)) {
+      try { await removeTag(cleanSid, current); } catch { /* swallow */ }
+    }
+  }
+
+  // Name-only flags: insert any missing, delete any current ones not desired.
+  const desiredNameSet = new Set(nameOnlyFlags as string[]);
+  for (const name of desiredNameSet) {
+    if (!currentV2FlagNames.has(name)) {
       try {
-        await removeTag(cleanSid, current);
-      } catch {
-        /* swallow */
-      }
+        await db.insert(leadTags).values({ manychatSubId: cleanSid, tag: name });
+      } catch { /* swallow */ }
+    }
+  }
+  // Remove name-only flags that are currently set but not desired.
+  // Only touch tags from V2_EXTRA_FLAG_NAMES — leave unrelated tags alone.
+  for (const extra of V2_EXTRA_FLAG_NAMES) {
+    if (currentV2FlagNames.has(extra) && !desiredNameSet.has(extra)) {
+      try {
+        await db
+          .delete(leadTags)
+          .where(
+            sql`trim(${leadTags.manychatSubId}) = ${cleanSid} AND ${leadTags.tag} = ${extra}`
+          );
+      } catch { /* swallow */ }
     }
   }
 }
@@ -121,7 +148,7 @@ export async function setLeadStage(
       return { ok: false, error: `invalid stage: ${input.stage}` };
     }
     for (const f of input.flags) {
-      if (!(f in V2_FLAG_TAG_IDS)) {
+      if (!V2_FLAG_NAMES.includes(f)) {
         return { ok: false, error: `invalid flag: ${f}` };
       }
     }
@@ -155,6 +182,10 @@ export async function setLeadStage(
         eventType: "stage_change",
         payload: { from: prior?.stage ?? null, to: input.stage, flags: input.flags },
       });
+      // Auto-create the follow-up task for the new stage (best-effort).
+      void createAutoTaskForStage(cleanSid, input.stage).catch((e) => {
+        console.warn("[setLeadStage] createAutoTaskForStage failed", e);
+      });
     }
 
     safeRevalidate("/dashboard/v3", "layout");
@@ -165,6 +196,36 @@ export async function setLeadStage(
       error: e instanceof Error ? e.message : "save failed",
     };
   }
+}
+
+// Map of stage -> auto-task spec. null = no task created.
+// Stages not in the map (e.g. AWAITING_FIRST_RESPONSE) intentionally skip task
+// creation: existing followUpCount cadence already nudges the lead.
+const AUTO_TASK_BY_STAGE: Partial<
+  Record<V2PipelineStage, { title: string; hoursUntilDue: number }>
+> = {
+  INITIAL_QUOTE_SENT: { title: "פולואפ אחרי הצעה ראשונית", hoursUntilDue: 24 },
+  SHOWED_INTEREST: { title: "להחליט אם לשלוח למפעל / לאלי", hoursUntilDue: 2 },
+  FACTORY_CHECK: { title: "לעקוב אחר תשובת מפעל", hoursUntilDue: 24 },
+  FINAL_QUOTE_SENT: { title: "פולואפ אחרי הצעה סופית", hoursUntilDue: 24 },
+  NEGOTIATING: { title: "לטפל בהתנגדות", hoursUntilDue: 4 },
+  WON: { title: "ביצוע / גבייה / אישור קובץ", hoursUntilDue: 24 },
+};
+
+async function createAutoTaskForStage(
+  sid: string,
+  stage: V2PipelineStage
+): Promise<void> {
+  const spec = AUTO_TASK_BY_STAGE[stage];
+  if (!spec) return;
+  const dueAt = new Date(Date.now() + spec.hoursUntilDue * 60 * 60 * 1000);
+  await db.insert(crmTasks).values({
+    manychatSubId: sid,
+    taskType: "follow_up",
+    title: spec.title,
+    status: "open",
+    dueAt,
+  });
 }
 
 export async function updateLeadNotes(
@@ -362,17 +423,18 @@ export async function deleteLeadAction(
 }
 
 /**
- * Stage 4 entry — Eli pushes the final price via dashboard, bot takes over
- * with stage=AWAITING_FINAL and the standard "מתאים?" classifier loop.
- * Per CUSTOMER-FLOW.md v2 §4 (decision: Eli updates stage manually).
+ * Final-quote entry — Eli pushes the final price via dashboard, bot takes
+ * over with stage=FINAL_QUOTE_SENT and the standard "מתאים?" classifier loop.
+ * Per CUSTOMER-FLOW.md (Eli updates stage manually).
  *
  * Side effects:
- *   - leads.pipelineStage = AWAITING_FINAL
+ *   - leads.pipelineStage = FINAL_QUOTE_SENT
  *   - leads.quoteTotal    = price (string)
- *   - leads.botPaused     = false (bot drives Stage 4)
+ *   - leads.botPaused     = false (bot drives this stage)
  *   - leads.pipelineFlag  = null  (cleared — bot owns again)
  *   - leads.followUpCount = 0 (fresh cadence window 24/36/72h)
  *   - leads.lastFollowUpAt = now (anchor for next follow-up)
+ *   - qState.subFlow      = "awaiting_final_decision"
  *   - qState.decisionState / finalState = null (clean slate)
  *   - Sends WhatsApp message: "המחיר הסופי X. נשמח לשמוע את דעתכם על ההצעה."
  */
@@ -411,12 +473,13 @@ export async function sendFinalPrice(
       ...((row.qState as Record<string, unknown> | null) ?? {}),
       decisionState: null,
       finalState: null,
+      subFlow: "awaiting_final_decision",
     };
 
     await db
       .update(leads)
       .set({
-        pipelineStage: "AWAITING_FINAL",
+        pipelineStage: "FINAL_QUOTE_SENT",
         quoteTotal: cleanPrice,
         followUpCount: 0,
         lastFollowUpAt: new Date(),
