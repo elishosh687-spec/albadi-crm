@@ -12,7 +12,7 @@
 import { useEffect, useState } from "react";
 import type { FactoryQuoteRow } from "./FactoryQuotePanel";
 import { humanizeMaterial, humanizePrinting, humanizeFinishing } from "@/lib/factory/qstate-decode";
-import { DetailedBreakdown } from "./DetailedBreakdown";
+import { DetailedBreakdown } from "@/components/calculator/DetailedBreakdown";
 import type { FactoryPricingConfig } from "@/lib/factory/types";
 
 const PRODUCT_LABEL = "שקית אלבדי";

@@ -7,22 +7,6 @@
 
 ---
 
-## 📂 כל המסמכים פוצלו לתיקייה ייעודית
-
-מאז `chore(structure)` — תיקייה מסודרת ב-[`docs/migration-to-ghl/`](migration-to-ghl/):
-
-| קובץ | תפקיד |
-|---|---|
-| [migration-to-ghl/HANDOFF.md](migration-to-ghl/HANDOFF.md) | **קרא ראשון** אם בסשן חדש |
-| [migration-to-ghl/PLAN.md](migration-to-ghl/PLAN.md) | תוכנית מלאה (אותו תוכן כמו פה) |
-| [migration-to-ghl/TESTS.md](migration-to-ghl/TESTS.md) | בדיקות ידניות per phase |
-| [migration-to-ghl/DELETION-CHECKLIST.md](migration-to-ghl/DELETION-CHECKLIST.md) | מה למחוק מ-albadi-crm אחרי שPhase 1 יציב |
-| [migration-to-ghl/ARCHITECTURE.md](migration-to-ghl/ARCHITECTURE.md) | מבנה הקוד אחרי שdashboard נמחק |
-
-הקובץ הזה (`GHL-MIGRATION-PLAN.md`) נשמר ל-backwards compat. **תוכן עדכני** ב-`docs/migration-to-ghl/`.
-
----
-
 ## 0. למשיכת עבודה בסשן אחר — קרא קודם
 
 **כל הסטטוס פה. אין צורך בquestions.** מצב לפני המשך:

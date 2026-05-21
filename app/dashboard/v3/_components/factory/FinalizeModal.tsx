@@ -18,7 +18,7 @@ import type {
   ShippingOption,
 } from "@/lib/factory/types";
 import { priceFactoryQuote } from "@/lib/factory/pricing";
-import { DetailedBreakdown } from "./DetailedBreakdown";
+import { DetailedBreakdown } from "@/components/calculator/DetailedBreakdown";
 
 function formatIls(n: number): string {
   return `₪${n.toLocaleString("he-IL", { maximumFractionDigits: 2 })}`;

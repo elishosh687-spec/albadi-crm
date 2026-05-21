@@ -45,7 +45,7 @@ import type {
   FactoryPricingConfig,
   FactoryQuoteStatus,
 } from "@/lib/factory/types";
-import { DetailedBreakdown } from "./DetailedBreakdown";
+import { DetailedBreakdown } from "@/components/calculator/DetailedBreakdown";
 import { QuoteHtmlPreview } from "./QuoteHtmlPreview";
 import {
   decodeQStateToSpec,

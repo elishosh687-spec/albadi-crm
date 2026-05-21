@@ -1,6 +1,6 @@
 import { getFactoryConfig } from "@/lib/factory/config";
 import { DEFAULT_CONFIG } from "@/lib/factory/calculator/constants";
-import { CalculatorView } from "./CalculatorView";
+import { CalculatorView } from "@/components/calculator/CalculatorView";
 
 export const dynamic = "force-dynamic";
 

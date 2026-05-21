@@ -10,7 +10,7 @@
  */
 import { getFactoryConfig } from "@/lib/factory/config";
 import { DEFAULT_CONFIG } from "@/lib/factory/calculator/constants";
-import { CalculatorView } from "@/app/dashboard/v3/calculator/CalculatorView";
+import { CalculatorView } from "@/components/calculator/CalculatorView";
 import { verifyWidgetToken } from "@/integrations/ghl/widget-auth";
 import { db } from "@/lib/db";
 import { leads } from "@/drizzle/schema";
