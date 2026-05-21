@@ -85,9 +85,19 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   const contactId = payload.contactId?.trim();
   const phone = payload.phone ? normalizePhone(payload.phone) : null;
   const text = extractText(payload);
+  const attachments = Array.isArray(payload.attachments)
+    ? payload.attachments.filter((u) => typeof u === "string" && u.trim())
+    : [];
+  const mediaUrl = attachments[0] ?? null;
+  if (attachments.length > 1) {
+    console.warn(
+      "[ghl.outbound] multiple attachments — only first will be sent",
+      attachments.length
+    );
+  }
 
-  if (!text) {
-    console.warn("[ghl.outbound] no text in payload", payload);
+  if (!text && !mediaUrl) {
+    console.warn("[ghl.outbound] no text or media in payload", payload);
     return NextResponse.json({ error: "missing message" }, { status: 400 });
   }
   if (!contactId && !phone) {
@@ -130,7 +140,12 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   }
 
   try {
-    const result = await sendBridgeMessage(recipient, text, undefined, "eli");
+    const result = await sendBridgeMessage(
+      recipient,
+      text ?? "",
+      mediaUrl ?? undefined,
+      "eli"
+    );
     console.log("[ghl.outbound] sent", {
       sid: lead.manychatSubId,
       wa_message_id: result.wa_message_id,

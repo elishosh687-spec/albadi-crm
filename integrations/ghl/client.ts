@@ -405,6 +405,57 @@ export async function upsertConversationProvider(input: {
   return res.provider;
 }
 
+// ===========================================================================
+// Medias — upload file to GHL hosting (Phase 1F media support)
+// ===========================================================================
+
+/**
+ * Upload a media file to GHL's `/medias/upload-file` endpoint. Returns the
+ * hosted URL we can pass as `attachments[]` to /conversations/messages so
+ * GHL renders the media inline with correct MIME (audio/video/image).
+ *
+ * Requires OAuth token (PIT lacks medias.write scope on this endpoint).
+ */
+export async function uploadMediaFromUrl(input: {
+  url: string;
+  filename: string;
+  mimeType?: string;
+  accessToken: string;
+}): Promise<{ url: string; fileId?: string }> {
+  // GHL /medias/upload-file expects a multipart form with `fileUrl`
+  // (string — GHL fetches the file itself) NOT a binary file field.
+  // Whitelist is path-extension based, so the URL path must end with a
+  // supported extension (.ogg/.mp3/.mp4/.jpg/.png/.pdf …).
+  const form = new FormData();
+  form.append("fileUrl", input.url);
+  form.append("locationId", requireGHLLocationId());
+  form.append("hosted", "true");
+  form.append("name", input.filename);
+
+  const res = await fetch(`${GHL_BASE}/medias/upload-file`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${input.accessToken}`,
+      Version: GHL_API_VERSION,
+      Accept: "application/json",
+    },
+    body: form,
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(
+      `uploadMediaFromUrl: GHL /medias/upload-file → ${res.status} ${text.slice(0, 200)}`
+    );
+  }
+  const json = (await res.json()) as { fileId?: string; url?: string };
+  if (!json.url) {
+    throw new Error(
+      `uploadMediaFromUrl: response missing url — ${JSON.stringify(json)}`
+    );
+  }
+  return { url: json.url, fileId: json.fileId };
+}
+
 export async function addContactNote(
   contactId: string,
   body: string,
@@ -462,6 +513,7 @@ export async function postOutboundMessage(input: {
   message: string;
   type?: "SMS" | "WhatsApp" | "Email" | "Custom";
   conversationProviderId?: string;
+  attachments?: string[];
   accessToken?: string;
 }): Promise<{ messageId?: string; conversationId?: string }> {
   const body: Record<string, unknown> = {
@@ -469,6 +521,9 @@ export async function postOutboundMessage(input: {
     contactId: input.contactId,
     message: input.message,
   };
+  if (input.attachments && input.attachments.length > 0) {
+    body.attachments = input.attachments;
+  }
   if (input.conversationProviderId) {
     body.conversationProviderId = input.conversationProviderId;
   }

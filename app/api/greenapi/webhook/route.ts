@@ -303,6 +303,9 @@ async function handleIncoming(evt: GreenWebhook): Promise<void> {
   let textForRouting: string | null = null;
   let textToStore: string | null = null;
   let hasMedia = false;
+  let mediaUrl: string | null = null;
+  let mediaFilename: string | null = null;
+  let mediaMimeType: string | null = null;
 
   if (typeMessage === "pollUpdateMessage") {
     const voted = extractVotedOption(msg, chatId);
@@ -315,6 +318,9 @@ async function handleIncoming(evt: GreenWebhook): Promise<void> {
     typeMessage === "audioMessage"
   ) {
     hasMedia = true;
+    mediaUrl = msg?.fileMessageData?.downloadUrl ?? null;
+    mediaFilename = msg?.fileMessageData?.fileName ?? null;
+    mediaMimeType = msg?.fileMessageData?.mimeType ?? null;
     const t = extractInboundText(msg);
     textForRouting = t;
     textToStore = t;
@@ -340,6 +346,9 @@ async function handleIncoming(evt: GreenWebhook): Promise<void> {
     sender: "lead",
     text: textToStore,
     occurredAt: new Date(),
+    mediaUrl,
+    mediaFilename,
+    mediaMimeType,
   });
   void syncLeadToGHL(canonicalSid);
 
@@ -426,6 +435,74 @@ async function handleIncoming(evt: GreenWebhook): Promise<void> {
   }
 }
 
+/**
+ * Manual outbound from the WA Business app — Eli typing on his phone.
+ * Persist the row with sender='eli' and mirror to GHL Inbox.
+ *
+ * outgoingAPIMessageReceived (our own sendGreenMessage outbound) is a
+ * separate event type that we do NOT handle here — the sender path
+ * already inserts the row + forwards to GHL.
+ */
+async function handleOutgoingManual(evt: GreenWebhook): Promise<void> {
+  const sender = evt.senderData ?? {};
+  const chatId = sender.chatId;
+  if (!chatId) return;
+  if (chatId.endsWith("@g.us") || chatId.startsWith("status@")) return;
+
+  const phone = chatIdToPhone(chatId);
+  if (!phone) return;
+  const senderName =
+    sender.senderContactName || sender.senderName || sender.chatName || undefined;
+  const canonicalSid = await upsertLeadFromGreen({
+    chatId,
+    phone,
+    name: senderName,
+  });
+
+  const msg = evt.messageData;
+  const typeMessage = msg?.typeMessage;
+  const waMessageId = evt.idMessage ?? `green:out:${Date.now()}`;
+
+  let textToStore: string | null = null;
+  let mediaUrl: string | null = null;
+  let mediaFilename: string | null = null;
+  let mediaMimeType: string | null = null;
+
+  if (
+    typeMessage === "imageMessage" ||
+    typeMessage === "videoMessage" ||
+    typeMessage === "documentMessage" ||
+    typeMessage === "audioMessage"
+  ) {
+    mediaUrl = msg?.fileMessageData?.downloadUrl ?? null;
+    mediaFilename = msg?.fileMessageData?.fileName ?? null;
+    mediaMimeType = msg?.fileMessageData?.mimeType ?? null;
+    textToStore = msg?.fileMessageData?.caption ?? null;
+  } else {
+    textToStore = extractInboundText(msg);
+  }
+
+  await insertGreenMessage({
+    chatId: canonicalSid,
+    direction: "out",
+    text: textToStore,
+    waMessageId,
+    sender: "eli",
+    payload: evt as unknown as Record<string, unknown>,
+  });
+
+  void ghlForwardMessage({
+    sid: canonicalSid,
+    direction: "out",
+    sender: "eli",
+    text: textToStore,
+    occurredAt: new Date(),
+    mediaUrl,
+    mediaFilename,
+    mediaMimeType,
+  });
+}
+
 export async function POST(req: NextRequest): Promise<NextResponse> {
   if (!authOk(req)) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
@@ -450,8 +527,16 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       case "incomingMessageReceived":
         await handleIncoming(body);
         break;
+      case "outgoingMessageReceived":
+        // Manual outbound from the WA Business app (Eli typing on phone).
+        // outgoingAPIMessageReceived is the same shape but originates from
+        // our own sendGreenMessage — already mirrored by the sender; skip
+        // here to avoid double rows / double-forwarding.
+        await handleOutgoingManual(body);
+        break;
       default:
-        // Audit-only: outgoingMessageStatus / stateInstanceChanged / etc.
+        // Audit-only: outgoingMessageStatus / outgoingAPIMessageReceived /
+        // stateInstanceChanged / etc.
         break;
     }
   } catch (e) {

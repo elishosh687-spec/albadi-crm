@@ -24,6 +24,7 @@ import {
   postInboundMessage,
   postOutboundMessage,
   addContactNote,
+  uploadMediaFromUrl,
   type GHLContact,
   type GHLOpportunity,
 } from "./client";
@@ -35,6 +36,49 @@ import {
   pickStageId,
   type LocalLeadSnapshot,
 } from "./mapping";
+
+// Map MIME type → preferred extension. Drives both `guessFilenameFromMime`
+// and the URL path we proxy through `/api/integrations/media/<x>.<ext>`
+// so GHL's /medias/upload-file accepts the source (it whitelists by path
+// extension and rejects `.oga`, generic urls, etc.).
+function extFromMime(mime: string | null | undefined): string {
+  if (!mime) return "bin";
+  const lower = mime.toLowerCase();
+  if (lower.startsWith("audio/ogg")) return "ogg";
+  if (lower.startsWith("audio/mpeg")) return "mp3";
+  if (lower.startsWith("audio/mp4")) return "m4a";
+  if (lower.startsWith("audio/")) return "ogg";
+  if (lower.startsWith("image/jpeg")) return "jpg";
+  if (lower.startsWith("image/png")) return "png";
+  if (lower.startsWith("image/webp")) return "webp";
+  if (lower.startsWith("image/")) return "jpg";
+  if (lower.startsWith("video/mp4")) return "mp4";
+  if (lower.startsWith("video/")) return "mp4";
+  if (lower === "application/pdf") return "pdf";
+  return "bin";
+}
+
+function guessFilenameFromMime(mime: string | null | undefined): string {
+  return `file.${extFromMime(mime)}`;
+}
+
+function base64Url(s: string): string {
+  return Buffer.from(s, "utf8")
+    .toString("base64")
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/g, "");
+}
+
+function buildProxyUrl(srcUrl: string, mime: string | null | undefined): string {
+  const base =
+    process.env.NEXT_PUBLIC_APP_URL ||
+    process.env.VERCEL_URL ||
+    "https://albadi-crm.vercel.app";
+  const origin = base.startsWith("http") ? base : `https://${base}`;
+  const ext = extFromMime(mime);
+  return `${origin}/api/integrations/media/${base64Url(srcUrl)}.${ext}`;
+}
 
 // ===========================================================================
 // Internal: lead loader
@@ -252,9 +296,17 @@ export async function forwardMessage(opts: {
   sender: "lead" | "bot" | "eli";
   text: string | null;
   occurredAt: Date;
+  // Optional public media URL (e.g. GreenAPI downloadUrl for image/audio/video/doc).
+  // When set, the helper uploads to GHL /medias/upload-file with the correct
+  // mime so the Inbox renders the file inline (audio plays, image shows),
+  // not as a generic document attachment.
+  mediaUrl?: string | null;
+  mediaFilename?: string | null;
+  mediaMimeType?: string | null;
 }): Promise<void> {
   if (!ENABLE_GHL_SYNC) return;
-  if (!opts.text || !opts.text.trim()) return;
+  // Allow empty text when media is present (audio messages have no caption).
+  if (!opts.text?.trim() && !opts.mediaUrl) return;
 
   try {
     const lead = await loadLead(opts.sid);
@@ -269,7 +321,41 @@ export async function forwardMessage(opts: {
       eli: "📤 אלי",
     } as const;
     const label = labelMap[opts.sender];
-    const body = `${label}\n${opts.text.trim()}`;
+    const caption = opts.text?.trim();
+    const body = caption ? `${label}\n${caption}` : label;
+
+    // Resolve attachments. For media we upload the source to GHL so the
+    // Inbox renders it with correct content-type (otherwise GreenAPI URLs
+    // come without extension and GHL treats audio as a generic file).
+    let attachments: string[] | undefined;
+    if (opts.mediaUrl) {
+      // Route through our media proxy so the URL path carries the right
+      // extension (.ogg/.mp4/.jpg). GHL rejects `.oga` from GreenAPI and
+      // generic URLs, but accepts the proxied URL because the extension
+      // matches its whitelist.
+      const proxyUrl = buildProxyUrl(opts.mediaUrl, opts.mediaMimeType);
+      const tokenForUpload =
+        (await getValidAccessToken(requireGHLLocationId())) ?? null;
+      if (tokenForUpload) {
+        try {
+          const uploaded = await uploadMediaFromUrl({
+            url: proxyUrl,
+            filename: opts.mediaFilename || guessFilenameFromMime(opts.mediaMimeType),
+            mimeType: opts.mediaMimeType ?? undefined,
+            accessToken: tokenForUpload,
+          });
+          attachments = [uploaded.url];
+        } catch (uploadErr) {
+          console.warn(
+            "[ghl.sync] media upload failed, falling back to proxy url",
+            uploadErr
+          );
+          attachments = [proxyUrl];
+        }
+      } else {
+        attachments = [proxyUrl];
+      }
+    }
 
     // Route through our Custom Conversation Provider when configured so
     // inbound + outbound land in the same thread tagged "Albadi WhatsApp".
@@ -288,6 +374,7 @@ export async function forwardMessage(opts: {
           type,
           conversationProviderId,
           accessToken,
+          attachments,
         });
       } else {
         await postOutboundMessage({
@@ -296,6 +383,7 @@ export async function forwardMessage(opts: {
           type,
           conversationProviderId,
           accessToken,
+          attachments,
         });
       }
     } catch (msgErr) {

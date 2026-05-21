@@ -336,6 +336,27 @@ export async function sendBridgeMessage(
     console.warn("[sendBridgeMessage] outbound pre-insert failed", e);
   }
 
+  // Mirror to GHL Inbox so bot/eli replies appear in the unified thread.
+  // Eli's manual replies coming from GHL Inbox webhook already hit this path
+  // (api/integrations/outbound calls sendBridgeMessage), and GHL records the
+  // outbound side itself when it routes through Custom Provider — so we skip
+  // forwarding `sender=eli` here to avoid duplicates. Only forward bot.
+  if (sender === "bot") {
+    try {
+      const { forwardMessage } = await import("@/integrations/ghl/sync");
+      void forwardMessage({
+        sid: jid,
+        direction: "out",
+        sender: "bot",
+        text: message,
+        occurredAt: new Date(),
+        mediaUrl: mediaPath ?? null,
+      });
+    } catch (e) {
+      console.warn("[sendBridgeMessage] ghl forward failed", e);
+    }
+  }
+
   return result;
 }
 

@@ -233,6 +233,7 @@ export async function sendGreenMessage(
       sender,
       payload: { from: "sendGreenMessage", kind: "poll", options: poll.options },
     });
+    await mirrorOutboundToGHL({ chatId, sender, text: poll.question });
     return { wa_message_id: res.idMessage };
   }
 
@@ -262,6 +263,13 @@ export async function sendGreenMessage(
       sender,
       payload: { from: "sendGreenMessage", kind: "file", url: mediaPath },
     });
+    await mirrorOutboundToGHL({
+      chatId,
+      sender,
+      text: message,
+      mediaUrl: mediaPath,
+      mediaFilename,
+    });
     return { wa_message_id: res.idMessage };
   }
 
@@ -287,7 +295,38 @@ export async function sendGreenMessage(
     sender,
     payload: { from: "sendGreenMessage", kind: "text" },
   });
+  await mirrorOutboundToGHL({ chatId, sender, text: outText });
   return { wa_message_id: res.idMessage };
+}
+
+// Forward bot outbound to GHL Inbox so the unified Custom Provider thread
+// shows both sides of the conversation. Skipped for `eli` (manual replies
+// initiated from GHL Inbox — GHL already recorded the outbound itself when
+// it routed through Custom Provider, so re-forwarding would dupe).
+async function mirrorOutboundToGHL(input: {
+  chatId: string;
+  sender: "bot" | "eli";
+  text: string;
+  mediaUrl?: string | null;
+  mediaFilename?: string | null;
+  mediaMimeType?: string | null;
+}): Promise<void> {
+  if (input.sender !== "bot") return;
+  try {
+    const { forwardMessage } = await import("../../integrations/ghl/sync");
+    await forwardMessage({
+      sid: input.chatId,
+      direction: "out",
+      sender: "bot",
+      text: input.text,
+      occurredAt: new Date(),
+      mediaUrl: input.mediaUrl ?? null,
+      mediaFilename: input.mediaFilename ?? null,
+      mediaMimeType: input.mediaMimeType ?? null,
+    });
+  } catch (e) {
+    console.warn("[green.client] ghl forward failed", e);
+  }
 }
 
 /**
