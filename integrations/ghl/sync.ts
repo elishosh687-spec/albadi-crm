@@ -72,9 +72,15 @@ function base64Url(s: string): string {
 }
 
 function buildProxyUrl(srcUrl: string, mime: string | null | undefined): string {
+  // MUST use VERCEL_PROJECT_PRODUCTION_URL, not VERCEL_URL — the latter is
+  // the per-deployment preview alias (e.g. albadi-xxxx-elishosh687-…vercel.app)
+  // which Vercel SSO-gates and external services (GHL Inbox) cannot fetch.
+  // Result was broken image / silent audio in the GHL UI even though the
+  // mirror call itself succeeded. See CHANGELOG entry on the same gotcha
+  // for Server Actions.
   const base =
     process.env.NEXT_PUBLIC_APP_URL ||
-    process.env.VERCEL_URL ||
+    process.env.VERCEL_PROJECT_PRODUCTION_URL ||
     "https://albadi-crm.vercel.app";
   const origin = base.startsWith("http") ? base : `https://${base}`;
   const ext = extFromMime(mime);
