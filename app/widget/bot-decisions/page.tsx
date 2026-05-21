@@ -1,14 +1,15 @@
 /**
- * Bot Decisions widget — embedded inside GHL via Custom Menu Link (sidebar).
+ * Bot Decisions + Drafts widget — embedded inside GHL via Custom Menu Link.
  *
  * URL template:
  *   https://<host>/widget/bot-decisions?widget_token=<GHL_WIDGET_TOKEN>
  *
- * Read-only viewer for bot_decision_log. Picker → table.
+ * Two tabs: drafts approval queue + read-only bot_decision_log history.
+ * Eli supervises the bot from one widget.
  */
 
 import { verifyWidgetToken } from "@/integrations/ghl/widget-auth";
-import { BotDecisionsView } from "@/components/bot-decisions/BotDecisionsView";
+import { DraftsWithDecisions } from "@/components/drafts/DraftsWithDecisions";
 
 export const dynamic = "force-dynamic";
 
@@ -37,7 +38,7 @@ export default async function BotDecisionsWidgetPage({
   }
 
   return (
-    <div style={{ maxWidth: 960, margin: "0 auto", padding: 16 }}>
+    <div style={{ maxWidth: 1100, margin: "0 auto", padding: 16 }}>
       <div
         style={{
           background: "#1a1d24",
@@ -47,13 +48,13 @@ export default async function BotDecisionsWidgetPage({
           marginBottom: 16,
         }}
       >
-        <strong style={{ fontSize: 16 }}>🤖 החלטות בוט</strong>
+        <strong style={{ fontSize: 16 }}>🤖 פיקוח על הבוט</strong>
         <span style={{ marginRight: 12, color: "#a1a1aa", fontSize: 13 }}>
-          · בחר ליד למטה כדי לראות היסטוריה
+          · תור אישורים + היסטוריית החלטות
         </span>
       </div>
 
-      <BotDecisionsView apiToken={token} />
+      <DraftsWithDecisions apiToken={token} />
     </div>
   );
 }
