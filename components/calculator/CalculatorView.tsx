@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { Loader2 } from "lucide-react";
 import { cn } from "@/lib/cn";
 import type { Product, QuantityTier, ShippingOption, QuoteResult } from "@/lib/factory/calculator/types";
-import { DetailedBreakdown } from "@/app/dashboard/v3/_components/factory/DetailedBreakdown";
+import { DetailedBreakdown } from "./DetailedBreakdown";
 
 interface Props {
   products: Product[];
