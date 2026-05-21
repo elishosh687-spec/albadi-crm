@@ -28,7 +28,8 @@ export interface LeadCardData {
   jid: string | null;
   source?: string | null;
   leadSource?: string | null;
-  stage: string;
+  stage: string | null;
+  qState?: Record<string, unknown> | null;
   pipelineFlag: string | null;
   flags: string[];
   botSummary: string | null;
@@ -83,6 +84,7 @@ export function LeadsBoard({ cards }: { cards: LeadCardData[] }) {
           stage: c.stage,
           pipelineFlag: c.pipelineFlag,
           botPaused: c.botPaused,
+          qState: (c.qState ?? null) as { subFlow?: string | null } | null,
         }),
       })),
     [cards]
@@ -92,7 +94,7 @@ export function LeadsBoard({ cards }: { cards: LeadCardData[] }) {
     const s = search.trim().toLowerCase();
     return enriched.filter(({ card, bucket }) => {
       if (bucketFilter && bucket !== bucketFilter) return false;
-      if (stageFilter && card.stage.toUpperCase() !== stageFilter) return false;
+      if (stageFilter && (card.stage ?? "").toUpperCase() !== stageFilter) return false;
       if (!s) return true;
       const hay = [
         card.name,
@@ -295,7 +297,7 @@ function LeadCard({
   isDeleting: boolean;
 }) {
   const stageTone =
-    STAGE_TONE[card.stage.toUpperCase()] ?? STAGE_TONE.UNCLASSIFIED;
+    STAGE_TONE[(card.stage ?? "").toUpperCase()] ?? STAGE_TONE.UNCLASSIFIED;
   const displayName = card.name || card.phone || shortSid(card.sid);
   const initials = (displayName ?? "?").trim().slice(0, 2);
   const needsEli = card.pipelineFlag === "NEEDS_ELI";
@@ -361,7 +363,7 @@ function LeadCard({
       <div className="flex items-center justify-between gap-2 mt-1">
         <div className="flex items-center gap-1 flex-wrap">
           <span className={cn("text-[10px] rounded-full px-2 py-0.5", stageTone.pill)}>
-            {STAGE_LABEL[card.stage.toUpperCase()] ?? card.stage}
+            {STAGE_LABEL[(card.stage ?? "").toUpperCase()] ?? card.stage ?? "—"}
           </span>
           {needsEli && (
             <span className="text-[10px] font-medium rounded-full bg-destructive/15 text-destructive border border-destructive/30 px-2 py-0.5">
