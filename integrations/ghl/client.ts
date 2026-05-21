@@ -516,23 +516,22 @@ export async function postOutboundMessage(input: {
   attachments?: string[];
   accessToken?: string;
 }): Promise<{ messageId?: string; conversationId?: string }> {
-  // IMPORTANT: route through /conversations/messages/inbound with
-  // direction: "outbound". The /conversations/messages endpoint is for
-  // sends typed in the GHL Inbox UI — GHL records them AND calls the
-  // Custom Provider deliveryUrl to actually deliver via WhatsApp. We
-  // already sent the WhatsApp ourselves (this is a historical mirror,
-  // not a new send), so using that endpoint would trigger a delivery
-  // loop: our /api/integrations/outbound endpoint would receive the
-  // callback and re-send the same text to the customer.
+  // Routes through /conversations/messages so the GHL Inbox UI renders the
+  // bubble with the right styling/source. The /inbound endpoint accepts
+  // direction:"outbound" and stores the message, but the Inbox UI hides
+  // outbound entries whose source is "api" coming from the inbound path —
+  // they exist in the conversation but never display.
   //
-  // The /inbound endpoint is documented as "add an external message" and
-  // accepts both directions via the `direction` field. It records the
-  // message in the conversation thread without firing a delivery webhook.
+  // GHL responds to /conversations/messages by also firing the Custom
+  // Provider deliveryUrl webhook to actually deliver via the provider.
+  // For us that webhook is /api/integrations/outbound, which would re-send
+  // the same text via Green API and duplicate the customer-facing message.
+  // The loop is blocked by the 60-second text+contact dedup in that route
+  // — see app/api/integrations/outbound/route.ts.
   const body: Record<string, unknown> = {
     type: input.type ?? "SMS",
     contactId: input.contactId,
     message: input.message,
-    direction: "outbound",
   };
   if (input.attachments && input.attachments.length > 0) {
     body.attachments = input.attachments;
@@ -545,5 +544,5 @@ export async function postOutboundMessage(input: {
     body: JSON.stringify(body),
   };
   if (input.accessToken) init.accessToken = input.accessToken;
-  return ghlFetch("/conversations/messages/inbound", init);
+  return ghlFetch("/conversations/messages", init);
 }
