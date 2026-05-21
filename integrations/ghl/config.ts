@@ -34,6 +34,14 @@ export function requireGHLLocationId(): string {
 
 export const GHL_PIPELINE_ID = readEnv("GHL_PIPELINE_ID");
 
+// Custom Conversation Provider id (assigned by GHL when our Marketplace App
+// is installed in the location). When set, messages mirrored into GHL via
+// forwardMessage are routed through this provider so inbound + outbound
+// share a single thread tagged "Albadi WhatsApp" in the Inbox.
+export const GHL_CONVERSATION_PROVIDER_ID = readEnv(
+  "GHL_CONVERSATION_PROVIDER_ID"
+);
+
 // Toggle to start mirroring leads/messages to GHL. Off by default until
 // bootstrap script populates all stage + custom-field ids.
 export const ENABLE_GHL_SYNC = readEnv("ENABLE_GHL_SYNC") === "1";

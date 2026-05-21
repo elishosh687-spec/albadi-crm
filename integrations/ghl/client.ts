@@ -434,8 +434,10 @@ export async function postInboundMessage(input: {
   attachments?: string[];
   // GHL message type — defaults to SMS so it shows up in the timeline. For
   // custom WhatsApp channels, switch to "CUSTOM" + conversationProviderId.
-  type?: "SMS" | "WhatsApp" | "Email" | "CUSTOM";
+  type?: "SMS" | "WhatsApp" | "Email" | "Custom";
   conversationProviderId?: string;
+  // OAuth access token — required when type=CUSTOM (PIT lacks provider access).
+  accessToken?: string;
 }): Promise<{ messageId?: string; conversationId?: string }> {
   const body: Record<string, unknown> = {
     type: input.type ?? "SMS",
@@ -447,17 +449,20 @@ export async function postInboundMessage(input: {
   if (input.conversationProviderId) {
     body.conversationProviderId = input.conversationProviderId;
   }
-  return ghlFetch("/conversations/messages/inbound", {
+  const init: RequestInit & { accessToken?: string } = {
     method: "POST",
     body: JSON.stringify(body),
-  });
+  };
+  if (input.accessToken) init.accessToken = input.accessToken;
+  return ghlFetch("/conversations/messages/inbound", init);
 }
 
 export async function postOutboundMessage(input: {
   contactId: string;
   message: string;
-  type?: "SMS" | "WhatsApp" | "Email" | "CUSTOM";
+  type?: "SMS" | "WhatsApp" | "Email" | "Custom";
   conversationProviderId?: string;
+  accessToken?: string;
 }): Promise<{ messageId?: string; conversationId?: string }> {
   const body: Record<string, unknown> = {
     type: input.type ?? "SMS",
@@ -467,8 +472,10 @@ export async function postOutboundMessage(input: {
   if (input.conversationProviderId) {
     body.conversationProviderId = input.conversationProviderId;
   }
-  return ghlFetch("/conversations/messages", {
+  const init: RequestInit & { accessToken?: string } = {
     method: "POST",
     body: JSON.stringify(body),
-  });
+  };
+  if (input.accessToken) init.accessToken = input.accessToken;
+  return ghlFetch("/conversations/messages", init);
 }

@@ -47,6 +47,10 @@ import {
 } from "@/lib/messaging/templates";
 import { sendEliDM } from "@/lib/notify/eli";
 import { sendBridgeMessage } from "@/lib/bridge/client";
+import {
+  forwardMessage as ghlForwardMessage,
+  syncLeadToGHL,
+} from "@/integrations/ghl/sync";
 
 export const runtime = "nodejs";
 export const maxDuration = 15;
@@ -328,6 +332,16 @@ async function handleIncoming(evt: GreenWebhook): Promise<void> {
     sender: "lead",
     payload: evt as unknown as Record<string, unknown>,
   });
+
+  // Mirror to GHL Inbox (Phase 1F).
+  void ghlForwardMessage({
+    sid: canonicalSid,
+    direction: "in",
+    sender: "lead",
+    text: textToStore,
+    occurredAt: new Date(),
+  });
+  void syncLeadToGHL(canonicalSid);
 
   // Skip routing for pollUpdateMessage events that arrive WITHOUT a vote
   // (e.g. when the poll is opened on the customer side but not yet voted).

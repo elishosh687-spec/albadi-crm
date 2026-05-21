@@ -13,6 +13,7 @@ import { leads } from "@/drizzle/schema";
 import { eq, sql } from "drizzle-orm";
 import {
   ENABLE_GHL_SYNC,
+  GHL_CONVERSATION_PROVIDER_ID,
   GHL_PIPELINE_ID,
   requireGHLLocationId,
 } from "./config";
@@ -26,6 +27,7 @@ import {
   type GHLContact,
   type GHLOpportunity,
 } from "./client";
+import { getValidAccessToken } from "./oauth";
 import {
   buildCustomFieldsPayload,
   buildLeadDisplayName,
@@ -269,11 +271,32 @@ export async function forwardMessage(opts: {
     const label = labelMap[opts.sender];
     const body = `${label}\n${opts.text.trim()}`;
 
+    // Route through our Custom Conversation Provider when configured so
+    // inbound + outbound land in the same thread tagged "Albadi WhatsApp".
+    // Falls back to SMS type when providerId is missing (pre-1F sessions).
+    const type = GHL_CONVERSATION_PROVIDER_ID ? "Custom" : "SMS";
+    const conversationProviderId = GHL_CONVERSATION_PROVIDER_ID || undefined;
+    // CUSTOM provider endpoints require OAuth (PIT lacks provider access).
+    const accessToken = conversationProviderId
+      ? (await getValidAccessToken(requireGHLLocationId())) ?? undefined
+      : undefined;
     try {
       if (opts.direction === "in") {
-        await postInboundMessage({ contactId, message: body, type: "SMS" });
+        await postInboundMessage({
+          contactId,
+          message: body,
+          type,
+          conversationProviderId,
+          accessToken,
+        });
       } else {
-        await postOutboundMessage({ contactId, message: body, type: "SMS" });
+        await postOutboundMessage({
+          contactId,
+          message: body,
+          type,
+          conversationProviderId,
+          accessToken,
+        });
       }
     } catch (msgErr) {
       // Fallback: note. Conversations API requires a registered provider
