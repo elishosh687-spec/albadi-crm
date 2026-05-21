@@ -23,17 +23,12 @@ export async function listDecisions(opts: ListDecisionsOpts = {}) {
   const limit = Math.min(200, Math.max(1, opts.limit ?? 50));
   const lead = opts.lead?.trim();
   const action = opts.action?.trim();
-  const source = opts.source?.trim();
 
   const where: SQL[] = [];
   if (lead) where.push(sql`trim(${botDecisionLog.manychatSubId}) = ${lead}`);
   if (action && action !== "all") where.push(eq(botDecisionLog.action, action));
-  // `source` column may not exist yet (Track C1 adds it). Use raw SQL so the
-  // query plan still works pre-migration — column reference will surface only
-  // when filter is active.
-  if (source && source !== "all") {
-    where.push(sql`COALESCE(source, 'bridge') = ${source}`);
-  }
+  // `source` filter intentionally not wired — column does not exist on
+  // bot_decision_log yet (Phase C1 adds it). Until then, all rows are bridge.
 
   const rows = await db
     .select()
