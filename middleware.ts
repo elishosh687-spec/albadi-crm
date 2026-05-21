@@ -1,5 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 
+// PowerShell stdin pipes prepend a UTF-8 BOM on Windows when piping values
+// into `vercel env add`. Without stripping, equality comparisons against
+// user-supplied query string values silently fail.
+const BOM = "﻿";
+function stripBom(s: string | undefined): string | undefined {
+  if (typeof s !== "string") return s;
+  return s.startsWith(BOM) ? s.slice(1) : s;
+}
+
 export function middleware(req: NextRequest) {
   const path = req.nextUrl.pathname;
 
@@ -39,7 +48,7 @@ export function middleware(req: NextRequest) {
   // Widgets calling /api/factory/quote-preview need a backdoor — accept
   // ?widget_token=<value> matching GHL_WIDGET_TOKEN. GET only, no writes.
   const widgetTokenQuery = req.nextUrl.searchParams.get("widget_token");
-  const expectedWidgetToken = process.env.GHL_WIDGET_TOKEN;
+  const expectedWidgetToken = stripBom(process.env.GHL_WIDGET_TOKEN);
   if (
     expectedWidgetToken &&
     widgetTokenQuery === expectedWidgetToken &&
