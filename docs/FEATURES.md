@@ -178,6 +178,20 @@
 | 2.6.8 | תצוגה מקדימה של הצעת המחיר ("בוס מוד") — customer view + פירוט פנימי (FX, CNY, רווח, shipping) | shipped | `app/dashboard/v3/factory/_components/QuoteHtmlPreview.tsx`, `DetailedBreakdown.tsx` | — |
 | 2.6.9 | Dark theme לכל modal הצעת המפעל | shipped | `QuoteHtmlPreview.tsx` | — |
 
+### 2.7 GHL Widgets (iframe inside GoHighLevel)
+
+GHL = ממשק תפעולי יחיד אחרי השלמת המעבר. dashboard v3 ייעלם. Widgets פר-iframe תחת `/widget/*`, auth ע"י `GHL_WIDGET_TOKEN` (query או Bearer). כל ה-business logic ב-`lib/factory/server/*` כך ש-routes גם של dashboard וגם של widget רק wrappers דקים — הפרדה מוחלטת.
+
+| # | Feature | Status | קוד | URL |
+|---|---|---|---|---|
+| 2.7.1 | 🧮 מחשבון מחיר — iframe sidebar | shipped (2026-05) | `app/widget/calculator/page.tsx`, `components/calculator/CalculatorView.tsx` | `/widget/calculator?widget_token=<T>` |
+| 2.7.2 | 📋 סיכום הזמנה (read-only) — iframe sidebar | shipped (2026-05-21) | `app/widget/order-summary/page.tsx`, `components/order-summary/OrderSummaryView.tsx` | `/widget/order-summary?widget_token=<T>` |
+| 2.7.3 | 🏭 הצעות מפעל (factory-flow) — **sidebar widget עם contact picker**. flow מלא: בחר ליד → Order Summary → שלח Feishu → Refresh → Finalize (margin slider + shipping + DetailedBreakdown ¥→$→₪) → שלח WhatsApp עם PDF | shipped (2026-05-21) | `app/widget/factory-flow/page.tsx`, `components/factory-flow/*.widget.tsx`, `lib/factory/server/{list,refresh,finalize,sendWhatsapp}.ts`, `app/api/widget/factory/*` | `/widget/factory-flow?widget_token=<T>` |
+| 2.7.4 | ⚙️ Settings widget — תוכנן, לא נחת | planned | — | `/widget/settings?widget_token=<T>` |
+| 2.7.5 | 🤖 Bot Decisions widget — תוכנן, לא נחת | planned | — | `/widget/bot-decisions?widget_token=<T>` |
+
+**Architecture:** [docs/migration-to-ghl/PLAN.md](migration-to-ghl/PLAN.md) Phase 1G. Contact Detail placement לא זמין ב-tier הנוכחי של GHL → כל הויג'טים פר-לקוח חיים ב-Sidebar עם contact picker פנימי (debounced search על name/phone/sid).
+
 ### 2.3 Dashboard v2 (Fallback, deprecated soon)
 
 | # | Feature | Status | קוד | מסמך |

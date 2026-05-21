@@ -44,11 +44,12 @@ Widget נדרש רק למה שאין native:
 
 | # | Widget | מצב | פעולות |
 |---|---|---|---|
-| 1 | Order Summary | read-only | אין (read q_state, factory spec, quote, follow-up date, source) |
+| 1 | Order Summary (sidebar) | read-only | פיקר ליד → q_state, factory spec, quote, follow-up date, source |
 | 2 | Bot Decisions | read + 2 mutations | thumbs-up/down ל-intent + stage |
-| 3 | Factory Quote per-lead | read + 1 mutation | "שלח לפבריקה" (Feishu) |
-| 4 | Factory Quotes List (cross-lead) | read-only | link חזרה ל-GHL contact detail |
-| 5 | Settings | read + write | currency rates, default margin, shipping, templates |
+| 3 | Factory Flow (sidebar, picker) | read + full mutations | פיקר ליד → Order Summary → שלח Feishu → Refresh → Finalize → שלח WhatsApp |
+| 4 | Settings | read + write | currency rates, default margin, shipping, templates |
+
+**הערה (2026-05-21):** GHL account tier לא חושף `Contact Detail` placement ב-Custom Menu Links. כל הויג'טים פר-לקוח לפי תוכנית מקורית (per-contact iframe) — בלתי אפשריים. במקום זה: **sidebar widget אחד עם contact picker בראש**. 1G-3 (Factory Flow) מכסה גם את הפונקציה של 1G-4 הישן (Quotes List cross-lead) — נמחק.
 
 Activity log — בוטל. GHL native timeline מציג את ה-Notes מ-Phase 1E.
 
@@ -66,21 +67,20 @@ Activity log — בוטל. GHL native timeline מציג את ה-Notes מ-Phase 1
 
 | שם | URL | Show On |
 |---|---|---|
-| 📋 סיכום הזמנה | `/widget/order-summary?contactId={{contact.id}}&widget_token=<T>` | Contact Detail |
-| 🤖 החלטות בוט | `/widget/bot-decisions?contactId={{contact.id}}&widget_token=<T>` | Contact Detail |
-| 🏭 הצעת מפעל | `/widget/factory-quote?contactId={{contact.id}}&widget_token=<T>` | Contact Detail |
-| 🗂️ הצעות מפעל | `/widget/factory-quotes-list?widget_token=<T>` | Sub-Account sidebar |
-| ⚙️ הגדרות | `/widget/settings?widget_token=<T>` | Sub-Account sidebar |
+| 🧮 מחשבון מחיר | `/widget/calculator?widget_token=<T>` | Sidebar |
+| 📋 סיכום הזמנה | `/widget/order-summary?widget_token=<T>` | Sidebar (picker) |
+| 🏭 הצעות מפעל | `/widget/factory-flow?widget_token=<T>` | Sidebar (picker) |
+| ⚙️ הגדרות | `/widget/settings?widget_token=<T>` | Sidebar |
 
-Per-lead → רק Contact Detail (GHL bug: `{{contact.id}}` שובר ב-Sidebar).
+Contact Detail placement לא זמין ב-tier הנוכחי. כל הויג'טים חיים ב-Sidebar עם contact picker פנימי. `{{contact.id}}` בכלל לא בשימוש (קורס ב-Sidebar — `$uxMessage` bug).
 
 ### Sequencing
 
 1. ✅ Phase 1F-prep — rename endpoints (DONE 2026-05-21)
-2. ✅ Phase 1G-1 — Order Summary (DONE 2026-05-21) — `app/widget/order-summary/` + `components/order-summary/OrderSummaryView.tsx`. Verified locally: 4 states (valid/invalid token/no contact/bogus contact).
-3. Phase 1G-2 — Bot Decisions (read + 2 mutations, ~שעה)
-4. Phase 1G-3 — Factory Quote per-lead (read + 1 mutation, ~שעה)
-5. Phase 1G-4 — Factory Quotes List (read-only, ~30 דק)
+2. ✅ Phase 1G-1 — Order Summary (DONE 2026-05-21) — `app/widget/order-summary/` + `components/order-summary/OrderSummaryView.tsx`.
+3. ✅ Phase 1G-3 — **Factory Flow widget** (DONE 2026-05-21) — `app/widget/factory-flow/` + `components/factory-flow/*.widget.tsx`. Sidebar widget עם contact picker. כל ה-business logic ב-`lib/factory/server/{list,refresh,finalize,sendWhatsapp}.ts` משותף עם dashboard routes. Verified locally + ב-GHL iframe (שמעון ווקנין finalized state, ₪4,887.53, 10000 יח׳).
+4. Phase 1G-2 — Bot Decisions (read + 2 mutations, ~שעה). אותו pattern של widget_token + sidebar picker.
+5. ~~Phase 1G-4 — Factory Quotes List~~ — מוזג ל-1G-3 (Factory Flow history list בתוך הפאנל).
 6. Phase 1D — Settings (read + write, ~שעה)
 
 ### Verification per widget
