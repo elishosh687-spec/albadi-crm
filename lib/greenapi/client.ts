@@ -204,7 +204,11 @@ export async function sendGreenMessage(
   sender: "bot" | "eli" = "bot",
   mediaFilename?: string,
   buttons?: { id: string; title: string }[],
-  poll?: { question: string; options: string[]; selectableCount?: number }
+  poll?: { question: string; options: string[]; selectableCount?: number },
+  // See sendBridgeMessage — only GHL-Inbox-originated sends should set
+  // skipGhlMirror=true. Everything else mirrors so business-side messages
+  // appear in the GHL unified thread.
+  opts?: { skipGhlMirror?: boolean }
 ): Promise<GreenSendResult> {
   if (process.env.BRIDGE_DRY_RUN === "1") {
     const fakeId = `dryrun:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`;
@@ -233,7 +237,9 @@ export async function sendGreenMessage(
       sender,
       payload: { from: "sendGreenMessage", kind: "poll", options: poll.options },
     });
-    await mirrorOutboundToGHL({ chatId, sender, text: poll.question });
+    if (!opts?.skipGhlMirror) {
+      await mirrorOutboundToGHL({ chatId, sender, text: poll.question });
+    }
     return { wa_message_id: res.idMessage };
   }
 
@@ -263,13 +269,15 @@ export async function sendGreenMessage(
       sender,
       payload: { from: "sendGreenMessage", kind: "file", url: mediaPath },
     });
-    await mirrorOutboundToGHL({
-      chatId,
-      sender,
-      text: message,
-      mediaUrl: mediaPath,
-      mediaFilename,
-    });
+    if (!opts?.skipGhlMirror) {
+      await mirrorOutboundToGHL({
+        chatId,
+        sender,
+        text: message,
+        mediaUrl: mediaPath,
+        mediaFilename,
+      });
+    }
     return { wa_message_id: res.idMessage };
   }
 
@@ -295,14 +303,16 @@ export async function sendGreenMessage(
     sender,
     payload: { from: "sendGreenMessage", kind: "text" },
   });
-  await mirrorOutboundToGHL({ chatId, sender, text: outText });
+  if (!opts?.skipGhlMirror) {
+    await mirrorOutboundToGHL({ chatId, sender, text: outText });
+  }
   return { wa_message_id: res.idMessage };
 }
 
-// Forward bot outbound to GHL Inbox so the unified Custom Provider thread
-// shows both sides of the conversation. Skipped for `eli` (manual replies
-// initiated from GHL Inbox — GHL already recorded the outbound itself when
-// it routed through Custom Provider, so re-forwarding would dupe).
+// Forward bot + eli outbound to GHL Inbox so the unified Custom Provider
+// thread shows both sides of the conversation. The GHL-Inbox-originated
+// path opts out via skipGhlMirror at the caller (GHL already recorded that
+// send in its own thread).
 async function mirrorOutboundToGHL(input: {
   chatId: string;
   sender: "bot" | "eli";
@@ -311,13 +321,12 @@ async function mirrorOutboundToGHL(input: {
   mediaFilename?: string | null;
   mediaMimeType?: string | null;
 }): Promise<void> {
-  if (input.sender !== "bot") return;
   try {
     const { forwardMessage } = await import("../../integrations/ghl/sync");
     await forwardMessage({
       sid: input.chatId,
       direction: "out",
-      sender: "bot",
+      sender: input.sender,
       text: input.text,
       occurredAt: new Date(),
       mediaUrl: input.mediaUrl ?? null,

@@ -251,7 +251,13 @@ export async function sendBridgeMessage(
   // above the options. Vote replies arrive as a webhook `message.received`
   // with `data.media_type="poll_vote"` and JSON content carrying
   // `selected_options[]`. See app/api/bridge/webhook/route.ts.
-  poll?: { question: string; options: string[]; selectableCount?: number }
+  poll?: { question: string; options: string[]; selectableCount?: number },
+  // Set { skipGhlMirror: true } only for sends that originate from the GHL
+  // Inbox UI (api/integrations/outbound). GHL already records those in its
+  // own thread; mirroring back would dupe. Every other surface (dashboard,
+  // bot autoresponder, scripts) must let the mirror run so Eli sees the
+  // business side of the conversation inside GHL.
+  opts?: { skipGhlMirror?: boolean }
 ): Promise<BridgeSendResult> {
   // Test-only escape hatch — skips the actual WhatsApp send and returns a
   // fake message id. Set BRIDGE_DRY_RUN=1 in local test scripts (see
@@ -271,7 +277,8 @@ export async function sendBridgeMessage(
       sender,
       mediaFilename,
       buttons,
-      poll
+      poll,
+      opts
     );
   }
   const jid = isJid(recipient) ? recipient : phoneToJid(recipient);
@@ -336,18 +343,17 @@ export async function sendBridgeMessage(
     console.warn("[sendBridgeMessage] outbound pre-insert failed", e);
   }
 
-  // Mirror to GHL Inbox so bot/eli replies appear in the unified thread.
-  // Eli's manual replies coming from GHL Inbox webhook already hit this path
-  // (api/integrations/outbound calls sendBridgeMessage), and GHL records the
-  // outbound side itself when it routes through Custom Provider — so we skip
-  // forwarding `sender=eli` here to avoid duplicates. Only forward bot.
-  if (sender === "bot") {
+  // Mirror to GHL Inbox so bot + eli replies appear in the unified thread.
+  // Only the GHL-Inbox-originated path (api/integrations/outbound) opts out
+  // via skipGhlMirror — GHL already recorded that send in its own thread, so
+  // re-forwarding would dupe.
+  if (!opts?.skipGhlMirror) {
     try {
       const { forwardMessage } = await import("@/integrations/ghl/sync");
       void forwardMessage({
         sid: jid,
         direction: "out",
-        sender: "bot",
+        sender,
         text: message,
         occurredAt: new Date(),
         mediaUrl: mediaPath ?? null,

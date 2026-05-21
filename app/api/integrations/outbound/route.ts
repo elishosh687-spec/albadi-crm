@@ -144,7 +144,11 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       recipient,
       text ?? "",
       mediaUrl ?? undefined,
-      "eli"
+      "eli",
+      undefined,
+      undefined,
+      undefined,
+      { skipGhlMirror: true }
     );
     console.log("[ghl.outbound] sent", {
       sid: lead.manychatSubId,

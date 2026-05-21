@@ -5,6 +5,14 @@
 
 ---
 
+## 2026-05-21 — "GHL outbound mirror: include `sender='eli'`"
+
+### Fixed
+- **Business-side messages now appear in the GHL unified thread.** Phase 1F shipped outbound mirroring gated on `sender === 'bot'`, which silently dropped every Eli-originated path (dashboard manual reply, bulk personalized cron, factory send, supervisor override) from the GHL Inbox view. Gate inverted: mirror by default; only the GHL-Inbox-originated `/api/integrations/outbound` path opts out via `skipGhlMirror=true` to avoid duping the message GHL already recorded itself. ([lib/bridge/client.ts](lib/bridge/client.ts), [lib/greenapi/client.ts](lib/greenapi/client.ts))
+- **WA Business app direct sends mirror to GHL.** `handleMessageSent` in the bridge webhook now captures the `insertBridgeMessage` return and forwards to GHL only on fresh inserts (i.e. when no `sendBridgeMessage` pre-insert claimed the `wa_message_id`). Covers the case where Eli replies from the bonded phone and bridge emits `message.sent` instead of `message.received(is_from_me)`. ([app/api/bridge/webhook/route.ts](app/api/bridge/webhook/route.ts))
+
+---
+
 ## 2026-05-19 — "Factory prices update 2 (Kunming) — broad cuts + plate-fee drops"
 
 ### Changed

@@ -911,7 +911,7 @@ async function handleMessageSent(evt: BridgeEnvelope): Promise<void> {
   // waMessageId, so reaching this insert path means the message came from a
   // surface we did not originate — i.e. Eli replying directly in the WA
   // Business app on the bonded phone. Default to 'eli' for those.
-  await insertBridgeMessage({
+  const inserted = await insertBridgeMessage({
     jid,
     direction: "out",
     text,
@@ -920,6 +920,18 @@ async function handleMessageSent(evt: BridgeEnvelope): Promise<void> {
     receivedAt: new Date(evt.occurred_at),
     sender: "eli",
   });
+  // Fresh insert ⇒ no pre-insert from sendBridgeMessage existed, so the GHL
+  // mirror in that helper never ran. This is the WA-Business-app direct-send
+  // case. Forward to GHL so the business side shows up in the unified thread.
+  if (inserted) {
+    void ghlForwardMessage({
+      sid: jid,
+      direction: "out",
+      sender: "eli",
+      text,
+      occurredAt: new Date(evt.occurred_at),
+    });
+  }
 }
 
 export async function POST(req: NextRequest) {
