@@ -2,7 +2,7 @@
 
 > קרא קודם אם התחלת סשן חדש. אין צורך בשאלות — הכל פה.
 
-עדכון: Phase 0 + 1A הושלמו. ממתין רק GHL Custom Menu Link ידני.
+עדכון: Phase 0 + 1A הושלמו **end-to-end**. Widget נראה ב-GHL sidebar, נטען בקליק, מציג Calculator + boss-mode breakdown. ממתין Phase 1E (backfill) + 1B (PDF) + 1C (Feishu) + 1F (outbound chat).
 
 ---
 
@@ -37,14 +37,36 @@
 
 | # | מה | מי |
 |---|---|---|
-| 1 | GHL Custom Menu Link "🧮 מחשבון" | אלי (UI) |
-| 2 | Backfill כל הלידים מ-DB → GHL (`integrations/ghl/backfill.ts`) | Claude |
-| 3 | `ENABLE_GHL_SYNC=1` ב-Vercel + redeploy | Claude (אחרי backfill) |
-| 4 | Phase 1B — PDF flow | Claude |
-| 5 | Phase 1C — Feishu loop | Claude |
-| 6 | Phase 1D — Settings widget | Claude |
-| 7 | Phase 1F — Outbound chat | Claude |
-| 8 | מחיקת dashboard ישן | אחרי שPhase 1 יציב 2 שבועות. ראה DELETION-CHECKLIST.md |
+| ~~1~~ | ~~GHL Custom Menu Link "🧮 מחשבון"~~ | ✅ DONE (אלי, 2026-05-21) |
+| 2 | Backfill כל הלידים מ-DB → GHL (`integrations/ghl/backfill.ts`) | Claude — **NEXT** |
+| 3 | Widget בתוך contact detail (לא sidebar) — חוקרים: Custom Fields HTML / Marketplace App / Custom Tab | Claude |
+| 4 | `ENABLE_GHL_SYNC=1` ב-Vercel + redeploy | Claude (אחרי backfill) |
+| 5 | Phase 1B — PDF flow | Claude |
+| 6 | Phase 1C — Feishu loop | Claude |
+| 7 | Phase 1D — Settings widget | Claude |
+| 8 | Phase 1F — Outbound chat | Claude |
+| 9 | מחיקת dashboard ישן | אחרי שPhase 1 יציב 2 שבועות. ראה DELETION-CHECKLIST.md |
+
+## הצעד הראשון בסשן הבא
+
+**A. Backfill (Phase 1E)** — סקריפט one-shot:
+- קורא כל `leads` מ-DB
+- לכל ליד: `upsertGHLContact` + `createOrUpdateGHLOpportunity`
+- שומר `ghl_contact_id`, `ghl_opportunity_id` חזרה ב-DB
+- supports `--dry-run` + `--resume`
+- rate-limit handling (GHL 10 req/sec)
+- run: `npx tsx integrations/ghl/backfill.ts`
+
+קוד יצרר ב-`integrations/ghl/backfill.ts`.
+
+## הסטטוס של ה-Custom Menu Link
+
+- **שם:** albadi calculator
+- **URL:** `https://albadi-crm.vercel.app/widget/calculator?widget_token=50da21955d78a871e4d1ffdd3e44827e2aa4875a3719dce4f009ca569cbb6a7c`
+- **Show On:** Sidebar (Agency + Sub-account)
+- **When Clicked:** Same Tab / Iframe (verified working)
+- **בעיה ידועה:** GHL has a bug — לא יכול לשים `{{contact.id}}` ב-URL כשShow On = Sidebar (GHL onClick handler crashes עם `Cannot read properties of undefined (reading '$uxMessage')`). Workaround: הסיר `{{contact.id}}` מה-URL כרגע. ה-widget רץ ב-standalone mode.
+- **TODO Phase 1E+:** למצוא דרך לשים widget בתוך contact detail (לא sidebar) → אז `{{contact.id}}` יעבוד.
 
 ---
 
@@ -83,15 +105,10 @@ GHL_FIELD_PIPELINE_FLAG=RWIsVudSbh5WKZFEXl1y
 
 ---
 
-## ה-Custom Menu Link — מה אלי צריך לעשות
+## ה-Custom Menu Link — DONE ✅
 
-1. `https://app.gohighlevel.com/v2/location/zo0OlVmtNiXiDAbZj2YW/settings/custom-menu-links`
-2. **+ Add Custom Menu Link**
-3. Name: `🧮 מחשבון`
-4. URL:
-   ```
-   https://albadi-crm.vercel.app/widget/calculator?contactId={{contact.id}}&widget_token=50da21955d78a871e4d1ffdd3e44827e2aa4875a3719dce4f009ca569cbb6a7c
-   ```
-5. Show On: **Contacts → Detail Page**
-6. Open In: **Iframe** (קריטי)
-7. Save
+נוצר ב-Agency view → Settings → Custom Menu Links.
+- URL בלי `{{contact.id}}` בגלל GHL bug (ראה למעלה).
+- Widget נטען ב-sidebar של sub-account "Eli".
+- מחשבון + boss-mode breakdown עובדים.
+- Standalone mode (אין lead match) — תקין לטסט.
