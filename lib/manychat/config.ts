@@ -27,8 +27,16 @@ export {
 // already imports from this file.
 export {
   V2_PIPELINE_STAGES,
+  V2_STAGE_LABELS,
   V2_FLAG_TAG_IDS,
   V2_FLAG_NAMES,
+  V2_EXTRA_FLAG_NAMES,
+  LEGACY_STAGE_MAP,
+  LOSS_REASONS,
+  LOSS_REASON_LABELS,
+  normalizeStage,
+  flagHasNumericId,
   type V2PipelineStage,
   type V2FlagName,
+  type LossReason,
 } from "./stages";
