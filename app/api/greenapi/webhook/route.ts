@@ -339,8 +339,10 @@ async function handleIncoming(evt: GreenWebhook): Promise<void> {
     payload: evt as unknown as Record<string, unknown>,
   });
 
-  // Mirror to GHL Inbox (Phase 1F).
-  void ghlForwardMessage({
+  // Mirror to GHL Inbox (Phase 1F). MUST await — see comment in
+  // handleOutgoingManual; Vercel kills the lambda when the HTTP handler
+  // returns, so fire-and-forget cancels the mirror mid-flight.
+  await ghlForwardMessage({
     sid: canonicalSid,
     direction: "in",
     sender: "lead",
@@ -350,7 +352,7 @@ async function handleIncoming(evt: GreenWebhook): Promise<void> {
     mediaFilename,
     mediaMimeType,
   });
-  void syncLeadToGHL(canonicalSid);
+  await syncLeadToGHL(canonicalSid);
 
   // Skip routing for pollUpdateMessage events that arrive WITHOUT a vote
   // (e.g. when the poll is opened on the customer side but not yet voted).
@@ -491,7 +493,11 @@ async function handleOutgoingManual(evt: GreenWebhook): Promise<void> {
     payload: evt as unknown as Record<string, unknown>,
   });
 
-  void ghlForwardMessage({
+  // MUST await — Vercel lambdas terminate when the HTTP handler returns,
+  // so `void` here cancels the mirror mid-flight (audit proved this:
+  // ghl_mirror.attempt fires, then nothing because the lambda is gone
+  // before loadLead/postOutboundMessage complete).
+  await ghlForwardMessage({
     sid: canonicalSid,
     direction: "out",
     sender: "eli",

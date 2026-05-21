@@ -350,7 +350,10 @@ export async function sendBridgeMessage(
   if (!opts?.skipGhlMirror) {
     try {
       const { forwardMessage } = await import("@/integrations/ghl/sync");
-      void forwardMessage({
+      // MUST await — Vercel kills the lambda when the calling HTTP handler
+      // returns, so a fire-and-forget mirror gets cancelled mid-flight
+      // before postOutboundMessage completes.
+      await forwardMessage({
         sid: jid,
         direction: "out",
         sender,
