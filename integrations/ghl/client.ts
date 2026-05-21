@@ -12,7 +12,7 @@ type Query = Record<string, string | number | boolean | undefined>;
 
 async function ghlFetch<T = unknown>(
   path: string,
-  init: RequestInit = {},
+  init: RequestInit & { accessToken?: string } = {},
   query?: Query
 ): Promise<T> {
   const url = new URL(GHL_BASE + path);
@@ -22,7 +22,8 @@ async function ghlFetch<T = unknown>(
     }
   }
   const headers = new Headers(init.headers);
-  headers.set("Authorization", `Bearer ${requireGHLToken()}`);
+  const token = init.accessToken ?? requireGHLToken();
+  headers.set("Authorization", `Bearer ${token}`);
   headers.set("Version", GHL_API_VERSION);
   headers.set("Accept", "application/json");
   if (init.body && !headers.has("Content-Type")) {
@@ -343,6 +344,66 @@ export async function createLocationCustomField(input: {
 // ===========================================================================
 // Notes (used for activity log / message mirroring as fallback)
 // ===========================================================================
+
+// ===========================================================================
+// Conversation Providers (Custom channel for Phase 1F outbound)
+// ===========================================================================
+
+export interface GHLConversationProvider {
+  id: string;
+  name: string;
+  alias?: string;
+  type: string;
+  locationId: string;
+  deliveryUrl?: string;
+  active?: boolean;
+}
+
+/**
+ * Register (or look up) a Custom Conversation Provider. GHL routes outbound
+ * messages typed with `conversationProviderId = <this.id>` through the
+ * provider's deliveryUrl webhook.
+ *
+ * Idempotent by name within a location: if a provider with the same name
+ * exists, returns it instead of creating a duplicate.
+ */
+export async function upsertConversationProvider(input: {
+  name: string;
+  deliveryUrl: string;
+  alias?: string;
+  type?: "Custom" | "SMS" | "Email";
+  accessToken?: string; // OAuth token (required — PIT lacks providers.write)
+}): Promise<GHLConversationProvider> {
+  const locationId = requireGHLLocationId();
+  const auth = input.accessToken ? { accessToken: input.accessToken } : {};
+  // Look up existing first.
+  try {
+    const existing = await ghlFetch<{ providers?: GHLConversationProvider[] }>(
+      "/conversations/providers",
+      auth,
+      { locationId }
+    );
+    const match = existing.providers?.find(
+      (p) => p.name === input.name && p.locationId === locationId
+    );
+    if (match) return match;
+  } catch {
+    // List endpoint may 404 on accounts with no providers — fall through to create.
+  }
+  const body = {
+    locationId,
+    name: input.name,
+    alias: input.alias ?? input.name.toLowerCase().replace(/\s+/g, "_"),
+    type: input.type ?? "Custom",
+    deliveryUrl: input.deliveryUrl,
+    active: true,
+  };
+  const res = await ghlFetch<{ provider: GHLConversationProvider }>(
+    "/conversations/providers",
+    { method: "POST", body: JSON.stringify(body), ...auth }
+  );
+  return res.provider;
+}
 
 export async function addContactNote(
   contactId: string,

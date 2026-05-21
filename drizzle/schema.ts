@@ -115,6 +115,24 @@ export const messages = pgTable("messages", {
   sender: text("sender"),
 });
 
+// GHL OAuth tokens — one row per (location, app). Populated by the OAuth
+// callback at /api/integrations/ghl/oauth/callback. The access_token is
+// what we use for scopes that the Private Integration Token can't access
+// (specifically conversations/providers.write — needed to register a
+// Custom Conversation Provider for Phase 1F outbound chat).
+export const ghlOauthTokens = pgTable("ghl_oauth_tokens", {
+  locationId: text("location_id").primaryKey(),
+  accessToken: text("access_token").notNull(),
+  refreshToken: text("refresh_token").notNull(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  scope: text("scope"),
+  companyId: text("company_id"),
+  userType: text("user_type"),
+  updatedAt: timestamp("updated_at", { withTimezone: true })
+    .defaultNow()
+    .notNull(),
+});
+
 // Key/value config table. Pre-existed from the v1 schema; re-declared here
 // so the Settings UI can read/write entries (bot prompts, feature toggles).
 export const botConfig = pgTable("bot_config", {
