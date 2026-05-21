@@ -146,7 +146,7 @@ albadi-crm/
 | `/api/bot/*`, `/api/factory/*` mutations | Bearer BOT_SECRET |
 | `/api/widget/*` | widget_token query (GHL_WIDGET_TOKEN HMAC) |
 | `/widget/*` (iframe pages) | widget_token query |
-| `/api/integrations/ghl/*` (webhooks מ-GHL) | GHL signing secret (Phase 1F) |
+| `/api/integrations/*` (webhooks מ-GHL) | GHL signing secret (Phase 1F) — path בלי "ghl" כי GHL UI חוסם URL שמכיל ghl/highlevel/gohighlevel |
 | `/api/factory/quote-preview` GET | widget_token OR Bearer (dual auth — widget + scripts) |
 
 **אין יותר** `albadi_auth` cookie. אין dashboard auth. אלי נכנס דרך GHL login.

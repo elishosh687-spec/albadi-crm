@@ -7,6 +7,93 @@
 
 ---
 
+## Workflow rule (חובה)
+
+**כל שינוי שעובר ל-GHL (Custom Menu Link / Conversation Provider / Webhook / Custom Field / Pipeline / Workflow / OAuth installation / token refresh / re-import) חייב להישלח לאלי לבדיקה ידנית ב-GHL UI לפני שעוברים להמשך.**
+
+הדפוס בכל פעם:
+1. Claude מבצע את השינוי + deploy
+2. Claude מציין במפורש מה לבדוק ב-GHL UI: איזה כרטיס לפתוח, איזה tab/menu, מה אמור להופיע
+3. אלי בודק ומאשר / מציין בעיה
+4. רק אז ממשיכים
+
+---
+
+## URL blocking rule — GHL חוסם המילה "ghl"
+
+GHL UI דוחה כל URL שמכיל `ghl`/`highlevel`/`gohighlevel` בנתיב. תצלום מהמשתמש מאשר.
+
+**Phase 1F-prep — rename בוצע 2026-05-21:**
+
+| ישן | חדש |
+|---|---|
+| `/api/integrations/ghl/install` | `/api/integrations/install` |
+| `/api/integrations/ghl/oauth/callback` | `/api/integrations/oauth/callback` |
+| `/api/integrations/ghl/outbound` | `/api/integrations/outbound` |
+
+ENV: `GHL_OAUTH_REDIRECT_URI=https://albadi-crm.vercel.app/api/integrations/oauth/callback`.
+
+תיעוד פנימי + commits יכולים להכיל "ghl". URL פומבי — לא.
+
+---
+
+## Phase 1G — Per-lead widgets + Settings (תוכנית)
+
+GHL native מטפל ב: stage, notes, tags, custom fields, opportunities, activity timeline. אין widget לזה.
+Widget נדרש רק למה שאין native:
+
+| # | Widget | מצב | פעולות |
+|---|---|---|---|
+| 1 | Order Summary | read-only | אין (read q_state, factory spec, quote, follow-up date, source) |
+| 2 | Bot Decisions | read + 2 mutations | thumbs-up/down ל-intent + stage |
+| 3 | Factory Quote per-lead | read + 1 mutation | "שלח לפבריקה" (Feishu) |
+| 4 | Factory Quotes List (cross-lead) | read-only | link חזרה ל-GHL contact detail |
+| 5 | Settings | read + write | currency rates, default margin, shipping, templates |
+
+Activity log — בוטל. GHL native timeline מציג את ה-Notes מ-Phase 1E.
+
+### Auth
+
+- Page (server component): `verifyWidgetToken(token)` constant-time + lookup `leads` WHERE `ghl_contact_id`=X
+- Mutations: REST endpoints חדשים תחת `/api/widget/*` (לא server actions). dual auth: cookie OR `widget_token` query/Bearer.
+- `middleware.ts` כבר פותח `/widget/*` ו-`/api/widget/*` ללא cookie.
+
+### Settings PUT risk
+
+`widget_token` הוא 64-hex random. למי שמשיג token יש כתיבה ל-factory config. mitigation עתידי: Bearer דו-שלבי או IP allowlist.
+
+### GHL Custom Menu Links
+
+| שם | URL | Show On |
+|---|---|---|
+| 📋 סיכום הזמנה | `/widget/order-summary?contactId={{contact.id}}&widget_token=<T>` | Contact Detail |
+| 🤖 החלטות בוט | `/widget/bot-decisions?contactId={{contact.id}}&widget_token=<T>` | Contact Detail |
+| 🏭 הצעת מפעל | `/widget/factory-quote?contactId={{contact.id}}&widget_token=<T>` | Contact Detail |
+| 🗂️ הצעות מפעל | `/widget/factory-quotes-list?widget_token=<T>` | Sub-Account sidebar |
+| ⚙️ הגדרות | `/widget/settings?widget_token=<T>` | Sub-Account sidebar |
+
+Per-lead → רק Contact Detail (GHL bug: `{{contact.id}}` שובר ב-Sidebar).
+
+### Sequencing
+
+1. ✅ Phase 1F-prep — rename endpoints (DONE 2026-05-21)
+2. Phase 1G-1 — Order Summary (read-only, ~30 דק)
+3. Phase 1G-2 — Bot Decisions (read + 2 mutations, ~שעה)
+4. Phase 1G-3 — Factory Quote per-lead (read + 1 mutation, ~שעה)
+5. Phase 1G-4 — Factory Quotes List (read-only, ~30 דק)
+6. Phase 1D — Settings (read + write, ~שעה)
+
+### Verification per widget
+
+1. `npx tsc --noEmit` נקי
+2. דפדפן ישיר: `https://albadi-crm.vercel.app/widget/<name>?contactId=<known>&widget_token=<T>` → נטען
+3. Token שגוי → 401
+4. F12 → Console נקי (CSP)
+5. ב-GHL Custom Menu Link → iframe נטען עם המידע
+6. **בדיקה ידנית של אלי ב-GHL UI לפני המשך** (workflow rule)
+
+---
+
 ## 0. למשיכת עבודה בסשן אחר — קרא קודם
 
 **כל הסטטוס פה. אין צורך בquestions.** מצב לפני המשך:
@@ -561,7 +648,7 @@ psql "$DATABASE_URL" -c "SELECT COUNT(*) FROM leads WHERE ghl_contact_id IS NOT 
 | Path | מה זה יעשה |
 |---|---|
 | `integrations/ghl/register-conversation-provider.ts` | one-shot CLI — רושם CUSTOM channel ב-GHL |
-| `app/api/integrations/ghl/outbound/route.ts` | webhook receiver מ-GHL conversation provider |
+| `app/api/integrations/outbound/route.ts` | webhook receiver מ-GHL conversation provider (path בלי "ghl" כי GHL UI חוסם URL שמכיל ghl) |
 
 ### איך לבדוק ידנית — Phase 1F (כשייבנה)
 

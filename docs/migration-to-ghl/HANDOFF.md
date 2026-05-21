@@ -57,22 +57,22 @@
 - `integrations/ghl/oauth.ts` — Marketplace OAuth exchange + refresh
 - `integrations/ghl/client.ts` — `upsertConversationProvider(accessToken)` עם dual auth
 - `integrations/ghl/register-conversation-provider.ts` — חד-פעמי CLI דרך OAuth token
-- `app/api/integrations/ghl/install` — GET → redirect לMarketplace
-- `app/api/integrations/ghl/oauth/callback` — מקבל code → tokens → DB
-- `app/api/integrations/ghl/outbound` — Bearer-auth'd webhook → sendBridgeMessage(jid, text, "eli") → GreenAPI
+- `app/api/integrations/install` — GET → redirect לMarketplace
+- `app/api/integrations/oauth/callback` — מקבל code → tokens → DB
+- `app/api/integrations/outbound` — Bearer-auth'd webhook → sendBridgeMessage(jid, text, "eli") → GreenAPI
 - DB: `ghl_oauth_tokens(locationId PK, access_token, refresh_token, expires_at, scope, company_id, user_type, updated_at)`
 
 ENV נדרשים:
 - `GHL_OUTBOUND_WEBHOOK_SECRET` — ✅ set in Vercel (c72bc568...)
 - `GHL_OAUTH_CLIENT_ID` — ⏳ אלי יוצר Marketplace Private App
 - `GHL_OAUTH_CLIENT_SECRET` — ⏳ same
-- `GHL_OAUTH_REDIRECT_URI=https://albadi-crm.vercel.app/api/integrations/ghl/oauth/callback`
+- `GHL_OAUTH_REDIRECT_URI=https://albadi-crm.vercel.app/api/integrations/oauth/callback`
 - `GHL_CONVERSATION_PROVIDER_ID` — מקבלים מהScript אחרי register
 
 צעדים פתוחים:
 1. אלי יוצר Marketplace Private App עם scopes מ-`DEFAULT_SCOPES` (כולל `conversations/providers.write`)
 2. אלי מוסר Client ID + Secret → Vercel envs + redeploy
-3. אלי פותח `/api/integrations/ghl/install` → אישור → callback שומר tokens
+3. אלי פותח `/api/integrations/install` → אישור → callback שומר tokens
 4. `npx tsx integrations/ghl/register-conversation-provider.ts` → מקבלים providerId
 5. `GHL_CONVERSATION_PROVIDER_ID` → Vercel + redeploy
 6. עדכון sync.ts forwardMessage + backfill chat-to-inbox לשלוח type="Custom" + conversationProviderId

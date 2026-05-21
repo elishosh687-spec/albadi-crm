@@ -116,7 +116,7 @@ export const messages = pgTable("messages", {
 });
 
 // GHL OAuth tokens — one row per (location, app). Populated by the OAuth
-// callback at /api/integrations/ghl/oauth/callback. The access_token is
+// callback at /api/integrations/oauth/callback. The access_token is
 // what we use for scopes that the Private Integration Token can't access
 // (specifically conversations/providers.write — needed to register a
 // Custom Conversation Provider for Phase 1F outbound chat).

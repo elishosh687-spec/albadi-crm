@@ -5,7 +5,9 @@
 //
 // Token lifecycle:
 //   1. User clicks Install in GHL Marketplace → GHL redirects to
-//      /api/integrations/ghl/oauth/callback?code=...&locationId=...
+//      /api/integrations/oauth/callback?code=...&locationId=...
+//      (path intentionally does NOT contain "ghl" — GHL UI validators
+//      reject any URL containing ghl/highlevel/gohighlevel.)
 //   2. callback POSTs the code to /oauth/token → access_token + refresh_token
 //   3. Tokens stored in `ghl_oauth_tokens` (one row per location)
 //   4. getValidAccessToken(locationId) returns a fresh access token;
@@ -40,7 +42,7 @@ export function requireOAuthClientSecret(): string {
 export function oauthRedirectUri(): string {
   return (
     readEnv("GHL_OAUTH_REDIRECT_URI") ||
-    "https://albadi-crm.vercel.app/api/integrations/ghl/oauth/callback"
+    "https://albadi-crm.vercel.app/api/integrations/oauth/callback"
   );
 }
 
@@ -197,7 +199,6 @@ export const DEFAULT_SCOPES = [
   "conversations.readonly",
   "conversations/message.write",
   "conversations/message.readonly",
-  "conversations/providers.write",
   "locations/customFields.write",
   "locations/customFields.readonly",
   "medias.write",

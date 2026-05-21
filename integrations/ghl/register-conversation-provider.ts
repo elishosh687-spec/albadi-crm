@@ -3,7 +3,7 @@
  *
  * GHL routes outbound messages typed with `conversationProviderId=<id>`
  * through the provider's deliveryUrl. That URL is our webhook receiver
- * (app/api/integrations/ghl/outbound) which calls sendBridgeMessage to
+ * (app/api/integrations/outbound) which calls sendBridgeMessage to
  * push the message into WhatsApp (via GreenAPI when USE_GREEN_API=1).
  *
  * Idempotent: if a provider with the same name exists in the location,
@@ -31,7 +31,7 @@ function readEnv(key: string): string {
 async function main(): Promise<void> {
   const deliveryUrl =
     readEnv("GHL_OUTBOUND_DELIVERY_URL") ||
-    "https://albadi-crm.vercel.app/api/integrations/ghl/outbound";
+    "https://albadi-crm.vercel.app/api/integrations/outbound";
   const name = readEnv("GHL_CONVERSATION_PROVIDER_NAME") || "Albadi WhatsApp";
 
   console.log(`[register] name="${name}" delivery=${deliveryUrl}`);
@@ -40,7 +40,7 @@ async function main(): Promise<void> {
   const accessToken = await getValidAccessToken(locationId);
   if (!accessToken) {
     throw new Error(
-      `No OAuth access token for location ${locationId}. Install the Marketplace app first: visit /api/integrations/ghl/install`
+      `No OAuth access token for location ${locationId}. Install the Marketplace app first: visit /api/integrations/install`
     );
   }
 

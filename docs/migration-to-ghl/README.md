@@ -21,4 +21,4 @@
 
 ## המסמך הראשי
 
-קישור backwards-compatible: [../GHL-MIGRATION-PLAN.md](../GHL-MIGRATION-PLAN.md) (כל המידע פה גם, רק יותר מאורגן).
+[PLAN.md](PLAN.md) הוא ה-canonical. ה-duplicate הישן `../GHL-MIGRATION-PLAN.md` נמחק 2026-05-21.

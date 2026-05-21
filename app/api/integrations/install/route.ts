@@ -2,7 +2,10 @@
  * Convenience redirect to the GHL Marketplace install flow. Visit this URL
  * in a browser to start OAuth — GHL prompts the user to pick a location and
  * approve the requested scopes. After approval GHL redirects to
- * /api/integrations/ghl/oauth/callback?code=... to complete the exchange.
+ * /api/integrations/oauth/callback?code=... to complete the exchange.
+ *
+ * Note: path intentionally omits "ghl" — GHL UI rejects URLs containing
+ * ghl/highlevel/gohighlevel when creating Marketplace apps or webhooks.
  *
  * Public on purpose (the redirect target itself is from a verified GHL
  * Marketplace app and the only state we trust later is the code returned
