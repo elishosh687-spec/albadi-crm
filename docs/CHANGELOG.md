@@ -5,6 +5,26 @@
 
 ---
 
+## 2026-05-21 — "GHL → DB stage sync (reverse direction)"
+
+### Added
+- **GHL is now source of truth for `pipeline_stage`.** New endpoint `app/api/ghl/stage-changed/route.ts` receives GHL Workflow webhooks when Eli moves an opportunity between stages in the GHL UI, reverse-maps the GHL stage UUID via `GHL_STAGE_IDS`, and updates `leads.pipeline_stage`. Handles the virtual `NEEDS_ELI` stage by setting `pipeline_flag` instead. Clears `pipeline_flag` when Eli moves to a real stage (escalation acknowledged). Auth: `Authorization: Bearer <BOT_SECRET>`. ([app/api/ghl/stage-changed/route.ts](app/api/ghl/stage-changed/route.ts))
+- **Loop safety:** existing DB→GHL push (`syncLeadToGHL` in `integrations/ghl/sync.ts`) remains active for bot-LLM classifications. The loop is naturally bounded — when GHL pushes a stage and DB writes it, the subsequent bot-side push resolves to the same stage and GHL skips the no-op PUT.
+
+### Required setup (GHL UI, manual)
+1. GHL → Automations → Workflows → Create.
+2. Trigger: **Opportunity Stage Changed** (filter by Pipeline = Albadi).
+3. Action: **Webhook POST**
+   - URL: `https://albadi-crm.vercel.app/api/ghl/stage-changed`
+   - Headers: `Authorization: Bearer <BOT_SECRET>`, `Content-Type: application/json`
+   - Custom Data: `contactId={{contact.id}}`, `opportunityId={{opportunity.id}}`, `stageId={{opportunity.pipline_stage_id}}`
+4. Publish.
+
+### Architecture context
+Part of a larger shift: GHL = primary UI (pipeline, inbox, contact edits); DB = silent engine (bot logic, quote calculations, `bot_quotes` history, messages). Dashboard v3 will be deprecated. Future endpoints planned for `contact-updated`, `note-added`, `tag-changed`.
+
+---
+
 ## 2026-05-21 — "Pipeline refactor: 7-stage → 8-stage journey model"
 
 ### Changed

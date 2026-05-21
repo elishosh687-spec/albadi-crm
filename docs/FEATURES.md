@@ -189,6 +189,7 @@ GHL = ממשק תפעולי יחיד אחרי השלמת המעבר. dashboard v
 | 2.7.3 | 🏭 הצעות מפעל (factory-flow) — **sidebar widget עם contact picker**. flow מלא: בחר ליד → Order Summary → שלח Feishu → Refresh → Finalize (margin slider + shipping + DetailedBreakdown ¥→$→₪) → שלח WhatsApp עם PDF | shipped (2026-05-21) | `app/widget/factory-flow/page.tsx`, `components/factory-flow/*.widget.tsx`, `lib/factory/server/{list,refresh,finalize,sendWhatsapp}.ts`, `app/api/widget/factory/*` | `/widget/factory-flow?widget_token=<T>` |
 | 2.7.4 | ⚙️ Settings widget — תוכנן, לא נחת | planned | — | `/widget/settings?widget_token=<T>` |
 | 2.7.5 | 🤖 Bot Decisions widget — תוכנן, לא נחת | planned | — | `/widget/bot-decisions?widget_token=<T>` |
+| 2.7.6 | ↩️ **GHL → DB stage sync** (reverse direction) — webhook receiver שעדכון opportunity stage ב-GHL UI דוחף ל-`leads.pipeline_stage`. NEEDS_ELI כstage וירטואלי → `pipeline_flag`. ניקוי flag כשeli מזיז לstage אמיתי | shipped (2026-05-21) | `app/api/ghl/stage-changed/route.ts` | GHL Workflow → POST `/api/ghl/stage-changed` |
 
 **Architecture:** [docs/migration-to-ghl/PLAN.md](migration-to-ghl/PLAN.md) Phase 1G. Contact Detail placement לא זמין ב-tier הנוכחי של GHL → כל הויג'טים פר-לקוח חיים ב-Sidebar עם contact picker פנימי (debounced search על name/phone/sid).
 

@@ -151,6 +151,58 @@ reject_reason       אופציונלי
 
 ---
 
+## 3b. GHL ↔ DB sync direction
+
+GHL = primary UI (pipeline, inbox, contact edits). DB = silent engine (bot
+logic, quote calculations, `bot_quotes` history, messages). Two-way sync
+with strict directionality per field.
+
+```
+                       ┌──────────────────────┐
+                       │       GHL UI         │
+                       │ pipeline / inbox /   │
+                       │ notes / contact card │
+                       └──────────┬───────────┘
+                                  │
+        ┌─────────────────────────┴───────────────────────────┐
+        │ DB → GHL (push, integrations/ghl/sync.ts)           │
+        │   • upsertGHLContact (name, phone, custom fields)   │
+        │   • createOrUpdateGHLOpportunity (stage from bot)   │
+        │   • forwardMessage (every WA in/out → GHL thread)   │
+        │                                                     │
+        │ GHL → DB (webhook, app/api/ghl/*)                   │
+        │   • stage-changed → leads.pipeline_stage            │
+        │   • (planned) contact-updated, note-added, tag-...  │
+        │   • outbound (Eli replies in GHL Inbox) →           │
+        │     sendBridgeMessage(sender='eli') + messages row  │
+        └─────────────────────────┬───────────────────────────┘
+                                  │ Drizzle
+                       ┌──────────▼───────────┐
+                       │   Neon Postgres      │
+                       │ leads, bot_quotes,   │
+                       │ messages, drafts     │
+                       └──────────────────────┘
+```
+
+**Quote-result ownership.** Bot calculator results live exclusively in DB:
+- `leads.qState.quoteResult` — latest quote text (overwritten on requote).
+- `bot_quotes` — append-only history (quoteTotalIls, quoteAltTotalIls,
+  qState snapshot, source='initial'|'requote'). Written by `logBotQuote` in
+  [lib/autoresponder/quote-log.ts](../lib/autoresponder/quote-log.ts).
+- `leads.quoteTotal` — final quote price, written **only** when Eli sends
+  the final quote via the dashboard (`app/actions/v2.ts` → `sendFinalQuote`).
+
+GHL stores `quote_total` as a mirror custom field only; the calculator
+widget reads/writes via the Albadi API.
+
+**Loop guard.** DB→GHL push and GHL→DB webhook can fight when both fire on
+the same lead. Resolution is by stage equality: when the bot updates DB and
+pushes to GHL, GHL skips the no-op PUT if the resolved stage id matches.
+When GHL pushes to DB and the bot's next cron run re-classifies to the
+same stage, the push is also a no-op.
+
+---
+
 ## 4. Messaging adapter
 
 קובץ יחיד: `lib/messaging/index.ts`. כל server-side code חייב לייבא דרכו.
