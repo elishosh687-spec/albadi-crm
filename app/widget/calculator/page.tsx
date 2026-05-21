@@ -10,7 +10,7 @@
  */
 import { getFactoryConfig } from "@/lib/factory/config";
 import { DEFAULT_CONFIG } from "@/lib/factory/calculator/constants";
-import { CalculatorView } from "@/components/calculator/CalculatorView";
+import { CalculatorWithSettings } from "@/components/calculator/CalculatorWithSettings";
 import { verifyWidgetToken } from "@/integrations/ghl/widget-auth";
 import { db } from "@/lib/db";
 import { leads } from "@/drizzle/schema";
@@ -154,7 +154,7 @@ export default async function CalculatorWidgetPage({
         )}
       </div>
 
-      <CalculatorView
+      <CalculatorWithSettings
         products={DEFAULT_CONFIG.products}
         quantityTiers={DEFAULT_CONFIG.quantityTiers}
         shippingOptions={shippingOptions}
