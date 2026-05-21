@@ -49,16 +49,35 @@
 
 ## הצעד הראשון בסשן הבא
 
-**A. הפעלת live sync** — `ENABLE_GHL_SYNC=1` ב-Vercel production + redeploy. אחרי זה כל inbound חדש מ-WA יזרום אוטומטית ל-GHL (contact upsert + opp + chat message ב-Inbox). הודעות חוזרות לוקח 1-2 דקות מ-WA → bridge → webhook → GHL.
+**A. live sync** — ✅ DONE 2026-05-21. ENABLE_GHL_SYNC=1 deployed.
 
-**B. Phase 1F — Outbound chat** — אלי מקליד ב-GHL Inbox, הודעה זורמת ל-WhatsApp.
+**B. Phase 1F — Outbound chat — IN PROGRESS:**
 
-קבצים שייווצרו:
-- `integrations/ghl/register-conversation-provider.ts` — חד-פעמי CLI, רושם CUSTOM channel
-- `app/api/integrations/ghl/outbound/route.ts` — webhook receiver מ-GHL conversation provider
-- bridge.sendMessage עם sender='eli' (כבר קיים, רק להפעיל)
+קוד מוכן (commit 92xxxxx):
+- `integrations/ghl/oauth.ts` — Marketplace OAuth exchange + refresh
+- `integrations/ghl/client.ts` — `upsertConversationProvider(accessToken)` עם dual auth
+- `integrations/ghl/register-conversation-provider.ts` — חד-פעמי CLI דרך OAuth token
+- `app/api/integrations/ghl/install` — GET → redirect לMarketplace
+- `app/api/integrations/ghl/oauth/callback` — מקבל code → tokens → DB
+- `app/api/integrations/ghl/outbound` — Bearer-auth'd webhook → sendBridgeMessage(jid, text, "eli") → GreenAPI
+- DB: `ghl_oauth_tokens(locationId PK, access_token, refresh_token, expires_at, scope, company_id, user_type, updated_at)`
 
-GHL UI step: אישור Provider ב-Settings → Conversation Providers.
+ENV נדרשים:
+- `GHL_OUTBOUND_WEBHOOK_SECRET` — ✅ set in Vercel (c72bc568...)
+- `GHL_OAUTH_CLIENT_ID` — ⏳ אלי יוצר Marketplace Private App
+- `GHL_OAUTH_CLIENT_SECRET` — ⏳ same
+- `GHL_OAUTH_REDIRECT_URI=https://albadi-crm.vercel.app/api/integrations/ghl/oauth/callback`
+- `GHL_CONVERSATION_PROVIDER_ID` — מקבלים מהScript אחרי register
+
+צעדים פתוחים:
+1. אלי יוצר Marketplace Private App עם scopes מ-`DEFAULT_SCOPES` (כולל `conversations/providers.write`)
+2. אלי מוסר Client ID + Secret → Vercel envs + redeploy
+3. אלי פותח `/api/integrations/ghl/install` → אישור → callback שומר tokens
+4. `npx tsx integrations/ghl/register-conversation-provider.ts` → מקבלים providerId
+5. `GHL_CONVERSATION_PROVIDER_ID` → Vercel + redeploy
+6. עדכון sync.ts forwardMessage + backfill chat-to-inbox לשלוח type="Custom" + conversationProviderId
+7. Re-import chat history כ-Custom (אופציונלי, או להשאיר SMS thread קיים)
+8. Smoke: שולחים הודעה מ-GHL Inbox → אמורה להגיע ב-WhatsApp דרך GreenAPI
 
 ## הסטטוס של ה-Custom Menu Link
 

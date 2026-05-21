@@ -136,7 +136,7 @@ GHL = display. DB = source of truth. Bridge = WA transport.
 | 1C | Feishu loop — שלח לפבריקה + cron מחזיר מחיר | ❌ Not started |
 | 1D | Settings widget — currency + margin בתוך GHL | ❌ Not started |
 | 1E | Backfill — כל הלידים מ-DB → GHL | ✅ DONE (82 leads + chat-to-inbox) |
-| 1F | Outbound chat — אלי כותב ב-GHL → bridge → WA | ❌ Not started — הצעד הבא |
+| 1F | Outbound chat — אלי כותב ב-GHL → bridge → WA | 🚧 IN PROGRESS — קוד מוכן, ממתין שאלי יצור Marketplace Private App |
 | 2 | Bot decisions widget, drafts widget, GHL Workflow followup | ❌ Future |
 
 ---
