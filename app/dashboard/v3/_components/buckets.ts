@@ -1,14 +1,15 @@
 /**
- * High-level bucket mapping for the v3 Leads board. The bot uses 7 canonical
+ * High-level bucket mapping for the v3 Leads board. The bot uses 8 canonical
  * pipeline stages (lib/manychat/stages.ts → V2_PIPELINE_STAGES); the UI groups
  * them into 4 supervisor-facing buckets:
  *
- *   NEEDS_ELI       — escalations (NEEDS_ELI flag, bot_paused) or WAITING_FACTORY
- *   BOT_ACTIVE      — bot driving the conversation (NEW / AWAITING_ESTIMATE /
- *                     AWAITING_LOGO / AWAITING_FINAL)
- *   WAITING_CUSTOMER— reserved for future use (no stage falls here today;
- *                     a "QUOTED but no customer reply" state would).
- *   CLOSED          — terminal stages (WON / DROPPED)
+ *   NEEDS_ELI       — escalations (NEEDS_ELI flag, bot_paused) or
+ *                     FACTORY_CHECK (subFlow=awaiting_factory_estimate)
+ *   BOT_ACTIVE      — bot driving (pre-quote / INITIAL_QUOTE_SENT /
+ *                     FACTORY_CHECK awaiting_logo / FINAL_QUOTE_SENT)
+ *   WAITING_CUSTOMER— passive wait (AWAITING_FIRST_RESPONSE / SHOWED_INTEREST /
+ *                     NEGOTIATING)
+ *   CLOSED          — terminal stages (WON / LOST)
  *
  * The stage chip on each card is still fully editable via StagePicker.
  */
@@ -59,32 +60,45 @@ export const BUCKET_TONE: Record<
   },
 };
 
-const ELI_STAGES = new Set(["WAITING_FACTORY"]);
+// Stages where bot is actively driving the conversation.
 const ACTIVE_STAGES = new Set([
-  "NEW",
-  "AWAITING_ESTIMATE",
-  "AWAITING_LOGO",
-  "AWAITING_FINAL",
+  "INITIAL_QUOTE_SENT",
+  "FINAL_QUOTE_SENT",
 ]);
-const WAITING_STAGES = new Set<string>([]); // reserved
-const CLOSED_STAGES = new Set(["WON", "DROPPED"]);
+// Stages where we're passively waiting on the customer.
+const WAITING_STAGES = new Set([
+  "AWAITING_FIRST_RESPONSE",
+  "SHOWED_INTEREST",
+  "NEGOTIATING",
+]);
+const CLOSED_STAGES = new Set(["WON", "LOST"]);
 
 export function bucketOf(lead: {
   stage: string | null | undefined;
   pipelineFlag: string | null | undefined;
   botPaused: boolean;
+  qState?: { subFlow?: string | null } | null;
 }): BucketKey {
-  const stage = (lead.stage ?? "NEW").toUpperCase();
+  const stage = (lead.stage ?? "").toUpperCase();
   if (CLOSED_STAGES.has(stage)) return "CLOSED";
-  if (
-    lead.pipelineFlag === "NEEDS_ELI" ||
-    lead.botPaused ||
-    ELI_STAGES.has(stage)
-  ) {
+
+  const subFlow = lead.qState?.subFlow ?? null;
+  // FACTORY_CHECK splits:
+  //   subFlow=awaiting_factory_estimate → Eli/factory works price → NEEDS_ELI bucket
+  //   subFlow=awaiting_logo (or unset)  → bot collecting logo → BOT_ACTIVE bucket
+  if (stage === "FACTORY_CHECK") {
+    if (subFlow === "awaiting_factory_estimate") return "NEEDS_ELI";
+    if (lead.pipelineFlag === "NEEDS_ELI" || lead.botPaused) return "NEEDS_ELI";
+    return "BOT_ACTIVE";
+  }
+
+  if (lead.pipelineFlag === "NEEDS_ELI" || lead.botPaused) {
     return "NEEDS_ELI";
   }
   if (WAITING_STAGES.has(stage)) return "WAITING_CUSTOMER";
   if (ACTIVE_STAGES.has(stage)) return "BOT_ACTIVE";
+  // No stage (pre-quote questionnaire) — bot is actively driving.
+  if (!stage) return "BOT_ACTIVE";
   // Unknown / unclassified — treat as bot-active so it surfaces for review.
   return "BOT_ACTIVE";
 }
