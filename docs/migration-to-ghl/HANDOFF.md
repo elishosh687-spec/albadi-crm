@@ -2,7 +2,7 @@
 
 > קרא קודם אם התחלת סשן חדש. אין צורך בשאלות — הכל פה.
 
-עדכון: Phase 0 + 1A הושלמו **end-to-end**. Widget נראה ב-GHL sidebar, נטען בקליק, מציג Calculator + boss-mode breakdown. ממתין Phase 1E (backfill) + 1B (PDF) + 1C (Feishu) + 1F (outbound chat).
+עדכון (2026-05-21 ערב): Phase 0 + 1A + 1E הושלמו **end-to-end**. Widget ב-GHL sidebar, 82 contacts + opportunities + 4 סוגי notes + Inbox messages ב-GHL. ממתין: A) `ENABLE_GHL_SYNC=1` ב-Vercel (live inbound flow), B) Phase 1F (Outbound chat — אלי מקליד ב-GHL→WA), C) 1B/1C/1D.
 
 ---
 
@@ -38,26 +38,27 @@
 | # | מה | מי |
 |---|---|---|
 | ~~1~~ | ~~GHL Custom Menu Link "🧮 מחשבון"~~ | ✅ DONE (אלי, 2026-05-21) |
-| 2 | Backfill כל הלידים מ-DB → GHL (`integrations/ghl/backfill.ts`) | Claude — **NEXT** |
-| 3 | Widget בתוך contact detail (לא sidebar) — חוקרים: Custom Fields HTML / Marketplace App / Custom Tab | Claude |
-| 4 | `ENABLE_GHL_SYNC=1` ב-Vercel + redeploy | Claude (אחרי backfill) |
+| ~~2~~ | ~~Backfill — 82 לידים מלאים ל-GHL~~ | ✅ DONE (Claude, 2026-05-21) |
+| 3 | `ENABLE_GHL_SYNC=1` ב-Vercel + redeploy | Claude — **NEXT (A)** |
+| 4 | Phase 1F — Outbound chat (Eli → GHL → WA) | Claude — **NEXT (B)** |
 | 5 | Phase 1B — PDF flow | Claude |
 | 6 | Phase 1C — Feishu loop | Claude |
 | 7 | Phase 1D — Settings widget | Claude |
-| 8 | Phase 1F — Outbound chat | Claude |
+| 8 | Widget בתוך contact detail (לא sidebar) — חוקרים: Custom Fields HTML / Marketplace App / Custom Tab | Claude |
 | 9 | מחיקת dashboard ישן | אחרי שPhase 1 יציב 2 שבועות. ראה DELETION-CHECKLIST.md |
 
 ## הצעד הראשון בסשן הבא
 
-**A. Backfill (Phase 1E)** — סקריפט one-shot:
-- קורא כל `leads` מ-DB
-- לכל ליד: `upsertGHLContact` + `createOrUpdateGHLOpportunity`
-- שומר `ghl_contact_id`, `ghl_opportunity_id` חזרה ב-DB
-- supports `--dry-run` + `--resume`
-- rate-limit handling (GHL 10 req/sec)
-- run: `npx tsx integrations/ghl/backfill.ts`
+**A. הפעלת live sync** — `ENABLE_GHL_SYNC=1` ב-Vercel production + redeploy. אחרי זה כל inbound חדש מ-WA יזרום אוטומטית ל-GHL (contact upsert + opp + chat message ב-Inbox). הודעות חוזרות לוקח 1-2 דקות מ-WA → bridge → webhook → GHL.
 
-קוד יצרר ב-`integrations/ghl/backfill.ts`.
+**B. Phase 1F — Outbound chat** — אלי מקליד ב-GHL Inbox, הודעה זורמת ל-WhatsApp.
+
+קבצים שייווצרו:
+- `integrations/ghl/register-conversation-provider.ts` — חד-פעמי CLI, רושם CUSTOM channel
+- `app/api/integrations/ghl/outbound/route.ts` — webhook receiver מ-GHL conversation provider
+- bridge.sendMessage עם sender='eli' (כבר קיים, רק להפעיל)
+
+GHL UI step: אישור Provider ב-Settings → Conversation Providers.
 
 ## הסטטוס של ה-Custom Menu Link
 

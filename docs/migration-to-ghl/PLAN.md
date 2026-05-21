@@ -3,7 +3,7 @@
 > מסמך אמת לכל המעבר ל-GHL. מתעדכן בכל phase.
 > כל שינוי כולל **"איך לבדוק ידנית"**.
 
-עדכון אחרון: Phase 0 + 1A הושלמו במלואם בקוד + Vercel. `ENABLE_GHL_SYNC=0` עדיין. ממתין רק ל-GHL Custom Menu Link יצירה ידנית.
+עדכון אחרון (2026-05-21): Phase 0 + 1A + 1E הושלמו. 82 לידים מיובאים ל-GHL מלא — Contact, Opportunity, 4 סוגי Notes (Internal notes, WhatsApp history, Order summary, Bot decisions, Activity log), והודעות WhatsApp ב-Conversations Inbox. `ENABLE_GHL_SYNC=0` עדיין. הצעד הבא: A) להפעיל `ENABLE_GHL_SYNC=1` ב-Vercel, B) Phase 1F (Outbound chat).
 
 ---
 
@@ -27,14 +27,25 @@
   - 5 custom fields נוצרו אוטומטית דרך bootstrap
   - Private Integration Token: `pit-80128d88-b443-4ece-aa66-2e1f6c65dbe8`
 
+### ✅ עשינו גם (2026-05-21)
+- **Phase 1E Backfill** — `integrations/ghl/backfill.ts` מלא:
+  - 82 contacts + 80 opportunities (2 שגיאות duplicate נפתרו עם findOpportunityForContact fallback)
+  - 74 Internal notes (`leads.notes`)
+  - 45 WhatsApp history notes (combined per lead)
+  - 68 Order summary notes (q_state + factory_spec_draft + quote_alt + follow_up_date)
+  - 32 Bot decisions notes (mapped from `bot_decision_log`)
+  - 1 Activity log note (`lead_events`)
+  - chat-to-inbox: 825 הודעות עברו ל-GHL Conversations Inbox כ-SMS עם direction נכון
+  - 4 args: `--dry-run`, `--resume`, `--extras-only`, `--chat-to-inbox`, `--sid`, `--limit`
+  - 2 columns חדשים: `leads.ghl_backfilled_at`, `leads.ghl_chat_imported_at` (gating re-run)
+- **GHL Custom Menu Link** — נוצר ב-sidebar (לא ב-contact detail בגלל GHL bug עם `{{contact.id}}`)
+
 ### ❌ נותר
-- [ ] **GHL Custom Menu Link** — אלי עוד לא יצר ב-Settings. ראה §7-C למטה.
-- [ ] **Backfill** — לידים קיימים בDB לא ב-GHL (`leads.ghl_contact_id` הוא NULL לכולם). ראה Phase 1E.
-- [ ] **`ENABLE_GHL_SYNC=1`** — sync עדיין dormant. הפעל רק אחרי backfill (אחרת inbound חדש יעלה לidf חדש ב-GHL בלי היסטוריה).
+- [ ] **`ENABLE_GHL_SYNC=1`** — sync עדיין dormant. עכשיו ה-backfill done → אפשר להפעיל.
+- [ ] **Phase 1F (Outbound chat)** — לא התחיל. בלי זה אלי לא יכול לענות מתוך GHL.
 - [ ] **Phase 1B (PDF flow)** — לא התחיל.
 - [ ] **Phase 1C (Feishu loop)** — לא התחיל.
 - [ ] **Phase 1D (Settings widget)** — לא התחיל.
-- [ ] **Phase 1F (Outbound chat)** — לא התחיל.
 
 ### IDs קריטיים (כבר ב-`.env` וגם ב-Vercel)
 ```
@@ -120,12 +131,12 @@ GHL = display. DB = source of truth. Bridge = WA transport.
 | Phase | מה | סטטוס |
 |---|---|---|
 | 0 | Foundation — GHL client, sync, bootstrap, DB columns, webhook wiring | ✅ DONE |
-| 1A | Calculator widget מוטמע ב-GHL contact card | ✅ DONE (קוד; ממתין ל-env + GHL UI setup) |
+| 1A | Calculator widget מוטמע ב-GHL contact card | ✅ DONE (Custom Menu Link ב-sidebar) |
 | 1B | PDF flow — finalize → GHL Files → send ללקוח | ❌ Not started |
 | 1C | Feishu loop — שלח לפבריקה + cron מחזיר מחיר | ❌ Not started |
 | 1D | Settings widget — currency + margin בתוך GHL | ❌ Not started |
-| 1E | Backfill — כל הלידים מ-DB → GHL | ❌ Not started |
-| 1F | Outbound chat — אלי כותב ב-GHL → bridge → WA | ❌ Not started |
+| 1E | Backfill — כל הלידים מ-DB → GHL | ✅ DONE (82 leads + chat-to-inbox) |
+| 1F | Outbound chat — אלי כותב ב-GHL → bridge → WA | ❌ Not started — הצעד הבא |
 | 2 | Bot decisions widget, drafts widget, GHL Workflow followup | ❌ Future |
 
 ---
@@ -493,15 +504,21 @@ http://localhost:3000/widget/calculator?contactId=test123&widget_token=<TOKEN>
 
 ---
 
-## Phase 1E — Backfill 🚧
+## Phase 1E — Backfill ✅
 
-**מה זה:** סקריפט one-shot שמעלה את **כל** הלידים מה-DB ל-GHL (גם DROPPED ישנים), שומר `ghl_contact_id` חזרה ב-DB, ויוצר opportunities לפי stage.
+**מה זה:** סקריפט one-shot שמעלה את **כל** הלידים מה-DB ל-GHL (גם DROPPED ישנים), שומר `ghl_contact_id` + `ghl_opportunity_id` חזרה ב-DB, יוצר opportunities לפי stage, ומעביר notes + chat history + bot decisions + order summary + activity log + הודעות לConversations Inbox.
 
-**קבצים שייווצרו:**
+**מה נוצר:**
 
-| Path | מה זה יעשה |
+| Path | מה זה עושה |
 |---|---|
-| `integrations/ghl/backfill.ts` | CLI — `--dry-run`, `--resume`, rate-limit handling (10 req/sec) |
+| [integrations/ghl/backfill.ts](../../integrations/ghl/backfill.ts) | CLI — `--dry-run`, `--resume`, `--extras-only`, `--chat-to-inbox`, `--sid=<id>`, `--limit=<n>`. Rate-limit 120ms/req. |
+| `leads.ghl_backfilled_at` column | gate: --resume מדלג על שורות שגנובל זה אצלן |
+| `leads.ghl_chat_imported_at` column | gate: --resume מדלג על שורות שchat כבר עבר |
+
+**ריצות בייצור:**
+- Smoke 3 → full 82 → extras 78 → chat-to-inbox 44 leads (825 הודעות)
+- שגיאות: 2 duplicate-opportunity (אותו טלפון לשני לידים) — נפתרו עם findOpportunityForContact fallback
 
 ### איך לבדוק ידנית — Phase 1E (כשייבנה)
 

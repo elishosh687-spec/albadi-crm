@@ -63,6 +63,13 @@ export const leads = pgTable("leads", {
   // GoHighLevel CRM ids. Populated by integrations/ghl/sync.ts on first sync.
   ghlContactId: text("ghl_contact_id"),
   ghlOpportunityId: text("ghl_opportunity_id"),
+  // Set by integrations/ghl/backfill.ts after it writes the full set of
+  // archival notes (chat history + decisions + activity + order summary).
+  // Gates --resume so we don't duplicate notes on re-runs.
+  ghlBackfilledAt: timestamp("ghl_backfilled_at", { withTimezone: true }),
+  // Set by backfill --chat-to-inbox after every message has been replayed
+  // through GHL Conversations API. Gates re-runs of that mode.
+  ghlChatImportedAt: timestamp("ghl_chat_imported_at", { withTimezone: true }),
 });
 
 // DB-owned tags (replaces ManyChat tag IDs). One row per (lead, tag).
