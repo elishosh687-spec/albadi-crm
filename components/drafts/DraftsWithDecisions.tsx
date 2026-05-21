@@ -29,6 +29,20 @@ export function DraftsWithDecisions({ apiToken }: { apiToken: string }) {
         </TabButton>
       </div>
 
+      <div className="text-xs text-muted-foreground border border-border bg-card/40 rounded-md px-3 py-2 leading-relaxed">
+        {tab === "drafts" ? (
+          <>
+            <strong>תור אישורים:</strong> הודעות שהבוט הכין אבל לא שלח —
+            מקרי כסף, התנגדות, או שינוי מפרט. אשר / ערוך / דחה אחת אחת.
+          </>
+        ) : (
+          <>
+            <strong>החלטות הבוט:</strong> היסטוריית כל פעולה של ה-AI על כל ליד
+            — מה הלקוח כתב, מה ה-AI החליט, ולמה. קריאה בלבד.
+          </>
+        )}
+      </div>
+
       {tab === "drafts" ? (
         <DraftsView apiToken={apiToken} />
       ) : (
