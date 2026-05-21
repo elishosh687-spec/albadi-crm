@@ -32,9 +32,15 @@ async function ghlFetch<T = unknown>(
   const res = await fetch(url.toString(), { ...init, headers });
   if (!res.ok) {
     const body = await res.text().catch(() => "");
-    throw new Error(
-      `GHL ${init.method ?? "GET"} ${path} failed: ${res.status} ${body}`
-    );
+    // Throw a structured error so callers (and the mirror audit log) can
+    // inspect status/body without parsing the message string.
+    const err = new Error(
+      `GHL ${init.method ?? "GET"} ${path} failed: ${res.status} ${body.slice(0, 500)}`
+    ) as Error & { status?: number; responseBody?: string; ghlPath?: string };
+    err.status = res.status;
+    err.responseBody = body;
+    err.ghlPath = path;
+    throw err;
   }
   if (res.status === 204) return undefined as T;
   return (await res.json()) as T;

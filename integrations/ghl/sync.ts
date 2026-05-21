@@ -28,6 +28,7 @@ import {
   type GHLContact,
   type GHLOpportunity,
 } from "./client";
+import { auditMirror } from "./audit";
 import { getValidAccessToken } from "./oauth";
 import {
   buildCustomFieldsPayload,
@@ -304,16 +305,43 @@ export async function forwardMessage(opts: {
   mediaFilename?: string | null;
   mediaMimeType?: string | null;
 }): Promise<void> {
-  if (!ENABLE_GHL_SYNC) return;
+  // TEMP audit (issue: business-side WA sends not appearing in GHL Inbox).
+  // Emits ghl_mirror.* rows to bridge_events so we can read where the
+  // mirror silently dies. Remove once the underlying bug is closed.
+  await auditMirror("attempt", opts.sid, {
+    direction: opts.direction,
+    sender: opts.sender,
+    textPreview: (opts.text ?? "").slice(0, 100),
+    textLen: opts.text?.length ?? 0,
+    hasMedia: !!opts.mediaUrl,
+    enableFlag: ENABLE_GHL_SYNC,
+  });
+
+  if (!ENABLE_GHL_SYNC) {
+    await auditMirror("skip", opts.sid, { reason: "no_enable_flag" });
+    return;
+  }
   // Allow empty text when media is present (audio messages have no caption).
-  if (!opts.text?.trim() && !opts.mediaUrl) return;
+  if (!opts.text?.trim() && !opts.mediaUrl) {
+    await auditMirror("skip", opts.sid, { reason: "empty_payload" });
+    return;
+  }
 
   try {
     const lead = await loadLead(opts.sid);
-    if (!lead) return;
+    if (!lead) {
+      await auditMirror("skip", opts.sid, { reason: "no_lead" });
+      return;
+    }
     const contactId =
       lead.ghlContactId ?? (await upsertGHLContact(lead));
-    if (!contactId) return;
+    if (!contactId) {
+      await auditMirror("skip", opts.sid, {
+        reason: "no_contact",
+        leadHadGhlContactId: !!lead.ghlContactId,
+      });
+      return;
+    }
 
     const labelMap = {
       lead: "📥 לקוח",
@@ -367,36 +395,87 @@ export async function forwardMessage(opts: {
       ? (await getValidAccessToken(requireGHLLocationId())) ?? undefined
       : undefined;
     try {
-      if (opts.direction === "in") {
-        await postInboundMessage({
-          contactId,
-          message: body,
-          type,
-          conversationProviderId,
-          accessToken,
-          attachments,
-        });
-      } else {
-        await postOutboundMessage({
-          contactId,
-          message: body,
-          type,
-          conversationProviderId,
-          accessToken,
-          attachments,
-        });
-      }
+      const result =
+        opts.direction === "in"
+          ? await postInboundMessage({
+              contactId,
+              message: body,
+              type,
+              conversationProviderId,
+              accessToken,
+              attachments,
+            })
+          : await postOutboundMessage({
+              contactId,
+              message: body,
+              type,
+              conversationProviderId,
+              accessToken,
+              attachments,
+            });
+      await auditMirror("success", opts.sid, {
+        contactId,
+        type,
+        hasAccessToken: !!accessToken,
+        providerId: conversationProviderId ?? null,
+        messageId: result?.messageId ?? null,
+        conversationId: result?.conversationId ?? null,
+      });
     } catch (msgErr) {
       // Fallback: note. Conversations API requires a registered provider
       // for non-SMS channels; until then notes always work.
+      const e = msgErr as
+        | (Error & { status?: number; responseBody?: string; ghlPath?: string })
+        | unknown;
+      const errInfo = {
+        contactId,
+        type,
+        hasAccessToken: !!accessToken,
+        providerId: conversationProviderId ?? null,
+        endpoint: (e as { ghlPath?: string })?.ghlPath ?? null,
+        status: (e as { status?: number })?.status ?? null,
+        body: ((e as { responseBody?: string })?.responseBody ?? "").slice(
+          0,
+          500
+        ),
+        message:
+          msgErr instanceof Error ? msgErr.message : String(msgErr),
+      };
       console.warn(
         "[ghl.sync] message endpoint failed, falling back to note",
         msgErr
       );
-      await addContactNote(contactId, body);
+      try {
+        const note = await addContactNote(contactId, body);
+        await auditMirror("fallback_note", opts.sid, {
+          ...errInfo,
+          noteId: (note as { id?: string })?.id ?? null,
+        });
+      } catch (noteErr) {
+        await auditMirror("fail", opts.sid, {
+          ...errInfo,
+          stage: "addContactNote",
+          noteError:
+            noteErr instanceof Error ? noteErr.message : String(noteErr),
+        });
+      }
     }
   } catch (err) {
     console.error("[ghl.sync] forwardMessage failed", opts.sid, err);
+    const e = err as
+      | (Error & { status?: number; responseBody?: string; ghlPath?: string; stack?: string })
+      | unknown;
+    await auditMirror("fail", opts.sid, {
+      stage: "outer",
+      endpoint: (e as { ghlPath?: string })?.ghlPath ?? null,
+      status: (e as { status?: number })?.status ?? null,
+      body: ((e as { responseBody?: string })?.responseBody ?? "").slice(
+        0,
+        500
+      ),
+      message: err instanceof Error ? err.message : String(err),
+      stack: (e as { stack?: string })?.stack?.slice(0, 1000) ?? null,
+    });
   }
 }
 
