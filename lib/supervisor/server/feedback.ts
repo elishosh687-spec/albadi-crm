@@ -7,6 +7,8 @@
 import { db } from "@/lib/db";
 import { botDecisionLog, leads } from "@/drizzle/schema";
 import { eq, sql } from "drizzle-orm";
+import { syncLeadToGHL } from "@/integrations/ghl/sync";
+import { V2_PIPELINE_STAGES } from "@/lib/manychat/stages";
 
 export interface FeedbackResult {
   ok: boolean;
@@ -66,10 +68,14 @@ export async function overrideDecisionStage(
   if (!Number.isFinite(rowId) || rowId <= 0) {
     return { ok: false, error: "invalid row id" };
   }
-  if (!stage.trim()) return { ok: false, error: "missing stage" };
+  const cleanStage = stage.trim();
+  if (!cleanStage) return { ok: false, error: "missing stage" };
+  if (!(V2_PIPELINE_STAGES as readonly string[]).includes(cleanStage)) {
+    return { ok: false, error: `invalid stage: ${cleanStage}` };
+  }
 
   try {
-    // Fetch the manychat_sub_id from the decision row so we can update the lead.
+    // Fetch the manychat_sub_id + prior stage from the decision row.
     const [row] = await db
       .select({ manychatSubId: botDecisionLog.manychatSubId })
       .from(botDecisionLog)
@@ -78,19 +84,30 @@ export async function overrideDecisionStage(
 
     if (!row) return { ok: false, error: "decision not found" };
 
+    const [prior] = await db
+      .select({ stage: leads.pipelineStage })
+      .from(leads)
+      .where(eq(leads.manychatSubId, row.manychatSubId))
+      .limit(1);
+
     await db
       .update(leads)
-      .set({ pipelineStage: stage })
+      .set({ pipelineStage: cleanStage, updatedAt: new Date() })
       .where(eq(leads.manychatSubId, row.manychatSubId));
 
     await db
       .update(botDecisionLog)
       .set({
-        eliStageTo: stage,
+        eliStageFrom: prior?.stage ?? null,
+        eliStageTo: cleanStage,
         eliAction: sql`COALESCE(${botDecisionLog.eliAction}, 'stage_override')`,
         eliDecidedAt: new Date(),
       })
       .where(eq(botDecisionLog.id, rowId));
+
+    // Mirror to GHL so the pipeline view reflects the move. Fire-and-forget;
+    // sync.ts swallows its own errors.
+    void syncLeadToGHL(row.manychatSubId);
 
     return { ok: true };
   } catch (e) {

@@ -5,6 +5,13 @@
 
 ---
 
+## 2026-05-21 — "Bot Decisions widget: explicit stage override"
+
+### Added
+- **Stage picker on every decision row.** When Eli corrects a bot decision in the Bot Decisions widget, a dropdown next to the row lets him also move the lead to a specific pipeline stage. Endpoint: `POST /api/widget/decisions/:id/stage` → `overrideDecisionStage` writes to both `leads.pipeline_stage` and `bot_decision_log.eli_stage_to`, then fires `syncLeadToGHL` so the GHL pipeline view reflects the move. Validation: stage must be in `V2_PIPELINE_STAGES`. UI was already in place; this commit adds the missing route + GHL mirror. ([app/api/widget/decisions/[id]/stage/route.ts](app/api/widget/decisions/[id]/stage/route.ts), [lib/supervisor/server/feedback.ts](lib/supervisor/server/feedback.ts))
+
+---
+
 ## 2026-05-21 — "GHL → DB stage sync (reverse direction)"
 
 ### Added
