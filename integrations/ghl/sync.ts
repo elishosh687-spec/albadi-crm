@@ -113,6 +113,9 @@ async function loadLead(sid: string): Promise<LoadedLead | null> {
       quoteTotal: leads.quoteTotal,
       lossReason: leads.lossReason,
       botPaused: leads.botPaused,
+      followUpDate: leads.followUpDate,
+      followUpCount: leads.followUpCount,
+      nextAction: leads.nextAction,
       ghlContactId: leads.ghlContactId,
       ghlOpportunityId: leads.ghlOpportunityId,
     })

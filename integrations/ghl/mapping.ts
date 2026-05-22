@@ -22,6 +22,9 @@ export interface LocalLeadSnapshot {
   quoteTotal?: string | null;
   lossReason?: string | null;
   botPaused?: boolean | null;
+  followUpDate?: string | null;
+  followUpCount?: number | null;
+  nextAction?: string | null;
 }
 
 /**
@@ -96,6 +99,11 @@ export function buildCustomFieldsPayload(
   if (lead.botPaused === true || lead.botPaused === false) {
     add(out, "bot_paused", lead.botPaused ? "Paused" : "Active");
   }
+  add(out, "follow_up_date", lead.followUpDate);
+  if (lead.followUpCount !== undefined && lead.followUpCount !== null) {
+    add(out, "follow_up_count", lead.followUpCount);
+  }
+  add(out, "next_action", lead.nextAction);
   return out;
 }
 

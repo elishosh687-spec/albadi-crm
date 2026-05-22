@@ -86,6 +86,9 @@ export const GHL_FIELD_IDS: Record<string, string> = {
   pipeline_flag: readEnv("GHL_FIELD_PIPELINE_FLAG"),
   loss_reason: readEnv("GHL_FIELD_LOSS_REASON"),
   bot_paused: readEnv("GHL_FIELD_BOT_PAUSED"),
+  follow_up_date: readEnv("GHL_FIELD_FOLLOW_UP_DATE"),
+  follow_up_count: readEnv("GHL_FIELD_FOLLOW_UP_COUNT"),
+  next_action: readEnv("GHL_FIELD_NEXT_ACTION"),
 };
 
 // Names used when creating fields in the bootstrap script. The bootstrap
@@ -116,6 +119,21 @@ export const GHL_FIELD_DEFINITIONS = [
   {
     envKey: "GHL_FIELD_LOSS_REASON",
     name: "Loss reason",
+    dataType: "TEXT",
+  },
+  {
+    envKey: "GHL_FIELD_FOLLOW_UP_DATE",
+    name: "Follow-up Date",
+    dataType: "DATE",
+  },
+  {
+    envKey: "GHL_FIELD_FOLLOW_UP_COUNT",
+    name: "Follow-up Count",
+    dataType: "NUMERICAL",
+  },
+  {
+    envKey: "GHL_FIELD_NEXT_ACTION",
+    name: "Next Action",
     dataType: "TEXT",
   },
 ] as const;

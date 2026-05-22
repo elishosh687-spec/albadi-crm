@@ -204,6 +204,22 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     const v = cf.bot_paused;
     updateSet.botPaused = v === "Paused" || v === true || v === "true";
   }
+  if (cf.follow_up_date !== undefined) {
+    const v = cf.follow_up_date;
+    updateSet.followUpDate = v === null || v === "" ? null : String(v);
+  }
+  if (cf.follow_up_count !== undefined) {
+    const v = cf.follow_up_count;
+    if (v === null || v === "") {
+      updateSet.followUpCount = 0;
+    } else {
+      const n = Number(v);
+      if (!Number.isNaN(n)) updateSet.followUpCount = n;
+    }
+  }
+  if (cf.next_action !== undefined) {
+    updateSet.nextAction = String(cf.next_action ?? "") || null;
+  }
 
   // Notes: concat all GHL notes (latest first) into leads.notes
   if (notes.length > 0) {
