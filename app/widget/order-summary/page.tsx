@@ -10,7 +10,7 @@
  */
 import { db } from "@/lib/db";
 import { leads, leadTags } from "@/drizzle/schema";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { verifyWidgetToken } from "@/integrations/ghl/widget-auth";
 import {
   OrderSummaryView,
@@ -21,12 +21,17 @@ export const dynamic = "force-dynamic";
 
 interface SearchParams {
   contactId?: string;
+  sid?: string;
   widget_token?: string;
 }
 
 async function loadOrderSummary(
-  contactId: string
+  contactId: string,
+  sid: string
 ): Promise<OrderSummaryWidgetData | null> {
+  const where = sid
+    ? sql`trim(${leads.manychatSubId}) = ${sid}`
+    : eq(leads.ghlContactId, contactId);
   const [row] = await db
     .select({
       sid: leads.manychatSubId,
@@ -45,7 +50,7 @@ async function loadOrderSummary(
       followUpDate: leads.followUpDate,
     })
     .from(leads)
-    .where(eq(leads.ghlContactId, contactId))
+    .where(where)
     .limit(1);
 
   if (!row) return null;
@@ -98,14 +103,12 @@ export default async function OrderSummaryWidgetPage({
   }
 
   const contactId = params.contactId?.trim() ?? "";
-  if (!contactId) {
+  const sid = params.sid?.trim() ?? "";
+  if (!contactId && !sid) {
     return (
       <div style={{ padding: 24, color: "#f59e0b" }}>
-        <h2 style={{ marginTop: 0 }}>אין contactId</h2>
-        <p>
-          הוסף <code>{"{{contact.id}}"}</code> ב-URL של ה-Custom Menu Link
-          (Show On: Contact Detail).
-        </p>
+        <h2 style={{ marginTop: 0 }}>בחר ליד</h2>
+        <p>פתח את לשונית 📥 שיחות ולחץ על שם של ליד.</p>
       </div>
     );
   }
@@ -113,7 +116,7 @@ export default async function OrderSummaryWidgetPage({
   let data: OrderSummaryWidgetData | null = null;
   let loadError: string | null = null;
   try {
-    data = await loadOrderSummary(contactId);
+    data = await loadOrderSummary(contactId, sid);
   } catch (err) {
     loadError = err instanceof Error ? err.message : String(err);
   }
@@ -131,10 +134,7 @@ export default async function OrderSummaryWidgetPage({
     return (
       <div style={{ padding: 24, color: "#f59e0b" }}>
         <h2 style={{ marginTop: 0 }}>אין ליד</h2>
-        <p>
-          לא נמצא ליד עם <code>ghl_contact_id={contactId}</code>. ייתכן שהליד
-          טרם סונכרן.
-        </p>
+        <p>לא נמצא ליד עם {sid ? <code>sid={sid}</code> : <code>ghl_contact_id={contactId}</code>}.</p>
       </div>
     );
   }

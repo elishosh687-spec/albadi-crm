@@ -14,12 +14,13 @@ import { CalculatorWithSettings } from "@/components/calculator/CalculatorWithSe
 import { verifyWidgetToken } from "@/integrations/ghl/widget-auth";
 import { db } from "@/lib/db";
 import { leads } from "@/drizzle/schema";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 
 export const dynamic = "force-dynamic";
 
 interface SearchParams {
   contactId?: string;
+  sid?: string;
   widget_token?: string;
 }
 
@@ -32,9 +33,13 @@ interface LeadSnapshot {
   qState: unknown;
 }
 
-async function loadLeadByGhlContactId(
-  contactId: string
+async function loadLead(
+  contactId: string,
+  sid: string
 ): Promise<LeadSnapshot | null> {
+  const where = sid
+    ? sql`trim(${leads.manychatSubId}) = ${sid}`
+    : eq(leads.ghlContactId, contactId);
   const [row] = await db
     .select({
       sid: leads.manychatSubId,
@@ -45,7 +50,7 @@ async function loadLeadByGhlContactId(
       qState: leads.qState,
     })
     .from(leads)
-    .where(eq(leads.ghlContactId, contactId))
+    .where(where)
     .limit(1);
   return row ?? null;
 }
@@ -68,14 +73,15 @@ export default async function CalculatorWidgetPage({
   }
 
   const contactId = params.contactId?.trim() ?? "";
+  const sid = params.sid?.trim() ?? "";
   let lead: LeadSnapshot | null = null;
   let leadError: string | null = null;
 
-  if (contactId) {
+  if (contactId || sid) {
     try {
-      lead = await loadLeadByGhlContactId(contactId);
+      lead = await loadLead(contactId, sid);
       if (!lead) {
-        leadError = `אין לידmatch לcontactId=${contactId}. עדכן את הסנכרון.`;
+        leadError = `אין ליד match (${sid ? `sid=${sid}` : `contactId=${contactId}`})`;
       }
     } catch (err) {
       leadError =
@@ -147,9 +153,9 @@ export default async function CalculatorWidgetPage({
         {leadError && (
           <span style={{ color: "#f59e0b", fontSize: 13 }}>⚠️ {leadError}</span>
         )}
-        {!contactId && (
+        {!contactId && !sid && (
           <span style={{ color: "#71717a", fontSize: 13 }}>
-            ⚠️ אין contactId — מצב standalone
+            ⚠️ ללא ליד — מצב standalone
           </span>
         )}
       </div>

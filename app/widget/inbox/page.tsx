@@ -21,6 +21,7 @@ export const maxDuration = 30;
 
 interface SearchParams {
   widget_token?: string;
+  sid?: string;
 }
 
 export default async function InboxWidgetPage({
@@ -30,6 +31,7 @@ export default async function InboxWidgetPage({
 }) {
   const params = await searchParams;
   const token = params.widget_token ?? "";
+  const selectedSid = params.sid?.trim() ?? "";
 
   if (!verifyWidgetToken(token)) {
     return (
@@ -144,7 +146,7 @@ export default async function InboxWidgetPage({
       >
         <strong style={{ fontSize: 14 }}>📥 שיחות ({rows.length})</strong>
       </div>
-      <InboxView apiToken={token} initialRows={rows} />
+      <InboxView apiToken={token} initialRows={rows} selectedSid={selectedSid} />
     </div>
   );
 }

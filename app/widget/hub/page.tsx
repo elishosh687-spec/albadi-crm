@@ -17,39 +17,44 @@ export const dynamic = "force-dynamic";
 interface SearchParams {
   widget_token?: string;
   tab?: string;
+  sid?: string;
 }
 
 interface TabDef {
   id: string;
   label: string;
-  url: (token: string) => string;
+  url: (token: string, sid: string) => string;
+}
+
+function withSid(base: string, sid: string): string {
+  return sid ? `${base}&sid=${encodeURIComponent(sid)}` : base;
 }
 
 const TABS: TabDef[] = [
   {
     id: "inbox",
     label: "📥 שיחות",
-    url: (t) => `/widget/inbox?widget_token=${encodeURIComponent(t)}`,
+    url: (t, sid) => withSid(`/widget/inbox?widget_token=${encodeURIComponent(t)}`, sid),
   },
   {
     id: "bot",
     label: "🤖 בוט",
-    url: (t) => `/widget/bot-decisions?widget_token=${encodeURIComponent(t)}`,
+    url: (t, sid) => withSid(`/widget/bot-decisions?widget_token=${encodeURIComponent(t)}`, sid),
   },
   {
     id: "factory",
     label: "🏭 מפעל",
-    url: (t) => `/widget/factory-flow?widget_token=${encodeURIComponent(t)}`,
+    url: (t, sid) => withSid(`/widget/factory-flow?widget_token=${encodeURIComponent(t)}`, sid),
   },
   {
     id: "calc",
     label: "🧮 מחשבון",
-    url: (t) => `/widget/calculator?widget_token=${encodeURIComponent(t)}`,
+    url: (t, sid) => withSid(`/widget/calculator?widget_token=${encodeURIComponent(t)}`, sid),
   },
   {
     id: "order",
     label: "📋 הזמנה",
-    url: (t) => `/widget/order-summary?widget_token=${encodeURIComponent(t)}`,
+    url: (t, sid) => withSid(`/widget/order-summary?widget_token=${encodeURIComponent(t)}`, sid),
   },
   {
     id: "settings",
@@ -65,6 +70,7 @@ export default async function HubWidgetPage({
 }) {
   const params = await searchParams;
   const token = params.widget_token ?? "";
+  const sid = params.sid?.trim() ?? "";
   const activeId = TABS.find((t) => t.id === params.tab)?.id ?? "inbox";
 
   if (!verifyWidgetToken(token)) {
@@ -103,7 +109,8 @@ export default async function HubWidgetPage({
       >
         {TABS.map((t) => {
           const isActive = t.id === activeId;
-          const href = `/widget/hub?widget_token=${encodeURIComponent(token)}&tab=${t.id}`;
+          const sidSuffix = sid ? `&sid=${encodeURIComponent(sid)}` : "";
+          const href = `/widget/hub?widget_token=${encodeURIComponent(token)}&tab=${t.id}${sidSuffix}`;
           return (
             <Link
               key={t.id}
@@ -128,8 +135,8 @@ export default async function HubWidgetPage({
       </nav>
 
       <iframe
-        key={active.id}
-        src={active.url(token)}
+        key={`${active.id}-${sid}`}
+        src={active.url(token, sid)}
         style={{
           flex: 1,
           width: "100%",

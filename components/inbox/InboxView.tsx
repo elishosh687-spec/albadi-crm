@@ -17,6 +17,7 @@ export interface InboxRow {
 interface Props {
   apiToken: string;
   initialRows: InboxRow[];
+  selectedSid?: string;
 }
 
 function timeAgo(iso: string | null): string {
@@ -36,11 +37,20 @@ function senderLabel(s: "lead" | "bot" | "eli"): string {
   return "🤖";
 }
 
-export default function InboxView({ apiToken, initialRows }: Props) {
+export default function InboxView({ apiToken, initialRows, selectedSid }: Props) {
   const [rows, setRows] = useState<InboxRow[]>(initialRows);
   const [busy, setBusy] = useState<string | null>(null);
   const [filter, setFilter] = useState("");
   const [, startTransition] = useTransition();
+
+  function selectLead(sid: string) {
+    const target = (typeof window !== "undefined" && window.top) ? window.top : window;
+    const url = new URL("/widget/hub", target.location.origin);
+    url.searchParams.set("widget_token", apiToken);
+    url.searchParams.set("tab", "order");
+    url.searchParams.set("sid", sid);
+    target.location.href = url.toString();
+  }
 
   const visible = useMemo(() => {
     const f = filter.trim().toLowerCase();
@@ -138,7 +148,7 @@ export default function InboxView({ apiToken, initialRows }: Props) {
             key={r.sid}
             style={{
               background: r.botPaused ? "#2a1d24" : "#1a1d24",
-              border: "1px solid #2a2d34",
+              border: `1px solid ${selectedSid === r.sid.trim() ? "#3b82f6" : "#2a2d34"}`,
               borderRadius: 8,
               padding: 12,
               display: "flex",
@@ -166,7 +176,10 @@ export default function InboxView({ apiToken, initialRows }: Props) {
               {busy === r.sid ? "…" : r.botPaused ? "▶️" : "⏸️"}
             </button>
 
-            <div style={{ flex: 1, minWidth: 0 }}>
+            <div
+              style={{ flex: 1, minWidth: 0, cursor: "pointer" }}
+              onClick={() => selectLead(r.sid.trim())}
+            >
               <div
                 style={{
                   display: "flex",
