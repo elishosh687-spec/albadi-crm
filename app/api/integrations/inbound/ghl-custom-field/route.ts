@@ -54,7 +54,9 @@ export async function POST(req: NextRequest) {
   const contactId = typeof body.contactId === "string" ? body.contactId.trim() : "";
   // GHL sometimes sends phone instead (E.164, with or without leading +)
   const rawPhone = typeof body.phone === "string" ? body.phone.trim().replace(/^\+/, "") : "";
-  const fieldName = typeof body.fieldName === "string" ? body.fieldName.trim() : "";
+  // fieldName: prefer URL query param ?field=xxx (GHL resolves literal body values as merge tags → empty)
+  const fieldName = (req.nextUrl.searchParams.get("field") ?? "")
+    || (typeof body.fieldName === "string" ? body.fieldName.trim() : "");
   const value = typeof body.value === "string" ? body.value.trim() : String(body.value ?? "");
 
   if (!contactId && !rawPhone) {
