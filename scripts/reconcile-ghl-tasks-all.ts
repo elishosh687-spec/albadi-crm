@@ -49,7 +49,7 @@ async function main() {
         created += r.created;
         updated += r.updated;
         deleted += r.deleted;
-        if (r.ownerTag === "eli_action") withTasks++;
+        if (r.created + r.updated > 0) withTasks++;
       }
       if ((i + 1) % 10 === 0) {
         console.log(
@@ -64,7 +64,7 @@ async function main() {
   }
 
   console.log(
-    `\nDone. created=${created} updated=${updated} deleted=${deleted} eli_action=${withTasks} errors=${errors}`
+    `\nDone. created=${created} updated=${updated} deleted=${deleted} touched=${withTasks} errors=${errors}`
   );
 }
 

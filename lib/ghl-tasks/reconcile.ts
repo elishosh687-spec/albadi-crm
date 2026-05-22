@@ -14,7 +14,6 @@ import {
   botDrafts,
   factoryQuoteRequests,
   ghlLeadTasks,
-  leadTags,
 } from "@/drizzle/schema";
 import { and, eq, sql } from "drizzle-orm";
 import { ENABLE_GHL_SYNC } from "@/integrations/ghl/config";
@@ -22,8 +21,6 @@ import {
   createContactTask,
   updateContactTask,
   deleteContactTask,
-  addContactTags,
-  removeContactTags,
 } from "@/integrations/ghl/client";
 import {
   deriveDesiredTasks,
@@ -31,9 +28,6 @@ import {
   type LeadSignalSnapshot,
   type SignalKind,
 } from "./derive";
-
-const OWNER_TAG_BOT = "bot_active";
-const OWNER_TAG_ELI = "eli_action";
 
 async function loadSnapshot(sid: string): Promise<{
   ghlContactId: string;
@@ -149,7 +143,8 @@ export interface ReconcileResult {
   created: number;
   updated: number;
   deleted: number;
-  ownerTag: "bot_active" | "eli_action" | null;
+  /** @deprecated owner tag toggle removed — always null. */
+  ownerTag: null;
 }
 
 export async function reconcileGHLTasksForLead(
@@ -220,59 +215,14 @@ export async function reconcileGHLTasksForLead(
       deleted++;
     }
 
-    // Owner tag toggle
-    const eliMustAct = desiredList.length > 0;
-    const ownerTag = eliMustAct ? OWNER_TAG_ELI : OWNER_TAG_BOT;
-    const otherTag = eliMustAct ? OWNER_TAG_BOT : OWNER_TAG_ELI;
-    try {
-      await addContactTags(ghlContactId, [ownerTag]);
-      await removeContactTags(ghlContactId, [otherTag]);
-      // Mirror to local lead_tags so DB-side filters stay in sync.
-      await mirrorLeadTag(snapshot.sid, ownerTag, otherTag);
-    } catch (e) {
-      console.warn("[ghl-tasks] owner tag toggle failed", sid, e);
-    }
-
     return {
       created,
       updated,
       deleted,
-      ownerTag: ownerTag as "bot_active" | "eli_action",
+      ownerTag: null,
     };
   } catch (err) {
     console.error("[ghl-tasks] reconcile failed", sid, err);
     return null;
   }
-}
-
-async function mirrorLeadTag(
-  sid: string,
-  addTagName: string,
-  removeTagName: string
-): Promise<void> {
-  const cleanSid = sid.trim();
-  // Insert if not present.
-  const existing = await db
-    .select({ id: leadTags.id })
-    .from(leadTags)
-    .where(
-      and(
-        sql`trim(${leadTags.manychatSubId}) = ${cleanSid}`,
-        eq(leadTags.tag, addTagName)
-      )
-    )
-    .limit(1);
-  if (existing.length === 0) {
-    await db
-      .insert(leadTags)
-      .values({ manychatSubId: cleanSid, tag: addTagName });
-  }
-  await db
-    .delete(leadTags)
-    .where(
-      and(
-        sql`trim(${leadTags.manychatSubId}) = ${cleanSid}`,
-        eq(leadTags.tag, removeTagName)
-      )
-    );
 }

@@ -5,6 +5,15 @@
 
 ---
 
+## 2026-05-22 — "Drop auto-managed owner tags"
+
+### Changed
+- The reconciler no longer toggles `bot_active` / `eli_action` GHL tags. Eli reviewed the auto-tag behaviour and prefers tags stay as deliberate, manually-applied signals (e.g. the existing "bot paused" tag he toggles to silence the bot). The signal-derived Tasks tab in GHL still works — only the owner-tag layer was removed.
+- `lib/ghl-tasks/reconcile.ts`: removed `addContactTags` / `removeContactTags` block + the `mirrorLeadTag` helper + the OWNER_TAG_* constants. `ReconcileResult.ownerTag` deprecated (always null).
+- `scripts/_cleanup-owner-tags.ts` (one-shot) removed the two tags from 79/83 GHL contacts (4 hit rate-limit — minor visual residue, will require a manual sweep if needed) and cleared 52 rows from `lead_tags`.
+
+---
+
 ## 2026-05-22 — "GHL = single source of truth — resync webhook"
 
 ### Why
