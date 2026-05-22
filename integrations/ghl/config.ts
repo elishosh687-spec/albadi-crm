@@ -85,6 +85,7 @@ export const GHL_FIELD_IDS: Record<string, string> = {
   quote_total: readEnv("GHL_FIELD_QUOTE_TOTAL"),
   pipeline_flag: readEnv("GHL_FIELD_PIPELINE_FLAG"),
   loss_reason: readEnv("GHL_FIELD_LOSS_REASON"),
+  bot_paused: readEnv("GHL_FIELD_BOT_PAUSED"),
 };
 
 // Names used when creating fields in the bootstrap script. The bootstrap
