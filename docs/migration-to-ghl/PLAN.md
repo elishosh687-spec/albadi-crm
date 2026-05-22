@@ -3,7 +3,7 @@
 > מסמך אמת לכל המעבר ל-GHL. מתעדכן בכל phase.
 > כל שינוי כולל **"איך לבדוק ידנית"**.
 
-עדכון אחרון (2026-05-22): Phase 0 + 1A + 1E + 1G (widgets) הושלמו. D1 (`bot_paused` GHL sync) — קוד שרת מוכן, GHL Workflow מוגדר, **באג פתוח** (ראה D1 bug למטה). הצעד הבא: תקן D1 bug → D2 follow_up_date → D3 Snippets → D4 Sheets.
+עדכון אחרון (2026-05-22 ערב): Phase 0 + 1A + 1E + 1G (widgets) הושלמו. **D1 ננטש** — הוחלף ב-Hub widget עם inbox + per-row pause toggle (DB ↔ GHL field both ways דרך לחיצה אחת). 6 Custom Menu Links הישנים → קישור יחיד `/widget/hub`. D3 ב-progress (snippets ידני). הצעד הבא: D2 follow_up_date → Phase 1F outbound chat → 1B PDF → 1C Feishu.
 
 ---
 
@@ -218,12 +218,17 @@ GHL = display. DB = source of truth. Bridge = WA transport.
 | Phase | מה | סטטוס |
 |---|---|---|
 | 0 | Foundation — GHL client, sync, bootstrap, DB columns, webhook wiring | ✅ DONE |
-| 1A | Calculator widget מוטמע ב-GHL contact card | ✅ DONE (Custom Menu Link ב-sidebar) |
+| 1A | Calculator widget מוטמע ב-GHL contact card | ✅ DONE |
 | 1B | PDF flow — finalize → GHL Files → send ללקוח | ❌ Not started |
 | 1C | Feishu loop — שלח לפבריקה + cron מחזיר מחיר | ❌ Not started |
-| 1D | Settings widget — currency + margin בתוך GHL | ❌ Not started |
+| 1D | Settings widget — currency + margin בתוך GHL | ✅ DONE (תחת Calculator tab) |
 | 1E | Backfill — כל הלידים מ-DB → GHL | ✅ DONE (82 leads + chat-to-inbox) |
 | 1F | Outbound chat — אלי כותב ב-GHL → bridge → WA | 🚧 IN PROGRESS — קוד מוכן, ממתין שאלי יצור Marketplace Private App |
+| **1G** | **Hub widget + Inbox + pause toggle (5 tabs)** | ✅ **DONE (2026-05-22 ערב)** |
+| D1 | bot_paused GHL ↔ DB sync | 🪦 ABANDONED — הוחלף ב-Hub toggle |
+| D2 | follow_up_date sync | ❌ Not started |
+| D3 | Snippets GHL native | 🚧 אלי בתהליך |
+| D4 | Google Sheets sync | ⏭️ SKIPPED |
 | 2 | Bot decisions widget, drafts widget, GHL Workflow followup | ❌ Future |
 
 ---
@@ -666,12 +671,24 @@ psql "$DATABASE_URL" -c "SELECT COUNT(*) FROM leads WHERE ghl_contact_id IS NOT 
 
 | Widget | Route | מצב |
 |---|---|---|
+| **Hub (single GHL entry)** | `/widget/hub` | ✅ DONE (2026-05-22 ערב) |
+| Inbox + pause toggle | `/widget/inbox` | ✅ DONE (2026-05-22 ערב) |
 | Factory Flow | `/widget/factory-flow` | ✅ DONE |
 | Bot Decisions + Drafts (tabs) | `/widget/bot-decisions` | ✅ DONE |
 | Calculator + Settings (tabs) | `/widget/calculator` | ✅ DONE |
+| Order Summary | `/widget/order-summary` | ✅ DONE |
 | Settings standalone | `/widget/settings` | ✅ DONE |
 
-**תוספות ב-2026-05-22:**
+**Hub ארכיטקטורה (2026-05-22 ערב):**
+- קישור יחיד ב-GHL Custom Menu Link → `/widget/hub?widget_token=<T>`
+- 5 tabs פנימיים: 📥 שיחות / 🤖 בוט / 🏭 מפעל / 🧮 מחשבון / 📋 הזמנה
+- (Settings תחת מחשבון, לא tab נפרד)
+- מעביר `?sid=` ל-iframes — order/calc מקבלים sid כחלופה ל-contactId
+- Inbox row click על שם → window.top → hub URL חדש עם sid → כל ה-tabs רואים אותו ליד
+- mobile-friendly: bookmark URL → גישה מהפלאפון בלי GHL UI
+- inbox per-row ⏸️/▶️ toggle → POST `/api/widget/toggle-pause` → `setBotPaused` → DB + GHL custom field "Bot Paused" (Paused/Active) דרך `syncLeadToGHL`
+
+**תוספות ב-2026-05-22 (בוקר):**
 - Stage override dropdown בכל decision card — POST `/api/widget/decisions/[id]/stage`
 - `bot_decision_log.source` column (`bridge`/`green`/`ghl`) + filter ב-BotDecisionsView
 - `dispatchSupervisor()` מקבל `source` param, נשמר ב-log
@@ -680,33 +697,22 @@ psql "$DATABASE_URL" -c "SELECT COUNT(*) FROM leads WHERE ghl_contact_id IS NOT 
 
 ## D-tracks — GHL Native sync
 
-### D1 — bot_paused GHL tag sync 🔥 BUG
+### D1 — bot_paused GHL tag sync 🪦 ABANDONED (2026-05-22 ערב)
 
-**מצב:** קוד שרת ✅ — GHL Workflows ✅ — **DB לא מתעדכן**
+**הוחלף ב-Hub Inbox widget** (Phase 1G). הסיבה: GHL Workflow Custom Data value fields ריצוט merge-tag failures (כל non-template string resolves ל-empty), debugging webhook לא הגיע ל-server מ-GHL UI.
 
-**מה עשינו:**
-- endpoint `POST /api/integrations/inbound/ghl-custom-field?field=bot_paused&value=true`
-- מקבל `phone` מ-custom data (כי `{{contact.id}}` לא resolves ב-GHL Custom Data value fields)
-- שני GHL Workflows: "Bot Paused — Tag Added" / "Bot Paused — Tag Removed"
+**הגישה החדשה:**
+- אלי לוחץ ⏸️/▶️ ב-inbox widget → POST `/api/widget/toggle-pause` → `setBotPaused()` עדכן DB + `syncLeadToGHL()` מסנכרן GHL custom field "Bot Paused" (Paused/Active)
+- One source of truth (widget) → both DB + GHL מתעדכנים סימולטנית
+- אין יותר GHL Workflow → webhook → DB chain שבור
 
-**הבאג:**
-GHL טריט **כל** ערך ב-Custom Data value fields כ-merge tag. גם `true`, `false`, `bot_paused` — resolves ל-empty string. רק `{{contact.phone}}` עובד.
+**קבצים חיים (לא נמחקו, אבל unused בייצור):**
+- `app/api/integrations/inbound/ghl-custom-field/route.ts` — עדיין קיים (D2 follow_up_date משתמש)
+- GHL Workflows "Bot Paused — Tag Added" / "Tag Removed" — אלי יכול למחוק/deactivate
+- env: `GHL_INBOUND_SECRET`, `GHL_FIELD_BOT_PAUSED=9gm1zPZnBraBKMF5hyzv` — נשארים ל-D2
 
-**תיקון שנעשה (חלקי):**
-- `fieldName` הועבר ל-URL query param (`?field=bot_paused`) — עובד ✅
-- `value` הועבר ל-URL query param (`?field=bot_paused&value=true`) — **לא אומת עדיין**
-
-**מה נשאר לבדוק בסשן הבא:**
-1. ב-workflow "Bot Paused — Tag Added": URL = `https://albadi-crm.vercel.app/api/integrations/inbound/ghl-custom-field?field=bot_paused&value=true`
-2. Custom Data = שורה אחת בלבד: `phone` → `{{contact.phone}}`
-3. אין `fieldName` ולא `value` ב-Custom Data
-4. אותו הדבר ל-"Tag Removed" עם `?field=bot_paused&value=false`
-5. הוסף תג "Bot Paused" לקונטקט → בדוק `bot_paused=true` ב-DB
-
-**קבצים רלוונטיים:**
-- `app/api/integrations/inbound/ghl-custom-field/route.ts` — קרא fieldName + value מ-URL query params ראשון, fallback ל-body
-- `.env`: `GHL_INBOUND_SECRET`, `GHL_FIELD_BOT_PAUSED=9gm1zPZnBraBKMF5hyzv`
-- `integrations/ghl/config.ts`: `GHL_INBOUND_SECRET` exported
+**איך לסנכרן ידנית עתידית** (DB → GHL):
+`syncLeadToGHL` קורא ל-`buildCustomFieldsPayload` שעכשיו כולל `bot_paused: "Paused" | "Active"`. כל toggle ב-widget → GHL field מעודכן תוך שניה.
 
 ### D2 — follow_up_date sync ❌
 
@@ -716,16 +722,15 @@ GHL טריט **כל** ערך ב-Custom Data value fields כ-merge tag. גם `tru
 - Server handler כבר מוכן ב-`ghl-custom-field/route.ts`
 - GHL Smart List: `Follow Up Date is within next 24h AND Stage != WON/DROPPED`
 
-### D3 — Snippets GHL native ❌
+### D3 — Snippets GHL native 🚧 (אלי בתהליך 2026-05-22 ערב)
 
 ידני. ב-GHL → Settings → Conversations → Snippets → צור 5-8 snippets מ-`lib/messaging/templates.ts`:
 - `/` ב-GHL Inbox מציג snippets
 - כל snippet עם `{contact.first_name}` merge tag
 
-### D4 — Google Sheets sync ❌
+### D4 — Google Sheets sync ⏭️ SKIPPED
 
-**Option A:** GHL native Workflow (Sheets row → create/update contact) — בדוק קודם
-**Option B:** אם לא מספיק — `app/api/integrations/inbound/sheets-cron/route.ts` + Vercel cron
+לא בעדיפות כרגע. ייתכן יחזור בעתיד אם נוסיף Meta Lead Ads → Sheet flow.
 
 ---
 
@@ -747,12 +752,13 @@ GHL טריט **כל** ערך ב-Custom Data value fields כ-merge tag. גם `tru
 
 | # | מה | מתי |
 |---|---|---|
-| A | Private Integration Token + scopes | לפני Phase 0 |
-| B | Pipeline "Albadi" עם 8 stages | לפני Phase 0 |
-| C | Custom Menu Link "🧮 מחשבון" | אחרי Phase 1A deploy |
-| D | Custom Menu Link "⚙️ הגדרות" | אחרי Phase 1D |
+| A | Private Integration Token + scopes | לפני Phase 0 — ✅ DONE |
+| B | Pipeline "Albadi" עם 8 stages | לפני Phase 0 — ✅ DONE |
+| C | Custom Menu Link אחד `/widget/hub` (החליף את כל הקודמים) | אחרי 1G hub deploy — ⏳ אלי לעשות |
+| D | מחק/deactivate Workflows ישנים ("Bot Paused — Tag Added/Removed") | אחרי hub deploy — ⏳ אלי לעשות |
 | E | Custom Conversation Provider אישור | אחרי Phase 1F |
 | F | Facebook Lead Ads native integration | Phase 2 |
+| G | Snippets ידני (D3) | 🚧 בתהליך |
 
 פרטי URLs ו-scopes לכל אחד — ראה הphase המתאים למעלה.
 
