@@ -51,6 +51,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: "invalid json" }, { status: 400 });
   }
 
+  console.log("[ghl-custom-field] DEBUG url:", req.nextUrl.toString());
+  console.log("[ghl-custom-field] DEBUG search:", req.nextUrl.search);
+  console.log("[ghl-custom-field] DEBUG body:", JSON.stringify(body));
+
   const contactId = typeof body.contactId === "string" ? body.contactId.trim() : "";
   // GHL sometimes sends phone instead (E.164, with or without leading +)
   const rawPhone = typeof body.phone === "string" ? body.phone.trim().replace(/^\+/, "") : "";
