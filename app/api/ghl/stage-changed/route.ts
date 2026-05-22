@@ -37,9 +37,33 @@ export const runtime = "nodejs";
 export const maxDuration = 15;
 
 interface Payload {
+  // GHL Workflow Custom Data — we tolerate several key names because the
+  // exact variable token in GHL has changed across releases.
   contactId?: string;
   opportunityId?: string;
   stageId?: string;
+  stage_id?: string;
+  pipelineStageId?: string;
+  pipeline_stage_id?: string;
+  pipline_stage_id?: string; // GHL's own typo, kept for compat
+  stageName?: string;
+  stage_name?: string;
+  [key: string]: unknown;
+}
+
+function pickStageId(p: Payload): string | null {
+  return (
+    p.stageId ||
+    p.stage_id ||
+    p.pipelineStageId ||
+    p.pipeline_stage_id ||
+    p.pipline_stage_id ||
+    null
+  );
+}
+
+function pickStageName(p: Payload): string | null {
+  return p.stageName || p.stage_name || null;
 }
 
 function reverseLookupStage(stageId: string): string | null {
@@ -56,26 +80,45 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
+  const rawBody = await req.text();
+  console.log("[ghl.stage-changed] raw body", rawBody.slice(0, 800));
+
   let payload: Payload;
   try {
-    payload = (await req.json()) as Payload;
+    payload = JSON.parse(rawBody) as Payload;
   } catch {
-    return NextResponse.json({ error: "bad_json" }, { status: 400 });
+    return NextResponse.json({ error: "bad_json", rawBody: rawBody.slice(0, 200) }, { status: 400 });
   }
 
-  const { contactId, opportunityId, stageId } = payload;
+  const contactId = payload.contactId;
+  const opportunityId = payload.opportunityId;
+  const stageId = pickStageId(payload);
+  const stageName = pickStageName(payload);
+
+  console.log("[ghl.stage-changed] parsed", {
+    contactId,
+    opportunityId,
+    stageId,
+    stageName,
+    keys: Object.keys(payload),
+  });
+
   if (!stageId || (!contactId && !opportunityId)) {
     return NextResponse.json(
-      { error: "missing_fields", need: "stageId + (contactId|opportunityId)" },
+      {
+        error: "missing_fields",
+        need: "stageId + (contactId|opportunityId)",
+        received: Object.keys(payload),
+      },
       { status: 400 }
     );
   }
 
   const localStage = reverseLookupStage(stageId);
   if (!localStage) {
-    console.warn("[ghl.stage-changed] unknown stage id", { stageId });
+    console.warn("[ghl.stage-changed] unknown stage id", { stageId, stageName });
     return NextResponse.json(
-      { error: "unknown_stage_id", stageId },
+      { error: "unknown_stage_id", stageId, stageName },
       { status: 422 }
     );
   }
