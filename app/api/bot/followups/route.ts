@@ -35,6 +35,7 @@ import { loadSheetGaps } from "@/lib/sheets/lead-gaps";
 import { superviseFollowup } from "@/lib/supervisor/followup-supervisor";
 import { logDecision } from "@/lib/supervisor/log";
 import { generateAndQueueDraft } from "@/lib/drafts";
+import { syncLeadToGHL } from "@/integrations/ghl/sync";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -351,6 +352,10 @@ async function processCustomerLead(row: {
       updatedAt: new Date(now),
     })
     .where(sql`trim(${leads.manychatSubId}) = ${row.sid.trim()}`);
+
+  // Push the new follow_up_count + lastFollowUpAt to GHL so Eli sees it in
+  // the contact card. Fire-and-forget — never throws.
+  await syncLeadToGHL(row.sid);
 
   await logDecision({
     ...logBase,
