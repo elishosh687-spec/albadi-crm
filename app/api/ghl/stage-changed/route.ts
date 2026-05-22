@@ -31,7 +31,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { leads } from "@/drizzle/schema";
 import { eq, or, sql } from "drizzle-orm";
-import { GHL_STAGE_IDS } from "@/integrations/ghl/config";
+import { GHL_STAGE_IDS, GHL_PIPELINE_ID } from "@/integrations/ghl/config";
+import { findOpportunityForContact, getOpportunity } from "@/integrations/ghl/client";
 
 export const runtime = "nodejs";
 export const maxDuration = 15;
@@ -40,7 +41,9 @@ interface Payload {
   // GHL Workflow Custom Data — we tolerate several key names because the
   // exact variable token in GHL has changed across releases.
   contactId?: string;
+  contact_id?: string;
   opportunityId?: string;
+  opportunity_id?: string;
   stageId?: string;
   stage_id?: string;
   pipelineStageId?: string;
@@ -90,9 +93,11 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: "bad_json", rawBody: rawBody.slice(0, 200) }, { status: 400 });
   }
 
-  const contactId = payload.contactId;
-  const opportunityId = payload.opportunityId;
-  const stageId = pickStageId(payload);
+  // Accept both camelCase (our Custom Data convention) and snake_case (GHL
+  // Standard Data auto-attached on every workflow webhook).
+  const contactId = payload.contactId || payload.contact_id;
+  let opportunityId = payload.opportunityId || payload.opportunity_id;
+  let stageId = pickStageId(payload);
   const stageName = pickStageName(payload);
 
   console.log("[ghl.stage-changed] parsed", {
@@ -103,14 +108,47 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     keys: Object.keys(payload),
   });
 
-  if (!stageId || (!contactId && !opportunityId)) {
+  if (!contactId && !opportunityId) {
     return NextResponse.json(
       {
         error: "missing_fields",
-        need: "stageId + (contactId|opportunityId)",
+        need: "contactId or opportunityId",
         received: Object.keys(payload),
       },
       { status: 400 }
+    );
+  }
+
+  // Fallback: if Custom Data didn't carry stageId, fetch it from GHL API.
+  // GHL Workflow webhooks reliably send contact_id/opportunity_id in
+  // Standard Data, but the Custom Data tokens for stage are flaky across
+  // releases. Pulling the opportunity directly from GHL is more robust.
+  if (!stageId) {
+    try {
+      if (opportunityId) {
+        const opp = await getOpportunity(opportunityId);
+        stageId = opp.pipelineStageId;
+        console.log("[ghl.stage-changed] fetched stageId via getOpportunity", { stageId });
+      } else if (contactId && GHL_PIPELINE_ID) {
+        const opp = await findOpportunityForContact(contactId, GHL_PIPELINE_ID);
+        if (opp) {
+          stageId = opp.pipelineStageId;
+          opportunityId = opp.id;
+          console.log("[ghl.stage-changed] fetched via findOpportunityForContact", {
+            stageId,
+            opportunityId,
+          });
+        }
+      }
+    } catch (e) {
+      console.warn("[ghl.stage-changed] GHL API lookup failed", e);
+    }
+  }
+
+  if (!stageId) {
+    return NextResponse.json(
+      { error: "stage_lookup_failed", contactId, opportunityId },
+      { status: 422 }
     );
   }
 
