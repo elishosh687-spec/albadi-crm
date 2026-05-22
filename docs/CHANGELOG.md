@@ -5,6 +5,17 @@
 
 ---
 
+## 2026-05-22 — "GHL tag-based bot pause"
+
+### Added
+- **`POST /api/integrations/inbound/ghl-tag`** — GHL Workflow webhook receiver for "Tag Applied" / "Tag Removed" events. Auth: `GHL_INBOUND_SECRET`. Body: `{contactId|phone, tag, action: "added"|"removed"}`. Mirrors the tag into `lead_tags` and, for known control tags (bot_paused + Hebrew aliases like `עצור_בוט`/`השהה_בוט`), toggles `leads.bot_paused`. Lets Eli flip the bot from the GHL contact card by adding/removing a tag instead of editing a Custom Field. ([app/api/integrations/inbound/ghl-tag/route.ts](app/api/integrations/inbound/ghl-tag/route.ts))
+
+### Required GHL setup (two workflows)
+1. **Tag Applied** workflow — trigger `Contact Tag` (Tag Applied) → filter Tag = `bot_paused` → Webhook POST `/api/integrations/inbound/ghl-tag` with body `{contactId: {{contact.id}}, tag: "bot_paused", action: "added"}` + Bearer `GHL_INBOUND_SECRET`.
+2. **Tag Removed** workflow — same but trigger Tag Removed, body action = `"removed"`.
+
+---
+
 ## 2026-05-21 — "Bot Decisions widget: explicit stage override"
 
 ### Added
