@@ -6,7 +6,7 @@
  *
  * Expected body (configure in GHL Workflow "Custom Webhook" action):
  *   {
- *     "contactId": "{{contact.id}}",
+ *     "contactId": "{{contact.id}}",    // OR omit and use "phone": "{{contact.phone}}" instead
  *     "fieldName": "bot_paused",          // which field changed
  *     "value":     "true" | "false"       // new value as string
  *   }
@@ -52,12 +52,19 @@ export async function POST(req: NextRequest) {
   }
 
   const contactId = typeof body.contactId === "string" ? body.contactId.trim() : "";
+  // GHL sometimes sends phone instead (E.164, with or without leading +)
+  const rawPhone = typeof body.phone === "string" ? body.phone.trim().replace(/^\+/, "") : "";
   const fieldName = typeof body.fieldName === "string" ? body.fieldName.trim() : "";
   const value = typeof body.value === "string" ? body.value.trim() : String(body.value ?? "");
 
-  if (!contactId) {
-    return NextResponse.json({ ok: false, error: "missing contactId" }, { status: 400 });
+  if (!contactId && !rawPhone) {
+    return NextResponse.json({ ok: false, error: "missing contactId or phone" }, { status: 400 });
   }
+
+  // Build where clause: match by GHL contact ID or by phone_e164
+  const whereClause = contactId
+    ? eq(leads.ghlContactId, contactId)
+    : eq(leads.phoneE164, rawPhone);
 
   if (fieldName === "bot_paused") {
     // RADIO field sends "Paused" or "Active"; also accept raw true/false strings.
@@ -65,7 +72,7 @@ export async function POST(req: NextRequest) {
     const result = await db
       .update(leads)
       .set({ botPaused: paused })
-      .where(eq(leads.ghlContactId, contactId))
+      .where(whereClause)
       .returning({ sid: leads.manychatSubId });
 
     if (result.length === 0) {
@@ -83,7 +90,7 @@ export async function POST(req: NextRequest) {
     const result = await db
       .update(leads)
       .set({ followUpDate: dateVal })
-      .where(eq(leads.ghlContactId, contactId))
+      .where(whereClause)
       .returning({ sid: leads.manychatSubId });
 
     if (result.length === 0) {
