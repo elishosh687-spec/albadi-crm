@@ -3,7 +3,7 @@
 > מסמך אמת לכל המעבר ל-GHL. מתעדכן בכל phase.
 > כל שינוי כולל **"איך לבדוק ידנית"**.
 
-עדכון אחרון (2026-05-21): Phase 0 + 1A + 1E הושלמו. 82 לידים מיובאים ל-GHL מלא — Contact, Opportunity, 4 סוגי Notes (Internal notes, WhatsApp history, Order summary, Bot decisions, Activity log), והודעות WhatsApp ב-Conversations Inbox. `ENABLE_GHL_SYNC=0` עדיין. הצעד הבא: A) להפעיל `ENABLE_GHL_SYNC=1` ב-Vercel, B) Phase 1F (Outbound chat).
+עדכון אחרון (2026-05-22): Phase 0 + 1A + 1E + 1G (widgets) הושלמו. D1 (`bot_paused` GHL sync) — קוד שרת מוכן, GHL Workflow מוגדר, **באג פתוח** (ראה D1 bug למטה). הצעד הבא: תקן D1 bug → D2 follow_up_date → D3 Snippets → D4 Sheets.
 
 ---
 
@@ -657,6 +657,75 @@ psql "$DATABASE_URL" -c "SELECT COUNT(*) FROM leads WHERE ghl_contact_id IS NOT 
 3. WhatsApp של test phone — קיבל את ההודעה
 4. אחורה ב-GHL — הודעה מסומנת "delivered"
 5. DB: `SELECT * FROM messages WHERE sender='eli' ORDER BY ingested_at DESC LIMIT 1` — קיים
+
+---
+
+---
+
+## Phase 1G — Widgets ✅ (2026-05-22)
+
+| Widget | Route | מצב |
+|---|---|---|
+| Factory Flow | `/widget/factory-flow` | ✅ DONE |
+| Bot Decisions + Drafts (tabs) | `/widget/bot-decisions` | ✅ DONE |
+| Calculator + Settings (tabs) | `/widget/calculator` | ✅ DONE |
+| Settings standalone | `/widget/settings` | ✅ DONE |
+
+**תוספות ב-2026-05-22:**
+- Stage override dropdown בכל decision card — POST `/api/widget/decisions/[id]/stage`
+- `bot_decision_log.source` column (`bridge`/`green`/`ghl`) + filter ב-BotDecisionsView
+- `dispatchSupervisor()` מקבל `source` param, נשמר ב-log
+
+---
+
+## D-tracks — GHL Native sync
+
+### D1 — bot_paused GHL tag sync 🔥 BUG
+
+**מצב:** קוד שרת ✅ — GHL Workflows ✅ — **DB לא מתעדכן**
+
+**מה עשינו:**
+- endpoint `POST /api/integrations/inbound/ghl-custom-field?field=bot_paused&value=true`
+- מקבל `phone` מ-custom data (כי `{{contact.id}}` לא resolves ב-GHL Custom Data value fields)
+- שני GHL Workflows: "Bot Paused — Tag Added" / "Bot Paused — Tag Removed"
+
+**הבאג:**
+GHL טריט **כל** ערך ב-Custom Data value fields כ-merge tag. גם `true`, `false`, `bot_paused` — resolves ל-empty string. רק `{{contact.phone}}` עובד.
+
+**תיקון שנעשה (חלקי):**
+- `fieldName` הועבר ל-URL query param (`?field=bot_paused`) — עובד ✅
+- `value` הועבר ל-URL query param (`?field=bot_paused&value=true`) — **לא אומת עדיין**
+
+**מה נשאר לבדוק בסשן הבא:**
+1. ב-workflow "Bot Paused — Tag Added": URL = `https://albadi-crm.vercel.app/api/integrations/inbound/ghl-custom-field?field=bot_paused&value=true`
+2. Custom Data = שורה אחת בלבד: `phone` → `{{contact.phone}}`
+3. אין `fieldName` ולא `value` ב-Custom Data
+4. אותו הדבר ל-"Tag Removed" עם `?field=bot_paused&value=false`
+5. הוסף תג "Bot Paused" לקונטקט → בדוק `bot_paused=true` ב-DB
+
+**קבצים רלוונטיים:**
+- `app/api/integrations/inbound/ghl-custom-field/route.ts` — קרא fieldName + value מ-URL query params ראשון, fallback ל-body
+- `.env`: `GHL_INBOUND_SECRET`, `GHL_FIELD_BOT_PAUSED=9gm1zPZnBraBKMF5hyzv`
+- `integrations/ghl/config.ts`: `GHL_INBOUND_SECRET` exported
+
+### D2 — follow_up_date sync ❌
+
+**מה נדרש:**
+- צור GHL Custom Field "Follow Up Date" (type: DATE)
+- Workflow: trigger "Field Changed → Follow Up Date" → POST `?field=follow_up_date`
+- Server handler כבר מוכן ב-`ghl-custom-field/route.ts`
+- GHL Smart List: `Follow Up Date is within next 24h AND Stage != WON/DROPPED`
+
+### D3 — Snippets GHL native ❌
+
+ידני. ב-GHL → Settings → Conversations → Snippets → צור 5-8 snippets מ-`lib/messaging/templates.ts`:
+- `/` ב-GHL Inbox מציג snippets
+- כל snippet עם `{contact.first_name}` merge tag
+
+### D4 — Google Sheets sync ❌
+
+**Option A:** GHL native Workflow (Sheets row → create/update contact) — בדוק קודם
+**Option B:** אם לא מספיק — `app/api/integrations/inbound/sheets-cron/route.ts` + Vercel cron
 
 ---
 
