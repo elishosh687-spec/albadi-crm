@@ -101,6 +101,8 @@ export interface LogDecisionInput {
   escalationKind?: string | null;
   draftId?: number | null;
   metadata?: Record<string, unknown> | null;
+  /** Inbound channel: 'bridge' | 'green' | 'ghl'. Defaults to 'bridge'. */
+  source?: string | null;
 }
 
 /**
@@ -131,6 +133,7 @@ export async function logDecision(
         escalationKind: input.escalationKind ?? null,
         draftId: input.draftId ?? null,
         metadata: (input.metadata as any) ?? null,
+        source: input.source ?? "bridge",
       })
       .returning({ id: botDecisionLog.id });
     return row?.id ?? null;

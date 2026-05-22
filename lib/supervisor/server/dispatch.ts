@@ -32,6 +32,8 @@ export interface DispatchInput {
   stage: string | null;
   mediaPresent: boolean;
   botPaused: boolean;
+  /** Inbound channel: 'bridge' | 'green' | 'ghl'. Defaults to 'bridge'. */
+  source?: string;
 }
 
 export interface DispatchResult {
@@ -78,7 +80,7 @@ const SAFE_AUTOSEND_INTENTS = new Set([
 export async function dispatchSupervisor(
   input: DispatchInput
 ): Promise<DispatchResult> {
-  const { sid, bridgeJid, inboundMessageId, inboundText, stage, mediaPresent, botPaused } = input;
+  const { sid, bridgeJid, inboundMessageId, inboundText, stage, mediaPresent, botPaused, source = "bridge" } = input;
 
   if (!inboundText.trim()) {
     return { shouldRunLegacy: true };
@@ -158,6 +160,7 @@ export async function dispatchSupervisor(
     llmRecommended: verdict.recommended,
     llmReason: verdict.reason,
     llmRiskFlags: verdict.riskFlags,
+    source,
   };
 
   if (verdict.recommended === "supervisor_error") {

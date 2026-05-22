@@ -436,6 +436,7 @@ async function handleIncoming(evt: GreenWebhook): Promise<void> {
     stage,
     mediaPresent: hasMedia,
     botPaused: false, // already auto-unpaused above
+    source: "green",
   });
 
   if (!dispatch.shouldRunLegacy) {

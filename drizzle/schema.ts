@@ -468,6 +468,9 @@ export const botDecisionLog = pgTable(
     eliStageFrom: text("eli_stage_from"),
     eliStageTo: text("eli_stage_to"),
     eliDecidedAt: timestamp("eli_decided_at", { withTimezone: true }),
+
+    // Inbound channel that triggered this decision. 'bridge' | 'green' | 'ghl'
+    source: text("source").default("bridge"),
   },
   (t) => ({
     sidCreatedIdx: index("bot_decision_log_sid_created_idx").on(

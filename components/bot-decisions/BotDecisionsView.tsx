@@ -103,6 +103,7 @@ export function BotDecisionsView({ apiToken }: { apiToken: string }) {
   const [rows, setRows] = useState<DecisionRow[]>([]);
   const [loadingRows, setLoadingRows] = useState(false);
   const [actionFilter, setActionFilter] = useState<string>("all");
+  const [sourceFilter, setSourceFilter] = useState<string>("all");
   const [error, setError] = useState<string | null>(null);
   const debounceRef = useRef<NodeJS.Timeout | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -142,7 +143,7 @@ export function BotDecisionsView({ apiToken }: { apiToken: string }) {
   }, []);
 
   const loadRows = useCallback(
-    async (sid: string, action: string) => {
+    async (sid: string, action: string, source: string) => {
       setLoadingRows(true);
       setError(null);
       try {
@@ -151,6 +152,7 @@ export function BotDecisionsView({ apiToken }: { apiToken: string }) {
             lead: sid,
             limit: "50",
             action,
+            source: sourceFilter !== "all" ? sourceFilter : undefined,
           })
         );
         const data = await res.json();
@@ -169,8 +171,8 @@ export function BotDecisionsView({ apiToken }: { apiToken: string }) {
   );
 
   useEffect(() => {
-    if (selectedSid) loadRows(selectedSid, actionFilter);
-  }, [selectedSid, actionFilter, loadRows]);
+    if (selectedSid) loadRows(selectedSid, actionFilter, sourceFilter);
+  }, [selectedSid, actionFilter, sourceFilter, loadRows]);
 
   const handlePick = (lead: LeadOption) => {
     setSelectedSid(lead.sid);
@@ -290,6 +292,16 @@ export function BotDecisionsView({ apiToken }: { apiToken: string }) {
                     {v.label}
                   </option>
                 ))}
+              </select>
+              <select
+                value={sourceFilter}
+                onChange={(e) => setSourceFilter(e.target.value)}
+                className="rounded-md border border-border bg-background px-2 py-1 text-xs"
+              >
+                <option value="all">כל המקורות</option>
+                <option value="bridge">Bridge</option>
+                <option value="green">Green API</option>
+                <option value="ghl">GHL</option>
               </select>
             </div>
           </div>

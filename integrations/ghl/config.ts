@@ -121,3 +121,8 @@ export const GHL_FIELD_DEFINITIONS = [
 
 export type LocalStage = keyof typeof GHL_STAGE_IDS;
 export type GHLFieldKey = keyof typeof GHL_FIELD_IDS;
+
+// ---- Inbound webhook auth ----
+// GHL Workflows send this token in `Authorization: Bearer <secret>`.
+// Set in .env + Vercel: GHL_INBOUND_SECRET=<random 32+ hex string>
+export const GHL_INBOUND_SECRET = readEnv("GHL_INBOUND_SECRET");
