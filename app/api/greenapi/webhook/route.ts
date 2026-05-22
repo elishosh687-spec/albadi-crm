@@ -47,6 +47,7 @@ import {
 } from "@/lib/messaging/templates";
 import { sendEliDM } from "@/lib/notify/eli";
 import { sendBridgeMessage } from "@/lib/bridge/client";
+import { dispatchSupervisor } from "@/lib/supervisor/server/dispatch";
 import {
   forwardMessage as ghlForwardMessage,
   syncLeadToGHL,
@@ -331,7 +332,7 @@ async function handleIncoming(evt: GreenWebhook): Promise<void> {
     textToStore = t;
   }
 
-  await insertGreenMessage({
+  const insertedMessage = await insertGreenMessage({
     chatId: canonicalSid,
     direction: "in",
     text: textToStore,
@@ -339,6 +340,7 @@ async function handleIncoming(evt: GreenWebhook): Promise<void> {
     sender: "lead",
     payload: evt as unknown as Record<string, unknown>,
   });
+  const inboundMessageId = insertedMessage?.id ?? null;
 
   // Mirror to GHL Inbox (Phase 1F). MUST await — see comment in
   // handleOutgoingManual; Vercel kills the lambda when the HTTP handler
@@ -420,7 +422,25 @@ async function handleIncoming(evt: GreenWebhook): Promise<void> {
     .where(sql`trim(${leads.manychatSubId}) = ${canonicalSid.trim()}`)
     .limit(1);
 
-  const stage = (snap?.stage ?? "").toUpperCase();
+  const stage = (snap?.stage ?? "").toUpperCase() || null;
+
+  // Supervisor gate — LLM decides whether to let the bot reply, draft for Eli,
+  // escalate, or silence. Mirrors lib/supervisor/server/dispatch logic used
+  // by the bridge webhook so both inbound paths share decision tracking +
+  // draft queue. Skipped for empty text (media-only) — handler still runs.
+  const dispatch = await dispatchSupervisor({
+    sid: canonicalSid,
+    bridgeJid: canonicalSid,
+    inboundMessageId,
+    inboundText: textForRouting ?? "",
+    stage,
+    mediaPresent: hasMedia,
+    botPaused: false, // already auto-unpaused above
+  });
+
+  if (!dispatch.shouldRunLegacy) {
+    return;
+  }
 
   try {
     if (!stage) {
