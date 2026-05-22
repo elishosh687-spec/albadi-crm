@@ -5,6 +5,22 @@
 
 ---
 
+## 2026-05-22 — "crm_tasks → GHL Contact Tasks sync"
+
+### Added
+- **`syncTaskToGHL(crmTaskId)`** in `integrations/ghl/sync.ts` — pushes a single `crm_tasks` row to GHL as a Contact Task. Caches the GHL task id on `crm_tasks.ghl_task_id`; subsequent updates (e.g. mark completed) target the same record instead of creating duplicates. Skips silently if the lead has no `ghl_contact_id`.
+- **Auto-fire-and-forget hooks** in `app/actions/v2.ts`:
+  - `createAutoTaskForStage` (stage transitions create follow-up tasks per the AUTO_TASK_BY_STAGE map: INITIAL_QUOTE_SENT/SHOWED_INTEREST/FACTORY_CHECK/FINAL_QUOTE_SENT/NEGOTIATING/WON) now also pushes to GHL.
+  - `createCrmTaskAction` (manual task from dashboard/API) pushes too.
+  - `completeCrmTaskAction` re-syncs so the task shows ✓ in the GHL Tasks tab.
+- **`crm_tasks.ghl_task_id` column** (text, nullable) added via drizzle-kit push. Populated on first sync.
+- **`scripts/backfill-tasks-to-ghl.ts`** — one-shot script for pre-existing open tasks. Joins with leads on ghl_contact_id; rate-limited at ~8/sec.
+
+### Why
+Eli's plan: every stage transition should leave a visible "next action" on the GHL contact card. Until now the auto-tasks lived in our DB only — invisible in the GHL Tasks tab. This closes the loop so the GHL UI is genuinely the operating console.
+
+---
+
 ## 2026-05-22 — "GHL tag-based bot pause"
 
 ### Added

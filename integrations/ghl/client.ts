@@ -552,3 +552,70 @@ export async function postOutboundMessage(input: {
   if (input.accessToken) init.accessToken = input.accessToken;
   return ghlFetch("/conversations/messages", init);
 }
+
+// ===========================================================================
+// Contact tasks
+// ===========================================================================
+
+export interface GHLContactTask {
+  id: string;
+  title: string;
+  body?: string;
+  dueDate: string; // ISO
+  completed: boolean;
+  assignedTo?: string | null;
+  contactId: string;
+}
+
+export interface GHLContactTaskInput {
+  title: string;
+  body?: string;
+  dueDate: string; // ISO 8601
+  completed?: boolean;
+  assignedTo?: string | null;
+}
+
+/**
+ * Create a task on a contact. GHL stores tasks as first-class records
+ * attached to a contact — visible in the contact's Tasks tab and in the
+ * global Tasks page.
+ */
+export async function createContactTask(
+  contactId: string,
+  input: GHLContactTaskInput
+): Promise<GHLContactTask> {
+  const body: Record<string, unknown> = {
+    title: input.title,
+    dueDate: input.dueDate,
+    completed: input.completed ?? false,
+  };
+  if (input.body) body.body = input.body;
+  if (input.assignedTo) body.assignedTo = input.assignedTo;
+  const res = await ghlFetch<{ task: GHLContactTask }>(
+    `/contacts/${contactId}/tasks/`,
+    { method: "POST", body: JSON.stringify(body) }
+  );
+  return res.task;
+}
+
+export async function updateContactTask(
+  contactId: string,
+  taskId: string,
+  patch: Partial<GHLContactTaskInput>
+): Promise<GHLContactTask> {
+  const res = await ghlFetch<{ task: GHLContactTask }>(
+    `/contacts/${contactId}/tasks/${taskId}`,
+    { method: "PUT", body: JSON.stringify(patch) }
+  );
+  return res.task;
+}
+
+export async function deleteContactTask(
+  contactId: string,
+  taskId: string
+): Promise<void> {
+  await ghlFetch(`/contacts/${contactId}/tasks/${taskId}`, {
+    method: "DELETE",
+  });
+}
+

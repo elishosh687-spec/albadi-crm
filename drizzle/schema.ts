@@ -319,11 +319,17 @@ export const crmTasks = pgTable(
     completedAt: timestamp("completed_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+    // GHL Contact Task id — null until first sync via syncTaskToGHL.
+    ghlTaskId: text("ghl_task_id"),
   },
   (t) => ({
     sidStatusIdx: index("crm_tasks_sid_status_idx").on(t.manychatSubId, t.status),
   })
 );
+
+// Adding cached GHL task id to the existing table — populated by
+// integrations/ghl/sync.ts:syncTaskToGHL on first push. drizzle-kit push will
+// create the column without losing data.
 
 export const crmSlaTimers = pgTable(
   "crm_sla_timers",

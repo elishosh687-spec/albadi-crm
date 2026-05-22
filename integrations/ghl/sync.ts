@@ -9,7 +9,7 @@
 // All public methods short-circuit if ENABLE_GHL_SYNC=0.
 
 import { db } from "@/lib/db";
-import { leads } from "@/drizzle/schema";
+import { leads, crmTasks } from "@/drizzle/schema";
 import { eq, sql } from "drizzle-orm";
 import {
   ENABLE_GHL_SYNC,
@@ -25,6 +25,8 @@ import {
   postOutboundMessage,
   addContactNote,
   uploadMediaFromUrl,
+  createContactTask,
+  updateContactTask,
   type GHLContact,
   type GHLOpportunity,
 } from "./client";
@@ -287,6 +289,81 @@ export async function syncLeadToGHL(sid: string): Promise<void> {
     );
   } catch (err) {
     console.error("[ghl.sync] syncLeadToGHL failed", sid, err);
+  }
+}
+
+// ===========================================================================
+// Public: tasks sync (crm_tasks → GHL Contact Tasks)
+// ===========================================================================
+
+/**
+ * Push a single crm_tasks row to GHL as a Contact Task. The GHL task id
+ * is cached on `crm_tasks.ghl_task_id` so subsequent updates (e.g. mark
+ * completed) target the same record instead of creating duplicates.
+ *
+ * Fire-and-forget — errors logged and swallowed so the dashboard / bot
+ * pipeline never blocks on GHL hiccups.
+ */
+export async function syncTaskToGHL(taskId: number): Promise<void> {
+  if (!ENABLE_GHL_SYNC) return;
+  try {
+    const [task] = await db
+      .select({
+        id: crmTasks.id,
+        sid: crmTasks.manychatSubId,
+        title: crmTasks.title,
+        status: crmTasks.status,
+        dueAt: crmTasks.dueAt,
+        ghlTaskId: crmTasks.ghlTaskId,
+      })
+      .from(crmTasks)
+      .where(eq(crmTasks.id, taskId))
+      .limit(1);
+    if (!task) return;
+
+    // Need the GHL contact id — pull from the lead row.
+    const [leadRow] = await db
+      .select({ ghlContactId: leads.ghlContactId })
+      .from(leads)
+      .where(sql`trim(${leads.manychatSubId}) = ${task.sid.trim()}`)
+      .limit(1);
+    if (!leadRow?.ghlContactId) {
+      console.warn("[ghl.sync] syncTaskToGHL skipped — no ghl_contact_id", {
+        taskId,
+        sid: task.sid,
+      });
+      return;
+    }
+    const contactId = leadRow.ghlContactId;
+
+    // GHL requires a dueDate. Fall back to "in 24h" if the task didn't
+    // carry one (the dashboard sometimes creates open-ended reminders).
+    const dueIso = (task.dueAt ?? new Date(Date.now() + 24 * 60 * 60 * 1000))
+      .toISOString();
+    const completed = task.status === "completed";
+
+    if (!task.ghlTaskId) {
+      // First push — create.
+      const created = await createContactTask(contactId, {
+        title: task.title,
+        dueDate: dueIso,
+        completed,
+      });
+      await db
+        .update(crmTasks)
+        .set({ ghlTaskId: created.id, updatedAt: new Date() })
+        .where(eq(crmTasks.id, taskId));
+      return;
+    }
+
+    // Already in GHL — patch.
+    await updateContactTask(contactId, task.ghlTaskId, {
+      title: task.title,
+      dueDate: dueIso,
+      completed,
+    });
+  } catch (err) {
+    console.error("[ghl.sync] syncTaskToGHL failed", taskId, err);
   }
 }
 
