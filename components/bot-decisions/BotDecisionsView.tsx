@@ -9,6 +9,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Loader2, Search, X, User, ChevronDown, ChevronUp, ThumbsUp, ThumbsDown, Check } from "lucide-react";
+import { V2_PIPELINE_STAGES, V2_STAGE_LABELS } from "@/lib/manychat/stages";
 
 const INTENT_OPTIONS: { value: string; label: string }[] = [
   { value: "accept", label: "אישור" },
@@ -49,6 +50,7 @@ interface DecisionRow {
   eliAction: string | null;
   eliIntentOverride: string | null;
   eliCorrectionType: string | null;
+  eliStageTo: string | null;
   // source may not exist yet pre-Track-C1 migration; treat null as 'bridge'.
   source?: string | null;
 }
@@ -342,6 +344,9 @@ function DecisionRowCard({
   const [freeText, setFreeText] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [fbError, setFbError] = useState<string | null>(null);
+  const [stageOverride, setStageOverride] = useState(row.eliStageTo ?? "");
+  const [stageSubmitting, setStageSubmitting] = useState(false);
+  const [stageError, setStageError] = useState<string | null>(null);
 
   const postFeedback = async (kind: "confirm" | "correct", body?: object) => {
     setSubmitting(true);
@@ -396,6 +401,33 @@ function DecisionRowCard({
       setShowPicker(false);
     }
   };
+  const handleStageOverride = async (stage: string) => {
+    if (!stage) return;
+    setStageSubmitting(true);
+    setStageError(null);
+    try {
+      const res = await fetch(
+        `/api/widget/decisions/${row.id}/stage?widget_token=${apiToken}`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ stage }),
+        }
+      );
+      const data = await res.json().catch(() => ({}));
+      if (!data?.ok) {
+        setStageError(data?.error ?? "שמירה נכשלה");
+        return;
+      }
+      setStageOverride(stage);
+      onUpdated({ id: row.id, eliStageTo: stage, eliAction: row.eliAction ?? "stage_override" });
+    } catch (e) {
+      setStageError(e instanceof Error ? e.message : "שמירה נכשלה");
+    } finally {
+      setStageSubmitting(false);
+    }
+  };
+
   const action = ACTION_LABELS[row.action] ?? {
     label: row.action,
     tone: "bg-muted/40 text-muted-foreground border-border",
@@ -598,6 +630,35 @@ function DecisionRowCard({
         )}
         {fbError && !showPicker && (
           <div className="mt-1 text-[11px] text-destructive">{fbError}</div>
+        )}
+      </div>
+
+      <div className="mt-2 pt-2 border-t border-border/30">
+        <div className="flex items-center gap-2">
+          <span className="text-[11px] text-muted-foreground shrink-0">שנה stage:</span>
+          <select
+            value={stageOverride}
+            onChange={(e) => {
+              setStageOverride(e.target.value);
+              handleStageOverride(e.target.value);
+            }}
+            disabled={stageSubmitting}
+            className="flex-1 text-[11px] rounded border border-border bg-background px-1.5 py-1 disabled:opacity-50"
+          >
+            <option value="">— בחר stage —</option>
+            {V2_PIPELINE_STAGES.map((s) => (
+              <option key={s} value={s}>
+                {V2_STAGE_LABELS[s]}
+              </option>
+            ))}
+          </select>
+          {stageSubmitting && <Loader2 className="size-3 animate-spin shrink-0 text-muted-foreground" />}
+          {stageOverride && !stageSubmitting && (
+            <Check className="size-3 shrink-0 text-emerald-500" />
+          )}
+        </div>
+        {stageError && (
+          <div className="mt-1 text-[11px] text-destructive">{stageError}</div>
         )}
       </div>
     </li>

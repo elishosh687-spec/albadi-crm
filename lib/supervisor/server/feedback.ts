@@ -5,7 +5,7 @@
  */
 
 import { db } from "@/lib/db";
-import { botDecisionLog } from "@/drizzle/schema";
+import { botDecisionLog, leads } from "@/drizzle/schema";
 import { eq, sql } from "drizzle-orm";
 
 export interface FeedbackResult {
@@ -53,6 +53,45 @@ export async function correctDecisionIntent(
         eliAction: sql`COALESCE(${botDecisionLog.eliAction}, 'stage_override')`,
       })
       .where(eq(botDecisionLog.id, rowId));
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "save failed" };
+  }
+}
+
+export async function overrideDecisionStage(
+  rowId: number,
+  stage: string
+): Promise<FeedbackResult> {
+  if (!Number.isFinite(rowId) || rowId <= 0) {
+    return { ok: false, error: "invalid row id" };
+  }
+  if (!stage.trim()) return { ok: false, error: "missing stage" };
+
+  try {
+    // Fetch the manychat_sub_id from the decision row so we can update the lead.
+    const [row] = await db
+      .select({ manychatSubId: botDecisionLog.manychatSubId })
+      .from(botDecisionLog)
+      .where(eq(botDecisionLog.id, rowId))
+      .limit(1);
+
+    if (!row) return { ok: false, error: "decision not found" };
+
+    await db
+      .update(leads)
+      .set({ pipelineStage: stage })
+      .where(eq(leads.manychatSubId, row.manychatSubId));
+
+    await db
+      .update(botDecisionLog)
+      .set({
+        eliStageTo: stage,
+        eliAction: sql`COALESCE(${botDecisionLog.eliAction}, 'stage_override')`,
+        eliDecidedAt: new Date(),
+      })
+      .where(eq(botDecisionLog.id, rowId));
+
     return { ok: true };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "save failed" };
