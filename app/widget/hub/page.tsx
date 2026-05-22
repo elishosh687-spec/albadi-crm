@@ -56,11 +56,6 @@ const TABS: TabDef[] = [
     label: "📋 הזמנה",
     url: (t, sid) => withSid(`/widget/order-summary?widget_token=${encodeURIComponent(t)}`, sid),
   },
-  {
-    id: "settings",
-    label: "⚙️ הגדרות",
-    url: (t) => `/widget/settings?widget_token=${encodeURIComponent(t)}`,
-  },
 ];
 
 export default async function HubWidgetPage({
