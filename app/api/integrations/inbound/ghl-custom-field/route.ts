@@ -54,10 +54,11 @@ export async function POST(req: NextRequest) {
   const contactId = typeof body.contactId === "string" ? body.contactId.trim() : "";
   // GHL sometimes sends phone instead (E.164, with or without leading +)
   const rawPhone = typeof body.phone === "string" ? body.phone.trim().replace(/^\+/, "") : "";
-  // fieldName: prefer URL query param ?field=xxx (GHL resolves literal body values as merge tags → empty)
+  // fieldName + value: prefer URL query params (GHL resolves literal body values as merge tags → empty)
   const fieldName = (req.nextUrl.searchParams.get("field") ?? "")
     || (typeof body.fieldName === "string" ? body.fieldName.trim() : "");
-  const value = typeof body.value === "string" ? body.value.trim() : String(body.value ?? "");
+  const value = (req.nextUrl.searchParams.get("value") ?? "")
+    || (typeof body.value === "string" ? body.value.trim() : String(body.value ?? ""));
 
   if (!contactId && !rawPhone) {
     return NextResponse.json({ ok: false, error: "missing contactId or phone" }, { status: 400 });
