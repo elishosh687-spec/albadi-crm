@@ -84,7 +84,20 @@ export async function createDraft(input: CreateDraftInput): Promise<DraftRow> {
       triggerMessageId: input.triggerMessageId ?? null,
     })
     .returning();
+  // Surface this lead as needing Eli action in GHL.
+  void reconcileGHLTasksLazy(sid);
   return row as DraftRow;
+}
+
+// Lazy import so this module doesn't drag the full GHL stack into bundles
+// that only need draft CRUD.
+async function reconcileGHLTasksLazy(sid: string): Promise<void> {
+  try {
+    const { reconcileGHLTasksForLead } = await import("@/lib/ghl-tasks/reconcile");
+    await reconcileGHLTasksForLead(sid);
+  } catch (e) {
+    console.warn("[drafts] reconcileGHLTasks failed (lazy)", sid, e);
+  }
 }
 
 export interface PendingFilter {
@@ -212,6 +225,10 @@ export async function approveDraft(
     eliEditText: wasEdited ? finalText : null,
   });
 
+  // Draft is gone from the pending queue — clear the GHL "💰 אשר/דחה טיוטה"
+  // task and re-evaluate the owner tag.
+  void reconcileGHLTasksLazy(draft.manychatSubId);
+
   return { ok: true, draftId: id, waMessageId, sentText: finalText };
 }
 
@@ -238,6 +255,8 @@ export async function rejectDraft(
     eliAction: "rejected_draft",
     eliRejectReason: reason?.trim() || null,
   });
+
+  void reconcileGHLTasksLazy(draft.manychatSubId);
 
   return { ok: true };
 }

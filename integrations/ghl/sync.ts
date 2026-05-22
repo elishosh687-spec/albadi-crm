@@ -287,6 +287,12 @@ export async function syncLeadToGHL(sid: string): Promise<void> {
       { ...lead, ghlContactId: contactId },
       contactId
     );
+    // Reconcile signal-derived tasks + owner tag. Fire-and-forget within
+    // the sync — same fail-soft semantics as the rest of this function.
+    const { reconcileGHLTasksForLead } = await import(
+      "@/lib/ghl-tasks/reconcile"
+    );
+    void reconcileGHLTasksForLead(sid);
   } catch (err) {
     console.error("[ghl.sync] syncLeadToGHL failed", sid, err);
   }

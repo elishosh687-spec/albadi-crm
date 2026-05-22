@@ -136,6 +136,18 @@ export async function finalizeQuote(
     })
     .where(eq(factoryQuoteRequests.id, id));
 
+  // Factory row no longer "received" — clear the GHL task and re-evaluate
+  // owner tag. Lazy import to avoid pulling GHL stack into bundles that
+  // only need finalize.
+  try {
+    const { reconcileGHLTasksForLead } = await import(
+      "@/lib/ghl-tasks/reconcile"
+    );
+    void reconcileGHLTasksForLead(reqRow.manychatSubId);
+  } catch (e) {
+    console.warn("[factory/finalize] ghl tasks reconcile failed", e);
+  }
+
   return {
     ok: true,
     id,

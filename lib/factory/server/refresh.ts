@@ -112,5 +112,20 @@ export async function refreshFromFeishu(): Promise<RefreshResult> {
     }
   }
 
+  // Surface the new "factory received" signal in GHL Tasks tab + flip
+  // owner tag to eli_action. Lazy import to keep cold-start cheap.
+  if (transitioned.length > 0) {
+    try {
+      const { reconcileGHLTasksForLead } = await import(
+        "@/lib/ghl-tasks/reconcile"
+      );
+      for (const t of transitioned) {
+        void reconcileGHLTasksForLead(t.manychatSubId);
+      }
+    } catch (e) {
+      console.warn("[factory/refresh] ghl tasks reconcile failed", e);
+    }
+  }
+
   return { ok: true, scanned: pending.length, updated, updates, dmResults };
 }

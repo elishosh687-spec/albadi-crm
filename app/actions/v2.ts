@@ -22,7 +22,7 @@ import {
   suggestReplies as suggestRepliesLLM,
   type ConversationMessage,
 } from "@/lib/autoresponder/suggest-reply";
-import { syncLeadToGHL, syncTaskToGHL } from "@/integrations/ghl/sync";
+import { syncLeadToGHL } from "@/integrations/ghl/sync";
 
 // revalidatePath throws "static generation store missing" when called outside
 // a Next.js request context (e.g. from tsx test scripts). Cache invalidation
@@ -219,17 +219,15 @@ async function createAutoTaskForStage(
   const spec = AUTO_TASK_BY_STAGE[stage];
   if (!spec) return;
   const dueAt = new Date(Date.now() + spec.hoursUntilDue * 60 * 60 * 1000);
-  const [row] = await db
-    .insert(crmTasks)
-    .values({
-      manychatSubId: sid,
-      taskType: "follow_up",
-      title: spec.title,
-      status: "open",
-      dueAt,
-    })
-    .returning({ id: crmTasks.id });
-  if (row) void syncTaskToGHL(row.id);
+  await db.insert(crmTasks).values({
+    manychatSubId: sid,
+    taskType: "follow_up",
+    title: spec.title,
+    status: "open",
+    dueAt,
+  });
+  // crm_tasks is dashboard-only — no GHL mirror. GHL Tasks tab is driven by
+  // signal-derived reconciler (lib/ghl-tasks/reconcile.ts) instead.
 }
 
 export async function updateLeadNotes(
@@ -1185,17 +1183,13 @@ export async function createCrmTaskAction(input: {
     if (!cleanSid) return { ok: false, error: "missing subscriberId" };
     if (!title) return { ok: false, error: "missing title" };
     const due = input.dueAt ? new Date(input.dueAt) : null;
-    const [row] = await db
-      .insert(crmTasks)
-      .values({
-        manychatSubId: cleanSid,
-        title,
-        taskType: input.taskType?.trim() || "follow_up",
-        dueAt: due && Number.isFinite(due.getTime()) ? due : null,
-        assignedTo: input.assignedTo?.trim() || null,
-      })
-      .returning({ id: crmTasks.id });
-    if (row) void syncTaskToGHL(row.id);
+    await db.insert(crmTasks).values({
+      manychatSubId: cleanSid,
+      title,
+      taskType: input.taskType?.trim() || "follow_up",
+      dueAt: due && Number.isFinite(due.getTime()) ? due : null,
+      assignedTo: input.assignedTo?.trim() || null,
+    });
     safeRevalidate("/dashboard/v3", "layout");
     return { ok: true, message: "משימה נוצרה" };
   } catch (e) {
@@ -1212,7 +1206,6 @@ export async function completeCrmTaskAction(taskId: number): Promise<SimpleResul
       .update(crmTasks)
       .set({ status: "completed", completedAt: new Date(), updatedAt: new Date() })
       .where(eq(crmTasks.id, taskId));
-    void syncTaskToGHL(taskId);
     safeRevalidate("/dashboard/v3", "layout");
     return { ok: true, message: "משימה טופלה" };
   } catch (e) {

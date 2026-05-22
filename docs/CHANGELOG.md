@@ -5,6 +5,29 @@
 
 ---
 
+## 2026-05-22 — "Signal-derived GHL Tasks + bot/eli ownership tag"
+
+### Why
+The earlier `crm_tasks → GHL Tasks` wire (commit 3d24a9e) targeted a barely-used table — 1 row in the entire DB. The real "Eli must act" signals live elsewhere: `pipeline_flag=NEEDS_ELI`, `bot_paused`, `bot_drafts.status=pending`, `factory_quote_requests.factory_status=received`, idle leads, big quotes. Replaced the dead wire with a signal-derived reconciler so the GHL Tasks tab and a new `eli_action`/`bot_active` owner tag reflect actual operational state.
+
+### Added
+- **`lib/ghl-tasks/derive.ts`** — pure function maps a lead snapshot + signal counts to a canonical set of `DesiredTask{signalKind,title,dueAt}`. 7 signals: needs_eli_escalation, bot_paused, draft_pending, factory_received, factory_stuck(>3d), big_quote_close(≥10k @ FINAL_QUOTE_SENT), idle_active_lead(48h no response).
+- **`lib/ghl-tasks/reconcile.ts`** — `reconcileGHLTasksForLead(sid)`: loads lead+drafts+factory in 3 queries, diffs desired vs cached, calls `createContactTask`/`updateContactTask`/`deleteContactTask`, toggles `eli_action` vs `bot_active` GHL contact tags, mirrors tag to `lead_tags`.
+- **`ghl_lead_tasks` table** — cache of (lead_sid, signal_kind) → ghl_task_id for idempotent diffing. Unique index on (lead_sid, signal_kind).
+- **`addContactTags` / `removeContactTags`** helpers in `integrations/ghl/client.ts` — POST/DELETE `/contacts/{id}/tags`.
+- **Hooks fire-and-forget reconcile** at the end of: `syncLeadToGHL`, `createDraft`/`approveDraft`/`rejectDraft`, `factory/refresh` (per transitioned row), `factory/finalize`, `app/api/ghl/stage-changed`.
+- **`scripts/reconcile-ghl-tasks-all.ts`** — backfill walks every ghl-linked lead with rate-limit 120ms.
+
+### Removed
+- Wire from `app/actions/v2.ts:createAutoTaskForStage`/`createCrmTaskAction`/`completeCrmTaskAction` → `syncTaskToGHL`. `crm_tasks.ghl_task_id` column kept; `syncTaskToGHL` still exported but no longer invoked.
+- `scripts/backfill-tasks-to-ghl.ts` (superseded).
+
+### Manual GHL setup (one-time, optional)
+- Smart List "התור שלי" — filter Contacts where Tag = `eli_action`.
+- Smart List "לידי בוט תקועים" — Tag = `bot_active` AND last activity > 7 days.
+
+---
+
 ## 2026-05-22 — "crm_tasks → GHL Contact Tasks sync"
 
 ### Added

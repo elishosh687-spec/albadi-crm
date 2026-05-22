@@ -8,6 +8,7 @@ import {
   boolean,
   jsonb,
   index,
+  uniqueIndex,
   doublePrecision,
 } from "drizzle-orm/pg-core";
 /* eslint-disable @typescript-eslint/no-unused-vars */
@@ -26,6 +27,8 @@ export const leads = pgTable("leads", {
   // until the backfill script runs.
   waJid: text("wa_jid"),
   phoneE164: text("phone_e164"),
+  // GHL-mirrored — Eli edits in GHL UI, resync webhook pulls back to DB.
+  email: text("email"),
 
   // Pipeline state (mirror of v2 ManyChat custom fields, but DB is the
   // source of truth once USE_BRIDGE=1).
@@ -330,6 +333,30 @@ export const crmTasks = pgTable(
 // Adding cached GHL task id to the existing table — populated by
 // integrations/ghl/sync.ts:syncTaskToGHL on first push. drizzle-kit push will
 // create the column without losing data.
+
+// Signal-derived GHL Contact Tasks cache. Each row maps a single (lead,
+// signal_kind) pair to the GHL task id we created for it. Lets the
+// reconciler diff desired-vs-existing and avoid duplicates. signal_kind
+// is one of the keys defined in lib/ghl-tasks/derive.ts (e.g.
+// 'needs_eli_escalation', 'draft_pending', 'factory_received', etc.).
+export const ghlLeadTasks = pgTable(
+  "ghl_lead_tasks",
+  {
+    id: serial("id").primaryKey(),
+    leadSid: text("lead_sid").notNull(),
+    signalKind: text("signal_kind").notNull(),
+    ghlTaskId: text("ghl_task_id").notNull(),
+    title: text("title"),
+    dueAt: timestamp("due_at", { withTimezone: true }),
+    completed: boolean("completed").default(false).notNull(),
+    lastPushedAt: timestamp("last_pushed_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (t) => ({
+    uniqLeadSignal: uniqueIndex("ghl_lead_tasks_uniq_idx").on(t.leadSid, t.signalKind),
+  })
+);
 
 export const crmSlaTimers = pgTable(
   "crm_sla_timers",

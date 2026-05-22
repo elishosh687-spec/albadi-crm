@@ -462,6 +462,23 @@ export async function uploadMediaFromUrl(input: {
   return { url: json.url, fileId: json.fileId };
 }
 
+export interface GHLContactNote {
+  id: string;
+  body: string;
+  userId?: string;
+  contactId?: string;
+  dateAdded?: string;
+}
+
+export async function listContactNotes(
+  contactId: string
+): Promise<GHLContactNote[]> {
+  const res = await ghlFetch<{ notes?: GHLContactNote[] }>(
+    `/contacts/${contactId}/notes`
+  );
+  return res.notes ?? [];
+}
+
 export async function addContactNote(
   contactId: string,
   body: string,
@@ -616,6 +633,32 @@ export async function deleteContactTask(
 ): Promise<void> {
   await ghlFetch(`/contacts/${contactId}/tasks/${taskId}`, {
     method: "DELETE",
+  });
+}
+
+// ===========================================================================
+// Contact tags (add/remove by name)
+// ===========================================================================
+
+export async function addContactTags(
+  contactId: string,
+  tags: string[]
+): Promise<void> {
+  if (tags.length === 0) return;
+  await ghlFetch(`/contacts/${contactId}/tags`, {
+    method: "POST",
+    body: JSON.stringify({ tags }),
+  });
+}
+
+export async function removeContactTags(
+  contactId: string,
+  tags: string[]
+): Promise<void> {
+  if (tags.length === 0) return;
+  await ghlFetch(`/contacts/${contactId}/tags`, {
+    method: "DELETE",
+    body: JSON.stringify({ tags }),
   });
 }
 

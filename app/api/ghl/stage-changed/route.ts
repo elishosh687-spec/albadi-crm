@@ -184,6 +184,15 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     console.log("[ghl.stage-changed] set NEEDS_ELI flag", {
       sid: result[0].sid,
     });
+    // Eli set NEEDS_ELI ⇒ owner tag flips + escalation task surfaces.
+    try {
+      const { reconcileGHLTasksForLead } = await import(
+        "@/lib/ghl-tasks/reconcile"
+      );
+      void reconcileGHLTasksForLead(result[0].sid);
+    } catch (e) {
+      console.warn("[ghl.stage-changed] ghl tasks reconcile failed", e);
+    }
     return NextResponse.json({
       ok: true,
       sid: result[0].sid,
@@ -218,6 +227,16 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     sid: result[0].sid,
     pipelineStage: localStage,
   });
+  // Re-evaluate signal-derived tasks (e.g. big_quote_close at FINAL_QUOTE_SENT,
+  // idle_active_lead set cleared when moving to WON/LOST) + flip owner tag.
+  try {
+    const { reconcileGHLTasksForLead } = await import(
+      "@/lib/ghl-tasks/reconcile"
+    );
+    void reconcileGHLTasksForLead(result[0].sid);
+  } catch (e) {
+    console.warn("[ghl.stage-changed] ghl tasks reconcile failed", e);
+  }
   return NextResponse.json({
     ok: true,
     sid: result[0].sid,
