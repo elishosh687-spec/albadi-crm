@@ -60,7 +60,8 @@ export async function POST(req: NextRequest) {
   }
 
   if (fieldName === "bot_paused") {
-    const paused = value === "true" || value === "1";
+    // RADIO field sends "Paused" or "Active"; also accept raw true/false strings.
+    const paused = value === "Paused" || value === "true" || value === "1";
     const result = await db
       .update(leads)
       .set({ botPaused: paused })
