@@ -91,6 +91,7 @@
 manychat_sub_id  PK (JID for bridge / numeric for legacy ManyChat)
 wa_jid           E.164 → JID resolution
 phone_e164       canonical phone
+email            customer email (added 2026-05-22; GHL-mirrored)
 name             from contact info / manual
 pipeline_stage   NULL (pre-quote) | INITIAL_QUOTE_SENT | AWAITING_FIRST_RESPONSE | SHOWED_INTEREST | FACTORY_CHECK | FINAL_QUOTE_SENT | NEGOTIATING | WON | LOST
                  (LOST requires loss_reason; FACTORY_CHECK uses qState.subFlow=awaiting_logo|awaiting_factory_estimate)
@@ -171,8 +172,12 @@ with strict directionality per field.
         │   • forwardMessage (every WA in/out → GHL thread)   │
         │                                                     │
         │ GHL → DB (webhook, app/api/ghl/*)                   │
-        │   • stage-changed → leads.pipeline_stage            │
-        │   • (planned) contact-updated, note-added, tag-...  │
+        │   • stage-changed   → leads.pipeline_stage          │
+        │   • ghl-tag         → lead_tags add/remove delta    │
+        │   • ghl-custom-field → bot_paused, follow_up_date   │
+        │   • resync (catch-all) → full contact pull:         │
+        │       name, phone, email, tags, customFields,       │
+        │       notes, tasks, opportunity stage/status/value  │
         │   • outbound (Eli replies in GHL Inbox) →           │
         │     sendBridgeMessage(sender='eli') + messages row  │
         └─────────────────────────┬───────────────────────────┘
@@ -200,6 +205,69 @@ the same lead. Resolution is by stage equality: when the bot updates DB and
 pushes to GHL, GHL skips the no-op PUT if the resolved stage id matches.
 When GHL pushes to DB and the bot's next cron run re-classifies to the
 same stage, the push is also a no-op.
+
+### Field-ownership matrix (2026-05-22)
+
+**Rule of thumb: GHL is source of truth for everything Eli edits in the UI.
+DB is source of truth for bot-internal state that GHL can't represent.**
+
+Shared fields — GHL → DB on change (via resync webhook):
+
+| GHL field            | DB target                          | sync direction |
+|----------------------|-----------------------------------|----------------|
+| Contact.name         | `leads.name`                      | GHL → DB       |
+| Contact.phone        | `leads.phone_e164`                | GHL → DB       |
+| Contact.email        | `leads.email`                     | GHL → DB       |
+| Contact.tags         | `lead_tags(manychat_sub_id, tag)` | GHL → DB (diff)|
+| Contact.customFields | `leads.bot_summary, quote_total, loss_reason, bot_paused, pipeline_flag` | GHL → DB |
+| Contact.notes        | `leads.notes` (all notes concat)  | GHL → DB       |
+| Contact.tasks        | `crm_tasks` (upsert by ghl_task_id)| GHL → DB      |
+| Opportunity.stage    | `leads.pipeline_stage`            | GHL → DB       |
+| Opportunity.status   | `leads.pipeline_stage` (WON/LOST) + `opportunities.won_at/lost_at` | GHL → DB |
+| Opportunity.value    | `opportunities.value_ils`         | GHL → DB       |
+
+DB → GHL push (bot-originated, integrations/ghl/sync.ts):
+
+| DB write                       | GHL target                       |
+|--------------------------------|----------------------------------|
+| pipeline_stage (LLM classify)  | Opportunity.pipelineStageId      |
+| bot_summary (LLM)              | Contact.customFields[bot_summary]|
+| quote_total (calculator)       | Contact.customFields[quote_total]|
+| crm_tasks (signal-derived)     | Contact.tasks                    |
+| messages (every WA in/out)     | Conversations thread             |
+
+DB-only fields (GHL never sees or touches):
+
+| Field                              | Why DB-only                              |
+|------------------------------------|------------------------------------------|
+| `leads.q_state`                    | Questionnaire FSM, JSON with 10 keys, bot reads/writes 20× per chat |
+| `leads.quote_alt`                  | Alt-shipping tier price, internal calc   |
+| `leads.factory_spec_draft`         | In-progress factory spec, JSON           |
+| `messages`                         | Bot needs 60-day history for classification |
+| `bot_quotes`                       | Append-only quote audit + analytics      |
+| `bot_drafts`                       | Money-moment draft queue                 |
+| `bot_decision_log`                 | LLM trace + verdict per inbound          |
+| `bot_config`, `app_config`         | Bot tuning, pricing, FX, shipping rates  |
+| `factory_quote_requests`           | Feishu integration state                 |
+| `bridge_events`                    | Webhook dedupe + audit                   |
+| `crm_sla_timers`, `lead_score_snapshots`, `source_touches` | Operational scoring/triage |
+| `ghl_lead_tasks`                   | Signal-derived task cache (auto, not user-edit) |
+
+### Resync endpoint
+
+`POST /api/ghl/resync` — full-pull GHL → DB for one contact.
+
+- **Trigger:** GHL Workflow on any Contact Changed or Opportunity Changed event.
+- **Body:** `{ contactId }`.
+- **Behavior:** parallel GETs (contact + notes + tasks + opportunities)
+  followed by a single idempotent merge into `leads`, `lead_tags`,
+  `crm_tasks`, `opportunities`. Records `lead_events('ghl_resync', …)`
+  for audit.
+- **Auth:** `Bearer ${BOT_SECRET}`.
+
+The narrower webhooks (stage-changed, ghl-tag, ghl-custom-field) remain for
+low-latency single-field updates. Resync is the catch-all reconciler — if
+GHL fires it once per minute on every change, we're still fine.
 
 ---
 

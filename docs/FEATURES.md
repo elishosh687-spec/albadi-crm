@@ -190,6 +190,7 @@ GHL = ממשק תפעולי יחיד אחרי השלמת המעבר. dashboard v
 | 2.7.4 | ⚙️ Settings widget — תוכנן, לא נחת | planned | — | `/widget/settings?widget_token=<T>` |
 | 2.7.5 | 🤖 Bot Decisions widget — תוכנן, לא נחת | planned | — | `/widget/bot-decisions?widget_token=<T>` |
 | 2.7.6 | ↩️ **GHL → DB stage sync** (reverse direction) — webhook receiver שעדכון opportunity stage ב-GHL UI דוחף ל-`leads.pipeline_stage`. NEEDS_ELI כstage וירטואלי → `pipeline_flag`. ניקוי flag כשeli מזיז לstage אמיתי | shipped (2026-05-21) | `app/api/ghl/stage-changed/route.ts` | GHL Workflow → POST `/api/ghl/stage-changed` |
+| 2.7.7 | ↩️ **GHL → DB full resync** — webhook catch-all שעל כל שינוי ב-Contact/Opportunity ב-GHL מושך מ-GHL את ה-contact + notes + tasks + opportunities ועושה merge ל-DB (leads, lead_tags, crm_tasks, opportunities). אכיפת GHL=source-of-truth לכל שדה משותף. רץ במקביל ל-narrow webhooks (2.7.6 וכו') | shipped (2026-05-22) | `app/api/ghl/resync/route.ts` | GHL Workflow → POST `/api/ghl/resync` (Contact Changed + Opportunity Changed) |
 
 **Architecture:** [docs/migration-to-ghl/PLAN.md](migration-to-ghl/PLAN.md) Phase 1G. Contact Detail placement לא זמין ב-tier הנוכחי של GHL → כל הויג'טים פר-לקוח חיים ב-Sidebar עם contact picker פנימי (debounced search על name/phone/sid).
 

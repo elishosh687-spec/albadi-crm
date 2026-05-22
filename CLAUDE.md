@@ -97,6 +97,46 @@ shows the actual error.
 
 Do NOT chase "DOM weight" or "hydration" before reading the console.
 
+## GHL is single source of truth (READ BEFORE TOUCHING ANY SHARED FIELD)
+
+**Decision 2026-05-22:** every field that Eli edits in the GHL UI is owned by
+GHL. DB just follows. No two-source-of-truth drift.
+
+**Shared fields (GHL owns, DB mirrors via webhook):**
+- `leads.name`, `leads.phone_e164`, `leads.email`
+- `lead_tags.tag` (Contact.tags)
+- `leads.bot_summary`, `leads.quote_total`, `leads.loss_reason`,
+  `leads.bot_paused`, `leads.pipeline_flag` (Contact.customFields)
+- `leads.notes` (Contact.notes, concat of all)
+- `crm_tasks` rows (Contact.tasks, upserted by `ghl_task_id`)
+- `leads.pipeline_stage` (Opportunity.pipelineStageId, mapped via `GHL_STAGE_IDS`)
+- `opportunities.value_ils` (Opportunity.monetaryValue)
+- `opportunities.won_at` / `lost_at` (Opportunity.status)
+
+**DB-only fields (GHL never touches):**
+- `leads.q_state` (questionnaire FSM), `leads.quote_alt`, `leads.factory_spec_draft`
+- `messages`, `bot_quotes`, `bot_drafts`, `bot_decision_log`
+- `bot_config`, `app_config`, `factory_quote_requests`, `bridge_events`
+- `crm_sla_timers`, `lead_score_snapshots`, `source_touches`, `ghl_lead_tasks`
+
+**Webhook map (GHL → DB):**
+| Endpoint | Trigger | Scope |
+|---|---|---|
+| `/api/ghl/stage-changed` | Opportunity Stage Changed | `leads.pipeline_stage` only |
+| `/api/integrations/inbound/ghl-tag` | Contact Tag Added/Removed | `lead_tags` delta |
+| `/api/integrations/inbound/ghl-custom-field` | Custom Field Changed | `bot_paused`, `follow_up_date` only |
+| `/api/ghl/resync` | Contact Changed + Opportunity Changed | **catch-all full pull** — name, phone, email, tags, customFields, notes, tasks, opps |
+
+**Rule:** if you add a new shared field or webhook, update the matrix in
+[docs/ARCHITECTURE.md §3b](docs/ARCHITECTURE.md). If GHL doesn't have a
+trigger for what you need, prefer extending the resync endpoint over
+making another narrow webhook.
+
+**Loop guard:** when the bot writes a shared field to DB, `syncLeadToGHL`
+pushes to GHL. The resync webhook will then fire and re-read the same
+value — but the merge is idempotent (`COALESCE` semantics for nullable
+fields, stage equality check for pipeline_stage), so no infinite loop.
+
 ## Bridge messaging (READ BEFORE TOUCHING MESSAGING)
 
 All WhatsApp I/O runs through the self-hosted whatsapp-bridge-node tenant.

@@ -636,6 +636,30 @@ export async function deleteContactTask(
   });
 }
 
+export async function listContactTasks(
+  contactId: string
+): Promise<GHLContactTask[]> {
+  const res = await ghlFetch<{ tasks?: GHLContactTask[] }>(
+    `/contacts/${contactId}/tasks`
+  );
+  return res.tasks ?? [];
+}
+
+export async function listOpportunitiesForContact(
+  contactId: string
+): Promise<GHLOpportunity[]> {
+  const res = await ghlFetch<{ opportunities?: GHLOpportunity[] }>(
+    "/opportunities/search",
+    undefined,
+    {
+      location_id: requireGHLLocationId(),
+      contact_id: contactId,
+      limit: 20,
+    }
+  );
+  return res.opportunities ?? [];
+}
+
 // ===========================================================================
 // Contact tags (add/remove by name)
 // ===========================================================================

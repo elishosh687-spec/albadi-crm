@@ -5,6 +5,39 @@
 
 ---
 
+## 2026-05-22 — "GHL = single source of truth — resync webhook"
+
+### Why
+Two-source-of-truth pain. Eli edits a contact in GHL UI — DB drifts. Bot writes to DB — GHL drifts. Result: contact gets deleted in GHL, bot keeps messaging, GHL auto-creates contact again on next bot write. Confusing for human, brittle for system.
+
+**Resolution:** declare **GHL = source of truth for every shared field**. DB stays canonical only for bot-internal state (q_state, quote history, message history, decision log, factory pipeline). For shared fields (name, phone, email, tags, custom fields, notes, tasks, opportunity stage/status/value) — GHL writes, DB follows.
+
+### Added
+- **`leads.email` column** (text, nullable). Mirrors `Contact.email` from GHL.
+- **`/api/ghl/resync` endpoint** (`app/api/ghl/resync/route.ts`) — full-pull GHL→DB sync for one contact. Idempotent. Parallel GETs (contact + notes + tasks + opportunities), single merge into `leads` / `lead_tags` (diff) / `crm_tasks` (upsert by ghl_task_id) / `opportunities`. Also prunes stale `ghl_lead_tasks` cache rows (signal-derived task cache from `lib/ghl-tasks/reconcile.ts`) whose `ghl_task_id` is no longer present in GHL — so the reconciler recreates them on next run instead of PUT→404. Writes `lead_events('ghl_resync', …)` for audit.
+- **`listContactNotes`, `listContactTasks`, `listOpportunitiesForContact`** helpers in `integrations/ghl/client.ts`.
+
+### Manual GHL setup (one-time)
+Create two workflows, both POST to same URL:
+
+1. **"Contact Changed → albadi resync"**
+   - Trigger: *Contact Changed* (any field)
+   - Action: Webhook POST
+     - URL: `https://albadi-crm.vercel.app/api/ghl/resync`
+     - Header: `Authorization: Bearer <BOT_SECRET>`, `Content-Type: application/json`
+     - Custom Data body: `contactId = {{contact.id}}`
+
+2. **"Opportunity Changed → albadi resync"**
+   - Trigger: *Opportunity Changed* (or *Opportunity Status Changed* if the former is unavailable)
+   - Action: same as #1
+
+The earlier narrow webhooks (`stage-changed`, `ghl-tag`, `ghl-custom-field`) stay enabled for low-latency single-field updates. Resync is the catch-all reconciler.
+
+### Architecture decision
+See `docs/ARCHITECTURE.md §3b → Field-ownership matrix` for the full DB↔GHL mapping. New code touching shared fields must respect the matrix.
+
+---
+
 ## 2026-05-22 — "Signal-derived GHL Tasks + bot/eli ownership tag"
 
 ### Why
