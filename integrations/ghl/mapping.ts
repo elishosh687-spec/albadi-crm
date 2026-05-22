@@ -21,6 +21,7 @@ export interface LocalLeadSnapshot {
   botSummary?: string | null;
   quoteTotal?: string | null;
   lossReason?: string | null;
+  botPaused?: boolean | null;
 }
 
 /**
@@ -91,6 +92,10 @@ export function buildCustomFieldsPayload(
   add(out, "quote_total", lead.quoteTotal ? Number(lead.quoteTotal) : null);
   add(out, "pipeline_flag", lead.pipelineFlag);
   add(out, "loss_reason", lead.lossReason);
+  // RADIO field "Paused"/"Active" — server-side route also accepts these.
+  if (lead.botPaused === true || lead.botPaused === false) {
+    add(out, "bot_paused", lead.botPaused ? "Paused" : "Active");
+  }
   return out;
 }
 

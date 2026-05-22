@@ -16,7 +16,7 @@ export const GHL_WIDGET_TOKEN = readEnv("GHL_WIDGET_TOKEN");
 
 export const WIDGET_ALLOWED_FRAME_ANCESTORS =
   readEnv("WIDGET_ALLOWED_FRAME_ANCESTORS") ||
-  "https://app.gohighlevel.com https://*.leadconnectorhq.com https://*.gohighlevel.com https://*.msgsndr.com";
+  "'self' https://app.gohighlevel.com https://*.leadconnectorhq.com https://*.gohighlevel.com https://*.msgsndr.com";
 
 /**
  * Verify a widget token from query string OR header.

@@ -110,6 +110,7 @@ async function loadLead(sid: string): Promise<LoadedLead | null> {
       botSummary: leads.botSummary,
       quoteTotal: leads.quoteTotal,
       lossReason: leads.lossReason,
+      botPaused: leads.botPaused,
       ghlContactId: leads.ghlContactId,
       ghlOpportunityId: leads.ghlOpportunityId,
     })
