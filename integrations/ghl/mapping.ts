@@ -95,10 +95,8 @@ export function buildCustomFieldsPayload(
   add(out, "quote_total", lead.quoteTotal ? Number(lead.quoteTotal) : null);
   add(out, "pipeline_flag", lead.pipelineFlag);
   add(out, "loss_reason", lead.lossReason);
-  // RADIO field "Paused"/"Active" — server-side route also accepts these.
-  if (lead.botPaused === true || lead.botPaused === false) {
-    add(out, "bot_paused", lead.botPaused ? "Paused" : "Active");
-  }
+  // Legacy `bot_paused` RADIO removed 2026-05-23 — replaced by `lead_owner`
+  // which carries the same information in a clearer form.
   add(out, "follow_up_date", lead.followUpDate);
   // Always push follow_up_count, even when 0 — empty cells in GHL look like
   // missing data; explicit 0 means "no follow-ups sent yet".
