@@ -204,6 +204,13 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     const v = cf.bot_paused;
     updateSet.botPaused = v === "Paused" || v === true || v === "true";
   }
+  // Lead Owner (RADIO) takes precedence over the legacy Bot Paused field —
+  // if Eli flipped it in GHL UI, mirror to bot_paused.
+  if (cf.lead_owner !== undefined) {
+    const v = String(cf.lead_owner ?? "");
+    if (v.includes("Eli")) updateSet.botPaused = true;
+    else if (v.includes("Bot")) updateSet.botPaused = false;
+  }
   if (cf.follow_up_date !== undefined) {
     const v = cf.follow_up_date;
     updateSet.followUpDate = v === null || v === "" ? null : String(v);

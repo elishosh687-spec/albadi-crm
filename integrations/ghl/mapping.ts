@@ -100,10 +100,22 @@ export function buildCustomFieldsPayload(
     add(out, "bot_paused", lead.botPaused ? "Paused" : "Active");
   }
   add(out, "follow_up_date", lead.followUpDate);
+  // Always push follow_up_count, even when 0 — empty cells in GHL look like
+  // missing data; explicit 0 means "no follow-ups sent yet".
   if (lead.followUpCount !== undefined && lead.followUpCount !== null) {
     add(out, "follow_up_count", lead.followUpCount);
+  } else {
+    add(out, "follow_up_count", 0);
   }
   add(out, "next_action", lead.nextAction);
+  // Lead Owner — derived from bot_paused. Single source of truth. The widget
+  // toggle writes bot_paused; we mirror to GHL so the contact card shows
+  // who's currently driving the lead.
+  if (lead.botPaused === true) {
+    add(out, "lead_owner", "👨 Eli");
+  } else if (lead.botPaused === false) {
+    add(out, "lead_owner", "🤖 Bot");
+  }
   return out;
 }
 
