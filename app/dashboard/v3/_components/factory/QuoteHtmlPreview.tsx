@@ -217,6 +217,23 @@ export function QuoteHtmlPreview({
             </div>
 
             {cfg && (
+              <div className="rounded-lg border border-gray-800 overflow-hidden">
+                <div className="bg-gray-900 px-4 py-2 text-xs font-semibold text-gray-300">
+                  שערי מטבע בעת ההצעה
+                </div>
+                <table className="w-full text-sm">
+                  <tbody>
+                    <PriceRow label="USD → ILS" value={cfg.usdToIls.toFixed(2)} />
+                    <PriceRow label="USD → CNY" value={cfg.usdToCny.toFixed(2)} />
+                    {cfg.ilsToCny !== undefined && cfg.ilsToCny !== null && (
+                      <PriceRow label="ILS → CNY" value={cfg.ilsToCny.toFixed(2)} />
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {cfg && (
               <DetailedBreakdown
                 defaultOpen
                 unitCost={p.unitCost}

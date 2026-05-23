@@ -59,6 +59,11 @@ export interface FactoryPricingConfig {
   usdToIls: number;
   /** CNY → USD divisor (i.e. 1 USD = X CNY) */
   usdToCny: number;
+  /** ILS → CNY rate. Manual (NOT auto-derived from USD rates) so it can
+   *  drift independently when needed. Shown in the boss view of every
+   *  quote for cost reference. Optional — falls back to derived value
+   *  (usdToCny / usdToIls) when missing. */
+  ilsToCny?: number;
   /** Default profit margin % when caller doesn't override and no per-qty value */
   defaultProfitMargin: number;
   /**

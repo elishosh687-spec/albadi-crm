@@ -102,7 +102,7 @@ export function SettingsView({ apiToken }: { apiToken: string }) {
   };
 
   const updateNumber = (
-    key: "usdToIls" | "usdToCny" | "defaultProfitMargin",
+    key: "usdToIls" | "usdToCny" | "ilsToCny" | "defaultProfitMargin",
     v: string
   ) => {
     const num = Number(v);
@@ -222,6 +222,14 @@ export function SettingsView({ apiToken }: { apiToken: string }) {
           step={0.01}
           onChange={(v) => updateNumber("usdToCny", v)}
           error={errors.usdToCny as string | undefined}
+        />
+        <NumField
+          label="ILS → CNY"
+          hint="כמה יואן בשקל — להצגה בלבד ב-boss view של ההצעה"
+          value={state.ilsToCny ?? 0}
+          step={0.01}
+          onChange={(v) => updateNumber("ilsToCny", v)}
+          error={errors.ilsToCny as string | undefined}
         />
         <NumField
           label="רווח ברירת מחדל (%)"
@@ -470,6 +478,7 @@ function validate(s: FactoryPricingConfig): Record<string, unknown> {
   const errors: Record<string, unknown> = {};
   if (!(s.usdToIls > 0)) errors.usdToIls = "חובה > 0";
   if (!(s.usdToCny > 0)) errors.usdToCny = "חובה > 0";
+  if (s.ilsToCny !== undefined && !(s.ilsToCny > 0)) errors.ilsToCny = "חובה > 0";
   if (!(s.defaultProfitMargin >= 0)) errors.defaultProfitMargin = "חובה ≥ 0";
   if (s.profitMarginByQuantity) {
     for (const [qty, pct] of Object.entries(s.profitMarginByQuantity)) {
