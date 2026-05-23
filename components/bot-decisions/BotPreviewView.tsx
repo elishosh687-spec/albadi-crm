@@ -147,10 +147,10 @@ function LinkBtn({ href, compact = false }: { href: string; compact?: boolean })
   return (
     <a
       href={href}
-      target="_top"
+      target="_blank"
       rel="noopener noreferrer"
       className={`inline-flex items-center gap-1 rounded-md border border-border bg-secondary/40 hover:bg-secondary text-xs font-medium ${compact ? "p-1" : "px-2 py-1"} transition-colors`}
-      title="פתח ב-GHL"
+      title="פתח ב-GHL (טאב חדש)"
     >
       <ExternalLink className="size-3" />
       {!compact && <span>GHL</span>}

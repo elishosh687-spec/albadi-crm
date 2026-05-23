@@ -45,12 +45,11 @@ export default function InboxView({ apiToken, initialRows, selectedSid }: Props)
   const [, startTransition] = useTransition();
 
   // Inbox is self-contained — clicking a name opens the lead's contact
-  // card in GHL (target=_top to escape the iframe). Does NOT switch to
-  // another widget tab. To create a quote, go to Calculator tab directly.
+  // card in GHL in a new tab. Cross-origin top-window navigation from an
+  // iframe is blocked, so we use window.open with _blank.
   function selectLead(row: InboxRow) {
     if (!row.ghlContactUrl) return;
-    const target = (typeof window !== "undefined" && window.top) ? window.top : window;
-    target.location.href = row.ghlContactUrl;
+    window.open(row.ghlContactUrl, "_blank", "noopener");
   }
 
   const visible = useMemo(() => {

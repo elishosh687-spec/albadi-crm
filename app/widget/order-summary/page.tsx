@@ -106,9 +106,16 @@ export default async function OrderSummaryWidgetPage({
   const sid = params.sid?.trim() ?? "";
   if (!contactId && !sid) {
     return (
-      <div style={{ padding: 24, color: "#f59e0b" }}>
-        <h2 style={{ marginTop: 0 }}>בחר ליד</h2>
-        <p>פתח את לשונית 📥 שיחות ולחץ על שם של ליד.</p>
+      <div style={{ padding: 24, color: "#a1a1aa", direction: "rtl" }}>
+        <h2 style={{ marginTop: 0, color: "#e4e4e7" }}>תצוגת הזמנה</h2>
+        <p>
+          לשונית זו מציגה את נתוני ההזמנה של ליד נבחר (qState, מחיר, factory
+          spec, הערות). פתח אותה דרך כרטיס הקונטקט ב-GHL — Custom Menu Link
+          מעביר את <code>contactId</code> אוטומטית.
+        </p>
+        <p style={{ marginTop: 12, fontSize: 13 }}>
+          ליצירת הצעה חדשה — השתמש בלשונית <strong>🧮 מחשבון</strong>.
+        </p>
       </div>
     );
   }
