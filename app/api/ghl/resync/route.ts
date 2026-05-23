@@ -200,17 +200,14 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     updateSet.quoteTotal = n === null || n === "" ? null : String(n);
   }
   if (cf.loss_reason !== undefined) updateSet.lossReason = String(cf.loss_reason ?? "") || null;
-  if (cf.bot_paused !== undefined) {
-    const v = cf.bot_paused;
-    updateSet.botPaused = v === "Paused" || v === true || v === "true";
-  }
-  // Lead Owner (RADIO) takes precedence over the legacy Bot Paused field —
-  // if Eli flipped it in GHL UI, mirror to bot_paused.
-  if (cf.lead_owner !== undefined) {
-    const v = String(cf.lead_owner ?? "");
-    if (v.includes("Eli")) updateSet.botPaused = true;
-    else if (v.includes("Bot")) updateSet.botPaused = false;
-  }
+  // bot_paused / lead_owner intentionally NOT mirrored from GHL on resync.
+  // Reason: race condition. If the widget toggles bot_paused at T0 and the
+  // push to GHL runs against stale code (mid-deploy), GHL keeps the old
+  // value. A subsequent resync would then overwrite the widget's intent.
+  // Direct GHL edits to Lead Owner are handled by the narrow webhook at
+  // /api/integrations/inbound/ghl-custom-field instead — that route is
+  // triggered ONLY when the field actually changes in GHL, so there is no
+  // race with the catch-all resync.
   if (cf.follow_up_date !== undefined) {
     const v = cf.follow_up_date;
     updateSet.followUpDate = v === null || v === "" ? null : String(v);

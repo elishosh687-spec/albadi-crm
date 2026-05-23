@@ -87,6 +87,21 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, updated: result.length });
   }
 
+  if (fieldName === "lead_owner") {
+    // RADIO sends "🤖 Bot" / "👨 Eli". Map back to bot_paused.
+    const paused = value.includes("Eli");
+    const result = await db
+      .update(leads)
+      .set({ botPaused: paused, updatedAt: new Date() })
+      .where(whereClause)
+      .returning({ sid: leads.manychatSubId });
+    if (result.length === 0) {
+      return NextResponse.json({ ok: false, error: "lead not found" }, { status: 404 });
+    }
+    console.log(`[ghl-custom-field] lead_owner=${value} (paused=${paused}) for ${result[0].sid}`);
+    return NextResponse.json({ ok: true, updated: result.length });
+  }
+
   if (fieldName === "follow_up_date") {
     // D2 — accept any ISO date string or empty (clear).
     const dateVal = value || null;
