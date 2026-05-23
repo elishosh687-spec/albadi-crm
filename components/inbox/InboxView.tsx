@@ -12,6 +12,7 @@ export interface InboxRow {
   lastSender: "lead" | "bot" | "eli";
   lastAt: string | null;
   inboundLast24h: number;
+  ghlContactUrl: string | null;
 }
 
 interface Props {
@@ -43,13 +44,13 @@ export default function InboxView({ apiToken, initialRows, selectedSid }: Props)
   const [filter, setFilter] = useState("");
   const [, startTransition] = useTransition();
 
-  function selectLead(sid: string) {
+  // Inbox is self-contained — clicking a name opens the lead's contact
+  // card in GHL (target=_top to escape the iframe). Does NOT switch to
+  // another widget tab. To create a quote, go to Calculator tab directly.
+  function selectLead(row: InboxRow) {
+    if (!row.ghlContactUrl) return;
     const target = (typeof window !== "undefined" && window.top) ? window.top : window;
-    const url = new URL("/widget/hub", target.location.origin);
-    url.searchParams.set("widget_token", apiToken);
-    url.searchParams.set("tab", "order");
-    url.searchParams.set("sid", sid);
-    target.location.href = url.toString();
+    target.location.href = row.ghlContactUrl;
   }
 
   const visible = useMemo(() => {
@@ -177,8 +178,9 @@ export default function InboxView({ apiToken, initialRows, selectedSid }: Props)
             </button>
 
             <div
-              style={{ flex: 1, minWidth: 0, cursor: "pointer" }}
-              onClick={() => selectLead(r.sid.trim())}
+              style={{ flex: 1, minWidth: 0, cursor: r.ghlContactUrl ? "pointer" : "default" }}
+              onClick={() => selectLead(r)}
+              title={r.ghlContactUrl ? "פתח ב-GHL" : "אין GHL contact מקושר"}
             >
               <div
                 style={{

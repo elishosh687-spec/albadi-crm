@@ -49,11 +49,15 @@ export default async function InboxWidgetPage({
       phone: leads.phoneE164,
       stage: leads.pipelineStage,
       botPaused: leads.botPaused,
+      ghlContactId: leads.ghlContactId,
       updatedAt: leads.updatedAt,
     })
     .from(leads)
     .where(eq(leads.active, true))
     .orderBy(desc(leads.updatedAt));
+
+  const ghlLocationId = process.env.GHL_LOCATION_ID ?? "";
+  const ghlBase = `https://app.gohighlevel.com/v2/location/${ghlLocationId}/contacts/detail/`;
 
   const sids = leadList.map((l) => l.sid.trim());
 
@@ -124,6 +128,7 @@ export default async function InboxWidgetPage({
         ? new Date(last.receivedAt).toISOString()
         : lead.updatedAt.toISOString(),
       inboundLast24h: unreadBySid.get(sid) ?? 0,
+      ghlContactUrl: lead.ghlContactId ? `${ghlBase}${lead.ghlContactId}` : null,
     };
   });
 
