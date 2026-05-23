@@ -92,7 +92,7 @@ export default async function HubWidgetPage({
       <nav
         style={{
           display: "flex",
-          flexWrap: "wrap",
+          flexWrap: "nowrap",
           gap: 4,
           padding: "8px 8px 0 8px",
           background: "#0d0f14",
@@ -100,6 +100,10 @@ export default async function HubWidgetPage({
           position: "sticky",
           top: 0,
           zIndex: 10,
+          overflowX: "auto",
+          overflowY: "hidden",
+          scrollbarWidth: "none",
+          WebkitOverflowScrolling: "touch",
         }}
       >
         {TABS.map((t) => {
@@ -111,8 +115,11 @@ export default async function HubWidgetPage({
               key={t.id}
               href={href}
               style={{
-                padding: "8px 12px",
+                padding: "10px 14px",
                 fontSize: 14,
+                minHeight: 44,
+                display: "flex",
+                alignItems: "center",
                 background: isActive ? "#2a2d34" : "transparent",
                 color: isActive ? "#e4e4e7" : "#a1a1aa",
                 border: "1px solid #2a2d34",
@@ -121,6 +128,7 @@ export default async function HubWidgetPage({
                 textDecoration: "none",
                 whiteSpace: "nowrap",
                 touchAction: "manipulation",
+                flexShrink: 0,
               }}
             >
               {t.label}
