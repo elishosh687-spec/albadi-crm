@@ -90,6 +90,8 @@ export const GHL_FIELD_IDS: Record<string, string> = {
   follow_up_count: readEnv("GHL_FIELD_FOLLOW_UP_COUNT"),
   next_action: readEnv("GHL_FIELD_NEXT_ACTION"),
   lead_owner: readEnv("GHL_FIELD_LEAD_OWNER"),
+  lead_score: readEnv("GHL_FIELD_LEAD_SCORE"),
+  next_action_v2: readEnv("GHL_FIELD_NEXT_ACTION_V2"),
 };
 
 // Names used when creating fields in the bootstrap script. The bootstrap

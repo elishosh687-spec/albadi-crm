@@ -156,6 +156,19 @@ export async function resyncContact(
   if (cf.next_action !== undefined) {
     updateSet.nextAction = String(cf.next_action ?? "") || null;
   }
+  // next_action_v2 (RADIO) takes precedence over the legacy TEXT field
+  if (cf.next_action_v2 !== undefined) {
+    updateSet.nextAction = String(cf.next_action_v2 ?? "") || null;
+  }
+  // Lead Score — GHL stores with emoji prefix; strip back to plain band.
+  if (cf.lead_score !== undefined) {
+    const v = String(cf.lead_score ?? "");
+    if (v.includes("HOT")) updateSet.leadScore = "HOT";
+    else if (v.includes("WARM")) updateSet.leadScore = "WARM";
+    else if (v.includes("NURTURE")) updateSet.leadScore = "NURTURE";
+    else if (v.includes("LOW")) updateSet.leadScore = "LOW";
+    else if (!v) updateSet.leadScore = null;
+  }
   if (notes.length > 0) {
     const sorted = [...notes].sort((a, b) =>
       (b.dateAdded ?? "").localeCompare(a.dateAdded ?? "")

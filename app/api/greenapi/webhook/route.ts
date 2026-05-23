@@ -48,6 +48,7 @@ import {
 import { sendEliDM } from "@/lib/notify/eli";
 import { sendBridgeMessage } from "@/lib/bridge/client";
 import { dispatchSupervisor } from "@/lib/supervisor/server/dispatch";
+import { refreshNextAction } from "@/lib/ghl/next-action";
 import {
   forwardMessage as ghlForwardMessage,
   syncLeadToGHL,
@@ -466,6 +467,17 @@ async function handleIncoming(evt: GreenWebhook): Promise<void> {
     // WON / LOST → no-op
   } catch (e) {
     console.error("[green.webhook] handler failed", e);
+  }
+
+  // Recompute next_action after handlers updated state (stage transition,
+  // draft queued, factory triggered, etc). Push the fresh value to GHL.
+  try {
+    const newAction = await refreshNextAction(canonicalSid);
+    if (newAction !== null) {
+      await syncLeadToGHL(canonicalSid);
+    }
+  } catch (e) {
+    console.warn("[green.webhook] next_action refresh failed", (e as Error).message);
   }
 }
 

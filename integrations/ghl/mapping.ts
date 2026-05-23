@@ -25,7 +25,15 @@ export interface LocalLeadSnapshot {
   followUpDate?: string | null;
   followUpCount?: number | null;
   nextAction?: string | null;
+  leadScore?: string | null;
 }
+
+const LEAD_SCORE_DB_TO_GHL: Record<string, string> = {
+  HOT: "🔥 HOT",
+  WARM: "☀️ WARM",
+  NURTURE: "🌱 NURTURE",
+  LOW: "❄️ LOW",
+};
 
 /**
  * Resolve the GHL stage id for a local lead.
@@ -106,6 +114,16 @@ export function buildCustomFieldsPayload(
     add(out, "follow_up_count", 0);
   }
   add(out, "next_action", lead.nextAction);
+  // Next Action V2 — RADIO version (12 operational enum values). Same source
+  // (leads.next_action) but pushed to the V2 GHL field so we get a typed
+  // dropdown in the UI instead of free text.
+  add(out, "next_action_v2", lead.nextAction);
+  // Lead Score — DB stores plain band (HOT/WARM/NURTURE/LOW), GHL RADIO
+  // option uses an emoji prefix. Translate on the way out.
+  if (lead.leadScore) {
+    const ghlValue = LEAD_SCORE_DB_TO_GHL[lead.leadScore.toUpperCase()];
+    if (ghlValue) add(out, "lead_score", ghlValue);
+  }
   // Lead Owner — derived from bot_paused. Single source of truth. The widget
   // toggle writes bot_paused; we mirror to GHL so the contact card shows
   // who's currently driving the lead.
