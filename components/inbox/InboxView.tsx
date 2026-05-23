@@ -176,10 +176,20 @@ export default function InboxView({ apiToken, initialRows, selectedSid }: Props)
               {busy === r.sid ? "…" : r.botPaused ? "▶️" : "⏸️"}
             </button>
 
-            <div
-              style={{ flex: 1, minWidth: 0, cursor: r.ghlContactUrl ? "pointer" : "default" }}
-              onClick={() => selectLead(r)}
-              title={r.ghlContactUrl ? "פתח ב-GHL" : "אין GHL contact מקושר"}
+            <a
+              href={r.ghlContactUrl ?? "#"}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(e) => { if (!r.ghlContactUrl) e.preventDefault(); }}
+              style={{
+                flex: 1,
+                minWidth: 0,
+                cursor: r.ghlContactUrl ? "pointer" : "default",
+                color: "inherit",
+                textDecoration: "none",
+                display: "block",
+              }}
+              title={r.ghlContactUrl ? "פתח ב-GHL (טאב חדש)" : "אין GHL contact מקושר"}
             >
               <div
                 style={{
@@ -270,7 +280,7 @@ export default function InboxView({ apiToken, initialRows, selectedSid }: Props)
                   <span style={{ color: "#52525b" }}>{r.phone}</span>
                 )}
               </div>
-            </div>
+            </a>
           </div>
         ))}
       </div>

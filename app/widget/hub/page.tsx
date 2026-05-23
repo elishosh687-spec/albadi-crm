@@ -43,7 +43,7 @@ const TABS: TabDef[] = [
   },
   {
     id: "factory",
-    label: "🏭 מפעל",
+    label: "💰 הצעות מחיר",
     url: (t, sid) => withSid(`/widget/factory-flow?widget_token=${encodeURIComponent(t)}`, sid),
   },
   {
