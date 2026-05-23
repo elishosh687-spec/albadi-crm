@@ -46,7 +46,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
-  const locationId = process.env.GHL_LOCATION_ID ?? "";
+  const locationId = (process.env.GHL_LOCATION_ID ?? "").replace(/^﻿/, "");
   const ghlBase = `https://app.gohighlevel.com/v2/location/${locationId}/contacts/detail/`;
 
   const now = new Date();

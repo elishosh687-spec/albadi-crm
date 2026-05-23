@@ -56,7 +56,7 @@ export default async function InboxWidgetPage({
     .where(eq(leads.active, true))
     .orderBy(desc(leads.updatedAt));
 
-  const ghlLocationId = process.env.GHL_LOCATION_ID ?? "";
+  const ghlLocationId = (process.env.GHL_LOCATION_ID ?? "").replace(/^﻿/, "");
   const ghlBase = `https://app.gohighlevel.com/v2/location/${ghlLocationId}/contacts/detail/`;
 
   const sids = leadList.map((l) => l.sid.trim());
