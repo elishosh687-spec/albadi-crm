@@ -8,8 +8,9 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Loader2, Search, X, User } from "lucide-react";
+import { Loader2, Search, X, User, ListChecks, Factory } from "lucide-react";
 import { FactoryQuotePanelWidget } from "./FactoryQuotePanel.widget";
+import { QuotesHistoryView } from "./QuotesHistoryView";
 import { widgetUrl } from "./widget-url";
 
 interface LeadOption {
@@ -33,7 +34,10 @@ interface LeadContext {
   };
 }
 
+type FFTab = "lead" | "history";
+
 export function FactoryFlowView({ apiToken }: { apiToken: string }) {
+  const [tab, setTab] = useState<FFTab>("lead");
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<LeadOption[]>([]);
   const [loadingResults, setLoadingResults] = useState(false);
@@ -128,6 +132,33 @@ export function FactoryFlowView({ apiToken }: { apiToken: string }) {
 
   return (
     <div className="space-y-4" dir="rtl">
+      <div className="inline-flex self-start rounded-lg border border-border bg-card/40 p-1 gap-1">
+        <button
+          type="button"
+          onClick={() => setTab("lead")}
+          className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+            tab === "lead" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-secondary hover:text-foreground"
+          }`}
+        >
+          <Factory className="size-3.5" />
+          ליד בודד
+        </button>
+        <button
+          type="button"
+          onClick={() => setTab("history")}
+          className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+            tab === "history" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-secondary hover:text-foreground"
+          }`}
+        >
+          <ListChecks className="size-3.5" />
+          כל ההצעות
+        </button>
+      </div>
+
+      {tab === "history" ? (
+        <QuotesHistoryView apiToken={apiToken} />
+      ) : (
+      <>
       <div ref={containerRef} className="relative">
         <div className="relative">
           <span className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">
@@ -251,6 +282,8 @@ export function FactoryFlowView({ apiToken }: { apiToken: string }) {
             factorySpecDraft={(context.lead.factorySpecDraft as Record<string, unknown> | null) ?? null}
           />
         </div>
+      )}
+      </>
       )}
     </div>
   );
