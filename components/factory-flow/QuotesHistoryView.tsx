@@ -1,16 +1,18 @@
 "use client";
 
 import { useEffect, useState, useMemo } from "react";
-import { ExternalLink, Search, FileText, Loader2, Download } from "lucide-react";
+import { ExternalLink, Search, Loader2, Eye, Download, Trash2, X } from "lucide-react";
+import { QuoteHtmlPreview } from "@/app/dashboard/v3/_components/factory/QuoteHtmlPreview";
+import type { FactoryQuoteRow as DashboardFactoryQuoteRow } from "@/app/dashboard/v3/_components/factory/FactoryQuotePanel";
 
-interface FactoryQuoteRow {
+interface ApiQuoteRow {
   id: string;
   leadSid: string;
   name: string | null;
   phone: string | null;
   stage: string | null;
   quotationNo: string | null;
-  status: string; // pending | received | finalized
+  status: string; // pending | received | finalized | draft
   productSpec: Record<string, unknown> | null;
   factoryResponse: Record<string, unknown> | null;
   finalPricing: Record<string, unknown> | null;
@@ -21,46 +23,50 @@ interface FactoryQuoteRow {
   ghlUrl: string | null;
 }
 
+function fmtDate(iso: string | null): string {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  return d.toLocaleDateString("he-IL", { day: "2-digit", month: "2-digit", year: "2-digit" });
+}
 function fmtMoney(v: unknown): string {
   if (v === null || v === undefined || v === "") return "—";
   const n = typeof v === "number" ? v : Number(v);
   if (Number.isNaN(n)) return "—";
   return `₪${Math.round(n).toLocaleString("he-IL")}`;
 }
-function fmtDate(iso: string | null): string {
-  if (!iso) return "—";
-  const d = new Date(iso);
-  return d.toLocaleDateString("he-IL", { day: "2-digit", month: "2-digit", year: "2-digit" }) +
-    " " + d.toLocaleTimeString("he-IL", { hour: "2-digit", minute: "2-digit" });
-}
-function specSummary(spec: Record<string, unknown> | null): string {
-  if (!spec) return "—";
-  const parts: string[] = [];
-  const desc = spec.description as string | undefined;
-  const qty = spec.quantity as number | undefined;
-  const w = spec.widthCm as number | undefined;
-  const h = spec.heightCm as number | undefined;
-  const d = spec.depthCm as number | undefined;
-  if (desc) parts.push(desc);
-  if (qty) parts.push(`${qty.toLocaleString("he-IL")} יח'`);
-  if (w && h) {
-    const dims = d ? `${w}×${h}×${d}` : `${w}×${h}`;
-    parts.push(`${dims} ס״מ`);
-  }
-  return parts.join(" · ") || "—";
-}
 const STATUS_LABEL: Record<string, { text: string; cls: string }> = {
-  pending: { text: "ממתין למפעל", cls: "bg-amber-500/15 text-amber-400" },
-  received: { text: "תשובה התקבלה", cls: "bg-blue-500/15 text-blue-400" },
-  finalized: { text: "נשלח ללקוח", cls: "bg-emerald-500/15 text-emerald-400" },
+  draft: { text: "טיוטה", cls: "bg-muted/40 text-muted-foreground border-border" },
+  pending: { text: "ממתין", cls: "bg-amber-500/15 text-amber-400 border-amber-500/30" },
+  received: { text: "התקבל", cls: "bg-blue-500/15 text-blue-400 border-blue-500/30" },
+  finalized: { text: "סופי", cls: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30" },
 };
 
+// Convert API row → dashboard FactoryQuoteRow shape for QuoteHtmlPreview.
+function toDashboardRow(r: ApiQuoteRow): DashboardFactoryQuoteRow {
+  return {
+    id: r.id,
+    manychatSubId: r.leadSid,
+    quotationNo: r.quotationNo,
+    createdAt: r.createdAt,
+    updatedAt: r.updatedAt,
+    productSpec: (r.productSpec ?? {}) as unknown as DashboardFactoryQuoteRow["productSpec"],
+    feishuRowIndex: null,
+    factoryStatus: r.status as DashboardFactoryQuoteRow["factoryStatus"],
+    factoryResponse: (r.factoryResponse ?? null) as DashboardFactoryQuoteRow["factoryResponse"],
+    finalPricing: (r.finalPricing ?? null) as DashboardFactoryQuoteRow["finalPricing"],
+    pdfUrl: r.pdfUrl,
+    sentToCustomerAt: r.sentToCustomerAt,
+    customerName: r.name,
+    customerPhone: r.phone,
+  };
+}
+
 export function QuotesHistoryView({ apiToken }: { apiToken: string }) {
-  const [data, setData] = useState<FactoryQuoteRow[] | null>(null);
+  const [data, setData] = useState<ApiQuoteRow[] | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [q, setQ] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
-  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const [opened, setOpened] = useState<ApiQuoteRow | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -110,150 +116,154 @@ export function QuotesHistoryView({ apiToken }: { apiToken: string }) {
   }
 
   return (
-    <div className="space-y-3">
-      <div className="relative">
-        <Search className="absolute right-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-        <input
-          type="search"
-          placeholder="חפש לפי שם / טלפון / מס' הצעה"
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          className="w-full rounded-lg border border-border bg-background pr-9 pl-3 py-2 text-sm text-right focus:outline-none focus:ring-2 focus:ring-ring/30"
-        />
-      </div>
+    <>
+      <div className="space-y-3">
+        <div className="relative">
+          <Search className="absolute right-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+          <input
+            type="search"
+            placeholder="חפש לפי שם / טלפון / מס' הצעה"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            className="w-full rounded-lg border border-border bg-background pr-9 pl-3 py-2 text-sm text-right focus:outline-none focus:ring-2 focus:ring-ring/30"
+          />
+        </div>
 
-      <div className="flex gap-2 flex-wrap">
-        {([
-          { id: "all", label: "הכל", n: counts.all },
-          { id: "pending", label: "ממתינים", n: counts.pending },
-          { id: "received", label: "התקבלו", n: counts.received },
-          { id: "finalized", label: "סופיים", n: counts.finalized },
-        ] as const).map((b) => (
-          <button
-            key={b.id}
-            onClick={() => setStatusFilter(b.id)}
-            className={`text-xs px-3 py-1.5 rounded-md border transition-colors ${
-              statusFilter === b.id
-                ? "bg-primary text-primary-foreground border-primary"
-                : "border-border bg-card/40 text-muted-foreground hover:bg-secondary"
-            }`}
-          >
-            {b.label} ({b.n})
-          </button>
-        ))}
-      </div>
+        <div className="flex gap-2 flex-wrap">
+          {([
+            { id: "all", label: "הכל", n: counts.all },
+            { id: "pending", label: "ממתינים", n: counts.pending },
+            { id: "received", label: "התקבלו", n: counts.received },
+            { id: "finalized", label: "סופיים", n: counts.finalized },
+          ] as const).map((b) => (
+            <button
+              key={b.id}
+              onClick={() => setStatusFilter(b.id)}
+              className={`text-xs px-3 py-1.5 rounded-md border transition-colors ${
+                statusFilter === b.id
+                  ? "bg-primary text-primary-foreground border-primary"
+                  : "border-border bg-card/40 text-muted-foreground hover:bg-secondary"
+              }`}
+            >
+              {b.label} ({b.n})
+            </button>
+          ))}
+        </div>
 
-      <div className="text-xs text-muted-foreground">
-        מציג {filtered.length} מתוך {data.length} הצעות מפעל
-      </div>
+        <div className="text-xs text-muted-foreground">
+          מציג {filtered.length} מתוך {data.length}
+        </div>
 
-      <div className="rounded-lg border border-border bg-card/40 divide-y divide-border">
-        {filtered.length === 0 ? (
-          <div className="p-6 text-center text-muted-foreground text-sm">לא נמצאו הצעות מתאימות</div>
-        ) : (
-          filtered.map((q) => {
-            const isOpen = expanded[q.id];
-            const fp = q.finalPricing ?? {};
-            const fr = q.factoryResponse ?? {};
-            return (
-              <div key={q.id} className="px-3 py-2.5">
-                <div className="flex items-start gap-3 flex-wrap">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-sm font-semibold truncate">{q.name ?? q.leadSid.slice(0, 25)}</span>
-                      <span className="text-[10px] text-muted-foreground">{q.phone ?? "—"}</span>
-                      {q.quotationNo && (
-                        <span className="text-[10px] font-mono text-muted-foreground">#{q.quotationNo}</span>
-                      )}
-                      <span className={`text-[10px] rounded-full px-1.5 py-0.5 ${STATUS_LABEL[q.status]?.cls ?? "bg-muted"}`}>
-                        {STATUS_LABEL[q.status]?.text ?? q.status}
-                      </span>
-                    </div>
-                    <div className="text-[11px] text-muted-foreground mt-0.5">
-                      נשלח למפעל: {fmtDate(q.createdAt)}
-                      {q.sentToCustomerAt && ` · ללקוח: ${fmtDate(q.sentToCustomerAt)}`}
-                    </div>
-                    <div className="text-[11px] text-muted-foreground mt-0.5">
-                      {specSummary(q.productSpec)}
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-3">
-                    <div className="text-right tabular-nums">
-                      {q.status === "finalized" && fp ? (
-                        <>
-                          <div className="text-sm font-semibold">{fmtMoney((fp as any).totalOrderPriceIls ?? (fp as any).totalPriceIls)}</div>
-                          <div className="text-[10px] text-muted-foreground">
-                            יח': {fmtMoney((fp as any).unitPriceIls)}
-                          </div>
-                        </>
-                      ) : q.status === "received" && fr ? (
-                        <div className="text-[11px] text-amber-400">
-                          ₥{(fr as any).unitCostCny ?? "?"} CNY/יח'
-                        </div>
-                      ) : (
-                        <div className="text-xs text-muted-foreground">—</div>
-                      )}
-                    </div>
-
-                    <button
-                      onClick={() => setExpanded((s) => ({ ...s, [q.id]: !s[q.id] }))}
-                      className="rounded-md border border-border bg-secondary/40 hover:bg-secondary p-1.5 transition-colors"
-                      title={isOpen ? "סגור" : "פירוט"}
-                    >
-                      <FileText className="size-3.5" />
-                    </button>
-                    {q.pdfUrl && (
-                      <a
-                        href={q.pdfUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="rounded-md border border-border bg-secondary/40 hover:bg-secondary p-1.5 transition-colors"
-                        title="הורד PDF"
-                      >
-                        <Download className="size-3.5" />
-                      </a>
-                    )}
-                    {q.ghlUrl && (
-                      <a
-                        href={q.ghlUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="rounded-md border border-border bg-secondary/40 hover:bg-secondary p-1.5 transition-colors"
-                        title="פתח ב-GHL"
-                      >
-                        <ExternalLink className="size-3.5" />
-                      </a>
-                    )}
-                  </div>
+        <ul className="space-y-1">
+          {filtered.length === 0 ? (
+            <li className="p-6 text-center text-muted-foreground text-sm rounded-lg border border-border bg-card/40">
+              לא נמצאו הצעות מתאימות
+            </li>
+          ) : (
+            filtered.map((r) => (
+              <li
+                key={r.id}
+                className="flex items-center justify-between gap-2 rounded-md border border-border/60 bg-background/40 px-3 py-2"
+              >
+                <div className="flex items-center gap-2 min-w-0 flex-1 flex-wrap">
+                  <span className="text-[11px] text-muted-foreground tabular-nums shrink-0">
+                    {fmtDate(r.createdAt)}
+                  </span>
+                  <span className="text-[11px] font-mono text-muted-foreground shrink-0">
+                    {r.quotationNo ?? r.id.slice(-6)}
+                  </span>
+                  <span className={`text-[10px] rounded-full border px-1.5 py-0.5 shrink-0 ${STATUS_LABEL[r.status]?.cls ?? "bg-muted"}`}>
+                    {STATUS_LABEL[r.status]?.text ?? r.status}
+                  </span>
+                  <span className="text-sm font-medium truncate min-w-0">
+                    {r.name ?? r.leadSid.slice(0, 20)}
+                  </span>
+                  {r.status === "finalized" && r.finalPricing && (
+                    <span className="text-[11px] tabular-nums text-emerald-400 shrink-0">
+                      {fmtMoney((r.finalPricing as any).totalOrderPriceIls ?? (r.finalPricing as any).totalSellingPrice)}
+                    </span>
+                  )}
                 </div>
-                {isOpen && (
-                  <div className="mt-3 grid grid-cols-1 md:grid-cols-3 gap-3 text-[11px]">
-                    <Detail title="📦 spec ללקוח" obj={q.productSpec} />
-                    <Detail title="🏭 תשובת מפעל" obj={q.factoryResponse} />
-                    <Detail title="💰 תמחור סופי" obj={q.finalPricing} />
-                  </div>
-                )}
-              </div>
-            );
-          })
-        )}
+                <div className="flex items-center gap-0.5 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => setOpened(r)}
+                    title="פתח מפרט מלא"
+                    className="size-7 rounded grid place-items-center text-muted-foreground hover:text-foreground hover:bg-secondary"
+                  >
+                    <Eye className="size-3.5" />
+                  </button>
+                  {r.pdfUrl && (
+                    <a
+                      href={r.pdfUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      title="הורד PDF"
+                      className="size-7 rounded grid place-items-center text-muted-foreground hover:text-foreground hover:bg-secondary"
+                    >
+                      <Download className="size-3.5" />
+                    </a>
+                  )}
+                  {r.ghlUrl && (
+                    <a
+                      href={r.ghlUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      title="פתח ב-GHL"
+                      className="size-7 rounded grid place-items-center text-muted-foreground hover:text-foreground hover:bg-secondary"
+                    >
+                      <ExternalLink className="size-3.5" />
+                    </a>
+                  )}
+                </div>
+              </li>
+            ))
+          )}
+        </ul>
       </div>
-    </div>
+
+      {opened && <QuoteModal row={opened} onClose={() => setOpened(null)} />}
+    </>
   );
 }
 
-function Detail({ title, obj }: { title: string; obj: Record<string, unknown> | null }) {
-  if (!obj) return (
-    <div className="rounded-md bg-background/40 border border-border p-2">
-      <div className="font-semibold mb-1">{title}</div>
-      <div className="text-muted-foreground">—</div>
-    </div>
-  );
+function QuoteModal({ row, onClose }: { row: ApiQuoteRow; onClose: () => void }) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
   return (
-    <div className="rounded-md bg-background/40 border border-border p-2">
-      <div className="font-semibold mb-1">{title}</div>
-      <pre className="whitespace-pre-wrap text-muted-foreground text-[10px] leading-snug overflow-x-auto">{JSON.stringify(obj, null, 2)}</pre>
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+      onClick={onClose}
+    >
+      <div
+        className="relative w-full max-w-3xl max-h-[90vh] rounded-lg border border-border bg-card flex flex-col overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
+        dir="rtl"
+      >
+        <div className="flex items-center justify-between px-4 py-2 border-b border-border bg-card/80">
+          <div className="text-sm font-semibold">
+            {row.name ?? row.leadSid.slice(0, 25)}
+            <span className="text-[11px] text-muted-foreground font-mono mx-2">
+              #{row.quotationNo ?? row.id.slice(-6)}
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="size-7 rounded grid place-items-center hover:bg-secondary"
+          >
+            <X className="size-4" />
+          </button>
+        </div>
+        <div className="flex-1 overflow-auto">
+          <QuoteHtmlPreview row={toDashboardRow(row)} />
+        </div>
+      </div>
     </div>
   );
 }
