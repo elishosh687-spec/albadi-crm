@@ -7,8 +7,29 @@ import {
   requireGHLToken,
   requireGHLLocationId,
 } from "./config";
+import { getValidAccessToken } from "./oauth";
 
 type Query = Record<string, string | number | boolean | undefined>;
+
+// Tiny in-process cache so we don't hit the DB on every ghlFetch call.
+// OAuth access tokens are 24h; we cache for 60s to balance freshness vs load.
+let oauthCache: { token: string; expiresAt: number } | null = null;
+async function resolveDefaultToken(): Promise<string> {
+  const now = Date.now();
+  if (oauthCache && oauthCache.expiresAt > now) return oauthCache.token;
+  try {
+    const locationId = requireGHLLocationId();
+    const tok = await getValidAccessToken(locationId);
+    if (tok) {
+      oauthCache = { token: tok, expiresAt: now + 60_000 };
+      return tok;
+    }
+  } catch {
+    // fall through to PIT
+  }
+  // Fallback to PIT if OAuth not set up (legacy).
+  return requireGHLToken();
+}
 
 async function ghlFetch<T = unknown>(
   path: string,
@@ -22,7 +43,7 @@ async function ghlFetch<T = unknown>(
     }
   }
   const headers = new Headers(init.headers);
-  const token = init.accessToken ?? requireGHLToken();
+  const token = init.accessToken ?? (await resolveDefaultToken());
   headers.set("Authorization", `Bearer ${token}`);
   headers.set("Version", GHL_API_VERSION);
   headers.set("Accept", "application/json");
