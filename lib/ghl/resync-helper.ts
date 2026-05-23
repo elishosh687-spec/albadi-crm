@@ -128,9 +128,19 @@ export async function resyncContact(
     updateSet.quoteTotal = n === null || n === "" ? null : String(n);
   }
   if (cf.loss_reason !== undefined) updateSet.lossReason = String(cf.loss_reason ?? "") || null;
-  // bot_paused / lead_owner intentionally NOT mirrored from GHL here (race
-  // condition between widget toggle and stale push). Handled by the narrow
-  // /api/integrations/inbound/ghl-custom-field webhook instead.
+  // Lead Owner (RADIO) → bot_paused. The original race risk (widget toggle
+  // pushing during a mid-deploy code update) is gone now that the mapping is
+  // stable. Re-enabled so a GHL UI toggle of Lead Owner correctly flows back
+  // to DB via either the resync workflow or the native app-webhook.
+  if (cf.lead_owner !== undefined) {
+    const v = String(cf.lead_owner ?? "");
+    if (v.includes("Eli")) updateSet.botPaused = true;
+    else if (v.includes("Bot")) updateSet.botPaused = false;
+  } else if (cf.bot_paused !== undefined) {
+    // Legacy fallback if old Bot Paused field is still set.
+    const v = cf.bot_paused;
+    updateSet.botPaused = v === "Paused" || v === true || v === "true";
+  }
   if (cf.follow_up_date !== undefined) {
     const v = cf.follow_up_date;
     updateSet.followUpDate = v === null || v === "" ? null : String(v);
