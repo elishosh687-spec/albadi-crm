@@ -31,22 +31,34 @@ function dimensionsHe(spec: FactoryQuoteRow["productSpec"]): string {
   return parts.length ? `${parts.join(" × ")} ס"מ` : "";
 }
 
-let cachedCfg: Promise<FactoryPricingConfig | null> | null = null;
-function fetchCfg(): Promise<FactoryPricingConfig | null> {
-  if (cachedCfg) return cachedCfg;
-  cachedCfg = fetch("/api/factory/config")
+const cfgCache = new Map<string, Promise<FactoryPricingConfig | null>>();
+function fetchCfg(widgetToken?: string): Promise<FactoryPricingConfig | null> {
+  const key = widgetToken ?? "";
+  const cached = cfgCache.get(key);
+  if (cached) return cached;
+  const url = widgetToken
+    ? `/api/factory/config?widget_token=${encodeURIComponent(widgetToken)}`
+    : "/api/factory/config";
+  const p = fetch(url)
     .then((r) => r.json())
     .then((d) => (d?.ok && d?.config ? (d.config as FactoryPricingConfig) : null))
     .catch(() => null);
-  return cachedCfg;
+  cfgCache.set(key, p);
+  return p;
 }
 
-export function QuoteHtmlPreview({ row }: { row: FactoryQuoteRow }) {
+export function QuoteHtmlPreview({
+  row,
+  widgetToken,
+}: {
+  row: FactoryQuoteRow;
+  widgetToken?: string;
+}) {
   const [mode, setMode] = useState<"customer" | "internal">("customer");
   const [cfg, setCfg] = useState<FactoryPricingConfig | null>(null);
   useEffect(() => {
-    if (mode === "internal" && !cfg) fetchCfg().then(setCfg);
-  }, [mode, cfg]);
+    if (mode === "internal" && !cfg) fetchCfg(widgetToken).then(setCfg);
+  }, [mode, cfg, widgetToken]);
 
   const p = row.finalPricing;
   if (!p) {

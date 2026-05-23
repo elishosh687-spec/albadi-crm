@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useMemo } from "react";
-import { ExternalLink, Search, Loader2, Eye, Download, Trash2, X } from "lucide-react";
+import { ExternalLink, Search, Loader2, Eye, Download, Trash2, X, MessageCircle } from "lucide-react";
 import { QuoteHtmlPreview } from "@/app/dashboard/v3/_components/factory/QuoteHtmlPreview";
 import type { FactoryQuoteRow as DashboardFactoryQuoteRow } from "@/app/dashboard/v3/_components/factory/FactoryQuotePanel";
 
@@ -67,6 +67,54 @@ export function QuotesHistoryView({ apiToken }: { apiToken: string }) {
   const [q, setQ] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [opened, setOpened] = useState<ApiQuoteRow | null>(null);
+  const [busyId, setBusyId] = useState<string | null>(null);
+
+  async function refresh() {
+    try {
+      const r = await fetch(`/api/widget/quotes/list?widget_token=${encodeURIComponent(apiToken)}&limit=300`);
+      const j = await r.json();
+      setData(j.quotes);
+    } catch {}
+  }
+
+  async function handleDelete(r: ApiQuoteRow) {
+    if (!confirm(`למחוק את הצעה #${r.quotationNo ?? r.id.slice(-6)}? פעולה לא הפיכה.`)) return;
+    setBusyId(r.id);
+    try {
+      const res = await fetch(
+        `/api/factory/${r.id}?widget_token=${encodeURIComponent(apiToken)}`,
+        { method: "DELETE" }
+      );
+      const j = await res.json().catch(() => ({}));
+      if (!j?.ok) {
+        alert(`שגיאה במחיקה: ${j?.error ?? res.status}`);
+        return;
+      }
+      await refresh();
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function handleSendWhatsApp(r: ApiQuoteRow) {
+    if (!confirm(`לשלוח את ההצעה ל-${r.name ?? "לקוח"} ב-WhatsApp?`)) return;
+    setBusyId(r.id);
+    try {
+      const res = await fetch(
+        `/api/factory/${r.id}/send-whatsapp?widget_token=${encodeURIComponent(apiToken)}`,
+        { method: "POST" }
+      );
+      const j = await res.json().catch(() => ({}));
+      if (!j?.ok) {
+        alert(`שגיאה בשליחה: ${j?.error ?? j?.detail ?? res.status}`);
+        return;
+      }
+      alert("נשלח בהצלחה ✓");
+      await refresh();
+    } finally {
+      setBusyId(null);
+    }
+  }
 
   useEffect(() => {
     (async () => {
@@ -189,7 +237,8 @@ export function QuotesHistoryView({ apiToken }: { apiToken: string }) {
                     type="button"
                     onClick={() => setOpened(r)}
                     title="פתח מפרט מלא"
-                    className="size-7 rounded grid place-items-center text-muted-foreground hover:text-foreground hover:bg-secondary"
+                    disabled={busyId === r.id}
+                    className="size-7 rounded grid place-items-center text-muted-foreground hover:text-foreground hover:bg-secondary disabled:opacity-50"
                   >
                     <Eye className="size-3.5" />
                   </button>
@@ -204,6 +253,26 @@ export function QuotesHistoryView({ apiToken }: { apiToken: string }) {
                       <Download className="size-3.5" />
                     </a>
                   )}
+                  {r.status === "finalized" && (
+                    <button
+                      type="button"
+                      onClick={() => handleSendWhatsApp(r)}
+                      disabled={busyId === r.id}
+                      title="שלח ללקוח ב-WhatsApp"
+                      className="size-7 rounded grid place-items-center text-muted-foreground hover:text-emerald-400 hover:bg-emerald-500/10 disabled:opacity-50"
+                    >
+                      {busyId === r.id ? <Loader2 className="size-3.5 animate-spin" /> : <MessageCircle className="size-3.5" />}
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => handleDelete(r)}
+                    disabled={busyId === r.id}
+                    title="מחק הצעה"
+                    className="size-7 rounded grid place-items-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 disabled:opacity-50"
+                  >
+                    <Trash2 className="size-3.5" />
+                  </button>
                   {r.ghlUrl && (
                     <a
                       href={r.ghlUrl}
@@ -222,12 +291,12 @@ export function QuotesHistoryView({ apiToken }: { apiToken: string }) {
         </ul>
       </div>
 
-      {opened && <QuoteModal row={opened} onClose={() => setOpened(null)} />}
+      {opened && <QuoteModal row={opened} onClose={() => setOpened(null)} widgetToken={apiToken} />}
     </>
   );
 }
 
-function QuoteModal({ row, onClose }: { row: ApiQuoteRow; onClose: () => void }) {
+function QuoteModal({ row, onClose, widgetToken }: { row: ApiQuoteRow; onClose: () => void; widgetToken: string }) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
@@ -261,7 +330,7 @@ function QuoteModal({ row, onClose }: { row: ApiQuoteRow; onClose: () => void })
           </button>
         </div>
         <div className="flex-1 overflow-auto">
-          <QuoteHtmlPreview row={toDashboardRow(row)} />
+          <QuoteHtmlPreview row={toDashboardRow(row)} widgetToken={widgetToken} />
         </div>
       </div>
     </div>

@@ -45,14 +45,15 @@ export function middleware(req: NextRequest) {
     return NextResponse.next();
   }
 
-  // Widgets calling /api/factory/quote-preview need a backdoor — accept
-  // ?widget_token=<value> matching GHL_WIDGET_TOKEN. GET only, no writes.
+  // Widgets calling /api/factory/* need a backdoor — accept
+  // ?widget_token=<value> matching GHL_WIDGET_TOKEN. All methods now
+  // allowed (DELETE/POST too) so the Quotes History widget can delete
+  // rows and send WhatsApp PDFs from inside the GHL iframe.
   const widgetTokenQuery = req.nextUrl.searchParams.get("widget_token");
   const expectedWidgetToken = stripBom(process.env.GHL_WIDGET_TOKEN);
   if (
     expectedWidgetToken &&
     widgetTokenQuery === expectedWidgetToken &&
-    req.method === "GET" &&
     path.startsWith("/api/factory/")
   ) {
     return NextResponse.next();
