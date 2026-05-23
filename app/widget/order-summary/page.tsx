@@ -10,12 +10,13 @@
  */
 import { db } from "@/lib/db";
 import { leads, leadTags } from "@/drizzle/schema";
-import { eq, sql } from "drizzle-orm";
+import { eq, sql, desc } from "drizzle-orm";
 import { verifyWidgetToken } from "@/integrations/ghl/widget-auth";
 import {
   OrderSummaryView,
   type OrderSummaryWidgetData,
 } from "@/components/order-summary/OrderSummaryView";
+import { OrderLeadPicker, type LeadOption } from "@/components/order-summary/OrderLeadPicker";
 
 export const dynamic = "force-dynamic";
 
@@ -105,19 +106,17 @@ export default async function OrderSummaryWidgetPage({
   const contactId = params.contactId?.trim() ?? "";
   const sid = params.sid?.trim() ?? "";
   if (!contactId && !sid) {
-    return (
-      <div style={{ padding: 24, color: "#a1a1aa", direction: "rtl" }}>
-        <h2 style={{ marginTop: 0, color: "#e4e4e7" }}>תצוגת הזמנה</h2>
-        <p>
-          לשונית זו מציגה את נתוני ההזמנה של ליד נבחר (qState, מחיר, factory
-          spec, הערות). פתח אותה דרך כרטיס הקונטקט ב-GHL — Custom Menu Link
-          מעביר את <code>contactId</code> אוטומטית.
-        </p>
-        <p style={{ marginTop: 12, fontSize: 13 }}>
-          ליצירת הצעה חדשה — השתמש בלשונית <strong>🧮 מחשבון</strong>.
-        </p>
-      </div>
-    );
+    const opts = await db
+      .select({
+        sid: leads.manychatSubId,
+        name: leads.name,
+        phone: leads.phoneE164,
+        stage: leads.pipelineStage,
+      })
+      .from(leads)
+      .where(eq(leads.active, true))
+      .orderBy(desc(leads.updatedAt));
+    return <OrderLeadPicker apiToken={token} options={opts as LeadOption[]} />;
   }
 
   let data: OrderSummaryWidgetData | null = null;
