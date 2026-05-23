@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useState, useMemo } from "react";
-import { ExternalLink, Search, Loader2, Eye, Download, Trash2, X, MessageCircle } from "lucide-react";
+import { ExternalLink, Search, Loader2, Eye, Download, Trash2, X, MessageCircle, Calculator } from "lucide-react";
 import { QuoteHtmlPreview } from "@/app/dashboard/v3/_components/factory/QuoteHtmlPreview";
 import type { FactoryQuoteRow as DashboardFactoryQuoteRow } from "@/app/dashboard/v3/_components/factory/FactoryQuotePanel";
+import { FinalizeModalWidget } from "./FinalizeModal.widget";
 
 interface ApiQuoteRow {
   id: string;
@@ -67,6 +68,7 @@ export function QuotesHistoryView({ apiToken }: { apiToken: string }) {
   const [q, setQ] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [opened, setOpened] = useState<ApiQuoteRow | null>(null);
+  const [finalizing, setFinalizing] = useState<ApiQuoteRow | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
 
   async function refresh() {
@@ -253,6 +255,18 @@ export function QuotesHistoryView({ apiToken }: { apiToken: string }) {
                       <Download className="size-3.5" />
                     </a>
                   )}
+                  {r.status === "received" && !r.finalPricing && (
+                    <button
+                      type="button"
+                      onClick={() => setFinalizing(r)}
+                      disabled={busyId === r.id}
+                      title="חשב הצעת מחיר"
+                      className="px-2 h-7 rounded grid place-items-center text-xs font-medium text-primary hover:bg-primary/10 border border-primary/30 disabled:opacity-50 flex items-center gap-1"
+                    >
+                      <Calculator className="size-3.5" />
+                      חשב
+                    </button>
+                  )}
                   {r.status === "finalized" && (
                     <button
                       type="button"
@@ -292,6 +306,17 @@ export function QuotesHistoryView({ apiToken }: { apiToken: string }) {
       </div>
 
       {opened && <QuoteModal row={opened} onClose={() => setOpened(null)} widgetToken={apiToken} />}
+      {finalizing && (
+        <FinalizeModalWidget
+          apiToken={apiToken}
+          row={toDashboardRow(finalizing)}
+          onClose={() => setFinalizing(null)}
+          onFinalized={async () => {
+            setFinalizing(null);
+            await refresh();
+          }}
+        />
+      )}
     </>
   );
 }

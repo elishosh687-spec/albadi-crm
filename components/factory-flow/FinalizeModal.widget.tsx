@@ -50,7 +50,25 @@ export function FinalizeModalWidget({
             const first = (data.config.shippingOptions as ShippingOption[]).find((s) => s.enabled);
             if (first) setShippingOptionId(first.id);
           }
-          if (margin < MARGIN_MIN || margin > MARGIN_MAX) {
+          // Fresh finalize → snap-down to per-qty margin matrix.
+          // Re-finalize → keep existing.
+          if (!row.finalPricing) {
+            const cfg = data.config as FactoryPricingConfig;
+            const matrix = cfg.profitMarginByQuantity;
+            if (matrix && Object.keys(matrix).length > 0) {
+              const qty = row.productSpec.quantity;
+              if (matrix[String(qty)] !== undefined) {
+                setMargin(matrix[String(qty)]);
+              } else {
+                const keys = Object.keys(matrix).map(Number).sort((a, b) => a - b);
+                let best = keys[0];
+                for (const k of keys) if (k <= qty) best = k;
+                setMargin(matrix[String(best)] ?? cfg.defaultProfitMargin);
+              }
+            } else if (cfg.defaultProfitMargin !== undefined) {
+              setMargin(cfg.defaultProfitMargin);
+            }
+          } else if (margin < MARGIN_MIN || margin > MARGIN_MAX) {
             setMargin(Math.min(MARGIN_MAX, Math.max(MARGIN_MIN, data.config.defaultProfitMargin)));
           }
         }
