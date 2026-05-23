@@ -1,11 +1,14 @@
 /**
  * GET /api/widget/quotes/list
- * Returns every quote ever sent (bot_quotes) joined with lead name + GHL link.
+ * Returns every factory quote request (factory_quote_requests) joined with
+ * lead name + GHL link. Status: pending (sent to factory, waiting),
+ * received (factory replied), finalized (Eli sent to customer).
+ *
  * Auth: widget_token query param.
  */
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { botQuotes, leads } from "@/drizzle/schema";
+import { factoryQuoteRequests, leads } from "@/drizzle/schema";
 import { desc, sql } from "drizzle-orm";
 import { verifyWidgetToken } from "@/integrations/ghl/widget-auth";
 
@@ -17,51 +20,48 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
   const limit = Math.min(Number(req.nextUrl.searchParams.get("limit") ?? "200"), 500);
-  const q = (req.nextUrl.searchParams.get("q") ?? "").trim();
 
   const locationId = (process.env.GHL_LOCATION_ID ?? "").replace(/^﻿/, "");
   const ghlBase = `https://app.gohighlevel.com/v2/location/${locationId}/contacts/detail/`;
 
   const rows = await db
     .select({
-      id: botQuotes.id,
-      leadSid: botQuotes.leadSid,
-      source: botQuotes.source,
-      quoteText: botQuotes.quoteText,
-      quoteTotalIls: botQuotes.quoteTotalIls,
-      quoteAltTotalIls: botQuotes.quoteAltTotalIls,
-      qState: botQuotes.qState,
-      sentAt: botQuotes.sentAt,
+      id: factoryQuoteRequests.id,
+      leadSid: factoryQuoteRequests.manychatSubId,
+      quotationNo: factoryQuoteRequests.quotationNo,
+      productSpec: factoryQuoteRequests.productSpec,
+      factoryStatus: factoryQuoteRequests.factoryStatus,
+      factoryResponse: factoryQuoteRequests.factoryResponse,
+      finalPricing: factoryQuoteRequests.finalPricing,
+      pdfUrl: factoryQuoteRequests.pdfUrl,
+      sentToCustomerAt: factoryQuoteRequests.sentToCustomerAt,
+      createdAt: factoryQuoteRequests.createdAt,
+      updatedAt: factoryQuoteRequests.updatedAt,
       name: leads.name,
       phone: leads.phoneE164,
       stage: leads.pipelineStage,
       ghlContactId: leads.ghlContactId,
     })
-    .from(botQuotes)
-    .leftJoin(leads, sql`trim(${leads.manychatSubId}) = trim(${botQuotes.leadSid})`)
-    .orderBy(desc(botQuotes.sentAt))
+    .from(factoryQuoteRequests)
+    .leftJoin(leads, sql`trim(${leads.manychatSubId}) = trim(${factoryQuoteRequests.manychatSubId})`)
+    .orderBy(desc(factoryQuoteRequests.createdAt))
     .limit(limit);
 
-  const filtered = q
-    ? rows.filter((r) =>
-        (r.name ?? "").toLowerCase().includes(q.toLowerCase()) ||
-        (r.phone ?? "").includes(q) ||
-        r.leadSid.toLowerCase().includes(q.toLowerCase())
-      )
-    : rows;
-
-  const out = filtered.map((r) => ({
+  const out = rows.map((r) => ({
     id: r.id,
     leadSid: r.leadSid,
     name: r.name,
     phone: r.phone,
     stage: r.stage,
-    source: r.source,
-    quoteTotalIls: r.quoteTotalIls,
-    quoteAltTotalIls: r.quoteAltTotalIls,
-    qState: r.qState,
-    quoteText: r.quoteText,
-    sentAt: r.sentAt.toISOString(),
+    quotationNo: r.quotationNo,
+    status: r.factoryStatus,
+    productSpec: r.productSpec,
+    factoryResponse: r.factoryResponse,
+    finalPricing: r.finalPricing,
+    pdfUrl: r.pdfUrl,
+    sentToCustomerAt: r.sentToCustomerAt?.toISOString() ?? null,
+    createdAt: r.createdAt.toISOString(),
+    updatedAt: r.updatedAt.toISOString(),
     ghlUrl: r.ghlContactId ? `${ghlBase}${r.ghlContactId}` : null,
   }));
 
