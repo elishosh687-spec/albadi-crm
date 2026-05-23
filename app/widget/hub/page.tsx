@@ -51,11 +51,6 @@ const TABS: TabDef[] = [
     label: "🧮 מחשבון",
     url: (t, sid) => withSid(`/widget/calculator?widget_token=${encodeURIComponent(t)}`, sid),
   },
-  {
-    id: "order",
-    label: "📋 הזמנה",
-    url: (t, sid) => withSid(`/widget/order-summary?widget_token=${encodeURIComponent(t)}`, sid),
-  },
 ];
 
 export default async function HubWidgetPage({
