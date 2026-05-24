@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
-import { Loader2, Send, Copy, Check } from "lucide-react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { Loader2, Send, Copy, Check, Search, X } from "lucide-react";
 import { cn } from "@/lib/cn";
 import type { Product, QuantityTier, ShippingOption, QuoteResult } from "@/lib/factory/calculator/types";
 import { DetailedBreakdown } from "./DetailedBreakdown";
@@ -629,6 +629,14 @@ function buildQuoteText(opts: {
   return lines.filter((l) => l !== null).join("\n");
 }
 
+interface LeadPickerOption {
+  sid: string;
+  name: string | null;
+  phone: string | null;
+  stage: string | null;
+  updatedAt: string;
+}
+
 function QuoteShareCard({
   apiToken,
   sid,
@@ -645,6 +653,85 @@ function QuoteShareCard({
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  // Lead picker — defaults to the URL-provided sid/leadName when the widget
+  // was opened from a contact card, but Eli can always switch to any other
+  // lead from inside the calculator (e.g. when bouncing between calls).
+  const [pickedSid, setPickedSid] = useState<string | null>(sid ?? null);
+  const [pickedName, setPickedName] = useState<string | null>(leadName ?? null);
+  const [query, setQuery] = useState("");
+  const [open, setOpen] = useState(false);
+  const [results, setResults] = useState<LeadPickerOption[]>([]);
+  const [loadingResults, setLoadingResults] = useState(false);
+  const debounceRef = useRef<NodeJS.Timeout | null>(null);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+
+  // Keep picker in sync if the URL-provided sid changes (e.g. parent
+  // reloads with a different contactId).
+  useEffect(() => {
+    if (sid && sid !== pickedSid) {
+      setPickedSid(sid);
+      setPickedName(leadName ?? null);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sid, leadName]);
+
+  const runSearch = useCallback(
+    async (q: string) => {
+      if (!apiToken) return;
+      setLoadingResults(true);
+      try {
+        const res = await fetch(
+          `/api/widget/leads/recent?widget_token=${encodeURIComponent(apiToken)}&q=${encodeURIComponent(q)}`
+        );
+        const data = await res.json();
+        if (data?.ok) setResults(data.leads || []);
+      } catch {
+        // ignore — picker just stays empty
+      } finally {
+        setLoadingResults(false);
+      }
+    },
+    [apiToken]
+  );
+
+  useEffect(() => {
+    if (!open) return;
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => runSearch(query.trim()), 200);
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, [query, open, runSearch]);
+
+  // Close picker on outside click.
+  useEffect(() => {
+    if (!open) return;
+    const onDocClick = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", onDocClick);
+    return () => document.removeEventListener("mousedown", onDocClick);
+  }, [open]);
+
+  const pickLead = (lead: LeadPickerOption) => {
+    setPickedSid(lead.sid);
+    setPickedName(lead.name);
+    setOpen(false);
+    setQuery("");
+    setStatus(null);
+    setError(null);
+  };
+
+  const clearLead = () => {
+    setPickedSid(null);
+    setPickedName(null);
+    setStatus(null);
+    setError(null);
+    setOpen(true);
+  };
+
   const copy = async () => {
     try {
       await navigator.clipboard.writeText(quoteText);
@@ -656,8 +743,8 @@ function QuoteShareCard({
   };
 
   const send = async () => {
-    if (!sid || !apiToken) return;
-    if (!confirm(`לשלוח את ההצעה ל-${leadName ?? "לקוח"} ב-WhatsApp?`)) return;
+    if (!pickedSid || !apiToken) return;
+    if (!confirm(`לשלוח את ההצעה ל-${pickedName ?? "לקוח"} ב-WhatsApp?`)) return;
     setSending(true);
     setStatus(null);
     setError(null);
@@ -667,7 +754,7 @@ function QuoteShareCard({
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ sid, text: quoteText }),
+          body: JSON.stringify({ sid: pickedSid, text: quoteText }),
         }
       );
       const j = await res.json().catch(() => ({}));
@@ -675,7 +762,7 @@ function QuoteShareCard({
         setError(j?.error ?? `HTTP ${res.status}`);
         return;
       }
-      setStatus("נשלח בהצלחה ✓");
+      setStatus(`נשלח ל-${pickedName ?? "לקוח"} בהצלחה ✓`);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -699,8 +786,8 @@ function QuoteShareCard({
           <button
             type="button"
             onClick={send}
-            disabled={!sid || !apiToken || sending}
-            title={!sid ? "פתח את הוידג'ט מתוך כרטיס לקוח כדי לאפשר שליחה" : undefined}
+            disabled={!pickedSid || !apiToken || sending}
+            title={!pickedSid ? "בחר ליד כדי לאפשר שליחה" : undefined}
             className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
           >
             {sending ? <Loader2 className="size-3.5 animate-spin" /> : <Send className="size-3.5" />}
@@ -708,16 +795,85 @@ function QuoteShareCard({
           </button>
         </div>
       </div>
+
+      {/* Lead picker */}
+      <div ref={containerRef} className="relative">
+        {pickedSid && !open ? (
+          <div className="flex items-center justify-between gap-2 rounded-md border border-border bg-background/40 px-3 py-2">
+            <div className="min-w-0 flex-1">
+              <div className="text-xs font-medium truncate">
+                {pickedName ?? "(ללא שם)"}
+              </div>
+              <div className="text-[11px] text-muted-foreground truncate tabular-nums">
+                sid {pickedSid}
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={clearLead}
+              title="בחר ליד אחר"
+              className="size-6 rounded grid place-items-center text-muted-foreground hover:text-foreground hover:bg-secondary shrink-0"
+            >
+              <X className="size-3.5" />
+            </button>
+          </div>
+        ) : (
+          <div className="relative">
+            <Search className="absolute right-3 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground" />
+            <input
+              type="text"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              onFocus={() => {
+                setOpen(true);
+                if (results.length === 0) runSearch(query.trim());
+              }}
+              placeholder="חפש ליד לפי שם / טלפון / sid"
+              className="w-full rounded-md border border-border bg-background pr-8 pl-3 py-1.5 text-xs text-right focus:outline-none focus:ring-2 focus:ring-ring/30"
+            />
+          </div>
+        )}
+        {open && (
+          <div className="absolute z-30 mt-1 w-full rounded-md border border-border bg-popover shadow-xl max-h-72 overflow-auto">
+            {loadingResults ? (
+              <div className="px-3 py-4 text-[11px] text-muted-foreground flex items-center gap-2 justify-center">
+                <Loader2 className="size-3 animate-spin" />
+                טוען…
+              </div>
+            ) : results.length === 0 ? (
+              <div className="px-3 py-4 text-[11px] text-muted-foreground text-center">
+                לא נמצאו לידים.
+              </div>
+            ) : (
+              <ul className="divide-y divide-border/60">
+                {results.map((r) => (
+                  <li key={r.sid}>
+                    <button
+                      type="button"
+                      onClick={() => pickLead(r)}
+                      className="w-full px-3 py-2 text-right hover:bg-accent flex items-center justify-between gap-2"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <div className="text-xs font-medium truncate">{r.name || "(ללא שם)"}</div>
+                        <div className="text-[10px] text-muted-foreground tabular-nums truncate">
+                          {r.phone || r.sid}
+                          {r.stage ? ` · ${r.stage}` : ""}
+                        </div>
+                      </div>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
+      </div>
+
       <textarea
         readOnly
         value={quoteText}
         className="w-full min-h-[220px] bg-background/30 border border-border rounded-md px-3 py-2 text-xs leading-relaxed font-mono whitespace-pre-wrap focus:outline-none"
       />
-      {!sid && (
-        <p className="text-[11px] text-muted-foreground">
-          ⚠️ ללא ליד מקושר — שליחה ב-WhatsApp מושבתת. אפשר עדיין להעתיק את הטקסט.
-        </p>
-      )}
       {status && <p className="text-[11px] text-success">{status}</p>}
       {error && <p className="text-[11px] text-destructive">⚠️ {error}</p>}
     </section>
