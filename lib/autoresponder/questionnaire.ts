@@ -628,6 +628,44 @@ export async function kickstartQuestionnaire(sid: string): Promise<void> {
 }
 
 /**
+ * Treat a lead as brand new: clear every bot-side field that survives across
+ * runs (FSM state, follow-up bookkeeping, draft factory spec, pipeline stage,
+ * cached money figures, summary, loss reason) and then re-trigger the
+ * questionnaire from question 1. Conversation history in `messages` is left
+ * alone so context isn't destroyed. Used by the GHL "restart questionnaire"
+ * tag webhook.
+ */
+export async function resetLeadAndRestart(
+  sid: string,
+  transitionText?: string
+): Promise<void> {
+  const ctx = await loadLeadCtx(sid);
+  if (!ctx) throw new Error("lead not found");
+  await db
+    .update(leads)
+    .set({
+      factorySpecDraft: null,
+      pipelineStage: null,
+      pipelineFlag: null,
+      botSummary: null,
+      quoteTotal: null,
+      quoteAlt: null,
+      followUpDate: null,
+      followUpCount: 0,
+      lossReason: null,
+      nextAction: null,
+      botPaused: false,
+      lastFollowUpAt: new Date(),
+      updatedAt: new Date(),
+    })
+    .where(sql`trim(${leads.manychatSubId}) = ${ctx.sid.trim()}`);
+  await restartQuestionnaire(
+    sid,
+    transitionText ?? "מתחילים מחדש 🙂 בואו נמלא יחד שאלון קצר כדי לבנות לך הצעת מחיר."
+  );
+}
+
+/**
  * Force-restart the questionnaire from the first question (shipping). Resets
  * qState, sends a transition note + OPENING + the first poll. Safe to invoke
  * mid-flow — the new state overrides whatever step the lead was on. Used by

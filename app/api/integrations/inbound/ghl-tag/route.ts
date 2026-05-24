@@ -28,6 +28,8 @@ import { db } from "@/lib/db";
 import { leads, leadTags } from "@/drizzle/schema";
 import { and, eq, sql } from "drizzle-orm";
 import { GHL_INBOUND_SECRET } from "@/integrations/ghl/config";
+import { resetLeadAndRestart } from "@/lib/autoresponder/questionnaire";
+import { removeContactTags } from "@/integrations/ghl/client";
 
 export const runtime = "nodejs";
 
@@ -50,12 +52,32 @@ const BOT_PAUSE_TAG_NAMES = new Set([
   "בוט_מושהה",
 ]);
 
+// When any of these tags is *added* to a contact, we wipe the lead's bot
+// state and resend the questionnaire from question 1, then strip the tag
+// from GHL so re-adding it later re-triggers the flow.
+const RESTART_QUESTIONNAIRE_TAG_NAMES = new Set([
+  "restart_questionnaire",
+  "restart questionnaire",
+  "restart_q",
+  "restart bot",
+  "התחל_מחדש",
+  "התחל מחדש",
+  "שאלון_מחדש",
+  "שאלון מחדש",
+  "שלח_שאלון",
+  "שלח שאלון",
+]);
+
 function normalize(s: string): string {
   return s.trim().toLowerCase();
 }
 
 function isBotPauseTag(tag: string): boolean {
   return BOT_PAUSE_TAG_NAMES.has(normalize(tag));
+}
+
+function isRestartTag(tag: string): boolean {
+  return RESTART_QUESTIONNAIRE_TAG_NAMES.has(normalize(tag));
 }
 
 export async function POST(req: NextRequest) {
@@ -142,6 +164,50 @@ export async function POST(req: NextRequest) {
       tag,
       action,
       botPaused: paused,
+    });
+  }
+
+  if (isRestartTag(tag) && action === "added") {
+    try {
+      await resetLeadAndRestart(sid);
+      console.log(`[ghl-tag] restart-questionnaire triggered for ${sid} via tag '${tag}'`);
+    } catch (err) {
+      console.error(`[ghl-tag] restart-questionnaire failed for ${sid}`, err);
+      return NextResponse.json(
+        {
+          ok: false,
+          sid,
+          tag,
+          action,
+          error: "restart_failed",
+          detail: err instanceof Error ? err.message : String(err),
+        },
+        { status: 500 }
+      );
+    }
+    // Strip the tag from GHL + DB so adding it again later re-fires this
+    // handler. Failures here are non-fatal — the questionnaire already
+    // restarted.
+    if (contactId) {
+      try {
+        await removeContactTags(contactId, [tag]);
+      } catch (err) {
+        console.warn(`[ghl-tag] removeContactTags failed for ${contactId}`, err);
+      }
+    }
+    try {
+      await db
+        .delete(leadTags)
+        .where(and(sql`trim(${leadTags.manychatSubId}) = ${sid.trim()}`, eq(leadTags.tag, tag)));
+    } catch (err) {
+      console.warn(`[ghl-tag] local tag cleanup failed for ${sid}`, err);
+    }
+    return NextResponse.json({
+      ok: true,
+      sid,
+      tag,
+      action,
+      applied: "restart_questionnaire",
     });
   }
 
