@@ -684,10 +684,18 @@ export async function restartQuestionnaire(
       : ctx.sid);
   const first = QUESTIONS[0];
   const newState: QState = { step: first.step };
+  // pipelineStage must go back to NULL so the questionnaire FSM
+  // (handleInbound) accepts the customer's next reply — otherwise the
+  // decision-stage handler grabs the inbound first and intent-classifies it
+  // (e.g. "רגיל ~90 יום" → question_delivery → canned reply instead of
+  // advancing the poll). Prior business data (factory draft, quote totals,
+  // bot summary, follow-up date, loss reason) is preserved intentionally so
+  // the customer's re-quote keeps full history.
   await db
     .update(leads)
     .set({
       qState: newState as any,
+      pipelineStage: null,
       pipelineFlag: null,
       botPaused: false,
       followUpCount: 0,
