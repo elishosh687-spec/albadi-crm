@@ -88,7 +88,7 @@ export async function computeNextAction(sid: string): Promise<NextAction | null>
       return "wait_response";
     case "NEGOTIATING":
       return "negotiate";
-    case "FUTURE_FOLLOWUP":
+    case "FUTURE_FOLLOW_UP":
       return "schedule_callback";
     case "WON":
     case "LOST":

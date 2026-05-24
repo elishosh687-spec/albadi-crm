@@ -59,6 +59,12 @@ export const GHL_STAGE_IDS: Record<string, string> = {
   NEGOTIATING: readEnv("GHL_STAGE_NEGOTIATING"),
   WON: readEnv("GHL_STAGE_WON"),
   LOST: readEnv("GHL_STAGE_LOST"),
+  // Manual stage Eli drags opps into when a customer asks to circle back
+  // later (e.g. "תחזור אליי בעוד חודש"). Bot does NOT followup here — the
+  // cron has no STAGE_RULE for it. Without this entry, reverseLookupStage
+  // returns null on drag → DB stays at the prior stage → next
+  // syncLeadToGHL push reverts the opp to that prior stage in the UI.
+  FUTURE_FOLLOW_UP: readEnv("GHL_STAGE_FUTURE_FOLLOW_UP"),
   // Virtual stage triggered when leads.pipeline_flag = 'NEEDS_ELI'.
   // Overrides whatever local pipeline_stage says (escalations bubble up).
   NEEDS_ELI: readEnv("GHL_STAGE_NEEDS_ELI"),
