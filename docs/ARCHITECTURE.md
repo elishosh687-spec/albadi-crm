@@ -269,6 +269,76 @@ The narrower webhooks (stage-changed, ghl-tag, ghl-custom-field) remain for
 low-latency single-field updates. Resync is the catch-all reconciler — if
 GHL fires it once per minute on every change, we're still fine.
 
+### Native App webhook
+
+`POST /api/ghl/app-webhook` — receives native webhook events from the GHL
+Marketplace App (separate from Workflow-triggered webhooks).
+
+- **Trigger:** GHL Marketplace App subscriptions: `ContactCreate`,
+  `ContactUpdate`, `ContactDelete`, `ContactTagUpdate`,
+  `OpportunityCreate`, `OpportunityUpdate`, `OpportunityStageUpdate`,
+  `OpportunityStatusUpdate`, `OpportunityMonetaryValueUpdate`,
+  `OpportunityDelete`, `NoteCreate/Update/Delete`,
+  `TaskCreate/Update/Delete`.
+- **Auth:** HMAC-SHA256 on `x-wh-signature` (header) over the raw body,
+  signed with `GHL_APP_WEBHOOK_SECRET`. When the secret isn't configured
+  the handler accepts unsigned + logs a warning (dev-only mode — switch
+  on for prod).
+- **Dedupe:** every event is audit-logged to `bridge_events` keyed by
+  `evtId = "app:${webhookId}"`. The insert uses
+  `onConflictDoNothing + returning` and short-circuits on duplicate so
+  GHL retries can't double-fire.
+- **Routing:**
+  - `Contact*` / `OpportunityXxx` / `Note*` / `Task*` → call `resyncContact(contactId)` to pull fresh state.
+  - `ContactTagUpdate` runs BEFORE the resync and checks for the
+    "start over" tag aliases (see FEATURES 1.8.2). When matched:
+    cooldown check, tag removal from GHL + local mirror, then
+    `restartQuestionnaire(sid)`. Tags without that meaning fall through
+    to the resync path.
+
+### Pipeline stages — env mapping & drift risk
+
+GHL pipeline ("albadi") stages are mapped to local enum strings via
+`GHL_STAGE_IDS` (`integrations/ghl/config.ts`) sourced from env vars.
+Direction matters in both directions:
+
+- **GHL → DB (resync):** `reverseLookupStage(stageId)` reads the env map
+  in reverse. If the live GHL stage id isn't in the map,
+  `resyncContact` silently skips the `pipeline_stage` write
+  (`if (localStage) updateSet.pipelineStage = localStage`) — DB stays
+  at the prior value.
+- **DB → GHL (sync):** `pickStageId(lead)` reads the same map forward,
+  pushing back to `Opportunity.pipelineStageId`.
+
+**Failure mode (recurring):** if Eli adds a NEW stage in the GHL UI
+without adding the matching env var, dragging an opportunity into that
+stage reverts overnight. The webhook reads it → can't translate → DB
+stays at the old stage → next `syncLeadToGHL` push (cron or inbound
+message) pushes the old stage id back to GHL.
+
+Current map (must match GHL exactly):
+
+| Local key | env var | GHL stage name |
+|---|---|---|
+| INITIAL_QUOTE_SENT | `GHL_STAGE_INITIAL_QUOTE_SENT` | INITIAL_QUOTE_SENT |
+| AWAITING_FIRST_RESPONSE | `GHL_STAGE_AWAITING_FIRST_RESPONSE` | AWAITING_FIRST_RESPONSE |
+| SHOWED_INTEREST | `GHL_STAGE_SHOWED_INTEREST` | SHOWED_INTEREST |
+| FACTORY_CHECK | `GHL_STAGE_FACTORY_CHECK` | FACTORY_CHECK |
+| FINAL_QUOTE_SENT | `GHL_STAGE_FINAL_QUOTE_SENT` | FINAL_QUOTE_SENT |
+| NEGOTIATING | `GHL_STAGE_NEGOTIATING` | NEGOTIATING |
+| WON | `GHL_STAGE_WON` | WON |
+| LOST | `GHL_STAGE_LOST` | LOST |
+| FUTURE_FOLLOW_UP | `GHL_STAGE_FUTURE_FOLLOW_UP` | FUTURE_FOLLOW_UP |
+| NO_RESPONSE_REENGAGE | `GHL_STAGE_NO_RESPONSE_REENGAGE` | NO_RESPONSE_REENGAGE |
+| (virtual) NEEDS_ELI | `GHL_STAGE_NEEDS_ELI` | (not used today — `pipelineFlag = "NEEDS_ELI"` instead, no stage push) |
+
+Whenever the GHL pipeline shape changes: run a stage diff diag
+(`npx tsx scripts/_diag-ghl-stages.ts` style — script is one-shot, recreate
+when needed), add the env var to Vercel (Production + Development; Preview
+is gated on a non-main git branch which we don't use), update the table
+above, redeploy via empty commit so the running runtime picks up the new
+env.
+
 ---
 
 ## 4. Messaging adapter
@@ -301,7 +371,7 @@ Bridge-only:
 ## 5. Bot flow (inbound → outbound)
 
 ```
-bridge POST /api/bridge/webhook
+bridge POST /api/bridge/webhook    (or /api/greenapi/webhook — same logic)
   │
   ├─ verify HMAC(BRIDGE_WEBHOOK_SECRET)
   ├─ check timestamp (5min replay window)
@@ -310,9 +380,21 @@ bridge POST /api/bridge/webhook
   ├─ if type=message.received:
   │    1. upsert leads row (auto-create from JID)
   │    2. insert messages row (sender=lead)
-  │    3. stop-word check → if matched: pause + DM + log row + return
-  │    4. clear bot_paused, log auto-unpause if bot was paused
-  │    5. routeThroughSupervisor():
+  │    3. forward inbound to GHL Inbox via after()  — non-blocking
+  │    4. stop-word check → if matched:
+  │         set pipeline_stage = "LOST", loss_reason = "opt_out",
+  │         bot_paused = true; STOP_WORD_REPLY; DM Eli; syncLeadToGHL; return.
+  │    5. clear bot_paused, reset followUpCount, log auto-unpause if bot was paused
+  │    6. NO_RESPONSE_REENGAGE branch — if stage == "NO_RESPONSE_REENGAGE":
+  │         handleReengagementInbound(): classify (interest/removal/ambiguous),
+  │         pause bot, DM Eli, leave stage for Eli to move manually; return.
+  │    7. questionnaireActive predicate (qState.step <= 9 && !doneAt && !bailed)
+  │         — used in two places:
+  │         a. supervisor hard-bypass (dispatchSupervisor returns approve_code
+  │            instantly — no LLM call) so poll-vote replies don't pay 1-3s.
+  │         b. legacy router prefers handleInbound (questionnaire FSM) over
+  │            handleDecisionInbound regardless of pipeline_stage.
+  │    8. routeThroughSupervisor():
   │         a. precomputeCandidateAction() — dry-run prediction of existing handler
   │         b. superviseIncomingMessage() — LLM gate (gpt-4o-mini)
   │              verdict ∈ {approve_code | override_with_text | escalate_to_eli | silence | supervisor_error}
@@ -333,9 +415,62 @@ bridge POST /api/bridge/webhook
        audit-log only (bridge_events). no state change.
 ```
 
+### Latency budget (per poll-vote reply)
+
+Optimized 2026-05-24 with three changes — see CHANGELOG. Target: server-side
+under 500 ms on the happy path.
+
+| Step | Type | Latency |
+|---|---|---|
+| Webhook ingress + JSON parse | net | 50–200 ms |
+| Upsert lead + insert inbound message | DB | 20–150 ms |
+| GHL inbox mirror (inbound) | net | **0 ms blocking** — fired via `after()` |
+| Supervisor LLM | LLM | **0 ms** during questionnaire (hard-bypass) |
+| `matchAnswer` | CPU | 1–5 ms |
+| Spec-extractor LLM fallback (on `matchAnswer = null`) | LLM | 0 if matched; ≤1.5 s if fallback fires (timeout was 7 s) |
+| `saveState` + `sendBridgeMessage` | DB + net | **parallel via Promise.all** (~200–500 ms) |
+| GHL inbox mirror (outbound) | net | **0 ms blocking** — fired via `after()` |
+| WhatsApp cloud → phone | net | 1–5 s (external SLA) |
+
+### Background work via Next 16 `after()`
+
+Pattern: any I/O that doesn't gate the HTTP response should run inside
+`after(() => …)` so the lambda returns the response to the customer
+immediately, then keeps running just long enough to finish the background
+work. Failures stay logged in `bridge_events` so we can audit silently
+dropped mirrors.
+
+CLI scripts (tsx, cron-via-curl) fall through a try/catch — when
+`next/server` import fails or `after()` isn't available, the call reverts
+to inline `await` so we don't silently drop the side-effect.
+
+Current background-work surfaces:
+
+| Surface | What runs in background |
+|---|---|
+| `sendBridgeMessage` | outbound GHL inbox mirror |
+| `app/api/greenapi/webhook` inbound | inbound GHL inbox mirror + `syncLeadToGHL` |
+| `app/api/greenapi/webhook` outbound (eli manual) | outbound GHL inbox mirror |
+| `app/api/ghl/app-webhook` | nothing yet — all inline (low traffic, OK) |
+
 ### Questionnaire engine
 
-`lib/autoresponder/questionnaire.ts` — finite-state machine ב-9 שלבים. State persists ב-`leads.q_state` JSONB. Re-ask עד 3 פעמים, אחרי זה NEEDS_ELI.
+`lib/autoresponder/questionnaire.ts` — finite-state machine ב-10 שלבים. State persists ב-`leads.q_state` JSONB.
+
+Step layout:
+- 3 = shipping (poll)
+- 4 = quantity (poll + "אחר" free-text)
+- 5 = product/size (poll + page 2 + "אחר" free-text)
+- 6 = handles (poll)
+- 7 = lamination (poll)
+- 8 = colors (poll)
+- **9 = confirmation gate** (handleConfirmationStep — "מעולה נמשיך" / "רוצה לשנות")
+- 10 = terminal done (`doneAt` set; routes to FACTORY_CHECK or sends quote)
+
+Re-ask up to 3 times per question, then NEEDS_ELI. Custom-spec branch
+(product = "custom" or quantity = "custom" < 1000) → FACTORY_CHECK with
+`subFlow = "awaiting_factory_estimate"` + Eli DM. Standard path →
+`fetchQuote` (local calculator) → INITIAL_QUOTE_SENT.
 
 ### Intent classifier
 
@@ -374,17 +509,21 @@ bridge POST /api/bridge/webhook
 | `decision.ts` — intent=`question_other` (Stage 2 + 4) | — | unmatch-agent — מנסה לענות מה-FAQ; אחרת escalate |
 | `decision.ts` — `awaiting_competitor_offer` ambiguous | — | unmatch-agent — מבין "לא ממש אבל יקר" |
 | `decision.ts` — Logo stage (media detect, link detect) | regex + media flag | — |
-| Follow-ups cron | rule-based cadence | — |
+| Follow-ups cron | rule-based cadence | follow-up supervisor (LLM) reviews every send; NO_RESPONSE_REENGAGE body is LLM-built per send |
 | Drafts queue (money moments) | — | OpenAI (draft generation) |
+| `re-engagement.ts` — `buildReEngagementMessage` | fallback static body if LLM errors | LLM writes personalized re-engagement body from notes + summary + history |
+| `re-engagement.ts` — `classifyReengagementReply` (on inbound at NO_RESPONSE_REENGAGE) | stop-word substring match (in `templates.ts`) — fast path → LOST | LLM classifies softer language → `interest / removal / ambiguous` + reason + recommendation for Eli DM |
 
 ### Models בשימוש
 
 | Model | Purpose | קובץ |
 |---|---|---|
 | `gpt-4o-mini` | intent classification | `lib/autoresponder/intent.ts` |
-| `gpt-4o-mini` | spec-extractor (טקסט חופשי → שדות) | `lib/autoresponder/spec-extractor.ts` |
+| `gpt-4o-mini` | spec-extractor (טקסט חופשי → שדות) — single-field timeout 1.5 s, full-extract 7 s | `lib/autoresponder/spec-extractor.ts` |
 | `gpt-4o-mini` | unmatch agent (Stage 2/4 fallback) | `lib/autoresponder/unmatch-agent.ts` |
-| `gpt-4o-mini` | **bot supervisor gate (every inbound, Phase 1)** | `lib/supervisor/supervise.ts` |
+| `gpt-4o-mini` | **bot supervisor gate (every inbound, Phase 1)** — hard-bypassed during questionnaire (`qState.step <= 9 && !doneAt && !bailed`) | `lib/supervisor/supervise.ts` |
+| `gpt-4o-mini` | follow-up supervisor (every cron send) | `lib/supervisor/followup-supervisor.ts` |
+| `gpt-4o-mini` | re-engagement body builder + reply classifier | `lib/autoresponder/re-engagement.ts` |
 | OpenAI | draft generation | `lib/drafts/index.ts` |
 
 כל LLM calls שותפים ל-`OPENAI_API_KEY` + `OPENAI_MODEL` (default `gpt-4o-mini`).
@@ -437,25 +576,51 @@ Toggle ב-Vercel envs → redeploy (~30s).
 ## 6. Follow-ups (cadence)
 
 `app/api/bot/followups/route.ts`:
-- Trigger: Vercel cron **hourly** (`0 * * * *`) + external cloud routine.
+- Trigger: Vercel cron **daily** at `0 9 * * *` UTC (= 12:00 Asia/Jerusalem). See `vercel.json`.
 - Auth: Bearer `BOT_SECRET` (or fallback `CRON_SECRET`).
 - Logic: query לידים, לכל אחד:
   1. Skip if `bot_paused` / quiet hours (unless `FOLLOWUPS_BYPASS_GATES=1`).
-  2. **Hard limit:** if `follow_up_count >= MAX_FOLLOWUPS` (=3) → escalate, no send.
+  2. **Hard limit:** if `!rule.unbounded && follow_up_count >= MAX_FOLLOWUPS` (=3) → escalate, no send.
   3. Cadence check — has enough time elapsed since `lastFollowUpAt` per stage rule.
-  4. **Pick candidate template** (`followupTemplate(stage, attempt)`).
+  4. **Pick candidate text:**
+     - Standard rules → `followupTemplate(stage, attempt)`.
+     - `RE_ENGAGEMENT` template → `buildReEngagementMessage(sid)` (LLM-personalized; see §6b).
   5. **Route through follow-up supervisor** (`lib/supervisor/followup-supervisor.ts`):
-     - LLM sees: stage, qState, last 15 messages, lead notes, bot summary, candidate template, attempt#, cadence gap.
+     - LLM sees: stage, qState, last 15 messages, lead notes, bot summary, candidate text, attempt#, cadence gap.
      - Returns: `approve_template` / `override_with_text` / `escalate_to_eli` / `silence` / `supervisor_error`.
   6. Execute verdict:
-     - `approve_template` → send template verbatim, increment `follow_up_count`.
+     - `approve_template` → send text verbatim, increment `follow_up_count`.
      - `override_with_text` → send LLM's Hebrew text, increment `follow_up_count`.
      - `escalate_to_eli` → no send, `generateAndQueueDraft` + `sendEliDM` + set NEEDS_ELI/bot_paused.
      - `silence` → no send, `lastFollowUpAt` updated but `follow_up_count` **not** incremented (lead gets another chance later).
      - `supervisor_error` → no send, DM already fired by supervisor.
   7. Write row to `bot_decision_log` with `metadata.trigger = "followup_cron"` + `prompt_version` + `template_label` + `attempt` + `gap_hours`.
-- אחרי N follow-ups בלי תגובה → אוטומטית NEEDS_ELI + bot_paused (לא LOST — רק אלי).
-- Kill switches: `SUPERVISOR_BYPASS=1` (skips supervisor, falls back to legacy template-only flow), `FOLLOWUPS_BYPASS_GATES=1` (skips quiet-hours/no-send-day).
+- אחרי N follow-ups בלי תגובה (standard rules only) → אוטומטית NEEDS_ELI + bot_paused (לא LOST — רק אלי).
+- Kill switches: `SUPERVISOR_BYPASS=1` (skips supervisor, falls back to legacy text-only flow), `FOLLOWUPS_BYPASS_GATES=1` (skips quiet-hours/no-send-day).
+
+### Stage rules
+
+| Stage | Cadences | Template | Bounded? | Notes |
+|---|---|---|---|---|
+| (NULL + qState mid-flight) | 1h × 3 | MID_QUESTIONNAIRE | 3 attempts | Pre-quote leads who started but didn't finish the questionnaire. |
+| INITIAL_QUOTE_SENT | 2h / 12h / 23h | INITIAL_QUOTE_SENT | 3 attempts | Quote sent, waiting on decision. |
+| FACTORY_CHECK (subFlow=awaiting_logo) | 2h / 12h / 23h | AWAITING_LOGO | 3 attempts | Bot waiting for the customer's logo file. |
+| FINAL_QUOTE_SENT | 2h / 12h / 23h | FINAL_QUOTE_SENT | 3 attempts | Final price sent, waiting on decision. |
+| NO_RESPONSE_REENGAGE | 3d (repeats) | RE_ENGAGEMENT | **unbounded** | Manual stage Eli drags into. LLM body per send. Loop stops only on customer reply / opt-out / manual drag. |
+| FUTURE_FOLLOW_UP | — | — | — | No rule. Manual hold. Bot does not touch. |
+| WON / LOST | — | — | — | Terminal. No cron action. |
+
+### 6b. NO_RESPONSE_REENGAGE re-engagement loop
+
+`lib/autoresponder/re-engagement.ts` — covers both the outbound build and the inbound handler.
+
+- `buildReEngagementMessage(sid)`: GPT-4o-mini, temperature 0.7, 8 s timeout. System prompt voices Eli (first-person singular, no "we"). User prompt = lead name + `notes` + `bot_summary` + last 20 messages. Returns 1-2 sentence Hebrew nudge. Always appends `RE_ENGAGEMENT_OPT_OUT_FOOTER` ("השב/י 'הסר' ולא אטריד שוב"). Soft-fails to a static `FALLBACK_BODY` + same footer if the LLM call errors.
+- `classifyReengagementReply(sid, text)`: GPT-4o-mini, temperature 0, 5 s timeout. Returns `{ intent: "interest" | "removal" | "ambiguous", reason, recommendation }`.
+- `handleReengagementInbound({ sid, text })`: pauses the bot (`bot_paused = true`), DMs Eli with intent emoji + verdict + reason + recommendation + the inbound text. **Does not change `pipeline_stage`** — Eli is the sole authority for the next move.
+
+Hookup: both `app/api/greenapi/webhook/route.ts` and `app/api/bridge/webhook/route.ts` short-circuit to `handleReengagementInbound` when `stage === "NO_RESPONSE_REENGAGE"` BEFORE the supervisor dispatch (the supervisor decision tree doesn't know NO_RESPONSE_REENGAGE → would no-op or wrongly escalate).
+
+Stop-words ("הסר", "stop", "תפסיק", "להסיר", "תוריד אותי", "די לי", …) bypass this path entirely — the webhook's stop-word check fires first, moves the lead straight to LOST with `loss_reason = "opt_out"`, DMs Eli, and pushes to GHL.
 
 ---
 
@@ -513,8 +678,9 @@ Money triggers (per `lib/drafts/index.ts`):
 
 > מה ש-code אומר אבל המוצר/PRD לא — או הפוך.
 
-1. **Pipeline stages refactor — 8-stage journey model — RESOLVED 2026-05-21**
-   - קוד יושר ל-8 stages: `INITIAL_QUOTE_SENT, AWAITING_FIRST_RESPONSE, SHOWED_INTEREST, FACTORY_CHECK, FINAL_QUOTE_SENT, NEGOTIATING, WON, LOST` (לפני שאלון נשלם — `pipeline_stage IS NULL`). שלבים מתארים מצב מכירה בלבד; pulse פנימי של ה-autoresponder עבר ל-`qState.subFlow` (`awaiting_estimate_decision` / `awaiting_logo` / `awaiting_factory_estimate` / `awaiting_final_decision`). Loss reason חובה ב-LOST. Migration ב-`scripts/_migrate-stage-rename.sql`.
+1. **Pipeline stages refactor — 10-stage journey model — RESOLVED 2026-05-24**
+   - Current map (must match GHL exactly — see §3b "Pipeline stages — env mapping & drift risk"): `INITIAL_QUOTE_SENT, AWAITING_FIRST_RESPONSE, SHOWED_INTEREST, FACTORY_CHECK, FINAL_QUOTE_SENT, NEGOTIATING, WON, LOST, FUTURE_FOLLOW_UP, NO_RESPONSE_REENGAGE` (pre-questionnaire = `pipeline_stage IS NULL`). שלבים מתארים מצב מכירה; pulse פנימי של ה-autoresponder ב-`qState.subFlow`. Loss reason חובה ב-LOST. Migration ב-`scripts/_migrate-stage-rename.sql` (original 8 stages); FUTURE_FOLLOW_UP + NO_RESPONSE_REENGAGE added 2026-05-24 via env vars only (no schema change needed).
+   - **Open recurring risk** (not yet automated): any new GHL stage that doesn't get an env entry will silently break the "drag in GHL = saved" round-trip. See §3b.
 
 2. **ManyChat path עוד חי**
    - `lib/manychat/client.ts`, `app/api/bot/new-lead/route.ts`, `app/api/bot/inbound-message/route.ts`, `app/api/bot/restart-send/route.ts` עוד קיימים.
