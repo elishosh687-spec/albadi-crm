@@ -97,6 +97,21 @@ export async function dispatchSupervisor(
     .where(sql`trim(${leads.manychatSubId}) = ${sid.trim()}`)
     .limit(1);
 
+  // Hard bypass when the questionnaire is mid-flight (qState exists with
+  // step < 9 and no doneAt/bailed). Poll matching is deterministic — the
+  // supervisor LLM has no useful judgment to add and consistently
+  // mis-escalates straightforward poll-vote replies like "עם ידיות" because
+  // the stale pipeline_stage (resynced from GHL after a restart) puts it
+  // into INITIAL_QUOTE_SENT context.
+  const q = (freshLead?.qState ?? null) as
+    | { step?: number; doneAt?: unknown; bailed?: unknown }
+    | null;
+  const questionnaireActive =
+    !!q && typeof q.step === "number" && q.step < 9 && !q.doneAt && !q.bailed;
+  if (questionnaireActive) {
+    return { shouldRunLegacy: true };
+  }
+
   const recent = await loadRecent(sid);
   const candidate = await precomputeCandidateAction({
     stage,
