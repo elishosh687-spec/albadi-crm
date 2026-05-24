@@ -26,8 +26,14 @@ import { resyncContact, softDeleteContact } from "@/lib/ghl/resync-helper";
 import { db } from "@/lib/db";
 import { bridgeEvents, leads, leadTags } from "@/drizzle/schema";
 import { and, eq, sql } from "drizzle-orm";
-import { resetLeadAndRestart } from "@/lib/autoresponder/questionnaire";
+import { restartQuestionnaire } from "@/lib/autoresponder/questionnaire";
 import { removeContactTags } from "@/integrations/ghl/client";
+
+// Cooldown window (ms) — if the same lead got a restart within this window,
+// we skip a fresh one. Defends against GHL webhook retries that fire while
+// `restartQuestionnaire` is still mid-flight (it does 3 sequential bridge
+// sends with ~800ms sleeps, easily 3-6s — long enough for a retry to land).
+const RESTART_COOLDOWN_MS = 60_000;
 
 // Tag names that, when added to a GHL contact, wipe the lead's bot state
 // and re-send the bag-quote questionnaire from question 1. Case-insensitive
@@ -103,18 +109,25 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: "bad_json" }, { status: 400 });
   }
 
-  // Audit log every event for replay/debug.
-  const evtId = `app:${event.webhookId || `${event.type}:${event.id || ""}:${Date.now()}`}`;
-  try {
-    await db.insert(bridgeEvents).values({
+  // Audit log + idempotency dedupe. If the same webhookId arrives twice
+  // (GHL retry on timeout, duplicate dispatch) we bail before doing any
+  // work — bridge_events.evtId has a UNIQUE constraint and the returning()
+  // call gives us back zero rows on conflict.
+  const evtId = `app:${event.webhookId || `${event.type}:${event.id || ""}:${event.timestamp || Date.now()}`}`;
+  const inserted = await db
+    .insert(bridgeEvents)
+    .values({
       evtId,
       type: `ghl_app.${event.type}`,
       tenant: event.locationId ?? null,
       occurredAt: event.timestamp ? new Date(event.timestamp) : new Date(),
       payload: event as any,
-    });
-  } catch {
-    // dedupe — same evtId already logged, ignore.
+    })
+    .onConflictDoNothing({ target: bridgeEvents.evtId })
+    .returning({ evtId: bridgeEvents.evtId });
+  if (inserted.length === 0) {
+    console.log(`[ghl.app-webhook] dedup skip evtId=${evtId}`);
+    return NextResponse.json({ ok: true, deduped: true });
   }
 
   const type = event.type;
@@ -131,7 +144,10 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     const restartTag = findRestartTag(event.tags);
     if (restartTag) {
       const [row] = await db
-        .select({ sid: leads.manychatSubId })
+        .select({
+          sid: leads.manychatSubId,
+          lastFollowUpAt: leads.lastFollowUpAt,
+        })
         .from(leads)
         .where(eq(leads.ghlContactId, contactId))
         .limit(1);
@@ -140,22 +156,33 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         return NextResponse.json({ ok: false, error: "lead_not_found" }, { status: 404 });
       }
       const sid = row.sid;
-      try {
-        await resetLeadAndRestart(sid);
-        console.log(`[ghl.app-webhook] restart-questionnaire triggered for sid=${sid} via tag '${restartTag}'`);
-      } catch (err) {
-        console.error(`[ghl.app-webhook] restart-questionnaire failed for ${sid}`, err);
-        return NextResponse.json(
-          {
-            ok: false,
-            error: "restart_failed",
-            detail: err instanceof Error ? err.message : String(err),
-          },
-          { status: 500 }
-        );
+
+      // Cooldown defense — if we restarted this lead within the cooldown
+      // window, skip. Covers the rare case where webhook dedupe fails
+      // (e.g. GHL replays with a new webhookId for the same logical event).
+      const recentlyRestarted =
+        row.lastFollowUpAt &&
+        Date.now() - new Date(row.lastFollowUpAt).getTime() < RESTART_COOLDOWN_MS;
+      if (recentlyRestarted) {
+        console.log(`[ghl.app-webhook] restart cooldown active for sid=${sid}, skipping`);
+        // Still attempt the tag removal — the previous run may have failed
+        // there and we don't want the tag stranded on the contact.
+        try {
+          await removeContactTags(contactId, [restartTag]);
+        } catch (err) {
+          console.warn(`[ghl.app-webhook] removeContactTags (cooldown branch) failed`, err);
+        }
+        return NextResponse.json({
+          ok: true,
+          sid,
+          applied: "restart_cooldown_skip",
+        });
       }
-      // Strip the tag from GHL + DB so re-adding it later re-triggers cleanly
-      // and the next resync doesn't loop into another restart.
+
+      // Remove the tag BEFORE running the slow restart so any GHL retry
+      // that lands mid-flight sees a clean tags array (findRestartTag will
+      // return null) and won't double-fire. Local lead_tags mirror cleanup
+      // is best-effort.
       try {
         await removeContactTags(contactId, [restartTag]);
       } catch (err) {
@@ -168,9 +195,29 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       } catch (err) {
         console.warn(`[ghl.app-webhook] local tag cleanup failed for ${sid}`, err);
       }
-      // Fall through to resync so DB reflects the new (post-cleanup) tag set.
-      const r = await resyncContact(contactId, "ghl_app_webhook");
-      return NextResponse.json({ ...r, ok: true, applied: "restart_questionnaire", sid });
+
+      try {
+        // Minimal restart — only resets qState + follow-up bookkeeping and
+        // sends the first poll. Pipeline stage, factory draft, quote totals,
+        // bot summary etc are preserved so an existing customer asking for
+        // a re-quote (e.g. different size) doesn't lose prior history.
+        await restartQuestionnaire(
+          sid,
+          "שולח לך את השאלון שוב 🙂 ענה על מה שהשתנה ואכין הצעה חדשה."
+        );
+        console.log(`[ghl.app-webhook] restart-questionnaire fired for sid=${sid} via tag '${restartTag}'`);
+      } catch (err) {
+        console.error(`[ghl.app-webhook] restart-questionnaire failed for ${sid}`, err);
+        return NextResponse.json(
+          {
+            ok: false,
+            error: "restart_failed",
+            detail: err instanceof Error ? err.message : String(err),
+          },
+          { status: 500 }
+        );
+      }
+      return NextResponse.json({ ok: true, applied: "restart_questionnaire", sid });
     }
     // Plain tag update — just resync to mirror tag state into DB.
     const r = await resyncContact(contactId, "ghl_app_webhook");

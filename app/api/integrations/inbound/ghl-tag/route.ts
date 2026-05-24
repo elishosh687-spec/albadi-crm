@@ -28,7 +28,7 @@ import { db } from "@/lib/db";
 import { leads, leadTags } from "@/drizzle/schema";
 import { and, eq, sql } from "drizzle-orm";
 import { GHL_INBOUND_SECRET } from "@/integrations/ghl/config";
-import { resetLeadAndRestart } from "@/lib/autoresponder/questionnaire";
+import { restartQuestionnaire } from "@/lib/autoresponder/questionnaire";
 import { removeContactTags } from "@/integrations/ghl/client";
 
 export const runtime = "nodejs";
@@ -171,26 +171,8 @@ export async function POST(req: NextRequest) {
   }
 
   if (isRestartTag(tag) && action === "added") {
-    try {
-      await resetLeadAndRestart(sid);
-      console.log(`[ghl-tag] restart-questionnaire triggered for ${sid} via tag '${tag}'`);
-    } catch (err) {
-      console.error(`[ghl-tag] restart-questionnaire failed for ${sid}`, err);
-      return NextResponse.json(
-        {
-          ok: false,
-          sid,
-          tag,
-          action,
-          error: "restart_failed",
-          detail: err instanceof Error ? err.message : String(err),
-        },
-        { status: 500 }
-      );
-    }
-    // Strip the tag from GHL + DB so adding it again later re-fires this
-    // handler. Failures here are non-fatal — the questionnaire already
-    // restarted.
+    // Remove the tag from GHL first so any Workflow retry sees clean state
+    // and won't re-trigger this handler while the restart is in flight.
     if (contactId) {
       try {
         await removeContactTags(contactId, [tag]);
@@ -204,6 +186,26 @@ export async function POST(req: NextRequest) {
         .where(and(sql`trim(${leadTags.manychatSubId}) = ${sid.trim()}`, eq(leadTags.tag, tag)));
     } catch (err) {
       console.warn(`[ghl-tag] local tag cleanup failed for ${sid}`, err);
+    }
+    try {
+      await restartQuestionnaire(
+        sid,
+        "שולח לך את השאלון שוב 🙂 ענה על מה שהשתנה ואכין הצעה חדשה."
+      );
+      console.log(`[ghl-tag] restart-questionnaire fired for ${sid} via tag '${tag}'`);
+    } catch (err) {
+      console.error(`[ghl-tag] restart-questionnaire failed for ${sid}`, err);
+      return NextResponse.json(
+        {
+          ok: false,
+          sid,
+          tag,
+          action,
+          error: "restart_failed",
+          detail: err instanceof Error ? err.message : String(err),
+        },
+        { status: 500 }
+      );
     }
     return NextResponse.json({
       ok: true,
