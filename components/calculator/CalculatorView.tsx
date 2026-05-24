@@ -609,12 +609,9 @@ function buildQuoteText(opts: {
     productDesc ? `מוצר: ${productDesc}` : null,
     `כמות: ${qty} יח׳`,
     "",
-    "💰 *תמחור*",
+    "💰 *תמחור* _(כולל שילוח)_",
     `📦 ${qty} יחידות × ${ilsFmt(opts.unitSellingPriceIls)}`,
   ];
-  if (opts.totalShippingIls > 0) {
-    lines.push(`🚢 שילוח: ${ilsFmt(opts.totalShippingIls)}`);
-  }
   if (shippingMethod) {
     lines.push(`🚚 שיטת שילוח: ${shippingMethod}`);
   }

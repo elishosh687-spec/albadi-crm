@@ -318,17 +318,21 @@ function CustomerQuotePDF(props: CustomerQuotePdfProps) {
   let displayUnitPrice: number;
 
   if (breakdown) {
-    // Multi-row breakdown from the local calculator.
-    const hasShippingRow = breakdown.shippingPerUnit > 0;
+    // Multi-row breakdown from the local calculator. Shipping cost is rolled
+    // into the base bag row instead of broken out — the customer should never
+    // see a separate shipping line item (boss-only data). Method name still
+    // appears in the bullets section for transparency.
     const baseBagDesc =
-      `שקית אלבדי — ${breakdown.dimensions} ס״מ` +
-      (hasShippingRow ? "" : " (כולל שילוח רגיל)");
+      `שקית אלבדי — ${breakdown.dimensions} ס״מ (כולל שילוח)`;
+    const baseBagWithShipping = r2(
+      breakdown.baseBagPerUnit + breakdown.shippingPerUnit
+    );
 
     rows.push({
       desc: baseBagDesc,
-      unit: breakdown.baseBagPerUnit,
+      unit: baseBagWithShipping,
       qty,
-      total: r2(breakdown.baseBagPerUnit * qty),
+      total: r2(baseBagWithShipping * qty),
     });
     if (breakdown.hasHandles && breakdown.handlesPerUnit > 0) {
       rows.push({
@@ -362,37 +366,23 @@ function CustomerQuotePDF(props: CustomerQuotePdfProps) {
         total: r2(breakdown.plateFeePerUnit * qty),
       });
     }
-    if (hasShippingRow) {
-      rows.push({
-        desc: `שילוח · ${breakdown.shippingOptionName ?? ""}`.trim(),
-        unit: breakdown.shippingPerUnit,
-        qty,
-        total: r2(breakdown.shippingPerUnit * qty),
-      });
-    }
     displayTotalOrder = breakdown.totalOrder;
     displayUnitPrice = breakdown.totalPerUnit;
   } else {
-    // Fallback: 2-row honest layout from FactoryPricingResult.
-    const bagDescParts: string[] = [`שקית אלבדי — ${sizeLabel(spec)}`];
+    // Fallback: 1-row honest layout from FactoryPricingResult. Shipping cost
+    // is folded into the bag unit price so no separate line item leaks to
+    // the customer.
+    const bagDescParts: string[] = [`שקית אלבדי — ${sizeLabel(spec)} (כולל שילוח)`];
     if (finishingHe) bagDescParts.push(finishingHe);
     if (printingHe) bagDescParts.push(printingHe);
     const bagDesc = bagDescParts.join(" · ");
-    const bagUnit = r2(pricing.unitCost + pricing.unitProfit);
+    const bagUnit = r2(pricing.unitSellingPrice);
     rows.push({
       desc: bagDesc,
       unit: bagUnit,
       qty: pricing.quantity,
       total: r2(bagUnit * pricing.quantity),
     });
-    if (!!pricing.shippingOptionName && pricing.unitShipping > 0) {
-      rows.push({
-        desc: `שילוח · ${pricing.shippingOptionName}`,
-        unit: r2(pricing.unitShipping),
-        qty: pricing.quantity,
-        total: r2(pricing.totalShipping),
-      });
-    }
     displayTotalOrder = pricing.totalSellingPrice;
     displayUnitPrice = pricing.unitSellingPrice;
   }

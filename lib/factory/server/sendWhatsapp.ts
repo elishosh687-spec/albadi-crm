@@ -41,12 +41,9 @@ function buildCaption(opts: {
     dims ? `מידות: ${dims} ס״מ` : null,
     `כמות: ${qty} יח׳`,
     "",
-    "💰 *תמחור*",
+    "💰 *תמחור* _(כולל שילוח)_",
     `📦 ${qty} יחידות × ${formatIls(pricing.unitSellingPrice)}`,
   ];
-  if (pricing.unitShipping > 0) {
-    lines.push(`🚢 שילוח: ${formatIls(pricing.totalShipping)}`);
-  }
   if (pricing.shippingOptionName) {
     lines.push(`🚚 שיטת שילוח: ${pricing.shippingOptionName}`);
   }
