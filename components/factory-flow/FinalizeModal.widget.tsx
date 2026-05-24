@@ -148,6 +148,32 @@ export function FinalizeModalWidget({
           ) : (
             <>
               <div className="rounded-lg border border-border bg-card/40 p-3 text-xs space-y-1">
+                {(() => {
+                  const s = row.productSpec;
+                  const dimParts: string[] = [];
+                  if (s.widthCm) dimParts.push(`רוחב ${s.widthCm}`);
+                  if (s.depthCm) dimParts.push(`עומק ${s.depthCm}`);
+                  if (s.heightCm) dimParts.push(`גובה ${s.heightCm}`);
+                  const dims = dimParts.length ? `${dimParts.join(" × ")} ס״מ` : null;
+                  return dims ? (
+                    <div className="flex justify-between gap-2">
+                      <span className="text-muted-foreground">מידות מוצר:</span>
+                      <span className="tabular-nums text-right">{dims}</span>
+                    </div>
+                  ) : null;
+                })()}
+                {row.productSpec.description && (
+                  <div className="flex justify-between gap-2">
+                    <span className="text-muted-foreground">תיאור:</span>
+                    <span className="text-right truncate ml-2">{row.productSpec.description}</span>
+                  </div>
+                )}
+                {row.productSpec.material && (
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">חומר:</span>
+                    <span>{row.productSpec.material}</span>
+                  </div>
+                )}
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">עלות מפעל ליחידה:</span>
                   <span className="tabular-nums">¥{row.factoryResponse?.unitCostCny}</span>

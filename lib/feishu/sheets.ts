@@ -57,7 +57,7 @@ export async function getSheetId(): Promise<string> {
 export async function appendRow(values: (string | number)[]): Promise<string> {
   const token = getSpreadsheetToken();
   const sheetId = await getSheetId();
-  const range = `${sheetId}!A:I`;
+  const range = `${sheetId}!A:J`;
   type AppendResp = {
     data: {
       updates: {
@@ -181,25 +181,39 @@ export async function findRowByQuotationNo(
 }
 
 // ------------------------------------------------------------
-// Request (Eli's side, A..I)
+// Request (Eli's side, A..J — column C is the creation date which Feishu
+// auto-fills with a formula. We write it explicitly so the column never
+// collapses if the formula is removed.)
 // ------------------------------------------------------------
 
 export interface FactoryRequestColumns {
   customer: string;       // A
   quotationNo: string;    // B
-  pic: string;            // C (URL or "")
-  description: string;    // D
-  material: string;       // E
-  size: string;           // F  e.g. "H20*D8*W25"
-  printing: string;       // G  e.g. "3 color(s)"
-  finishing: string;      // H  e.g. "Handles / not laminated"
-  quantity: number | string; // I
+                          // C = date (auto, added by buildFactoryRow)
+  pic: string;            // D (URL or "")
+  description: string;    // E
+  material: string;       // F
+  size: string;           // G  e.g. "H20*D8*W25"
+  printing: string;       // H  e.g. "3 color(s)"
+  finishing: string;      // I  e.g. "Handles / not laminated"
+  quantity: number | string; // J
+}
+
+/**
+ * Excel-style serial date (days since 1899-12-30, matching Feishu's display
+ * format for date cells).
+ */
+function todayExcelSerial(): number {
+  const epoch = Date.UTC(1899, 11, 30); // 1899-12-30 UTC
+  const now = Date.now();
+  return Math.floor((now - epoch) / 86_400_000);
 }
 
 export function buildFactoryRow(cols: FactoryRequestColumns): (string | number)[] {
   return [
     cols.customer ?? "",
     cols.quotationNo ?? "",
+    todayExcelSerial(),
     cols.pic ?? "",
     cols.description ?? "",
     cols.material ?? "",
@@ -244,16 +258,23 @@ function toStr(v: unknown): string | undefined {
 export function parseFactoryResponseRow(
   row: (string | number | null)[]
 ): ParsedFactoryResponse {
-  // Indices 9..17 = columns J..R
-  const unitCost = toNum(row[9]);
-  const cartonQty = toNum(row[10]);
-  const cartonLen = toNum(row[11]);
-  const cartonWid = toNum(row[12]);
-  const cartonHei = toNum(row[13]);
-  let cartonCbm = toNum(row[14]);
-  const weight = toNum(row[15]);
-  const supplier = toStr(row[16]);
-  const notes = toStr(row[17]);
+  // Sheet layout (current): the Feishu sheet auto-fills column C with the
+  // creation date, shifting every other column one slot to the right vs the
+  // original assumption. Outgoing columns are now A,B,(C=date),D..J — see
+  // appendRow comment. Incoming (factory's) columns are K..R:
+  //   K(10) unitCost CNY, L(11) cartonQty, M(12) length, N(13) width,
+  //   O(14) height, P(15) cbm, Q(16) weight, R(17) supplier.
+  // There's no dedicated `notes` column in the active layout; supplier text
+  // sometimes carries trailing notes. Leave `notes` undefined for now.
+  const unitCost = toNum(row[10]);
+  const cartonQty = toNum(row[11]);
+  const cartonLen = toNum(row[12]);
+  const cartonWid = toNum(row[13]);
+  const cartonHei = toNum(row[14]);
+  let cartonCbm = toNum(row[15]);
+  const weight = toNum(row[16]);
+  const supplier = toStr(row[17]);
+  const notes: string | undefined = undefined;
 
   // If CBM not provided but dims are, derive: (L*W*H) cm / 1,000,000 = m³
   if (
