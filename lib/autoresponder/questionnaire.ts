@@ -1007,8 +1007,10 @@ export async function handleInbound(input: {
       : null;
     if (nextQ) {
       captured.step = nextQ.step;
-      await saveState(ctx.sid, captured);
-      await askQuestion(recipient, nextQ);
+      await Promise.all([
+        saveState(ctx.sid, captured),
+        askQuestion(recipient, nextQ),
+      ]);
       return { action: "custom_captured", detail: `${field}=${text}` };
     }
     // Custom on the LAST question — shouldn't happen since only Q4/Q5 are
@@ -1091,8 +1093,10 @@ export async function handleInbound(input: {
       sizePage: 2,
       unmatchedAt: 0,
     };
-    await saveState(ctx.sid, paged);
-    await askQuestion(recipient, PRODUCT_QUESTION_PAGE_2);
+    await Promise.all([
+      saveState(ctx.sid, paged),
+      askQuestion(recipient, PRODUCT_QUESTION_PAGE_2),
+    ]);
     return { action: "size_page_2", detail: "more sizes requested" };
   }
 
@@ -1141,8 +1145,13 @@ export async function handleInbound(input: {
   const nextQ = QUESTIONS.find((q) => q.step === currentQ.step + 1);
   if (nextQ) {
     advanced.step = nextQ.step;
-    await saveState(ctx.sid, advanced);
-    await askQuestion(recipient, nextQ);
+    // saveState and askQuestion are independent — kicking the DB update in
+    // parallel with the bridge send shaves ~10–50ms off the customer-facing
+    // latency. Both still complete before this function returns.
+    await Promise.all([
+      saveState(ctx.sid, advanced),
+      askQuestion(recipient, nextQ),
+    ]);
     return { action: "answered", detail: `${currentQ.field}=${match}` };
   }
 
@@ -1152,8 +1161,10 @@ export async function handleInbound(input: {
   advanced.step = 9;
   advanced.confirmationStep = "awaiting_confirm";
   advanced.confirmationAttempts = 0;
-  await saveState(ctx.sid, advanced);
-  await askConfirmation(ctx, advanced);
+  await Promise.all([
+    saveState(ctx.sid, advanced),
+    askConfirmation(ctx, advanced),
+  ]);
   return { action: "confirmation_sent" };
 }
 

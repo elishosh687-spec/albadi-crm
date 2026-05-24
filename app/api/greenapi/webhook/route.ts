@@ -343,20 +343,31 @@ async function handleIncoming(evt: GreenWebhook): Promise<void> {
   });
   const inboundMessageId = insertedMessage?.id ?? null;
 
-  // Mirror to GHL Inbox (Phase 1F). MUST await — see comment in
-  // handleOutgoingManual; Vercel kills the lambda when the HTTP handler
-  // returns, so fire-and-forget cancels the mirror mid-flight.
-  await ghlForwardMessage({
-    sid: canonicalSid,
-    direction: "in",
-    sender: "lead",
-    text: textToStore,
-    occurredAt: new Date(),
-    mediaUrl,
-    mediaFilename,
-    mediaMimeType,
-  });
-  await syncLeadToGHL(canonicalSid);
+  // Mirror to GHL Inbox (Phase 1F). Deferred via Next 16 `after()` so we
+  // don't block the inbound handler — the lambda stays alive past the HTTP
+  // response just long enough to finish the mirror, while the customer's
+  // reply pipeline (supervisor / handleInbound / outbound send) runs
+  // immediately. Failures stay logged in `bridge_events` via auditMirror.
+  const { after } = await import("next/server");
+  after(() =>
+    ghlForwardMessage({
+      sid: canonicalSid,
+      direction: "in",
+      sender: "lead",
+      text: textToStore,
+      occurredAt: new Date(),
+      mediaUrl,
+      mediaFilename,
+      mediaMimeType,
+    }).catch((e) => {
+      console.warn("[greenapi.webhook] ghl forward (in) failed", e);
+    })
+  );
+  after(() =>
+    syncLeadToGHL(canonicalSid).catch((e) => {
+      console.warn("[greenapi.webhook] syncLeadToGHL failed", e);
+    })
+  );
 
   // Skip routing for pollUpdateMessage events that arrive WITHOUT a vote
   // (e.g. when the poll is opened on the customer side but not yet voted).
@@ -551,20 +562,25 @@ async function handleOutgoingManual(evt: GreenWebhook): Promise<void> {
     payload: evt as unknown as Record<string, unknown>,
   });
 
-  // MUST await — Vercel lambdas terminate when the HTTP handler returns,
-  // so `void` here cancels the mirror mid-flight (audit proved this:
-  // ghl_mirror.attempt fires, then nothing because the lambda is gone
-  // before loadLead/postOutboundMessage complete).
-  await ghlForwardMessage({
-    sid: canonicalSid,
-    direction: "out",
-    sender: "eli",
-    text: textToStore,
-    occurredAt: new Date(),
-    mediaUrl,
-    mediaFilename,
-    mediaMimeType,
-  });
+  // Deferred via Next 16 `after()` — keeps the lambda alive past the HTTP
+  // response so the mirror completes, without making the customer (or here:
+  // Eli's own manual send) wait. Auditing remains intact through
+  // forwardMessage's internal `auditMirror` calls.
+  const { after: afterOut } = await import("next/server");
+  afterOut(() =>
+    ghlForwardMessage({
+      sid: canonicalSid,
+      direction: "out",
+      sender: "eli",
+      text: textToStore,
+      occurredAt: new Date(),
+      mediaUrl,
+      mediaFilename,
+      mediaMimeType,
+    }).catch((e) => {
+      console.warn("[greenapi.webhook] ghl forward (out) failed", e);
+    })
+  );
 }
 
 export async function POST(req: NextRequest): Promise<NextResponse> {

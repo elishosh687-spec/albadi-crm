@@ -130,6 +130,12 @@ export interface ExtractInput {
   text: string;
   /** Optional rendered context (history + qState) from llm-context.ts. */
   context?: string;
+  /** Per-call override for LLM timeout. Defaults to 7000ms (used by
+   *  step 9 free-text revisions which legitimately need time). Callers on
+   *  the fast path (single-field poll-vote fallback) pass a tighter value
+   *  so an unmatched answer falls into the cheap reask path instead of
+   *  blocking the customer for seconds. */
+  timeoutMs?: number;
 }
 
 export async function extractSpecFromText(
@@ -165,7 +171,7 @@ export async function extractSpecFromText(
     // Tight budget — Vercel Hobby kills functions at 10s. Leave headroom for
     // DB writes + sendBridgeMessage after this call returns. A retry doubles
     // latency and risks function termination, so retries=0.
-    timeoutMs: 7000,
+    timeoutMs: input.timeoutMs ?? 7000,
     retries: 0,
   });
 
@@ -312,7 +318,11 @@ export async function extractSingleField(
   minConfidence = 0.7,
   context?: string
 ): Promise<{ value: string; quantityCustom?: string; productCustom?: string } | null> {
-  const spec = await extractSpecFromText({ text, context });
+  // Tight per-call timeout (1500ms): when the dumb matcher already failed
+  // on a single poll-vote field, a slow LLM answer just makes the customer
+  // wait. The reask path is fast and recoverable — better to fall to it
+  // than to block 7s on the LLM.
+  const spec = await extractSpecFromText({ text, context, timeoutMs: 1500 });
   if (!spec) return null;
   if (spec.confidence < minConfidence) return null;
   const value = spec[field];

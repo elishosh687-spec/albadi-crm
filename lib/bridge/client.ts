@@ -347,23 +347,54 @@ export async function sendBridgeMessage(
   // Only the GHL-Inbox-originated path (api/integrations/outbound) opts out
   // via skipGhlMirror — GHL already recorded that send in its own thread, so
   // re-forwarding would dupe.
+  //
+  // We used to `await` this call to keep the lambda alive long enough to
+  // finish the GHL POST. That cost 200–500ms of customer-visible latency on
+  // every bot reply during the questionnaire. Now we hand the work to
+  // Next 16's `after()` which guarantees the lambda stays alive past the
+  // HTTP response until the deferred callback finishes — so customer sees
+  // the reply faster and GHL still gets the mirror. Failures stay logged
+  // in `bridge_events` via `auditMirror` inside `forwardMessage`.
+  //
+  // When called outside a request lifecycle (CLI scripts, cron), `after`
+  // no-ops and the mirror is skipped — acceptable since those flows
+  // typically don't need GHL parity.
   if (!opts?.skipGhlMirror) {
     try {
-      const { forwardMessage } = await import("@/integrations/ghl/sync");
-      // MUST await — Vercel kills the lambda when the calling HTTP handler
-      // returns, so a fire-and-forget mirror gets cancelled mid-flight
-      // before postOutboundMessage completes.
-      await forwardMessage({
-        sid: jid,
-        direction: "out",
-        sender,
-        text: message,
-        occurredAt: new Date(),
-        mediaUrl: mediaPath ?? null,
-        mediaFilename: mediaFilename ?? null,
-      });
+      const [{ forwardMessage }, { after }] = await Promise.all([
+        import("@/integrations/ghl/sync"),
+        import("next/server"),
+      ]);
+      after(() =>
+        forwardMessage({
+          sid: jid,
+          direction: "out",
+          sender,
+          text: message,
+          occurredAt: new Date(),
+          mediaUrl: mediaPath ?? null,
+          mediaFilename: mediaFilename ?? null,
+        }).catch((e) => {
+          console.warn("[sendBridgeMessage] ghl forward failed", e);
+        })
+      );
     } catch (e) {
-      console.warn("[sendBridgeMessage] ghl forward failed", e);
+      // `next/server` unavailable (rare; tsx runtime in a weird state).
+      // Fall back to inline await so we don't silently drop the mirror.
+      try {
+        const { forwardMessage } = await import("@/integrations/ghl/sync");
+        await forwardMessage({
+          sid: jid,
+          direction: "out",
+          sender,
+          text: message,
+          occurredAt: new Date(),
+          mediaUrl: mediaPath ?? null,
+          mediaFilename: mediaFilename ?? null,
+        });
+      } catch (e2) {
+        console.warn("[sendBridgeMessage] ghl forward failed (sync fallback)", e2);
+      }
     }
   }
 
