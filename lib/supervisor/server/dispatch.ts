@@ -106,8 +106,10 @@ export async function dispatchSupervisor(
   const q = (freshLead?.qState ?? null) as
     | { step?: number; doneAt?: unknown; bailed?: unknown }
     | null;
+  // Step 9 is the confirmation gate (handleConfirmationStep) — still
+  // questionnaire-owned. Step 10 is the terminal done state.
   const questionnaireActive =
-    !!q && typeof q.step === "number" && q.step < 9 && !q.doneAt && !q.bailed;
+    !!q && typeof q.step === "number" && q.step <= 9 && !q.doneAt && !q.bailed;
   if (questionnaireActive) {
     return { shouldRunLegacy: true };
   }

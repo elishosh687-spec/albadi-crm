@@ -432,8 +432,10 @@ async function handleIncoming(evt: GreenWebhook): Promise<void> {
   const q = (snap?.qState ?? null) as
     | { step?: number; doneAt?: string | number; bailed?: boolean }
     | null;
+  // Step 9 is the confirmation gate (handleConfirmationStep) — still
+  // questionnaire-owned. Step 10 is the terminal done state.
   const questionnaireActive =
-    !!q && typeof q.step === "number" && q.step < 9 && !q.doneAt && !q.bailed;
+    !!q && typeof q.step === "number" && q.step <= 9 && !q.doneAt && !q.bailed;
 
   // Supervisor gate — LLM decides whether to let the bot reply, draft for Eli,
   // escalate, or silence. Mirrors lib/supervisor/server/dispatch logic used

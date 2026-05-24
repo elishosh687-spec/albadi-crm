@@ -949,10 +949,12 @@ export async function handleInbound(input: {
   // (qState exists with step < 9 and no doneAt/bailed) takes precedence over
   // pipeline_stage — otherwise a stale GHL opp stage resynced back into DB
   // would block the re-quote questionnaire entirely.
+  // Step 9 is the confirmation gate (handleConfirmationStep) — still
+  // questionnaire-owned. Step 10 is the terminal done state.
   const qActive =
     !!ctx.qState &&
     typeof (ctx.qState as { step?: number }).step === "number" &&
-    (ctx.qState as { step?: number }).step! < 9 &&
+    (ctx.qState as { step?: number }).step! <= 9 &&
     !(ctx.qState as { doneAt?: unknown }).doneAt &&
     !(ctx.qState as { bailed?: unknown }).bailed;
   if (stage && !qActive) {
