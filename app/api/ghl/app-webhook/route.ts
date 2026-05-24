@@ -24,7 +24,35 @@ import { NextRequest, NextResponse } from "next/server";
 import crypto from "node:crypto";
 import { resyncContact, softDeleteContact } from "@/lib/ghl/resync-helper";
 import { db } from "@/lib/db";
-import { bridgeEvents } from "@/drizzle/schema";
+import { bridgeEvents, leads, leadTags } from "@/drizzle/schema";
+import { and, eq, sql } from "drizzle-orm";
+import { resetLeadAndRestart } from "@/lib/autoresponder/questionnaire";
+import { removeContactTags } from "@/integrations/ghl/client";
+
+// Tag names that, when added to a GHL contact, wipe the lead's bot state
+// and re-send the bag-quote questionnaire from question 1. Case-insensitive
+// match; Hebrew + English aliases accepted.
+const RESTART_QUESTIONNAIRE_TAG_NAMES = new Set([
+  "restart_questionnaire",
+  "restart questionnaire",
+  "restart_q",
+  "restart bot",
+  "התחל_מחדש",
+  "התחל מחדש",
+  "שאלון_מחדש",
+  "שאלון מחדש",
+  "שלח_שאלון",
+  "שלח שאלון",
+]);
+
+function findRestartTag(tags: unknown): string | null {
+  if (!Array.isArray(tags)) return null;
+  for (const t of tags) {
+    if (typeof t !== "string") continue;
+    if (RESTART_QUESTIONNAIRE_TAG_NAMES.has(t.trim().toLowerCase())) return t;
+  }
+  return null;
+}
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
@@ -90,12 +118,68 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   console.log(`[ghl.app-webhook] ${type}`, { id: event.id, contactId: event.contactId });
 
   // ============================================================
-  // Contact events — resync the contact (covers field/tag changes)
+  // Contact-tag updates — first check for restart-questionnaire trigger
+  // before the generic resync, so we wipe + send the first poll without
+  // any extra workflow setup on GHL's side.
+  // ============================================================
+  if (type === "ContactTagUpdate") {
+    const contactId = event.id;
+    if (!contactId) return NextResponse.json({ error: "missing_contact_id" }, { status: 400 });
+    const restartTag = findRestartTag(event.tags);
+    if (restartTag) {
+      const [row] = await db
+        .select({ sid: leads.manychatSubId })
+        .from(leads)
+        .where(eq(leads.ghlContactId, contactId))
+        .limit(1);
+      if (!row) {
+        console.warn(`[ghl.app-webhook] restart tag '${restartTag}' but no lead for contactId=${contactId}`);
+        return NextResponse.json({ ok: false, error: "lead_not_found" }, { status: 404 });
+      }
+      const sid = row.sid;
+      try {
+        await resetLeadAndRestart(sid);
+        console.log(`[ghl.app-webhook] restart-questionnaire triggered for sid=${sid} via tag '${restartTag}'`);
+      } catch (err) {
+        console.error(`[ghl.app-webhook] restart-questionnaire failed for ${sid}`, err);
+        return NextResponse.json(
+          {
+            ok: false,
+            error: "restart_failed",
+            detail: err instanceof Error ? err.message : String(err),
+          },
+          { status: 500 }
+        );
+      }
+      // Strip the tag from GHL + DB so re-adding it later re-triggers cleanly
+      // and the next resync doesn't loop into another restart.
+      try {
+        await removeContactTags(contactId, [restartTag]);
+      } catch (err) {
+        console.warn(`[ghl.app-webhook] removeContactTags failed for ${contactId}`, err);
+      }
+      try {
+        await db
+          .delete(leadTags)
+          .where(and(sql`trim(${leadTags.manychatSubId}) = ${sid.trim()}`, eq(leadTags.tag, restartTag)));
+      } catch (err) {
+        console.warn(`[ghl.app-webhook] local tag cleanup failed for ${sid}`, err);
+      }
+      // Fall through to resync so DB reflects the new (post-cleanup) tag set.
+      const r = await resyncContact(contactId, "ghl_app_webhook");
+      return NextResponse.json({ ...r, ok: true, applied: "restart_questionnaire", sid });
+    }
+    // Plain tag update — just resync to mirror tag state into DB.
+    const r = await resyncContact(contactId, "ghl_app_webhook");
+    return NextResponse.json(r);
+  }
+
+  // ============================================================
+  // Other contact events — resync the contact (covers field changes)
   // ============================================================
   if (
     type === "ContactCreate" ||
     type === "ContactUpdate" ||
-    type === "ContactTagUpdate" ||
     type === "ContactDndUpdate"
   ) {
     const contactId = event.id;
