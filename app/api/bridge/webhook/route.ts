@@ -751,9 +751,25 @@ async function runLegacyHandlerAndLog(args: {
   let result: any = null;
   let handlerName = "noop";
 
+  // Mid-flight questionnaire (qState.step < 9, not done/bailed) takes priority
+  // over stale pipeline_stage. Prevents the restart-questionnaire flow from
+  // being grabbed by handleDecisionInbound after a GHL resync re-pushes the
+  // pre-restart opp stage back into DB.
+  const [qRow] = await db
+    .select({ qState: leads.qState })
+    .from(leads)
+    .where(sql`trim(${leads.manychatSubId}) = ${sid.trim()}`)
+    .limit(1);
+  const q = (qRow?.qState ?? null) as
+    | { step?: number; doneAt?: unknown; bailed?: unknown }
+    | null;
+  const questionnaireActive =
+    !!q && typeof q.step === "number" && q.step < 9 && !q.doneAt && !q.bailed;
+
   try {
-    if (!stage) {
-      // Pre-quote (NULL stage) — questionnaire still running.
+    if (questionnaireActive || !stage) {
+      // Pre-quote (NULL stage) — questionnaire still running. Also forced
+      // here when qState is mid-flight even if pipeline_stage is set.
       handlerName = "handleInbound";
       result = await handleInbound({ sid, text });
     } else if (

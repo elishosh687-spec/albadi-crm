@@ -418,12 +418,22 @@ async function handleIncoming(evt: GreenWebhook): Promise<void> {
 
   // Load lead snapshot for routing.
   const [snap] = await db
-    .select({ stage: leads.pipelineStage })
+    .select({ stage: leads.pipelineStage, qState: leads.qState })
     .from(leads)
     .where(sql`trim(${leads.manychatSubId}) = ${canonicalSid.trim()}`)
     .limit(1);
 
   const stage = (snap?.stage ?? "").toUpperCase() || null;
+  // qState is authoritative when the questionnaire is mid-flight. Without
+  // this guard, a "start over" tag (which resets qState to step 1 but leaves
+  // pipeline_stage at whatever GHL last pushed back via resync) sends the
+  // customer's first poll answer into the decision handler, which then
+  // canned-replies / escalates instead of advancing the questionnaire.
+  const q = (snap?.qState ?? null) as
+    | { step?: number; doneAt?: string | number; bailed?: boolean }
+    | null;
+  const questionnaireActive =
+    !!q && typeof q.step === "number" && q.step < 9 && !q.doneAt && !q.bailed;
 
   // Supervisor gate — LLM decides whether to let the bot reply, draft for Eli,
   // escalate, or silence. Mirrors lib/supervisor/server/dispatch logic used
@@ -445,8 +455,10 @@ async function handleIncoming(evt: GreenWebhook): Promise<void> {
   }
 
   try {
-    if (!stage) {
-      // Pre-quote — questionnaire path.
+    if (questionnaireActive || !stage) {
+      // Pre-quote — questionnaire path. Also forced here when qState is
+      // mid-flight even if pipeline_stage is set (re-quote via restart-tag
+      // where GHL opp stage hasn't been moved back).
       await handleInbound({ sid: canonicalSid, text: textForRouting ?? "" });
     } else if (
       stage === "INITIAL_QUOTE_SENT" ||
