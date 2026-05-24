@@ -166,6 +166,8 @@ export default async function CalculatorWidgetPage({
         shippingOptions={shippingOptions}
         initialMargins={margins}
         apiToken={token}
+        sid={lead?.sid ?? sid ?? undefined}
+        leadName={lead?.name ?? null}
       />
     </div>
   );

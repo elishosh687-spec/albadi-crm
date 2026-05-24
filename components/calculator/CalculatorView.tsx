@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { Loader2 } from "lucide-react";
+import { Loader2, Send, Copy, Check } from "lucide-react";
 import { cn } from "@/lib/cn";
 import type { Product, QuantityTier, ShippingOption, QuoteResult } from "@/lib/factory/calculator/types";
 import { DetailedBreakdown } from "./DetailedBreakdown";
@@ -15,6 +15,13 @@ interface Props {
   // `&widget_token=<value>` so middleware lets the request through without
   // an albadi_auth cookie. Empty in normal dashboard mode.
   apiToken?: string;
+  // Optional lead sid (waJid for bridge-origin leads). When present, a
+  // "send quote text to lead via WhatsApp" action becomes available so
+  // Eli can fire off a quick manual quote from the calculator without
+  // touching the factory pipeline.
+  sid?: string;
+  // Lead display name for the WA greeting. Optional.
+  leadName?: string | null;
 }
 
 interface PreviewResult {
@@ -32,7 +39,7 @@ const r2 = (n: number) => Math.round(n * 100) / 100;
 const ils = (n: number) =>
   n.toLocaleString("he-IL", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-export function CalculatorView({ products, quantityTiers, shippingOptions, initialMargins, apiToken }: Props) {
+export function CalculatorView({ products, quantityTiers, shippingOptions, initialMargins, apiToken, sid, leadName }: Props) {
   const [productId, setProductId] = useState(products[0]?.id ?? "p1");
   const [qtyId, setQtyId]         = useState(quantityTiers[0]?.id ?? "q0");
   const [handles, setHandles]     = useState(true);
@@ -335,6 +342,30 @@ export function CalculatorView({ products, quantityTiers, shippingOptions, initi
         />
       )}
 
+      {/* Quote → WhatsApp / Copy. Only when widget is loaded with a lead
+          context (sid present) and the calculator has a fresh result. */}
+      {r && c && !loading && (
+        <QuoteShareCard
+          apiToken={apiToken}
+          sid={sid}
+          leadName={leadName}
+          quoteText={buildQuoteText({
+            leadName: leadName ?? null,
+            product: products.find((p) => p.id === productId) ?? null,
+            quantity: r.quantity,
+            shippingName: r.shippingOption?.name ?? null,
+            shippingType:
+              r.shippingOption?.type === "sea" || r.shippingOption?.type === "air"
+                ? r.shippingOption.type
+                : null,
+            unitSellingPriceIls: r.sellingPricePerUnitIls,
+            totalSellingPriceIls: r.totalOrderPriceIls,
+            shippingPerUnitIls: c.shippingPerUnitIls,
+            totalShippingIls: c.shippingPerUnitIls * r.quantity,
+          })}
+        />
+      )}
+
       {/* Reverse margin: given a price, what % is the implied profit? */}
       {r && c && (
         <section className="rounded-xl border border-border bg-card p-5 flex flex-col gap-3">
@@ -537,6 +568,159 @@ function BreakdownRows({
         </div>
       ))}
     </dl>
+  );
+}
+
+// -----------------------------------------------------------------------------
+// Quote → text + WhatsApp share. Used when /widget/calculator is loaded with a
+// lead context (sid). Builds the same Hebrew layout the bot uses for quote
+// messages so the customer sees a familiar format whether the quote was
+// generated automatically or manually by Eli on a phone call.
+// -----------------------------------------------------------------------------
+
+function buildQuoteText(opts: {
+  leadName: string | null;
+  product: Product | null;
+  quantity: number;
+  shippingName: string | null;
+  shippingType: "sea" | "air" | null | undefined;
+  unitSellingPriceIls: number;
+  totalSellingPriceIls: number;
+  shippingPerUnitIls: number;
+  totalShippingIls: number;
+}): string {
+  const ilsFmt = (n: number) =>
+    `₪${n.toLocaleString("he-IL", { maximumFractionDigits: 2 })}`;
+  const qty = opts.quantity.toLocaleString("he-IL");
+  const greeting = opts.leadName ? `היי ${opts.leadName} 👋` : "היי 👋";
+  const productDesc = opts.product
+    ? `${opts.product.dimensions} — ${opts.product.description}`
+    : null;
+  const shippingMethod = opts.shippingName
+    ? `${opts.shippingName}${opts.shippingType === "air" ? " (אווירי)" : opts.shippingType === "sea" ? " (ימי)" : ""}`
+    : null;
+
+  const lines: (string | null)[] = [
+    greeting,
+    "",
+    "*הצעת מחיר*",
+    "",
+    "📦 *פרטי המוצר*",
+    productDesc ? `מוצר: ${productDesc}` : null,
+    `כמות: ${qty} יח׳`,
+    "",
+    "💰 *תמחור*",
+    `📦 ${qty} יחידות × ${ilsFmt(opts.unitSellingPriceIls)}`,
+  ];
+  if (opts.totalShippingIls > 0) {
+    lines.push(`🚢 שילוח: ${ilsFmt(opts.totalShippingIls)}`);
+  }
+  if (shippingMethod) {
+    lines.push(`🚚 שיטת שילוח: ${shippingMethod}`);
+  }
+  lines.push(
+    `*💵 סה״כ: ${ilsFmt(opts.totalSellingPriceIls)}*`,
+    "_(לא כולל מע״מ)_",
+    "",
+    "━━━━━━━━━━━━━━",
+    "ההצעה בתוקף ל-14 יום",
+    "נשמח לקבל את אישורך 🙂",
+  );
+  return lines.filter((l) => l !== null).join("\n");
+}
+
+function QuoteShareCard({
+  apiToken,
+  sid,
+  leadName,
+  quoteText,
+}: {
+  apiToken: string | undefined;
+  sid: string | undefined;
+  leadName: string | null | undefined;
+  quoteText: string;
+}) {
+  const [sending, setSending] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [status, setStatus] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(quoteText);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  };
+
+  const send = async () => {
+    if (!sid || !apiToken) return;
+    if (!confirm(`לשלוח את ההצעה ל-${leadName ?? "לקוח"} ב-WhatsApp?`)) return;
+    setSending(true);
+    setStatus(null);
+    setError(null);
+    try {
+      const res = await fetch(
+        `/api/widget/calculator/send-text?widget_token=${encodeURIComponent(apiToken)}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ sid, text: quoteText }),
+        }
+      );
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok || !j?.ok) {
+        setError(j?.error ?? `HTTP ${res.status}`);
+        return;
+      }
+      setStatus("נשלח בהצלחה ✓");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setSending(false);
+    }
+  };
+
+  return (
+    <section className="rounded-xl border border-border bg-card p-4 flex flex-col gap-3" dir="rtl">
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <h2 className="text-sm font-medium">📨 שליחת ההצעה ללקוח</h2>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={copy}
+            className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background/40 px-3 py-1.5 text-xs hover:bg-secondary"
+          >
+            {copied ? <Check className="size-3.5 text-success" /> : <Copy className="size-3.5" />}
+            {copied ? "הועתק" : "העתק טקסט"}
+          </button>
+          <button
+            type="button"
+            onClick={send}
+            disabled={!sid || !apiToken || sending}
+            title={!sid ? "פתח את הוידג'ט מתוך כרטיס לקוח כדי לאפשר שליחה" : undefined}
+            className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+          >
+            {sending ? <Loader2 className="size-3.5 animate-spin" /> : <Send className="size-3.5" />}
+            {sending ? "שולח…" : "שלח בווצאפ"}
+          </button>
+        </div>
+      </div>
+      <textarea
+        readOnly
+        value={quoteText}
+        className="w-full min-h-[220px] bg-background/30 border border-border rounded-md px-3 py-2 text-xs leading-relaxed font-mono whitespace-pre-wrap focus:outline-none"
+      />
+      {!sid && (
+        <p className="text-[11px] text-muted-foreground">
+          ⚠️ ללא ליד מקושר — שליחה ב-WhatsApp מושבתת. אפשר עדיין להעתיק את הטקסט.
+        </p>
+      )}
+      {status && <p className="text-[11px] text-success">{status}</p>}
+      {error && <p className="text-[11px] text-destructive">⚠️ {error}</p>}
+    </section>
   );
 }
 

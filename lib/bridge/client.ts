@@ -360,6 +360,7 @@ export async function sendBridgeMessage(
         text: message,
         occurredAt: new Date(),
         mediaUrl: mediaPath ?? null,
+        mediaFilename: mediaFilename ?? null,
       });
     } catch (e) {
       console.warn("[sendBridgeMessage] ghl forward failed", e);

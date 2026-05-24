@@ -65,6 +65,31 @@ function guessFilenameFromMime(mime: string | null | undefined): string {
   return `file.${extFromMime(mime)}`;
 }
 
+/**
+ * Infer mime from a URL's path extension when the caller didn't supply one.
+ * Used so an outbound mediaUrl like `/api/factory/<id>/pdf` (no mime hint)
+ * still routes through GHL as `application/pdf` instead of `application/bin`,
+ * which GHL's media whitelist silently rejects (the attachment never renders
+ * in the Inbox thread).
+ */
+function sniffMimeFromUrl(url: string | null | undefined): string | null {
+  if (!url) return null;
+  try {
+    const u = new URL(url);
+    const path = u.pathname.toLowerCase();
+    if (path.endsWith(".pdf") || path.endsWith("/pdf")) return "application/pdf";
+    if (path.endsWith(".jpg") || path.endsWith(".jpeg")) return "image/jpeg";
+    if (path.endsWith(".png")) return "image/png";
+    if (path.endsWith(".webp")) return "image/webp";
+    if (path.endsWith(".mp4")) return "video/mp4";
+    if (path.endsWith(".mp3")) return "audio/mpeg";
+    if (path.endsWith(".ogg") || path.endsWith(".oga")) return "audio/ogg";
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 function base64Url(s: string): string {
   return Buffer.from(s, "utf8")
     .toString("base64")
@@ -456,15 +481,20 @@ export async function forwardMessage(opts: {
       // extension (.ogg/.mp4/.jpg). GHL rejects `.oga` from GreenAPI and
       // generic URLs, but accepts the proxied URL because the extension
       // matches its whitelist.
-      const proxyUrl = buildProxyUrl(opts.mediaUrl, opts.mediaMimeType);
+      // Fall back to URL-suffix sniffing when caller didn't pass a mime
+      // (e.g. factory PDF send path → mediaUrl ends with /pdf → infer
+      // application/pdf so the GHL attachment renders instead of silently
+      // dropping with a .bin extension).
+      const effectiveMime = opts.mediaMimeType ?? sniffMimeFromUrl(opts.mediaUrl);
+      const proxyUrl = buildProxyUrl(opts.mediaUrl, effectiveMime);
       const tokenForUpload =
         (await getValidAccessToken(requireGHLLocationId())) ?? null;
       if (tokenForUpload) {
         try {
           const uploaded = await uploadMediaFromUrl({
             url: proxyUrl,
-            filename: opts.mediaFilename || guessFilenameFromMime(opts.mediaMimeType),
-            mimeType: opts.mediaMimeType ?? undefined,
+            filename: opts.mediaFilename || guessFilenameFromMime(effectiveMime),
+            mimeType: effectiveMime ?? undefined,
             accessToken: tokenForUpload,
           });
           attachments = [uploaded.url];

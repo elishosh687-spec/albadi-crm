@@ -19,6 +19,8 @@ interface Props {
   shippingOptions: ShippingOption[];
   initialMargins: Record<string, number>;
   apiToken: string;
+  sid?: string;
+  leadName?: string | null;
 }
 
 type Tab = "calculator" | "settings";
@@ -40,7 +42,15 @@ export function CalculatorWithSettings(props: Props) {
       </div>
 
       {tab === "calculator" ? (
-        <CalculatorView {...props} />
+        <CalculatorView
+          products={props.products}
+          quantityTiers={props.quantityTiers}
+          shippingOptions={props.shippingOptions}
+          initialMargins={props.initialMargins}
+          apiToken={props.apiToken}
+          sid={props.sid}
+          leadName={props.leadName}
+        />
       ) : (
         <SettingsView apiToken={props.apiToken} />
       )}
