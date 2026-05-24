@@ -296,15 +296,17 @@ async function handleMessageReceived(evt: BridgeEnvelope): Promise<void> {
 
   const wasBotPaused = leadSnapshot?.botPaused === true;
 
-  // 1. Stop-word check — bypasses supervisor. Send one polite reply, pause,
-  // DM Eli. Logged so the row appears in the decision timeline.
+  // 1. Stop-word check — bypasses supervisor. Move stage to LOST, send one
+  // polite reply, DM Eli. Logged so the row appears in the decision timeline.
   if (isStopWord(text)) {
     try {
       await db
         .update(leads)
         .set({
           botPaused: true,
-          pipelineFlag: "NEEDS_ELI",
+          pipelineStage: "LOST",
+          pipelineFlag: null,
+          lossReason: "opt_out",
           updatedAt: new Date(),
         })
         .where(sql`trim(${leads.manychatSubId}) = ${sid.trim()}`);
@@ -321,6 +323,13 @@ async function handleMessageReceived(evt: BridgeEnvelope): Promise<void> {
           reason: "stop_word",
         })
       );
+      // Push LOST + lossReason to GHL so the opp moves in the UI.
+      try {
+        const { syncLeadToGHL } = await import("@/integrations/ghl/sync");
+        await syncLeadToGHL(sid);
+      } catch (e) {
+        console.warn("[bridge.webhook] stop-word syncLeadToGHL failed", sid, e);
+      }
       console.log("[bridge.webhook] stop-word escalation", sid);
     } catch (e) {
       console.error("[bridge.webhook] stop-word handler error", sid, e);

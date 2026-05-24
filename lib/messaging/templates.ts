@@ -16,7 +16,11 @@ export type FollowupStage =
   | "MID_QUESTIONNAIRE"
   | "INITIAL_QUOTE_SENT"
   | "AWAITING_LOGO"
-  | "FINAL_QUOTE_SENT";
+  | "FINAL_QUOTE_SENT"
+  // Re-engagement loop for leads at NO_RESPONSE_REENGAGE. Body is built per
+  // send by `lib/autoresponder/re-engagement.ts` via LLM — the entries below
+  // are only used as a fallback if the LLM call returns nothing.
+  | "RE_ENGAGEMENT";
 
 const TEMPLATES: Record<FollowupStage, string[]> = {
   // pre-quote — questionnaire mid-flight (not bailed, not done).
@@ -47,6 +51,11 @@ const TEMPLATES: Record<FollowupStage, string[]> = {
     "היי, חוזר אליכם לגבי המחיר הסופי. הספקתם לחשוב על ההצעה?",
     "אם יש משהו שצריך להבהיר — תכתבו לי. אם לא — אעביר את זה לסיים בטלפון.",
     "אם לא מתאים עכשיו — אין בעיה, תחזרו אליי כשתרצו. אחרת אתקשר היום-מחר.",
+  ],
+  // Fallback only — re-engagement.ts.buildReEngagementMessage normally
+  // produces a personalized body. These are used if the LLM call errors.
+  RE_ENGAGEMENT: [
+    "היי 👋 רק רציתי להזכיר שאנחנו כאן אם בא לך להתקדם עם ההצעה לשקיות הממותגות. תכתוב/י לי בכל זמן.",
   ],
 };
 
@@ -201,9 +210,16 @@ const STOP_PATTERNS_LOWER: string[] = [
   "לא מעניין",
   "לא מעניין אותי",
   "לא מענין אותי",
+  "הסר",
+  "הסירו",
+  "להסיר",
   "הסר אותי",
+  "תוריד אותי",
+  "תורידו אותי",
   "אל תשלחו",
   "אל תשלח",
+  "די לי",
+  "להפסיק",
   "stop",
   "remove me",
   "unsubscribe",

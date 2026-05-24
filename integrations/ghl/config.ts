@@ -65,6 +65,13 @@ export const GHL_STAGE_IDS: Record<string, string> = {
   // returns null on drag → DB stays at the prior stage → next
   // syncLeadToGHL push reverts the opp to that prior stage in the UI.
   FUTURE_FOLLOW_UP: readEnv("GHL_STAGE_FUTURE_FOLLOW_UP"),
+  // Manual stage Eli drags opps into when a customer has been completely
+  // unresponsive (3+ calls and 3+ messages with no reply). The bot then
+  // runs a low-frequency re-engagement loop (every 3 days, skipping
+  // holidays/sabbaths) with an LLM-personalized message until the customer
+  // replies, opts out ("הסר"), or Eli manually drags the opp to LOST. See
+  // app/api/bot/followups/route.ts STAGE_RULE for the cadence.
+  NO_RESPONSE_REENGAGE: readEnv("GHL_STAGE_NO_RESPONSE_REENGAGE"),
   // Virtual stage triggered when leads.pipeline_flag = 'NEEDS_ELI'.
   // Overrides whatever local pipeline_stage says (escalations bubble up).
   NEEDS_ELI: readEnv("GHL_STAGE_NEEDS_ELI"),

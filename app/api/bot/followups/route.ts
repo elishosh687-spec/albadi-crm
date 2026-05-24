@@ -46,9 +46,15 @@ const MAX_FOLLOWUPS = 3;
 
 interface StageRule {
   match: (pipelineStage: string | null, qState: any) => boolean;
-  /** Wait BEFORE attempt #N. cadences[0] = wait before 1st follow-up, etc. */
+  /** Wait BEFORE attempt #N. cadences[0] = wait before 1st follow-up, etc.
+   *  When `unbounded=true`, the cron repeatedly applies the LAST cadence
+   *  value indefinitely. */
   cadences: number[];
   template: FollowupStage;
+  /** When true, the MAX_FOLLOWUPS=3 cap is bypassed and the cadence keeps
+   *  repeating until the customer replies, opts out, or Eli moves the lead
+   *  manually. Used for the NO_RESPONSE_REENGAGE re-engagement loop. */
+  unbounded?: boolean;
 }
 
 const STAGE_RULES: StageRule[] = [
@@ -84,6 +90,19 @@ const STAGE_RULES: StageRule[] = [
     match: (stage) => (stage || "").toUpperCase() === "FINAL_QUOTE_SENT",
     cadences: [2 * HOUR_MS, 12 * HOUR_MS, 23 * HOUR_MS],
     template: "FINAL_QUOTE_SENT",
+  },
+  {
+    // NO_RESPONSE_REENGAGE — Eli manually drags leads here after 3 calls +
+    // 3 messages without a reply. Bot nudges every 3 days with an
+    // LLM-personalized message (see lib/autoresponder/re-engagement.ts).
+    // Quiet hours + Sabbath/holiday gate already applied globally below.
+    // Unbounded: keeps running until customer replies, opts out via stop
+    // word ("הסר" etc → webhook moves stage to LOST), or Eli moves the
+    // opp himself.
+    match: (stage) => (stage || "").toUpperCase() === "NO_RESPONSE_REENGAGE",
+    cadences: [3 * DAY_MS],
+    template: "RE_ENGAGEMENT",
+    unbounded: true,
   },
 ];
 
@@ -147,8 +166,10 @@ async function processCustomerLead(row: {
     return { sid: row.sid, action: "no_rule" };
   }
 
-  // HARD LIMIT — 3 attempts max, supervisor cannot override.
-  if (row.followUpCount >= MAX_FOLLOWUPS) {
+  // HARD LIMIT — 3 attempts max, supervisor cannot override. Skipped for
+  // rules that opted into `unbounded` (re-engagement loop, runs forever
+  // until customer replies or Eli moves the lead).
+  if (!rule.unbounded && row.followUpCount >= MAX_FOLLOWUPS) {
     await escalateLead({
       sid: row.sid,
       name: row.name,
@@ -179,7 +200,17 @@ async function processCustomerLead(row: {
 
   const recipient = row.jid || row.sid;
   const attempt = row.followUpCount + 1;
-  const candidateText = followupTemplate(rule.template, attempt);
+  // Re-engagement loop bodies are LLM-built per send so the message reflects
+  // each lead's specific history + notes; the static template here only
+  // serves as a fallback if the LLM is unavailable.
+  let candidateText: string;
+  if (rule.template === "RE_ENGAGEMENT") {
+    const { buildReEngagementMessage } = await import("@/lib/autoresponder/re-engagement");
+    const built = await buildReEngagementMessage(row.sid);
+    candidateText = built.text;
+  } else {
+    candidateText = followupTemplate(rule.template, attempt);
+  }
 
   // Load recent thread for supervisor context.
   const recentRows = await db
@@ -365,8 +396,9 @@ async function processCustomerLead(row: {
     metadata: { ...replayMeta, rawJson: verdict.rawJson },
   });
 
-  // HARD LIMIT — if this was the 3rd attempt, escalate now.
-  if (attempt >= MAX_FOLLOWUPS) {
+  // HARD LIMIT — if this was the 3rd attempt, escalate now. Skipped for
+  // unbounded rules (re-engagement loop).
+  if (!rule.unbounded && attempt >= MAX_FOLLOWUPS) {
     await escalateLead({
       sid: row.sid,
       name: row.name,

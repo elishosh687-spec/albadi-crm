@@ -377,22 +377,14 @@ async function handleIncoming(evt: GreenWebhook): Promise<void> {
     return;
   }
 
-  // Stop-word check.
+  // Stop-word check. Customer explicitly asked us to stop — move stage to
+  // LOST so the GHL pipeline reflects the outcome, pause the bot, and DM
+  // Eli. The lossReason field captures the trigger for later analysis.
   if (textForRouting && isStopWord(textForRouting)) {
     try {
-      await db
-        .update(leads)
-        .set({
-          botPaused: true,
-          pipelineFlag: "NEEDS_ELI",
-          updatedAt: new Date(),
-        })
-        .where(sql`trim(${leads.manychatSubId}) = ${canonicalSid.trim()}`);
-      try {
-        await sendBridgeMessage(canonicalSid, STOP_WORD_REPLY);
-      } catch (e) {
-        console.error("[green.webhook] stop-word reply failed", e);
-      }
+      // Snapshot BEFORE updating so the DM shows the stage the customer
+      // was sitting at when they opted out (e.g. NO_RESPONSE_REENGAGE),
+      // not "LOST" which is the post-update state.
       const [snap] = await db
         .select({
           name: leads.name,
@@ -402,6 +394,21 @@ async function handleIncoming(evt: GreenWebhook): Promise<void> {
         .from(leads)
         .where(sql`trim(${leads.manychatSubId}) = ${canonicalSid.trim()}`)
         .limit(1);
+      await db
+        .update(leads)
+        .set({
+          botPaused: true,
+          pipelineStage: "LOST",
+          pipelineFlag: null,
+          lossReason: "opt_out",
+          updatedAt: new Date(),
+        })
+        .where(sql`trim(${leads.manychatSubId}) = ${canonicalSid.trim()}`);
+      try {
+        await sendBridgeMessage(canonicalSid, STOP_WORD_REPLY);
+      } catch (e) {
+        console.error("[green.webhook] stop-word reply failed", e);
+      }
       await sendEliDM(
         eliEscalationTemplate({
           name: snap?.name ?? null,
@@ -410,6 +417,12 @@ async function handleIncoming(evt: GreenWebhook): Promise<void> {
           stage: snap?.stage ?? null,
         })
       );
+      // Push LOST + lossReason to GHL so the opp moves in the UI.
+      try {
+        await syncLeadToGHL(canonicalSid);
+      } catch (e) {
+        console.warn("[green.webhook] stop-word syncLeadToGHL failed", e);
+      }
     } catch (e) {
       console.error("[green.webhook] stop-word path failed", e);
     }
