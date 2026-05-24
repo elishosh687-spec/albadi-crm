@@ -200,20 +200,25 @@ export interface FactoryRequestColumns {
 }
 
 /**
- * Excel-style serial date (days since 1899-12-30, matching Feishu's display
- * format for date cells).
+ * Today's date as "YYYY-MM-DD". Sent as a literal string instead of an
+ * Excel serial number — the factory operators see a human-readable date
+ * directly in the cell without needing Feishu's date-format setting on
+ * column C. Earlier serial values like 46164 rendered as raw integers
+ * and confused the supplier.
  */
-function todayExcelSerial(): number {
-  const epoch = Date.UTC(1899, 11, 30); // 1899-12-30 UTC
-  const now = Date.now();
-  return Math.floor((now - epoch) / 86_400_000);
+function todayDateString(): string {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
 }
 
 export function buildFactoryRow(cols: FactoryRequestColumns): (string | number)[] {
   return [
     cols.customer ?? "",
     cols.quotationNo ?? "",
-    todayExcelSerial(),
+    todayDateString(),
     cols.pic ?? "",
     cols.description ?? "",
     cols.material ?? "",

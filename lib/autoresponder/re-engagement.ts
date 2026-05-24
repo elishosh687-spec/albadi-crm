@@ -16,6 +16,7 @@ import { db } from "../db";
 import { leads, messages } from "../../drizzle/schema";
 import { desc, eq, sql } from "drizzle-orm";
 import { callLLM } from "./openai-client";
+import { sendEliDM } from "../notify/eli";
 
 export const RE_ENGAGEMENT_OPT_OUT_FOOTER =
   "\n\n_אם אינך מעוניין/ת לקבל הודעות נוספות, השב/י 'הסר' ולא אטריד שוב._";
@@ -124,4 +125,144 @@ export async function buildReEngagementMessage(
     console.warn("[re-engagement] LLM error, falling back:", e);
   }
   return { text: FALLBACK_BODY + RE_ENGAGEMENT_OPT_OUT_FOOTER, llmAuthored: false };
+}
+
+// -----------------------------------------------------------------------------
+// Inbound classifier — runs when a customer at NO_RESPONSE_REENGAGE replies.
+// Stop-word detection is already handled upstream (templates.ts.isStopWord →
+// stage moves to LOST). Everything else needs intent classification so Eli
+// knows what the customer wants without scrolling the thread.
+// -----------------------------------------------------------------------------
+
+export type ReengagementIntent = "interest" | "removal" | "ambiguous";
+
+export interface ReengagementClassification {
+  intent: ReengagementIntent;
+  reason: string;
+  recommendation: string;
+}
+
+const CLASSIFIER_SYSTEM = `אתה מסווג תגובת לקוח להודעת re-engagement של חברת אריזות אלבדי.
+
+הקטגוריות:
+- "interest" — הלקוח מביע עניין/שאלה/רצון להמשיך (גם בעקיפין: "תזכיר לי", "מה היה המחיר?", "אשמח לדבר", "עוד לא קראתי").
+- "removal" — הלקוח רוצה להפסיק/לא מעוניין/מבקש לא להטריד. (הערה: stop-words ברורים כמו "הסר" כבר מטופלים במקום אחר; אם הגיע לכאן זה בגלל ניסוח רך יותר).
+- "ambiguous" — לא ברור איזה כיוון. ספק = ambiguous.
+
+החזר JSON: {"intent": "interest|removal|ambiguous", "reason": "<משפט קצר בעברית מה הלקוח רוצה>", "recommendation": "<מה כדאי לאלי לעשות, משפט קצר>"}`;
+
+export async function classifyReengagementReply(
+  sid: string,
+  text: string
+): Promise<ReengagementClassification> {
+  const fallback: ReengagementClassification = {
+    intent: "ambiguous",
+    reason: "לא הצלחתי לסווג אוטומטית — קרא את ההיסטוריה.",
+    recommendation: "בדוק את השיחה ידנית.",
+  };
+  if (!text.trim()) return fallback;
+  const ctx = await loadCtx(sid);
+  const history = ctx?.recent ?? [];
+  const userPrompt = [
+    history.length > 0
+      ? `הקשר אחרון:\n` +
+        history
+          .slice(-6)
+          .map((m) => `${m.direction === "in" ? "לקוח" : "אלי"}: ${m.text.slice(0, 200)}`)
+          .join("\n")
+      : null,
+    "",
+    `תגובת הלקוח לסווג: ${JSON.stringify(text)}`,
+  ]
+    .filter((l) => l !== null)
+    .join("\n");
+
+  try {
+    const out = await callLLM<{ intent?: string; reason?: string; recommendation?: string }>({
+      system: CLASSIFIER_SYSTEM,
+      user: userPrompt,
+      temperature: 0,
+      timeoutMs: 5000,
+      retries: 0,
+    });
+    const intent = out?.intent;
+    if (intent === "interest" || intent === "removal" || intent === "ambiguous") {
+      return {
+        intent,
+        reason: out?.reason?.trim() || fallback.reason,
+        recommendation: out?.recommendation?.trim() || fallback.recommendation,
+      };
+    }
+  } catch (e) {
+    console.warn("[re-engagement] classifier error, falling back:", e);
+  }
+  return fallback;
+}
+
+/**
+ * Webhook hook for inbound at NO_RESPONSE_REENGAGE. Stops the bot from
+ * sending more re-engagement nudges (otherwise the next 3-day tick would
+ * fire because `lastFollowUpAt` was just zeroed by the auto-unpause path),
+ * classifies the customer's intent, and DMs Eli so he can manually move the
+ * stage. We never touch `pipeline_stage` here — Eli is the source of truth
+ * for that.
+ *
+ * Returns true when the handler ran, false when there's no work to do.
+ */
+export async function handleReengagementInbound(input: {
+  sid: string;
+  text: string;
+}): Promise<boolean> {
+  const sid = input.sid.trim();
+  const text = (input.text ?? "").trim();
+  if (!text) return false;
+
+  // Snapshot lead before pausing so the DM uses the real name/phone.
+  const [snap] = await db
+    .select({
+      name: leads.name,
+      phone: leads.phoneE164,
+    })
+    .from(leads)
+    .where(sql`trim(${leads.manychatSubId}) = ${sid}`)
+    .limit(1);
+  if (!snap) return false;
+
+  const classification = await classifyReengagementReply(sid, text);
+
+  // Pause the bot so the next followup-cron tick won't enqueue another
+  // re-engagement nudge while we wait for Eli to act.
+  await db
+    .update(leads)
+    .set({
+      botPaused: true,
+      updatedAt: new Date(),
+    })
+    .where(sql`trim(${leads.manychatSubId}) = ${sid}`);
+
+  const who = snap.name?.trim() || snap.phone || sid;
+  const intentEmoji =
+    classification.intent === "interest"
+      ? "🔥"
+      : classification.intent === "removal"
+        ? "🛑"
+        : "❓";
+  const intentLabel =
+    classification.intent === "interest"
+      ? "מביע עניין"
+      : classification.intent === "removal"
+        ? "מבקש להפסיק"
+        : "תגובה לא ברורה";
+  const dm =
+    `${intentEmoji} ${who} (NO_RESPONSE_REENGAGE) — ${intentLabel}.\n` +
+    `הלקוח כתב: "${text.slice(0, 300)}"\n` +
+    `🤖 ניתוח: ${classification.reason}\n` +
+    `💡 המלצה: ${classification.recommendation}\n` +
+    `📞 הבוט הושהה — אתה צריך לגרור ידנית ל-stage המתאים (SHOWED_INTEREST / LOST / וכו').`;
+  try {
+    await sendEliDM(dm);
+  } catch (e) {
+    console.warn("[re-engagement] eli DM failed", e);
+  }
+  return true;
 }

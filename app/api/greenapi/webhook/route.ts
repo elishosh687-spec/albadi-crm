@@ -448,6 +448,20 @@ async function handleIncoming(evt: GreenWebhook): Promise<void> {
     .limit(1);
 
   const stage = (snap?.stage ?? "").toUpperCase() || null;
+
+  // NO_RESPONSE_REENGAGE inbound — classify intent, DM Eli, pause bot,
+  // hand off. Eli moves the stage manually. Runs before supervisor so we
+  // don't waste an LLM call on the supervisor decision tree for a stage it
+  // doesn't know how to route. The auto-unpause above just zeroed
+  // followUpCount + lastFollowUpAt — without this handler the next cron
+  // tick would treat the customer as freshly stuck and send another
+  // re-engagement nudge.
+  if (stage === "NO_RESPONSE_REENGAGE" && textForRouting?.trim()) {
+    const { handleReengagementInbound } = await import("@/lib/autoresponder/re-engagement");
+    await handleReengagementInbound({ sid: canonicalSid, text: textForRouting });
+    return;
+  }
+
   // qState is authoritative when the questionnaire is mid-flight. Without
   // this guard, a "start over" tag (which resets qState to step 1 but leaves
   // pipeline_stage at whatever GHL last pushed back via resync) sends the

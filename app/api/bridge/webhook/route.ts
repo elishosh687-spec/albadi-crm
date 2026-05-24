@@ -491,6 +491,17 @@ async function routeThroughSupervisor(input: SupervisorRouteInput): Promise<void
     .limit(1);
 
   const inboundText = (text ?? "").trim();
+
+  // NO_RESPONSE_REENGAGE inbound — classify intent, DM Eli, pause bot,
+  // hand off. Eli moves the stage manually. Runs before supervisor so the
+  // re-engagement loop can't auto-fire another nudge on the next cron tick
+  // while we wait for Eli to act.
+  if (stage === "NO_RESPONSE_REENGAGE" && inboundText) {
+    const { handleReengagementInbound } = await import("@/lib/autoresponder/re-engagement");
+    await handleReengagementInbound({ sid, text: inboundText });
+    return;
+  }
+
   // Empty-text inbounds (media-only without caption) — let existing handler
   // own that decision; supervisor input would be useless without text.
   // We skip the supervisor and let the legacy handlers do their thing, but
