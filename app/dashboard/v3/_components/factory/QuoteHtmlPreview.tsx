@@ -233,35 +233,73 @@ export function QuoteHtmlPreview({
               </div>
             )}
 
-            {cfg && (
-              <DetailedBreakdown
-                defaultOpen
-                unitCost={p.unitCost}
-                unitShipping={p.unitShipping}
-                unitProfit={p.unitProfit}
-                unitSellingPrice={p.unitSellingPrice}
-                totalCost={p.totalCost}
-                totalShipping={p.totalShipping}
-                totalProfit={p.totalProfit}
-                totalSellingPrice={p.totalSellingPrice}
-                quantity={p.quantity}
-                profitMarginPct={p.profitMarginPct}
-                totalCartons={p.totalCartons}
-                totalWeightKg={p.totalWeightKg}
-                totalCbm={p.totalCbm}
-                shippingType={
-                  cfg.shippingOptions.find((s) => s.id === p.shippingOptionId)?.type ?? null
+            {cfg && (() => {
+              const currentOpt = cfg.shippingOptions.find((s) => s.id === p.shippingOptionId);
+              const currentType = currentOpt?.type ?? null;
+              const altOpt = currentType
+                ? cfg.shippingOptions.find(
+                    (s) => s.enabled && s.type === (currentType === "air" ? "sea" : "air")
+                  )
+                : null;
+
+              let altPayload: {
+                shippingType: "sea" | "air";
+                unitSellingPrice: number;
+                totalSellingPrice: number;
+                shippingName: string | null;
+              } | null = null;
+
+              if (altOpt && p.quantity > 0) {
+                let altShipPerUnitUsd = 0;
+                if (altOpt.type === "air" && altOpt.airRates) {
+                  const rate =
+                    p.totalWeightKg <= altOpt.airRates.thresholdKg
+                      ? altOpt.airRates.rateBelowThreshold
+                      : altOpt.airRates.rateAboveThreshold;
+                  altShipPerUnitUsd = (p.totalWeightKg * rate) / p.quantity;
+                } else if (altOpt.type === "sea" && altOpt.seaRate && altOpt.seaRate > 0) {
+                  altShipPerUnitUsd = (Math.max(p.totalCbm, 1) * altOpt.seaRate) / p.quantity;
                 }
-                factoryUnitCostCny={row.factoryResponse?.unitCostCny}
-                usdToIls={cfg.usdToIls}
-                usdToCny={cfg.usdToCny}
-                seaRate={
-                  cfg.shippingOptions.find((s) => s.id === p.shippingOptionId && s.type === "sea")?.seaRate
-                }
-                rawCbm={p.totalCbm}
-                seaMinCbm={1}
-              />
-            )}
+                const altShipPerUnitIls = altShipPerUnitUsd * cfg.usdToIls;
+                const altShipTotalIls = altShipPerUnitIls * p.quantity;
+                const altTotalSelling = p.totalCost + p.totalProfit + altShipTotalIls;
+                altPayload = {
+                  shippingType: altOpt.type,
+                  unitSellingPrice: altTotalSelling / p.quantity,
+                  totalSellingPrice: altTotalSelling,
+                  shippingName: altOpt.name ?? null,
+                };
+              }
+
+              return (
+                <DetailedBreakdown
+                  defaultOpen
+                  unitCost={p.unitCost}
+                  unitShipping={p.unitShipping}
+                  unitProfit={p.unitProfit}
+                  unitSellingPrice={p.unitSellingPrice}
+                  totalCost={p.totalCost}
+                  totalShipping={p.totalShipping}
+                  totalProfit={p.totalProfit}
+                  totalSellingPrice={p.totalSellingPrice}
+                  quantity={p.quantity}
+                  profitMarginPct={p.profitMarginPct}
+                  totalCartons={p.totalCartons}
+                  totalWeightKg={p.totalWeightKg}
+                  totalCbm={p.totalCbm}
+                  shippingType={currentType}
+                  factoryUnitCostCny={row.factoryResponse?.unitCostCny}
+                  usdToIls={cfg.usdToIls}
+                  usdToCny={cfg.usdToCny}
+                  seaRate={
+                    cfg.shippingOptions.find((s) => s.id === p.shippingOptionId && s.type === "sea")?.seaRate
+                  }
+                  rawCbm={p.totalCbm}
+                  seaMinCbm={1}
+                  alt={altPayload}
+                />
+              );
+            })()}
           </div>
         )}
       </div>

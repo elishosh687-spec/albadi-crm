@@ -261,10 +261,9 @@ export function QuotesHistoryView({ apiToken }: { apiToken: string }) {
                       onClick={() => setFinalizing(r)}
                       disabled={busyId === r.id}
                       title="חשב הצעת מחיר"
-                      className="px-2 h-7 rounded grid place-items-center text-xs font-medium text-primary hover:bg-primary/10 border border-primary/30 disabled:opacity-50 flex items-center gap-1"
+                      className="size-7 rounded grid place-items-center text-primary hover:bg-primary/10 disabled:opacity-50"
                     >
                       <Calculator className="size-3.5" />
-                      חשב
                     </button>
                   )}
                   {r.status === "finalized" && (

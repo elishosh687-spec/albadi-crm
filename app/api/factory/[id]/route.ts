@@ -6,8 +6,9 @@
  * collisions with concurrent factory edits; out of scope for now). Use this
  * to clean test data or remove obsolete history.
  *
- * Auth: dashboard cookie (albadi_auth == ADMIN_PASSWORD), same pattern as
- * /api/leads/[sid]/factory-draft.
+ * Auth: dashboard cookie (albadi_auth == ADMIN_PASSWORD) OR widget_token
+ * query param matching GHL_WIDGET_TOKEN (so the Quotes History widget inside
+ * the GHL iframe can delete rows). Middleware also gates this path.
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -17,9 +18,19 @@ import { eq } from "drizzle-orm";
 
 export const runtime = "nodejs";
 
+const BOM = "﻿";
+function stripBom(s: string | undefined): string | undefined {
+  if (typeof s !== "string") return s;
+  return s.startsWith(BOM) ? s.slice(1) : s;
+}
+
 function authorized(req: NextRequest): boolean {
   const cookie = req.cookies.get("albadi_auth");
-  return !!cookie && cookie.value === process.env.ADMIN_PASSWORD;
+  if (cookie && cookie.value === process.env.ADMIN_PASSWORD) return true;
+  const widgetToken = req.nextUrl.searchParams.get("widget_token");
+  const expected = stripBom(process.env.GHL_WIDGET_TOKEN);
+  if (expected && widgetToken === expected) return true;
+  return false;
 }
 
 export async function DELETE(
