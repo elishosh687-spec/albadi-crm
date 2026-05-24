@@ -14,6 +14,7 @@ import {
   appendRow,
   buildFactoryRow,
   setRowHeight,
+  setCellDateFormat,
   FEISHU_ROW_HEIGHT_PX,
 } from "@/lib/feishu/sheets";
 import type { FactoryProductSpec } from "./types";
@@ -90,6 +91,18 @@ export async function createFactoryRequest(
   } catch (err) {
     console.warn(
       "[factory/create-request] setRowHeight failed (non-fatal)",
+      err
+    );
+  }
+
+  // Format column C (the date cell we just wrote as an Excel serial) so it
+  // renders as a clickable date that opens the Feishu date picker. Without
+  // this the cell shows the raw integer (e.g. "46164"). Non-fatal.
+  try {
+    await setCellDateFormat(feishuRowIndex, "C");
+  } catch (err) {
+    console.warn(
+      "[factory/create-request] setCellDateFormat failed (non-fatal)",
       err
     );
   }

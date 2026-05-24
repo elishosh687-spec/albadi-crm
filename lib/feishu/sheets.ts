@@ -90,6 +90,45 @@ export async function appendRow(values: (string | number)[]): Promise<string> {
 export const FEISHU_ROW_HEIGHT_PX = 70;
 
 /**
+ * Apply a date cell-format ("yyyy/MM/dd") to a single cell. Used after
+ * append so the Excel-serial value written into column C renders as a
+ * clickable date that opens Feishu's date picker, instead of as a raw
+ * integer ("46164") or a text string.
+ *
+ * Feishu API: PUT /open-apis/sheets/v2/spreadsheets/{token}/style
+ *   body.appendStyle.style.formatter = "yyyy/MM/dd"
+ *
+ * Non-fatal on failure — the cell still holds the serial value; only
+ * the visual format is missing.
+ */
+export async function setCellDateFormat(
+  rowIndex: string | number,
+  columnLetter: string
+): Promise<void> {
+  const token = getSpreadsheetToken();
+  const sheetId = await getSheetId();
+  const idx = typeof rowIndex === "string" ? parseInt(rowIndex, 10) : rowIndex;
+  if (!Number.isFinite(idx) || idx <= 0) {
+    throw new Error(`setCellDateFormat: invalid rowIndex=${rowIndex}`);
+  }
+  const range = `${sheetId}!${columnLetter}${idx}:${columnLetter}${idx}`;
+  await feishuFetch(
+    `/open-apis/sheets/v2/spreadsheets/${token}/style`,
+    {
+      method: "PUT",
+      body: JSON.stringify({
+        appendStyle: {
+          range,
+          style: {
+            formatter: "yyyy/MM/dd",
+          },
+        },
+      }),
+    }
+  );
+}
+
+/**
  * Set the height (in pixels) of a specific row.
  *
  * Feishu API: PUT /open-apis/sheets/v2/spreadsheets/{token}/dimension_range
@@ -200,25 +239,25 @@ export interface FactoryRequestColumns {
 }
 
 /**
- * Today's date as "YYYY-MM-DD". Sent as a literal string instead of an
- * Excel serial number — the factory operators see a human-readable date
- * directly in the cell without needing Feishu's date-format setting on
- * column C. Earlier serial values like 46164 rendered as raw integers
- * and confused the supplier.
+ * Today's date as an Excel-style serial number (days since 1899-12-30).
+ * Sent as a number so Feishu's cell-format system recognizes it as a date
+ * value — combined with `setCellDateFormat()` on column C right after the
+ * append, the cell becomes a real date type that opens the date picker
+ * when clicked. Sending a literal "YYYY-MM-DD" string would render as
+ * text and lose the date picker; sending a number without the style call
+ * would render as the raw integer (e.g. "46164").
  */
-function todayDateString(): string {
-  const d = new Date();
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
+function todayExcelSerial(): number {
+  const epoch = Date.UTC(1899, 11, 30); // Excel epoch (1899-12-30 UTC).
+  const now = Date.now();
+  return Math.floor((now - epoch) / 86_400_000);
 }
 
 export function buildFactoryRow(cols: FactoryRequestColumns): (string | number)[] {
   return [
     cols.customer ?? "",
     cols.quotationNo ?? "",
-    todayDateString(),
+    todayExcelSerial(),
     cols.pic ?? "",
     cols.description ?? "",
     cols.material ?? "",
