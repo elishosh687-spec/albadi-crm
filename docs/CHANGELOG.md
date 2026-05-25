@@ -5,6 +5,16 @@
 
 ---
 
+## 2026-05-25 — "Custom product in calculator + edit-as-new on finalized quotes"
+
+### Added
+
+- **Manual product mode in the price calculator.** New toggle pill at the top of `CalculatorView` ("מוצר מקטלוג" / "מוצר ידני"). When `manualMode` is on, the 14-SKU `<select>` is replaced by an inline spec block (description, H/D/W cm, ¥ CNY per unit, master carton: qty / weight / L×W×H). Handles / lamination / logo-colors controls are hidden because the user-entered CNY already includes everything. The system margin matrix + shipping engine are reused unchanged — same `priceFactoryQuote` math, same `DetailedBreakdown` panel, same reverse-target "תמחור לפי יעד" calc, same WhatsApp share card (with the manual description + dims rendered in the message body). Unlocks quoting non-stock products (different materials, custom dims, one-off carton specs) without forging a stock SKU. Backend: `/api/factory/quote-preview` now accepts `product=custom` + `customUnitCostCny` + `customDescription` + `custom{Width,Height,Depth}Cm` + `customCarton{Qty,Weight,Length,Width,Height}`. It synthesizes a `Product` (id=`custom`) with a flat price tier and injects it into `cfg.products` before calling `calculateQuote`. Files: `app/api/factory/quote-preview/route.ts`, `components/calculator/CalculatorView.tsx`.
+
+- **Edit-as-new on finalized factory quotes.** Previously the "ערוך ושלח שוב" button reopened `FinalizeModal` on the **same** `factory_quote_requests` row, silently destroying the prior `pdfUrl` / `finalPricing` / `sentToCustomerAt`. New behaviour: button clones the row to a fresh id (`POST /api/{widget/,}factory/[id]/clone`) with `status='received'` and nulled-out pdf/finalPricing/sentToCustomerAt, then opens `FinalizeModal` on the clone. The original stays untouched in history. Wired in three places: `components/factory-flow/FactoryQuotePanel.widget.tsx`, `app/dashboard/v3/_components/factory/FactoryQuotePanel.tsx`, `components/factory-flow/QuotesHistoryView.tsx` (Copy icon on every finalized row). Shared helper: `lib/factory/clone-quote.ts` (`cloneFactoryQuote(sourceId)`).
+
+---
+
 ## 2026-05-24 — "GHL widgets v2, re-engagement loop, supervisor + routing fixes"
 
 Two intensive days of work after the GHL-as-source-of-truth migration. Three big themes plus a long tail of fixes. Sub-sections by theme; commits in `git log --since="2026-05-22"`.

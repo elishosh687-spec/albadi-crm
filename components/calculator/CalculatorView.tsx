@@ -55,6 +55,22 @@ export function CalculatorView({ products, quantityTiers, shippingOptions, initi
   const [loading, setLoading]     = useState(false);
   const [error, setError]         = useState<string | null>(null);
 
+  // Manual product mode — user enters dims + CNY + carton, no catalog match.
+  const [manualMode, setManualMode] = useState(false);
+  const [manualDesc, setManualDesc] = useState<string>("");
+  const [manualW, setManualW] = useState<string>("");
+  const [manualH, setManualH] = useState<string>("");
+  const [manualD, setManualD] = useState<string>("");
+  const [manualCny, setManualCny] = useState<string>("");
+  const [manualCartonQty, setManualCartonQty] = useState<string>("250");
+  const [manualCartonWeight, setManualCartonWeight] = useState<string>("");
+  const [manualCartonL, setManualCartonL] = useState<string>("");
+  const [manualCartonW, setManualCartonW] = useState<string>("");
+  const [manualCartonH, setManualCartonH] = useState<string>("");
+
+  const manualCnyNum = parseFloat(manualCny);
+  const manualValid = manualMode && Number.isFinite(manualCnyNum) && manualCnyNum > 0;
+
   const selectedTier = quantityTiers.find((t) => t.id === qtyId);
   const overrideParsed = qtyOverride ? parseInt(qtyOverride, 10) : NaN;
   const overrideValid = Number.isFinite(overrideParsed) && overrideParsed > 0;
@@ -74,19 +90,36 @@ export function CalculatorView({ products, quantityTiers, shippingOptions, initi
   const minProfitValid = Number.isFinite(minProfitParsed) && minProfitParsed > 0;
 
   const fetchPreview = useCallback(async () => {
+    if (manualMode && !manualValid) {
+      setPreview(null);
+      setError(null);
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
       const params = new URLSearchParams({
-        product: productId,
+        product: manualMode ? "custom" : productId,
         qty: qtyId,
-        handles: String(handles),
-        lamination: String(lamination),
-        colors: String(colors),
+        handles: String(manualMode ? false : handles),
+        lamination: String(manualMode ? false : lamination),
+        colors: String(manualMode ? 1 : colors),
         shipping: shippingId,
         margin: String(currentMargin),
       });
       if (overrideValid) params.set("qtyOverride", String(overrideParsed));
+      if (manualMode) {
+        params.set("customUnitCostCny", String(manualCnyNum));
+        if (manualDesc.trim()) params.set("customDescription", manualDesc.trim());
+        if (manualW) params.set("customWidthCm", manualW);
+        if (manualH) params.set("customHeightCm", manualH);
+        if (manualD) params.set("customDepthCm", manualD);
+        if (manualCartonQty) params.set("customCartonQty", manualCartonQty);
+        if (manualCartonWeight) params.set("customCartonWeight", manualCartonWeight);
+        if (manualCartonL) params.set("customCartonLength", manualCartonL);
+        if (manualCartonW) params.set("customCartonWidth", manualCartonW);
+        if (manualCartonH) params.set("customCartonHeight", manualCartonH);
+      }
       if (apiToken) params.set("widget_token", apiToken);
       const res = await fetch(`/api/factory/quote-preview?${params}`, { cache: "no-store" });
       const data = await res.json();
@@ -102,7 +135,12 @@ export function CalculatorView({ products, quantityTiers, shippingOptions, initi
     } finally {
       setLoading(false);
     }
-  }, [productId, qtyId, handles, lamination, colors, shippingId, currentMargin, overrideValid, overrideParsed]);
+  }, [
+    manualMode, manualValid, manualCnyNum, manualDesc,
+    manualW, manualH, manualD,
+    manualCartonQty, manualCartonWeight, manualCartonL, manualCartonW, manualCartonH,
+    productId, qtyId, handles, lamination, colors, shippingId, currentMargin, overrideValid, overrideParsed,
+  ]);
 
   useEffect(() => {
     fetchPreview();
@@ -136,21 +174,96 @@ export function CalculatorView({ products, quantityTiers, shippingOptions, initi
     <div className="flex flex-col gap-6" dir="rtl">
       {/* Form */}
       <section className="rounded-xl border border-border bg-card p-5 flex flex-col gap-4">
-        {/* Product */}
-        <div className="flex flex-col gap-1">
-          <label className="text-sm font-medium">מוצר</label>
-          <select
-            value={productId}
-            onChange={(e) => setProductId(e.target.value)}
-            className="bg-background/50 border border-border rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring/30"
+        {/* Mode toggle */}
+        <div className="inline-flex self-start rounded-md border border-border bg-background/40 p-0.5 text-xs">
+          <button
+            type="button"
+            onClick={() => setManualMode(false)}
+            className={cn(
+              "px-3 py-1 rounded",
+              !manualMode ? "bg-primary text-primary-foreground" : "text-muted-foreground"
+            )}
           >
-            {products.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.dimensions} — {p.description}
-              </option>
-            ))}
-          </select>
+            מוצר מקטלוג
+          </button>
+          <button
+            type="button"
+            onClick={() => setManualMode(true)}
+            className={cn(
+              "px-3 py-1 rounded",
+              manualMode ? "bg-primary text-primary-foreground" : "text-muted-foreground"
+            )}
+          >
+            מוצר ידני
+          </button>
         </div>
+
+        {!manualMode ? (
+          /* Product */
+          <div className="flex flex-col gap-1">
+            <label className="text-sm font-medium">מוצר</label>
+            <select
+              value={productId}
+              onChange={(e) => setProductId(e.target.value)}
+              className="bg-background/50 border border-border rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring/30"
+            >
+              {products.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.dimensions} — {p.description}
+                </option>
+              ))}
+            </select>
+          </div>
+        ) : (
+          /* Manual product spec */
+          <div className="flex flex-col gap-3 rounded-lg border border-primary/30 bg-primary/5 p-3">
+            <div className="text-[11px] text-muted-foreground">
+              מוצר מותאם אישית — הזן עלות סינית, מידות, ופרטי קרטון. הרווח/שילוח מחושב לפי הגדרות המערכת.
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-medium">תיאור המוצר</label>
+              <input
+                type="text"
+                placeholder="למשל: שקית פוליאסטר עם רוכסן"
+                value={manualDesc}
+                onChange={(e) => setManualDesc(e.target.value)}
+                className="bg-background/50 border border-border rounded-md px-3 py-1.5 text-sm text-right focus:outline-none focus:ring-2 focus:ring-ring/30"
+              />
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              <NumField label="גובה (ס״מ)" value={manualH} onChange={setManualH} placeholder="30" />
+              <NumField label="עומק (ס״מ)" value={manualD} onChange={setManualD} placeholder="10" />
+              <NumField label="רוחב (ס״מ)" value={manualW} onChange={setManualW} placeholder="40" />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-medium">עלות סינית ליחידה (¥ CNY)</label>
+              <input
+                type="number"
+                min={0}
+                step={0.01}
+                placeholder="למשל 1.20"
+                value={manualCny}
+                onChange={(e) => setManualCny(e.target.value)}
+                className="bg-background/50 border border-border rounded-md px-3 py-1.5 text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-ring/30"
+              />
+              {!manualValid && (
+                <span className="text-[11px] text-warning">חובה להזין עלות סינית גדולה מ-0</span>
+              )}
+            </div>
+            <div className="pt-2 border-t border-primary/20 flex flex-col gap-2">
+              <div className="text-[11px] uppercase tracking-wider text-muted-foreground">קרטון מאסטר</div>
+              <div className="grid grid-cols-2 gap-3">
+                <NumField label="יחידות לקרטון" value={manualCartonQty} onChange={setManualCartonQty} placeholder="250" />
+                <NumField label="משקל קרטון (ק״ג)" value={manualCartonWeight} onChange={setManualCartonWeight} placeholder="5" step={0.1} />
+              </div>
+              <div className="grid grid-cols-3 gap-3">
+                <NumField label="אורך (ס״מ)" value={manualCartonL} onChange={setManualCartonL} placeholder="40" />
+                <NumField label="רוחב (ס״מ)" value={manualCartonW} onChange={setManualCartonW} placeholder="30" />
+                <NumField label="גובה (ס״מ)" value={manualCartonH} onChange={setManualCartonH} placeholder="40" />
+              </div>
+            </div>
+          </div>
+        )}
 
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
           {/* Quantity */}
@@ -201,26 +314,30 @@ export function CalculatorView({ products, quantityTiers, shippingOptions, initi
             </select>
           </div>
 
-          {/* Colors */}
-          <div className="flex flex-col gap-1">
-            <label className="text-sm font-medium">צבעי לוגו</label>
-            <select
-              value={colors}
-              onChange={(e) => setColors(Number(e.target.value))}
-              className="bg-background/50 border border-border rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring/30"
-            >
-              <option value={1}>1 צבע</option>
-              <option value={2}>2 צבעים</option>
-              <option value={3}>3 צבעים</option>
-            </select>
-          </div>
+          {/* Colors — catalog only */}
+          {!manualMode && (
+            <div className="flex flex-col gap-1">
+              <label className="text-sm font-medium">צבעי לוגו</label>
+              <select
+                value={colors}
+                onChange={(e) => setColors(Number(e.target.value))}
+                className="bg-background/50 border border-border rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring/30"
+              >
+                <option value={1}>1 צבע</option>
+                <option value={2}>2 צבעים</option>
+                <option value={3}>3 צבעים</option>
+              </select>
+            </div>
+          )}
         </div>
 
-        {/* Toggles */}
-        <div className="flex gap-6">
-          <Toggle label="ידיות" value={handles} onChange={setHandles} />
-          <Toggle label="למינציה" value={lamination} onChange={setLamination} />
-        </div>
+        {/* Toggles — catalog only */}
+        {!manualMode && (
+          <div className="flex gap-6">
+            <Toggle label="ידיות" value={handles} onChange={setHandles} />
+            <Toggle label="למינציה" value={lamination} onChange={setLamination} />
+          </div>
+        )}
 
         {/* Margin override + min profit (Wave 6: #4, #19) */}
         <div className="grid grid-cols-2 gap-4 pt-2 border-t border-border/50">
@@ -351,7 +468,20 @@ export function CalculatorView({ products, quantityTiers, shippingOptions, initi
           leadName={leadName}
           quoteText={buildQuoteText({
             leadName: leadName ?? null,
-            product: products.find((p) => p.id === productId) ?? null,
+            product: manualMode
+              ? null
+              : products.find((p) => p.id === productId) ?? null,
+            manualDescription: manualMode
+              ? (() => {
+                  const dimsParts: string[] = [];
+                  if (manualH) dimsParts.push(`H${manualH}`);
+                  if (manualD) dimsParts.push(`D${manualD}`);
+                  if (manualW) dimsParts.push(`W${manualW}`);
+                  const dims = dimsParts.join("*");
+                  const desc = manualDesc.trim() || "מוצר מותאם";
+                  return dims ? `${dims} — ${desc}` : desc;
+                })()
+              : null,
             quantity: r.quantity,
             shippingName: r.shippingOption?.name ?? null,
             shippingType:
@@ -581,6 +711,7 @@ function BreakdownRows({
 function buildQuoteText(opts: {
   leadName: string | null;
   product: Product | null;
+  manualDescription?: string | null;
   quantity: number;
   shippingName: string | null;
   shippingType: "sea" | "air" | null | undefined;
@@ -595,7 +726,7 @@ function buildQuoteText(opts: {
   const greeting = opts.leadName ? `היי ${opts.leadName} 👋` : "היי 👋";
   const productDesc = opts.product
     ? `${opts.product.dimensions} — ${opts.product.description}`
-    : null;
+    : opts.manualDescription ?? null;
   const shippingMethod = opts.shippingName
     ? `${opts.shippingName}${opts.shippingType === "air" ? " (אווירי)" : opts.shippingType === "sea" ? " (ימי)" : ""}`
     : null;
@@ -874,6 +1005,35 @@ function QuoteShareCard({
       {status && <p className="text-[11px] text-success">{status}</p>}
       {error && <p className="text-[11px] text-destructive">⚠️ {error}</p>}
     </section>
+  );
+}
+
+function NumField({
+  label,
+  value,
+  onChange,
+  placeholder,
+  step = 1,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  placeholder?: string;
+  step?: number;
+}) {
+  return (
+    <div className="flex flex-col gap-1">
+      <label className="text-xs font-medium">{label}</label>
+      <input
+        type="number"
+        min={0}
+        step={step}
+        placeholder={placeholder}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="bg-background/50 border border-border rounded-md px-3 py-1.5 text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-ring/30"
+      />
+    </div>
   );
 }
 

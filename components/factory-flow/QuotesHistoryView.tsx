@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useMemo } from "react";
-import { ExternalLink, Search, Loader2, Eye, Download, Trash2, X, MessageCircle, Calculator } from "lucide-react";
+import { ExternalLink, Search, Loader2, Eye, Download, Trash2, X, MessageCircle, Calculator, Copy } from "lucide-react";
 import { QuoteHtmlPreview } from "@/app/dashboard/v3/_components/factory/QuoteHtmlPreview";
 import type { FactoryQuoteRow as DashboardFactoryQuoteRow } from "@/app/dashboard/v3/_components/factory/FactoryQuotePanel";
 import { FinalizeModalWidget } from "./FinalizeModal.widget";
@@ -93,6 +93,37 @@ export function QuotesHistoryView({ apiToken }: { apiToken: string }) {
         return;
       }
       await refresh();
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function handleEditAsNew(r: ApiQuoteRow) {
+    if (busyId) return;
+    setBusyId(r.id);
+    try {
+      const res = await fetch(
+        `/api/widget/factory/${r.id}/clone?widget_token=${encodeURIComponent(apiToken)}`,
+        { method: "POST" }
+      );
+      const j = await res.json().catch(() => ({}));
+      if (!j?.ok) {
+        alert(`שגיאה בשכפול: ${j?.error ?? res.status}`);
+        return;
+      }
+      const clonedId: string = j.id;
+      const listRes = await fetch(`/api/widget/quotes/list?widget_token=${encodeURIComponent(apiToken)}&limit=300`);
+      const listJ = await listRes.json();
+      const fresh: ApiQuoteRow[] = listJ?.quotes ?? [];
+      setData(fresh);
+      const cloned = fresh.find((row) => row.id === clonedId);
+      if (cloned) {
+        setFinalizing(cloned);
+      } else {
+        alert("השכפול נוצר אך לא נמצא — רענן ידנית.");
+      }
+    } catch (err) {
+      alert(`כשל: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
       setBusyId(null);
     }
@@ -264,6 +295,17 @@ export function QuotesHistoryView({ apiToken }: { apiToken: string }) {
                       className="size-7 rounded grid place-items-center text-primary hover:bg-primary/10 disabled:opacity-50"
                     >
                       <Calculator className="size-3.5" />
+                    </button>
+                  )}
+                  {r.status === "finalized" && (
+                    <button
+                      type="button"
+                      onClick={() => handleEditAsNew(r)}
+                      disabled={busyId === r.id}
+                      title="ערוך כעותק חדש — מקור נשמר"
+                      className="size-7 rounded grid place-items-center text-muted-foreground hover:text-primary hover:bg-primary/10 disabled:opacity-50"
+                    >
+                      {busyId === r.id ? <Loader2 className="size-3.5 animate-spin" /> : <Copy className="size-3.5" />}
                     </button>
                   )}
                   {r.status === "finalized" && (

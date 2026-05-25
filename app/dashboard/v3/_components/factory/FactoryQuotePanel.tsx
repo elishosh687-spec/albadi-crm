@@ -131,6 +131,7 @@ export function FactoryQuotePanel({
   const [extraFormOpen, setExtraFormOpen] = useState(false);
   const [finalizing, setFinalizing] = useState<FactoryQuoteRow | null>(null);
   const [whatsappLoading, setWhatsappLoading] = useState<string | null>(null);
+  const [editingAsNew, setEditingAsNew] = useState(false);
 
   // Local view of the draft so we can update without a full page reload.
   const [draft, setDraft] = useState<Record<string, unknown> | null>(
@@ -240,6 +241,37 @@ export function FactoryQuotePanel({
   // pipeline (operator hasn't sent them to Feishu yet) and live exclusively in
   // the history list, where they can be promoted via send-to-feishu.
   const active = rows.find((r) => r.factoryStatus !== "draft") ?? null;
+
+  const handleEditAsNew = useCallback(
+    async (row: FactoryQuoteRow) => {
+      if (editingAsNew) return;
+      setEditingAsNew(true);
+      try {
+        const res = await fetch(`/api/factory/${row.id}/clone`, { method: "POST" });
+        const data = await res.json();
+        if (!data?.ok) {
+          alert(`שגיאה בשכפול: ${data?.error ?? "unknown"}`);
+          return;
+        }
+        const clonedId: string = data.id;
+        const listRes = await fetch(`/api/factory/list?lead=${encodeURIComponent(leadId)}`);
+        const listData = await listRes.json();
+        const fresh: FactoryQuoteRow[] = listData?.ok ? listData.requests : [];
+        setRows(fresh);
+        const cloned = fresh.find((r) => r.id === clonedId);
+        if (cloned) {
+          setFinalizing(cloned);
+        } else {
+          alert("השכפול נוצר אך לא נמצא — רענן ידנית.");
+        }
+      } catch (err) {
+        alert(`כשל: ${err instanceof Error ? err.message : String(err)}`);
+      } finally {
+        setEditingAsNew(false);
+      }
+    },
+    [editingAsNew, leadId]
+  );
 
   const handleSendFromSummary = useCallback(async () => {
     if (!resolvedSpec) return;
@@ -357,7 +389,8 @@ export function FactoryQuotePanel({
       ) : (
         <FinalizedState
           row={active}
-          onReFinalize={() => setFinalizing(active)}
+          onEditAsNew={() => handleEditAsNew(active)}
+          editingAsNew={editingAsNew}
           onSendWhatsapp={() => handleSendWhatsapp(active)}
           whatsappLoading={whatsappLoading === active.id}
         />
@@ -689,12 +722,14 @@ function fetchFactoryConfigCached(): Promise<FactoryPricingConfig | null> {
 
 function FinalizedState({
   row,
-  onReFinalize,
+  onEditAsNew,
+  editingAsNew,
   onSendWhatsapp,
   whatsappLoading,
 }: {
   row: FactoryQuoteRow;
-  onReFinalize: () => void;
+  onEditAsNew: () => void;
+  editingAsNew: boolean;
   onSendWhatsapp: () => void;
   whatsappLoading: boolean;
 }) {
@@ -907,10 +942,19 @@ function FinalizedState({
 
       <button
         type="button"
-        onClick={onReFinalize}
-        className="w-full inline-flex items-center justify-center gap-1.5 rounded-md border border-border bg-background/40 px-3 py-2 text-xs text-muted-foreground hover:bg-secondary"
+        onClick={onEditAsNew}
+        disabled={editingAsNew}
+        title="יוצר עותק חדש של ההצעה לעריכה — המקור נשמר בהיסטוריה"
+        className="w-full inline-flex items-center justify-center gap-1.5 rounded-md border border-border bg-background/40 px-3 py-2 text-xs text-muted-foreground hover:bg-secondary disabled:opacity-60"
       >
-        ערוך ושלח שוב
+        {editingAsNew ? (
+          <>
+            <Loader2 className="size-3.5 animate-spin" />
+            יוצר עותק…
+          </>
+        ) : (
+          "ערוך ושלח שוב (עותק חדש)"
+        )}
       </button>
 
       {pdfPreviewOpen && (
