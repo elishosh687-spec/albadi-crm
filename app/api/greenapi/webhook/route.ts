@@ -440,6 +440,25 @@ async function handleIncoming(evt: GreenWebhook): Promise<void> {
     })
     .where(sql`trim(${leads.manychatSubId}) = ${canonicalSid.trim()}`);
 
+  // "New conversation" detection — if the customer hasn't pinged in over 7
+  // days, treat the next inbound as a fresh start regardless of any prior
+  // qState / pipeline_stage. Covers Meta-ad re-leads (same phone clicks a
+  // new ad with a different prefilled template) and stale test leads. The
+  // NO_RESPONSE_REENGAGE branch below has its own dedicated handler — we
+  // skip the restart there so the bot doesn't trample the re-engagement
+  // intent classifier.
+  const NEW_CONVO_GAP_MS = 7 * 24 * 60 * 60 * 1000;
+  const priorInboundRows = await db.execute(sql`
+    SELECT received_at FROM messages
+    WHERE manychat_sub_id = ${canonicalSid} AND direction = 'in'
+    ORDER BY received_at DESC
+    OFFSET 1 LIMIT 1
+  `);
+  const priorInboundAt = (priorInboundRows.rows[0] as { received_at?: Date } | undefined)?.received_at;
+  const isNewConversation =
+    priorInboundAt &&
+    Date.now() - new Date(priorInboundAt).getTime() > NEW_CONVO_GAP_MS;
+
   // Load lead snapshot for routing.
   const [snap] = await db
     .select({ stage: leads.pipelineStage, qState: leads.qState })
@@ -448,6 +467,19 @@ async function handleIncoming(evt: GreenWebhook): Promise<void> {
     .limit(1);
 
   const stage = (snap?.stage ?? "").toUpperCase() || null;
+
+  if (isNewConversation && stage !== "NO_RESPONSE_REENGAGE") {
+    console.log(
+      `[green.webhook] new-conversation reset for ${canonicalSid} (gap ${Math.round((Date.now() - new Date(priorInboundAt!).getTime()) / 86_400_000)}d) — restarting questionnaire`
+    );
+    try {
+      const { restartQuestionnaire } = await import("@/lib/autoresponder/questionnaire");
+      await restartQuestionnaire(canonicalSid, "שלום 👋 בוא נמלא יחד שאלון קצר כדי שאוכל להכין הצעת מחיר.");
+    } catch (e) {
+      console.error("[green.webhook] new-conversation restart failed", e);
+    }
+    return;
+  }
 
   // NO_RESPONSE_REENGAGE inbound — classify intent, DM Eli, pause bot,
   // hand off. Eli moves the stage manually. Runs before supervisor so we

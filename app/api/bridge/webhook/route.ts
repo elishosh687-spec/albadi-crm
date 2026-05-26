@@ -492,6 +492,37 @@ async function routeThroughSupervisor(input: SupervisorRouteInput): Promise<void
 
   const inboundText = (text ?? "").trim();
 
+  // "New conversation" detection — same logic as the Green API webhook
+  // (see app/api/greenapi/webhook/route.ts). If the customer hasn't pinged
+  // in > 7 days, the next inbound triggers a fresh questionnaire restart
+  // regardless of any leftover qState / pipeline_stage. NO_RESPONSE_REENGAGE
+  // is excluded because it has its own classifier branch below.
+  const NEW_CONVO_GAP_MS = 7 * 24 * 60 * 60 * 1000;
+  if (inboundText && stage !== "NO_RESPONSE_REENGAGE") {
+    const priorInboundRows = await db.execute(sql`
+      SELECT received_at FROM messages
+      WHERE manychat_sub_id = ${sid} AND direction = 'in'
+      ORDER BY received_at DESC
+      OFFSET 1 LIMIT 1
+    `);
+    const priorInboundAt = (priorInboundRows.rows[0] as { received_at?: Date } | undefined)?.received_at;
+    if (
+      priorInboundAt &&
+      Date.now() - new Date(priorInboundAt).getTime() > NEW_CONVO_GAP_MS
+    ) {
+      console.log(
+        `[bridge.webhook] new-conversation reset for ${sid} (gap ${Math.round((Date.now() - new Date(priorInboundAt).getTime()) / 86_400_000)}d) — restarting questionnaire`
+      );
+      try {
+        const { restartQuestionnaire } = await import("@/lib/autoresponder/questionnaire");
+        await restartQuestionnaire(sid, "שלום 👋 בוא נמלא יחד שאלון קצר כדי שאוכל להכין הצעת מחיר.");
+      } catch (e) {
+        console.error("[bridge.webhook] new-conversation restart failed", e);
+      }
+      return;
+    }
+  }
+
   // NO_RESPONSE_REENGAGE inbound — classify intent, DM Eli, pause bot,
   // hand off. Eli moves the stage manually. Runs before supervisor so the
   // re-engagement loop can't auto-fire another nudge on the next cron tick
