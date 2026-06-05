@@ -40,6 +40,7 @@ import { handleInbound } from "@/lib/autoresponder/questionnaire";
 import { handleDecisionInbound } from "@/lib/autoresponder/decision";
 import {
   isStopWord,
+  isFacebookCtwaAutoFill,
   eliEscalationTemplate,
   STOP_WORD_REPLY,
 } from "@/lib/messaging/templates";
@@ -399,6 +400,36 @@ async function handleMessageReceived(evt: BridgeEnvelope): Promise<void> {
     } catch (e) {
       console.error("[bridge.webhook] test-jid reset error", sid, e);
     }
+  }
+
+  // 2.7 Facebook Click-to-WhatsApp auto-fill — if the inbound text matches a
+  // known Meta-generated prompt (the message a customer's WhatsApp pre-fills
+  // when they tap the "WhatsApp" button on an FB/IG ad), it's not a real
+  // customer message. Skip the bot entirely so we don't fire OPENING +
+  // questionnaire before the customer has typed anything real. The message
+  // row is already persisted (insertBridgeMessage ran above), so the
+  // dashboard still shows the lead and the prompt text; only the bot reply
+  // is suppressed. The next genuine inbound from this lead will flow
+  // through the normal supervisor route and trigger the questionnaire.
+  if (isFacebookCtwaAutoFill(text)) {
+    console.log("[bridge.webhook] ctwa autofill — bot suppressed", sid);
+    await logDecision({
+      manychatSubId: sid,
+      messageId: inboundMessageId,
+      inboundText: text,
+      stageBefore: leadSnapshot?.stage ?? null,
+      stageAfter: leadSnapshot?.stage ?? null,
+      decidedBy: "code",
+      action: "no_op",
+      metadata: {
+        reason: "facebook_ctwa_autofill_skipped",
+        path: "fb_ctwa_autofill",
+      },
+    });
+    // Still push lead snapshot to GHL so the contact + first message land in
+    // the CRM even though the bot stayed silent.
+    void syncLeadToGHL(sid);
+    return;
   }
 
   // 3. Supervisor-gated routing. Every inbound passes through the LLM
