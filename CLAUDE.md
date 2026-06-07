@@ -62,6 +62,25 @@ npx tsx scripts/restart-send.ts
 npx tsx scripts/restart-send.ts --confirm
 ```
 
+## Pipeline stages (post 2026-06-07 funnel rename)
+
+4-active-stage funnel, 6 total + WON/LOST/sides. Internal names match GHL exactly — no translation layer.
+
+| Stage | Hebrew | When | Who sets |
+|---|---|---|---|
+| `NULL` | בשאלון | first inbound, questionnaire active | bot (`upsertLeadFromBridgeEvent` leaves NULL) |
+| `INTAKE` | שאלון + הצעה אוטומטית | questionnaire complete + auto-quote sent; includes the 24h+ silent state | bot (`handleInbound`) |
+| `DISCAVERY` | שיחת בירור | customer engaged, salesperson runs discovery / commitment-signal call | bot or salesperson |
+| `FACTORY_WAIT` | בדיקת מפעל | non-standard spec, factory check in flight | bot (`routeToFactory`) / Eli (subFlow=awaiting_factory_estimate) |
+| `CONSIDERATION` | שוקל הצעה / מו״מ | final quote in customer's hands; haggling lives here | bot (`handleDecisionInbound`) |
+| `WON` / `LOST` | terminal | customer confirmed payment / explicit refusal | bot or Eli (LOST requires `loss_reason`) |
+
+Side stages (operator drags manually, bot doesn't transition): `FUTURE_FOLLOW_UP`, `NO_RESPONSE_REENGAGE`.
+
+Source of truth: `V2_PIPELINE_STAGES` in [lib/manychat/stages.ts](lib/manychat/stages.ts). Full transition table: [docs/CUSTOMER-FLOW.md](docs/CUSTOMER-FLOW.md).
+
+**Rename rule.** When renaming or merging a stage: ADD the old name to `LEGACY_STAGE_MAP` (don't remove existing entries). Pattern proven 2026-06-07 — stale DB rows, log entries, and external API payloads keep normalizing cleanly. Run the DB backfill (`UPDATE leads SET pipeline_stage = ...`) AFTER the code lands, never before.
+
 ## Known Hardcoded Values (still to fix)
 
 - `TAG_IDS` / `FIELD_IDS` in `lib/manychat/config.ts` — should come from ManyChat API
@@ -71,7 +90,25 @@ npx tsx scripts/restart-send.ts --confirm
 
 ## Deploy
 
-Push to `main` → Vercel auto-deploys. No manual steps needed.
+Push to `main` → Vercel **usually** auto-deploys via GitHub integration.
+
+**Gotcha (seen 2026-06-07):** the GitHub→Vercel webhook silently doesn't fire sometimes. After pushing, run `vercel ls` and check the top deployment age. If it's older than your last commit, trigger manually:
+
+```bash
+~/.local/node/bin/vercel deploy --prod --yes   # or: vercel deploy --prod
+```
+
+The CLI deploy uses the linked project from `.vercel/project.json` — no need to specify the project name. Build runs on Vercel (not local).
+
+## Working with Vercel + Neon from the CLI
+
+**Vercel env vars are encrypted by default.** Running `vercel env pull .env` produces a file where sensitive values (`DATABASE_URL`, all `GHL_*`, all `BRIDGE_*`, etc.) come back as empty strings — the CLI cannot decrypt them. The masking is silent: there's no error, the file looks complete.
+
+To actually query the DB or call GHL from local:
+
+- **Neon (DB):** install `neonctl` (`npm i -g neonctl`), run `neon auth` (OAuth browser flow), then `neon connection-string --project-id <id> --org-id <id>` returns the real DATABASE_URL. Project id is in `neon projects list`.
+- **GHL API:** the OAuth access tokens live in `ghl_oauth_tokens` table — pull from the DB connection above (`SELECT access_token, location_id FROM ghl_oauth_tokens ORDER BY updated_at DESC LIMIT 1`) and hit `services.leadconnectorhq.com` directly.
+- **Vercel env writes:** `vercel env add NAME production` reads value from stdin (`echo VALUE | vercel env add ...`). `vercel env rm NAME production --yes` for removal. Production writes require explicit user authorization in this harness — auto-approve is blocked.
 
 ## Client-bundle import rule (READ BEFORE TOUCHING SHARED CONSTANTS)
 
