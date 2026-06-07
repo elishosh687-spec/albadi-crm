@@ -93,8 +93,8 @@ wa_jid           E.164 → JID resolution
 phone_e164       canonical phone
 email            customer email (added 2026-05-22; GHL-mirrored)
 name             from contact info / manual
-pipeline_stage   NULL (pre-quote) | INITIAL_QUOTE_SENT | AWAITING_FIRST_RESPONSE | SHOWED_INTEREST | FACTORY_CHECK | FINAL_QUOTE_SENT | NEGOTIATING | WON | LOST
-                 (LOST requires loss_reason; FACTORY_CHECK uses qState.subFlow=awaiting_logo|awaiting_factory_estimate)
+pipeline_stage   NULL (pre-quote) | INTAKE | INTAKE | DISCAVERY | FACTORY_WAIT | CONSIDERATION | CONSIDERATION | WON | LOST
+                 (LOST requires loss_reason; FACTORY_WAIT uses qState.subFlow=awaiting_logo|awaiting_factory_estimate)
 next_action      sub-state inside stage (e.g. awaiting_reason, awaiting_competitor_offer)
 last_response_at when the customer last replied
 loss_reason      required when pipeline_stage=LOST — one of LOSS_REASONS (lib/manychat/stages.ts)
@@ -320,12 +320,10 @@ Current map (must match GHL exactly):
 
 | Local key | env var | GHL stage name |
 |---|---|---|
-| INITIAL_QUOTE_SENT | `GHL_STAGE_INITIAL_QUOTE_SENT` | INITIAL_QUOTE_SENT |
-| AWAITING_FIRST_RESPONSE | `GHL_STAGE_AWAITING_FIRST_RESPONSE` | AWAITING_FIRST_RESPONSE |
-| SHOWED_INTEREST | `GHL_STAGE_SHOWED_INTEREST` | SHOWED_INTEREST |
-| FACTORY_CHECK | `GHL_STAGE_FACTORY_CHECK` | FACTORY_CHECK |
-| FINAL_QUOTE_SENT | `GHL_STAGE_FINAL_QUOTE_SENT` | FINAL_QUOTE_SENT |
-| NEGOTIATING | `GHL_STAGE_NEGOTIATING` | NEGOTIATING |
+| INTAKE | `GHL_STAGE_INTAKE` | INTAKE |
+| DISCAVERY | `GHL_STAGE_DISCAVERY` | DISCAVERY |
+| FACTORY_WAIT | `GHL_STAGE_FACTORY_WAIT` | FACTORY_WAIT |
+| CONSIDERATION | `GHL_STAGE_CONSIDERATION` | CONSIDERATION |
 | WON | `GHL_STAGE_WON` | WON |
 | LOST | `GHL_STAGE_LOST` | LOST |
 | FUTURE_FOLLOW_UP | `GHL_STAGE_FUTURE_FOLLOW_UP` | FUTURE_FOLLOW_UP |
@@ -465,12 +463,12 @@ Step layout:
 - 7 = lamination (poll)
 - 8 = colors (poll)
 - **9 = confirmation gate** (handleConfirmationStep — "מעולה נמשיך" / "רוצה לשנות")
-- 10 = terminal done (`doneAt` set; routes to FACTORY_CHECK or sends quote)
+- 10 = terminal done (`doneAt` set; routes to FACTORY_WAIT or sends quote)
 
 Re-ask up to 3 times per question, then NEEDS_ELI. Custom-spec branch
-(product = "custom" or quantity = "custom" < 1000) → FACTORY_CHECK with
+(product = "custom" or quantity = "custom" < 1000) → FACTORY_WAIT with
 `subFlow = "awaiting_factory_estimate"` + Eli DM. Standard path →
-`fetchQuote` (local calculator) → INITIAL_QUOTE_SENT.
+`fetchQuote` (local calculator) → INTAKE.
 
 ### Intent classifier
 
@@ -603,9 +601,9 @@ Toggle ב-Vercel envs → redeploy (~30s).
 | Stage | Cadences | Template | Bounded? | Notes |
 |---|---|---|---|---|
 | (NULL + qState mid-flight) | 1h × 3 | MID_QUESTIONNAIRE | 3 attempts | Pre-quote leads who started but didn't finish the questionnaire. |
-| INITIAL_QUOTE_SENT | 2h / 12h / 23h | INITIAL_QUOTE_SENT | 3 attempts | Quote sent, waiting on decision. |
-| FACTORY_CHECK (subFlow=awaiting_logo) | 2h / 12h / 23h | AWAITING_LOGO | 3 attempts | Bot waiting for the customer's logo file. |
-| FINAL_QUOTE_SENT | 2h / 12h / 23h | FINAL_QUOTE_SENT | 3 attempts | Final price sent, waiting on decision. |
+| INTAKE | 2h / 12h / 23h | INTAKE | 3 attempts | Quote sent, waiting on decision. |
+| FACTORY_WAIT (subFlow=awaiting_logo) | 2h / 12h / 23h | AWAITING_LOGO | 3 attempts | Bot waiting for the customer's logo file. |
+| CONSIDERATION | 2h / 12h / 23h | CONSIDERATION | 3 attempts | Final price sent, waiting on decision. |
 | NO_RESPONSE_REENGAGE | 3d (repeats) | RE_ENGAGEMENT | **unbounded** | Manual stage Eli drags into. LLM body per send. Loop stops only on customer reply / opt-out / manual drag. |
 | FUTURE_FOLLOW_UP | — | — | — | No rule. Manual hold. Bot does not touch. |
 | WON / LOST | — | — | — | Terminal. No cron action. |
@@ -646,7 +644,7 @@ Eli sees draft (Retool feed OR /dashboard/v3/drafts OR /dashboard/v2/drafts)
 ```
 
 Money triggers (per `lib/drafts/index.ts`):
-- pipeline_stage ∈ {INITIAL_QUOTE_SENT, FINAL_QUOTE_SENT, NEGOTIATING}
+- pipeline_stage ∈ {INTAKE, CONSIDERATION, CONSIDERATION}
 - OR LLM returns `is_money_moment=true`
 
 ---
@@ -679,7 +677,7 @@ Money triggers (per `lib/drafts/index.ts`):
 > מה ש-code אומר אבל המוצר/PRD לא — או הפוך.
 
 1. **Pipeline stages refactor — 10-stage journey model — RESOLVED 2026-05-24**
-   - Current map (must match GHL exactly — see §3b "Pipeline stages — env mapping & drift risk"): `INITIAL_QUOTE_SENT, AWAITING_FIRST_RESPONSE, SHOWED_INTEREST, FACTORY_CHECK, FINAL_QUOTE_SENT, NEGOTIATING, WON, LOST, FUTURE_FOLLOW_UP, NO_RESPONSE_REENGAGE` (pre-questionnaire = `pipeline_stage IS NULL`). שלבים מתארים מצב מכירה; pulse פנימי של ה-autoresponder ב-`qState.subFlow`. Loss reason חובה ב-LOST. Migration ב-`scripts/_migrate-stage-rename.sql` (original 8 stages); FUTURE_FOLLOW_UP + NO_RESPONSE_REENGAGE added 2026-05-24 via env vars only (no schema change needed).
+   - Current map (must match GHL exactly — see §3b "Pipeline stages — env mapping & drift risk"): `INTAKE, INTAKE, DISCAVERY, FACTORY_WAIT, CONSIDERATION, CONSIDERATION, WON, LOST, FUTURE_FOLLOW_UP, NO_RESPONSE_REENGAGE` (pre-questionnaire = `pipeline_stage IS NULL`). שלבים מתארים מצב מכירה; pulse פנימי של ה-autoresponder ב-`qState.subFlow`. Loss reason חובה ב-LOST. Migration ב-`scripts/_migrate-stage-rename.sql` (original 8 stages); FUTURE_FOLLOW_UP + NO_RESPONSE_REENGAGE added 2026-05-24 via env vars only (no schema change needed).
    - **Open recurring risk** (not yet automated): any new GHL stage that doesn't get an env entry will silently break the "drag in GHL = saved" round-trip. See §3b.
 
 2. **ManyChat path עוד חי**
@@ -711,7 +709,7 @@ Money triggers (per `lib/drafts/index.ts`):
    - Business thresholds (10000 NIS high-value, 5d no-contact) hardcoded במקום `bot_config`.
 
 7. **Bot Supervisor — `override_with_text` doesn't apply stage transitions**
-   - When the LLM supervisor returns `override_with_text`, it sends the override text but skips the existing handler. Stage transitions (e.g. `INITIAL_QUOTE_SENT → FACTORY_CHECK` on accept, with subFlow=awaiting_logo) won't fire.
+   - When the LLM supervisor returns `override_with_text`, it sends the override text but skips the existing handler. Stage transitions (e.g. `INTAKE → FACTORY_WAIT` on accept, with subFlow=awaiting_logo) won't fire.
    - Mitigated by the supervisor prompt telling the LLM not to override on stage-transition intents (accept, logo received).
    - Phase 5 will fix: add `stage_transition` to the supervisor JSON output.
 

@@ -19,21 +19,19 @@
 
 כל lead נמצא ב-**stage** אחד מתוך הרשימה למטה. בנוסף יכול להיות עם **flags** רוחביים ועם **`qState.subFlow`** לתת-מצב בתוך השלב.
 
-### Stages — 8-stage journey model
+### Stages — 4-stage funnel + WON/LOST/sides
 
-מקור אמת. מקביל ל-`V2_PIPELINE_STAGES` ב-`lib/manychat/stages.ts`. 8 שלבים שמתארים **איפה המכירה נמצאת**, לא מה הפעולה הבאה (פעולות = `crm_tasks` / `crm_sla_timers` / tags).
+מקור אמת. מקביל ל-`V2_PIPELINE_STAGES` ב-`lib/manychat/stages.ts`. 6 שלבים שמתארים **איפה המכירה נמצאת**, לא מה הפעולה הבאה (פעולות = `crm_tasks` / `crm_sla_timers` / tags). 2026-06-07 — קוצצנו מ-8 ל-6 שלבים: INTAKE קיבל אליו את INITIAL_QUOTE_SENT+AWAITING_FIRST_RESPONSE, ו-CONSIDERATION קיבל אליו את FINAL_QUOTE_SENT+NEGOTIATING.
 
 | # | Stage | תווית עברית | מתי נכנסים | מתי יוצאים | מי משנה |
 |---|---|---|---|---|---|
-| 0 | `NULL` | בשאלון | first inbound (pre-quote) | סיום שאלון → שלב 1 | בוט |
-| 1 | `INITIAL_QUOTE_SENT` | הצעה ראשונית נשלחה | בוט שלח מחיר משוער + "מתאים?" | הסכמה / דחייה / שינוי מפרט / 24h ללא תגובה | בוט |
-| 2 | `AWAITING_FIRST_RESPONSE` | ממתין לתגובה ראשונה | חלפו 24h+ ללא תגובה אחרי שלב 1 | לקוח מגיב | בוט (cron) |
-| 3 | `SHOWED_INTEREST` | הראה עניין | לקוח שאל שאלה / ביקש שינוי / ביקש להמשיך | אלי החליט אם לשלוח למפעל | בוט / אלי |
-| 4 | `FACTORY_CHECK` | בדיקת מפעל | לקוח הסכים → איסוף לוגו / "אחר" → מפעל / calc API נכשל | תשובת מפעל מוכנה | בוט (subFlow=awaiting_logo) / אלי (subFlow=awaiting_factory_estimate) |
-| 5 | `FINAL_QUOTE_SENT` | הצעה סופית נשלחה | אלי שלח מחיר סופי | הסכמה → WON / דחייה / מיקוח | בוט |
-| 6 | `NEGOTIATING` | במשא ומתן / החלטה | לקוח מתמקח / מתלבט / מבקש הנחה | סגירה / נטישה | בוט / אלי |
-| 7 | `WON` | נסגר | הלקוח אישר / שילם / הוזמן | סוף (סטטוס סופי) | בוט / אלי |
-| 8 | `LOST` | לא נסגר | סירוב מפורש / 3+ פולואפים בלי תגובה / מצא ספק אחר | סוף — חייב למלא `loss_reason` | **רק אלי** |
+| 0 | `NULL` | בשאלון | first inbound (pre-quote) | סיום שאלון → INTAKE | בוט |
+| 1 | `INTAKE` | שאלון + הצעה אוטומטית | סיום שאלון, בוט שלח מחיר משוער + "מתאים?". כולל גם 24h+ ללא תגובה. | הסכמה / דחייה / שינוי מפרט / לקוח שאל שאלה | בוט |
+| 2 | `DISCAVERY` | שיחת בירור | לקוח שאל שאלה / ביקש שינוי / איש המכירות מתחיל לדבר איתו | החלטה אם לשלוח למפעל או לסגור הצעה | בוט / איש מכירות |
+| 3 | `FACTORY_WAIT` | בדיקת מפעל | לקוח הסכים → איסוף לוגו / "אחר" → מפעל / calc API נכשל | תשובת מפעל מוכנה | בוט (subFlow=awaiting_logo) / אלי (subFlow=awaiting_factory_estimate) |
+| 4 | `CONSIDERATION` | שוקל הצעה / מו״מ | מחיר סופי נשלח / לקוח מתמקח / מתלבט / מבקש הנחה | סגירה (WON) / נטישה (LOST) | בוט / איש מכירות |
+| 5 | `WON` | נסגר | הלקוח אישר / שילם / הוזמן | סוף (סטטוס סופי) | בוט / אלי |
+| 6 | `LOST` | לא נסגר | סירוב מפורש / 3+ פולואפים בלי תגובה / מצא ספק אחר | סוף — חייב למלא `loss_reason` | **רק אלי** |
 
 ### qState.subFlow — תת-מצבים פנימיים של הבוט
 
@@ -41,10 +39,10 @@
 
 | subFlow | בתוך stage | משמעות |
 |---|---|---|
-| `awaiting_estimate_decision` | `INITIAL_QUOTE_SENT` | בוט שאל "מתאים?", מחכה לתגובה (accept / negotiate / reject) |
-| `awaiting_logo` | `FACTORY_CHECK` | לקוח הסכים — בוט אוסף לוגו |
-| `awaiting_factory_estimate` | `FACTORY_CHECK` | לוגו / מפרט אצל מפעל — אלי עובד ידנית |
-| `awaiting_final_decision` | `FINAL_QUOTE_SENT` | בוט שולח את ההצעה הסופית ומחכה לתגובה |
+| `awaiting_estimate_decision` | `INTAKE` | בוט שאל "מתאים?", מחכה לתגובה (accept / negotiate / reject) |
+| `awaiting_logo` | `FACTORY_WAIT` | לקוח הסכים — בוט אוסף לוגו |
+| `awaiting_factory_estimate` | `FACTORY_WAIT` | לוגו / מפרט אצל מפעל — אלי עובד ידנית |
+| `awaiting_final_decision` | `CONSIDERATION` | בוט שולח את ההצעה הסופית ומחכה לתגובה |
 
 ### `loss_reason` (חובה ב-LOST)
 

@@ -29,7 +29,7 @@
 | 1.2.3 | Re-ask up to 3 times on invalid answer | shipped | `lib/autoresponder/questionnaire.ts` | CUSTOMER-FLOW §1.1 |
 | 1.2.4 | Escalate to NEEDS_ELI after 3 failed re-asks / "אחר" | shipped | `lib/autoresponder/questionnaire.ts` | CUSTOMER-FLOW §1.1 |
 | 1.2.5 | Calc-engine integration → estimate price | shipped | `lib/autoresponder/calc.ts` (TBD path) | CUSTOMER-FLOW §1.2 |
-| 1.2.6 | Custom-spec → FACTORY_CHECK (subFlow=awaiting_factory_estimate, אלי מתמחר ידני) | shipped | `lib/autoresponder/questionnaire.ts` | CUSTOMER-FLOW §2 |
+| 1.2.6 | Custom-spec → FACTORY_WAIT (subFlow=awaiting_factory_estimate, אלי מתמחר ידני) | shipped | `lib/autoresponder/questionnaire.ts` | CUSTOMER-FLOW §2 |
 | 1.2.7 | LLM fallback ב-matchAnswer ("לא חייב"→false, "דחוף"→s1, "אלפיים"→custom) | shipped (v3.1) | `lib/autoresponder/spec-extractor.ts` | ARCHITECTURE §5b |
 | 1.2.8 | Step 9 confirmation gate — סיכום + "מעולה/רוצה לשנות" | shipped (v3.1) | `lib/autoresponder/questionnaire.ts:handleConfirmationStep` | CHANGELOG v3.1 |
 | 1.2.9 | Free-text spec revision (LLM merge) — max 2 סיבובים | shipped (v3.1) | `lib/autoresponder/questionnaire.ts:mergeExtracted` | CHANGELOG v3.1 |
@@ -44,14 +44,14 @@
 | 1.3.3 | Money-moment detection (`is_money_moment`) | shipped | `lib/autoresponder/intent.ts` | ARCHITECTURE §drafts |
 | 1.3.4 | Confidence score per classification | shipped | `bot_drafts.llm_confidence` | — |
 
-### 1.4 Decision Flow (INITIAL_QUOTE_SENT / FACTORY_CHECK[awaiting_logo])
+### 1.4 Decision Flow (INTAKE / FACTORY_WAIT[awaiting_logo])
 
 | # | Feature | Status | קוד | מסמך |
 |---|---|---|---|---|
-| 1.4.1 | INITIAL_QUOTE_SENT sub-flows (accept/negotiate/reject) | shipped | `lib/autoresponder/decision.ts` | CUSTOMER-FLOW §2 |
+| 1.4.1 | INTAKE sub-flows (accept/negotiate/reject) | shipped | `lib/autoresponder/decision.ts` | CUSTOMER-FLOW §2 |
 | 1.4.2 | Canned answers for FAQ (delivery, payment, format, meeting) | shipped | `lib/autoresponder/decision.ts` | BOT-COPY |
-| 1.4.3 | Logo request (FACTORY_CHECK/awaiting_logo) on accept | shipped | `lib/autoresponder/decision.ts` | CUSTOMER-FLOW §3 |
-| 1.4.4 | Logo received (image) → FACTORY_CHECK/awaiting_factory_estimate + NEEDS_ELI | shipped | `lib/autoresponder/decision.ts` | CUSTOMER-FLOW §3 |
+| 1.4.3 | Logo request (FACTORY_WAIT/awaiting_logo) on accept | shipped | `lib/autoresponder/decision.ts` | CUSTOMER-FLOW §3 |
+| 1.4.4 | Logo received (image) → FACTORY_WAIT/awaiting_factory_estimate + NEEDS_ELI | shipped | `lib/autoresponder/decision.ts` | CUSTOMER-FLOW §3 |
 | 1.4.5 | 3-strike drop-off rule per stage | shipped | `lib/autoresponder/decision.ts` | CUSTOMER-FLOW §4 |
 | 1.4.6 | Unmatch-agent — `intent=other`/`question_other` → LLM מנסה לפתור לפני escalate | shipped (v3.1) | `lib/autoresponder/unmatch-agent.ts` | ARCHITECTURE §5b |
 | 1.4.7 | Rich HANDOFF DM — `llmAnalysis` + `recommendation` ב-`escalateToEli` | shipped (v3.1) | `lib/messaging/templates.ts:eliDecisionEscalationTemplate` | ARCHITECTURE §HANDOFF |

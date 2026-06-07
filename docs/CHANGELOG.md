@@ -5,6 +5,32 @@
 
 ---
 
+## 2026-06-07 — "Funnel pipeline: 6 stages → 4 stages, internal names match GHL"
+
+### Changed
+
+- **Pipeline restructured from 8-stage journey to 4-stage funnel.** Operator rebuilt the GHL "albadi" pipeline with a simpler, sales-funnel-shaped column layout: INTAKE → DISCAVERY → FACTORY_WAIT → CONSIDERATION → WON/LOST (plus side stages FUTURE_FOLLOW_UP and NO_RESPONSE_REENGAGE). Internal DB stage names now match GHL exactly — no translation layer between bot logic and kanban columns. Mapping:
+  - `INITIAL_QUOTE_SENT` + `AWAITING_FIRST_RESPONSE` → `INTAKE` (questionnaire complete, auto-quote sent, awaiting customer's first real engagement — includes the 24h+ silent state)
+  - `SHOWED_INTEREST` → `DISCAVERY` (lead engaged, salesperson runs discovery / commitment-signal call)
+  - `FACTORY_CHECK` → `FACTORY_WAIT` (non-standard spec — internal factory check before quoting)
+  - `FINAL_QUOTE_SENT` + `NEGOTIATING` → `CONSIDERATION` (final quote in customer's hands; haggling lives here too)
+- **Bot still drives stage transitions** — operator explicitly kept that responsibility on the bot rather than going fully manual. The supervisor candidate's special-case for FINAL_QUOTE_SENT vs NEGOTIATING (`awaiting_haggle_detail` short-circuit) collapses into one CONSIDERATION branch, and the two distinct auto-tasks for those stages merge into one "פולואפ / לטפל בהתנגדות" with the more urgent 4h SLA. Intentional simplification cost.
+- **LEGACY_STAGE_MAP** in `lib/manychat/stages.ts` gained explicit `INITIAL_QUOTE_SENT → INTAKE` (etc.) entries so any stale DB row, log, or external API payload normalizes cleanly. Future renames should follow the same pattern — add legacy entries, don't break the safety net.
+- **DB backfill applied** on prod Neon: 76 lead rows + 76 opportunity rows remapped from old → new stages in one transaction. Pre-questionnaire leads continue to land in INTAKE column via `pickStageId` returning the INTAKE UUID when `pipelineStage` is NULL.
+- **Vercel env vars rotated**: 6 old `GHL_STAGE_*` removed, 4 new ones added pointing to the new GHL pipeline UUIDs. WON/LOST/FUTURE_FOLLOW_UP/NO_RESPONSE_REENGAGE UUIDs also rotated (new pipeline = new stage IDs even for unchanged columns).
+- **Files touched (39)**: a sed-rename across all bot routing, supervisor, dashboard, and integration code, plus targeted dedup of object literals and arrays that collided after the merge. Docs (CUSTOMER-FLOW, ARCHITECTURE, FEATURES) updated to match.
+
+### Why
+
+A 6-active-stage journey was over-articulated for the actual sales work: INITIAL_QUOTE_SENT vs AWAITING_FIRST_RESPONSE were the same kanban column in operator's head, and FINAL_QUOTE_SENT vs NEGOTIATING were the same conversation. Mapping internal stages 1:1 to GHL columns also removed the translation layer that had to live in `pickStageId` + `reverseLookupStage` — fewer abstractions, cheaper to reason about when a stage suddenly behaves wrong.
+
+### Risks / known footguns
+
+- The lost FINAL vs NEGOTIATING distinction means the supervisor no longer downgrades a haggle-detail probe to "escalate" — the merged CONSIDERATION branch treats both like a normal money inbound. If this becomes a problem, reintroduce a `qState.consideration_phase` flag rather than re-splitting the stage.
+- Any old GHL Workflow that filtered on the old stage names (e.g. "trigger when opp moved to FINAL_QUOTE_SENT") will silently stop firing. The operator must re-create those workflows against the new stage UUIDs.
+
+---
+
 ## 2026-05-25 — "Custom product in calculator + edit-as-new on finalized quotes"
 
 ### Added
@@ -35,9 +61,9 @@ Two intensive days of work after the GHL-as-source-of-truth migration. Three big
 
 ### Changed
 
-- **Questionnaire routing — qState beats pipeline_stage when mid-flight.** Same predicate added in 4 places: `lib/supervisor/server/dispatch.ts`, `app/api/greenapi/webhook/route.ts`, `app/api/bridge/webhook/route.ts`, `lib/autoresponder/questionnaire.ts`. `questionnaireActive = qState.step <= 9 && !doneAt && !bailed`. When true, `handleInbound` takes over and `handleDecisionInbound` / supervisor LLM are bypassed. Necessary because the restart-tag flow only resets `pipeline_stage` once; the next GHL `OpportunityUpdate` webhook re-pushes the pre-restart opp stage into DB via `resyncContact`, and without this guard the customer's first poll-vote reply gets caught by the decision handler (classified as "delivery question" or accept of the prior quote → canned reply / FACTORY_CHECK transition / Eli escalation instead of advancing the poll). Step 9 (the confirmation gate `handleConfirmationStep`) is part of the questionnaire — earlier predicate said `step < 9` and that off-by-one made Max Baby's "מעולה, נמשיך" jump to FACTORY_CHECK/awaiting_logo instead of generating the price quote.
+- **Questionnaire routing — qState beats pipeline_stage when mid-flight.** Same predicate added in 4 places: `lib/supervisor/server/dispatch.ts`, `app/api/greenapi/webhook/route.ts`, `app/api/bridge/webhook/route.ts`, `lib/autoresponder/questionnaire.ts`. `questionnaireActive = qState.step <= 9 && !doneAt && !bailed`. When true, `handleInbound` takes over and `handleDecisionInbound` / supervisor LLM are bypassed. Necessary because the restart-tag flow only resets `pipeline_stage` once; the next GHL `OpportunityUpdate` webhook re-pushes the pre-restart opp stage into DB via `resyncContact`, and without this guard the customer's first poll-vote reply gets caught by the decision handler (classified as "delivery question" or accept of the prior quote → canned reply / FACTORY_WAIT transition / Eli escalation instead of advancing the poll). Step 9 (the confirmation gate `handleConfirmationStep`) is part of the questionnaire — earlier predicate said `step < 9` and that off-by-one made Max Baby's "מעולה, נמשיך" jump to FACTORY_WAIT/awaiting_logo instead of generating the price quote.
 - **Stop-word opt-out → automatic LOST move.** Both webhooks (`greenapi`, `bridge`) now set `pipeline_stage = "LOST"` + `loss_reason = "opt_out"` + `bot_paused = true` and push to GHL via `syncLeadToGHL`. The Eli DM still references the lead's prior stage (snapshot taken before the update) for context. Stop-word list extended in `lib/messaging/templates.ts` to include "הסר", "הסירו", "להסיר", "תוריד אותי", "תורידו אותי", "די לי", "להפסיק" alongside the existing tokens.
-- **`pickStageId` no longer fabricates a default stage.** When `lead.pipeline_stage` is NULL (pre-quote, questionnaire still running), it returns `null` so the caller skips opp creation. The old behavior of falling back to `INITIAL_QUOTE_SENT` was creating ghost opportunities at the wrong stage, which then caused the bot to route subsequent inbounds to the decision handler. File: `integrations/ghl/mapping.ts`.
+- **`pickStageId` no longer fabricates a default stage.** When `lead.pipeline_stage` is NULL (pre-quote, questionnaire still running), it returns `null` so the caller skips opp creation. The old behavior of falling back to `INTAKE` was creating ghost opportunities at the wrong stage, which then caused the bot to route subsequent inbounds to the decision handler. File: `integrations/ghl/mapping.ts`.
 - **Customer-facing surfaces no longer show shipping as a separate price.** Factory PDF, WhatsApp caption attached to the PDF, and the calculator widget's quote text — all three drop the dedicated "🚢 שילוח: ₪X" line. Unit price now includes shipping; description labeled `(כולל שילוח)`; method name (ים / אוויר) still appears. Boss views (`DetailedBreakdown`, `FinalizeModal`, `QuoteHtmlPreview` internal tab) keep the breakdown intact. Files: `lib/factory/pdf.tsx`, `lib/factory/server/sendWhatsapp.ts`, `components/calculator/CalculatorView.tsx`.
 
 ### Performance
@@ -119,7 +145,7 @@ See `docs/ARCHITECTURE.md §3b → Field-ownership matrix` for the full DB↔GHL
 The earlier `crm_tasks → GHL Tasks` wire (commit 3d24a9e) targeted a barely-used table — 1 row in the entire DB. The real "Eli must act" signals live elsewhere: `pipeline_flag=NEEDS_ELI`, `bot_paused`, `bot_drafts.status=pending`, `factory_quote_requests.factory_status=received`, idle leads, big quotes. Replaced the dead wire with a signal-derived reconciler so the GHL Tasks tab and a new `eli_action`/`bot_active` owner tag reflect actual operational state.
 
 ### Added
-- **`lib/ghl-tasks/derive.ts`** — pure function maps a lead snapshot + signal counts to a canonical set of `DesiredTask{signalKind,title,dueAt}`. 7 signals: needs_eli_escalation, bot_paused, draft_pending, factory_received, factory_stuck(>3d), big_quote_close(≥10k @ FINAL_QUOTE_SENT), idle_active_lead(48h no response).
+- **`lib/ghl-tasks/derive.ts`** — pure function maps a lead snapshot + signal counts to a canonical set of `DesiredTask{signalKind,title,dueAt}`. 7 signals: needs_eli_escalation, bot_paused, draft_pending, factory_received, factory_stuck(>3d), big_quote_close(≥10k @ CONSIDERATION), idle_active_lead(48h no response).
 - **`lib/ghl-tasks/reconcile.ts`** — `reconcileGHLTasksForLead(sid)`: loads lead+drafts+factory in 3 queries, diffs desired vs cached, calls `createContactTask`/`updateContactTask`/`deleteContactTask`, toggles `eli_action` vs `bot_active` GHL contact tags, mirrors tag to `lead_tags`.
 - **`ghl_lead_tasks` table** — cache of (lead_sid, signal_kind) → ghl_task_id for idempotent diffing. Unique index on (lead_sid, signal_kind).
 - **`addContactTags` / `removeContactTags`** helpers in `integrations/ghl/client.ts` — POST/DELETE `/contacts/{id}/tags`.
@@ -141,7 +167,7 @@ The earlier `crm_tasks → GHL Tasks` wire (commit 3d24a9e) targeted a barely-us
 ### Added
 - **`syncTaskToGHL(crmTaskId)`** in `integrations/ghl/sync.ts` — pushes a single `crm_tasks` row to GHL as a Contact Task. Caches the GHL task id on `crm_tasks.ghl_task_id`; subsequent updates (e.g. mark completed) target the same record instead of creating duplicates. Skips silently if the lead has no `ghl_contact_id`.
 - **Auto-fire-and-forget hooks** in `app/actions/v2.ts`:
-  - `createAutoTaskForStage` (stage transitions create follow-up tasks per the AUTO_TASK_BY_STAGE map: INITIAL_QUOTE_SENT/SHOWED_INTEREST/FACTORY_CHECK/FINAL_QUOTE_SENT/NEGOTIATING/WON) now also pushes to GHL.
+  - `createAutoTaskForStage` (stage transitions create follow-up tasks per the AUTO_TASK_BY_STAGE map: INTAKE/DISCAVERY/FACTORY_WAIT/CONSIDERATION/CONSIDERATION/WON) now also pushes to GHL.
   - `createCrmTaskAction` (manual task from dashboard/API) pushes too.
   - `completeCrmTaskAction` re-syncs so the task shows ✓ in the GHL Tasks tab.
 - **`crm_tasks.ghl_task_id` column** (text, nullable) added via drizzle-kit push. Populated on first sync.
@@ -190,18 +216,18 @@ Part of a larger shift: GHL = primary UI (pipeline, inbox, contact edits); DB = 
 
 ---
 
-## 2026-05-21 — "Pipeline refactor: 7-stage → 8-stage journey model"
+## 2026-05-21 — "Pipeline refactor: 7-stage → 4-stage funnel + WON/LOST/sides journey model"
 
 ### Changed
-- **Pipeline stages refactored to 8-stage journey model.** Replaced the old action-state-mixing 7-stage enum (`NEW / AWAITING_ESTIMATE / AWAITING_LOGO / WAITING_FACTORY / AWAITING_FINAL / CALLBACK_LATER / WON / DROPPED`) with a journey-only model: `NULL (pre-quote) / INITIAL_QUOTE_SENT / AWAITING_FIRST_RESPONSE / SHOWED_INTEREST / FACTORY_CHECK / FINAL_QUOTE_SENT / NEGOTIATING / WON / LOST`. Stages now describe **where the sale is**, not what action the bot should take next; per-lead tasks (`crm_tasks`) and `qState.subFlow` handle the operational layer. ([lib/manychat/stages.ts](lib/manychat/stages.ts), [docs/CUSTOMER-FLOW.md](docs/CUSTOMER-FLOW.md))
-- **Internal autoresponder sub-state moved to `qState.subFlow`.** Values: `awaiting_estimate_decision` (inside INITIAL_QUOTE_SENT), `awaiting_logo` (inside FACTORY_CHECK — bot collecting logo), `awaiting_factory_estimate` (inside FACTORY_CHECK — Eli/factory works price), `awaiting_final_decision` (inside FINAL_QUOTE_SENT). Routing in `handleDecisionInbound` checks subFlow first, falls back to stage. ([lib/autoresponder/decision.ts](lib/autoresponder/decision.ts), [lib/autoresponder/questionnaire.ts](lib/autoresponder/questionnaire.ts))
+- **Pipeline stages refactored to 4-stage funnel + WON/LOST/sides journey model.** Replaced the old action-state-mixing 7-stage enum (`NEW / AWAITING_ESTIMATE / AWAITING_LOGO / WAITING_FACTORY / AWAITING_FINAL / CALLBACK_LATER / WON / DROPPED`) with a journey-only model: `NULL (pre-quote) / INTAKE / INTAKE / DISCAVERY / FACTORY_WAIT / CONSIDERATION / CONSIDERATION / WON / LOST`. Stages now describe **where the sale is**, not what action the bot should take next; per-lead tasks (`crm_tasks`) and `qState.subFlow` handle the operational layer. ([lib/manychat/stages.ts](lib/manychat/stages.ts), [docs/CUSTOMER-FLOW.md](docs/CUSTOMER-FLOW.md))
+- **Internal autoresponder sub-state moved to `qState.subFlow`.** Values: `awaiting_estimate_decision` (inside INTAKE), `awaiting_logo` (inside FACTORY_WAIT — bot collecting logo), `awaiting_factory_estimate` (inside FACTORY_WAIT — Eli/factory works price), `awaiting_final_decision` (inside CONSIDERATION). Routing in `handleDecisionInbound` checks subFlow first, falls back to stage. ([lib/autoresponder/decision.ts](lib/autoresponder/decision.ts), [lib/autoresponder/questionnaire.ts](lib/autoresponder/questionnaire.ts))
 - **New leads schema columns**: `last_response_at` (customer's last reply timestamp, distinct from `last_follow_up_at`), `loss_reason` (required when stage=LOST — one of `יקר_לו / לא_ענה / לא_רלוונטי / מצא_ספק_אחר / זמן_אספקה / כמות`), `priority` (low|normal|high|urgent), `owner_id` (denormalized from `crm_lead_episodes.owner_id`). ([drizzle/schema.ts](drizzle/schema.ts))
-- **Auto-task hook on stage change** in `setLeadStage`. Every stage transition (except `AWAITING_FIRST_RESPONSE`) creates a `crm_tasks` row with a stage-appropriate title + dueAt: 24h for `INITIAL_QUOTE_SENT`/`FACTORY_CHECK`/`FINAL_QUOTE_SENT`/`WON`, 2h for `SHOWED_INTEREST`, 4h for `NEGOTIATING`. ([app/actions/v2.ts](app/actions/v2.ts))
+- **Auto-task hook on stage change** in `setLeadStage`. Every stage transition (except `INTAKE`) creates a `crm_tasks` row with a stage-appropriate title + dueAt: 24h for `INTAKE`/`FACTORY_WAIT`/`CONSIDERATION`/`WON`, 2h for `DISCAVERY`, 4h for `CONSIDERATION`. ([app/actions/v2.ts](app/actions/v2.ts))
 - **GHL pipeline mirror updated** — `GHL_STAGE_IDS` env keys renamed to the 8 new stages; new custom field `loss_reason` added to `GHL_FIELD_DEFINITIONS`; `pickOpportunityStatus` maps `LOST → "lost"`. Re-run `npx tsx integrations/ghl/bootstrap.ts` after creating the 8 stages in GHL UI to populate the env block. ([integrations/ghl/config.ts](integrations/ghl/config.ts), [integrations/ghl/mapping.ts](integrations/ghl/mapping.ts), [integrations/ghl/bootstrap.ts](integrations/ghl/bootstrap.ts))
 - **Bridge webhook routing** + greenapi webhook routing updated to dispatch new stages to `handleDecisionInbound` and read `qState.subFlow` for media-only fast-path. ([app/api/bridge/webhook/route.ts](app/api/bridge/webhook/route.ts), [app/api/greenapi/webhook/route.ts](app/api/greenapi/webhook/route.ts))
-- **Tags extended** with name-only flags: `לקוח_חם` (auto-set on SHOWED_INTEREST), `לא_ענה`, `מחכה_למפעל`. Numeric ManyChat tag IDs in `V2_FLAG_TAG_IDS` remain for the existing 5 flags (vestigial post-bridge-cutover). New tags write directly to `lead_tags` table; legacy `addTag(sid, tagId)` path skipped silently. ([lib/manychat/stages.ts](lib/manychat/stages.ts), [app/actions/v2.ts](app/actions/v2.ts))
+- **Tags extended** with name-only flags: `לקוח_חם` (auto-set on DISCAVERY), `לא_ענה`, `מחכה_למפעל`. Numeric ManyChat tag IDs in `V2_FLAG_TAG_IDS` remain for the existing 5 flags (vestigial post-bridge-cutover). New tags write directly to `lead_tags` table; legacy `addTag(sid, tagId)` path skipped silently. ([lib/manychat/stages.ts](lib/manychat/stages.ts), [app/actions/v2.ts](app/actions/v2.ts))
 - **Dashboard v3 + analytics + supervisor prompts** rewritten for new stage labels, colors, funnel order, bucket categorization, and LLM-guidance examples.
-- **`new-lead` upsert** no longer sets `pipeline_stage='NEW'`. Pre-quote leads sit at `pipeline_stage=NULL` until the bot's `routeToQuoted` writes `INITIAL_QUOTE_SENT`. ([lib/bridge/client.ts](lib/bridge/client.ts))
+- **`new-lead` upsert** no longer sets `pipeline_stage='NEW'`. Pre-quote leads sit at `pipeline_stage=NULL` until the bot's `routeToQuoted` writes `INTAKE`. ([lib/bridge/client.ts](lib/bridge/client.ts))
 
 ### Required follow-up actions (manual)
 1. `npx drizzle-kit push` — adds `last_response_at`, `loss_reason`, `priority`, `owner_id` columns.
