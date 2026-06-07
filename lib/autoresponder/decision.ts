@@ -4,9 +4,9 @@
  * Stage values use the 8-stage journey model from lib/manychat/stages.ts.
  * Internal autoresponder sub-flow is tracked on qState.subFlow:
  *
- *   subFlow="awaiting_estimate_decision"  (stage = INITIAL_QUOTE_SENT)
+ *   subFlow="awaiting_estimate_decision"  (stage = INTAKE)
  *     bot asked "המחיר מתאים?"
- *     ├─ accept             → FACTORY_CHECK + subFlow="awaiting_logo"
+ *     ├─ accept             → FACTORY_WAIT + subFlow="awaiting_logo"
  *     ├─ samples_request    → catalog URL, stay
  *     ├─ negotiating ("יקר") → ask "יש לך הצעה מתחרה?" (decisionState sub-sub-state)
  *     ├─ reject             → ask "יש סיבה ספציפית?" (decisionState)
@@ -17,15 +17,15 @@
  *     ├─ question_meeting / question_other → escalate
  *     └─ other              → no-op (cadence keeps nudging)
  *
- *   subFlow="awaiting_logo"  (stage = FACTORY_CHECK)
+ *   subFlow="awaiting_logo"  (stage = FACTORY_WAIT)
  *     ├─ media inbound (image / file / link) → subFlow="awaiting_factory_estimate" + NEEDS_ELI + Eli DM
  *     ├─ text + intent=question_format       → canned "כל פורמט בסדר", stay
  *     └─ text (other)                         → re-ask up to 3x, then escalate
  *
- *   subFlow="awaiting_factory_estimate"  (stage = FACTORY_CHECK)
+ *   subFlow="awaiting_factory_estimate"  (stage = FACTORY_WAIT)
  *     bot is paused — Eli/factory works the price manually.
  *
- *   subFlow="awaiting_final_decision"  (stage = FINAL_QUOTE_SENT)
+ *   subFlow="awaiting_final_decision"  (stage = CONSIDERATION)
  *     Eli sent final price; bot watches for customer reaction.
  *
  * Sub-flows respect bot_paused (caller skips this module when paused).
@@ -115,7 +115,7 @@ const REPLY_SPEC_CHANGE_REPROMPT =
 const REPLY_SPEC_CHANGE_AUTO_QUOTE =
   "סבבה, עדכנתי את הפרטים. הנה ההצעה המעודכנת:";
 
-// FINAL_QUOTE_SENT (subFlow=awaiting_final_decision) copies
+// CONSIDERATION (subFlow=awaiting_final_decision) copies
 const FINAL_ACCEPT_REPLY =
   "מעולה 🎉 אתקשר אליכם תוך כמה שעות עם פרטי תשלום ולוחות זמנים.";
 const FINAL_HAGGLE_PROMPT =
@@ -444,16 +444,16 @@ export async function handleDecisionInbound(input: {
     return handleFinalStage(ctx, input.text);
   }
 
-  // Fallback for leads written before subFlow existed. FACTORY_CHECK without
+  // Fallback for leads written before subFlow existed. FACTORY_WAIT without
   // a subFlow most commonly means awaiting_logo (the bot-driven happy path);
   // awaiting_factory_estimate is set explicitly elsewhere.
-  if (stage === "FACTORY_CHECK") {
+  if (stage === "FACTORY_WAIT") {
     return handleLogoStage(ctx, input.text, input.hasMedia);
   }
-  if (stage === "INITIAL_QUOTE_SENT") {
+  if (stage === "INTAKE") {
     return handleDecisionStage(ctx, input.text);
   }
-  if (stage === "FINAL_QUOTE_SENT") {
+  if (stage === "CONSIDERATION") {
     return handleFinalStage(ctx, input.text);
   }
   return { action: "no_op", detail: `stage=${stage} subFlow=${subFlow}` };
@@ -465,7 +465,7 @@ async function handleDecisionStage(
 ): Promise<DecisionResult> {
   const t = (text ?? "").trim();
   if (!t) {
-    // Empty text at INITIAL_QUOTE_SENT = customer sent media without
+    // Empty text at INTAKE = customer sent media without
     // caption (e.g. they accepted the quote and sent a logo eagerly, or
     // a voice note / sticker). The bot can't classify, but silence makes
     // the customer feel ignored. Escalate so Eli sees it in the
@@ -708,7 +708,7 @@ async function handleDecisionStage(
       await db
         .update(leads)
         .set({
-          pipelineStage: "FACTORY_CHECK",
+          pipelineStage: "FACTORY_WAIT",
           followUpCount: 0,
           lastFollowUpAt: new Date(),
           botSummary: "customer accepted quote — awaiting logo",
@@ -917,7 +917,7 @@ async function handleLogoStage(
       .update(leads)
       .set({
         qState: next as any,
-        pipelineStage: "FACTORY_CHECK",
+        pipelineStage: "FACTORY_WAIT",
         pipelineFlag: "NEEDS_ELI",
         botPaused: true,
         botSummary: "logo received — Eli to send final price within 24h",
@@ -953,7 +953,7 @@ async function handleLogoStage(
       .update(leads)
       .set({
         qState: next as any,
-        pipelineStage: "FACTORY_CHECK",
+        pipelineStage: "FACTORY_WAIT",
         pipelineFlag: "NEEDS_ELI",
         botPaused: true,
         botSummary: "logo link received — Eli to send final price within 24h",
@@ -1051,10 +1051,10 @@ async function handleFinalStage(
 ): Promise<DecisionResult> {
   const t = (text ?? "").trim();
   if (!t) {
-    // Same logic as INITIAL_QUOTE_SENT: empty text usually means media
+    // Same logic as INTAKE: empty text usually means media
     // without caption. Don't ghost the customer — escalate so the lead
     // surfaces in the dashboard for manual reply.
-    await escalateToEli(ctx, "Customer sent media-only / empty message at FINAL_QUOTE_SENT", {
+    await escalateToEli(ctx, "Customer sent media-only / empty message at CONSIDERATION", {
       kind: "generic",
       llmAnalysis:
         "הלקוח שלח הודעה בלי טקסט אחרי המחיר הסופי. ייתכן שזה הלוגו או קובץ עזר.",

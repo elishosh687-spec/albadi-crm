@@ -10,12 +10,10 @@ const OPENAI_URL = "https://api.openai.com/v1/chat/completions";
 
 const STAGE_LABELS: Record<string, string> = {
   PRE_QUOTE: "בשאלון",
-  INITIAL_QUOTE_SENT: "הצעה ראשונית נשלחה",
-  AWAITING_FIRST_RESPONSE: "ממתין לתגובה ראשונה",
-  SHOWED_INTEREST: "הראה עניין",
-  FACTORY_CHECK: "בדיקת מפעל",
-  FINAL_QUOTE_SENT: "הצעה סופית נשלחה",
-  NEGOTIATING: "משא ומתן",
+  INTAKE: "שאלון + הצעה אוטומטית",
+  DISCAVERY: "שיחת בירור",
+  FACTORY_WAIT: "בדיקת מפעל",
+  CONSIDERATION: "שוקל הצעה / מו״מ",
   WON: "נסגר",
   LOST: "לא נסגר",
 };

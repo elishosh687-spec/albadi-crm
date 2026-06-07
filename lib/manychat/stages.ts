@@ -3,16 +3,21 @@
 // at module load and throws on the client. This file is safe to import
 // from "use client" components.
 
-// 8 canonical stages — journey-only model.
+// 6 canonical stages — funnel model aligned with the GHL kanban columns the
+// operator sees in Opportunities. The four active stages compress what used
+// to be a 6-stage journey:
+//   INTAKE         = questionnaire running + auto-quote sent (pre-engagement)
+//   DISCAVERY      = engaged, salesperson discovery call + commitment signal
+//   FACTORY_WAIT   = factory check for non-standard specs
+//   CONSIDERATION  = final quote sent, customer considering / negotiating
+//   WON / LOST     = terminal
 // Sub-states like "snooze for callback" or "waiting on logo" live as tasks
 // (crm_tasks) or flags, not as their own stages. See docs/CUSTOMER-FLOW.md.
 export const V2_PIPELINE_STAGES = [
-  "INITIAL_QUOTE_SENT",
-  "AWAITING_FIRST_RESPONSE",
-  "SHOWED_INTEREST",
-  "FACTORY_CHECK",
-  "FINAL_QUOTE_SENT",
-  "NEGOTIATING",
+  "INTAKE",
+  "DISCAVERY",
+  "FACTORY_WAIT",
+  "CONSIDERATION",
   "WON",
   "LOST",
 ] as const;
@@ -20,29 +25,39 @@ export const V2_PIPELINE_STAGES = [
 export type V2PipelineStage = (typeof V2_PIPELINE_STAGES)[number];
 
 export const V2_STAGE_LABELS: Record<V2PipelineStage, string> = {
-  INITIAL_QUOTE_SENT: "הצעה ראשונית נשלחה",
-  AWAITING_FIRST_RESPONSE: "ממתין לתגובה ראשונה",
-  SHOWED_INTEREST: "הראה עניין",
-  FACTORY_CHECK: "בדיקת מפעל",
-  FINAL_QUOTE_SENT: "הצעה סופית נשלחה",
-  NEGOTIATING: "במשא ומתן / החלטה",
+  INTAKE: "שאלון + הצעה אוטומטית",
+  DISCAVERY: "שיחת בירור",
+  FACTORY_WAIT: "בדיקת מפעל",
+  CONSIDERATION: "שוקל הצעה / מו״מ",
   WON: "נסגר",
   LOST: "לא נסגר",
 };
 
 // Legacy -> new mapping. Consumed by:
-//   - scripts/_migrate-stage-rename.sql (DB backfill — also hardcoded there)
+//   - DB backfill (UPDATE leads SET pipeline_stage = ... — see migration below)
 //   - classifier prompt (so previous-decision history with old names still parses)
 //   - runtime safety net in any code that may still read a legacy value
 // `null` means "no stage" — pre-quote leads sit at pipeline_stage = NULL while
-// the questionnaire is running and graduate to INITIAL_QUOTE_SENT after quote.
+// the questionnaire is running and graduate to INTAKE after quote.
+//
+// The 2026-06-07 rename merged 6 journey stages into the new 4-stage funnel.
+// Keep all pre-rename names here so a stale DB row, an old API payload, or a
+// log entry still normalizes cleanly.
 export const LEGACY_STAGE_MAP: Record<string, V2PipelineStage | null> = {
   NEW: null,
-  AWAITING_ESTIMATE: "AWAITING_FIRST_RESPONSE",
-  AWAITING_LOGO: "FACTORY_CHECK",
-  WAITING_FACTORY: "FACTORY_CHECK",
-  AWAITING_FINAL: "FINAL_QUOTE_SENT",
-  CALLBACK_LATER: "SHOWED_INTEREST",
+  // 2026-06-07 funnel rename
+  INITIAL_QUOTE_SENT: "INTAKE",
+  AWAITING_FIRST_RESPONSE: "INTAKE",
+  SHOWED_INTEREST: "DISCAVERY",
+  FACTORY_CHECK: "FACTORY_WAIT",
+  FINAL_QUOTE_SENT: "CONSIDERATION",
+  NEGOTIATING: "CONSIDERATION",
+  // Older renames (pre-2026-06-07)
+  AWAITING_ESTIMATE: "INTAKE",
+  AWAITING_LOGO: "FACTORY_WAIT",
+  WAITING_FACTORY: "FACTORY_WAIT",
+  AWAITING_FINAL: "CONSIDERATION",
+  CALLBACK_LATER: "DISCAVERY",
   DROPPED: "LOST",
   WON: "WON",
 };
@@ -101,8 +116,8 @@ export const V2_FLAG_TAG_IDS = {
 // no numeric id. If/when re-added, also add an id to V2_FLAG_TAG_IDS or guard
 // the index with flagHasNumericId.
 export const V2_EXTRA_FLAG_NAMES = [
-  "לקוח_חם",      // set when stage -> SHOWED_INTEREST
-  "מחכה_למפעל",   // set when stage -> FACTORY_CHECK
+  "לקוח_חם",      // set when stage -> DISCAVERY
+  "מחכה_למפעל",   // set when stage -> FACTORY_WAIT
 ] as const;
 
 export type V2FlagName =

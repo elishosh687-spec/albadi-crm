@@ -44,10 +44,9 @@ export interface LeadSignalSnapshot {
 }
 
 const ACTIVE_STAGES = new Set([
-  "INITIAL_QUOTE_SENT",
-  "AWAITING_FIRST_RESPONSE",
-  "SHOWED_INTEREST",
-  "NEGOTIATING",
+  "INTAKE",
+  "DISCAVERY",
+  "CONSIDERATION",
 ]);
 
 const HOUR_MS = 60 * 60 * 1000;
@@ -99,7 +98,7 @@ export function deriveDesiredTasks(
   // 5. Factory stuck >3 days — waiting on factory estimate.
   const subFlow = (lead.qState as { subFlow?: string } | null)?.subFlow;
   if (
-    lead.pipelineStage === "FACTORY_CHECK" &&
+    lead.pipelineStage === "FACTORY_WAIT" &&
     subFlow === "awaiting_factory_estimate" &&
     lead.updatedAt &&
     now.getTime() - lead.updatedAt.getTime() >= 3 * DAY_MS
@@ -111,10 +110,10 @@ export function deriveDesiredTasks(
     });
   }
 
-  // 6. Big quote sitting at FINAL_QUOTE_SENT — close it.
+  // 6. Big quote sitting at CONSIDERATION — close it.
   const quoteTotalNum = lead.quoteTotal ? Number(lead.quoteTotal) : 0;
   if (
-    lead.pipelineStage === "FINAL_QUOTE_SENT" &&
+    lead.pipelineStage === "CONSIDERATION" &&
     quoteTotalNum >= 10_000
   ) {
     tasks.push({

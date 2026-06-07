@@ -102,7 +102,7 @@ export async function dispatchSupervisor(
   // supervisor LLM has no useful judgment to add and consistently
   // mis-escalates straightforward poll-vote replies like "עם ידיות" because
   // the stale pipeline_stage (resynced from GHL after a restart) puts it
-  // into INITIAL_QUOTE_SENT context.
+  // into INTAKE context.
   const q = (freshLead?.qState ?? null) as
     | { step?: number; doneAt?: unknown; bailed?: unknown }
     | null;

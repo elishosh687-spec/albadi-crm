@@ -21,12 +21,10 @@ const HOUR_MS = 60 * 60 * 1000;
 const MAX_FOLLOWUPS = 3;
 const CADENCE: Record<string, number[]> = {
   PRE_QUOTE: [1, 1, 1],
-  INITIAL_QUOTE_SENT: [2, 12, 23],
-  AWAITING_FIRST_RESPONSE: [2, 12, 23],
-  SHOWED_INTEREST: [2, 12, 23],
-  FACTORY_CHECK: [2, 12, 23],
-  FINAL_QUOTE_SENT: [2, 12, 23],
-  NEGOTIATING: [2, 12, 23],
+  INTAKE: [2, 12, 23],
+  DISCAVERY: [2, 12, 23],
+  FACTORY_WAIT: [2, 12, 23],
+  CONSIDERATION: [2, 12, 23],
 };
 
 function jerusalemHour(d: Date): number {

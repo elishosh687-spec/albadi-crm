@@ -21,12 +21,10 @@ const QUIET_END = 9; // 09:00 IL
 // explicitly when stage is empty.
 const CADENCE_BY_STAGE: Record<string, number[]> = {
   PRE_QUOTE: [1 * HOUR_MS, 1 * HOUR_MS, 1 * HOUR_MS],
-  INITIAL_QUOTE_SENT: [2 * HOUR_MS, 12 * HOUR_MS, 23 * HOUR_MS],
-  AWAITING_FIRST_RESPONSE: [2 * HOUR_MS, 12 * HOUR_MS, 23 * HOUR_MS],
-  SHOWED_INTEREST: [2 * HOUR_MS, 12 * HOUR_MS, 23 * HOUR_MS],
-  FACTORY_CHECK: [2 * HOUR_MS, 12 * HOUR_MS, 23 * HOUR_MS],
-  FINAL_QUOTE_SENT: [2 * HOUR_MS, 12 * HOUR_MS, 23 * HOUR_MS],
-  NEGOTIATING: [2 * HOUR_MS, 12 * HOUR_MS, 23 * HOUR_MS],
+  INTAKE: [2 * HOUR_MS, 12 * HOUR_MS, 23 * HOUR_MS],
+  DISCAVERY: [2 * HOUR_MS, 12 * HOUR_MS, 23 * HOUR_MS],
+  FACTORY_WAIT: [2 * HOUR_MS, 12 * HOUR_MS, 23 * HOUR_MS],
+  CONSIDERATION: [2 * HOUR_MS, 12 * HOUR_MS, 23 * HOUR_MS],
 };
 
 function jerusalemHour(d: Date): number {
@@ -85,10 +83,10 @@ export async function loadFollowupQueue(): Promise<FollowupQueueItem[]> {
     // Terminal stages: no bot follow-ups.
     if (stage === "WON" || stage === "LOST") continue;
 
-    // FACTORY_CHECK splits internally:
+    // FACTORY_WAIT splits internally:
     //   subFlow=awaiting_factory_estimate → Eli/factory is working, skip (Eli should call, not text)
     //   subFlow=awaiting_logo             → bot keeps nudging for the logo
-    if (stage === "FACTORY_CHECK") {
+    if (stage === "FACTORY_WAIT") {
       const subFlow = (r.qState as any)?.subFlow;
       if (subFlow === "awaiting_factory_estimate") continue;
     }

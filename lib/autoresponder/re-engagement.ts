@@ -258,7 +258,7 @@ export async function handleReengagementInbound(input: {
     `הלקוח כתב: "${text.slice(0, 300)}"\n` +
     `🤖 ניתוח: ${classification.reason}\n` +
     `💡 המלצה: ${classification.recommendation}\n` +
-    `📞 הבוט הושהה — אתה צריך לגרור ידנית ל-stage המתאים (SHOWED_INTEREST / LOST / וכו').`;
+    `📞 הבוט הושהה — אתה צריך לגרור ידנית ל-stage המתאים (DISCAVERY / LOST / וכו').`;
   try {
     await sendEliDM(dm);
   } catch (e) {

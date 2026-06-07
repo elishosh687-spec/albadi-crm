@@ -6,10 +6,10 @@
  *     (Fri/Sat/holiday-eve/holiday via Hebcal).
  *   - Customer-side cadence by stage:
  *       (pre-quote, mid-questionnaire abandoned)         → 1h, 1h, 1h
- *       INITIAL_QUOTE_SENT                               → 2h, 12h, 23h
- *       FACTORY_CHECK (subFlow=awaiting_logo)            → 2h, 12h, 23h
- *       FINAL_QUOTE_SENT                                 → 2h, 12h, 23h
- *   - FACTORY_CHECK (subFlow=awaiting_factory_estimate) → Eli-only daily reminder.
+ *       INTAKE                               → 2h, 12h, 23h
+ *       FACTORY_WAIT (subFlow=awaiting_logo)            → 2h, 12h, 23h
+ *       CONSIDERATION                                 → 2h, 12h, 23h
+ *   - FACTORY_WAIT (subFlow=awaiting_factory_estimate) → Eli-only daily reminder.
  *   - After 3 unanswered attempts → escalate (NEEDS_ELI + bot_paused + Eli DM).
  *   - Skips leads where bot_paused=true.
  *
@@ -71,25 +71,25 @@ const STAGE_RULES: StageRule[] = [
     template: "MID_QUESTIONNAIRE",
   },
   {
-    // INITIAL_QUOTE_SENT — bot waiting on customer reply to estimated quote.
+    // INTAKE — bot waiting on customer reply to estimated quote.
     // Cadence per Eli: 2h → 12h → 23h. 3 nudges spread over ~37h total.
-    match: (stage) => (stage || "").toUpperCase() === "INITIAL_QUOTE_SENT",
+    match: (stage) => (stage || "").toUpperCase() === "INTAKE",
     cadences: [2 * HOUR_MS, 12 * HOUR_MS, 23 * HOUR_MS],
-    template: "INITIAL_QUOTE_SENT",
+    template: "INTAKE",
   },
   {
-    // FACTORY_CHECK (subFlow=awaiting_logo) — bot waiting on logo file.
+    // FACTORY_WAIT (subFlow=awaiting_logo) — bot waiting on logo file.
     match: (stage, q) =>
-      (stage || "").toUpperCase() === "FACTORY_CHECK" &&
+      (stage || "").toUpperCase() === "FACTORY_WAIT" &&
       (q?.subFlow === "awaiting_logo" || !q?.subFlow),
     cadences: [2 * HOUR_MS, 12 * HOUR_MS, 23 * HOUR_MS],
     template: "AWAITING_LOGO",
   },
   {
-    // FINAL_QUOTE_SENT — bot waiting on customer reply to final price.
-    match: (stage) => (stage || "").toUpperCase() === "FINAL_QUOTE_SENT",
+    // CONSIDERATION — bot waiting on customer reply to final price.
+    match: (stage) => (stage || "").toUpperCase() === "CONSIDERATION",
     cadences: [2 * HOUR_MS, 12 * HOUR_MS, 23 * HOUR_MS],
-    template: "FINAL_QUOTE_SENT",
+    template: "CONSIDERATION",
   },
   {
     // NO_RESPONSE_REENGAGE — Eli manually drags leads here after 3 calls +
@@ -501,9 +501,9 @@ export async function POST(req: NextRequest) {
   for (const row of candidates) {
     const stage = (row.pipelineStage || "").toUpperCase();
     const subFlow = (row.qState as any)?.subFlow;
-    // FACTORY_CHECK with subFlow=awaiting_factory_estimate = Eli is working
+    // FACTORY_WAIT with subFlow=awaiting_factory_estimate = Eli is working
     // on the price manually. Daily reminder to Eli, no customer message.
-    if (stage === "FACTORY_CHECK" && subFlow === "awaiting_factory_estimate") {
+    if (stage === "FACTORY_WAIT" && subFlow === "awaiting_factory_estimate") {
       const r = await processFactoryLead({
         sid: row.sid,
         name: row.name,

@@ -22,9 +22,9 @@
  *      (customer re-engagement = fresh budget).
  *   4. Route by current pipeline_stage (+ qState.subFlow for sub-routing):
  *        NULL                                           → questionnaire autoresponder
- *        INITIAL_QUOTE_SENT (subFlow=awaiting_estimate) → LLM intent classifier
- *        FACTORY_CHECK (subFlow=awaiting_logo)          → media detection + reask loop
- *        FACTORY_CHECK (subFlow=awaiting_factory_estimate) / WON / LOST → no auto-action
+ *        INTAKE (subFlow=awaiting_estimate) → LLM intent classifier
+ *        FACTORY_WAIT (subFlow=awaiting_logo)          → media detection + reask loop
+ *        FACTORY_WAIT (subFlow=awaiting_factory_estimate) / WON / LOST → no auto-action
  */
 import { NextRequest, NextResponse } from "next/server";
 import { createHmac, timingSafeEqual } from "node:crypto";
@@ -538,14 +538,14 @@ async function routeThroughSupervisor(input: SupervisorRouteInput): Promise<void
   // We skip the supervisor and let the legacy handlers do their thing, but
   // still log a row so the timeline shows the event.
   if (!inboundText) {
-    // FACTORY_CHECK with subFlow=awaiting_logo: media-without-caption is the
+    // FACTORY_WAIT with subFlow=awaiting_logo: media-without-caption is the
     // happy path (customer sent the logo). Run the handler; it will switch
     // subFlow to awaiting_factory_estimate, pause the bot, DM Eli.
     const subFlow =
       ((freshLead?.qState as Record<string, unknown> | null)?.subFlow as string | undefined) ?? null;
     const isLogoCollection =
       subFlow === "awaiting_logo" ||
-      (stage === "FACTORY_CHECK" && !subFlow); // fallback for pre-subFlow leads
+      (stage === "FACTORY_WAIT" && !subFlow); // fallback for pre-subFlow leads
     if (isLogoCollection) {
       try {
         const r = await handleDecisionInbound({
@@ -560,11 +560,11 @@ async function routeThroughSupervisor(input: SupervisorRouteInput): Promise<void
           stageBefore: stage,
           decidedBy: "code",
           action: r.action === "escalated" ? "escalated" : "stage_transition",
-          metadata: { handler: "handleDecisionInbound", result: r, reason: "media-only at FACTORY_CHECK/awaiting_logo" },
+          metadata: { handler: "handleDecisionInbound", result: r, reason: "media-only at FACTORY_WAIT/awaiting_logo" },
         });
         return;
       } catch (e) {
-        console.error("[supervisor.route] FACTORY_CHECK/awaiting_logo media handler error", e);
+        console.error("[supervisor.route] FACTORY_WAIT/awaiting_logo media handler error", e);
       }
     }
     // Other stages with empty text — let the legacy handler decide (it usually escalates).
@@ -826,12 +826,10 @@ async function runLegacyHandlerAndLog(args: {
       handlerName = "handleInbound";
       result = await handleInbound({ sid, text });
     } else if (
-      stage === "INITIAL_QUOTE_SENT" ||
-      stage === "FACTORY_CHECK" ||
-      stage === "FINAL_QUOTE_SENT" ||
-      stage === "AWAITING_FIRST_RESPONSE" ||
-      stage === "SHOWED_INTEREST" ||
-      stage === "NEGOTIATING"
+      stage === "INTAKE" ||
+      stage === "FACTORY_WAIT" ||
+      stage === "CONSIDERATION" ||
+      stage === "DISCAVERY"
     ) {
       handlerName = "handleDecisionInbound";
       // Internal sub-flow routing (logo vs estimate vs final) lives inside

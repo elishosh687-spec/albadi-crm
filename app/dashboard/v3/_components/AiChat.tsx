@@ -6,12 +6,12 @@ import { MessageSquare, X, Send, Loader2, ChevronDown } from "lucide-react";
 const STAGES = [
   { value: "ALL", label: "כל הלידים" },
   { value: "PRE_QUOTE", label: "בשאלון" },
-  { value: "INITIAL_QUOTE_SENT", label: "הצעה ראשונית נשלחה" },
-  { value: "AWAITING_FIRST_RESPONSE", label: "ממתין לתגובה ראשונה" },
-  { value: "SHOWED_INTEREST", label: "הראה עניין" },
-  { value: "FACTORY_CHECK", label: "בדיקת מפעל" },
-  { value: "FINAL_QUOTE_SENT", label: "הצעה סופית נשלחה" },
-  { value: "NEGOTIATING", label: "משא ומתן" },
+  { value: "INTAKE", label: "הצעה ראשונית נשלחה" },
+  { value: "INTAKE", label: "ממתין לתגובה ראשונה" },
+  { value: "DISCAVERY", label: "הראה עניין" },
+  { value: "FACTORY_WAIT", label: "בדיקת מפעל" },
+  { value: "CONSIDERATION", label: "הצעה סופית נשלחה" },
+  { value: "CONSIDERATION", label: "משא ומתן" },
   { value: "WON", label: "נסגר" },
   { value: "LOST", label: "לא נסגר" },
 ];

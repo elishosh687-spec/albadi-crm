@@ -533,12 +533,10 @@ async function handleIncoming(evt: GreenWebhook): Promise<void> {
       // where GHL opp stage hasn't been moved back).
       await handleInbound({ sid: canonicalSid, text: textForRouting ?? "" });
     } else if (
-      stage === "INITIAL_QUOTE_SENT" ||
-      stage === "FACTORY_CHECK" ||
-      stage === "FINAL_QUOTE_SENT" ||
-      stage === "AWAITING_FIRST_RESPONSE" ||
-      stage === "SHOWED_INTEREST" ||
-      stage === "NEGOTIATING"
+      stage === "INTAKE" ||
+      stage === "FACTORY_WAIT" ||
+      stage === "CONSIDERATION" ||
+      stage === "DISCAVERY"
     ) {
       // Internal subFlow routing (logo vs estimate vs final) lives inside
       // handleDecisionInbound via qState.subFlow.

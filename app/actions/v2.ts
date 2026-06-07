@@ -199,16 +199,18 @@ export async function setLeadStage(
 }
 
 // Map of stage -> auto-task spec. null = no task created.
-// Stages not in the map (e.g. AWAITING_FIRST_RESPONSE) intentionally skip task
-// creation: existing followUpCount cadence already nudges the lead.
+// Post-2026-06-07 funnel: INTAKE and CONSIDERATION each absorbed two old
+// stages (INITIAL_QUOTE_SENT+AWAITING_FIRST_RESPONSE → INTAKE; FINAL+
+// NEGOTIATING → CONSIDERATION). We kept the more urgent / objection-
+// handling task for CONSIDERATION because that's where money objections
+// surface and a 4h SLA matters more than the 24h followup nudge.
 const AUTO_TASK_BY_STAGE: Partial<
   Record<V2PipelineStage, { title: string; hoursUntilDue: number }>
 > = {
-  INITIAL_QUOTE_SENT: { title: "פולואפ אחרי הצעה ראשונית", hoursUntilDue: 24 },
-  SHOWED_INTEREST: { title: "להחליט אם לשלוח למפעל / לאלי", hoursUntilDue: 2 },
-  FACTORY_CHECK: { title: "לעקוב אחר תשובת מפעל", hoursUntilDue: 24 },
-  FINAL_QUOTE_SENT: { title: "פולואפ אחרי הצעה סופית", hoursUntilDue: 24 },
-  NEGOTIATING: { title: "לטפל בהתנגדות", hoursUntilDue: 4 },
+  INTAKE: { title: "פולואפ אחרי הצעה ראשונית", hoursUntilDue: 24 },
+  DISCAVERY: { title: "להחליט אם לשלוח למפעל / לאלי", hoursUntilDue: 2 },
+  FACTORY_WAIT: { title: "לעקוב אחר תשובת מפעל", hoursUntilDue: 24 },
+  CONSIDERATION: { title: "פולואפ / לטפל בהתנגדות", hoursUntilDue: 4 },
   WON: { title: "ביצוע / גבייה / אישור קובץ", hoursUntilDue: 24 },
 };
 
@@ -426,11 +428,11 @@ export async function deleteLeadAction(
 
 /**
  * Final-quote entry — Eli pushes the final price via dashboard, bot takes
- * over with stage=FINAL_QUOTE_SENT and the standard "מתאים?" classifier loop.
+ * over with stage=CONSIDERATION and the standard "מתאים?" classifier loop.
  * Per CUSTOMER-FLOW.md (Eli updates stage manually).
  *
  * Side effects:
- *   - leads.pipelineStage = FINAL_QUOTE_SENT
+ *   - leads.pipelineStage = CONSIDERATION
  *   - leads.quoteTotal    = price (string)
  *   - leads.botPaused     = false (bot drives this stage)
  *   - leads.pipelineFlag  = null  (cleared — bot owns again)
@@ -481,7 +483,7 @@ export async function sendFinalPrice(
     await db
       .update(leads)
       .set({
-        pipelineStage: "FINAL_QUOTE_SENT",
+        pipelineStage: "CONSIDERATION",
         quoteTotal: cleanPrice,
         followUpCount: 0,
         lastFollowUpAt: new Date(),

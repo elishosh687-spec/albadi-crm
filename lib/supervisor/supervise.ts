@@ -124,9 +124,9 @@ pre-quote / questionnaire (pipeline_stage IS NULL, qState has step 1-7):
   question_company → override_with_text or approve_code (canned company info)
   total drop-off (silence) → not your call (cron handles cadence)
 
-INITIAL_QUOTE_SENT (subFlow=awaiting_estimate_decision — bot asked "המחיר מתאים?"):
+INTAKE (subFlow=awaiting_estimate_decision — bot asked "המחיר מתאים?"):
   intent              → recommended_action
-  accept              → approve_code (handler transitions to FACTORY_CHECK + subFlow=awaiting_logo + asks for logo)
+  accept              → approve_code (handler transitions to FACTORY_WAIT + subFlow=awaiting_logo + asks for logo)
   samples_request     → approve_code (handler sends catalog URL)
   negotiating ("יקר") → approve_code (handler asks "יש הצעה מתחרה?")
   reject              → approve_code (handler asks "יש סיבה ספציפית?")
@@ -141,14 +141,14 @@ INITIAL_QUOTE_SENT (subFlow=awaiting_estimate_decision — bot asked "המחיר
   customer asks for specific discount amount ("תורידו ל-800") → escalate_to_eli
   frustrated / angry / threatening to leave → escalate_to_eli
 
-FACTORY_CHECK (subFlow=awaiting_logo — bot collecting customer's logo):
+FACTORY_WAIT (subFlow=awaiting_logo — bot collecting customer's logo):
   media inbound      → approve_code (handler switches subFlow=awaiting_factory_estimate, pauses bot, DMs Eli)
   logo share link    → approve_code (handler treats as logo received)
   "אין לי לוגו"      → approve_code (handler escalates with "אתקשר")
   question_format    → approve_code (canned format answer)
   text-only         → approve_code (re-ask up to 3x, then handler escalates)
 
-FINAL_QUOTE_SENT (subFlow=awaiting_final_decision — Eli sent final price):
+CONSIDERATION (subFlow=awaiting_final_decision — Eli sent final price):
   accept              → approve_code (WON + Eli DM)
   reject / negotiating → approve_code (handler asks "מה בדיוק?", next turn escalates)
   question_payment    → approve_code (canned 50/50)
@@ -156,7 +156,7 @@ FINAL_QUOTE_SENT (subFlow=awaiting_final_decision — Eli sent final price):
   competitor price mention → escalate_to_eli
   discount with number → escalate_to_eli
 
-FACTORY_CHECK (subFlow=awaiting_factory_estimate) / NEGOTIATING / WON / LOST (silent stages):
+FACTORY_WAIT (subFlow=awaiting_factory_estimate) / CONSIDERATION / WON / LOST (silent stages):
   ANY message with substance → escalate_to_eli (handler does nothing — Eli must see)
   bare "תודה" / acknowledgement → silence
   customer asks "מה קורה?" / "איפה זה?" → escalate_to_eli
@@ -170,8 +170,8 @@ If ANY of these are true, escalate_to_eli:
 - asks for a phone call / meeting / human ("question_meeting")
 - intent unclear after 2+ turns of clarification
 - frustrated / angry / mentions complaint / threatening to leave
-- non-standard spec change after final price (FINAL_QUOTE_SENT / NEGOTIATING)
-- stage = WON / LOST or FACTORY_CHECK (subFlow=awaiting_factory_estimate) and message has substance
+- non-standard spec change after final price (CONSIDERATION / CONSIDERATION)
+- stage = WON / LOST or FACTORY_WAIT (subFlow=awaiting_factory_estimate) and message has substance
 
 Default tilt: when in doubt, escalate_to_eli. Eli would rather see one too many drafts than have the bot say something stupid.
 
@@ -190,23 +190,23 @@ When NOT to override:
 ============================================================
 EXAMPLES OF GOOD VERDICTS
 
-Customer (INITIAL_QUOTE_SENT): "יקר לי, מצאתי ב-1500"
+Customer (INTAKE): "יקר לי, מצאתי ב-1500"
 → recommended_action: escalate_to_eli
   intent: negotiating_with_competitor_price
   reason: לקוח נתן מחיר מתחרה — שיקול מסחרי
   risk_flags: ["mentions_competitor_price", "money_moment"]
 
-Customer (INITIAL_QUOTE_SENT): "מה זמן האספקה?"
+Customer (INTAKE): "מה זמן האספקה?"
 → recommended_action: approve_code
   intent: question_delivery
   reason: שאלת אספקה — קיים canned (25/90)
 
-Customer (FACTORY_CHECK, subFlow=awaiting_factory_estimate): "מה קורה עם ההצעה?"
+Customer (FACTORY_WAIT, subFlow=awaiting_factory_estimate): "מה קורה עם ההצעה?"
 → recommended_action: escalate_to_eli
   intent: status_check
-  reason: לקוח ב-FACTORY_CHECK שואל סטטוס — הקוד שותק
+  reason: לקוח ב-FACTORY_WAIT שואל סטטוס — הקוד שותק
 
-Customer (INITIAL_QUOTE_SENT): "תתקשר אליי"
+Customer (INTAKE): "תתקשר אליי"
 → recommended_action: escalate_to_eli (or approve_code if candidate handles it)
   intent: question_meeting
   reason: בקשת שיחה — חוזר ל-Eli
@@ -217,7 +217,7 @@ Customer (pre-quote, mid-questionnaire): "5000 יחידות"
   intent: questionnaire_answer
   reason: תשובה תקנית לשאלת כמות
 
-Customer (FACTORY_CHECK, subFlow=awaiting_logo): (media inbound, no text)
+Customer (FACTORY_WAIT, subFlow=awaiting_logo): (media inbound, no text)
 → recommended_action: approve_code
   intent: logo_received
   reason: handler מטפל ב-factory routing

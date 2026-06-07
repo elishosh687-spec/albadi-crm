@@ -227,7 +227,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     sid: result[0].sid,
     pipelineStage: localStage,
   });
-  // Re-evaluate signal-derived tasks (e.g. big_quote_close at FINAL_QUOTE_SENT,
+  // Re-evaluate signal-derived tasks (e.g. big_quote_close at CONSIDERATION,
   // idle_active_lead set cleared when moving to WON/LOST) + flip owner tag.
   try {
     const { reconcileGHLTasksForLead } = await import(

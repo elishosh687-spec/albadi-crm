@@ -48,15 +48,14 @@ export const ENABLE_GHL_SYNC = readEnv("ENABLE_GHL_SYNC") === "1";
 
 // ---- Pipeline stage mapping ----
 // Local stage  →  GHL Opportunity Stage ID (UUID)
-// User fills these after running scripts/_ghl-bootstrap.ts.
-// Mirrors lib/manychat/stages.ts → V2_PIPELINE_STAGES (8-stage journey model).
+// Mirrors lib/manychat/stages.ts → V2_PIPELINE_STAGES (4-stage funnel post
+// 2026-06-07 rename; merged INITIAL_QUOTE_SENT + AWAITING_FIRST_RESPONSE
+// into INTAKE and FINAL_QUOTE_SENT + NEGOTIATING into CONSIDERATION).
 export const GHL_STAGE_IDS: Record<string, string> = {
-  INITIAL_QUOTE_SENT: readEnv("GHL_STAGE_INITIAL_QUOTE_SENT"),
-  AWAITING_FIRST_RESPONSE: readEnv("GHL_STAGE_AWAITING_FIRST_RESPONSE"),
-  SHOWED_INTEREST: readEnv("GHL_STAGE_SHOWED_INTEREST"),
-  FACTORY_CHECK: readEnv("GHL_STAGE_FACTORY_CHECK"),
-  FINAL_QUOTE_SENT: readEnv("GHL_STAGE_FINAL_QUOTE_SENT"),
-  NEGOTIATING: readEnv("GHL_STAGE_NEGOTIATING"),
+  INTAKE: readEnv("GHL_STAGE_INTAKE"),
+  DISCAVERY: readEnv("GHL_STAGE_DISCAVERY"),
+  FACTORY_WAIT: readEnv("GHL_STAGE_FACTORY_WAIT"),
+  CONSIDERATION: readEnv("GHL_STAGE_CONSIDERATION"),
   WON: readEnv("GHL_STAGE_WON"),
   LOST: readEnv("GHL_STAGE_LOST"),
   // Manual stage Eli drags opps into when a customer asks to circle back

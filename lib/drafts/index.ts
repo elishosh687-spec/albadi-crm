@@ -26,13 +26,14 @@ export type MoneyReason =
   | "manual";
 
 // Stages where money-moment drafts are queued. Per the 8-stage model:
-// INITIAL_QUOTE_SENT covers the bot-driven negotiation/competitor-offer
-// sub-states (decisionState in qState); FINAL_QUOTE_SENT and NEGOTIATING
-// cover the Eli-driven post-final money conversation.
+// INTAKE covers the bot-driven negotiation/competitor-offer
+// Stages where the bot might escalate a money objection or negotiation to
+// Eli — INTAKE handles initial-quote sub-states (decisionState in qState);
+// CONSIDERATION covers the post-final money conversation (haggling, "too
+// expensive", "let me think", spec changes).
 const MONEY_STAGES = new Set([
-  "INITIAL_QUOTE_SENT",
-  "FINAL_QUOTE_SENT",
-  "NEGOTIATING",
+  "INTAKE",
+  "CONSIDERATION",
 ]);
 
 export function isMoneyStage(stage: string | null | undefined): boolean {

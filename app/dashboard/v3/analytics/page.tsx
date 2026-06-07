@@ -13,12 +13,10 @@ export const revalidate = 0;
 export const maxDuration = 30;
 
 const FUNNEL_ORDER = [
-  "INITIAL_QUOTE_SENT",
-  "AWAITING_FIRST_RESPONSE",
-  "SHOWED_INTEREST",
-  "FACTORY_CHECK",
-  "FINAL_QUOTE_SENT",
-  "NEGOTIATING",
+  "INTAKE",
+  "DISCAVERY",
+  "FACTORY_WAIT",
+  "CONSIDERATION",
   "WON",
 ];
 
@@ -161,7 +159,7 @@ export default async function V3AnalyticsPage() {
       .where(
         and(
           eq(leads.active, true),
-          eq(leads.pipelineStage, "FACTORY_CHECK"),
+          eq(leads.pipelineStage, "FACTORY_WAIT"),
           sql`${leads.qState}->>'subFlow' = 'awaiting_factory_estimate'`
         )
       ),

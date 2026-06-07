@@ -53,7 +53,7 @@ export interface FollowupSuperviseInput {
   stage: string | null;
   qState: any;
   recentMessages: { direction: "in" | "out"; text: string; sender: string | null }[];
-  /** Stage-keyed template label (MID_QUESTIONNAIRE / INITIAL_QUOTE_SENT / etc). */
+  /** Stage-keyed template label (MID_QUESTIONNAIRE / INTAKE / etc). */
   templateLabel: string;
   /** 1-based — which follow-up attempt is this. */
   attempt: number;
@@ -128,7 +128,7 @@ Escalate when ANY of these are true:
 - Lead notes flag NEEDS_ELI or anything sensitive
 - Last bot message was already escalation-like
 - Lead expressed frustration in recent history
-- Stage is FACTORY_CHECK with subFlow=awaiting_factory_estimate — text follow-up rarely right; Eli should call
+- Stage is FACTORY_WAIT with subFlow=awaiting_factory_estimate — text follow-up rarely right; Eli should call
 
 ============================================================
 WHEN TO SILENCE (rare — skip this cycle)
@@ -140,18 +140,18 @@ Silence when:
 ============================================================
 EXAMPLES
 
-Context: Eli notes = "אמר ליצור איתו קשר ב-18.5.26". Today is 2026-05-18. Stage = INITIAL_QUOTE_SENT. attempt = 1.
+Context: Eli notes = "אמר ליצור איתו קשר ב-18.5.26". Today is 2026-05-18. Stage = INTAKE. attempt = 1.
 → override_with_text:
   reason: "אסף ביקש קשר היום ב-18.5 — מזכיר ספציפית"
   override_text: "אסף, היום ה-18.5 כמו שביקשת. אפשר להתקשר עכשיו?"
 
-Context: Generic lead, no last inbound, sat 24h after quote. Stage = INITIAL_QUOTE_SENT. attempt = 1.
+Context: Generic lead, no last inbound, sat 24h after quote. Stage = INTAKE. attempt = 1.
 → approve_template:
   reason: "אין קונטקסט מיוחד — טמפלייט תקין"
 
-Context: Lead stage = FACTORY_CHECK (subFlow=awaiting_factory_estimate). Eli notes empty. attempt = 1.
+Context: Lead stage = FACTORY_WAIT (subFlow=awaiting_factory_estimate). Eli notes empty. attempt = 1.
 → escalate_to_eli:
-  reason: "FACTORY_CHECK — אלי צריך להתקשר, לא טקסט"
+  reason: "FACTORY_WAIT — אלי צריך להתקשר, לא טקסט"
 
 Context: Lead said "תן לי יומיים" 18h ago. attempt = 1.
 → silence:

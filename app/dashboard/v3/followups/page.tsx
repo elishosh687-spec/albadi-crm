@@ -57,9 +57,9 @@ function adjustForQuietHours(at: Date): { adjusted: Date; deferred: boolean } {
 // "PRE_QUOTE" is the sentinel for pipeline_stage IS NULL with active questionnaire.
 const CADENCE_BY_STAGE: Record<string, number[]> = {
   PRE_QUOTE: [1 * HOUR_MS, 1 * HOUR_MS, 1 * HOUR_MS],
-  INITIAL_QUOTE_SENT: [2 * HOUR_MS, 12 * HOUR_MS, 23 * HOUR_MS],
-  FACTORY_CHECK: [2 * HOUR_MS, 12 * HOUR_MS, 23 * HOUR_MS],
-  FINAL_QUOTE_SENT: [2 * HOUR_MS, 12 * HOUR_MS, 23 * HOUR_MS],
+  INTAKE: [2 * HOUR_MS, 12 * HOUR_MS, 23 * HOUR_MS],
+  FACTORY_WAIT: [2 * HOUR_MS, 12 * HOUR_MS, 23 * HOUR_MS],
+  CONSIDERATION: [2 * HOUR_MS, 12 * HOUR_MS, 23 * HOUR_MS],
 };
 
 interface QueueRow {
@@ -128,9 +128,9 @@ async function loadQueue(): Promise<QueueRow[]> {
 
     // Skip terminal stages.
     if (stage === "WON" || stage === "LOST") continue;
-    // FACTORY_CHECK split: Eli-only sub-flow has no customer-side follow-ups.
+    // FACTORY_WAIT split: Eli-only sub-flow has no customer-side follow-ups.
     const subFlow = (r.qState as any)?.subFlow;
-    if (stage === "FACTORY_CHECK" && subFlow === "awaiting_factory_estimate") continue;
+    if (stage === "FACTORY_WAIT" && subFlow === "awaiting_factory_estimate") continue;
 
     // Pick cadence — pre-quote also requires q_state mid-flight (matches cron logic).
     let cadences: number[] | null = null;

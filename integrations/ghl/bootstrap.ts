@@ -30,15 +30,13 @@ import {
   GHL_STAGE_IDS,
 } from "./config";
 
-// 8 stages in Kanban order. Matches `pickStageId` lookup in mapping.ts.
+// 6 stages in Kanban order. Matches `pickStageId` lookup in mapping.ts.
 // Source of truth: lib/manychat/stages.ts → V2_PIPELINE_STAGES.
 const ALBADI_STAGES = [
-  "INITIAL_QUOTE_SENT",
-  "AWAITING_FIRST_RESPONSE",
-  "SHOWED_INTEREST",
-  "FACTORY_CHECK",
-  "FINAL_QUOTE_SENT",
-  "NEGOTIATING",
+  "INTAKE",
+  "DISCAVERY",
+  "FACTORY_WAIT",
+  "CONSIDERATION",
   "WON",
   "LOST",
 ];
@@ -84,9 +82,8 @@ async function main() {
       console.error('  → Falling back: create pipeline manually in GHL UI:');
       console.error('     CRM → Opportunities → Pipelines → + Add Pipeline');
       console.error('     Name: "Albadi"');
-      console.error('     Stages (in order): INITIAL_QUOTE_SENT, AWAITING_FIRST_RESPONSE,');
-      console.error('     SHOWED_INTEREST, FACTORY_CHECK, FINAL_QUOTE_SENT, NEGOTIATING,');
-      console.error('     WON, LOST');
+      console.error('     Stages (in order): INTAKE, DISCAVERY,');
+      console.error('     FACTORY_WAIT, CONSIDERATION, WON, LOST');
       console.error('     Then re-run this script.');
       pipeline = pipelines[0]; // fallback so we still create fields
     }

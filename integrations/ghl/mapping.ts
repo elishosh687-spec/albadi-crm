@@ -51,20 +51,20 @@ export function pickStageId(lead: LocalLeadSnapshot): string | null {
     return GHL_STAGE_IDS.NEEDS_ELI;
   }
   // pipeline_stage = NULL means pre-quote (questionnaire still running).
-  // Map these leads to AWAITING_FIRST_RESPONSE so they appear in the GHL
+  // Map these leads to INTAKE so they appear in the GHL
   // pipeline kanban (operator decision 2026-06-07 — "want to see new leads
   // in pipeline too, not only contacts"). The Hebrew label "ממתין לתגובה
   // ראשונה" fits pre-questionnaire leads cleanly.
   //
-  // Safety: when GHL's resync writes AWAITING_FIRST_RESPONSE back to DB
+  // Safety: when GHL's resync writes INTAKE back to DB
   // and the customer's next inbound arrives, the bot routing at
   // app/api/bridge/webhook/route.ts:823 short-circuits on
   // `questionnaireActive` BEFORE checking stage, so the questionnaire flow
   // continues uninterrupted. Once the questionnaire completes,
-  // handleInbound promotes the stage to INITIAL_QUOTE_SENT (existing
+  // handleInbound promotes the stage to INTAKE (existing
   // behavior) and the lead moves to the next column.
   if (!lead.pipelineStage) {
-    return GHL_STAGE_IDS.AWAITING_FIRST_RESPONSE || null;
+    return GHL_STAGE_IDS.INTAKE || null;
   }
   const stage = lead.pipelineStage as LocalStage;
   return GHL_STAGE_IDS[stage] || null;

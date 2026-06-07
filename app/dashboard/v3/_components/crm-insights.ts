@@ -62,14 +62,12 @@ export function lifecycleOf(stage: string | null | undefined): LifecycleKey {
   switch ((stage ?? "").toUpperCase()) {
     case "":
       return "NEW_INQUIRY"; // pre-quote (questionnaire)
-    case "INITIAL_QUOTE_SENT":
-    case "AWAITING_FIRST_RESPONSE":
+    case "INTAKE":
       return "QUALIFIED";
-    case "SHOWED_INTEREST":
-    case "FACTORY_CHECK":
+    case "DISCAVERY":
+    case "FACTORY_WAIT":
       return "SALES_ACCEPTED";
-    case "FINAL_QUOTE_SENT":
-    case "NEGOTIATING":
+    case "CONSIDERATION":
       return "OPPORTUNITY";
     case "WON":
       return "CUSTOMER";
@@ -90,7 +88,7 @@ export function priorityOf(card: LeadCardData): PriorityBand {
   ) {
     return "HOT";
   }
-  if (quote > 0 || ["FACTORY_CHECK", "FINAL_QUOTE_SENT", "NEGOTIATING"].includes((card.stage ?? "").toUpperCase())) {
+  if (quote > 0 || ["FACTORY_WAIT", "CONSIDERATION"].includes((card.stage ?? "").toUpperCase())) {
     return "WARM";
   }
   if (leadAgeHours(card) >= 48 || card.followUpCount >= 2) {

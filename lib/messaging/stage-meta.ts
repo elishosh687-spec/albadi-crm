@@ -1,15 +1,13 @@
 // Shared stage display tokens — used by dashboard v3 and GHL widgets.
 //
-// 8 canonical stages — must match V2_PIPELINE_STAGES in lib/manychat/stages.ts
-// and the table in docs/CUSTOMER-FLOW.md.
+// 4-stage funnel (post 2026-06-07 rename) — must match V2_PIPELINE_STAGES in
+// lib/manychat/stages.ts and the table in docs/CUSTOMER-FLOW.md.
 
 export const STAGE_LABEL: Record<string, string> = {
-  INITIAL_QUOTE_SENT: "הצעה ראשונית נשלחה",
-  AWAITING_FIRST_RESPONSE: "ממתין לתגובה ראשונה",
-  SHOWED_INTEREST: "הראה עניין",
-  FACTORY_CHECK: "בדיקת מפעל",
-  FINAL_QUOTE_SENT: "הצעה סופית נשלחה",
-  NEGOTIATING: "משא ומתן",
+  INTAKE: "שאלון + הצעה אוטומטית",
+  DISCAVERY: "שיחת בירור",
+  FACTORY_WAIT: "בדיקת מפעל",
+  CONSIDERATION: "שוקל הצעה / מו״מ",
   WON: "נסגר",
   LOST: "לא נסגר",
   // Implicit pre-quote — for display when pipeline_stage IS NULL but lead exists.
@@ -21,35 +19,25 @@ export const STAGE_TONE: Record<
   string,
   { bar: string; pill: string; text: string }
 > = {
-  INITIAL_QUOTE_SENT: {
+  INTAKE: {
     bar: "bg-sky-500/60",
     pill: "bg-sky-500/15 text-sky-300 border border-sky-500/20",
     text: "text-sky-300",
   },
-  AWAITING_FIRST_RESPONSE: {
-    bar: "bg-fuchsia-500/60",
-    pill: "bg-fuchsia-500/15 text-fuchsia-300 border border-fuchsia-500/20",
-    text: "text-fuchsia-300",
-  },
-  SHOWED_INTEREST: {
+  DISCAVERY: {
     bar: "bg-cyan-500/60",
     pill: "bg-cyan-500/15 text-cyan-300 border border-cyan-500/20",
     text: "text-cyan-300",
   },
-  FACTORY_CHECK: {
+  FACTORY_WAIT: {
     bar: "bg-amber-500/60",
     pill: "bg-amber-500/15 text-amber-300 border border-amber-500/20",
     text: "text-amber-300",
   },
-  FINAL_QUOTE_SENT: {
+  CONSIDERATION: {
     bar: "bg-rose-500/60",
     pill: "bg-rose-500/15 text-rose-300 border border-rose-500/20",
     text: "text-rose-300",
-  },
-  NEGOTIATING: {
-    bar: "bg-indigo-500/60",
-    pill: "bg-indigo-500/15 text-indigo-300 border border-indigo-500/20",
-    text: "text-indigo-300",
   },
   WON: {
     bar: "bg-emerald-500/60",

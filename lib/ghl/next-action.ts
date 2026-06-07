@@ -77,16 +77,16 @@ export async function computeNextAction(sid: string): Promise<NextAction | null>
   }
 
   switch (stage) {
-    case "INITIAL_QUOTE_SENT":
-    case "AWAITING_FIRST_RESPONSE":
+    case "INTAKE":
+    case "INTAKE":
       return "wait_response";
-    case "SHOWED_INTEREST":
+    case "DISCAVERY":
       return "whatsapp";
-    case "FACTORY_CHECK":
+    case "FACTORY_WAIT":
       return "follow_factory";
-    case "FINAL_QUOTE_SENT":
+    case "CONSIDERATION":
       return "wait_response";
-    case "NEGOTIATING":
+    case "CONSIDERATION":
       return "negotiate";
     case "FUTURE_FOLLOW_UP":
       return "schedule_callback";

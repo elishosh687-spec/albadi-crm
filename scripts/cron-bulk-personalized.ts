@@ -10,7 +10,7 @@
  *   - bot_paused (we don't override Eli's explicit pause)
  *   - last outbound from bot/eli within 24h (avoid spamming)
  *   - test JIDs
- *   - WON / LOST / FACTORY_CHECK with subFlow=awaiting_factory_estimate (terminal or Eli-only stages)
+ *   - WON / LOST / FACTORY_WAIT with subFlow=awaiting_factory_estimate (terminal or Eli-only stages)
  *
  * Run modes:
  *   --dry        print what WOULD be sent, no API calls, no DB writes
@@ -198,7 +198,7 @@ async function main() {
     const stage = (r.stage ?? "").toUpperCase();
     if (stage === "WON" || stage === "LOST") continue;
     if (
-      stage === "FACTORY_CHECK" &&
+      stage === "FACTORY_WAIT" &&
       (r.qState as any)?.subFlow === "awaiting_factory_estimate"
     ) continue;
     if (r.botPaused) continue;

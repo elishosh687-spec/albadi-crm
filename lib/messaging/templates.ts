@@ -10,13 +10,13 @@
 //
 // Labels here are autoresponder-template keys (not pipeline_stage values).
 // AWAITING_LOGO is the logo-collection follow-up template used while
-// pipeline_stage=FACTORY_CHECK + qState.subFlow=awaiting_logo.
+// pipeline_stage=FACTORY_WAIT + qState.subFlow=awaiting_logo.
 
 export type FollowupStage =
   | "MID_QUESTIONNAIRE"
-  | "INITIAL_QUOTE_SENT"
+  | "INTAKE"
   | "AWAITING_LOGO"
-  | "FINAL_QUOTE_SENT"
+  | "CONSIDERATION"
   // Re-engagement loop for leads at NO_RESPONSE_REENGAGE. Body is built per
   // send by `lib/autoresponder/re-engagement.ts` via LLM — the entries below
   // are only used as a fallback if the LLM call returns nothing.
@@ -30,24 +30,24 @@ const TEMPLATES: Record<FollowupStage, string[]> = {
     "משהו לא ברור בשאלה? תכתבו לי, אעזור.",
     "אם נוח לכם בטלפון — תגידו, ואתקשר היום-מחר.",
   ],
-  // INITIAL_QUOTE_SENT — bot waiting on customer response to estimated quote.
+  // INTAKE — bot waiting on customer response to estimated quote.
   // Cadence: 2h / 12h / 23h.
-  INITIAL_QUOTE_SENT: [
+  INTAKE: [
     "היי, חוזר אליכם. רציתי לשמוע מה דעתכם על ההצעה ששלחתי.",
     "אם נוח לכם בטלפון — תגידו, אתקשר.",
     "ניסיון אחרון. רוצים שאתקשר, או שנעזוב לעת עתה?",
   ],
-  // FACTORY_CHECK (subFlow=awaiting_logo) — bot waiting on logo file.
+  // FACTORY_WAIT (subFlow=awaiting_logo) — bot waiting on logo file.
   // Cadence: 2h / 12h / 23h.
   AWAITING_LOGO: [
     "היי, מחכה ללוגו שלכם כדי לשלוח את המחיר הסופי. אפשר לשלוח עכשיו?",
     "משהו מעכב את הלוגו? תכתבו לי.",
     "ניסיון אחרון. רוצים שאתקשר?",
   ],
-  // FINAL_QUOTE_SENT — bot waiting on customer response to final price.
+  // CONSIDERATION — bot waiting on customer response to final price.
   // Cadence: 2h / 12h / 23h. Final price is hot; we lead with a 2h nudge
   // while the price is still fresh.
-  FINAL_QUOTE_SENT: [
+  CONSIDERATION: [
     "היי, חוזר אליכם לגבי המחיר הסופי. הספקתם לחשוב על ההצעה?",
     "אם יש משהו שצריך להבהיר — תכתבו לי. אם לא — אעביר את זה לסיים בטלפון.",
     "אם לא מתאים עכשיו — אין בעיה, תחזרו אליי כשתרצו. אחרת אתקשר היום-מחר.",
@@ -74,7 +74,7 @@ export function followupTemplate(
 }
 
 /**
- * Eli-only daily reminder while a lead sits in FACTORY_CHECK (subFlow=awaiting_factory_estimate).
+ * Eli-only daily reminder while a lead sits in FACTORY_WAIT (subFlow=awaiting_factory_estimate).
  * Escalates wording after 3+ days waiting — past 3 days the chance of
  * losing the lead grows.
  */

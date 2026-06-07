@@ -142,7 +142,8 @@ export async function POST(req: NextRequest) {
       source: "facebook_import",
       leadSource: FB_LEAD_SOURCE,
       active: true,
-      pipelineStage: "NEW",
+      // null = pre-questionnaire; the bot will run intake on first inbound.
+      pipelineStage: null,
     });
   } catch (err) {
     return NextResponse.json(

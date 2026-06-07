@@ -740,7 +740,7 @@ export async function upsertLeadFromBridgeEvent(input: {
       source: input.source ?? "bridge_webhook",
       active: true,
       // pipeline_stage = NULL while questionnaire runs (pre-quote); promoted
-      // to INITIAL_QUOTE_SENT by routeToQuoted when the first quote goes out.
+      // to INTAKE by routeToQuoted when the first quote goes out.
       pipelineStage: null,
     })
     .onConflictDoUpdate({

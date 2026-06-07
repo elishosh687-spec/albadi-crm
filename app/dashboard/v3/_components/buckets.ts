@@ -4,11 +4,11 @@
  * them into 4 supervisor-facing buckets:
  *
  *   NEEDS_ELI       — escalations (NEEDS_ELI flag, bot_paused) or
- *                     FACTORY_CHECK (subFlow=awaiting_factory_estimate)
- *   BOT_ACTIVE      — bot driving (pre-quote / INITIAL_QUOTE_SENT /
- *                     FACTORY_CHECK awaiting_logo / FINAL_QUOTE_SENT)
- *   WAITING_CUSTOMER— passive wait (AWAITING_FIRST_RESPONSE / SHOWED_INTEREST /
- *                     NEGOTIATING)
+ *                     FACTORY_WAIT (subFlow=awaiting_factory_estimate)
+ *   BOT_ACTIVE      — bot driving (pre-quote / INTAKE /
+ *                     FACTORY_WAIT awaiting_logo / CONSIDERATION)
+ *   WAITING_CUSTOMER— passive wait (INTAKE / DISCAVERY /
+ *                     CONSIDERATION)
  *   CLOSED          — terminal stages (WON / LOST)
  *
  * The stage chip on each card is still fully editable via StagePicker.
@@ -62,14 +62,14 @@ export const BUCKET_TONE: Record<
 
 // Stages where bot is actively driving the conversation.
 const ACTIVE_STAGES = new Set([
-  "INITIAL_QUOTE_SENT",
-  "FINAL_QUOTE_SENT",
+  "INTAKE",
+  "CONSIDERATION",
 ]);
 // Stages where we're passively waiting on the customer.
 const WAITING_STAGES = new Set([
-  "AWAITING_FIRST_RESPONSE",
-  "SHOWED_INTEREST",
-  "NEGOTIATING",
+  "INTAKE",
+  "DISCAVERY",
+  "CONSIDERATION",
 ]);
 const CLOSED_STAGES = new Set(["WON", "LOST"]);
 
@@ -83,10 +83,10 @@ export function bucketOf(lead: {
   if (CLOSED_STAGES.has(stage)) return "CLOSED";
 
   const subFlow = lead.qState?.subFlow ?? null;
-  // FACTORY_CHECK splits:
+  // FACTORY_WAIT splits:
   //   subFlow=awaiting_factory_estimate → Eli/factory works price → NEEDS_ELI bucket
   //   subFlow=awaiting_logo (or unset)  → bot collecting logo → BOT_ACTIVE bucket
-  if (stage === "FACTORY_CHECK") {
+  if (stage === "FACTORY_WAIT") {
     if (subFlow === "awaiting_factory_estimate") return "NEEDS_ELI";
     if (lead.pipelineFlag === "NEEDS_ELI" || lead.botPaused) return "NEEDS_ELI";
     return "BOT_ACTIVE";

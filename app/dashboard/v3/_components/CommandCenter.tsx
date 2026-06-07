@@ -125,7 +125,7 @@ function buildQueueItem(
   }
   if (
     factoryReceivedSids.has(sid) ||
-    (stage === "FACTORY_CHECK" && subFlow === "awaiting_factory_estimate")
+    (stage === "FACTORY_WAIT" && subFlow === "awaiting_factory_estimate")
   ) {
     reasons.push({
       key: "factory",

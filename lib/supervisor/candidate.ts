@@ -55,9 +55,9 @@ interface CandidateInput {
 function effectiveSubFlow(stage: string, qState: any): string | null {
   const explicit = qState?.subFlow;
   if (typeof explicit === "string") return explicit;
-  if (stage === "INITIAL_QUOTE_SENT") return "awaiting_estimate_decision";
-  if (stage === "FACTORY_CHECK") return "awaiting_logo"; // best-guess default
-  if (stage === "FINAL_QUOTE_SENT") return "awaiting_final_decision";
+  if (stage === "INTAKE") return "awaiting_estimate_decision";
+  if (stage === "FACTORY_WAIT") return "awaiting_logo"; // best-guess default
+  if (stage === "CONSIDERATION") return "awaiting_final_decision";
   return null;
 }
 
@@ -111,7 +111,7 @@ export async function precomputeCandidateAction(
     };
   }
 
-  // Logo-collection sub-flow (subFlow=awaiting_logo, stage=FACTORY_CHECK).
+  // Logo-collection sub-flow (subFlow=awaiting_logo, stage=FACTORY_WAIT).
   if (subFlow === "awaiting_logo") {
     if (input.hasMedia) {
       return {
@@ -143,9 +143,9 @@ export async function precomputeCandidateAction(
   }
 
   // Silent stages — bot does nothing today.
-  // FACTORY_CHECK with subFlow=awaiting_factory_estimate = Eli is working manually.
+  // FACTORY_WAIT with subFlow=awaiting_factory_estimate = Eli is working manually.
   if (
-    (stage === "FACTORY_CHECK" && subFlow === "awaiting_factory_estimate") ||
+    (stage === "FACTORY_WAIT" && subFlow === "awaiting_factory_estimate") ||
     stage === "WON" ||
     stage === "LOST"
   ) {
@@ -158,31 +158,29 @@ export async function precomputeCandidateAction(
     };
   }
 
-  // INITIAL_QUOTE_SENT / FINAL_QUOTE_SENT / NEGOTIATING — intent-routed.
+  // INTAKE / CONSIDERATION / DISCAVERY — intent-routed.
   if (
-    stage === "INITIAL_QUOTE_SENT" ||
-    stage === "FINAL_QUOTE_SENT" ||
-    stage === "NEGOTIATING" ||
-    stage === "AWAITING_FIRST_RESPONSE" ||
-    stage === "SHOWED_INTEREST"
+    stage === "INTAKE" ||
+    stage === "CONSIDERATION" ||
+    stage === "DISCAVERY"
   ) {
     // Sub-states short-circuit intent routing in the real handlers.
-    if (stage === "INITIAL_QUOTE_SENT" && decisionState) {
+    if (stage === "INTAKE" && decisionState) {
       return {
         kind: "sub_state_advance",
         intent: null,
         intentConfidence: null,
         intentSummary: null,
-        description: `INITIAL_QUOTE_SENT in decisionState "${decisionState}". Existing code will branch based on whether the inbound matches the expected sub-state response.`,
+        description: `INTAKE in decisionState "${decisionState}". Existing code will branch based on whether the inbound matches the expected sub-state response.`,
       };
     }
-    if (stage === "FINAL_QUOTE_SENT" && finalState === "awaiting_haggle_detail") {
+    if (stage === "CONSIDERATION" && finalState === "awaiting_haggle_detail") {
       return {
         kind: "escalate",
         intent: null,
         intentConfidence: null,
         intentSummary: null,
-        description: `FINAL_QUOTE_SENT in finalState "awaiting_haggle_detail". Existing code will ack + escalate (negotiating).`,
+        description: `CONSIDERATION in finalState "awaiting_haggle_detail". Existing code will ack + escalate (negotiating).`,
       };
     }
 
@@ -229,7 +227,7 @@ function mapStageIntent(
     };
   }
 
-  const isInitial = stage === "INITIAL_QUOTE_SENT";
+  const isInitial = stage === "INTAKE";
 
   // custom_size — sub-state for spec change (initial) or escalate (final)
   if (ic.intent === "custom_size") {
@@ -248,7 +246,7 @@ function mapStageIntent(
       ...base,
       kind: "canned_reply",
       description: `${stage}, intent=accept. Existing code will ${
-        isInitial ? "transition to FACTORY_CHECK + ask for logo" : "set WON + DM Eli"
+        isInitial ? "transition to FACTORY_WAIT + ask for logo" : "set WON + DM Eli"
       }.`,
       cannedReplyLabel: isInitial ? "accept_to_logo" : "final_accept_won",
     };
@@ -269,7 +267,7 @@ function mapStageIntent(
       ...base,
       kind: isPremature ? "escalate" : "canned_reply",
       description: isPremature
-        ? `INITIAL_QUOTE_SENT, premature payment question. Existing code will reply "I'll call" + escalate.`
+        ? `INTAKE, premature payment question. Existing code will reply "I'll call" + escalate.`
         : `${stage}, intent=${ic.intent}. Existing code will send the canned ${cannedMap[ic.intent]} reply.`,
       cannedReplyLabel: cannedMap[ic.intent],
     };

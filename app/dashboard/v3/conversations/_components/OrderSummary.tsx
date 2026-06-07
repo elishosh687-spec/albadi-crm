@@ -310,7 +310,7 @@ function TagsPicker({
     currentStage
   )
     ? (currentStage as V2PipelineStage)
-    : ("INITIAL_QUOTE_SENT" as V2PipelineStage);
+    : ("INTAKE" as V2PipelineStage);
 
   const write = (nextFlags: V2FlagName[]) => {
     setErr(null);

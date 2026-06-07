@@ -140,9 +140,9 @@ export function ExpandedLead({
     needsHuman || summary.botPaused || quoteValue >= 10000
       ? "HOT"
       : quoteValue > 0 ||
-          stage === "FACTORY_CHECK" ||
-          stage === "FINAL_QUOTE_SENT" ||
-          stage === "NEGOTIATING"
+          stage === "FACTORY_WAIT" ||
+          stage === "CONSIDERATION" ||
+          stage === "CONSIDERATION"
         ? "WARM"
         : "LOW";
 
@@ -334,10 +334,10 @@ function OverviewTab({
 }) {
   const [stage, setStage] = useState<V2PipelineStage>(
     (V2_PIPELINE_STAGES.includes(
-      (summary.stage ?? "INITIAL_QUOTE_SENT") as V2PipelineStage
+      (summary.stage ?? "INTAKE") as V2PipelineStage
     )
       ? summary.stage
-      : "INITIAL_QUOTE_SENT") as V2PipelineStage
+      : "INTAKE") as V2PipelineStage
   );
   const [flags, setFlags] = useState<V2FlagName[]>(
     summary.flags.filter((f) =>
