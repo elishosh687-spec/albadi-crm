@@ -28,13 +28,6 @@ export interface LocalLeadSnapshot {
   leadScore?: string | null;
 }
 
-const LEAD_SCORE_DB_TO_GHL: Record<string, string> = {
-  HOT: "🔥 HOT",
-  WARM: "☀️ WARM",
-  NURTURE: "🌱 NURTURE",
-  LOW: "❄️ LOW",
-};
-
 /**
  * Resolve the GHL stage id for a local lead.
  *
@@ -114,8 +107,10 @@ export function buildCustomFieldsPayload(
   add(out, "wa_jid", lead.waJid);
   add(out, "bot_summary", lead.botSummary);
   add(out, "quote_total", lead.quoteTotal ? Number(lead.quoteTotal) : null);
-  add(out, "pipeline_flag", lead.pipelineFlag);
-  add(out, "loss_reason", lead.lossReason);
+  // `pipeline_flag` + `loss_reason` GHL custom fields removed 2026-06-08 (Eli
+  // didn't use them). Source of truth stays in DB (`leads.pipeline_flag` drives
+  // bot routing/tasks; `leads.loss_reason` still set via dashboard). We just
+  // stop mirroring them to GHL. Do NOT re-add without re-creating the fields.
   // Legacy `bot_paused` RADIO removed 2026-05-23 — replaced by `lead_owner`
   // which carries the same information in a clearer form.
   add(out, "follow_up_date", lead.followUpDate);
@@ -131,12 +126,8 @@ export function buildCustomFieldsPayload(
   // (leads.next_action) but pushed to the V2 GHL field so we get a typed
   // dropdown in the UI instead of free text.
   add(out, "next_action_v2", lead.nextAction);
-  // Lead Score — DB stores plain band (HOT/WARM/NURTURE/LOW), GHL RADIO
-  // option uses an emoji prefix. Translate on the way out.
-  if (lead.leadScore) {
-    const ghlValue = LEAD_SCORE_DB_TO_GHL[lead.leadScore.toUpperCase()];
-    if (ghlValue) add(out, "lead_score", ghlValue);
-  }
+  // Lead Score GHL custom field removed 2026-06-08 (unused by Eli). DB keeps
+  // its own banding in `lead_score_snapshots`; we just stop mirroring to GHL.
   // Lead Owner — derived from bot_paused. Single source of truth. The widget
   // toggle writes bot_paused; we mirror to GHL so the contact card shows
   // who's currently driving the lead.
