@@ -106,7 +106,11 @@ The CLI deploy uses the linked project from `.vercel/project.json` — no need t
 
 To actually query the DB or call GHL from local:
 
-- **Neon (DB):** install `neonctl` (`npm i -g neonctl`), run `neon auth` (OAuth browser flow), then `neon connection-string --project-id <id> --org-id <id>` returns the real DATABASE_URL. Project id is in `neon projects list`.
+- **Neon (DB):** `neonctl` lives at `~/.local/node/bin/neonctl` (npm global, not on `$PATH` by default) and is already authed. Project id: `fragrant-morning-71359670`. Org id: `org-frosty-star-50411125`. One-liner to feed any tsx script the live DATABASE_URL:
+  ```bash
+  DATABASE_URL="$(~/.local/node/bin/neonctl connection-string --project-id fragrant-morning-71359670 --org-id org-frosty-star-50411125)" npx tsx scripts/<name>.ts
+  ```
+  If `neonctl` is missing on a fresh machine: `npm i -g neonctl && neon auth` (OAuth browser flow).
 - **GHL API:** the OAuth access tokens live in `ghl_oauth_tokens` table — pull from the DB connection above (`SELECT access_token, location_id FROM ghl_oauth_tokens ORDER BY updated_at DESC LIMIT 1`) and hit `services.leadconnectorhq.com` directly.
 - **Vercel env writes:** `vercel env add NAME production` reads value from stdin (`echo VALUE | vercel env add ...`). `vercel env rm NAME production --yes` for removal. Production writes require explicit user authorization in this harness — auto-approve is blocked.
 
@@ -246,3 +250,50 @@ directly by v3 client components. Includes `setLeadStage`,
 `app/actions/v2.ts`. Add a REST endpoint only when external tooling needs
 HTTP access. If it sends WhatsApp, route through `sendBridgeMessage` so
 the outbound row gets sender attribution automatically.
+
+## FB Lead Ads form pipeline (Sheet → Apps Script → CRM)
+
+Replaces the old Google Apps Script → ManyChat path. Three independent layers around a single Google Sheet; safe to re-run end-to-end.
+
+**Sheet** — Meta Lead Ads native CRM connector writes rows directly. Current sheet: `1AnswoeBAFV-z4aN3KhqyJjb9DegyiDNH-0FcB8ry518` ("Albadi leads v2"). **Must be set to "Anyone with link → Viewer"** or the dashboard pill silently fetches an empty snapshot. Standard Meta column layout (0-indexed):
+
+| idx | column | written by |
+|-----|--------|------------|
+| 0–11 | `id`, `created_time`, ad/adset/campaign/form metadata, `is_organic`, `platform` | Meta |
+| 12 | `שם_מלא` | Meta |
+| 13 | `phone` (with `p:` prefix) | Meta |
+| 14–16 | `דוא"ל`, `שם_החברה`, `lead_status` | Meta |
+| 18 | `SENT` marker (gates re-processing) | Apps Script |
+| 19 | status string (`sent` / `tagged_only` / `BAD_PHONE: …` / `lead_created_send_failed` / `http_*` / `exception_*`) | Apps Script |
+| 20 | returned `sid` | Apps Script |
+
+**Apps Script** lives in the sheet itself (time-driven trigger every 5 minutes; not in this repo). Function `onNewLead` iterates rows, skips rows already marked `SENT` and rows whose phone contains `"test lead"`, normalizes via `fixPhone` (handles `p:` prefix, `0…` → `+972…` Israeli local, bare digits → country-coded), POSTs `{phone, fullName}` to `/api/leads/facebook-import` with `Bearer FB_IMPORT_SECRET`. BAD_PHONE rows write status but NOT SENT — eligible for retry after manual fix.
+
+**CRM endpoint** [app/api/leads/facebook-import/route.ts](app/api/leads/facebook-import/route.ts):
+- Phone stored in DB **without `+`** (`leads.phoneE164 = "972525755705"`). The endpoint uses `digitsOnly()` for both inbound normalization and dedupe lookup — DB and endpoint agree on the no-`+` form.
+- Dedupe by `phoneE164 OR waJid`. Existing lead → adds `ליד_חדש` tag (idempotent), sets `leadSource="facebook"` if null, returns `tagged_only`. **Does NOT re-send OPENING.**
+- New lead → inserts with `source="facebook_import"` (pipeline marker, distinguishes from `greenapi_webhook`) and `leadSource="facebook"` (attribution), sends OPENING + kicks off the questionnaire, returns `sent`.
+
+**Dashboard consumer** [lib/sheets/lead-gaps.ts](lib/sheets/lead-gaps.ts):
+- Env var `GOOGLE_SHEETS_FB_LEADS_ID`. Fetches `https://docs.google.com/spreadsheets/d/<id>/export?format=csv&gid=0` — no auth, soft-fails to empty snapshot on any error.
+- Column constants `COL_NAME=12, COL_PHONE=13, COL_SENT=18, COL_LAST_STATUS=19, COL_SID=20` match the Apps Script writes exactly. Classification: SENT → not a gap; BAD_PHONE prefix → bad_phone; `lead_created_send_failed` → send_failed; `http_*`/`exception_*` → other_error; else → pending.
+- Consumed by [app/dashboard/v3/leads/page.tsx](app/dashboard/v3/leads/page.tsx) ("פערי טופס" pill) and [app/api/bot/followups/route.ts](app/api/bot/followups/route.ts) (cron DMs Eli about stuck rows).
+
+**Rotating the sheet:** to swap to a new form, update Vercel env `GOOGLE_SHEETS_FB_LEADS_ID` + share the new sheet "Anyone with link" + redeploy. Apps Script lives in the sheet so each new sheet needs its own copy of the script. Code requires zero changes as long as the Meta column layout stays standard.
+
+## GHL-gap audit (leads missing from GHL)
+
+For "לידים שנופלים בין הכיסאות" — active leads with WhatsApp activity (msgs / jid / phone) and `ghl_contact_id IS NULL`. Two ways to run, both already in the repo:
+
+- **HTTP** (recommended): `GET /api/admin/audit-ghl-gap` with `Authorization: Bearer $BOT_SECRET`. Query params: `?limit=N` (1..500, default 100), `?onlyBotTouched=1`. Returns `{summary, leads}`. Source: [app/api/admin/audit-ghl-gap/route.ts](app/api/admin/audit-ghl-gap/route.ts).
+- **CLI**: [scripts/audit-ghl-gap.ts](scripts/audit-ghl-gap.ts). Run with the neonctl one-liner above.
+
+## Deleting a lead end-to-end (test cleanup pattern)
+
+Sixteen tables reference a lead by `manychat_sub_id` (or `lead_sid` in `bot_quotes` / `ghl_lead_tasks`). None have FK constraints, so deletes never cascade or block. For a clean test reset:
+
+1. **Delete the GHL contact via UI first** — otherwise the next GHL resync recreates the DB row from GHL state.
+2. Run a scoped script that deletes from each table where the sid matches. The full table list is in `scripts/_purge-eli-lead.ts` (scratch, underscore-prefixed). Order doesn't matter — no FKs.
+3. Verify with a phone/sid lookup against `leads`.
+
+The bot-side effect: after a fresh insert via the FB-import path, the new lead has `ghl_contact_id=NULL` until the first inbound triggers a GHL sync.
