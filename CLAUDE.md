@@ -180,10 +180,30 @@ fields, stage equality check for pipeline_stage), so no infinite loop.
 
 ## Bridge messaging (READ BEFORE TOUCHING MESSAGING)
 
-All WhatsApp I/O runs through the self-hosted whatsapp-bridge-node tenant.
-ManyChat was retired — only legacy backfill scripts still hit its API. The
-bridge gives us send/receive + webhooks; tags, custom fields, and pipeline
-state live in the DB.
+**Active backend = GreenAPI (confirmed 2026-06-08).** WhatsApp send/receive
+runs through GreenAPI, not the bridge tenant directly. ManyChat is fully
+retired (only historical backfill scripts touch its API). The layering is two
+nested flags:
+- `USE_BRIDGE=1` routes `@/lib/messaging` → `lib/bridge/client.ts` (vs the dead
+  ManyChat path).
+- `USE_GREEN_API=1` then makes `sendBridgeMessage` delegate to
+  `sendGreenMessage` (`lib/greenapi/client.ts`). Inbound arrives at
+  [app/api/greenapi/webhook/route.ts](app/api/greenapi/webhook/route.ts).
+The `whatsapp-bridge-node` tenant code still exists but is dormant while
+`USE_GREEN_API=1`. Tags, custom fields, and pipeline state live in the DB.
+
+**⚠️ Two JID namespaces — the #1 messaging footgun.** GreenAPI uses
+`<phone>@c.us`; FB-import leads ([api/leads/facebook-import](app/api/leads/facebook-import/route.ts))
+are stored under `<phone>@s.whatsapp.net`; the bridge also uses
+`@s.whatsapp.net` + `@lid`. So a lead's `manychat_sub_id` (sid) and the Green
+`chatId` for the SAME person often differ only by suffix. Any code that maps a
+chatId back to a lead MUST canonicalise first — use
+`resolveLeadSidForChatId` (green client) on the way in, and `loadLead`
+(`integrations/ghl/sync.ts`) has a phone-digit fallback as the safety net.
+Bug fixed 2026-06-08: the GHL outbound mirror passed the raw `@c.us` chatId →
+`loadLead` missed → every bot/eli reply was dropped from the GHL Inbox
+(`ghl_mirror.skip reason=no_lead`) while inbound (already canonicalised)
+showed fine. Symptom: GHL thread shows only the customer side.
 
 **Feature flag:** `USE_BRIDGE=1` is permanent. Setting it to `0` would route
 through `lib/manychat/client.ts` which is deprecated and unmaintained.
