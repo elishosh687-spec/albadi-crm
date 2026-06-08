@@ -3,6 +3,10 @@
     {
       "path": "/api/bot/followups",
       "schedule": "0 9 * * *"
+    },
+    {
+      "path": "/api/bot/process-recordings",
+      "schedule": "*/5 * * * *"
     }
   ],
   "functions": {
