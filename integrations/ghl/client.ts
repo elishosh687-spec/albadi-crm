@@ -707,3 +707,164 @@ export async function removeContactTags(
   });
 }
 
+// ===========================================================================
+// Call recordings — list calls + download audio for the
+// /api/bot/process-recordings pipeline.
+// ===========================================================================
+//
+// GHL stores calls as `messages` of type `TYPE_CALL` (numeric id may vary —
+// observed values: 3 for call, sometimes returned as string "TYPE_CALL").
+// We accept both shapes when filtering downstream.
+//
+// API surface used:
+//   - GET /conversations/messages/search   — location-level search across
+//     all conversations for messages matching the type/date filter.
+//   - GET /conversations/messages/{id}/locations/{locationId}/recording
+//     — returns the audio binary directly (not a redirect URL).
+
+export interface GHLCallMessage {
+  id: string;
+  conversationId: string;
+  contactId?: string;
+  locationId?: string;
+  /** Numeric or string form, depending on GHL version. */
+  type?: number | string;
+  /** Specific to call-type messages — direction/status/duration metadata. */
+  meta?: {
+    call?: {
+      status?:
+        | "completed"
+        | "voicemail"
+        | "busy"
+        | "no-answer"
+        | "failed"
+        | string;
+      duration?: number; // seconds
+      direction?: "inbound" | "outbound" | string;
+      recordingUrl?: string;
+    };
+  };
+  dateAdded?: string;
+  dateUpdated?: string;
+  body?: string;
+  attachments?: Array<{ url?: string; type?: string }>;
+}
+
+export interface SearchCallMessagesOpts {
+  /** ISO timestamp. Polls with overlap = (cursor − 30min). */
+  startAfterDate?: string;
+  /** Soft cap. GHL returns up to 100 per page; we paginate inside. */
+  limit?: number;
+}
+
+/**
+ * List recent call messages across the location.
+ *
+ * GHL's `/conversations/messages/search` doesn't accept a type filter
+ * (422 "type must be a valid enum value" — empirically confirmed 2026-06).
+ * So we go two-stage:
+ *   1. /conversations/search?lastMessageType=TYPE_CALL → conversations whose
+ *      most recent message is a call
+ *   2. /conversations/{id}/messages → fetch up to N messages each, keep the
+ *      call-type ones
+ *
+ * Caveat: this misses calls where a non-call message landed AFTER the call
+ * in the same conversation. For the MVP polling window (5min) that's a
+ * vanishingly small race. If it becomes a problem in practice, switch to
+ * the broader `/conversations/search` (no lastMessageType filter) + scan.
+ */
+export async function searchCallMessages(
+  opts: SearchCallMessagesOpts = {}
+): Promise<GHLCallMessage[]> {
+  const locationId = requireGHLLocationId();
+  const limit = Math.min(opts.limit ?? 100, 100);
+
+  const convQuery: Query = {
+    locationId,
+    limit,
+    lastMessageType: "TYPE_CALL",
+    sort: "desc",
+    sortBy: "last_message_date",
+  };
+  // NOTE: GHL's `startAfterDate` on this endpoint is a *pagination cursor*
+  // (search_after on last_message_date), not a date filter. We poll newest
+  // 20 every tick and rely on the call_recording_imports.ghl_message_id
+  // UNIQUE constraint to dedupe across runs.
+
+  const convRes = await ghlFetch<{
+    conversations?: Array<{ id: string; contactId?: string; locationId?: string }>;
+  }>("/conversations/search", { method: "GET" }, convQuery);
+  const conversations = convRes.conversations ?? [];
+
+  const out: GHLCallMessage[] = [];
+  for (const conv of conversations) {
+    const msgRes = await ghlFetch<{
+      messages?: { messages?: GHLCallMessage[] };
+    }>(
+      `/conversations/${conv.id}/messages`,
+      { method: "GET" },
+      { limit: 20 },
+    );
+    // GHL nests this oddly: { messages: { lastMessageId, nextPage, messages: [...] } }
+    const messages = msgRes.messages?.messages ?? [];
+    for (const m of messages) {
+      const isCall =
+        m.type === "TYPE_CALL" ||
+        m.type === 3 ||
+        m.type === "3" ||
+        !!m.meta?.call;
+      if (!isCall) continue;
+      // Annotate conversationId + contactId from the parent in case the
+      // message payload omits them (observed on some accounts).
+      out.push({
+        ...m,
+        conversationId: m.conversationId ?? conv.id,
+        contactId: m.contactId ?? conv.contactId,
+        locationId: m.locationId ?? conv.locationId ?? locationId,
+      });
+    }
+  }
+
+  // De-dupe in case a message id appears in multiple conversations (shouldn't
+  // happen but be safe — Set on id).
+  const seen = new Set<string>();
+  return out.filter((m) => (seen.has(m.id) ? false : (seen.add(m.id), true)));
+}
+
+/**
+ * Download a call recording. Returns the raw audio bytes (Buffer) along
+ * with a best-effort content-type for the multipart hint downstream.
+ *
+ * Endpoint returns the binary directly, not a signed URL. The Authorization
+ * header is required.
+ */
+export async function downloadRecording(
+  messageId: string
+): Promise<{ audio: Buffer; contentType: string }> {
+  const locationId = requireGHLLocationId();
+  const token = await resolveDefaultToken();
+
+  const url =
+    `${GHL_BASE}/conversations/messages/${messageId}` +
+    `/locations/${locationId}/recording`;
+
+  const res = await fetch(url, {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Version: GHL_API_VERSION,
+      Accept: "audio/*",
+    },
+  });
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    const err = new Error(
+      `GHL GET recording ${messageId} failed: ${res.status} ${body.slice(0, 300)}`
+    ) as Error & { status?: number };
+    err.status = res.status;
+    throw err;
+  }
+  const contentType = res.headers.get("content-type") ?? "audio/mpeg";
+  const audio = Buffer.from(await res.arrayBuffer());
+  return { audio, contentType };
+}

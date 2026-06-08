@@ -297,3 +297,46 @@ Sixteen tables reference a lead by `manychat_sub_id` (or `lead_sid` in `bot_quot
 3. Verify with a phone/sid lookup against `leads`.
 
 The bot-side effect: after a fresh insert via the FB-import path, the new lead has `ghl_contact_id=NULL` until the first inbound triggers a GHL sync.
+
+## GHL call recording analysis pipeline
+
+Every completed GHL call gets transcribed (Whisper), analyzed for sales signals (GPT), and posted back to the contact as a structured Hebrew note. Polls every 5 min, no GHL webhook needed.
+
+**Data model:** [drizzle/schema.ts](drizzle/schema.ts) → `call_recording_imports`. One row per recording, keyed on `ghl_message_id` UNIQUE. State machine in `status` column: `pending` → `transcribing` → `analyzing` → `posted` (terminal happy path); branch terminals: `failed` (>= 3 attempts), `skipped_oversize` (>25MB), `skipped_voicemail`. `(status, attempts)` composite index for cron query efficiency.
+
+**Pipeline stages**, each runs independently per cron tick — partial failures in one stage don't block others. Per-row gating in [app/api/bot/process-recordings/route.ts](app/api/bot/process-recordings/route.ts):
+
+| Stage | Selector | Tools used |
+|-------|----------|------------|
+| 1 — discover | poll GHL `messages/search?type=TYPE_CALL&startAfterDate=<cursor−30min>`, filter `meta.call.status=='completed'` AND `dateAdded > 60s ago` | `searchCallMessages` in `integrations/ghl/client.ts` |
+| 2 — transcribe | `transcript IS NULL AND status NOT IN (failed/skipped_*)` | `downloadRecording` + `transcribeAudio` ([lib/transcription/whisper.ts](lib/transcription/whisper.ts)) |
+| 3 — analyze | `transcribed_at IS NOT NULL AND analyzed_at IS NULL` | `analyzeCall` ([lib/autoresponder/call-analysis.ts](lib/autoresponder/call-analysis.ts)) |
+| 4 — post back | `analyzed_at IS NOT NULL AND posted_back_at IS NULL` | `listContactNotes` (dedupe via marker) + `addContactNote` |
+
+**Cursor:** `app_config` key `"call_recordings.last_polled_at"` (JSON `{iso}`). First run looks back 24h. Each tick rewinds by 30min as a belt-and-suspenders overlap; unique `ghl_message_id` constraint handles dedupe.
+
+**GHL endpoint quirks (validated empirically 2026-06):**
+- `GET /conversations/messages/search` rejects `?type=TYPE_CALL` with 422 ("type must be a valid enum value"). It doesn't accept type-based filtering at all on this endpoint.
+- Correct path is two-stage: `GET /conversations/search?lastMessageType=TYPE_CALL` → enumerate conversation ids; then `GET /conversations/{id}/messages` per conversation and filter to call-type messages (`type === "TYPE_CALL"` or `meta.call` present).
+- `/conversations/{id}/messages` nests the array oddly: response shape is `{messages: {messages: [...], nextPage, lastMessageId}}`.
+- `startAfterDate` on `/conversations/search` is a **pagination cursor** (search_after on last_message_date), not a date filter. Polling-style "give me everything since X" doesn't work — we just take the newest 20 every tick and rely on the unique constraint.
+- Recording download: `GET /conversations/messages/{messageId}/locations/{locationId}/recording` returns the binary directly (`audio/x-wav` or `audio/mpeg`), not a signed URL.
+
+**Note format and idempotency.** Stage 4 posts a Hebrew-structured note whose first line is the stable marker `[CALL-ANALYSIS v1] msg=<ghl_message_id>`. Before posting, stage 4 lists existing notes via `listContactNotes` and skips if the marker is already present — survives crashes between API call and DB write.
+
+**Retry policy.** Per-row `attempts` increments on every failure; row goes to `status='failed'` after `MAX_ATTEMPTS=3` and is excluded from all subsequent stages until manually reset. `last_error` / `last_error_at` capture the most recent failure for triage.
+
+**Limits and caps.** Hard cap of 5 recordings per tick per stage (keeps the cron under `maxDuration=300s` and well within Whisper's 50 RPM tier). Whisper rejects >25MB audio — oversized rows are immediately moved to `skipped_oversize` (Phase B will add ffmpeg downcompression before this cap).
+
+**Env vars (Vercel prod):**
+- `OPENAI_API_KEY` — required (shared with autoresponder)
+- `OPENAI_TRANSCRIBE_MODEL` — optional, defaults `whisper-1`
+- `OPENAI_ANALYSIS_MODEL` — optional, defaults to `OPENAI_MODEL` (`gpt-4o-mini`)
+- `BOT_SECRET` — auth (shared with other crons)
+- All `GHL_*` — already configured
+
+**Trigger.** Register a Vercel Cloud Routine that hits `POST /api/bot/process-recordings` every 5 min with `Authorization: Bearer $BOT_SECRET`. Same pattern as the existing followups routine documented above.
+
+**Dry-run before going live.** `npx tsx scripts/_test-call-pipeline.ts` (with `DATABASE_URL` set) runs all four stages inline against a real recent call and prints the note body that WOULD be posted — DB is touched (cursor stays untouched), but `addContactNote` is NOT called. Use this to validate Hebrew analysis quality before flipping the cron on.
+
+**Upgrade path for analysis quality.** If `gpt-4o-mini` underperforms on spoken Hebrew nuance, swap the LLM in `lib/autoresponder/call-analysis.ts` to a Claude-Sonnet wrapper (~30 line change behind the same `analyzeCall` signature). Don't pre-optimize — see real outputs first.

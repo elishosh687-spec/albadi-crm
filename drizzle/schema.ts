@@ -517,3 +517,63 @@ export const botDecisionLog = pgTable(
     eliActionIdx: index("bot_decision_log_eli_action_idx").on(t.eliAction),
   })
 );
+
+// === GHL call recording → Whisper → GPT → contact note pipeline ===
+//
+// One row per recording (keyed on ghl_message_id). State machine progresses
+// pending → transcribing → analyzing → posted (or failed / skipped_oversize).
+// Each cron tick advances rows independently per-stage, so partial failures
+// don't block other rows.
+//
+// See [CLAUDE.md §"GHL call recording analysis pipeline"] for the full doc.
+export const callRecordingImports = pgTable(
+  "call_recording_imports",
+  {
+    id: serial("id").primaryKey(),
+    // GHL message id for the call. Unique → idempotent re-ingest from cron.
+    ghlMessageId: text("ghl_message_id").notNull().unique(),
+    ghlContactId: text("ghl_contact_id").notNull(),
+    ghlConversationId: text("ghl_conversation_id").notNull(),
+
+    // Optional metadata from stage-1 enrichment.
+    recordingUrl: text("recording_url"),
+    callDurationSec: integer("call_duration_sec"),
+    callStartedAt: timestamp("call_started_at", { withTimezone: true }),
+
+    // Set by stage 2.
+    transcript: text("transcript"),
+    transcribedAt: timestamp("transcribed_at", { withTimezone: true }),
+
+    // Set by stage 3 — structured analysis output. Shape lives in
+    // lib/autoresponder/call-analysis.ts → CallAnalysis interface.
+    analysis: jsonb("analysis"),
+    analyzedAt: timestamp("analyzed_at", { withTimezone: true }),
+
+    // Set by stage 4. Idempotent: stage 4 checks existing GHL notes for the
+    // `[CALL-ANALYSIS v1] msg=<id>` marker before posting.
+    postedBackAt: timestamp("posted_back_at", { withTimezone: true }),
+    postedNoteId: text("posted_note_id"),
+
+    // State + retry tracking. Lets the cron query "what's stuck" cheaply.
+    status: text("status").notNull().default("pending"),
+    // 'pending' | 'transcribing' | 'analyzing' | 'posted'
+    // | 'failed' | 'skipped_oversize' | 'skipped_voicemail'
+    attempts: integer("attempts").notNull().default(0),
+    lastError: text("last_error"),
+    lastErrorAt: timestamp("last_error_at", { withTimezone: true }),
+
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (t) => ({
+    // Cron queries "what's pending in each stage" → status + attempts cap.
+    statusAttemptsIdx: index("call_recording_imports_status_attempts_idx").on(
+      t.status,
+      t.attempts
+    ),
+  })
+);
