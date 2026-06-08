@@ -322,9 +322,16 @@ async function mirrorOutboundToGHL(input: {
   mediaMimeType?: string | null;
 }): Promise<void> {
   try {
+    // Canonicalise the Green chatId (<phone>@c.us) to the lead's stored sid
+    // (often <phone>@s.whatsapp.net for FB-import leads) — same resolution
+    // insertGreenOutbound uses. Without this the GHL mirror's loadLead missed
+    // and every bot/eli reply was dropped with reason=no_lead. loadLead also
+    // has a phone-digit fallback now, but resolving here keeps the sid
+    // consistent across the messages table and the mirror.
+    const sid = await resolveLeadSidForChatId(input.chatId);
     const { forwardMessage } = await import("../../integrations/ghl/sync");
     await forwardMessage({
-      sid: input.chatId,
+      sid,
       direction: "out",
       sender: input.sender,
       text: input.text,
