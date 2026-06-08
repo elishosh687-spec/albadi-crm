@@ -251,7 +251,7 @@ async function stage2Transcribe(): Promise<{ done: number }> {
     .where(
       and(
         isNull(callRecordingImports.transcript),
-        sql`${callRecordingImports.status} not in ('failed','skipped_oversize','skipped_voicemail')`,
+        sql`${callRecordingImports.status} not in ('failed','skipped_oversize','skipped_voicemail','skipped_no_recording')`,
         lte(callRecordingImports.attempts, MAX_ATTEMPTS),
       ),
     )
@@ -330,7 +330,7 @@ async function stage3Analyze(): Promise<{ done: number }> {
       and(
         isNotNull(callRecordingImports.transcript),
         isNull(callRecordingImports.analyzedAt),
-        sql`${callRecordingImports.status} not in ('failed','skipped_oversize','skipped_voicemail')`,
+        sql`${callRecordingImports.status} not in ('failed','skipped_oversize','skipped_voicemail','skipped_no_recording')`,
         lte(callRecordingImports.attempts, MAX_ATTEMPTS),
       ),
     )
@@ -376,7 +376,7 @@ async function stage4PostBack(): Promise<{ done: number }> {
       and(
         isNotNull(callRecordingImports.analyzedAt),
         isNull(callRecordingImports.postedBackAt),
-        sql`${callRecordingImports.status} not in ('failed','skipped_oversize','skipped_voicemail')`,
+        sql`${callRecordingImports.status} not in ('failed','skipped_oversize','skipped_voicemail','skipped_no_recording')`,
         lte(callRecordingImports.attempts, MAX_ATTEMPTS),
       ),
     )
