@@ -69,7 +69,8 @@ export async function transcribeAudio(
     );
   }
 
-  const model = opts.model ?? readEnv("OPENAI_TRANSCRIBE_MODEL") ?? DEFAULT_MODEL;
+  // `||` not `??`: readEnv returns "" for unset, and "" must fall back too.
+  const model = opts.model || readEnv("OPENAI_TRANSCRIBE_MODEL") || DEFAULT_MODEL;
   const timeoutMs = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const contentType = opts.contentType ?? "audio/mpeg";
   // Whisper inspects the filename extension to detect audio format. If the
