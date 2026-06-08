@@ -32,6 +32,7 @@ import {
 } from "./client";
 import { auditMirror } from "./audit";
 import { getValidAccessToken } from "./oauth";
+import { jidToPhone } from "@/lib/bridge/jid";
 import {
   buildCustomFieldsPayload,
   buildLeadDisplayName,
@@ -123,32 +124,57 @@ interface LoadedLead extends LocalLeadSnapshot {
   ghlOpportunityId: string | null;
 }
 
+const LOAD_LEAD_COLS = {
+  manychatSubId: leads.manychatSubId,
+  name: leads.name,
+  phoneE164: leads.phoneE164,
+  waJid: leads.waJid,
+  pipelineStage: leads.pipelineStage,
+  pipelineFlag: leads.pipelineFlag,
+  botSummary: leads.botSummary,
+  quoteTotal: leads.quoteTotal,
+  lossReason: leads.lossReason,
+  botPaused: leads.botPaused,
+  followUpDate: leads.followUpDate,
+  followUpCount: leads.followUpCount,
+  nextAction: leads.nextAction,
+  leadScore: leads.leadScore,
+  ghlContactId: leads.ghlContactId,
+  ghlOpportunityId: leads.ghlOpportunityId,
+} as const;
+
 async function loadLead(sid: string): Promise<LoadedLead | null> {
   // Only load columns mapping.ts actually uses + GHL id cache columns.
   // Calculator iframe reads full lead state directly from DB on its own.
-  const [row] = await db
-    .select({
-      manychatSubId: leads.manychatSubId,
-      name: leads.name,
-      phoneE164: leads.phoneE164,
-      waJid: leads.waJid,
-      pipelineStage: leads.pipelineStage,
-      pipelineFlag: leads.pipelineFlag,
-      botSummary: leads.botSummary,
-      quoteTotal: leads.quoteTotal,
-      lossReason: leads.lossReason,
-      botPaused: leads.botPaused,
-      followUpDate: leads.followUpDate,
-      followUpCount: leads.followUpCount,
-      nextAction: leads.nextAction,
-      leadScore: leads.leadScore,
-      ghlContactId: leads.ghlContactId,
-      ghlOpportunityId: leads.ghlOpportunityId,
-    })
+  const trimmed = sid.trim();
+  const [exact] = await db
+    .select(LOAD_LEAD_COLS)
     .from(leads)
-    .where(sql`trim(${leads.manychatSubId}) = ${sid.trim()}`)
+    .where(sql`trim(${leads.manychatSubId}) = ${trimmed}`)
     .limit(1);
-  return row ?? null;
+  if (exact) return exact;
+
+  // JID-namespace fallback. Outbound sends pass the lead's wa_jid as the sid
+  // (e.g. "972…@c.us"), but bridge-origin leads are stored under the bridge
+  // sid ("972…@s.whatsapp.net"). Same phone, different suffix → the exact
+  // match above misses and EVERY bot/eli reply was dropped from the GHL mirror
+  // with reason=no_lead (so Eli saw only the customer side of the thread).
+  // Re-match by phone digits across waJid / phoneE164 / manychatSubId.
+  // jidToPhone returns null for numeric ManyChat sids and @lid JIDs, so this
+  // fallback never collapses two distinct ManyChat leads onto one phone.
+  const phone = jidToPhone(trimmed);
+  if (!phone) return null;
+  const [byPhone] = await db
+    .select(LOAD_LEAD_COLS)
+    .from(leads)
+    .where(
+      sql`${leads.waJid} = ${trimmed}
+        OR regexp_replace(coalesce(${leads.phoneE164}, ''), '[^0-9]', '', 'g') = ${phone}
+        OR regexp_replace(coalesce(${leads.waJid}, ''), '[^0-9]', '', 'g') = ${phone}
+        OR regexp_replace(coalesce(${leads.manychatSubId}, ''), '[^0-9]', '', 'g') = ${phone}`
+    )
+    .limit(1);
+  return byPhone ?? null;
 }
 
 async function cacheContactId(sid: string, contactId: string): Promise<void> {
