@@ -46,9 +46,15 @@ const MAX_ATTEMPTS = 3;
 const NOTE_MARKER_VERSION = "CALL-ANALYSIS v1";
 
 function authorized(req: NextRequest): boolean {
-  const secret = process.env.BOT_SECRET;
-  if (!secret) return false;
-  return req.headers.get("authorization") === `Bearer ${secret}`;
+  // Accept either BOT_SECRET (shared with the rest of the internal API) or
+  // CALL_TRIGGER_SECRET (a dedicated, non-sensitive value used by the
+  // local Claude scheduled task — see CLAUDE.md §"GHL call recording
+  // analysis pipeline" for why both exist).
+  const accepted = [process.env.BOT_SECRET, process.env.CALL_TRIGGER_SECRET]
+    .filter((s): s is string => Boolean(s));
+  if (accepted.length === 0) return false;
+  const header = req.headers.get("authorization") ?? "";
+  return accepted.some((s) => header === `Bearer ${s}`);
 }
 
 function markerFor(messageId: string): string {
