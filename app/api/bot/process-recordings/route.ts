@@ -293,6 +293,24 @@ async function stage2Transcribe(): Promise<{ done: number }> {
             updatedAt: new Date(),
           })
           .where(eq(callRecordingImports.id, row.id));
+      } else if (
+        err instanceof Error &&
+        /does not have recording/i.test(err.message)
+      ) {
+        // GHL 422 "Message does not have recording" — legitimate, not a
+        // pipeline failure. Happens on missed calls, voicemail entries
+        // where recording wasn't captured, etc. Mark terminal so we don't
+        // retry, and keep these out of the 'failed' bucket which is
+        // reserved for actual errors.
+        await db
+          .update(callRecordingImports)
+          .set({
+            status: "skipped_no_recording",
+            lastError: "GHL reports no recording attached to this call message",
+            lastErrorAt: new Date(),
+            updatedAt: new Date(),
+          })
+          .where(eq(callRecordingImports.id, row.id));
       } else {
         await recordError(row.id, err, row.attempts + 1 >= MAX_ATTEMPTS);
       }
