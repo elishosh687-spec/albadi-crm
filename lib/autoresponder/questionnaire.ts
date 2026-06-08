@@ -9,10 +9,14 @@
  *   step 3: asked shipping
  *   step 4: asked quantity (option 5 = "אחר" → free-text capture in same step)
  *   step 5: asked product  (option 7 = "אחר" → free-text capture in same step)
- *   step 6: asked handles
- *   step 7: asked colors
- *   step 8: calling calc API (standard path) OR routing to factory (custom path)
- *   step 9: done
+ *   step 8: asked colors
+ *   step 9: confirmation gate
+ *   step 10: done
+ *
+ * Note: steps 6 (handles) and 7 (lamination) were retired — data showed 100%
+ * answered "with handles" and customers can override the "without lamination"
+ * default at the step-9 free-text revision. Defaults are injected on the
+ * transition to step 9 (see HANDLES_DEFAULT / LAMINATION_DEFAULT).
  *
  * Custom branches set q_state.pendingCustomField — on the next inbound the
  * text is stored in q_state.{field}Custom and the flow advances normally.
@@ -95,26 +99,6 @@ const QUESTIONS: Question[] = [
       "מה המידות שאתם צריכים? פורמט המפעל: גובה × עומק × רוחב (בס״מ).\nדוגמה: H40*D15*W50 (גובה 40, עומק 15, רוחב 50).\nאם אין עומק (שקית שטוחה) — תכתבו רק גובה ורוחב, למשל H30*W40.",
   },
   {
-    step: 6,
-    field: "handles",
-    prompt: "🛍️ עם או בלי ידיות?",
-    options: [
-      { value: "true", label: "עם ידיות" },
-      { value: "false", label: "ללא ידיות" },
-    ],
-    buttons: true,
-  },
-  {
-    step: 7,
-    field: "lamination",
-    prompt: "✨ עם למינציה? (מראה יוקרתי, עמיד יותר, דוחה נוזלים)",
-    options: [
-      { value: "true", label: "עם למינציה" },
-      { value: "false", label: "ללא למינציה" },
-    ],
-    buttons: true,
-  },
-  {
     step: 8,
     field: "colors",
     prompt: "🎨 כמה צבעים בלוגו?",
@@ -155,6 +139,27 @@ const PRODUCT_QUESTION_PAGE_2: Question = {
 function getCurrentQuestion(qState: { step: number; sizePage?: 1 | 2 }): Question | null {
   if (qState.step === 5 && qState.sizePage === 2) return PRODUCT_QUESTION_PAGE_2;
   return QUESTIONS.find((q) => q.step === qState.step) ?? null;
+}
+
+// Step numbers are sparse (3,4,5,8) after retiring handles/lamination — find
+// the next question by step ordering, not strict +1 increment. Returns
+// `undefined` when `currentStep` is past the last question.
+function findNextQuestion(currentStep: number): Question | undefined {
+  return QUESTIONS.filter((q) => q.step > currentStep).sort((a, b) => a.step - b.step)[0];
+}
+
+// Defaults injected when the questionnaire transitions to step 9 (confirmation
+// gate). Customers who want a different value can say so in the "רוצה לשנות"
+// free-text revision — spec-extractor parses it and merges back into qState.
+const HANDLES_DEFAULT = "true"; // 100% of past customers chose "with handles"
+const LAMINATION_DEFAULT = "false"; // business choice — cheaper default; customer can upgrade in revision
+
+function applyRetiredFieldDefaults(state: QState): QState {
+  return {
+    ...state,
+    handles: state.handles ?? HANDLES_DEFAULT,
+    lamination: state.lamination ?? LAMINATION_DEFAULT,
+  };
 }
 
 const DECISION_PROMPT =
@@ -1002,9 +1007,7 @@ export async function handleInbound(input: {
     if (field === "quantity") captured.quantityCustom = text;
     if (field === "product") captured.productCustom = text;
     const currentQ = getCurrentQuestion(ctx.qState!);
-    const nextQ = currentQ
-      ? QUESTIONS.find((q) => q.step === currentQ.step + 1)
-      : null;
+    const nextQ = currentQ ? findNextQuestion(currentQ.step) : undefined;
     if (nextQ) {
       captured.step = nextQ.step;
       await Promise.all([
@@ -1142,7 +1145,7 @@ export async function handleInbound(input: {
   if (currentQ.field === "product" && llmCustomProduct) {
     advanced.productCustom = llmCustomProduct;
   }
-  const nextQ = QUESTIONS.find((q) => q.step === currentQ.step + 1);
+  const nextQ = findNextQuestion(currentQ.step);
   if (nextQ) {
     advanced.step = nextQ.step;
     // saveState and askQuestion are independent — kicking the DB update in
@@ -1158,12 +1161,15 @@ export async function handleInbound(input: {
   // Last question answered → enter step 9 confirmation gate.
   // The actual route (factory vs quoted) is deferred until the customer
   // confirms or after `confirmationAttempts >= 2`.
-  advanced.step = 9;
-  advanced.confirmationStep = "awaiting_confirm";
-  advanced.confirmationAttempts = 0;
+  const finalized: QState = applyRetiredFieldDefaults({
+    ...advanced,
+    step: 9,
+    confirmationStep: "awaiting_confirm",
+    confirmationAttempts: 0,
+  });
   await Promise.all([
-    saveState(ctx.sid, advanced),
-    askConfirmation(ctx, advanced),
+    saveState(ctx.sid, finalized),
+    askConfirmation(ctx, finalized),
   ]);
   return { action: "confirmation_sent" };
 }
