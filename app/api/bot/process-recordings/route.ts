@@ -41,7 +41,10 @@ export const maxDuration = 300;
 
 const CURSOR_KEY = "call_recordings.last_polled_at";
 const CURSOR_OVERLAP_MS = 30 * 60 * 1000; // 30min belt-and-suspenders rewind
-const MAX_PER_TICK_DOWNLOADS = 5;
+// Bumped from 5 to 10 to chew through the historical backfill faster.
+// 10 × Whisper turnaround (~15s) ≈ 150s, well under maxDuration=300s.
+// Whisper rate limit is 50 RPM — we're at ~2 RPM at this cap.
+const MAX_PER_TICK_DOWNLOADS = 10;
 const MAX_ATTEMPTS = 3;
 const NOTE_MARKER_VERSION = "CALL-ANALYSIS v1";
 
