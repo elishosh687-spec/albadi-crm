@@ -71,8 +71,23 @@ export async function transcribeAudio(
 
   const model = opts.model ?? readEnv("OPENAI_TRANSCRIBE_MODEL") ?? DEFAULT_MODEL;
   const timeoutMs = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS;
-  const filename = opts.filename ?? "audio.mp3";
   const contentType = opts.contentType ?? "audio/mpeg";
+  // Whisper inspects the filename extension to detect audio format. If the
+  // extension doesn't match the content type, it returns 400. Derive a
+  // matching extension when the caller hasn't been explicit.
+  const filename =
+    opts.filename ??
+    `audio.${
+      contentType.includes("wav")
+        ? "wav"
+        : contentType.includes("ogg")
+          ? "ogg"
+          : contentType.includes("webm")
+            ? "webm"
+            : contentType.includes("m4a") || contentType.includes("mp4")
+              ? "m4a"
+              : "mp3"
+    }`;
 
   const form = new FormData();
   form.append("file", new Blob([new Uint8Array(audio)], { type: contentType }), filename);

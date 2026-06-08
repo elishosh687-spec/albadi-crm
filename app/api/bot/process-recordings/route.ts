@@ -160,12 +160,23 @@ async function recordError(
   err: unknown,
   giveUp: boolean,
 ): Promise<void> {
-  const msg = err instanceof Error ? err.message : String(err);
+  // Capture both the error message AND any structured detail (e.g.
+  // TranscribeError.detail holds OpenAI's response body excerpt). Without
+  // detail we'd just see "OpenAI transcription failed: 400" with no clue
+  // why.
+  let msg: string;
+  if (err instanceof Error) {
+    msg = err.message;
+    const detail = (err as Error & { detail?: string }).detail;
+    if (detail) msg += `\n  detail: ${detail}`;
+  } else {
+    msg = String(err);
+  }
   await db
     .update(callRecordingImports)
     .set({
       attempts: sql`${callRecordingImports.attempts} + 1`,
-      lastError: msg.slice(0, 1000),
+      lastError: msg.slice(0, 2000),
       lastErrorAt: new Date(),
       status: giveUp ? "failed" : "pending",
       updatedAt: new Date(),
@@ -252,10 +263,10 @@ async function stage2Transcribe(): Promise<{ done: number }> {
         .where(eq(callRecordingImports.id, row.id));
 
       const { audio, contentType } = await downloadRecording(row.ghlMessageId);
-      const transcript = await transcribeAudio(audio, {
-        contentType,
-        filename: `call-${row.ghlMessageId}.mp3`,
-      });
+      // Let the wrapper derive the filename extension from contentType —
+      // Whisper 400s when extension and content type disagree (we observed
+      // this with audio/x-wav being sent as .mp3 → 400).
+      const transcript = await transcribeAudio(audio, { contentType });
 
       await db
         .update(callRecordingImports)
