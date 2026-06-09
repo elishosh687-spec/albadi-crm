@@ -85,6 +85,28 @@ export default function InboxView({ apiToken, initialRows, selectedSid }: Props)
     }
   }
 
+  async function sendIntro(sid: string, name: string) {
+    if (!window.confirm(`לשלוח הצגת חברה (וידאו + אתרים) ל-${name}?`)) return;
+    setBusy(sid);
+    try {
+      const res = await fetch(
+        `/api/widget/send-company-intro?widget_token=${encodeURIComponent(apiToken)}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ sid }),
+        }
+      );
+      const json = await res.json();
+      if (!json.ok) throw new Error(json.error || "send failed");
+      alert("✅ הצגת חברה נשלחה");
+    } catch (e) {
+      alert(`שגיאה: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setBusy(null);
+    }
+  }
+
   function refresh() {
     startTransition(() => {
       location.reload();
@@ -174,6 +196,26 @@ export default function InboxView({ apiToken, initialRows, selectedSid }: Props)
               }}
             >
               {busy === r.sid ? "…" : r.botPaused ? "▶️" : "⏸️"}
+            </button>
+
+            <button
+              onClick={() => sendIntro(r.sid, r.name || r.phone || r.sid)}
+              disabled={busy === r.sid}
+              title="שלח הצגת חברה (וידאו + אתרים)"
+              style={{
+                width: 56,
+                minWidth: 56,
+                height: 56,
+                fontSize: 22,
+                background: "#14321f",
+                color: "#e4e4e7",
+                border: "1px solid #2f6f4f",
+                borderRadius: 8,
+                cursor: busy === r.sid ? "wait" : "pointer",
+                touchAction: "manipulation",
+              }}
+            >
+              🎬
             </button>
 
             <a

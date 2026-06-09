@@ -11,6 +11,7 @@
 import { getFactoryConfig } from "@/lib/factory/config";
 import { DEFAULT_CONFIG } from "@/lib/factory/calculator/constants";
 import { CalculatorWithSettings } from "@/components/calculator/CalculatorWithSettings";
+import SendCompanyIntroButton from "@/components/widget/SendCompanyIntroButton";
 import { verifyWidgetToken } from "@/integrations/ghl/widget-auth";
 import { db } from "@/lib/db";
 import { leads } from "@/drizzle/schema";
@@ -157,6 +158,13 @@ export default async function CalculatorWidgetPage({
           <span style={{ color: "#71717a", fontSize: 13 }}>
             ⚠️ ללא ליד — מצב standalone
           </span>
+        )}
+        {lead?.sid && (
+          <SendCompanyIntroButton
+            sid={lead.sid}
+            apiToken={token}
+            leadName={lead.name}
+          />
         )}
       </div>
 
