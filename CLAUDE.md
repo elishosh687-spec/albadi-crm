@@ -360,3 +360,83 @@ Every completed GHL call gets transcribed (Whisper), analyzed for sales signals 
 **Dry-run before going live.** `npx tsx scripts/_test-call-pipeline.ts` (with `DATABASE_URL` set) runs all four stages inline against a real recent call and prints the note body that WOULD be posted — DB is touched (cursor stays untouched), but `addContactNote` is NOT called. Use this to validate Hebrew analysis quality before flipping the cron on.
 
 **Upgrade path for analysis quality.** If `gpt-4o-mini` underperforms on spoken Hebrew nuance, swap the LLM in `lib/autoresponder/call-analysis.ts` to a Claude-Sonnet wrapper (~30 line change behind the same `analyzeCall` signature). Don't pre-optimize — see real outputs first.
+
+## ElevenLabs voice agent (Twilio telephony → GHL)
+
+A Conversational-AI phone agent that calls/answers leads in Hebrew, plus an
+**additive sibling** of the GHL call-recording pipeline above that mirrors each
+agent call into GHL as a note + playable recording. Built 2026-06-09. It does
+**not** touch `process-recordings` (the GHL-native dialer path) — both run side
+by side, keyed on different tables.
+
+**The agent.** "Marketing Lead Capture Agent", `agent_id =
+agent_2101ktmrrw08ef29qty75p1qqpc3`. Hebrew system prompt + first message
+(outbound "you left details → we call you back" flow), grounded in the real
+questionnaire (`lib/autoresponder/questionnaire.ts`) and 52 analyzed past
+calls. `platform_settings.summary_language = "he"` so ElevenLabs' own summary
+is Hebrew (the note's fallback when `analyzeCall` returns null). Agent LLM is
+`glm-45-air` (small/cheap — upgrade for better Hebrew nuance); analysis LLM is
+`gemini-2.5-flash`. Edit the agent via `PATCH /v1/convai/agents/{id}` (do NOT
+send `conversation_config.agent.language` — it 400s against the TTS model;
+language is already `he`).
+
+**Telephony.** Twilio number **+972 3-382-2538** (`+97233822538`,
+`phone_number_id = phnum_6701ktmwg1dcebr9w659vms6dc6y`), imported via
+`POST /v1/convai/phone-numbers` (Twilio SID+token) and assigned to the agent —
+`supports_inbound` + `supports_outbound`. ElevenLabs auto-sets the Twilio
+voice webhook to `api.elevenlabs.io/twilio/inbound_call`. A GHL number can NOT
+double as the agent's line (one voice webhook per number; GHL owns its
+numbers' Twilio). Outbound calls: `POST /v1/convai/twilio/outbound-call`
+`{agent_id, agent_phone_number_id, to_number}` — currently manual; auto-dial
+of new leads is NOT built yet.
+
+**Sync pipeline** — [app/api/elevenlabs/sync-calls/route.ts](app/api/elevenlabs/sync-calls/route.ts), 4 stages, per-row gated, cap 5/stage/tick:
+
+| Stage | Selector | Action |
+|-------|----------|--------|
+| 1 discover | list conversations since cursor | insert rows (`conversation_id` UNIQUE) |
+| 2 enrich | `transcript IS NULL` | pull transcript + `metadata.phone_call.external_number` + ElevenLabs summary |
+| 3 analyze | `enriched_at NOT NULL AND analyzed_at IS NULL` | `analyzeCall` (Hebrew, reused) |
+| 4 post | `analyzed_at NOT NULL AND posted_back_at IS NULL` | resolve GHL contact by phone → note + recording attachment |
+
+**Data model:** `elevenlabs_call_imports` ([drizzle/schema.ts](drizzle/schema.ts)),
+`conversation_id` UNIQUE. Status: `pending → enriched → analyzed → posted`;
+branch terminals `skipped_no_contact` (web/widget call, no phone to bind),
+`skipped_empty`, `failed` (>= 3 attempts). Cursor: `app_config` key
+`elevenlabs.last_polled_unix`.
+
+**Recording attachment.** ElevenLabs audio needs the `xi-api-key`, but GHL
+fetches attachment URLs unauthenticated — so
+[app/api/elevenlabs/recording/[id]/route.ts](app/api/elevenlabs/recording/[id]/route.ts)
+proxies it as `<conv_id>.mp3` (injects the key). Stage 4 uploads that proxy
+URL via `uploadMediaFromUrl` and attaches it with `postOutboundMessage`
+(type `Custom`, the same conversation provider as the WhatsApp mirror) so it
+renders as a playable bubble in the GHL contact.
+
+**Idempotency:** stage 4 checks existing notes for the marker
+`[CALL-ANALYSIS-11L v1] conv=<id>` before posting (survives crashes); the
+`conversation_id` UNIQUE constraint dedupes discovery.
+
+**Trigger.** No dedicated routine yet (claude.ai scheduler was down 2026-06-09).
+Instead **piggybacked on the existing `process-recordings` 5-min Cloud
+Routine** — its POST handler ends with a non-fatal internal `fetch` to
+`/api/elevenlabs/sync-calls`. To decouple later: remove that block and register
+a dedicated routine hitting `POST /api/elevenlabs/sync-calls` with
+`Authorization: Bearer $BOT_SECRET`.
+
+**Env vars (Vercel prod):** `ELEVENLABS_API_KEY` (required), `ELEVENLABS_AGENT_ID`
+(optional — scopes discovery to one agent). Auth on the cron: `BOT_SECRET` /
+`CALL_TRIGGER_SECRET` (shared with other crons).
+
+**Manual verify:** [scripts/_verify-11l-e2e.ts](scripts/_verify-11l-e2e.ts) runs
+the full pipeline against one conversation with inline env (`ELEVENLABS_API_KEY`
++ `GHL_LOCATION_ID` + `GHL_CONVERSATION_PROVIDER_ID` + `DATABASE_URL`) — it
+posts a real note + recording, so use a disposable contact. Analysis (OpenAI)
+only runs where `OPENAI_API_KEY` is present (prod), so a local run falls back to
+the Hebrew ElevenLabs summary.
+
+**Footguns.** (1) Web/widget calls have no phone → `skipped_no_contact` (can't
+bind a GHL contact) — expected, only telephony calls sync. (2) Editing the
+agent with `language` in the payload 400s (see above). (3) The recording proxy
+needs `ELEVENLABS_API_KEY` in the **prod** runtime, else it 502s and the audio
+attach silently fails (note still posts).
