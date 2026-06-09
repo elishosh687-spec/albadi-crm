@@ -7,7 +7,7 @@
  * without leaving the calculator screen.
  */
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Calculator as CalcIcon, Settings as SettingsIcon } from "lucide-react";
 import { CalculatorView } from "./CalculatorView";
 import { SettingsView } from "@/components/settings/SettingsView";
@@ -27,6 +27,31 @@ type Tab = "calculator" | "settings";
 
 export function CalculatorWithSettings(props: Props) {
   const [tab, setTab] = useState<Tab>("calculator");
+  // The "הגדרות" tab saves margins to the DB but does NOT reload the page, so
+  // the calculator tab would keep the margins it got at page-load. Re-pull the
+  // live config whenever we (re)enter the calculator tab, so an edit made in
+  // settings takes effect immediately without a manual page refresh.
+  const [margins, setMargins] = useState<Record<string, number>>(props.initialMargins);
+
+  useEffect(() => {
+    if (tab !== "calculator") return;
+    let cancelled = false;
+    fetch(
+      `/api/widget/factory/config?widget_token=${encodeURIComponent(props.apiToken)}`,
+      { cache: "no-store" }
+    )
+      .then((r) => r.json())
+      .then((data) => {
+        const m = data?.config?.profitMarginByQuantity;
+        if (!cancelled && m && typeof m === "object") {
+          setMargins(m as Record<string, number>);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [tab, props.apiToken]);
 
   return (
     <div className="flex flex-col gap-4" dir="rtl">
@@ -46,7 +71,7 @@ export function CalculatorWithSettings(props: Props) {
           products={props.products}
           quantityTiers={props.quantityTiers}
           shippingOptions={props.shippingOptions}
-          initialMargins={props.initialMargins}
+          initialMargins={margins}
           apiToken={props.apiToken}
           sid={props.sid}
           leadName={props.leadName}
