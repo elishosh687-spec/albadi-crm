@@ -577,3 +577,65 @@ export const callRecordingImports = pgTable(
     ),
   })
 );
+
+// ElevenLabs Conversational AI call → GHL bridge. Additive sibling of
+// call_recording_imports (which handles GHL-native dialer recordings). One row
+// per ElevenLabs conversation, keyed on conversation_id UNIQUE for idempotent
+// re-ingest from the sync cron. State machine in `status`:
+//   'pending' → 'enriched' (transcript+meta pulled) → 'analyzed' → 'posted'
+//   branch terminals: 'failed' (>= MAX_ATTEMPTS), 'skipped_no_contact'
+//   (web/widget call with no phone to bind a GHL contact), 'skipped_empty'
+//   (no transcript / zero-length call).
+// See app/api/elevenlabs/sync-calls/route.ts for the staged pipeline.
+export const elevenlabsCallImports = pgTable(
+  "elevenlabs_call_imports",
+  {
+    id: serial("id").primaryKey(),
+    // ElevenLabs conversation id (e.g. "conv_7601kt…"). Unique → dedupe.
+    conversationId: text("conversation_id").notNull().unique(),
+    agentId: text("agent_id"),
+
+    // Telephony metadata (null for web/widget calls).
+    phone: text("phone"),
+    direction: text("direction"), // 'inbound' | 'outbound' | null
+    callDurationSec: integer("call_duration_sec"),
+    callStartedAt: timestamp("call_started_at", { withTimezone: true }),
+
+    // Resolved in the post stage by phone lookup. Null until then.
+    ghlContactId: text("ghl_contact_id"),
+
+    // Set by stage 2 (enrich): transcript text built from ElevenLabs turns.
+    transcript: text("transcript"),
+    enrichedAt: timestamp("enriched_at", { withTimezone: true }),
+
+    // Set by stage 3 — CallAnalysis shape (lib/autoresponder/call-analysis.ts).
+    analysis: jsonb("analysis"),
+    analyzedAt: timestamp("analyzed_at", { withTimezone: true }),
+
+    // Set by stage 4. GHL-hosted media url for the uploaded recording, plus
+    // the note + attachment message ids. Idempotent: stage 4 checks existing
+    // notes for the `[CALL-ANALYSIS-11L v1] conv=<id>` marker before posting.
+    recordingGhlUrl: text("recording_ghl_url"),
+    postedNoteId: text("posted_note_id"),
+    attachedMessageId: text("attached_message_id"),
+    postedBackAt: timestamp("posted_back_at", { withTimezone: true }),
+
+    status: text("status").notNull().default("pending"),
+    attempts: integer("attempts").notNull().default(0),
+    lastError: text("last_error"),
+    lastErrorAt: timestamp("last_error_at", { withTimezone: true }),
+
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (t) => ({
+    statusAttemptsIdx: index("elevenlabs_call_imports_status_attempts_idx").on(
+      t.status,
+      t.attempts
+    ),
+  })
+);
