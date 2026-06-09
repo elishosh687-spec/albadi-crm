@@ -231,6 +231,7 @@ async function stageEnrich(): Promise<number> {
         .update(elevenlabsCallImports)
         .set({
           transcript,
+          elevenSummary: meta.summary,
           phone: meta.phone,
           direction: meta.direction,
           callDurationSec: meta.durationSec ?? row.callDurationSec,
@@ -335,7 +336,7 @@ async function stagePost(): Promise<number> {
           durationSec: row.callDurationSec,
           direction: row.direction,
           analysis: (row.analysis as CallAnalysis | null) ?? null,
-          fallbackSummary: null,
+          fallbackSummary: row.elevenSummary,
           transcript: row.transcript ?? "",
         });
         const note = await addContactNote(contactId, body);

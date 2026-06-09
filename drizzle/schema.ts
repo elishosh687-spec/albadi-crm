@@ -604,8 +604,11 @@ export const elevenlabsCallImports = pgTable(
     // Resolved in the post stage by phone lookup. Null until then.
     ghlContactId: text("ghl_contact_id"),
 
-    // Set by stage 2 (enrich): transcript text built from ElevenLabs turns.
+    // Set by stage 2 (enrich): transcript text built from ElevenLabs turns,
+    // plus ElevenLabs' own summary (fallback for the note when the OpenAI
+    // analysis is null — short calls / LLM hiccup).
     transcript: text("transcript"),
+    elevenSummary: text("eleven_summary"),
     enrichedAt: timestamp("enriched_at", { withTimezone: true }),
 
     // Set by stage 3 — CallAnalysis shape (lib/autoresponder/call-analysis.ts).
