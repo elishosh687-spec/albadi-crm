@@ -159,8 +159,8 @@ export function FactoryPricingForm({ initial }: { initial: FactoryPricingConfig 
           error={errors.usdToCny as string | undefined}
         />
         <NumField
-          label='רווח ברירת מחדל (%)'
-          hint="נופל-חזרה כשאין ערך בטבלת הכמויות (לכמויות חופשיות)"
+          label='מרז׳ין ברירת מחדל (% מהמחיר)'
+          hint="אחוז רווח מתוך מחיר המוצר ללקוח (0–99). נופל-חזרה כשאין ערך בטבלת הכמויות"
           value={state.defaultProfitMargin}
           step={1}
           onChange={(v) => updateNumber("defaultProfitMargin", v)}
@@ -170,10 +170,11 @@ export function FactoryPricingForm({ initial }: { initial: FactoryPricingConfig 
 
       {/* Profit margin per quantity tier — used by the WhatsApp questionnaire */}
       <div className="mb-6">
-        <h3 className="text-sm font-medium mb-1">אחוזי רווחיות לפי כמות</h3>
+        <h3 className="text-sm font-medium mb-1">מרז׳ין לפי כמות (% מהמחיר)</h3>
         <p className="text-[11px] text-muted-foreground mb-3">
-          השאלון בווצאפ לוקח את האחוז המתאים לפי הכמות שהלקוח בחר. כמות שלא
-          ברשימה → "רווח ברירת מחדל" שלמעלה.
+          אחוז רווח מתוך מחיר המוצר ללקוח (0–99). למשל 60 = 60% מהמחיר נשאר לך.
+          השאלון בווצאפ לוקח את האחוז לפי הכמות שהלקוח בחר; כמות שלא ברשימה →
+          "מרז׳ין ברירת מחדל" שלמעלה.
         </p>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           {QTY_TIERS.map((q) => (
@@ -429,10 +430,12 @@ function validate(s: FactoryPricingConfig): Record<string, unknown> {
   const errors: Record<string, unknown> = {};
   if (!(s.usdToIls > 0)) errors.usdToIls = "חובה > 0";
   if (!(s.usdToCny > 0)) errors.usdToCny = "חובה > 0";
-  if (!(s.defaultProfitMargin >= 0)) errors.defaultProfitMargin = "חובה ≥ 0";
+  // Margin is % of PRICE → must be 0..<100 (≥100 is mathematically impossible).
+  if (!(s.defaultProfitMargin >= 0 && s.defaultProfitMargin < 100))
+    errors.defaultProfitMargin = "חובה 0–99";
   if (s.profitMarginByQuantity) {
     for (const [qty, pct] of Object.entries(s.profitMarginByQuantity)) {
-      if (!(pct >= 0)) errors[`margin:${qty}`] = "חובה ≥ 0";
+      if (!(pct >= 0 && pct < 100)) errors[`margin:${qty}`] = "חובה 0–99";
     }
   }
   s.shippingOptions.forEach((opt, i) => {

@@ -6,7 +6,7 @@
  *     (w/h/d, qty, handles, colors, lamination, shipping), finds the matching
  *     14-product entry, returns per-component ILS selling prices.
  *   - calculateQuoteByCodes({ productId, ... }) — for the bot. Takes the
- *     option codes the questionnaire collects directly (p1..p14, q0..q3,
+ *     option codes the questionnaire collects directly (p1..p13, q0..q3,
  *     s1/s2) and returns the full QuoteResult plus the alternative shipping
  *     option (sea ↔ air) for the customer message.
  */
@@ -111,9 +111,11 @@ export function computeQuoteBreakdown(spec: {
   // stays pass-through.
   const { usdToCny, usdToIls } = DEFAULT_CONFIG.exchangeRates;
   const margin = result.profitMargin;
+  // MARGIN-on-price semantics: selling = cost / (1 - margin). Same as engine.ts.
+  const marginFrac = Math.min(Math.max(margin, 0), 99.9) / 100;
   const r2 = (n: number) => Math.round(n * 100) / 100;
   const toSellingIls = (cny: number) =>
-    r2((cny / usdToCny) * usdToIls * (1 + margin / 100));
+    r2(((cny / usdToCny) * usdToIls) / (1 - marginFrac));
 
   let baseBagPerUnit = toSellingIls(result.baseBagCny);
   const handlesPerUnit = toSellingIls(result.handlesAddonCny);
@@ -155,7 +157,7 @@ export function computeQuoteBreakdown(spec: {
 }
 
 export interface CalculateByCodesInput {
-  productId: string; // p1..p14
+  productId: string; // p1..p13
   quantityTierId: string; // q0..q3 (or null + quantityOverride)
   quantityOverride?: number | null;
   hasHandles: boolean;

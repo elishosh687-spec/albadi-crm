@@ -84,7 +84,7 @@ export function CalculatorView({ products, quantityTiers, shippingOptions, initi
   );
   const defaultMargin = initialMargins[String(snappedTierQty)] ?? 40;
   const marginOverrideParsed = marginOverride !== "" ? parseFloat(marginOverride) : NaN;
-  const marginOverrideValid = Number.isFinite(marginOverrideParsed) && marginOverrideParsed >= 0 && marginOverrideParsed <= 300;
+  const marginOverrideValid = Number.isFinite(marginOverrideParsed) && marginOverrideParsed >= 0 && marginOverrideParsed < 100;
   const currentMargin = marginOverrideValid ? marginOverrideParsed : defaultMargin;
   const minProfitParsed = minProfit !== "" ? parseFloat(minProfit) : NaN;
   const minProfitValid = Number.isFinite(minProfitParsed) && minProfitParsed > 0;
@@ -163,7 +163,9 @@ export function CalculatorView({ products, quantityTiers, shippingOptions, initi
     } else {
       perUnit = n;
     }
-    const marginPct = ((perUnit - c.shippingPerUnitIls) / base - 1) * 100;
+    // MARGIN-on-price: profit ÷ product price (excl shipping).
+    const productPrice = perUnit - c.shippingPerUnitIls;
+    const marginPct = productPrice > 0 ? ((productPrice - base) / productPrice) * 100 : 0;
     const profitPerUnit = perUnit - r.totalCostPerUnitIls;
     const totalProfit = profitPerUnit * r.quantity;
     const totalPrice = perUnit * r.quantity;
@@ -385,7 +387,9 @@ export function CalculatorView({ products, quantityTiers, shippingOptions, initi
           ⚠️ הרווח הכולל ₪{ils(r.totalProfitIls)} נמוך מהמינימום שהוגדר ₪{ils(minProfitParsed)}.
           {(() => {
             const totalCost = r.totalCostPerUnitIls * r.quantity;
-            const requiredMarginPct = totalCost > 0 ? ((minProfitParsed / totalCost) * 100) : 0;
+            // MARGIN-on-price: profit ÷ (cost + profit) at the target.
+            const requiredMarginPct =
+              minProfitParsed > 0 ? ((minProfitParsed / (totalCost + minProfitParsed)) * 100) : 0;
             return ` רווח נדרש כדי להגיע ליעד: ${r2(requiredMarginPct)}%.`;
           })()}
         </div>

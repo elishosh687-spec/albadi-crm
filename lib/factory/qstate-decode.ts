@@ -29,11 +29,8 @@ export const PRODUCT_LABEL: Record<string, string> = {
   p7: "H15*D5*W20 ס״מ — קטן צר, יוקרה",
   p8: "H35*D10*W40 ס״מ — בינוני-גדול",
   p9: "H40*D15*W45 ס״מ — גדול",
-  p10: "H50*D20*W60 ס״מ — XL",
-  p11: "H8*W10 ס״מ — מיני שטוח",
   p12: "H10*W15 ס״מ — שטוח קטן",
   p13: "H25*W25 ס״מ — ריבועי",
-  p14: "H35*W50 ס״מ — שטוח רחב",
 };
 
 /** Approximate width/height/depth in cm parsed from a known product code. */
@@ -50,11 +47,8 @@ export const PRODUCT_DIMS: Record<
   p7: { widthCm: 20, heightCm: 15, depthCm: 5 },
   p8: { widthCm: 40, heightCm: 35, depthCm: 10 },
   p9: { widthCm: 45, heightCm: 40, depthCm: 15 },
-  p10: { widthCm: 60, heightCm: 50, depthCm: 20 },
-  p11: { widthCm: 10, heightCm: 8, depthCm: 0 },
   p12: { widthCm: 15, heightCm: 10, depthCm: 0 },
   p13: { widthCm: 25, heightCm: 25, depthCm: 0 },
-  p14: { widthCm: 50, heightCm: 35, depthCm: 0 },
 };
 
 export const QUANTITY_VALUE: Record<string, number> = {

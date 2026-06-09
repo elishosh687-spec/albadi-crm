@@ -124,11 +124,8 @@ const PRODUCT_QUESTION_PAGE_2: Question = {
     { value: "p7", label: "H15*D5*W20 — קטן צר, יוקרה" },
     { value: "p8", label: "H35*D10*W40 — בינוני-גדול" },
     { value: "p9", label: "H40*D15*W45 — גדול" },
-    { value: "p10", label: "H50*D20*W60 — XL" },
-    { value: "p11", label: "H8*W10 — מיני שטוח" },
     { value: "p12", label: "H10*W15 — שטוח קטן" },
     { value: "p13", label: "H25*W25 — ריבועי" },
-    { value: "p14", label: "H35*W50 — שטוח רחב" },
     { value: "custom", label: "אחר / מידה מותאמת" },
   ],
   hasCustom: true,
@@ -352,11 +349,8 @@ const PROD_LABEL: Record<string, string> = {
   p7: "H15*D5*W20 ס״מ",
   p8: "H35*D10*W40 ס״מ",
   p9: "H40*D15*W45 ס״מ",
-  p10: "H50*D20*W60 ס״מ",
-  p11: "H8*W10 ס״מ",
   p12: "H10*W15 ס״מ",
   p13: "H25*W25 ס״מ",
-  p14: "H35*W50 ס״מ",
 };
 
 function buildConfirmationMessage(state: QState): string {
@@ -1088,7 +1082,7 @@ export async function handleInbound(input: {
   }
 
   // Step-5 page pivot — "צריך מידה אחרת" swaps the option set to page 2.
-  // Stay on step 5; don't advance. matchAnswer can now hit p7..p14 / custom
+  // Stay on step 5; don't advance. matchAnswer can now hit p7..p13 / custom
   // because getCurrentQuestion will return PRODUCT_QUESTION_PAGE_2 next turn.
   if (currentQ.field === "product" && match === "more") {
     const paged: QState = {

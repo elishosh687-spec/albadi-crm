@@ -1,5 +1,8 @@
 /**
- * Source of truth for the 14 fixed-size products and their factory prices.
+ * Source of truth for the fixed-size products and their factory prices.
+ * Note: p10 (H50*D20*W60), p11 (H8*W10), p14 (H35*W50) were retired 2026-06-09 —
+ * the factory gave them no real volume discount, so a falling customer price
+ * could not be guaranteed. Ids are intentionally left non-contiguous.
  * Imported from newfactory.xlsx (May 2026 — Kunming Shengximengtai Trading).
  * To re-import after factory updates: `npx tsx scripts/import-new-factory.ts`.
  * Pure data — no logic.
@@ -79,18 +82,6 @@ const DEFAULT_PRODUCTS: Product[] = [
     withoutHandles: { prices: { "1000": 1.82, "3000": 1.11, "5000": 0.97, "10000": 0.87 }, carton: { qty: 250, weight: 13.2, length: 50, width: 44, height: 48 }, laminationPrices: { "1000": 2.75, "3000": 2.05, "5000": 1.18, "10000": 1.14 } },
   },
   {
-    id: "p10", dimensions: "H50*D20*W60", description: "תיק XL — מתאים לפריטים גדולים מאוד", sortOrder: 10,
-    laminationColorPlateFee: 760,
-    withHandles: { prices: { "1000": 2.8, "3000": 2.9, "5000": 2.8, "10000": 2.72 }, carton: { qty: 100, weight: 10, length: 75, width: 55, height: 20 }, laminationPrices: { "1000": 3.35, "3000": 3.1 } },
-    withoutHandles: { prices: { "1000": 2.72, "3000": 2.81, "5000": 2.7, "10000": 2.6 }, carton: { qty: 100, weight: 9.2, length: 65, width: 55, height: 20 }, laminationPrices: { "1000": 3.29, "3000": 3.05 } },
-  },
-  {
-    id: "p11", dimensions: "H8*W10", description: "תיק מיני — מתאים לתכשיטים, מתנות קטנות", sortOrder: 11,
-    laminationColorPlateFee: 300,
-    withHandles: { prices: { "1000": 1.3, "3000": 0.75, "5000": 0.71, "10000": 0.68 }, carton: { qty: 1000, weight: 7, length: 36, width: 26, height: 30 }, laminationPrices: { "1000": 1.9, "3000": 1.2 } },
-    withoutHandles: { prices: { "1000": 1.2, "3000": 0.53, "5000": 0.55, "10000": 0.37 }, carton: { qty: 600, weight: 5, length: 36, width: 20, height: 30 }, laminationPrices: { "1000": 1.84, "3000": 1.15 } },
-  },
-  {
     id: "p12", dimensions: "H10*W15", description: "תיק קטן — מתאים לאקססוריז", sortOrder: 12,
     laminationColorPlateFee: 300,
     withHandles: { prices: { "1000": 1.14, "3000": 0.78, "5000": 0.73, "10000": 0.71 }, carton: { qty: 600, weight: 4.5, length: 36, width: 25, height: 20 }, laminationPrices: { "1000": 2, "3000": 1.28 } },
@@ -101,12 +92,6 @@ const DEFAULT_PRODUCTS: Product[] = [
     laminationColorPlateFee: 300,
     withHandles: { prices: { "1000": 1.37, "3000": 0.67, "5000": 0.63, "10000": 0.6 }, carton: { qty: 500, weight: 9, length: 40, width: 30, height: 45 }, laminationPrices: { "1000": 2.17, "3000": 1.3, "5000": 0.65, "10000": 0.61 } },
     withoutHandles: { prices: { "1000": 1.32, "3000": 0.63, "5000": 0.59, "10000": 0.56 }, carton: { qty: 500, weight: 8, length: 30, width: 30, height: 45 }, laminationPrices: { "1000": 2.12, "3000": 1.25, "5000": 0.6, "10000": 0.57 } },
-  },
-  {
-    id: "p14", dimensions: "H35*W50", description: "תיק רחב — מתאים לפריטים שטוחים גדולים", sortOrder: 14,
-    laminationColorPlateFee: 400,
-    withHandles: { prices: { "1000": 1.5, "3000": 1.23, "5000": 1.18, "10000": 1.16 }, carton: { qty: 300, weight: 12, length: 60, width: 40, height: 25 }, laminationPrices: { "1000": 2.35, "3000": 1.53, "5000": 0.78, "10000": 0.74 } },
-    withoutHandles: { prices: { "1000": 1.45, "3000": 0.63, "5000": 0.59, "10000": 0.56 }, carton: { qty: 300, weight: 10.5, length: 54, width: 39, height: 25 }, laminationPrices: { "1000": 2.3, "3000": 1.48, "5000": 0.73, "10000": 0.7 } },
   },
 ];
 

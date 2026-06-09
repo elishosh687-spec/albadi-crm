@@ -144,10 +144,14 @@ export function calculateQuote(
       : adminSettings.globalProfitMargin;
   const shippingPerUnitIls = shippingPerUnitUsd * targetRate;
   const marginableBaseIls = totalCostPerUnitIls - shippingPerUnitIls;
+  // profitMargin is MARGIN-on-price (profit ÷ product price), not markup-on-cost.
+  // product price = cost / (1 - margin); shipping is added after, pass-through.
+  // Clamp to <100% so a misconfigured value can never divide-by-zero / go negative.
+  const marginFrac = Math.min(Math.max(profitMargin, 0), 99.9) / 100;
   // Keep exact (unrounded) for profit and total-order calculations so that
   // changing shipping method does not shift profit via rounding boundaries.
   const sellingPricePerUnitIlsExact =
-    marginableBaseIls * (1 + profitMargin / 100) + shippingPerUnitIls;
+    marginableBaseIls / (1 - marginFrac) + shippingPerUnitIls;
   const sellingPricePerUnitIls = r2(sellingPricePerUnitIlsExact);
   const totalOrderPriceIls = r2(sellingPricePerUnitIlsExact * quantity);
 
