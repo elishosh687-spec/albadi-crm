@@ -466,12 +466,36 @@ export async function POST(req: NextRequest) {
     return { done: 0, error: String(e) };
   });
 
+  // Piggyback the ElevenLabs→GHL call sync on this same every-5-min Cloud
+  // Routine (the claude.ai scheduler for a dedicated routine was unavailable).
+  // ADDITIVE + non-fatal: wrapped so it can never affect the recording
+  // pipeline above. The standalone /api/elevenlabs/sync-calls route stays for
+  // manual triggering and can later move to its own routine.
+  let elevenlabs: unknown = { skipped: true };
+  try {
+    const base =
+      process.env.NEXT_PUBLIC_APP_URL ||
+      (process.env.VERCEL_PROJECT_PRODUCTION_URL
+        ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
+        : "https://albadi-crm.vercel.app");
+    const secret = process.env.BOT_SECRET ?? process.env.CALL_TRIGGER_SECRET ?? "";
+    const r = await fetch(`${base}/api/elevenlabs/sync-calls`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${secret}` },
+    });
+    elevenlabs = await r.json().catch(() => ({ ok: r.ok, status: r.status }));
+  } catch (e) {
+    console.warn("[process-recordings] elevenlabs sync piggyback failed", e);
+    elevenlabs = { ok: false, error: String(e) };
+  }
+
   return NextResponse.json({
     elapsedMs: Date.now() - startedAt,
     discovered,
     transcribed,
     analyzed,
     posted,
+    elevenlabs,
   });
 }
 
