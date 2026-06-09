@@ -26,6 +26,7 @@ import { and, eq, or, sql } from "drizzle-orm";
 import { z } from "zod";
 import { sendBridgeMessage } from "@/lib/bridge/client";
 import { OPENING, kickstartQuestionnaire } from "@/lib/autoresponder/questionnaire";
+import { syncLeadToGHL } from "@/integrations/ghl/sync";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
@@ -158,6 +159,15 @@ export async function POST(req: NextRequest) {
     // Tag insert failure is non-fatal — the lead row exists.
     console.warn("[fb-import] tag insert failed", err);
   }
+
+  // Push to GHL right after the row lands so the lead shows up in the
+  // pipeline kanban immediately, even if they never reply to the OPENING.
+  // pickStageId in integrations/ghl/mapping.ts maps NULL stage → INTAKE so
+  // the opportunity is created in the first visible column. Fire-and-forget
+  // (no await) so Apps Script doesn't pay the GHL latency on each row.
+  void syncLeadToGHL(jid).catch((e) =>
+    console.warn("[fb-import] syncLeadToGHL failed", jid, e),
+  );
 
   try {
     await sendBridgeMessage(jid, OPENING, undefined, "bot");
