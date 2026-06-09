@@ -1,9 +1,10 @@
 "use client";
 
-import React, { useRef, useEffect, useState } from "react";
-import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { OrbitControls, PerspectiveCamera } from "@react-three/drei";
+import React, { useEffect, useMemo, useState } from "react";
+import { Canvas, useThree } from "@react-three/fiber";
+import { OrbitControls, PerspectiveCamera, useGLTF } from "@react-three/drei";
 import * as THREE from "three";
+import { colors } from "@/lib/ui/tokens";
 
 interface BagModelProps {
   bagColor: string;
@@ -11,265 +12,275 @@ interface BagModelProps {
   logoScale: number;
   logoPositionX: number;
   logoPositionY: number;
-  logoRotation: number;
   onScreenshotReady: (callback: () => Promise<string>) => void;
 }
 
-/**
- * Main bag mesh component (non-woven tote bag)
- */
-const BagMesh = React.forwardRef<
-  THREE.Group,
-  Omit<BagModelProps, "onScreenshotReady">
->(
-  (
-    {
-      bagColor,
+const BAG_MODEL_PATH = "/Rusable_Bag.glb";
+const MODEL_SCALE = 1.62;
+const MODEL_FRONT_Z = 0.49;
+
+function useFabricTexture(hex: string) {
+  return useMemo(() => {
+    const canvas = document.createElement("canvas");
+    canvas.width = 256;
+    canvas.height = 256;
+
+    const context = canvas.getContext("2d");
+    if (!context) return null;
+
+    context.fillStyle = hex;
+    context.fillRect(0, 0, canvas.width, canvas.height);
+
+    for (let y = 0; y < canvas.height; y += 3) {
+      context.fillStyle = y % 6 === 0 ? "rgba(255,255,255,0.045)" : "rgba(0,0,0,0.035)";
+      context.fillRect(0, y, canvas.width, 1);
+    }
+
+    for (let x = 0; x < canvas.width; x += 4) {
+      context.fillStyle = x % 8 === 0 ? "rgba(255,255,255,0.028)" : "rgba(0,0,0,0.025)";
+      context.fillRect(x, 0, 1, canvas.height);
+    }
+
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    texture.wrapS = THREE.RepeatWrapping;
+    texture.wrapT = THREE.RepeatWrapping;
+    texture.repeat.set(2.4, 2.8);
+    texture.anisotropy = 8;
+
+    return texture;
+  }, [hex]);
+}
+
+function useLogoTexture(logoUrl?: string | null) {
+  const [texture, setTexture] = useState<THREE.Texture | null>(null);
+  const [aspectRatio, setAspectRatio] = useState(1);
+
+  useEffect(() => {
+    let disposed = false;
+    let nextTexture: THREE.Texture | null = null;
+
+    if (!logoUrl) {
+      setTexture((current) => {
+        current?.dispose();
+        return null;
+      });
+      setAspectRatio(1);
+      return;
+    }
+
+    const loader = new THREE.TextureLoader();
+    loader.load(
       logoUrl,
-      logoScale,
-      logoPositionX,
-      logoPositionY,
-      logoRotation,
-    },
-    ref
-  ) => {
-    const groupRef = useRef<THREE.Group>(null);
-    const canvasRef = useRef<HTMLCanvasElement | null>(null);
-    const textureRef = useRef<THREE.Texture | null>(null);
-
-    React.useImperativeHandle(ref, () => groupRef.current as THREE.Group);
-
-    // Load and prepare logo texture
-    useEffect(() => {
-      if (!logoUrl) return;
-
-      const canvas = document.createElement("canvas");
-      canvas.width = 512;
-      canvas.height = 512;
-      const ctx = canvas.getContext("2d");
-
-      if (!ctx) return;
-
-      // Fill transparent background
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-      const img = new Image();
-      img.crossOrigin = "anonymous";
-      img.onload = () => {
-        // Calculate aspect-preserving dimensions
-        const maxDim = canvas.width * 0.8;
-        let width = img.width;
-        let height = img.height;
-        if (width > height) {
-          height = (height * maxDim) / width;
-          width = maxDim;
-        } else {
-          width = (width * maxDim) / height;
-          height = maxDim;
+      (loadedTexture) => {
+        if (disposed) {
+          loadedTexture.dispose();
+          return;
         }
 
-        const x = (canvas.width - width) / 2;
-        const y = (canvas.height - height) / 2;
-
-        ctx.drawImage(img, x, y, width, height);
-
-        const texture = new THREE.CanvasTexture(canvas);
-        texture.needsUpdate = true;
-        textureRef.current = texture;
-      };
-      img.src = logoUrl;
-      canvasRef.current = canvas;
-    }, [logoUrl]);
-
-    return (
-      <group ref={groupRef} position={[0, 0, 0]}>
-        {/* Bag Body - Main rectangular shape */}
-        <mesh position={[0, 0, 0]} castShadow receiveShadow>
-          <boxGeometry args={[2.5, 3, 0.6]} />
-          <meshStandardMaterial
-            color={bagColor}
-            roughness={0.4}
-            metalness={0.1}
-          />
-        </mesh>
-
-        {/* Left Handle */}
-        <mesh
-          position={[-1.1, 1.5, 0]}
-          rotation={[Math.PI * 0.3, 0, 0]}
-          castShadow
-        >
-          <torusGeometry args={[0.4, 0.08, 8, 32, 0, Math.PI]} />
-          <meshStandardMaterial
-            color={bagColor}
-            roughness={0.4}
-            metalness={0.1}
-          />
-        </mesh>
-
-        {/* Right Handle */}
-        <mesh
-          position={[1.1, 1.5, 0]}
-          rotation={[Math.PI * 0.3, 0, 0]}
-          castShadow
-        >
-          <torusGeometry args={[0.4, 0.08, 8, 32, 0, Math.PI]} />
-          <meshStandardMaterial
-            color={bagColor}
-            roughness={0.4}
-            metalness={0.1}
-          />
-        </mesh>
-
-        {/* Logo Decal Plane - Front face of bag */}
-        {textureRef.current && (
-          <mesh
-            position={[
-              logoPositionX * 1.2,
-              logoPositionY * 1.4,
-              0.32,
-            ]}
-            rotation={[0, 0, (logoRotation * Math.PI) / 180]}
-            castShadow
-          >
-            <planeGeometry args={[logoScale * 1.2, logoScale * 1.2]} />
-            <meshStandardMaterial
-              map={textureRef.current}
-              transparent
-              depthTest={true}
-              depthWrite={false}
-            />
-          </mesh>
-        )}
-
-        {/* Placeholder for empty logo area */}
-        {!textureRef.current && (
-          <mesh position={[0, 0, 0.31]} castShadow>
-            <planeGeometry args={[1.8, 2.2]} />
-            <meshStandardMaterial
-              color="#e5e7eb"
-              transparent
-              opacity={0.3}
-            />
-          </mesh>
-        )}
-      </group>
+        loadedTexture.colorSpace = THREE.SRGBColorSpace;
+        loadedTexture.anisotropy = 8;
+        loadedTexture.needsUpdate = true;
+        nextTexture = loadedTexture;
+        setAspectRatio(
+          loadedTexture.image?.width && loadedTexture.image?.height
+            ? loadedTexture.image.width / loadedTexture.image.height
+            : 1
+        );
+        setTexture((current) => {
+          current?.dispose();
+          return loadedTexture;
+        });
+      },
+      undefined,
+      () => {
+        if (!disposed) {
+          setTexture((current) => {
+            current?.dispose();
+            return null;
+          });
+          setAspectRatio(1);
+        }
+      }
     );
-  }
-);
 
-BagMesh.displayName = "BagMesh";
+    return () => {
+      disposed = true;
+      if (nextTexture) nextTexture.dispose();
+    };
+  }, [logoUrl]);
 
-/**
- * Canvas Scene Component
- */
-const BagScene = ({
+  return { texture, aspectRatio };
+}
+
+function BagModel({
   bagColor,
   logoUrl,
   logoScale,
   logoPositionX,
   logoPositionY,
-  logoRotation,
-  onScreenshotReady,
-}: BagModelProps) => {
-  const bagRef = useRef<THREE.Group>(null);
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const { gl } = useThree();
+}: Omit<BagModelProps, "onScreenshotReady">) {
+  const gltf = useGLTF(BAG_MODEL_PATH, true);
+  const { texture, aspectRatio } = useLogoTexture(logoUrl);
+  const fabricTexture = useFabricTexture(bagColor);
 
-  // Expose screenshot function
+  const modelScene = useMemo(() => {
+    const clonedScene = gltf.scene.clone(true);
+
+    clonedScene.traverse((object) => {
+      if (object instanceof THREE.Mesh) {
+        object.castShadow = true;
+        object.receiveShadow = true;
+      }
+    });
+
+    return clonedScene;
+  }, [gltf.scene]);
+
+  const modelMaterial = useMemo(
+    () =>
+      new THREE.MeshStandardMaterial({
+        color: bagColor,
+        map: fabricTexture ?? undefined,
+        roughness: 0.88,
+        metalness: 0,
+        envMapIntensity: 0.28,
+        side: THREE.DoubleSide,
+      }),
+    [bagColor, fabricTexture]
+  );
+
+  useEffect(() => {
+    modelScene.traverse((object) => {
+      if (object instanceof THREE.Mesh) {
+        object.material = modelMaterial;
+      }
+    });
+
+    return () => {
+      modelMaterial.dispose();
+    };
+  }, [modelMaterial, modelScene]);
+
+  const logoWidth = Math.min(0.86, 0.5 * logoScale * Math.max(aspectRatio, 0.65));
+  const logoHeight = Math.min(0.5, 0.5 * logoScale / Math.max(aspectRatio, 0.65));
+  const logoX = logoPositionX * 0.4;
+  const logoY = 0.36 + logoPositionY * 0.5;
+
+  return (
+    <group rotation={[0.02, -0.46, 0]} position={[0, -1.42, 0]} scale={MODEL_SCALE}>
+      <primitive object={modelScene} />
+
+      <mesh position={[0, 0.36, MODEL_FRONT_Z]} renderOrder={2}>
+        <planeGeometry args={[0.92, 0.58]} />
+        <meshStandardMaterial color="#ffffff" transparent opacity={texture ? 0.055 : 0.17} />
+      </mesh>
+
+      {texture ? (
+        <mesh position={[logoX, logoY, MODEL_FRONT_Z + 0.012]} renderOrder={3}>
+          <planeGeometry args={[logoWidth, logoHeight]} />
+          <meshStandardMaterial
+            map={texture}
+            transparent
+            alphaTest={0.04}
+            depthWrite={false}
+            side={THREE.DoubleSide}
+          />
+        </mesh>
+      ) : null}
+    </group>
+  );
+}
+
+function ViewerScene({
+  bagColor,
+  logoUrl,
+  logoScale,
+  logoPositionX,
+  logoPositionY,
+  onScreenshotReady,
+}: BagModelProps) {
+  const { camera, gl, scene } = useThree();
+
   useEffect(() => {
     onScreenshotReady(async () => {
       try {
-        // Get the WebGL canvas and create a screenshot
-        const canvas = gl.domElement as HTMLCanvasElement;
-        return canvas.toDataURL("image/png");
-      } catch (err) {
-        console.error("Screenshot capture failed:", err);
+        gl.render(scene, camera);
+        return gl.domElement.toDataURL("image/png");
+      } catch {
         return "";
       }
     });
-  }, [gl, onScreenshotReady]);
+  }, [camera, gl, onScreenshotReady, scene]);
 
   return (
     <>
-      <PerspectiveCamera makeDefault position={[0, 0, 5]} fov={50} />
+      <PerspectiveCamera makeDefault position={[0.28, 0.18, 8.2]} fov={32} />
       <OrbitControls
-        enableZoom={true}
-        minDistance={3}
-        maxDistance={12}
-        enablePan={true}
-        autoRotate={false}
-        autoRotateSpeed={2}
+        enablePan={false}
+        target={[0, 0.1, 0]}
+        minDistance={5.8}
+        maxDistance={10}
+        minPolarAngle={0.85}
+        maxPolarAngle={1.72}
+        minAzimuthAngle={-1.18}
+        maxAzimuthAngle={0.55}
       />
 
-      {/* Lighting */}
-      <ambientLight intensity={0.6} />
+      <color attach="background" args={[colors.surfaceMuted]} />
+      <ambientLight intensity={1.15} />
+      <hemisphereLight color="#fffaf3" groundColor="#d9d1c4" intensity={0.85} />
       <directionalLight
-        position={[10, 10, 10]}
-        intensity={0.8}
+        position={[3.5, 5.4, 4.5]}
+        intensity={1.45}
         castShadow
-        shadow-mapSize-width={2048}
-        shadow-mapSize-height={2048}
-        shadow-camera-left={-5}
-        shadow-camera-right={5}
-        shadow-camera-top={5}
-        shadow-camera-bottom={-5}
+        shadow-mapSize-width={1024}
+        shadow-mapSize-height={1024}
       />
-      <directionalLight position={[-5, 5, 5]} intensity={0.3} />
+      <directionalLight position={[-3.5, 2, 3]} intensity={0.38} />
 
-      {/* Background */}
-      <color attach="background" args={["#f8f9fa"]} />
-
-      {/* Bag Model */}
-      <BagMesh
-        ref={bagRef}
+      <BagModel
         bagColor={bagColor}
         logoUrl={logoUrl}
         logoScale={logoScale}
         logoPositionX={logoPositionX}
         logoPositionY={logoPositionY}
-        logoRotation={logoRotation}
       />
 
-      {/* Ground plane shadow */}
-      <mesh position={[0, -2, 0]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
-        <planeGeometry args={[10, 10]} />
-        <shadowMaterial opacity={0.3} />
+      <mesh position={[0, -1.72, 0]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
+        <circleGeometry args={[2.4, 48]} />
+        <meshBasicMaterial color="#d9d1c5" transparent opacity={0.32} />
       </mesh>
     </>
   );
-};
+}
 
-/**
- * BagViewer3D - Main component combining Canvas and Scene
- */
 export const BagViewer3D = ({
   bagColor,
   logoUrl,
   logoScale,
   logoPositionX,
   logoPositionY,
-  logoRotation,
   onScreenshotReady,
 }: BagModelProps) => {
   return (
-    <div className="w-full h-full bg-gradient-to-br from-gray-50 to-gray-100 rounded-lg overflow-hidden">
+    <div className="h-full w-full overflow-hidden">
       <Canvas
-        shadows
+        shadows={{ type: THREE.PCFShadowMap }}
+        dpr={[1, 1.75]}
         gl={{
           preserveDrawingBuffer: true,
           antialias: true,
-          alpha: true,
+          alpha: false,
         }}
         style={{ width: "100%", height: "100%" }}
       >
-        <BagScene
+        <ViewerScene
           bagColor={bagColor}
           logoUrl={logoUrl}
           logoScale={logoScale}
           logoPositionX={logoPositionX}
           logoPositionY={logoPositionY}
-          logoRotation={logoRotation}
           onScreenshotReady={onScreenshotReady}
         />
       </Canvas>
@@ -278,3 +289,5 @@ export const BagViewer3D = ({
 };
 
 export default BagViewer3D;
+
+useGLTF.preload(BAG_MODEL_PATH, true);

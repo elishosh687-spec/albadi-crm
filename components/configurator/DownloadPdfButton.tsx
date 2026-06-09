@@ -1,22 +1,34 @@
 "use client";
 
 import React, { useState } from "react";
+import { AlertCircle, CheckCircle2, Download, Loader2 } from "lucide-react";
 import jsPDF from "jspdf";
+import { Button } from "@/components/ui/Button";
+import { colors, radius, size, space } from "@/lib/ui/tokens";
+import {
+  formatCurrency,
+  hasRequiredCustomerFields,
+  type CustomerInfo,
+  type PricingInfo,
+} from "./configurator-state";
 
-interface CustomerInfo {
-  name: string;
-  email: string;
-  phone: string;
-  company?: string;
-  quantity: number;
-  notes?: string;
-}
+type FontDoc = jsPDF & {
+  addFileToVFS: (name: string, data: string) => void;
+  addFont: (postScriptName: string, id: string, style: string) => void;
+};
 
-interface PricingInfo {
-  unitPrice: number;
-  setupFee: number;
-  quantity: number;
-  totalPrice: number;
+let fontDataPromise: Promise<{ regular: string; bold: string }> | null = null;
+
+function arrayBufferToBase64(buffer: ArrayBuffer) {
+  const bytes = new Uint8Array(buffer);
+  let binary = "";
+  const chunkSize = 0x8000;
+
+  for (let index = 0; index < bytes.length; index += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(index, index + chunkSize));
+  }
+
+  return btoa(binary);
 }
 
 interface DownloadPdfButtonProps {
@@ -40,14 +52,41 @@ export const DownloadPdfButton: React.FC<DownloadPdfButtonProps> = ({
 }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState(false);
+
+  const loadFonts = async () => {
+    if (!fontDataPromise) {
+      fontDataPromise = Promise.all([
+        fetch("/fonts/Heebo-Regular.ttf").then(async (response) => {
+          if (!response.ok) {
+            throw new Error("Unable to load PDF font");
+          }
+          return arrayBufferToBase64(await response.arrayBuffer());
+        }),
+        fetch("/fonts/Heebo-Bold.ttf").then(async (response) => {
+          if (!response.ok) {
+            throw new Error("Unable to load PDF font");
+          }
+          return arrayBufferToBase64(await response.arrayBuffer());
+        }),
+      ]).then(([regular, bold]) => ({ regular, bold }));
+    }
+
+    return fontDataPromise;
+  };
 
   const generatePdf = async () => {
     setLoading(true);
     setError(null);
+    setSuccess(false);
 
     try {
-      if (!customerInfo.name || !customerInfo.email || !customerInfo.phone) {
-        throw new Error("Please fill in all required customer fields");
+      if (!hasRequiredCustomerFields(customerInfo)) {
+        throw new Error("אנא מלא את כל השדות החובה");
+      }
+
+      if (!screenshotCallback) {
+        throw new Error("תצוגת המוצר עדיין לא מוכנה לייצוא");
       }
 
       const doc = new jsPDF({
@@ -55,191 +94,107 @@ export const DownloadPdfButton: React.FC<DownloadPdfButtonProps> = ({
         unit: "mm",
         format: "a4",
       });
+      const fontDoc = doc as FontDoc;
+      const fonts = await loadFonts();
 
-      // jsPDF internal dimensions
-      const pageWidth = 210; // A4 width in mm
-      const pageHeight = 297; // A4 height in mm
+      fontDoc.addFileToVFS("Heebo-Regular.ttf", fonts.regular);
+      fontDoc.addFileToVFS("Heebo-Bold.ttf", fonts.bold);
+      fontDoc.addFont("Heebo-Regular.ttf", "Heebo", "normal");
+      fontDoc.addFont("Heebo-Bold.ttf", "Heebo", "bold");
+      doc.setFont("Heebo", "normal");
+
+      const pageWidth = 210;
+      const pageHeight = 297;
       const margin = 15;
       let yPosition = margin;
 
-      // Header
-      doc.setFillColor(30, 58, 52); // Navy color
-      doc.rect(0, 0, pageWidth, 40, "F");
-
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(24);
+      doc.setFillColor(156, 66, 33);
+      doc.rect(0, 0, pageWidth, 34, "F");
       doc.setTextColor(255, 255, 255);
-      doc.text("PRICING CONTRACT", margin, 15);
+      doc.setFont("Heebo", "bold");
+      doc.setFontSize(20);
+      doc.text("Albadi Pricing Contract", margin, 16);
+      doc.setFont("Heebo", "normal");
+      doc.setFontSize(9);
+      doc.text("Non-woven bag configuration summary", margin, 24);
+      doc.text(new Date().toLocaleDateString("en-GB"), pageWidth - margin, 16, { align: "right" });
+      yPosition = 44;
 
-      doc.setFontSize(10);
-      doc.setTextColor(200, 200, 200);
-      doc.text("Non-woven Custom Bags", margin, 24);
-
-      // Date
-      doc.setFontSize(8);
-      const today = new Date().toLocaleDateString();
-      doc.text(`Generated: ${today}`, pageWidth - margin - 40, 15);
-
-      yPosition = 50;
-
-      // Customer Details Section
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(12);
-      doc.setTextColor(0, 0, 0);
-      doc.text("CUSTOMER DETAILS", margin, yPosition);
-      yPosition += 8;
-
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(10);
-      doc.setTextColor(60, 60, 60);
-
-      const customerFields = [
-        `Name: ${customerInfo.name}`,
-        `Email: ${customerInfo.email}`,
-        `Phone: ${customerInfo.phone}`,
-        ...(customerInfo.company ? [`Company: ${customerInfo.company}`] : []),
-      ];
-
-      customerFields.forEach((field) => {
-        doc.text(field, margin + 5, yPosition);
+      const sectionTitle = (title: string) => {
+        doc.setFont("Heebo", "bold");
+        doc.setFontSize(11);
+        doc.setTextColor(28, 24, 21);
+        doc.text(title, margin, yPosition);
         yPosition += 6;
-      });
+      };
 
+      const row = (label: string, value: string, options?: { strong?: boolean }) => {
+        doc.setFont("Heebo", options?.strong ? "bold" : "normal");
+        doc.setFontSize(10);
+        doc.setTextColor(115, 107, 98);
+        doc.text(label, margin, yPosition);
+        doc.setTextColor(28, 24, 21);
+        doc.text(value || "-", pageWidth - margin, yPosition, { align: "right" });
+        yPosition += 6;
+      };
+
+      sectionTitle("Customer details");
+      row("Contact name", customerInfo.name);
+      row("Company", customerInfo.company || "-");
+      row("Email", customerInfo.email);
+      row("Phone", customerInfo.phone);
+      row("Date", new Date().toLocaleDateString("en-GB"));
       yPosition += 4;
 
-      // Product Details Section
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(12);
-      doc.setTextColor(0, 0, 0);
-      doc.text("PRODUCT DETAILS", margin, yPosition);
-      yPosition += 8;
+      sectionTitle("Product summary");
+      row("Product", "Custom non-woven bag");
+      row("Selected color", bagColorName);
+      row("Logo", hasLogo ? "Uploaded" : "Not uploaded");
+      row("Quantity", `${pricingInfo.quantity} pcs`);
 
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(10);
-      doc.setTextColor(60, 60, 60);
-
-      const productFields = [
-        `Product: Non-woven Custom Tote Bag`,
-        `Bag Color: ${bagColorName}`,
-        `Quantity: ${pricingInfo.quantity} units`,
-        `Logo: ${hasLogo ? "Yes ✓" : "No"}`,
-      ];
-
-      productFields.forEach((field) => {
-        doc.text(field, margin + 5, yPosition);
-        yPosition += 6;
-      });
-
-      yPosition += 4;
-
-      // Color Swatch
       doc.setDrawColor(150, 150, 150);
-      doc.rect(margin, yPosition - 2, 15, 10);
       doc.setFillColor(
         parseInt(bagColorHex.slice(1, 3), 16),
         parseInt(bagColorHex.slice(3, 5), 16),
         parseInt(bagColorHex.slice(5, 7), 16)
       );
-      doc.rect(margin, yPosition - 2, 15, 10, "F");
+      doc.rect(margin, yPosition - 4, 12, 8, "F");
+      doc.rect(margin, yPosition - 4, 12, 8);
+      doc.setFont("Heebo", "normal");
       doc.setFontSize(9);
-      doc.setTextColor(60, 60, 60);
-      doc.text("Color Sample", margin + 20, yPosition + 3);
+      doc.setTextColor(115, 107, 98);
+      doc.text("Color swatch", margin + 16, yPosition + 1);
+      yPosition += 12;
 
-      yPosition += 15;
+      sectionTitle("Pricing");
+      row("Unit price", formatCurrency(pricingInfo.unitPrice));
+      row("Setup fee", formatCurrency(pricingInfo.setupFee));
+      row("Line total", formatCurrency(pricingInfo.unitPrice * pricingInfo.quantity));
+      row("Grand total", formatCurrency(pricingInfo.totalPrice), { strong: true });
+      yPosition += 4;
 
-      // Pricing Section
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(12);
-      doc.setTextColor(0, 0, 0);
-      doc.text("PRICING BREAKDOWN", margin, yPosition);
-      yPosition += 8;
-
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(10);
-      doc.setTextColor(60, 60, 60);
-
-      const pricingLines = [
-        {
-          label: `Unit Price (${pricingInfo.quantity} @ $${pricingInfo.unitPrice.toFixed(2)}/ea)`,
-          value: `$${(pricingInfo.unitPrice * pricingInfo.quantity).toFixed(2)}`,
-        },
-        {
-          label: "Setup Fee",
-          value: `$${pricingInfo.setupFee.toFixed(2)}`,
-        },
-      ];
-
-      pricingLines.forEach(({ label, value }) => {
-        doc.text(label, margin + 5, yPosition);
-        doc.text(value, pageWidth - margin - 30, yPosition, { align: "right" });
-        yPosition += 6;
-      });
-
-      // Total
-      yPosition += 2;
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(12);
-      doc.setTextColor(0, 86, 184); // Blue
-      doc.rect(margin, yPosition - 5, pageWidth - 2 * margin, 10, "F");
-      doc.setFillColor(0, 86, 184);
-      doc.setTextColor(255, 255, 255);
-      doc.text("TOTAL PRICE", margin + 5, yPosition);
-      doc.text(`$${pricingInfo.totalPrice.toFixed(2)}`, pageWidth - margin - 5, yPosition, {
-        align: "right",
-      });
-
-      yPosition += 15;
-
-      // Screenshot Section
-      if (screenshotCallback) {
-        try {
-          const screenshot = await screenshotCallback();
-          if (screenshot) {
-            doc.setFont("helvetica", "bold");
-            doc.setFontSize(12);
-            doc.setTextColor(0, 0, 0);
-            doc.text("3D MOCKUP", margin, yPosition);
-            yPosition += 5;
-
-            const maxWidth = pageWidth - 2 * margin;
-            const imgHeight = 50;
-            doc.addImage(
-              screenshot,
-              "PNG",
-              margin,
-              yPosition,
-              maxWidth,
-              imgHeight
-            );
-            yPosition += imgHeight + 5;
-          }
-        } catch (err) {
-          console.error("Failed to capture screenshot:", err);
-        }
+      const screenshot = await screenshotCallback();
+      if (!screenshot) {
+        throw new Error("לא ניתן היה ללכוד את תצוגת המוצר עבור ה-PDF");
       }
 
-      // Check if we need a second page
+      sectionTitle("Configured mockup");
+      const imageWidth = pageWidth - margin * 2;
+      const imageHeight = 90;
+      doc.addImage(screenshot, "PNG", margin, yPosition, imageWidth, imageHeight);
+      yPosition += imageHeight + 10;
+
       if (yPosition > pageHeight - 40) {
         doc.addPage();
         yPosition = margin;
       }
 
-      // Terms & Conditions
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(11);
-      doc.setTextColor(0, 0, 0);
-      doc.text("TERMS & CONDITIONS", margin, yPosition);
-      yPosition += 7;
-
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(9);
-      doc.setTextColor(80, 80, 80);
-
+      sectionTitle("Terms");
       const terms = [
-        "• Final production may vary slightly from the digital mockup.",
-        "• Pricing is subject to confirmation after final file review.",
-        "• Delivery timeline will be confirmed upon order placement.",
-        "• Payment terms: 50% deposit to start, balance due before shipment.",
+        "Mockup is an indicative preview and may vary slightly from final production.",
+        "Pricing remains subject to final artwork review and production confirmation.",
+        "Lead times are confirmed after approval of artwork and quantity.",
+        "This MVP contract does not include checkout, storage, or order automation.",
       ];
 
       terms.forEach((term) => {
@@ -249,61 +204,89 @@ export const DownloadPdfButton: React.FC<DownloadPdfButtonProps> = ({
             doc.addPage();
             yPosition = margin;
           }
-          doc.text(line, margin + 5, yPosition);
+          doc.setFont("Heebo", "normal");
+          doc.setFontSize(9);
+          doc.setTextColor(80, 80, 80);
+          doc.text(line, margin + 2, yPosition);
           yPosition += 5;
         });
       });
 
-      yPosition += 5;
-
-      // Footer
-      doc.setFont("helvetica", "italic");
+      doc.setFont("Heebo", "normal");
       doc.setFontSize(8);
       doc.setTextColor(150, 150, 150);
       doc.text(
-        "Generated by Albadi Bags - 3D Configurator",
+        "Albadi | pricing-contract-non-woven-bag.pdf",
         pageWidth / 2,
         pageHeight - 10,
         { align: "center" }
       );
 
-      // Download the PDF
-      const filename = `pricing-contract-${customerInfo.name.replace(
-        /\s+/g,
-        "-"
-      ).toLowerCase()}-${Date.now()}.pdf`;
-      doc.save(filename);
+      doc.save("pricing-contract-non-woven-bag.pdf");
+      setSuccess(true);
+      setTimeout(() => setSuccess(false), 3000);
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Failed to generate PDF";
+      const message = err instanceof Error ? err.message : "שגיאה בהפקת PDF";
       setError(message);
-      console.error("PDF generation error:", err);
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="space-y-2">
-      <button
+    <div className="space-y-4">
+      <Button
+        type="button"
         onClick={generatePdf}
         disabled={disabled || loading}
-        className={`w-full px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg transition ${
-          disabled || loading
-            ? "opacity-50 cursor-not-allowed"
-            : "hover:shadow-lg"
-        }`}
+        fullWidth
+        size="lg"
+        style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", gap: space.sm }}
       >
-        {loading ? "Generating PDF..." : "📥 Download Pricing Contract"}
-      </button>
+        {loading ? <Loader2 className="size-4 animate-spin" /> : <Download className="size-4" />}
+        {loading ? "יוצר קובץ..." : "הורד PDF"}
+      </Button>
 
       {error && (
-        <div className="p-3 bg-red-50 border border-red-200 rounded text-red-700 text-sm">
+        <div
+          style={{
+            display: "flex",
+            gap: space.sm,
+            alignItems: "flex-start",
+            padding: space.md,
+            borderRadius: radius.lg,
+            background: colors.dangerBg,
+            border: `1px solid ${colors.danger}`,
+            color: colors.danger,
+            fontSize: size.sm,
+          }}
+        >
+          <AlertCircle className="size-4 shrink-0" />
           {error}
         </div>
       )}
 
-      <p className="text-xs text-gray-600 text-center">
-        Your contract will include customer details, pricing, and a 3D mockup preview.
+      {success && (
+        <div
+          style={{
+            display: "flex",
+            gap: space.sm,
+            alignItems: "flex-start",
+            padding: space.md,
+            borderRadius: radius.lg,
+            background: colors.successBg,
+            border: `1px solid ${colors.success}`,
+            color: colors.success,
+            fontSize: size.sm,
+          }}
+        >
+          <CheckCircle2 className="size-4 shrink-0" />
+          הקובץ הורד בהצלחה!
+        </div>
+      )}
+
+      <p style={{ margin: 0, fontSize: size.xs, color: colors.inkMuted }}>
+        המסמך מוכן רק אחרי שתמלא שם, אימייל וטלפון. אם לכידת ה-canvas נכשלת, ההורדה תיעצר עם הודעת שגיאה.
       </p>
     </div>
   );

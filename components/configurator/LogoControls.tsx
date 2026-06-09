@@ -1,16 +1,16 @@
 "use client";
 
 import React from "react";
+import { Move, Scaling } from "lucide-react";
+import { colors, radius, size, space, weight } from "@/lib/ui/tokens";
 
 interface LogoControlsProps {
   logoScale: number;
   logoPositionX: number;
   logoPositionY: number;
-  logoRotation: number;
   onScaleChange: (scale: number) => void;
   onPositionXChange: (x: number) => void;
   onPositionYChange: (y: number) => void;
-  onRotationChange: (rotation: number) => void;
   hasLogo: boolean;
 }
 
@@ -18,104 +18,99 @@ export const LogoControls: React.FC<LogoControlsProps> = ({
   logoScale,
   logoPositionX,
   logoPositionY,
-  logoRotation,
   onScaleChange,
   onPositionXChange,
   onPositionYChange,
-  onRotationChange,
   hasLogo,
 }) => {
+  const controls = [
+    {
+      label: "גודל לוגו",
+      value: `${logoScale.toFixed(2)}x`,
+      min: 0.4,
+      max: 1.9,
+      step: 0.05,
+      current: logoScale,
+      onChange: onScaleChange,
+      icon: <Scaling className="size-4" />,
+    },
+    {
+      label: "מיקום אופקי",
+      value: logoPositionX.toFixed(2),
+      min: -0.85,
+      max: 0.85,
+      step: 0.01,
+      current: logoPositionX,
+      onChange: onPositionXChange,
+      icon: <Move className="size-4" />,
+    },
+    {
+      label: "מיקום אנכי",
+      value: logoPositionY.toFixed(2),
+      min: -0.6,
+      max: 0.75,
+      step: 0.01,
+      current: logoPositionY,
+      onChange: onPositionYChange,
+      icon: <Move className="size-4" />,
+    },
+  ] as const;
+
   return (
     <div className="space-y-4">
-      <h3 className="text-sm font-semibold text-gray-700">Logo Controls</h3>
-
       {!hasLogo && (
-        <p className="text-xs text-gray-500 italic">
-          Upload a logo to enable controls
+        <p
+          style={{
+            margin: 0,
+            fontSize: size.sm,
+            color: colors.inkMuted,
+            background: colors.surfaceMuted,
+            border: `1px dashed ${colors.rule}`,
+            borderRadius: radius.lg,
+            padding: space.md,
+          }}
+        >
+          העלה לוגו כדי להפעיל את הבקרים
         </p>
       )}
 
-      {/* Scale */}
-      <div className="space-y-1">
-        <label className="block text-sm font-medium text-gray-700">
-          Size: {logoScale.toFixed(2)}
-        </label>
-        <input
-          type="range"
-          min="0.3"
-          max="2"
-          step="0.05"
-          value={logoScale}
-          onChange={(e) => onScaleChange(parseFloat(e.target.value))}
-          disabled={!hasLogo}
-          className="w-full disabled:opacity-50"
-        />
-      </div>
-
-      {/* Position X */}
-      <div className="space-y-1">
-        <label className="block text-sm font-medium text-gray-700">
-          Position X: {logoPositionX.toFixed(2)}
-        </label>
-        <input
-          type="range"
-          min="-1"
-          max="1"
-          step="0.05"
-          value={logoPositionX}
-          onChange={(e) => onPositionXChange(parseFloat(e.target.value))}
-          disabled={!hasLogo}
-          className="w-full disabled:opacity-50"
-        />
-      </div>
-
-      {/* Position Y */}
-      <div className="space-y-1">
-        <label className="block text-sm font-medium text-gray-700">
-          Position Y: {logoPositionY.toFixed(2)}
-        </label>
-        <input
-          type="range"
-          min="-1"
-          max="1"
-          step="0.05"
-          value={logoPositionY}
-          onChange={(e) => onPositionYChange(parseFloat(e.target.value))}
-          disabled={!hasLogo}
-          className="w-full disabled:opacity-50"
-        />
-      </div>
-
-      {/* Rotation */}
-      <div className="space-y-1">
-        <label className="block text-sm font-medium text-gray-700">
-          Rotation: {logoRotation.toFixed(0)}°
-        </label>
-        <input
-          type="range"
-          min="0"
-          max="360"
-          step="5"
-          value={logoRotation}
-          onChange={(e) => onRotationChange(parseFloat(e.target.value))}
-          disabled={!hasLogo}
-          className="w-full disabled:opacity-50"
-        />
-      </div>
-
-      {/* Reset Button */}
-      <button
-        onClick={() => {
-          onScaleChange(1);
-          onPositionXChange(0);
-          onPositionYChange(0);
-          onRotationChange(0);
-        }}
-        disabled={!hasLogo}
-        className="w-full px-3 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 text-sm rounded transition disabled:opacity-50 disabled:cursor-not-allowed"
-      >
-        Reset Logo Position
-      </button>
+      {controls.map((control) => (
+        <div key={control.label} className="space-y-2">
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              gap: space.sm,
+            }}
+          >
+            <label
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: space.xs,
+                fontSize: size.sm,
+                fontWeight: weight.medium,
+                color: colors.ink,
+              }}
+            >
+              {control.icon}
+              {control.label}
+            </label>
+            <span style={{ fontSize: size.xs, color: colors.inkMuted }}>{control.value}</span>
+          </div>
+          <input
+            type="range"
+            min={control.min}
+            max={control.max}
+            step={control.step}
+            value={control.current}
+            onChange={(event) => control.onChange(Number(event.target.value))}
+            disabled={!hasLogo}
+            style={{ width: "100%", accentColor: colors.accent }}
+          />
+        </div>
+      ))}
     </div>
   );
 };
