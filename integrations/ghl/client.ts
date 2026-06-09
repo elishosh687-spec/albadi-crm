@@ -763,15 +763,20 @@ export interface SearchCallMessagesOpts {
  * GHL's `/conversations/messages/search` doesn't accept a type filter
  * (422 "type must be a valid enum value" — empirically confirmed 2026-06).
  * So we go two-stage:
- *   1. /conversations/search?lastMessageType=TYPE_CALL → conversations whose
- *      most recent message is a call
- *   2. /conversations/{id}/messages → fetch up to N messages each, keep the
- *      call-type ones
+ *   1. /conversations/search → newest N conversations (no type filter — see below)
+ *   2. /conversations/{id}/messages → fetch each conversation's messages,
+ *      keep only the call-type ones (type === 1 / "TYPE_CALL" / meta.call set)
  *
- * Caveat: this misses calls where a non-call message landed AFTER the call
- * in the same conversation. For the MVP polling window (5min) that's a
- * vanishingly small race. If it becomes a problem in practice, switch to
- * the broader `/conversations/search` (no lastMessageType filter) + scan.
+ * **Why no `lastMessageType=TYPE_CALL`:** that filter only returns
+ * conversations whose most recent message is a call. But in this codebase
+ * the bot sends a WhatsApp follow-up after every call, which immediately
+ * flips lastMessageType to TYPE_CUSTOM_PROVIDER_SMS — so the call message
+ * becomes invisible to the filter. We learned this the hard way on
+ * 2026-06-09 (moshe / 972505646052 / a 700-second call we missed).
+ *
+ * Trade-off: scanning newest 100 conversations on every tick is ~100 GHL
+ * API calls per tick instead of ~50. At 1-min cron frequency that's still
+ * comfortably under GHL's OAuth rate limit.
  */
 export async function searchCallMessages(
   opts: SearchCallMessagesOpts = {}
@@ -782,14 +787,13 @@ export async function searchCallMessages(
   const convQuery: Query = {
     locationId,
     limit,
-    lastMessageType: "TYPE_CALL",
     sort: "desc",
     sortBy: "last_message_date",
   };
   // NOTE: GHL's `startAfterDate` on this endpoint is a *pagination cursor*
-  // (search_after on last_message_date), not a date filter. We poll newest
-  // 20 every tick and rely on the call_recording_imports.ghl_message_id
-  // UNIQUE constraint to dedupe across runs.
+  // (search_after on last_message_date), not a date filter. We poll the
+  // newest `limit` conversations every tick and rely on the
+  // call_recording_imports.ghl_message_id UNIQUE constraint to dedupe.
 
   const convRes = await ghlFetch<{
     conversations?: Array<{ id: string; contactId?: string; locationId?: string }>;
