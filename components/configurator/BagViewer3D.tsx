@@ -21,6 +21,7 @@ interface BagViewer3DProps {
   logoRotation: number;
   autoRotate: boolean;
   showLogoHint: boolean;
+  isCompact?: boolean;
   onApiReady: (api: ViewerApi) => void;
 }
 
@@ -50,13 +51,26 @@ function easeOutBack(t: number) {
 const DECAL_FRONT_Z = 0.26;
 const DECAL_BASE_Y = -0.5;
 
+function configureLogoTexture(texture: THREE.Texture, maxAnisotropy: number) {
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.anisotropy = Math.max(1, maxAnisotropy);
+  texture.generateMipmaps = true;
+  texture.minFilter = THREE.LinearMipmapLinearFilter;
+  texture.magFilter = THREE.LinearFilter;
+  texture.wrapS = THREE.ClampToEdgeWrapping;
+  texture.wrapT = THREE.ClampToEdgeWrapping;
+  texture.needsUpdate = true;
+}
+
 function useLogoTexture(logoUrl?: string | null) {
+  const { gl } = useThree();
   const [texture, setTexture] = useState<THREE.Texture | null>(null);
   const [aspectRatio, setAspectRatio] = useState(1);
 
   useEffect(() => {
     let disposed = false;
     let nextTexture: THREE.Texture | null = null;
+    const maxAnisotropy = gl.capabilities.getMaxAnisotropy();
 
     if (!logoUrl) {
       setTexture((current) => {
@@ -76,9 +90,7 @@ function useLogoTexture(logoUrl?: string | null) {
           return;
         }
 
-        loadedTexture.colorSpace = THREE.SRGBColorSpace;
-        loadedTexture.anisotropy = 8;
-        loadedTexture.needsUpdate = true;
+        configureLogoTexture(loadedTexture, maxAnisotropy);
         nextTexture = loadedTexture;
         setAspectRatio(
           loadedTexture.image?.width && loadedTexture.image?.height
@@ -106,7 +118,7 @@ function useLogoTexture(logoUrl?: string | null) {
       disposed = true;
       if (nextTexture) nextTexture.dispose();
     };
-  }, [logoUrl]);
+  }, [gl, logoUrl]);
 
   return { texture, aspectRatio };
 }
@@ -146,20 +158,14 @@ function BagModel({
 
   const bagGeometry = useMemo(() => {
     if (!bagSource) return null;
-    const geometry = bagSource.geometry.clone();
-    geometry.computeVertexNormals();
-    return geometry;
+    return bagSource.geometry.clone();
   }, [bagSource]);
 
   const modelMaterial = useMemo(
     () =>
-      new THREE.MeshStandardMaterial({
+      new THREE.MeshLambertMaterial({
         color: bagColor,
-        roughness: 0.92,
-        metalness: 0,
-        envMapIntensity: 0.22,
-        flatShading: false,
-        side: THREE.DoubleSide,
+        side: THREE.FrontSide,
       }),
     [bagColor]
   );
@@ -183,8 +189,6 @@ function BagModel({
       <mesh
         geometry={bagGeometry}
         position={bagSource.position}
-        castShadow
-        receiveShadow
         material={modelMaterial}
       >
         {texture ? (
@@ -209,17 +213,43 @@ function BagModel({
 }
 
 function PedestalMeshes() {
+  const discTexture = useMemo(() => {
+    const canvas = document.createElement("canvas");
+    canvas.width = 512;
+    canvas.height = 512;
+    const context = canvas.getContext("2d");
+    if (!context) return null;
+
+    const center = canvas.width / 2;
+    const gradient = context.createRadialGradient(center, center, 24, center, center, center);
+    gradient.addColorStop(0, "rgba(210, 198, 178, 0.55)");
+    gradient.addColorStop(0.55, "rgba(210, 198, 178, 0.28)");
+    gradient.addColorStop(1, "rgba(210, 198, 178, 0)");
+    context.fillStyle = gradient;
+    context.fillRect(0, 0, canvas.width, canvas.height);
+
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    return texture;
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      discTexture?.dispose();
+    };
+  }, [discTexture]);
+
   return (
-    <>
-      <mesh receiveShadow position={[0, 0.035, 0]}>
-        <cylinderGeometry args={[1.62, 1.78, 0.07, 64]} />
-        <meshStandardMaterial color="#e6ddcc" roughness={0.96} metalness={0} />
-      </mesh>
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.073, 0]} receiveShadow>
-        <circleGeometry args={[1.58, 64]} />
-        <meshStandardMaterial color="#ded3bf" transparent opacity={0.55} roughness={1} />
-      </mesh>
-    </>
+    <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.04, 0]}>
+      <circleGeometry args={[1.72, 128]} />
+      <meshBasicMaterial
+        map={discTexture ?? undefined}
+        color="#e3d9c8"
+        transparent
+        toneMapped={false}
+        depthWrite={false}
+      />
+    </mesh>
   );
 }
 
@@ -292,6 +322,7 @@ function ViewerScene({
   logoRotation,
   autoRotate,
   showLogoHint,
+  isCompact = false,
   onApiReady,
 }: BagViewer3DProps) {
   const { camera, gl, scene } = useThree();
@@ -301,8 +332,13 @@ function ViewerScene({
     onApiReady({
       screenshot: async () => {
         try {
+          const previousPixelRatio = gl.getPixelRatio();
+          const capturePixelRatio = Math.min(2.5, window.devicePixelRatio || 1);
+          gl.setPixelRatio(capturePixelRatio);
           gl.render(scene, camera);
-          return gl.domElement.toDataURL("image/png");
+          const dataUrl = gl.domElement.toDataURL("image/png");
+          gl.setPixelRatio(previousPixelRatio);
+          return dataUrl;
         } catch {
           return "";
         }
@@ -320,7 +356,7 @@ function ViewerScene({
 
   return (
     <>
-      <PerspectiveCamera makeDefault position={DEFAULT_CAMERA_POSITION} fov={32} />
+      <PerspectiveCamera makeDefault position={DEFAULT_CAMERA_POSITION} fov={isCompact ? 36 : 32} />
       <OrbitControls
         ref={controlsRef}
         makeDefault
@@ -335,16 +371,10 @@ function ViewerScene({
       />
 
       <color attach="background" args={[BACKDROP_COLOR]} />
-      <ambientLight intensity={1.15} />
-      <hemisphereLight color="#fffaf3" groundColor="#d9d1c4" intensity={0.85} />
-      <directionalLight
-        position={[3.5, 5.4, 4.5]}
-        intensity={1.45}
-        castShadow
-        shadow-mapSize-width={1024}
-        shadow-mapSize-height={1024}
-      />
-      <directionalLight position={[-3.5, 2, 3]} intensity={0.38} />
+      <ambientLight intensity={1.35} />
+      <hemisphereLight color="#fffaf3" groundColor="#d9d1c4" intensity={0.65} />
+      <directionalLight position={[3.5, 5.4, 4.5]} intensity={0.95} />
+      <directionalLight position={[-3.5, 2, 3]} intensity={0.28} />
 
       <React.Suspense fallback={null}>
         <EntranceRig>
@@ -367,14 +397,14 @@ export const BagViewer3D = (props: BagViewer3DProps) => {
   return (
     <div className="h-full w-full overflow-hidden">
       <Canvas
-        shadows={{ type: THREE.PCFShadowMap }}
-        dpr={[1, 1.75]}
+        dpr={[1, 2.5]}
         gl={{
           preserveDrawingBuffer: true,
           antialias: true,
           alpha: false,
+          powerPreference: "high-performance",
         }}
-        style={{ width: "100%", height: "100%" }}
+        style={{ width: "100%", height: "100%", touchAction: "none" }}
       >
         <ViewerScene {...props} />
       </Canvas>

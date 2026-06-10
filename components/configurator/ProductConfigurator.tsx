@@ -28,6 +28,8 @@ import {
   type CustomerInfo,
   type PricingInfo,
 } from "./configurator-state";
+import { processLogoFile } from "./logo-assets";
+import { useCompactLayout } from "./useCompactLayout";
 
 const BagViewer3D = dynamic(() => import("./BagViewer3D"), { ssr: false });
 
@@ -40,10 +42,6 @@ const DEFAULT_LOGO_STATE = {
   positionY: 0.05,
   rotation: 0,
 } as const;
-
-const ALLOWED_LOGO_TYPES = ["image/png", "image/jpeg", "image/svg+xml"];
-const ALLOWED_LOGO_EXTENSIONS = [".png", ".jpg", ".jpeg", ".svg"];
-const MAX_LOGO_FILE_SIZE = 5 * 1024 * 1024;
 
 type DockTab = "color" | "logo" | "quote";
 
@@ -62,40 +60,23 @@ const PILL_STYLE: React.CSSProperties = {
   boxShadow: "0 8px 28px rgba(28,24,21,0.12)",
 };
 
-function isSupportedLogoFile(file: File) {
-  if (ALLOWED_LOGO_TYPES.includes(file.type)) return true;
-  const lower = file.name.toLowerCase();
-  return ALLOWED_LOGO_EXTENSIONS.some((extension) => lower.endsWith(extension));
-}
-
-function readFileAsDataUrl(file: File) {
-  return new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      if (typeof reader.result === "string") {
-        resolve(reader.result);
-        return;
-      }
-      reject(new Error("שגיאה בקריאת הקובץ"));
-    };
-    reader.onerror = () => reject(new Error("שגיאה בקריאת הקובץ"));
-    reader.readAsDataURL(file);
-  });
-}
-
 function ToolbarButton({
   label,
   onClick,
   active = false,
   disabled = false,
+  compact = false,
   children,
 }: {
   label: string;
   onClick: () => void;
   active?: boolean;
   disabled?: boolean;
+  compact?: boolean;
   children: React.ReactNode;
 }) {
+  const buttonSize = compact ? 34 : 38;
+
   return (
     <button
       type="button"
@@ -105,8 +86,8 @@ function ToolbarButton({
       disabled={disabled}
       className="transition-colors"
       style={{
-        width: 38,
-        height: 38,
+        width: buttonSize,
+        height: buttonSize,
         borderRadius: radius.full,
         border: "none",
         display: "grid",
@@ -135,6 +116,7 @@ function MiniSlider({
   max,
   step,
   onChange,
+  compact = false,
 }: {
   label: string;
   value: number;
@@ -143,9 +125,19 @@ function MiniSlider({
   max: number;
   step: number;
   onChange: (value: number) => void;
+  compact?: boolean;
 }) {
   return (
-    <label style={{ display: "flex", flexDirection: "column", gap: 3, width: 96 }}>
+    <label
+      className="shrink-0"
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        gap: 3,
+        width: compact ? 78 : 96,
+        minWidth: compact ? 78 : 96,
+      }}
+    >
       <span
         style={{
           display: "flex",
@@ -192,6 +184,9 @@ export const ProductConfigurator: React.FC = () => {
   const [autoRotate, setAutoRotate] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [captureReady, setCaptureReady] = useState(false);
+  const [logoLoading, setLogoLoading] = useState(false);
+
+  const isCompact = useCompactLayout();
 
   const wrapperRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -247,24 +242,19 @@ export const ProductConfigurator: React.FC = () => {
     if (!file) return;
 
     setLogoError(null);
+    setLogoLoading(true);
 
     try {
-      if (!isSupportedLogoFile(file)) {
-        throw new Error("פורמט לא נתמך — PNG, JPG, JPEG או SVG בלבד");
-      }
-      if (file.size > MAX_LOGO_FILE_SIZE) {
-        throw new Error("הקובץ גדול מדי — עד 5MB");
-      }
-
-      const dataUrl = await readFileAsDataUrl(file);
-      setLogoUrl(dataUrl);
-      setLogoFileName(file.name);
+      const processed = await processLogoFile(file);
+      setLogoUrl(processed.textureUrl);
+      setLogoFileName(processed.fileName);
       resetLogoLayout();
     } catch (error) {
       setLogoError(error instanceof Error ? error.message : "שגיאה בקריאת הקובץ");
       setLogoUrl(null);
       setLogoFileName("");
     } finally {
+      setLogoLoading(false);
       if (fileInputRef.current) fileInputRef.current.value = "";
     }
   };
@@ -307,6 +297,74 @@ export const ProductConfigurator: React.FC = () => {
 
   const canDownloadPdf = captureReady && hasRequiredCustomerFields(customerInfo);
 
+  const stageInset =
+    activeTab === "logo" && logoUrl
+      ? isCompact
+        ? "clamp(220px, 34vh, 280px)"
+        : "clamp(188px, 24vh, 228px)"
+      : activeTab === "logo"
+        ? isCompact
+          ? "clamp(168px, 26vh, 220px)"
+          : "clamp(148px, 18vh, 188px)"
+        : isCompact
+          ? "clamp(148px, 22vh, 196px)"
+          : "clamp(128px, 16vh, 168px)";
+
+  const toolbarButtons = (
+    <>
+      <ToolbarButton
+        label="איפוס תצוגה"
+        onClick={() => viewerApiRef.current?.resetView()}
+        disabled={!captureReady}
+        compact={isCompact}
+      >
+        <RotateCcw className={isCompact ? "size-3.5" : "size-4"} />
+      </ToolbarButton>
+      <ToolbarButton
+        label={autoRotate ? "עצור סיבוב" : "סיבוב אוטומטי"}
+        onClick={() => setAutoRotate((current) => !current)}
+        active={autoRotate}
+        compact={isCompact}
+      >
+        {autoRotate ? (
+          <Pause className={isCompact ? "size-3.5" : "size-4"} />
+        ) : (
+          <Play className={isCompact ? "size-3.5" : "size-4"} />
+        )}
+      </ToolbarButton>
+      <ToolbarButton
+        label="הורד צילום מסך PNG"
+        onClick={handleSnapshotDownload}
+        disabled={!captureReady}
+        compact={isCompact}
+      >
+        <Camera className={isCompact ? "size-3.5" : "size-4"} />
+      </ToolbarButton>
+      <ToolbarButton
+        label="הצעת מחיר ו-PDF"
+        onClick={() => {
+          setActiveTab("quote");
+          setQuoteOpen(true);
+        }}
+        active={quoteOpen}
+        compact={isCompact}
+      >
+        <FileText className={isCompact ? "size-3.5" : "size-4"} />
+      </ToolbarButton>
+      <ToolbarButton
+        label={isFullscreen ? "צא ממסך מלא" : "מסך מלא"}
+        onClick={toggleFullscreen}
+        compact={isCompact}
+      >
+        {isFullscreen ? (
+          <Minimize className={isCompact ? "size-3.5" : "size-4"} />
+        ) : (
+          <Maximize className={isCompact ? "size-3.5" : "size-4"} />
+        )}
+      </ToolbarButton>
+    </>
+  );
+
   return (
     <div
       ref={wrapperRef}
@@ -314,9 +372,11 @@ export const ProductConfigurator: React.FC = () => {
         position: "relative",
         width: "100%",
         height: "100dvh",
+        minHeight: "-webkit-fill-available",
         overflow: "hidden",
         background: "#f0e9dc",
         fontFamily: fontStack.body,
+        paddingTop: "env(safe-area-inset-top)",
       }}
     >
       <input
@@ -335,7 +395,7 @@ export const ProductConfigurator: React.FC = () => {
           top: 0,
           left: 0,
           right: 0,
-          bottom: "clamp(128px, 16vh, 168px)",
+          bottom: stageInset,
         }}
       >
         <React.Suspense fallback={null}>
@@ -348,6 +408,7 @@ export const ProductConfigurator: React.FC = () => {
             logoRotation={logoRotation}
             autoRotate={autoRotate}
             showLogoHint={activeTab === "logo"}
+            isCompact={isCompact}
             onApiReady={handleApiReady}
           />
         </React.Suspense>
@@ -355,14 +416,16 @@ export const ProductConfigurator: React.FC = () => {
 
       {/* Brand chip */}
       <div
+        className="max-w-[calc(100vw-2rem)]"
         style={{
           position: "absolute",
-          top: 16,
-          insetInlineStart: 16,
+          top: isCompact ? 10 : 16,
+          insetInlineStart: isCompact ? 10 : 16,
+          insetInlineEnd: isCompact ? 10 : undefined,
           display: "inline-flex",
           alignItems: "center",
           gap: space.sm,
-          padding: `${space.sm}px ${space.lg}px`,
+          padding: isCompact ? `${space.xs}px ${space.md}px` : `${space.sm}px ${space.lg}px`,
           ...PILL_STYLE,
           zIndex: 10,
         }}
@@ -380,85 +443,70 @@ export const ProductConfigurator: React.FC = () => {
         <span
           style={{
             fontFamily: fontStack.display,
-            fontSize: size.md,
+            fontSize: isCompact ? size.sm : size.md,
             fontWeight: weight.medium,
             color: colors.ink,
             whiteSpace: "nowrap",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
           }}
         >
-          Albadi · קונפיגורטור שקיות
+          {isCompact ? "Albadi · שקיות" : "Albadi · קונפיגורטור שקיות"}
         </span>
       </div>
 
-      {/* Right vertical toolbar */}
-      <div
-        style={{
-          position: "absolute",
-          right: 14,
-          top: "50%",
-          transform: "translateY(-50%)",
-          display: "flex",
-          flexDirection: "column",
-          gap: 2,
-          padding: 5,
-          ...PILL_STYLE,
-          zIndex: 10,
-        }}
-      >
-        <ToolbarButton
-          label="איפוס תצוגה"
-          onClick={() => viewerApiRef.current?.resetView()}
-          disabled={!captureReady}
-        >
-          <RotateCcw className="size-4" />
-        </ToolbarButton>
-        <ToolbarButton
-          label={autoRotate ? "עצור סיבוב" : "סיבוב אוטומטי"}
-          onClick={() => setAutoRotate((current) => !current)}
-          active={autoRotate}
-        >
-          {autoRotate ? <Pause className="size-4" /> : <Play className="size-4" />}
-        </ToolbarButton>
-        <ToolbarButton
-          label="הורד צילום מסך PNG"
-          onClick={handleSnapshotDownload}
-          disabled={!captureReady}
-        >
-          <Camera className="size-4" />
-        </ToolbarButton>
-        <ToolbarButton
-          label="הצעת מחיר ו-PDF"
-          onClick={() => {
-            setActiveTab("quote");
-            setQuoteOpen(true);
+      {/* Desktop / tablet toolbar */}
+      {!isCompact ? (
+        <div
+          style={{
+            position: "absolute",
+            right: 14,
+            top: "50%",
+            transform: "translateY(-50%)",
+            display: "flex",
+            flexDirection: "column",
+            gap: 2,
+            padding: 5,
+            ...PILL_STYLE,
+            zIndex: 10,
           }}
-          active={quoteOpen}
         >
-          <FileText className="size-4" />
-        </ToolbarButton>
-        <ToolbarButton
-          label={isFullscreen ? "צא ממסך מלא" : "מסך מלא"}
-          onClick={toggleFullscreen}
-        >
-          {isFullscreen ? <Minimize className="size-4" /> : <Maximize className="size-4" />}
-        </ToolbarButton>
-      </div>
+          {toolbarButtons}
+        </div>
+      ) : null}
 
       {/* Bottom dock */}
       <div
         style={{
           position: "absolute",
-          bottom: 18,
+          bottom: `calc(${isCompact ? 10 : 18}px + env(safe-area-inset-bottom))`,
           left: "50%",
           transform: "translateX(-50%)",
           display: "flex",
           flexDirection: "column",
           alignItems: "center",
-          gap: 10,
-          width: "min(720px, 94vw)",
+          gap: isCompact ? 8 : 10,
+          width: isCompact ? "min(100%, calc(100vw - 16px))" : "min(720px, 94vw)",
+          paddingInline: isCompact ? 8 : 0,
           zIndex: 10,
         }}
       >
+        {isCompact ? (
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 2,
+              padding: 4,
+              ...PILL_STYLE,
+              width: "100%",
+              maxWidth: 360,
+            }}
+          >
+            {toolbarButtons}
+          </div>
+        ) : null}
         {/* Contextual pill */}
         {activeTab === "color" ? (
           <>
@@ -502,8 +550,8 @@ export const ProductConfigurator: React.FC = () => {
                       onClick={() => setSelectedColorHex(color.hex)}
                       className="transition-transform hover:scale-110"
                       style={{
-                        width: 30,
-                        height: 30,
+                        width: isCompact ? 28 : 30,
+                        height: isCompact ? 28 : 30,
                         flexShrink: 0,
                         borderRadius: radius.full,
                         border: `2px solid ${colors.surface}`,
@@ -526,14 +574,14 @@ export const ProductConfigurator: React.FC = () => {
           <div
             style={{
               ...PILL_STYLE,
-              borderRadius: 24,
+              borderRadius: isCompact ? 20 : 24,
               maxWidth: "100%",
-              padding: `${space.sm}px ${space.lg}px`,
+              width: "100%",
+              padding: isCompact ? `${space.sm}px ${space.md}px` : `${space.sm}px ${space.lg}px`,
               display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              flexWrap: "wrap",
-              gap: space.lg,
+              flexDirection: "column",
+              alignItems: "stretch",
+              gap: space.md,
             }}
           >
             {!logoUrl ? (
@@ -541,9 +589,11 @@ export const ProductConfigurator: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
+                  disabled={logoLoading}
                   style={{
                     display: "inline-flex",
                     alignItems: "center",
+                    justifyContent: "center",
                     gap: space.sm,
                     padding: `${space.sm}px ${space.lg}px`,
                     borderRadius: radius.full,
@@ -552,89 +602,140 @@ export const ProductConfigurator: React.FC = () => {
                     color: colors.surface,
                     fontSize: size.sm,
                     fontWeight: weight.medium,
-                    cursor: "pointer",
+                    cursor: logoLoading ? "wait" : "pointer",
+                    opacity: logoLoading ? 0.7 : 1,
+                    minHeight: 44,
                   }}
                 >
                   <ImagePlus className="size-4" />
-                  העלה לוגו
+                  {logoLoading ? "מעבד לוגו..." : "העלה לוגו"}
                 </button>
-                <span style={{ fontSize: size.xs, color: colors.inkMuted }}>
-                  PNG, JPG או SVG · עד 5MB · מודפס על חזית השקית
+                <span
+                  style={{
+                    fontSize: size.xs,
+                    color: colors.inkMuted,
+                    textAlign: "center",
+                    lineHeight: 1.5,
+                  }}
+                >
+                  PNG, JPG או SVG · עד 8MB · איכות גבוהה לתצוגה ו-PDF
                 </span>
               </>
             ) : (
               <>
-                <button
-                  type="button"
-                  title="החלף לוגו"
-                  aria-label="החלף לוגו"
-                  onClick={() => fileInputRef.current?.click()}
+                <div
                   style={{
-                    width: 42,
-                    height: 42,
-                    flexShrink: 0,
-                    borderRadius: radius.lg,
-                    border: `1px solid ${colors.rule}`,
-                    background: colors.surface,
-                    padding: 4,
-                    cursor: "pointer",
-                    display: "grid",
-                    placeItems: "center",
-                    overflow: "hidden",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: space.md,
+                    width: "100%",
                   }}
                 >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={logoUrl}
-                    alt={logoFileName || "לוגו"}
-                    style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }}
+                  <button
+                    type="button"
+                    title="החלף לוגו"
+                    aria-label="החלף לוגו"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={logoLoading}
+                    style={{
+                      width: 44,
+                      height: 44,
+                      flexShrink: 0,
+                      borderRadius: radius.lg,
+                      border: `1px solid ${colors.rule}`,
+                      background: colors.surface,
+                      padding: 4,
+                      cursor: logoLoading ? "wait" : "pointer",
+                      display: "grid",
+                      placeItems: "center",
+                      overflow: "hidden",
+                    }}
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={logoUrl}
+                      alt={logoFileName || "לוגו"}
+                      style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }}
+                    />
+                  </button>
+                  <div style={{ minWidth: 0, flex: 1 }}>
+                    <div
+                      style={{
+                        fontSize: size.sm,
+                        fontWeight: weight.medium,
+                        color: colors.ink,
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {logoFileName || "לוגו"}
+                    </div>
+                    <div style={{ fontSize: size.xs, color: colors.inkMuted }}>
+                      איכות גבוהה · גרור לכוונון
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", gap: 2, flexShrink: 0 }}>
+                    <ToolbarButton
+                      label="איפוס מיקום הלוגו"
+                      onClick={resetLogoLayout}
+                      compact={isCompact}
+                    >
+                      <RotateCcw className="size-4" />
+                    </ToolbarButton>
+                    <ToolbarButton label="הסר לוגו" onClick={handleRemoveLogo} compact={isCompact}>
+                      <Trash2 className="size-4" />
+                    </ToolbarButton>
+                  </div>
+                </div>
+
+                <div
+                  className="flex w-full gap-3 overflow-x-auto pb-1"
+                  style={{
+                    scrollbarWidth: "thin",
+                    WebkitOverflowScrolling: "touch",
+                  }}
+                >
+                  <MiniSlider
+                    label="גודל"
+                    value={logoScale}
+                    display={`${logoScale.toFixed(2)}x`}
+                    min={0.4}
+                    max={1.9}
+                    step={0.05}
+                    onChange={setLogoScale}
+                    compact={isCompact}
                   />
-                </button>
-
-                <MiniSlider
-                  label="גודל"
-                  value={logoScale}
-                  display={`${logoScale.toFixed(2)}x`}
-                  min={0.4}
-                  max={1.9}
-                  step={0.05}
-                  onChange={setLogoScale}
-                />
-                <MiniSlider
-                  label="אופקי"
-                  value={logoPositionX}
-                  display={logoPositionX.toFixed(2)}
-                  min={-0.85}
-                  max={0.85}
-                  step={0.01}
-                  onChange={setLogoPositionX}
-                />
-                <MiniSlider
-                  label="אנכי"
-                  value={logoPositionY}
-                  display={logoPositionY.toFixed(2)}
-                  min={-0.6}
-                  max={0.75}
-                  step={0.01}
-                  onChange={setLogoPositionY}
-                />
-                <MiniSlider
-                  label="סיבוב"
-                  value={logoRotation}
-                  display={`${Math.round(logoRotation)}°`}
-                  min={-180}
-                  max={180}
-                  step={1}
-                  onChange={setLogoRotation}
-                />
-
-                <div style={{ display: "flex", gap: 2 }}>
-                  <ToolbarButton label="איפוס מיקום הלוגו" onClick={resetLogoLayout}>
-                    <RotateCcw className="size-4" />
-                  </ToolbarButton>
-                  <ToolbarButton label="הסר לוגו" onClick={handleRemoveLogo}>
-                    <Trash2 className="size-4" />
-                  </ToolbarButton>
+                  <MiniSlider
+                    label="אופקי"
+                    value={logoPositionX}
+                    display={logoPositionX.toFixed(2)}
+                    min={-0.85}
+                    max={0.85}
+                    step={0.01}
+                    onChange={setLogoPositionX}
+                    compact={isCompact}
+                  />
+                  <MiniSlider
+                    label="אנכי"
+                    value={logoPositionY}
+                    display={logoPositionY.toFixed(2)}
+                    min={-0.6}
+                    max={0.75}
+                    step={0.01}
+                    onChange={setLogoPositionY}
+                    compact={isCompact}
+                  />
+                  <MiniSlider
+                    label="סיבוב"
+                    value={logoRotation}
+                    display={`${Math.round(logoRotation)}°`}
+                    min={-180}
+                    max={180}
+                    step={1}
+                    onChange={setLogoRotation}
+                    compact={isCompact}
+                  />
                 </div>
               </>
             )}
@@ -691,10 +792,12 @@ export const ProductConfigurator: React.FC = () => {
 
         {/* Tabs pill */}
         <div
+          className="w-full max-w-full"
           style={{
             ...PILL_STYLE,
-            display: "inline-flex",
+            display: "flex",
             alignItems: "center",
+            justifyContent: "center",
             gap: 4,
             padding: 4,
           }}
@@ -710,13 +813,17 @@ export const ProductConfigurator: React.FC = () => {
                 style={{
                   border: "none",
                   borderRadius: radius.full,
-                  padding: `${space.sm}px ${space.lg}px`,
-                  fontSize: size.sm,
+                  padding: isCompact
+                    ? `${space.sm}px ${space.md}px`
+                    : `${space.sm}px ${space.lg}px`,
+                  fontSize: isCompact ? size.xs : size.sm,
                   fontWeight: isActive ? weight.semibold : weight.regular,
                   background: isActive ? colors.ink : "transparent",
                   color: isActive ? colors.surface : colors.inkMuted,
                   cursor: "pointer",
                   whiteSpace: "nowrap",
+                  minHeight: 40,
+                  flex: isCompact ? 1 : undefined,
                 }}
               >
                 {tab.label}
@@ -744,15 +851,18 @@ export const ProductConfigurator: React.FC = () => {
               top: 0,
               bottom: 0,
               left: 0,
-              width: "min(440px, 100%)",
+              right: isCompact ? 0 : undefined,
+              width: isCompact ? "100%" : "min(440px, 100%)",
               background: colors.surface,
-              boxShadow: "8px 0 32px rgba(28,24,21,0.18)",
+              boxShadow: isCompact ? "none" : "8px 0 32px rgba(28,24,21,0.18)",
               zIndex: 21,
               overflowY: "auto",
-              padding: space.xl,
+              padding: isCompact
+                ? `calc(${space.lg}px + env(safe-area-inset-top)) ${space.lg}px calc(${space.lg}px + env(safe-area-inset-bottom))`
+                : space.xl,
               display: "flex",
               flexDirection: "column",
-              gap: space.xl,
+              gap: isCompact ? space.lg : space.xl,
             }}
           >
             <div
