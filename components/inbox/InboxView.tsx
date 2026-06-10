@@ -46,6 +46,13 @@ function senderLabel(s: "lead" | "bot" | "eli"): string {
   return "🤖";
 }
 
+// Strip a leading pictographic char + whitespace so the visible label under
+// the tile icon doesn't repeat the icon (e.g. "📐 הסבר מידות שקית" →
+// "הסבר מידות שקית").
+function stripLeadingEmoji(name: string): string {
+  return name.trim().replace(/^\p{Extended_Pictographic}\s*/u, "").trim();
+}
+
 export default function InboxView({
   apiToken,
   initialRows,
@@ -55,6 +62,8 @@ export default function InboxView({
   const [rows, setRows] = useState<InboxRow[]>(initialRows);
   const [busy, setBusy] = useState<string | null>(null);
   const [filter, setFilter] = useState("");
+  // sid of the row whose mobile template overlay is open. null = closed.
+  const [mobileMenuSid, setMobileMenuSid] = useState<string | null>(null);
   const [, startTransition] = useTransition();
 
   // Inbox is self-contained — clicking a name opens the lead's contact
@@ -150,6 +159,18 @@ export default function InboxView({
 
   return (
     <div dir="rtl" style={{ maxWidth: 720, margin: "0 auto" }}>
+      {/* Responsive CSS — at ≤640px (mobile), collapse the inline template
+          tiles into a ☰ hamburger that opens an overlay; on tablet/desktop
+          show them inline. Inline styles can't do media queries, so this
+          tiny <style> tag carries the breakpoint behavior. */}
+      <style>{`
+        .inbox-actions-inline { display: flex; }
+        .inbox-actions-mobile { display: none; }
+        @media (max-width: 640px) {
+          .inbox-actions-inline { display: none; }
+          .inbox-actions-mobile { display: flex; }
+        }
+      `}</style>
       <div
         style={{
           display: "flex",
@@ -321,15 +342,17 @@ export default function InboxView({
               </div>
             </a>
 
-            {/* Action buttons — bottom-left of the row. Each button is a
-                vertical tile (icon on top, short label below) so on mobile
-                the user reads instantly without relying on hover. Touch
-                targets ≥48×56 with 8px gap (ui-ux-pro-max guidelines:
-                44px minimum + 8px spacing). Wraps to second line if the
-                row accumulates many templates. */}
+            {/* Action area — bottom-left of the row.
+                Desktop (≥641px): all tiles inline (pause + every template).
+                Mobile (≤640px): only pause + a ☰ hamburger that opens an
+                overlay containing the same tiles in a 2-column grid.
+                The hamburger keeps the row compact on narrow screens so
+                the lead name + last message stay legible. */}
+
+            {/* Inline tiles — desktop only */}
             <div
+              className="inbox-actions-inline"
               style={{
-                display: "flex",
                 flexWrap: "wrap",
                 gap: 8,
                 flexShrink: 0,
@@ -347,12 +370,7 @@ export default function InboxView({
                 tone={r.botPaused ? "warn" : "neutral"}
               />
               {quickTemplates.map((tpl) => {
-                // Strip leading emoji from the visible label so the icon
-                // isn't repeated under itself.
-                const labelText = tpl.name
-                  .trim()
-                  .replace(/^\p{Extended_Pictographic}\s*/u, "")
-                  .trim();
+                const labelText = stripLeadingEmoji(tpl.name);
                 return (
                   <ActionTile
                     key={tpl.id}
@@ -368,9 +386,128 @@ export default function InboxView({
                 );
               })}
             </div>
+
+            {/* Mobile-only — pause + hamburger that opens the full picker */}
+            <div
+              className="inbox-actions-mobile"
+              style={{
+                gap: 8,
+                flexShrink: 0,
+                alignSelf: "flex-end",
+              }}
+            >
+              <ActionTile
+                onClick={() => toggle(r.sid, r.botPaused)}
+                disabled={busy === r.sid}
+                title={r.botPaused ? "הבוט מושהה — לחץ כדי להפעיל" : "הבוט פעיל — לחץ כדי להשהות"}
+                icon={busy === r.sid ? "…" : r.botPaused ? "▶" : "⏸"}
+                label={r.botPaused ? "הפעל" : "השהה"}
+                tone={r.botPaused ? "warn" : "neutral"}
+              />
+              {quickTemplates.length > 0 && (
+                <ActionTile
+                  onClick={() => setMobileMenuSid(r.sid)}
+                  disabled={busy === r.sid}
+                  title="פתח תבניות לשליחה"
+                  icon="☰"
+                  label="תבניות"
+                  tone="neutral"
+                />
+              )}
+            </div>
           </div>
         ))}
       </div>
+
+      {/* Mobile template picker overlay — fires when a row's ☰ tile is
+          tapped. Sits at the bottom of the viewport as a sheet so it's
+          thumb-reachable. Outside-tap closes it. */}
+      {mobileMenuSid && (() => {
+        const r = rows.find((x) => x.sid === mobileMenuSid);
+        if (!r) return null;
+        const leadName = r.name || r.phone || r.sid;
+        return (
+          <div
+            onClick={() => setMobileMenuSid(null)}
+            style={{
+              position: "fixed",
+              inset: 0,
+              background: "rgba(0,0,0,0.6)",
+              zIndex: 100,
+              display: "flex",
+              alignItems: "flex-end",
+              justifyContent: "center",
+              padding: 16,
+            }}
+          >
+            <div
+              dir="rtl"
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                width: "100%",
+                maxWidth: 480,
+                background: "#10131a",
+                border: "1px solid #2d3548",
+                borderRadius: "16px 16px 8px 8px",
+                padding: 16,
+                boxShadow: "0 -10px 30px rgba(0,0,0,0.6)",
+              }}
+            >
+              <div style={{ marginBottom: 12 }}>
+                <div style={{ fontSize: 11, color: "#71717a", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                  תבניות לשליחה
+                </div>
+                <div style={{ fontSize: 14, color: "#e4e4e7", fontWeight: 600, marginTop: 2 }}>
+                  {leadName}
+                </div>
+              </div>
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fill, minmax(80px, 1fr))",
+                  gap: 10,
+                }}
+              >
+                {quickTemplates.map((tpl) => {
+                  const labelText = stripLeadingEmoji(tpl.name);
+                  return (
+                    <ActionTile
+                      key={tpl.id}
+                      onClick={() => {
+                        setMobileMenuSid(null);
+                        sendTemplate(r.sid, leadName, tpl);
+                      }}
+                      disabled={busy === r.sid}
+                      title={`שלח: ${tpl.name}`}
+                      icon={tpl.icon}
+                      label={labelText || "תבנית"}
+                      tone="accent"
+                    />
+                  );
+                })}
+              </div>
+              <button
+                onClick={() => setMobileMenuSid(null)}
+                style={{
+                  marginTop: 14,
+                  width: "100%",
+                  padding: "10px 16px",
+                  background: "transparent",
+                  color: "#a1a1aa",
+                  border: "1px solid #2d3548",
+                  borderRadius: 8,
+                  fontSize: 14,
+                  fontFamily: "inherit",
+                  cursor: "pointer",
+                  touchAction: "manipulation",
+                }}
+              >
+                ביטול
+              </button>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }
