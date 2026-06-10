@@ -50,39 +50,6 @@ function easeOutBack(t: number) {
 const DECAL_FRONT_Z = 0.26;
 const DECAL_BASE_Y = -0.5;
 
-function useFabricTexture(hex: string) {
-  return useMemo(() => {
-    const canvas = document.createElement("canvas");
-    canvas.width = 256;
-    canvas.height = 256;
-
-    const context = canvas.getContext("2d");
-    if (!context) return null;
-
-    context.fillStyle = hex;
-    context.fillRect(0, 0, canvas.width, canvas.height);
-
-    for (let y = 0; y < canvas.height; y += 3) {
-      context.fillStyle = y % 6 === 0 ? "rgba(255,255,255,0.045)" : "rgba(0,0,0,0.035)";
-      context.fillRect(0, y, canvas.width, 1);
-    }
-
-    for (let x = 0; x < canvas.width; x += 4) {
-      context.fillStyle = x % 8 === 0 ? "rgba(255,255,255,0.028)" : "rgba(0,0,0,0.025)";
-      context.fillRect(x, 0, 1, canvas.height);
-    }
-
-    const texture = new THREE.CanvasTexture(canvas);
-    texture.colorSpace = THREE.SRGBColorSpace;
-    texture.wrapS = THREE.RepeatWrapping;
-    texture.wrapT = THREE.RepeatWrapping;
-    texture.repeat.set(2.4, 2.8);
-    texture.anisotropy = 8;
-
-    return texture;
-  }, [hex]);
-}
-
 function useLogoTexture(logoUrl?: string | null) {
   const [texture, setTexture] = useState<THREE.Texture | null>(null);
   const [aspectRatio, setAspectRatio] = useState(1);
@@ -166,7 +133,6 @@ function BagModel({
 }: BagModelProps) {
   const gltf = useGLTF(BAG_MODEL_PATH, true);
   const { texture, aspectRatio } = useLogoTexture(logoUrl);
-  const fabricTexture = useFabricTexture(bagColor);
 
   const bagSource = useMemo(() => {
     let mesh: THREE.Mesh | null = null;
@@ -178,17 +144,24 @@ function BagModel({
     return mesh as THREE.Mesh | null;
   }, [gltf.scene]);
 
+  const bagGeometry = useMemo(() => {
+    if (!bagSource) return null;
+    const geometry = bagSource.geometry.clone();
+    geometry.computeVertexNormals();
+    return geometry;
+  }, [bagSource]);
+
   const modelMaterial = useMemo(
     () =>
       new THREE.MeshStandardMaterial({
         color: bagColor,
-        map: fabricTexture ?? undefined,
-        roughness: 0.88,
+        roughness: 0.92,
         metalness: 0,
-        envMapIntensity: 0.28,
+        envMapIntensity: 0.22,
+        flatShading: false,
         side: THREE.DoubleSide,
       }),
-    [bagColor, fabricTexture]
+    [bagColor]
   );
 
   useEffect(() => {
@@ -197,7 +170,7 @@ function BagModel({
     };
   }, [modelMaterial]);
 
-  if (!bagSource) return null;
+  if (!bagSource || !bagGeometry) return null;
 
   const clampedAspect = Math.max(aspectRatio, 0.65);
   const decalWidth = Math.min(0.86, 0.5 * logoScale * clampedAspect);
@@ -208,7 +181,7 @@ function BagModel({
   return (
     <group rotation={[0.02, -0.46, 0]} scale={MODEL_SCALE}>
       <mesh
-        geometry={bagSource.geometry}
+        geometry={bagGeometry}
         position={bagSource.position}
         castShadow
         receiveShadow
