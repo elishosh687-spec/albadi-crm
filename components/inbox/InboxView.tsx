@@ -213,83 +213,61 @@ export default function InboxView({
               alignItems: "flex-start",
             }}
           >
-            {/* Action buttons — compact column so multiple templates fit
-                without crowding the lead info area. 40×40 each, wrap into
-                two rows if needed. */}
+            {/* Action buttons — compact column with icon + always-visible
+                label so it's clear what each button does without hovering.
+                Unified neutral palette; pause button tints red only when
+                actually paused (state cue). Wraps into multi-row grid if
+                there are many templates. */}
             <div
               style={{
-                display: "flex",
-                flexWrap: "wrap",
-                gap: 4,
-                width: 88,
-                minWidth: 88,
+                display: "grid",
+                gridTemplateColumns: "repeat(2, 56px)",
+                gap: 6,
                 alignContent: "flex-start",
               }}
             >
-              <button
+              <ActionTile
                 onClick={() => toggle(r.sid, r.botPaused)}
                 disabled={busy === r.sid}
-                title={r.botPaused ? "הפעל בוט" : "השהה בוט"}
-                style={{
-                  width: 40,
-                  height: 40,
-                  fontSize: 18,
-                  background: r.botPaused ? "#7c2d12" : "#1f2937",
-                  color: "#e4e4e7",
-                  border: `1px solid ${r.botPaused ? "#9a3412" : "#3a3d44"}`,
-                  borderRadius: 6,
-                  cursor: busy === r.sid ? "wait" : "pointer",
-                  touchAction: "manipulation",
-                  padding: 0,
-                }}
-              >
-                {busy === r.sid ? "…" : r.botPaused ? "▶️" : "⏸️"}
-              </button>
+                tooltip={r.botPaused ? "הבוט מושהה — לחץ כדי להפעיל" : "הבוט פעיל — לחץ כדי להשהות"}
+                label={r.botPaused ? "הפעל" : "השהה"}
+                icon={busy === r.sid ? "…" : r.botPaused ? "▶" : "⏸"}
+                tone={r.botPaused ? "warn" : "neutral"}
+              />
 
-              <button
+              <ActionTile
                 onClick={() => sendIntro(r.sid, r.name || r.phone || r.sid)}
                 disabled={busy === r.sid}
-                title="שלח הצגת חברה (וידאו + אתרים)"
-                style={{
-                  width: 40,
-                  height: 40,
-                  fontSize: 18,
-                  background: "#14321f",
-                  color: "#e4e4e7",
-                  border: "1px solid #2f6f4f",
-                  borderRadius: 6,
-                  cursor: busy === r.sid ? "wait" : "pointer",
-                  touchAction: "manipulation",
-                  padding: 0,
-                }}
-              >
-                🎬
-              </button>
+                tooltip="הצגת חברה — וידאו תדמית + לינקים לאתרים"
+                label="הצגה"
+                icon="🎬"
+                tone="neutral"
+              />
 
-              {quickTemplates.map((tpl) => (
-                <button
-                  key={tpl.id}
-                  onClick={() =>
-                    sendTemplate(r.sid, r.name || r.phone || r.sid, tpl)
-                  }
-                  disabled={busy === r.sid}
-                  title={tpl.name}
-                  style={{
-                    width: 40,
-                    height: 40,
-                    fontSize: 18,
-                    background: "#1e293b",
-                    color: "#e4e4e7",
-                    border: "1px solid #3a4659",
-                    borderRadius: 6,
-                    cursor: busy === r.sid ? "wait" : "pointer",
-                    touchAction: "manipulation",
-                    padding: 0,
-                  }}
-                >
-                  {tpl.icon}
-                </button>
-              ))}
+              {quickTemplates.map((tpl) => {
+                // Strip the leading icon char from the visible label so the
+                // emoji doesn't repeat (e.g. "📐 הסבר מידות שקית" → "הסבר
+                // מידות שקית"). Limited to ~10 chars to keep the tile
+                // compact; full name still on hover.
+                const labelText = tpl.name
+                  .trim()
+                  .replace(/^\p{Extended_Pictographic}\s*/u, "")
+                  .trim()
+                  .slice(0, 12);
+                return (
+                  <ActionTile
+                    key={tpl.id}
+                    onClick={() =>
+                      sendTemplate(r.sid, r.name || r.phone || r.sid, tpl)
+                    }
+                    disabled={busy === r.sid}
+                    tooltip={`שלח: ${tpl.name}`}
+                    label={labelText || "תבנית"}
+                    icon={tpl.icon}
+                    tone="accent"
+                  />
+                );
+              })}
             </div>
 
             <a
@@ -401,5 +379,86 @@ export default function InboxView({
         ))}
       </div>
     </div>
+  );
+}
+
+// Reusable per-row action button. Icon on top + tiny label below; tooltip on
+// hover (desktop) / long-press (mobile) via the native `title` attribute.
+// Three tones: neutral (slate), warn (paused/destructive), accent (templates).
+function ActionTile({
+  onClick,
+  disabled,
+  tooltip,
+  label,
+  icon,
+  tone,
+}: {
+  onClick: () => void;
+  disabled: boolean;
+  tooltip: string;
+  label: string;
+  icon: string;
+  tone: "neutral" | "warn" | "accent";
+}) {
+  const palette = {
+    neutral: { bg: "#1a2030", border: "#2d3548", text: "#e4e4e7" },
+    warn: { bg: "#3a1d1a", border: "#7c2d12", text: "#fecaca" },
+    accent: { bg: "#1a2a3a", border: "#2f4a6e", text: "#dbeafe" },
+  }[tone];
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      title={tooltip}
+      style={{
+        width: 56,
+        height: 56,
+        background: palette.bg,
+        color: palette.text,
+        border: `1px solid ${palette.border}`,
+        borderRadius: 8,
+        cursor: disabled ? "wait" : "pointer",
+        touchAction: "manipulation",
+        padding: "4px 2px",
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 2,
+        fontFamily: "inherit",
+        opacity: disabled ? 0.6 : 1,
+        transition: "background 0.12s ease, transform 0.06s ease",
+      }}
+      onMouseEnter={(e) => {
+        if (!disabled) {
+          e.currentTarget.style.background = palette.border;
+        }
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.background = palette.bg;
+      }}
+      onMouseDown={(e) => {
+        if (!disabled) e.currentTarget.style.transform = "scale(0.96)";
+      }}
+      onMouseUp={(e) => {
+        e.currentTarget.style.transform = "scale(1)";
+      }}
+    >
+      <span style={{ fontSize: 18, lineHeight: 1 }}>{icon}</span>
+      <span
+        style={{
+          fontSize: 9.5,
+          lineHeight: 1.1,
+          opacity: 0.85,
+          textAlign: "center",
+          maxWidth: 52,
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+          whiteSpace: "nowrap",
+        }}
+      >
+        {label}
+      </span>
+    </button>
   );
 }
