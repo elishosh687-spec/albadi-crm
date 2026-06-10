@@ -39,11 +39,19 @@ const BODY = [
 ].join("\n");
 
 export async function POST(req: NextRequest) {
-  // /api/admin/* is NOT covered by the middleware auth gate — enforce the
-  // admin cookie here directly (same check the middleware uses on the
-  // dashboard). Run this from a signed-in browser tab.
+  // /api/admin/* is NOT covered by the middleware auth gate — enforce auth
+  // here directly. Accepts either:
+  //   1. The admin cookie (`albadi_auth`) — when called from a signed-in
+  //      browser tab (e.g. paste in DevTools console).
+  //   2. `Authorization: Bearer ${CRON_SECRET}` — for CLI/automation use
+  //      (same pattern the bridge-webhook bypass uses for /api/factory/refresh).
   const cookie = req.cookies.get("albadi_auth");
-  if (!cookie || cookie.value !== process.env.ADMIN_PASSWORD) {
+  const cookieOk =
+    !!cookie && cookie.value === process.env.ADMIN_PASSWORD;
+  const bearerOk =
+    !!process.env.CRON_SECRET &&
+    req.headers.get("authorization") === `Bearer ${process.env.CRON_SECRET}`;
+  if (!cookieOk && !bearerOk) {
     return NextResponse.json(
       { ok: false, error: "unauthorized" },
       { status: 401 }
