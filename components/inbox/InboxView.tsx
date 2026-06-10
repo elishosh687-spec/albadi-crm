@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 
 export interface InboxRow {
   sid: string;
@@ -213,59 +213,44 @@ export default function InboxView({
               alignItems: "flex-start",
             }}
           >
-            {/* Action buttons — compact column with icon + always-visible
-                label so it's clear what each button does without hovering.
-                Unified neutral palette; pause button tints red only when
-                actually paused (state cue). Wraps into multi-row grid if
-                there are many templates. */}
+            {/* Action column — three icon-only square buttons in a horizontal
+                strip: pause toggle, send intro, and a "תבניות" menu that
+                opens the full template list. Templates as full rows make
+                long Hebrew names readable; cramming them into the row was
+                too tight. */}
             <div
               style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(2, 56px)",
+                display: "flex",
                 gap: 6,
-                alignContent: "flex-start",
+                alignItems: "flex-start",
+                flexShrink: 0,
               }}
             >
-              <ActionTile
+              <IconButton
                 onClick={() => toggle(r.sid, r.botPaused)}
                 disabled={busy === r.sid}
-                tooltip={r.botPaused ? "הבוט מושהה — לחץ כדי להפעיל" : "הבוט פעיל — לחץ כדי להשהות"}
-                label={r.botPaused ? "הפעל" : "השהה"}
+                title={r.botPaused ? "הבוט מושהה — לחץ כדי להפעיל" : "הבוט פעיל — לחץ כדי להשהות"}
                 icon={busy === r.sid ? "…" : r.botPaused ? "▶" : "⏸"}
                 tone={r.botPaused ? "warn" : "neutral"}
               />
 
-              <ActionTile
+              <IconButton
                 onClick={() => sendIntro(r.sid, r.name || r.phone || r.sid)}
                 disabled={busy === r.sid}
-                tooltip="הצגת חברה — וידאו תדמית + לינקים לאתרים"
-                label="הצגה"
+                title="הצגת חברה — וידאו תדמית + לינקים לאתרים"
                 icon="🎬"
                 tone="neutral"
               />
 
-              {quickTemplates.map((tpl) => {
-                // Strip the leading emoji from the visible label so the icon
-                // doesn't repeat (e.g. "📐 הסבר מידות שקית" → "הסבר מידות
-                // שקית"). Full name still on hover.
-                const labelText = tpl.name
-                  .trim()
-                  .replace(/^\p{Extended_Pictographic}\s*/u, "")
-                  .trim();
-                return (
-                  <ActionTile
-                    key={tpl.id}
-                    onClick={() =>
-                      sendTemplate(r.sid, r.name || r.phone || r.sid, tpl)
-                    }
-                    disabled={busy === r.sid}
-                    tooltip={`שלח: ${tpl.name}`}
-                    label={labelText || "תבנית"}
-                    icon={tpl.icon}
-                    tone="accent"
-                  />
-                );
-              })}
+              {quickTemplates.length > 0 && (
+                <TemplateMenu
+                  templates={quickTemplates}
+                  disabled={busy === r.sid}
+                  onPick={(tpl) =>
+                    sendTemplate(r.sid, r.name || r.phone || r.sid, tpl)
+                  }
+                />
+              )}
             </div>
 
             <a
@@ -380,88 +365,187 @@ export default function InboxView({
   );
 }
 
-// Reusable per-row action button. Icon on top + tiny label below; tooltip on
-// hover (desktop) / long-press (mobile) via the native `title` attribute.
-// Three tones: neutral (slate), warn (paused/destructive), accent (templates).
-function ActionTile({
+// Square icon-only action button with a native `title` tooltip.
+// Two tones: neutral (default slate) and warn (red — used for the pause
+// button when the bot is actually paused).
+function IconButton({
   onClick,
   disabled,
-  tooltip,
-  label,
+  title,
   icon,
   tone,
 }: {
   onClick: () => void;
   disabled: boolean;
-  tooltip: string;
-  label: string;
+  title: string;
   icon: string;
-  tone: "neutral" | "warn" | "accent";
+  tone: "neutral" | "warn";
 }) {
-  const palette = {
-    neutral: { bg: "#1a2030", border: "#2d3548", text: "#e4e4e7" },
-    warn: { bg: "#3a1d1a", border: "#7c2d12", text: "#fecaca" },
-    accent: { bg: "#1a2a3a", border: "#2f4a6e", text: "#dbeafe" },
-  }[tone];
+  const palette =
+    tone === "warn"
+      ? { bg: "#3a1d1a", border: "#7c2d12", hover: "#5a2a20" }
+      : { bg: "#1a2030", border: "#2d3548", hover: "#252e44" };
   return (
     <button
       onClick={onClick}
       disabled={disabled}
-      title={tooltip}
+      title={title}
       style={{
-        width: 56,
-        height: 56,
+        width: 44,
+        height: 44,
+        fontSize: 20,
         background: palette.bg,
-        color: palette.text,
+        color: "#e4e4e7",
         border: `1px solid ${palette.border}`,
         borderRadius: 8,
         cursor: disabled ? "wait" : "pointer",
         touchAction: "manipulation",
-        padding: "4px 2px",
+        padding: 0,
         display: "flex",
-        flexDirection: "column",
         alignItems: "center",
         justifyContent: "center",
-        gap: 2,
-        fontFamily: "inherit",
         opacity: disabled ? 0.6 : 1,
         transition: "background 0.12s ease, transform 0.06s ease",
       }}
       onMouseEnter={(e) => {
-        if (!disabled) {
-          e.currentTarget.style.background = palette.border;
-        }
+        if (!disabled) e.currentTarget.style.background = palette.hover;
       }}
       onMouseLeave={(e) => {
         e.currentTarget.style.background = palette.bg;
       }}
       onMouseDown={(e) => {
-        if (!disabled) e.currentTarget.style.transform = "scale(0.96)";
+        if (!disabled) e.currentTarget.style.transform = "scale(0.95)";
       }}
       onMouseUp={(e) => {
         e.currentTarget.style.transform = "scale(1)";
       }}
     >
-      <span style={{ fontSize: 18, lineHeight: 1 }}>{icon}</span>
-      <span
-        style={{
-          fontSize: 9.5,
-          lineHeight: 1.15,
-          opacity: 0.88,
-          textAlign: "center",
-          maxWidth: 52,
-          // Allow up to 2 lines, then truncate. Hebrew template names like
-          // "הסבר מידות שקית" don't fit on one line at 9.5px in 52px width
-          // but wrap naturally to two.
-          display: "-webkit-box",
-          WebkitBoxOrient: "vertical" as const,
-          WebkitLineClamp: 2,
-          overflow: "hidden",
-          wordBreak: "break-word",
-        }}
-      >
-        {label}
-      </span>
+      {icon}
     </button>
+  );
+}
+
+// "☰ תבניות" button that opens a dropdown of all active templates as full
+// rows. Picking a row triggers `onPick(template)`. Closes on outside click
+// or after selection. Each row shows the full Hebrew name in readable size,
+// so long names don't get truncated.
+function TemplateMenu({
+  templates,
+  disabled,
+  onPick,
+}: {
+  templates: QuickTemplate[];
+  disabled: boolean;
+  onPick: (tpl: QuickTemplate) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement | null>(null);
+
+  // Close on outside click.
+  useEffect(() => {
+    if (!open) return;
+    const onDocClick = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", onDocClick);
+    return () => document.removeEventListener("mousedown", onDocClick);
+  }, [open]);
+
+  return (
+    <div ref={ref} style={{ position: "relative" }}>
+      <IconButton
+        onClick={() => setOpen((v) => !v)}
+        disabled={disabled}
+        title="פתח רשימת תבניות"
+        icon="☰"
+        tone="neutral"
+      />
+      {open && (
+        <div
+          style={{
+            position: "absolute",
+            top: 48,
+            right: 0,
+            minWidth: 220,
+            maxWidth: 280,
+            background: "#10131a",
+            border: "1px solid #2d3548",
+            borderRadius: 8,
+            boxShadow: "0 10px 30px rgba(0,0,0,0.45)",
+            zIndex: 50,
+            padding: 4,
+            display: "flex",
+            flexDirection: "column",
+            gap: 2,
+          }}
+        >
+          <div
+            style={{
+              fontSize: 10,
+              color: "#71717a",
+              textTransform: "uppercase",
+              letterSpacing: "0.05em",
+              padding: "6px 8px 4px",
+            }}
+          >
+            תבניות לשליחה
+          </div>
+          {templates.map((tpl) => {
+            const labelText = tpl.name
+              .trim()
+              .replace(/^\p{Extended_Pictographic}\s*/u, "")
+              .trim();
+            return (
+              <button
+                key={tpl.id}
+                type="button"
+                onClick={() => {
+                  setOpen(false);
+                  onPick(tpl);
+                }}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 10,
+                  padding: "10px 10px",
+                  background: "transparent",
+                  border: "none",
+                  borderRadius: 6,
+                  color: "#e4e4e7",
+                  cursor: "pointer",
+                  fontFamily: "inherit",
+                  fontSize: 13,
+                  textAlign: "right",
+                  direction: "rtl",
+                  width: "100%",
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = "#1f2937";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = "transparent";
+                }}
+              >
+                <span style={{ fontSize: 18, width: 24, flexShrink: 0 }}>
+                  {tpl.icon}
+                </span>
+                <span
+                  style={{
+                    flex: 1,
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {labelText || tpl.name}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
   );
 }
