@@ -4,19 +4,24 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import dynamic from "next/dynamic";
 import {
   Camera,
+  Check,
+  Copy,
   FileText,
+  Hand,
   ImagePlus,
   Maximize,
   Minimize,
   Pause,
   Play,
   RotateCcw,
+  SlidersHorizontal,
   Trash2,
   X,
 } from "lucide-react";
 import { BAG_COLORS } from "@/lib/constants/bagColors";
 import { colors, fontStack, radius, size, space, weight } from "@/lib/ui/tokens";
-import type { ViewerApi } from "./BagViewer3D";
+import type { LogoPlacementMode, ViewerApi } from "./BagViewer3D";
+import { LOGO_POSITION_LIMITS } from "./BagViewer3D";
 import PricingContractForm from "./PricingContractForm";
 import DownloadPdfButton from "./DownloadPdfButton";
 import {
@@ -175,6 +180,7 @@ export const ProductConfigurator: React.FC = () => {
   const [logoPositionX, setLogoPositionX] = useState<number>(DEFAULT_LOGO_STATE.positionX);
   const [logoPositionY, setLogoPositionY] = useState<number>(DEFAULT_LOGO_STATE.positionY);
   const [logoRotation, setLogoRotation] = useState<number>(DEFAULT_LOGO_STATE.rotation);
+  const [logoPlacementMode, setLogoPlacementMode] = useState<LogoPlacementMode>("drag");
   const [customerInfo, setCustomerInfo] = useState<CustomerInfo>(DEFAULT_CUSTOMER_INFO);
   const [pricingInfo, setPricingInfo] = useState<PricingInfo>(
     normalizePricing(DEFAULT_PRICING_INFO)
@@ -185,6 +191,7 @@ export const ProductConfigurator: React.FC = () => {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [captureReady, setCaptureReady] = useState(false);
   const [logoLoading, setLogoLoading] = useState(false);
+  const [colorCopied, setColorCopied] = useState(false);
 
   const isCompact = useCompactLayout();
 
@@ -206,6 +213,24 @@ export const ProductConfigurator: React.FC = () => {
   const selectedColorName = selectedColor
     ? `${selectedColor.name} (${selectedColor.sku})`
     : selectedColorHex;
+
+  const selectedColorClipboardText = selectedColor
+    ? `${selectedColor.sku} · ${selectedColor.hex.toUpperCase()}`
+    : selectedColorHex.toUpperCase();
+
+  useEffect(() => {
+    setColorCopied(false);
+  }, [selectedColorHex]);
+
+  const handleCopyColorDetails = useCallback(async () => {
+    try {
+      await navigator.clipboard.writeText(selectedColorClipboardText);
+      setColorCopied(true);
+      window.setTimeout(() => setColorCopied(false), 1500);
+    } catch {
+      setColorCopied(false);
+    }
+  }, [selectedColorClipboardText]);
 
   const handleApiReady = useCallback((api: ViewerApi) => {
     viewerApiRef.current = api;
@@ -236,6 +261,11 @@ export const ProductConfigurator: React.FC = () => {
     setLogoPositionY(DEFAULT_LOGO_STATE.positionY);
     setLogoRotation(DEFAULT_LOGO_STATE.rotation);
   };
+
+  const handleLogoPositionChange = useCallback((positionX: number, positionY: number) => {
+    setLogoPositionX(positionX);
+    setLogoPositionY(positionY);
+  }, []);
 
   const handleLogoFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -406,6 +436,8 @@ export const ProductConfigurator: React.FC = () => {
             logoPositionX={logoPositionX}
             logoPositionY={logoPositionY}
             logoRotation={logoRotation}
+            logoPlacementMode={logoUrl ? logoPlacementMode : "controls"}
+            onLogoPositionChange={handleLogoPositionChange}
             autoRotate={autoRotate}
             showLogoHint={activeTab === "logo"}
             isCompact={isCompact}
@@ -510,17 +542,74 @@ export const ProductConfigurator: React.FC = () => {
         {/* Contextual pill */}
         {activeTab === "color" ? (
           <>
-            <span
+            <div
               style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: space.sm,
+                maxWidth: "100%",
                 fontSize: size.xs,
                 color: colors.inkMuted,
-                background: "rgba(255,255,255,0.7)",
+                background: "rgba(255,255,255,0.92)",
                 borderRadius: radius.full,
-                padding: `2px ${space.md}px`,
+                border: `1px solid ${colors.ruleSoft}`,
+                padding: `4px ${space.sm}px 4px ${space.md}px`,
               }}
             >
-              {selectedColorName}
-            </span>
+              <span
+                style={{
+                  width: 14,
+                  height: 14,
+                  flexShrink: 0,
+                  borderRadius: radius.full,
+                  border: `1px solid ${colors.rule}`,
+                  background: selectedColorHex,
+                }}
+                aria-hidden="true"
+              />
+              <span
+                style={{
+                  minWidth: 0,
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                  color: colors.ink,
+                }}
+              >
+                {selectedColor?.name ?? "צבע נבחר"}
+              </span>
+              <code
+                style={{
+                  flexShrink: 0,
+                  fontSize: 10,
+                  fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+                  color: colors.inkMuted,
+                  letterSpacing: "0.02em",
+                }}
+              >
+                {selectedColorClipboardText}
+              </code>
+              <button
+                type="button"
+                onClick={handleCopyColorDetails}
+                title="העתק SKU וקוד צבע"
+                aria-label="העתק SKU וקוד צבע"
+                style={{
+                  flexShrink: 0,
+                  width: 28,
+                  height: 28,
+                  display: "grid",
+                  placeItems: "center",
+                  borderRadius: radius.full,
+                  border: "none",
+                  background: colorCopied ? colors.successBg : colors.surfaceMuted,
+                  color: colorCopied ? colors.success : colors.inkMuted,
+                  cursor: "pointer",
+                }}
+              >
+                {colorCopied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
+              </button>
+            </div>
             <div
               style={{
                 ...PILL_STYLE,
@@ -672,7 +761,9 @@ export const ProductConfigurator: React.FC = () => {
                       {logoFileName || "לוגו"}
                     </div>
                     <div style={{ fontSize: size.xs, color: colors.inkMuted }}>
-                      איכות גבוהה · גרור לכוונון
+                      {logoPlacementMode === "drag"
+                        ? "גרור על השקית · המודל נשאר קבוע"
+                        : "בקרות מדויקות · סובב את המודל"}
                     </div>
                   </div>
                   <div style={{ display: "flex", gap: 2, flexShrink: 0 }}>
@@ -687,6 +778,57 @@ export const ProductConfigurator: React.FC = () => {
                       <Trash2 className="size-4" />
                     </ToolbarButton>
                   </div>
+                </div>
+
+                <div
+                  style={{
+                    display: "flex",
+                    width: "100%",
+                    padding: 3,
+                    borderRadius: radius.full,
+                    background: colors.surfaceMuted,
+                    gap: 3,
+                  }}
+                  role="tablist"
+                  aria-label="אופן מיקום הלוגו"
+                >
+                  {(
+                    [
+                      { id: "drag" as const, label: "גרירה על השקית", icon: Hand },
+                      { id: "controls" as const, label: "בקרות מדויקות", icon: SlidersHorizontal },
+                    ] as const
+                  ).map(({ id, label, icon: Icon }) => {
+                    const active = logoPlacementMode === id;
+                    return (
+                      <button
+                        key={id}
+                        type="button"
+                        role="tab"
+                        aria-selected={active ? "true" : "false"}
+                        onClick={() => setLogoPlacementMode(id)}
+                        style={{
+                          flex: 1,
+                          display: "inline-flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          gap: 6,
+                          minHeight: 36,
+                          padding: `0 ${space.sm}px`,
+                          borderRadius: radius.full,
+                          border: "none",
+                          background: active ? colors.ink : "transparent",
+                          color: active ? colors.surface : colors.inkMuted,
+                          fontSize: isCompact ? 11 : size.xs,
+                          fontWeight: active ? weight.medium : weight.regular,
+                          cursor: "pointer",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        <Icon className="size-3.5 shrink-0" />
+                        {isCompact ? (id === "drag" ? "גרירה" : "בקרות") : label}
+                      </button>
+                    );
+                  })}
                 </div>
 
                 <div
@@ -706,26 +848,30 @@ export const ProductConfigurator: React.FC = () => {
                     onChange={setLogoScale}
                     compact={isCompact}
                   />
-                  <MiniSlider
-                    label="אופקי"
-                    value={logoPositionX}
-                    display={logoPositionX.toFixed(2)}
-                    min={-0.85}
-                    max={0.85}
-                    step={0.01}
-                    onChange={setLogoPositionX}
-                    compact={isCompact}
-                  />
-                  <MiniSlider
-                    label="אנכי"
-                    value={logoPositionY}
-                    display={logoPositionY.toFixed(2)}
-                    min={-0.6}
-                    max={0.75}
-                    step={0.01}
-                    onChange={setLogoPositionY}
-                    compact={isCompact}
-                  />
+                  {logoPlacementMode === "controls" ? (
+                    <>
+                      <MiniSlider
+                        label="אופקי"
+                        value={logoPositionX}
+                        display={logoPositionX.toFixed(2)}
+                        min={LOGO_POSITION_LIMITS.x.min}
+                        max={LOGO_POSITION_LIMITS.x.max}
+                        step={0.01}
+                        onChange={setLogoPositionX}
+                        compact={isCompact}
+                      />
+                      <MiniSlider
+                        label="אנכי"
+                        value={logoPositionY}
+                        display={logoPositionY.toFixed(2)}
+                        min={LOGO_POSITION_LIMITS.y.min}
+                        max={LOGO_POSITION_LIMITS.y.max}
+                        step={0.01}
+                        onChange={setLogoPositionY}
+                        compact={isCompact}
+                      />
+                    </>
+                  ) : null}
                   <MiniSlider
                     label="סיבוב"
                     value={logoRotation}
@@ -792,10 +938,11 @@ export const ProductConfigurator: React.FC = () => {
 
         {/* Tabs pill */}
         <div
-          className="w-full max-w-full"
           style={{
             ...PILL_STYLE,
-            display: "flex",
+            display: "inline-flex",
+            width: "fit-content",
+            maxWidth: "100%",
             alignItems: "center",
             justifyContent: "center",
             gap: 4,
@@ -823,7 +970,6 @@ export const ProductConfigurator: React.FC = () => {
                   cursor: "pointer",
                   whiteSpace: "nowrap",
                   minHeight: 40,
-                  flex: isCompact ? 1 : undefined,
                 }}
               >
                 {tab.label}

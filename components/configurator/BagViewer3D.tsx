@@ -1,10 +1,17 @@
 "use client";
 
-import React, { useEffect, useMemo, useRef, useState } from "react";
-import { Canvas, useFrame, useThree } from "@react-three/fiber";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Canvas, useFrame, useThree, type ThreeEvent } from "@react-three/fiber";
 import { Decal, OrbitControls, PerspectiveCamera, useGLTF } from "@react-three/drei";
 import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 import * as THREE from "three";
+
+export type LogoPlacementMode = "drag" | "controls";
+
+export const LOGO_POSITION_LIMITS = {
+  x: { min: -0.85, max: 0.85 },
+  y: { min: -0.6, max: 0.75 },
+} as const;
 
 export interface ViewerApi {
   screenshot: () => Promise<string>;
@@ -19,6 +26,8 @@ interface BagViewer3DProps {
   logoPositionY: number;
   /** Degrees, rotates the decal around the surface normal. */
   logoRotation: number;
+  logoPlacementMode?: LogoPlacementMode;
+  onLogoPositionChange?: (positionX: number, positionY: number) => void;
   autoRotate: boolean;
   showLogoHint: boolean;
   isCompact?: boolean;
@@ -50,6 +59,30 @@ function easeOutBack(t: number) {
 // Decal coordinates live in the bag mesh's local space (front face sits at z ≈ +0.28).
 const DECAL_FRONT_Z = 0.26;
 const DECAL_BASE_Y = -0.5;
+const LOGO_X_SCALE = 0.42;
+const LOGO_Y_SCALE = 0.55;
+
+function logoStateToDecalPosition(logoPositionX: number, logoPositionY: number) {
+  return {
+    x: logoPositionX * LOGO_X_SCALE,
+    y: DECAL_BASE_Y + logoPositionY * LOGO_Y_SCALE,
+  };
+}
+
+function decalLocalPointToLogoState(local: THREE.Vector3) {
+  return {
+    x: THREE.MathUtils.clamp(
+      local.x / LOGO_X_SCALE,
+      LOGO_POSITION_LIMITS.x.min,
+      LOGO_POSITION_LIMITS.x.max
+    ),
+    y: THREE.MathUtils.clamp(
+      (local.y - DECAL_BASE_Y) / LOGO_Y_SCALE,
+      LOGO_POSITION_LIMITS.y.min,
+      LOGO_POSITION_LIMITS.y.max
+    ),
+  };
+}
 
 function configureLogoTexture(texture: THREE.Texture, maxAnisotropy: number) {
   texture.colorSpace = THREE.SRGBColorSpace;
@@ -131,6 +164,8 @@ type BagModelProps = Pick<
   | "logoPositionX"
   | "logoPositionY"
   | "logoRotation"
+  | "logoPlacementMode"
+  | "onLogoPositionChange"
   | "showLogoHint"
 >;
 
@@ -141,10 +176,82 @@ function BagModel({
   logoPositionX,
   logoPositionY,
   logoRotation,
+  logoPlacementMode = "controls",
+  onLogoPositionChange,
   showLogoHint,
 }: BagModelProps) {
   const gltf = useGLTF(BAG_MODEL_PATH, true);
   const { texture, aspectRatio } = useLogoTexture(logoUrl);
+  const meshRef = useRef<THREE.Mesh>(null);
+  const draggingRef = useRef(false);
+  const { camera, gl } = useThree();
+  const raycaster = useMemo(() => new THREE.Raycaster(), []);
+  const pointer = useMemo(() => new THREE.Vector2(), []);
+
+  const dragEnabled = logoPlacementMode === "drag" && !!texture;
+
+  const updatePositionFromClient = useCallback(
+    (clientX: number, clientY: number) => {
+      const mesh = meshRef.current;
+      if (!mesh || !onLogoPositionChange) return;
+
+      const rect = gl.domElement.getBoundingClientRect();
+      pointer.x = ((clientX - rect.left) / rect.width) * 2 - 1;
+      pointer.y = -((clientY - rect.top) / rect.height) * 2 + 1;
+      raycaster.setFromCamera(pointer, camera);
+
+      const [hit] = raycaster.intersectObject(mesh, false);
+      if (!hit) return;
+
+      const local = mesh.worldToLocal(hit.point.clone());
+      const next = decalLocalPointToLogoState(local);
+      onLogoPositionChange(next.x, next.y);
+    },
+    [camera, gl, onLogoPositionChange, pointer, raycaster]
+  );
+
+  useEffect(() => {
+    if (!dragEnabled) {
+      gl.domElement.style.cursor = "";
+      return;
+    }
+
+    gl.domElement.style.cursor = "grab";
+
+    const handlePointerMove = (event: PointerEvent) => {
+      if (!draggingRef.current) return;
+      event.preventDefault();
+      updatePositionFromClient(event.clientX, event.clientY);
+    };
+
+    const endDrag = () => {
+      if (!draggingRef.current) return;
+      draggingRef.current = false;
+      gl.domElement.style.cursor = "grab";
+    };
+
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", endDrag);
+    window.addEventListener("pointercancel", endDrag);
+
+    return () => {
+      gl.domElement.style.cursor = "";
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", endDrag);
+      window.removeEventListener("pointercancel", endDrag);
+    };
+  }, [dragEnabled, gl, updatePositionFromClient]);
+
+  const handlePointerDown = useCallback(
+    (event: ThreeEvent<PointerEvent>) => {
+      if (!dragEnabled) return;
+      event.stopPropagation();
+      draggingRef.current = true;
+      gl.domElement.style.cursor = "grabbing";
+      updatePositionFromClient(event.clientX, event.clientY);
+    },
+    [dragEnabled, gl, updatePositionFromClient]
+  );
 
   const bagSource = useMemo(() => {
     let mesh: THREE.Mesh | null = null;
@@ -181,15 +288,16 @@ function BagModel({
   const clampedAspect = Math.max(aspectRatio, 0.65);
   const decalWidth = Math.min(0.86, 0.5 * logoScale * clampedAspect);
   const decalHeight = Math.min(0.5, (0.5 * logoScale) / clampedAspect);
-  const decalX = logoPositionX * 0.42;
-  const decalY = DECAL_BASE_Y + logoPositionY * 0.55;
+  const { x: decalX, y: decalY } = logoStateToDecalPosition(logoPositionX, logoPositionY);
 
   return (
     <group rotation={[0.02, -0.46, 0]} scale={MODEL_SCALE}>
       <mesh
+        ref={meshRef}
         geometry={bagGeometry}
         position={bagSource.position}
         material={modelMaterial}
+        onPointerDown={handlePointerDown}
       >
         {texture ? (
           <Decal
@@ -320,6 +428,8 @@ function ViewerScene({
   logoPositionX,
   logoPositionY,
   logoRotation,
+  logoPlacementMode = "controls",
+  onLogoPositionChange,
   autoRotate,
   showLogoHint,
   isCompact = false,
@@ -327,6 +437,7 @@ function ViewerScene({
 }: BagViewer3DProps) {
   const { camera, gl, scene } = useThree();
   const controlsRef = useRef<OrbitControlsImpl | null>(null);
+  const lockCamera = logoPlacementMode === "drag" && !!logoUrl;
 
   useEffect(() => {
     onApiReady({
@@ -360,13 +471,14 @@ function ViewerScene({
       <OrbitControls
         ref={controlsRef}
         makeDefault
+        enabled={!lockCamera}
         enablePan={false}
         target={DEFAULT_TARGET}
         minDistance={5.2}
         maxDistance={11}
         minPolarAngle={0.7}
         maxPolarAngle={1.72}
-        autoRotate={autoRotate}
+        autoRotate={autoRotate && !lockCamera}
         autoRotateSpeed={1.5}
       />
 
@@ -385,6 +497,8 @@ function ViewerScene({
             logoPositionX={logoPositionX}
             logoPositionY={logoPositionY}
             logoRotation={logoRotation}
+            logoPlacementMode={logoPlacementMode}
+            onLogoPositionChange={onLogoPositionChange}
             showLogoHint={showLogoHint}
           />
         </EntranceRig>
