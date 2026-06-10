@@ -18,7 +18,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { messageTemplates } from "@/drizzle/schema";
-import { uploadBridgeMediaFromUrl } from "@/lib/bridge/client";
 
 export const runtime = "nodejs";
 
@@ -72,10 +71,14 @@ export async function POST(req: NextRequest) {
     const proto = host.startsWith("localhost") ? "http" : "https";
     const imageUrl = `${proto}://${host}${IMAGE_PATH}`;
 
-    const mediaId = await uploadBridgeMediaFromUrl(
-      imageUrl,
-      "bag-dimensions-he.png"
-    );
+    // Store the public URL in the mediaId column. The Green API send path
+    // (lib/bridge/client.ts::sendCtaUrlMessage) detects http(s):// in mediaId
+    // and routes it as mediaUrl → sendFileByUrl. Avoids the dependency on the
+    // bridge's tenant-internal media_id, which requires a working bridge
+    // upload token (BRIDGE_TENANT_TOKEN). If the deployment later flips back
+    // to the bridge path (USE_GREEN_API=0 with a healthy token), re-running
+    // this endpoint can be swapped to uploadBridgeMediaFromUrl(imageUrl).
+    const mediaId = imageUrl;
 
     const existing = await db
       .select({ id: messageTemplates.id })

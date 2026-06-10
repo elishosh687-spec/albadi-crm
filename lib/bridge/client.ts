@@ -493,15 +493,19 @@ export async function sendCtaUrlMessage(
 ): Promise<void> {
   if (useGreenApi()) {
     const { sendGreenCtaUrlMessage } = await import("../greenapi/client");
+    // Green has no media_id concept — but if the upstream caller stored a
+    // public URL in the `mediaId` field (the template manager does this when
+    // the bridge media upload isn't usable), pass it through as mediaUrl so
+    // Green's sendFileByUrl renders a real image header. Bridge media_ids
+    // (which start with letters, no `://`) are skipped — Green client
+    // degrades to text+cta link in that case.
+    const looksLikeUrl =
+      !!payload.mediaId && /^https?:\/\//i.test(payload.mediaId);
     await sendGreenCtaUrlMessage(jid, {
       body: payload.body,
       headerType: payload.headerType,
-      mediaId: payload.mediaId,
-      // Green has no media_id concept — pass mediaUrl only if the upstream
-      // caller has a public URL. The bridge variant uses media_id which is
-      // tenant-internal; we can't translate. If headers fail, Green client
-      // degrades to text+cta link.
-      mediaUrl: null,
+      mediaId: looksLikeUrl ? null : payload.mediaId,
+      mediaUrl: looksLikeUrl ? payload.mediaId : null,
       ctaLabel: payload.ctaLabel,
       ctaUrl: payload.ctaUrl,
     });
