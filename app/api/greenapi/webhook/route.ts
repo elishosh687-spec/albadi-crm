@@ -429,16 +429,34 @@ async function handleIncoming(evt: GreenWebhook): Promise<void> {
     return;
   }
 
-  // Auto-unpause + reset follow-up budget on any non-stopword inbound.
+  // Snapshot pause state BEFORE any update — needed for the sticky-pause
+  // short-circuit below and to keep the supervisor honest if it ever runs.
+  const [preUpdateSnap] = await db
+    .select({ botPaused: leads.botPaused })
+    .from(leads)
+    .where(sql`trim(${leads.manychatSubId}) = ${canonicalSid.trim()}`)
+    .limit(1);
+  const wasBotPaused = preUpdateSnap?.botPaused === true;
+
+  // Reset follow-up cadence on any non-stopword inbound. Sticky pause: do
+  // NOT clear botPaused here — once Eli (or any handler) paused the bot, a
+  // customer message does not auto-resume. Eli must un-pause via dashboard.
   await db
     .update(leads)
     .set({
-      botPaused: false,
       followUpCount: 0,
       lastFollowUpAt: null,
       updatedAt: new Date(),
     })
     .where(sql`trim(${leads.manychatSubId}) = ${canonicalSid.trim()}`);
+
+  if (wasBotPaused) {
+    // No supervisor / no reply — inbound is already persisted; the dashboard
+    // surfaces it via the messages timeline. Eli toggles pause off when he
+    // wants the bot back.
+    console.log(`[green.webhook] sticky-pause hit for ${canonicalSid} — no auto-resume, no reply`);
+    return;
+  }
 
   // "New conversation" detection — if the customer hasn't pinged in over 7
   // days, treat the next inbound as a fresh start regardless of any prior

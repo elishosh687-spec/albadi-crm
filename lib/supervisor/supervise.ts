@@ -241,7 +241,7 @@ function buildUserPrompt(input: SuperviseInput): string {
       if (body) lines.push(`Eli's last note: ${body.slice(0, 200)}`);
     }
   }
-  if (input.botPaused) lines.push(`bot_paused: true (was manually paused — auto-unpaused on this inbound)`);
+  if (input.botPaused) lines.push(`bot_paused: true (sticky pause — bot must NOT reply. If you reach this point, escalate to Eli, do not send a customer-facing message)`);
   if (input.qState) {
     const q = input.qState;
     const summary: string[] = [];

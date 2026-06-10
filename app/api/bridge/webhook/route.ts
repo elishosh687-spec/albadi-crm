@@ -349,15 +349,18 @@ async function handleMessageReceived(evt: BridgeEnvelope): Promise<void> {
     return;
   }
 
-  // 2. Re-engagement: reset cadence + un-pause. Log if the bot was actually
-  // paused before (so we can audit auto-wakeups).
+  // 2. Re-engagement: reset cadence + clear stale pipeline flag.
+  // NOTE: pause is STICKY by design — once Eli (or any handler) pauses the
+  // bot, an incoming customer message does NOT auto-resume. Eli must un-pause
+  // explicitly via the dashboard. The supervisor receives `wasBotPaused`
+  // below and short-circuits when true, so the inbound is logged but no
+  // outbound reply is produced.
   try {
     await db
       .update(leads)
       .set({
         followUpCount: 0,
         lastFollowUpAt: new Date(),
-        botPaused: false,
         pipelineFlag: null,
         updatedAt: new Date(),
       })
@@ -367,6 +370,11 @@ async function handleMessageReceived(evt: BridgeEnvelope): Promise<void> {
   }
 
   if (wasBotPaused) {
+    // Sticky pause: short-circuit the supervisor pipeline entirely. The
+    // inbound is already persisted to the messages table (earlier in this
+    // handler) and the timeline row below makes the customer's activity
+    // visible in the dashboard, but the bot stays silent until Eli toggles
+    // pause off manually. No LLM call, no draft, no auto-reply.
     await logDecision({
       manychatSubId: sid,
       messageId: inboundMessageId,
@@ -374,9 +382,10 @@ async function handleMessageReceived(evt: BridgeEnvelope): Promise<void> {
       stageBefore: leadSnapshot?.stage ?? null,
       stageAfter: leadSnapshot?.stage ?? null,
       decidedBy: "code",
-      action: "unpaused_on_inbound",
-      metadata: { reason: "customer re-engaged, bot_paused → false" },
+      action: "bot_remained_paused",
+      metadata: { reason: "inbound while paused — sticky-pause policy, no auto-resume" },
     });
+    return;
   }
 
   // 2.5 Test-JID auto-reset (no log row — internal dev path).
