@@ -22,6 +22,40 @@ import InboxView, {
 // templates by sortOrder. Above this, the user opens a full lead/composer.
 const QUICK_TEMPLATE_LIMIT = 4;
 
+/**
+ * Pick a unique fallback icon when the template name doesn't start with an
+ * emoji. First tries keyword heuristics (Hebrew + English), then rotates
+ * through a small palette indexed by template id so two templates with no
+ * keywords still get visually distinct icons.
+ */
+function pickFallbackIcon(name: string, id: number): string {
+  const lower = name.toLowerCase();
+  const rules: Array<[RegExp, string]> = [
+    [/אנחנו|מי\s*אנחנו|about|who/i, "🏢"],
+    [/שאלון|שאלות|questionnaire|quiz/i, "📋"],
+    [/התחל|מחדש|restart|start\s*over/i, "🔄"],
+    [/מידות|מידה|size|dimension/i, "📐"],
+    [/מחיר|הצעה|תמחור|price|quote/i, "💰"],
+    [/תשלום|payment|pay/i, "💳"],
+    [/משלוח|שילוח|shipping|delivery/i, "🚚"],
+    [/תודה|thanks|thank\s*you/i, "🙏"],
+    [/דוגמ|sample|demo/i, "🧪"],
+    [/קטלוג|catalog/i, "📚"],
+    [/וידאו|video|הצגה|intro/i, "🎬"],
+    [/לוגו|logo|עיצוב|design/i, "🎨"],
+    [/אישור|approval|confirm/i, "✅"],
+    [/תזכורת|reminder|follow/i, "🔔"],
+    [/יצירת קשר|contact/i, "📞"],
+  ];
+  for (const [pattern, icon] of rules) {
+    if (pattern.test(lower)) return icon;
+  }
+  // Final fallback: rotate through a small generic palette so distinct
+  // templates still look distinct.
+  const palette = ["✉️", "💬", "📨", "📝", "💡", "⚡", "🎯"];
+  return palette[id % palette.length];
+}
+
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 export const maxDuration = 30;
@@ -161,15 +195,13 @@ export default async function InboxWidgetPage({
     .limit(QUICK_TEMPLATE_LIMIT);
   const quickTemplates: QuickTemplate[] = templateRows.map((t) => {
     const trimmed = t.name.trim();
-    // Use the leading emoji as the icon ONLY when one exists. A bare Hebrew/
-    // Latin letter looks weird as an icon ("מ", "b") — fall back to ✉️.
+    // Use the leading emoji as the icon when one exists; otherwise pick a
+    // distinct icon based on Hebrew/English keyword heuristics so two
+    // templates don't share the same ✉️ fallback.
     const first = Array.from(trimmed)[0] ?? "";
-    const isEmoji = /\p{Extended_Pictographic}/u.test(first);
-    return {
-      id: t.id,
-      name: trimmed,
-      icon: isEmoji ? first : "✉️",
-    };
+    const hasLeadingEmoji = /\p{Extended_Pictographic}/u.test(first);
+    const icon = hasLeadingEmoji ? first : pickFallbackIcon(trimmed, t.id);
+    return { id: t.id, name: trimmed, icon };
   });
 
   return (
