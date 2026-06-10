@@ -15,10 +15,18 @@ export interface InboxRow {
   ghlContactUrl: string | null;
 }
 
+export interface QuickTemplate {
+  id: number;
+  name: string;
+  /** First char/emoji of the name — used as the button label */
+  icon: string;
+}
+
 interface Props {
   apiToken: string;
   initialRows: InboxRow[];
   selectedSid?: string;
+  quickTemplates?: QuickTemplate[];
 }
 
 function timeAgo(iso: string | null): string {
@@ -38,7 +46,12 @@ function senderLabel(s: "lead" | "bot" | "eli"): string {
   return "🤖";
 }
 
-export default function InboxView({ apiToken, initialRows, selectedSid }: Props) {
+export default function InboxView({
+  apiToken,
+  initialRows,
+  selectedSid,
+  quickTemplates = [],
+}: Props) {
   const [rows, setRows] = useState<InboxRow[]>(initialRows);
   const [busy, setBusy] = useState<string | null>(null);
   const [filter, setFilter] = useState("");
@@ -100,6 +113,28 @@ export default function InboxView({ apiToken, initialRows, selectedSid }: Props)
       const json = await res.json();
       if (!json.ok) throw new Error(json.error || "send failed");
       alert("✅ הצגת חברה נשלחה");
+    } catch (e) {
+      alert(`שגיאה: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function sendTemplate(sid: string, leadName: string, tpl: QuickTemplate) {
+    if (!window.confirm(`לשלוח "${tpl.name}" ל-${leadName}?`)) return;
+    setBusy(sid);
+    try {
+      const res = await fetch(
+        `/api/widget/send-template?widget_token=${encodeURIComponent(apiToken)}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ sid, templateId: tpl.id }),
+        }
+      );
+      const json = await res.json();
+      if (!json.ok) throw new Error(json.error || "send failed");
+      alert(`✅ נשלח: ${tpl.name}`);
     } catch (e) {
       alert(`שגיאה: ${e instanceof Error ? e.message : String(e)}`);
     } finally {
@@ -178,45 +213,84 @@ export default function InboxView({ apiToken, initialRows, selectedSid }: Props)
               alignItems: "flex-start",
             }}
           >
-            <button
-              onClick={() => toggle(r.sid, r.botPaused)}
-              disabled={busy === r.sid}
-              title={r.botPaused ? "הפעל בוט" : "השהה בוט"}
+            {/* Action buttons — compact column so multiple templates fit
+                without crowding the lead info area. 40×40 each, wrap into
+                two rows if needed. */}
+            <div
               style={{
-                width: 56,
-                minWidth: 56,
-                height: 56,
-                fontSize: 24,
-                background: r.botPaused ? "#7c2d12" : "#1f2937",
-                color: "#e4e4e7",
-                border: `1px solid ${r.botPaused ? "#9a3412" : "#3a3d44"}`,
-                borderRadius: 8,
-                cursor: busy === r.sid ? "wait" : "pointer",
-                touchAction: "manipulation",
+                display: "flex",
+                flexWrap: "wrap",
+                gap: 4,
+                width: 88,
+                minWidth: 88,
+                alignContent: "flex-start",
               }}
             >
-              {busy === r.sid ? "…" : r.botPaused ? "▶️" : "⏸️"}
-            </button>
+              <button
+                onClick={() => toggle(r.sid, r.botPaused)}
+                disabled={busy === r.sid}
+                title={r.botPaused ? "הפעל בוט" : "השהה בוט"}
+                style={{
+                  width: 40,
+                  height: 40,
+                  fontSize: 18,
+                  background: r.botPaused ? "#7c2d12" : "#1f2937",
+                  color: "#e4e4e7",
+                  border: `1px solid ${r.botPaused ? "#9a3412" : "#3a3d44"}`,
+                  borderRadius: 6,
+                  cursor: busy === r.sid ? "wait" : "pointer",
+                  touchAction: "manipulation",
+                  padding: 0,
+                }}
+              >
+                {busy === r.sid ? "…" : r.botPaused ? "▶️" : "⏸️"}
+              </button>
 
-            <button
-              onClick={() => sendIntro(r.sid, r.name || r.phone || r.sid)}
-              disabled={busy === r.sid}
-              title="שלח הצגת חברה (וידאו + אתרים)"
-              style={{
-                width: 56,
-                minWidth: 56,
-                height: 56,
-                fontSize: 22,
-                background: "#14321f",
-                color: "#e4e4e7",
-                border: "1px solid #2f6f4f",
-                borderRadius: 8,
-                cursor: busy === r.sid ? "wait" : "pointer",
-                touchAction: "manipulation",
-              }}
-            >
-              🎬
-            </button>
+              <button
+                onClick={() => sendIntro(r.sid, r.name || r.phone || r.sid)}
+                disabled={busy === r.sid}
+                title="שלח הצגת חברה (וידאו + אתרים)"
+                style={{
+                  width: 40,
+                  height: 40,
+                  fontSize: 18,
+                  background: "#14321f",
+                  color: "#e4e4e7",
+                  border: "1px solid #2f6f4f",
+                  borderRadius: 6,
+                  cursor: busy === r.sid ? "wait" : "pointer",
+                  touchAction: "manipulation",
+                  padding: 0,
+                }}
+              >
+                🎬
+              </button>
+
+              {quickTemplates.map((tpl) => (
+                <button
+                  key={tpl.id}
+                  onClick={() =>
+                    sendTemplate(r.sid, r.name || r.phone || r.sid, tpl)
+                  }
+                  disabled={busy === r.sid}
+                  title={tpl.name}
+                  style={{
+                    width: 40,
+                    height: 40,
+                    fontSize: 18,
+                    background: "#1e293b",
+                    color: "#e4e4e7",
+                    border: "1px solid #3a4659",
+                    borderRadius: 6,
+                    cursor: busy === r.sid ? "wait" : "pointer",
+                    touchAction: "manipulation",
+                    padding: 0,
+                  }}
+                >
+                  {tpl.icon}
+                </button>
+              ))}
+            </div>
 
             <a
               href={r.ghlContactUrl ?? "#"}

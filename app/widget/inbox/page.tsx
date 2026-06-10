@@ -10,10 +10,17 @@
  */
 
 import { db } from "@/lib/db";
-import { leads, messages } from "@/drizzle/schema";
-import { desc, eq, sql } from "drizzle-orm";
+import { leads, messages, messageTemplates } from "@/drizzle/schema";
+import { asc, desc, eq, sql } from "drizzle-orm";
 import { verifyWidgetToken } from "@/integrations/ghl/widget-auth";
-import InboxView, { type InboxRow } from "@/components/inbox/InboxView";
+import InboxView, {
+  type InboxRow,
+  type QuickTemplate,
+} from "@/components/inbox/InboxView";
+
+// How many quick-send buttons to show next to each lead row. Top N active
+// templates by sortOrder. Above this, the user opens a full lead/composer.
+const QUICK_TEMPLATE_LIMIT = 4;
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -138,6 +145,27 @@ export default async function InboxWidgetPage({
     return tb - ta;
   });
 
+  // Load top-N active templates for the per-row quick-send buttons. Each row
+  // renders one tiny icon button per template; click → POST /api/widget/
+  // send-template. The "icon" is just the first character of the name (so a
+  // template named "📐 הסבר מידות שקית" shows 📐).
+  const templateRows = await db
+    .select({
+      id: messageTemplates.id,
+      name: messageTemplates.name,
+      sortOrder: messageTemplates.sortOrder,
+    })
+    .from(messageTemplates)
+    .where(eq(messageTemplates.active, true))
+    .orderBy(asc(messageTemplates.sortOrder), asc(messageTemplates.id))
+    .limit(QUICK_TEMPLATE_LIMIT);
+  const quickTemplates: QuickTemplate[] = templateRows.map((t) => {
+    // Use first grapheme of the name as the visual icon. Defaults to ✉️
+    // when the name has no emoji/leading symbol.
+    const firstChar = Array.from(t.name.trim())[0] ?? "✉️";
+    return { id: t.id, name: t.name, icon: firstChar };
+  });
+
   return (
     <div style={{ padding: 8 }}>
       <div
@@ -151,7 +179,12 @@ export default async function InboxWidgetPage({
       >
         <strong style={{ fontSize: 14 }}>📥 שיחות ({rows.length})</strong>
       </div>
-      <InboxView apiToken={token} initialRows={rows} selectedSid={selectedSid} />
+      <InboxView
+        apiToken={token}
+        initialRows={rows}
+        selectedSid={selectedSid}
+        quickTemplates={quickTemplates}
+      />
     </div>
   );
 }
