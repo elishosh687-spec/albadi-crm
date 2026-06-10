@@ -210,46 +210,11 @@ export default function InboxView({
               padding: 12,
               display: "flex",
               gap: 10,
-              alignItems: "flex-start",
+              // Buttons live at the bottom-left of the row (alignSelf below),
+              // so the row height is driven by the info area on the right.
+              alignItems: "stretch",
             }}
           >
-            {/* Action column — three icon-only square buttons in a horizontal
-                strip: pause toggle, send intro, and a "תבניות" menu that
-                opens the full template list. Templates as full rows make
-                long Hebrew names readable; cramming them into the row was
-                too tight. */}
-            <div
-              style={{
-                display: "flex",
-                gap: 6,
-                alignItems: "flex-start",
-                flexShrink: 0,
-              }}
-            >
-              <IconButton
-                onClick={() => toggle(r.sid, r.botPaused)}
-                disabled={busy === r.sid}
-                title={r.botPaused ? "הבוט מושהה — לחץ כדי להפעיל" : "הבוט פעיל — לחץ כדי להשהות"}
-                icon={busy === r.sid ? "…" : r.botPaused ? "▶" : "⏸"}
-                tone={r.botPaused ? "warn" : "neutral"}
-              />
-
-              {/* The hardcoded "🎬 הצגה" button used to live here, but Eli
-                  manages an equivalent "מי אנחנו" template via Settings —
-                  the two duplicate each other. Templates are easier to
-                  edit, so the menu is the single source of truth now. */}
-
-              {quickTemplates.length > 0 && (
-                <TemplateMenu
-                  templates={quickTemplates}
-                  disabled={busy === r.sid}
-                  onPick={(tpl) =>
-                    sendTemplate(r.sid, r.name || r.phone || r.sid, tpl)
-                  }
-                />
-              )}
-            </div>
-
             <a
               href={r.ghlContactUrl ?? "#"}
               target="_blank"
@@ -355,6 +320,37 @@ export default function InboxView({
                 )}
               </div>
             </a>
+
+            {/* Action buttons — pinned to the bottom-left of the row (in
+                RTL = visually left because they come AFTER the info area
+                in the DOM, and alignSelf:flex-end glues them to the bottom
+                edge instead of the top). Single horizontal strip: pause
+                toggle + ☰ template menu. */}
+            <div
+              style={{
+                display: "flex",
+                gap: 6,
+                flexShrink: 0,
+                alignSelf: "flex-end",
+              }}
+            >
+              <IconButton
+                onClick={() => toggle(r.sid, r.botPaused)}
+                disabled={busy === r.sid}
+                title={r.botPaused ? "הבוט מושהה — לחץ כדי להפעיל" : "הבוט פעיל — לחץ כדי להשהות"}
+                icon={busy === r.sid ? "…" : r.botPaused ? "▶" : "⏸"}
+                tone={r.botPaused ? "warn" : "neutral"}
+              />
+              {quickTemplates.length > 0 && (
+                <TemplateMenu
+                  templates={quickTemplates}
+                  disabled={busy === r.sid}
+                  onPick={(tpl) =>
+                    sendTemplate(r.sid, r.name || r.phone || r.sid, tpl)
+                  }
+                />
+              )}
+            </div>
           </div>
         ))}
       </div>
