@@ -70,10 +70,18 @@ function badRequest(reason: string, extra?: Record<string, unknown>) {
 }
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
-  const secret = process.env.BOT_SECRET || process.env.CRON_SECRET || "";
+  // Accept EITHER:
+  //   1. GHL_DISPOSITION_SECRET — dedicated secret for this endpoint (preferred,
+  //      because GHL is the only caller and rotating it doesn't affect anything else)
+  //   2. BOT_SECRET — fallback so older configs keep working
+  const dispositionSecret = process.env.GHL_DISPOSITION_SECRET || "";
+  const botSecret = process.env.BOT_SECRET || process.env.CRON_SECRET || "";
   const auth = req.headers.get("authorization") || "";
-  if (!secret) return unauthorized("BOT_SECRET not configured");
-  if (auth !== `Bearer ${secret}`) return unauthorized("bad bearer");
+  if (!dispositionSecret && !botSecret) return unauthorized("no secret configured");
+  const accepted =
+    (dispositionSecret && auth === `Bearer ${dispositionSecret}`) ||
+    (botSecret && auth === `Bearer ${botSecret}`);
+  if (!accepted) return unauthorized("bad bearer");
 
   let body: DispositionWebhookBody;
   try {
