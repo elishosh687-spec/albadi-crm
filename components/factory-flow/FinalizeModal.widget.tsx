@@ -32,6 +32,13 @@ export function FinalizeModalWidget({
   const [shippingOptionId, setShippingOptionId] = useState<string>(
     row.finalPricing?.shippingOptionId ?? row.productSpec.shippingOptionId ?? ""
   );
+  const [moldsCost, setMoldsCost] = useState<string>(
+    row.finalPricing?.moldsTotalCny && row.finalPricing.moldsTotalCny > 0
+      ? String(row.finalPricing.moldsTotalCny)
+      : ""
+  );
+  const moldsParsed = moldsCost !== "" ? parseFloat(moldsCost) : NaN;
+  const moldsValid = Number.isFinite(moldsParsed) && moldsParsed > 0;
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [reverseMode, setReverseMode] = useState<"profit" | "total" | "unit">("profit");
@@ -93,10 +100,11 @@ export function FinalizeModalWidget({
           heightCm: row.factoryResponse.cartonHeightCm,
         },
         profitMarginOverride: margin,
+        moldsCostCny: moldsValid ? moldsParsed : 0,
       },
       config
     );
-  }, [config, row, shippingOptionId, margin]);
+  }, [config, row, shippingOptionId, margin, moldsValid, moldsParsed]);
 
   const handleSubmit = async () => {
     setError(null);
@@ -108,6 +116,7 @@ export function FinalizeModalWidget({
         body: JSON.stringify({
           profitMarginOverride: margin,
           shippingOptionId: shippingOptionId || undefined,
+          moldsCostCny: moldsValid ? moldsParsed : undefined,
         }),
       });
       const data = await res.json();
@@ -191,6 +200,26 @@ export function FinalizeModalWidget({
               </div>
 
               <div>
+                <label className="block text-sm font-medium mb-1">
+                  מולדים / תבניות (¥ CNY) — חד פעמי
+                </label>
+                <input
+                  type="number"
+                  min={0}
+                  step={50}
+                  placeholder="למשל 2000"
+                  value={moldsCost}
+                  onChange={(e) => setMoldsCost(e.target.value)}
+                  className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-ring/30"
+                />
+                <p className="text-[10px] text-muted-foreground mt-1">
+                  {moldsValid
+                    ? `מתחלק על ${row.productSpec.quantity.toLocaleString("he-IL")} יח׳ = ¥${(moldsParsed / row.productSpec.quantity).toFixed(3)} ליחידה — נכלל בעלות מפעל וברווח`
+                    : "ריק → ללא עלות מולדים"}
+                </p>
+              </div>
+
+              <div>
                 <label className="block text-sm font-medium mb-1">שיטת שילוח</label>
                 <select
                   value={shippingOptionId}
@@ -252,6 +281,12 @@ export function FinalizeModalWidget({
                   <PriceRow label="סה״כ הזמנה" value={formatIls(livePricing.totalSellingPrice)} bold />
                   <div className="border-t border-success/20 my-1" />
                   <PriceRow label="עלות יחידה (CNY→₪)" value={formatIls(livePricing.unitCost)} />
+                  {livePricing.moldsTotalCny > 0 && (
+                    <PriceRow
+                      label={`מולדים (¥${livePricing.moldsTotalCny} ÷ ${livePricing.quantity} יח׳)`}
+                      value={`¥${livePricing.moldsPerUnitCny.toFixed(3)}/יח׳`}
+                    />
+                  )}
                   <PriceRow label="שילוח / יחידה" value={formatIls(livePricing.unitShipping)} />
                   <PriceRow label="רווח / יחידה" value={formatIls(livePricing.unitProfit)} highlight />
                   <PriceRow label="סה״כ רווח" value={formatIls(livePricing.totalProfit)} highlight />

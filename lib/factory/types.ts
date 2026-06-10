@@ -92,6 +92,10 @@ export interface FactoryPricingInput {
   };
   /** Override the default margin (e.g. slider 30-50%) */
   profitMarginOverride?: number;
+  /** One-time mold/tooling fee from the factory in CNY.
+   *  Amortized across `quantity` and folded into the per-unit production cost
+   *  so the margin applies to it like any other factory cost. */
+  moldsCostCny?: number;
 }
 
 export interface FactoryPricingResult {
@@ -119,4 +123,8 @@ export interface FactoryPricingResult {
   profitMarginPct: number;
   shippingOptionId: string | null;
   shippingOptionName: string | null;
+
+  // one-time mold/tooling charge (echoed for persistence + display); 0 = none
+  moldsTotalCny: number;
+  moldsPerUnitCny: number;
 }

@@ -71,7 +71,13 @@ export function priceFactoryQuote(
     ? config.shippingOptions.find((s) => s.id === input.shippingOptionId) ?? null
     : null;
 
-  const unitCostUsd = input.factoryUnitCostCny * cnyToUsd;
+  // One-time mold/tooling fee (CNY) — amortized across the order and folded
+  // into the per-unit production CNY so the margin applies to it too.
+  const moldsTotalCny = Math.max(input.moldsCostCny ?? 0, 0);
+  const moldsPerUnitCny = moldsTotalCny > 0 ? moldsTotalCny / quantity : 0;
+
+  const unitProductionCny = input.factoryUnitCostCny + moldsPerUnitCny;
+  const unitCostUsd = unitProductionCny * cnyToUsd;
   const unitShippingUsd = computeShippingPerUnitUsd(
     shipping,
     totalWeightKg,
@@ -118,5 +124,7 @@ export function priceFactoryQuote(
     profitMarginPct: marginPct,
     shippingOptionId: shipping?.id ?? null,
     shippingOptionName: shipping?.name ?? null,
+    moldsTotalCny: r2(moldsTotalCny),
+    moldsPerUnitCny: Math.round(moldsPerUnitCny * 1000) / 1000,
   };
 }

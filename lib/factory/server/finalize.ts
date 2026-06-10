@@ -24,6 +24,8 @@ import type {
 export interface FinalizeInput {
   profitMarginOverride?: number;
   shippingOptionId?: string;
+  /** One-time mold/tooling fee in CNY (amortized across the order). */
+  moldsCostCny?: number;
 }
 
 export interface FinalizeOk {
@@ -87,6 +89,7 @@ export async function finalizeQuote(
         heightCm: resp.cartonHeightCm,
       },
       profitMarginOverride: body.profitMarginOverride,
+      moldsCostCny: body.moldsCostCny,
     },
     config
   );

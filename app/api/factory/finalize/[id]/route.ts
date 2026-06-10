@@ -20,6 +20,7 @@ export const maxDuration = 60;
 const BodySchema = z.object({
   profitMarginOverride: z.number().min(0).max(300).optional(),
   shippingOptionId: z.string().optional(),
+  moldsCostCny: z.number().min(0).optional(),
 });
 
 export async function POST(
