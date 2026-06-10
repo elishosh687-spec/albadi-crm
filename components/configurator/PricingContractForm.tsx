@@ -104,7 +104,7 @@ export const PricingContractForm: React.FC<PricingContractFormProps> = ({
   };
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[minmax(0,1.15fr)_minmax(320px,0.85fr)]">
+    <div className="grid gap-6">
       <div className="grid gap-4">
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label="שם מלא *" icon={<User className="size-4" />}>

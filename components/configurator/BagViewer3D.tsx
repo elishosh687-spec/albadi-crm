@@ -1,23 +1,38 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Canvas, useThree } from "@react-three/fiber";
-import { OrbitControls, PerspectiveCamera, useGLTF } from "@react-three/drei";
+import { Decal, OrbitControls, PerspectiveCamera, useGLTF } from "@react-three/drei";
+import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 import * as THREE from "three";
-import { colors } from "@/lib/ui/tokens";
 
-interface BagModelProps {
+export interface ViewerApi {
+  screenshot: () => Promise<string>;
+  resetView: () => void;
+}
+
+interface BagViewer3DProps {
   bagColor: string;
   logoUrl?: string | null;
   logoScale: number;
   logoPositionX: number;
   logoPositionY: number;
-  onScreenshotReady: (callback: () => Promise<string>) => void;
+  /** Degrees, rotates the decal around the surface normal. */
+  logoRotation: number;
+  autoRotate: boolean;
+  showLogoHint: boolean;
+  onApiReady: (api: ViewerApi) => void;
 }
 
 const BAG_MODEL_PATH = "/Rusable_Bag.glb";
 const MODEL_SCALE = 1.62;
-const MODEL_FRONT_Z = 0.49;
+const BACKDROP_COLOR = "#f0e9dc";
+const DEFAULT_CAMERA_POSITION: [number, number, number] = [0.28, 0.18, 8.2];
+const DEFAULT_TARGET: [number, number, number] = [0, 0.22, 0];
+
+// Decal coordinates live in the bag mesh's local space (front face sits at z ≈ +0.28).
+const DECAL_FRONT_Z = 0.26;
+const DECAL_BASE_Y = -0.5;
 
 function useFabricTexture(hex: string) {
   return useMemo(() => {
@@ -113,28 +128,38 @@ function useLogoTexture(logoUrl?: string | null) {
   return { texture, aspectRatio };
 }
 
+type BagModelProps = Pick<
+  BagViewer3DProps,
+  | "bagColor"
+  | "logoUrl"
+  | "logoScale"
+  | "logoPositionX"
+  | "logoPositionY"
+  | "logoRotation"
+  | "showLogoHint"
+>;
+
 function BagModel({
   bagColor,
   logoUrl,
   logoScale,
   logoPositionX,
   logoPositionY,
-}: Omit<BagModelProps, "onScreenshotReady">) {
+  logoRotation,
+  showLogoHint,
+}: BagModelProps) {
   const gltf = useGLTF(BAG_MODEL_PATH, true);
   const { texture, aspectRatio } = useLogoTexture(logoUrl);
   const fabricTexture = useFabricTexture(bagColor);
 
-  const modelScene = useMemo(() => {
-    const clonedScene = gltf.scene.clone(true);
-
-    clonedScene.traverse((object) => {
-      if (object instanceof THREE.Mesh) {
-        object.castShadow = true;
-        object.receiveShadow = true;
+  const bagSource = useMemo(() => {
+    let mesh: THREE.Mesh | null = null;
+    gltf.scene.traverse((object) => {
+      if (!mesh && object instanceof THREE.Mesh) {
+        mesh = object;
       }
     });
-
-    return clonedScene;
+    return mesh as THREE.Mesh | null;
   }, [gltf.scene]);
 
   const modelMaterial = useMemo(
@@ -151,43 +176,60 @@ function BagModel({
   );
 
   useEffect(() => {
-    modelScene.traverse((object) => {
-      if (object instanceof THREE.Mesh) {
-        object.material = modelMaterial;
-      }
-    });
-
     return () => {
       modelMaterial.dispose();
     };
-  }, [modelMaterial, modelScene]);
+  }, [modelMaterial]);
 
-  const logoWidth = Math.min(0.86, 0.5 * logoScale * Math.max(aspectRatio, 0.65));
-  const logoHeight = Math.min(0.5, 0.5 * logoScale / Math.max(aspectRatio, 0.65));
-  const logoX = logoPositionX * 0.4;
-  const logoY = 0.36 + logoPositionY * 0.5;
+  if (!bagSource) return null;
+
+  const clampedAspect = Math.max(aspectRatio, 0.65);
+  const decalWidth = Math.min(0.86, 0.5 * logoScale * clampedAspect);
+  const decalHeight = Math.min(0.5, (0.5 * logoScale) / clampedAspect);
+  const decalX = logoPositionX * 0.42;
+  const decalY = DECAL_BASE_Y + logoPositionY * 0.55;
 
   return (
-    <group rotation={[0.02, -0.46, 0]} position={[0, -1.42, 0]} scale={MODEL_SCALE}>
-      <primitive object={modelScene} />
-
-      <mesh position={[0, 0.36, MODEL_FRONT_Z]} renderOrder={2}>
-        <planeGeometry args={[0.92, 0.58]} />
-        <meshStandardMaterial color="#ffffff" transparent opacity={texture ? 0.055 : 0.17} />
+    <group rotation={[0.02, -0.46, 0]} position={[0, -1.35, 0]} scale={MODEL_SCALE}>
+      <mesh
+        geometry={bagSource.geometry}
+        position={bagSource.position}
+        castShadow
+        receiveShadow
+        material={modelMaterial}
+      >
+        {texture ? (
+          <Decal
+            position={[decalX, decalY, DECAL_FRONT_Z]}
+            rotation={[0, 0, -THREE.MathUtils.degToRad(logoRotation)]}
+            scale={[decalWidth, decalHeight, 0.32]}
+            map={texture}
+            depthTest
+          />
+        ) : null}
       </mesh>
 
-      {texture ? (
-        <mesh position={[logoX, logoY, MODEL_FRONT_Z + 0.012]} renderOrder={3}>
-          <planeGeometry args={[logoWidth, logoHeight]} />
-          <meshStandardMaterial
-            map={texture}
-            transparent
-            alphaTest={0.04}
-            depthWrite={false}
-            side={THREE.DoubleSide}
-          />
+      {showLogoHint && !texture ? (
+        <mesh position={[0, 0.36, 0.31]} renderOrder={2}>
+          <planeGeometry args={[0.92, 0.58]} />
+          <meshStandardMaterial color="#ffffff" transparent opacity={0.18} depthWrite={false} />
         </mesh>
       ) : null}
+    </group>
+  );
+}
+
+function Pedestal() {
+  return (
+    <group position={[0, -1.75, 0]}>
+      <mesh receiveShadow position={[0, 0.035, 0]}>
+        <cylinderGeometry args={[1.62, 1.78, 0.07, 64]} />
+        <meshStandardMaterial color="#e6ddcc" roughness={0.96} metalness={0} />
+      </mesh>
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.073, 0]} receiveShadow>
+        <circleGeometry args={[1.58, 64]} />
+        <meshStandardMaterial color="#ded3bf" transparent opacity={0.55} roughness={1} />
+      </mesh>
     </group>
   );
 }
@@ -198,36 +240,52 @@ function ViewerScene({
   logoScale,
   logoPositionX,
   logoPositionY,
-  onScreenshotReady,
-}: BagModelProps) {
+  logoRotation,
+  autoRotate,
+  showLogoHint,
+  onApiReady,
+}: BagViewer3DProps) {
   const { camera, gl, scene } = useThree();
+  const controlsRef = useRef<OrbitControlsImpl | null>(null);
 
   useEffect(() => {
-    onScreenshotReady(async () => {
-      try {
-        gl.render(scene, camera);
-        return gl.domElement.toDataURL("image/png");
-      } catch {
-        return "";
-      }
+    onApiReady({
+      screenshot: async () => {
+        try {
+          gl.render(scene, camera);
+          return gl.domElement.toDataURL("image/png");
+        } catch {
+          return "";
+        }
+      },
+      resetView: () => {
+        camera.position.set(...DEFAULT_CAMERA_POSITION);
+        const controls = controlsRef.current;
+        if (controls) {
+          controls.target.set(...DEFAULT_TARGET);
+          controls.update();
+        }
+      },
     });
-  }, [camera, gl, onScreenshotReady, scene]);
+  }, [camera, gl, onApiReady, scene]);
 
   return (
     <>
-      <PerspectiveCamera makeDefault position={[0.28, 0.18, 8.2]} fov={32} />
+      <PerspectiveCamera makeDefault position={DEFAULT_CAMERA_POSITION} fov={32} />
       <OrbitControls
+        ref={controlsRef}
+        makeDefault
         enablePan={false}
-        target={[0, 0.1, 0]}
-        minDistance={5.8}
-        maxDistance={10}
-        minPolarAngle={0.85}
+        target={DEFAULT_TARGET}
+        minDistance={5.2}
+        maxDistance={11}
+        minPolarAngle={0.7}
         maxPolarAngle={1.72}
-        minAzimuthAngle={-1.18}
-        maxAzimuthAngle={0.55}
+        autoRotate={autoRotate}
+        autoRotateSpeed={1.5}
       />
 
-      <color attach="background" args={[colors.surfaceMuted]} />
+      <color attach="background" args={[BACKDROP_COLOR]} />
       <ambientLight intensity={1.15} />
       <hemisphereLight color="#fffaf3" groundColor="#d9d1c4" intensity={0.85} />
       <directionalLight
@@ -239,30 +297,24 @@ function ViewerScene({
       />
       <directionalLight position={[-3.5, 2, 3]} intensity={0.38} />
 
-      <BagModel
-        bagColor={bagColor}
-        logoUrl={logoUrl}
-        logoScale={logoScale}
-        logoPositionX={logoPositionX}
-        logoPositionY={logoPositionY}
-      />
+      <React.Suspense fallback={null}>
+        <BagModel
+          bagColor={bagColor}
+          logoUrl={logoUrl}
+          logoScale={logoScale}
+          logoPositionX={logoPositionX}
+          logoPositionY={logoPositionY}
+          logoRotation={logoRotation}
+          showLogoHint={showLogoHint}
+        />
+      </React.Suspense>
 
-      <mesh position={[0, -1.72, 0]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
-        <circleGeometry args={[2.4, 48]} />
-        <meshBasicMaterial color="#d9d1c5" transparent opacity={0.32} />
-      </mesh>
+      <Pedestal />
     </>
   );
 }
 
-export const BagViewer3D = ({
-  bagColor,
-  logoUrl,
-  logoScale,
-  logoPositionX,
-  logoPositionY,
-  onScreenshotReady,
-}: BagModelProps) => {
+export const BagViewer3D = (props: BagViewer3DProps) => {
   return (
     <div className="h-full w-full overflow-hidden">
       <Canvas
@@ -275,14 +327,7 @@ export const BagViewer3D = ({
         }}
         style={{ width: "100%", height: "100%" }}
       >
-        <ViewerScene
-          bagColor={bagColor}
-          logoUrl={logoUrl}
-          logoScale={logoScale}
-          logoPositionX={logoPositionX}
-          logoPositionY={logoPositionY}
-          onScreenshotReady={onScreenshotReady}
-        />
+        <ViewerScene {...props} />
       </Canvas>
     </div>
   );

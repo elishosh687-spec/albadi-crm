@@ -6,6 +6,21 @@ A complete 3D product configurator for non-woven bags built with Next.js, Three.
 
 **Route:** `/configurator`
 
+## UI Layout (2026-06-10 redesign)
+
+Full-screen immersive configurator (inspired by jewelry-designer style showrooms):
+
+- **Full-bleed 3D stage** — the canvas fills the viewport with a soft pastel backdrop and pedestal.
+- **Bottom dock** — compact floating pills, jewelry-configurator style:
+  - Tab pill: `בד וצבע` / `לוגו` / `הצעת מחיר`
+  - Color tab: horizontal scrollable swatch strip (all fabric colors)
+  - Logo tab: upload button → thumbnail + mini sliders (size / X / Y / rotation) + reset/remove
+  - Quote tab: total summary + button opening the quote drawer
+- **Right vertical toolbar** — reset view, auto-rotate, PNG snapshot, quote/PDF, fullscreen.
+- **Quote drawer** — slides in from the left with customer form, pricing, and PDF download.
+
+The logo is a real **drei `<Decal>`** projected onto the bag mesh (wraps the fabric surface, supports rotation), not a floating plane.
+
 ## Features Implemented ✅
 
 ### 1. **3D Bag Viewer**
@@ -114,12 +129,10 @@ app/configurator/
 ├── page.tsx                           # Route page component
 
 components/configurator/
-├── ProductConfigurator.tsx            # Main orchestrator component
-├── BagViewer3D.tsx                    # 3D Three.js canvas & scene
-├── ColorPalette.tsx                   # Color selection UI
-├── LogoUploader.tsx                   # File upload & preview
-├── LogoControls.tsx                   # Size/position sliders
-├── PricingContractForm.tsx            # Customer info & pricing
+├── ProductConfigurator.tsx            # Orchestrator: full-screen stage, bottom dock, toolbar, drawer
+├── BagViewer3D.tsx                    # 3D scene: GLB bag, Decal logo, camera api (screenshot/reset)
+├── configurator-state.ts              # Shared types + pricing helpers
+├── PricingContractForm.tsx            # Customer info & pricing (rendered in quote drawer)
 └── DownloadPdfButton.tsx              # PDF generation & download
 
 lib/constants/
@@ -234,12 +247,11 @@ None required for MVP. The configurator is completely client-side.
 
 ### Current Limitations
 
-1. **3D Model**: Procedurally generated bag - not a pre-built GLB model
-2. **Logo Decals**: Simple plane-based logo (not advanced decal system)
-3. **No Persistence**: Data not saved between sessions
-4. **No Database**: Customer info not stored
-5. **No Checkout**: PDF is endpoint, no order placement
-6. **No Email**: No automated email sending of contracts
+1. **Logo placement**: front face only (no back/sides/handles yet)
+2. **No Persistence**: Data not saved between sessions
+3. **No Database**: Customer info not stored
+4. **No Checkout**: PDF is endpoint, no order placement
+5. **No Email**: No automated email sending of contracts
 
 ### Future Enhancement Opportunities
 
@@ -250,7 +262,6 @@ None required for MVP. The configurator is completely client-side.
    - Add texture variations
 
 2. **Advanced Logo System**
-   - Drei Decal for better UV mapping
    - Multiple logo placements (front, back, sides, handles)
    - Pattern/texture overlays
 
