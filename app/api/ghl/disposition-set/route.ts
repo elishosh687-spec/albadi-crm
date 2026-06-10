@@ -90,18 +90,72 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     return badRequest("invalid json");
   }
 
-  const contactId = typeof body.contactId === "string" ? body.contactId.trim() : "";
-  const disposition =
-    typeof body.disposition === "string" ? body.disposition.trim() : "";
-  const opportunityId =
-    typeof body.opportunityId === "string" && body.opportunityId.trim()
-      ? body.opportunityId.trim()
-      : null;
-  const callId =
-    typeof body.callId === "string" && body.callId.trim() ? body.callId.trim() : null;
+  // DEBUG: log the FULL body (capped at 4KB) so we can discover which merge
+  // tag GHL actually uses for "Custom Disposition Name" — the picker labels
+  // vary by GHL version and the names aren't documented. Remove this log
+  // once we've stabilized the field discovery path.
+  try {
+    const bodyStr = JSON.stringify(body);
+    console.log(
+      `[ghl.disposition-set] RAW_BODY (${bodyStr.length}b): ${bodyStr.slice(0, 4000)}`
+    );
+  } catch {
+    /* ignore */
+  }
 
-  if (!contactId) return badRequest("missing contactId");
-  if (!disposition) return badRequest("missing disposition");
+  // Field discovery — GHL might send the contact id under multiple key names
+  // depending on the workflow trigger / standard-data shape. Try them all.
+  const pickStr = (...keys: string[]): string => {
+    for (const k of keys) {
+      const v = body[k];
+      if (typeof v === "string" && v.trim()) return v.trim();
+    }
+    return "";
+  };
+
+  const contactId = pickStr(
+    "contactId",
+    "contact_id",
+    "contact.id",
+    "id" // when triggered from Contact-level trigger
+  );
+  const disposition = pickStr(
+    "disposition",
+    "callDisposition",
+    "call_disposition",
+    "customDisposition",
+    "custom_disposition",
+    "dispositionName",
+    "disposition_name"
+  );
+  const opportunityId =
+    pickStr("opportunityId", "opportunity_id", "opportunity.id") || null;
+  const callId =
+    pickStr("callId", "call_id", "messageId", "message_id") || null;
+
+  if (!contactId) {
+    console.warn(
+      `[ghl.disposition-set] missing contactId — body keys: ${Object.keys(body).join(",")}`
+    );
+    return NextResponse.json({
+      ok: true,
+      noop: true,
+      reason: "missing_contactId",
+      bodyKeys: Object.keys(body),
+    });
+  }
+  if (!disposition) {
+    console.warn(
+      `[ghl.disposition-set] missing disposition — body keys: ${Object.keys(body).join(",")}`
+    );
+    return NextResponse.json({
+      ok: true,
+      noop: true,
+      reason: "missing_disposition",
+      bodyKeys: Object.keys(body),
+      hint: "check GHL workflow Custom Data — add 'disposition' field with merge tag for call disposition name",
+    });
+  }
 
   // Quick existence check on rule. If unknown, log and 200 (no retry value).
   const rule = findRule(disposition);
