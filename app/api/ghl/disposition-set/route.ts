@@ -41,7 +41,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { bridgeEvents } from "@/drizzle/schema";
 import { handleDisposition } from "@/lib/dispositions/handler";
-import { findRule } from "@/lib/dispositions/config";
+import { findRule, DISPOSITION_RULES } from "@/lib/dispositions/config";
+import { findMostRecentCallForContact } from "@/integrations/ghl/client";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
@@ -144,36 +145,107 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       bodyKeys: Object.keys(body),
     });
   }
+
+  // ---------------------------------------------------------------------
+  // Disposition discovery — GHL's Custom Webhook doesn't reliably include
+  // the disposition the user picked. Fallback: query the API for the most
+  // recent call on this contact and try to extract the disposition from
+  // its metadata. We dump the full message JSON to logs so we can pick the
+  // right field path on first sighting (different GHL versions stash it
+  // in different places).
+  // ---------------------------------------------------------------------
+  let discoveredCallId = callId;
+  let dispositionFromAPI: string | null = null;
   if (!disposition) {
+    try {
+      const lastCall = await findMostRecentCallForContact(contactId);
+      if (lastCall) {
+        try {
+          const json = JSON.stringify(lastCall);
+          console.log(
+            `[ghl.disposition-set] LAST_CALL_RAW (${json.length}b): ${json.slice(0, 3500)}`
+          );
+        } catch {
+          /* ignore */
+        }
+        // Try every plausible field path. We accept the first non-empty
+        // match. As soon as we know which one GHL actually uses, we can
+        // trim this list.
+        const candidates = [
+          lastCall.disposition,
+          lastCall.customDisposition,
+          lastCall.dispositionName,
+          (lastCall.meta as { disposition?: unknown } | undefined)?.disposition,
+          (lastCall.meta as { customDisposition?: unknown } | undefined)?.customDisposition,
+          (lastCall.meta as { callDisposition?: unknown } | undefined)?.callDisposition,
+          ((lastCall.meta as { call?: { disposition?: unknown } } | undefined)?.call)?.disposition,
+          ((lastCall.meta as { call?: { customDisposition?: unknown } } | undefined)?.call)?.customDisposition,
+          ((lastCall.meta as { call?: { dispositionName?: unknown } } | undefined)?.call)?.dispositionName,
+        ];
+        for (const c of candidates) {
+          if (typeof c === "string" && c.trim()) {
+            dispositionFromAPI = c.trim();
+            break;
+          }
+        }
+        // If we got an id from the call message and the webhook didn't
+        // include one, use it for dedupe.
+        const lcId = lastCall.id;
+        if (!discoveredCallId && typeof lcId === "string" && lcId)
+          discoveredCallId = lcId;
+        // Heuristic last-resort: try matching the rule names against any
+        // string value in the call json (covers free-form disposition
+        // storage where the field name varies).
+        if (!dispositionFromAPI) {
+          const flat = JSON.stringify(lastCall);
+          for (const rule of DISPOSITION_RULES) {
+            if (flat.includes(rule.name)) {
+              dispositionFromAPI = rule.name;
+              break;
+            }
+          }
+        }
+      } else {
+        console.warn(
+          `[ghl.disposition-set] no recent call found for contactId=${contactId}`
+        );
+      }
+    } catch (e) {
+      console.warn(`[ghl.disposition-set] API call lookup failed`, e);
+    }
+  }
+
+  const effectiveDisposition = disposition || dispositionFromAPI || "";
+  if (!effectiveDisposition) {
     console.warn(
-      `[ghl.disposition-set] missing disposition — body keys: ${Object.keys(body).join(",")}`
+      `[ghl.disposition-set] disposition not in webhook AND not in last call — giving up`
     );
     return NextResponse.json({
       ok: true,
       noop: true,
-      reason: "missing_disposition",
+      reason: "disposition_not_found",
       bodyKeys: Object.keys(body),
-      hint: "check GHL workflow Custom Data — add 'disposition' field with merge tag for call disposition name",
+      hint: "GHL did not include disposition in webhook payload and we couldn't find it on the most recent call message. Check Vercel logs for LAST_CALL_RAW to see which field stores it.",
     });
   }
 
   // Quick existence check on rule. If unknown, log and 200 (no retry value).
-  const rule = findRule(disposition);
+  const rule = findRule(effectiveDisposition);
   if (!rule) {
     console.warn(
-      `[ghl.disposition-set] unknown disposition "${disposition}" — add to lib/dispositions/config.ts`
+      `[ghl.disposition-set] unknown disposition "${effectiveDisposition}" — add to lib/dispositions/config.ts`
     );
     return NextResponse.json({
       ok: true,
       noop: true,
       reason: "unknown_disposition",
-      disposition,
+      disposition: effectiveDisposition,
     });
   }
 
   // Idempotency — same call event firing twice (GHL retry / dual workflow
   // entry) becomes a no-op. evt_id collapses on (callId, disposition).
-  const evtId = `disposition:${callId || `${contactId}:${disposition}:${body.timestamp || Date.now()}`}`;
+  const evtId = `disposition:${discoveredCallId || `${contactId}:${effectiveDisposition}:${body.timestamp || Date.now()}`}`;
   const inserted = await db
     .insert(bridgeEvents)
     .values({
@@ -191,14 +263,14 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   }
 
   console.log(
-    `[ghl.disposition-set] processing disposition="${disposition}" contactId=${contactId} oppId=${opportunityId ?? "none"}`
+    `[ghl.disposition-set] processing disposition="${effectiveDisposition}" contactId=${contactId} oppId=${opportunityId ?? "none"} (source: ${disposition ? "webhook" : "api_lookup"})`
   );
 
   try {
     const result = await handleDisposition({
       contactId,
       opportunityId,
-      disposition,
+      disposition: effectiveDisposition,
     });
     return NextResponse.json({ ok: true, ...result });
   } catch (e) {
