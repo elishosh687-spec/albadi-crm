@@ -538,7 +538,7 @@ interface BridgeMediaUpload {
  * POST /v1/media (raw body, NOT JSON). Returns the staged media_id, which
  * /v1/messages will accept under the `media_id` field.
  */
-async function uploadBridgeMediaFromUrl(
+export async function uploadBridgeMediaFromUrl(
   url: string,
   filenameOverride?: string
 ): Promise<string> {

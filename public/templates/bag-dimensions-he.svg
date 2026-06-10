@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 900" width="1200" height="900" font-family="Heebo, Arial, sans-serif">
+  <!-- Background -->
+  <rect width="1200" height="900" fill="#f3f4e8"/>
+
+  <!-- Title -->
+  <text x="600" y="60" font-size="36" font-weight="700" text-anchor="middle" fill="#1f2937" direction="rtl">איך מודדים שקית? מדריך מהיר</text>
+  <text x="600" y="95" font-size="18" text-anchor="middle" fill="#6b7280" direction="rtl">לפני שמתחילים את השאלון — חשוב לדעת מה כל מידה</text>
+
+  <!-- 3D box: front + top + right faces -->
+  <!-- Front face -->
+  <polygon points="280,250 800,250 800,750 280,750" fill="#cbd6f0" stroke="#1f2937" stroke-width="3"/>
+
+  <!-- Top face (parallelogram) -->
+  <polygon points="280,250 380,170 900,170 800,250" fill="#dbe5fa" stroke="#1f2937" stroke-width="3"/>
+
+  <!-- Right face (parallelogram) -->
+  <polygon points="800,250 900,170 900,670 800,750" fill="#9bb1d8" stroke="#1f2937" stroke-width="3"/>
+
+  <!-- Top opening dashed line on front face -->
+  <line x1="280" y1="285" x2="800" y2="285" stroke="#374151" stroke-width="2" stroke-dasharray="10,6"/>
+
+  <!-- "פתח השקית" label on top -->
+  <text x="540" y="330" font-size="22" fill="#374151" text-anchor="middle" font-style="italic" direction="rtl">← פתח השקית →</text>
+
+  <!-- ============ Width arrow (RED) — bottom ============ -->
+  <line x1="280" y1="810" x2="800" y2="810" stroke="#dc2626" stroke-width="6" marker-start="url(#arrowRedL)" marker-end="url(#arrowRedR)"/>
+  <!-- Bottom guide dashes -->
+  <line x1="280" y1="750" x2="280" y2="820" stroke="#dc2626" stroke-width="2" stroke-dasharray="6,4"/>
+  <line x1="800" y1="750" x2="800" y2="820" stroke="#dc2626" stroke-width="2" stroke-dasharray="6,4"/>
+
+  <text x="540" y="870" font-size="32" font-weight="700" fill="#dc2626" text-anchor="middle" direction="rtl">רוחב (W)</text>
+
+  <!-- ============ Height arrow (BLUE) — left side ============ -->
+  <line x1="220" y1="250" x2="220" y2="750" stroke="#1e3a8a" stroke-width="6" marker-start="url(#arrowBlueT)" marker-end="url(#arrowBlueB)"/>
+  <!-- Left guide dashes -->
+  <line x1="280" y1="250" x2="210" y2="250" stroke="#1e3a8a" stroke-width="2" stroke-dasharray="6,4"/>
+  <line x1="280" y1="750" x2="210" y2="750" stroke="#1e3a8a" stroke-width="2" stroke-dasharray="6,4"/>
+
+  <text x="120" y="495" font-size="32" font-weight="700" fill="#1e3a8a" text-anchor="middle" direction="rtl" transform="rotate(-90 120 495)">גובה (H)</text>
+  <text x="170" y="510" font-size="16" fill="#475569" text-anchor="middle" direction="rtl" transform="rotate(-90 170 510)">מלמעלה למטה</text>
+
+  <!-- ============ Depth arrow (GREEN) — top-right diagonal ============ -->
+  <line x1="800" y1="250" x2="900" y2="170" stroke="#15803d" stroke-width="6" marker-start="url(#arrowGreenS)" marker-end="url(#arrowGreenE)"/>
+
+  <!-- Depth label box on top-right -->
+  <rect x="930" y="180" width="240" height="180" fill="#ffffff" stroke="#15803d" stroke-width="2" rx="10"/>
+  <text x="1050" y="220" font-size="26" font-weight="700" fill="#15803d" text-anchor="middle" direction="rtl">עומק (D)</text>
+  <text x="1050" y="255" font-size="16" fill="#374151" text-anchor="middle" direction="rtl">נקרא גם "גוזט"</text>
+  <text x="1050" y="295" font-size="15" fill="#6b7280" text-anchor="middle" direction="rtl">כמה השקית מתרחבת</text>
+  <text x="1050" y="320" font-size="15" fill="#6b7280" text-anchor="middle" direction="rtl">כשהיא מלאה</text>
+  <text x="1050" y="350" font-size="13" fill="#9ca3af" text-anchor="middle" direction="rtl">(0 = שקית שטוחה)</text>
+
+  <!-- ============ Legend bottom-right ============ -->
+  <rect x="950" y="700" width="220" height="170" fill="#ffffff" stroke="#1f2937" stroke-width="1.5" rx="8"/>
+  <text x="1060" y="730" font-size="20" font-weight="700" fill="#1f2937" text-anchor="middle" direction="rtl">מקרא</text>
+
+  <line x1="980" y1="755" x2="1020" y2="755" stroke="#dc2626" stroke-width="5"/>
+  <text x="1150" y="762" font-size="17" fill="#1f2937" text-anchor="end" direction="rtl">רוחב</text>
+
+  <line x1="980" y1="785" x2="1020" y2="785" stroke="#1e3a8a" stroke-width="5"/>
+  <text x="1150" y="792" font-size="17" fill="#1f2937" text-anchor="end" direction="rtl">גובה</text>
+
+  <line x1="980" y1="815" x2="1020" y2="815" stroke="#15803d" stroke-width="5"/>
+  <text x="1150" y="822" font-size="17" fill="#1f2937" text-anchor="end" direction="rtl">עומק</text>
+
+  <text x="1060" y="855" font-size="13" fill="#6b7280" text-anchor="middle" direction="rtl">W × H × D (ס״מ)</text>
+
+  <!-- Arrow markers -->
+  <defs>
+    <marker id="arrowRedL" viewBox="0 0 12 12" refX="2" refY="6" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M 12 0 L 0 6 L 12 12 Z" fill="#dc2626"/>
+    </marker>
+    <marker id="arrowRedR" viewBox="0 0 12 12" refX="10" refY="6" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M 0 0 L 12 6 L 0 12 Z" fill="#dc2626"/>
+    </marker>
+    <marker id="arrowBlueT" viewBox="0 0 12 12" refX="6" refY="2" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M 0 12 L 6 0 L 12 12 Z" fill="#1e3a8a"/>
+    </marker>
+    <marker id="arrowBlueB" viewBox="0 0 12 12" refX="6" refY="10" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M 0 0 L 6 12 L 12 0 Z" fill="#1e3a8a"/>
+    </marker>
+    <marker id="arrowGreenS" viewBox="0 0 12 12" refX="2" refY="6" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M 12 0 L 0 6 L 12 12 Z" fill="#15803d"/>
+    </marker>
+    <marker id="arrowGreenE" viewBox="0 0 12 12" refX="10" refY="6" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M 0 0 L 12 6 L 0 12 Z" fill="#15803d"/>
+    </marker>
+  </defs>
+</svg>
