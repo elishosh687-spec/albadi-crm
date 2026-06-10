@@ -604,21 +604,13 @@ export const ProductConfigurator: React.FC = () => {
                 {colorCopied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
               </button>
             </div>
-            <div
-              style={{
-                ...PILL_STYLE,
-                maxWidth: "100%",
-                padding: `${space.sm}px ${space.md}px ${space.sm}px`,
-              }}
-            >
-              <ColorSwatchRail
-                colors={BAG_COLORS}
-                selectedHex={selectedColorHex}
-                onSelect={setSelectedColorHex}
-                compact={isCompact}
-                scrollToSelection={activeTab === "color"}
-              />
-            </div>
+            <ColorSwatchRail
+              colors={BAG_COLORS}
+              selectedHex={selectedColorHex}
+              onSelect={setSelectedColorHex}
+              compact={isCompact}
+              scrollToSelection={activeTab === "color"}
+            />
           </>
         ) : null}
 

@@ -1,14 +1,26 @@
 "use client";
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
+import Swiper from "swiper";
+import { FreeMode, Mousewheel } from "swiper/modules";
+import type { Swiper as SwiperInstance } from "swiper";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import type { BagColor } from "@/lib/constants/bagColors";
 import { colors, radius, space } from "@/lib/ui/tokens";
 
-const PILL_SURFACE = "rgba(255,255,255,0.98)";
-const FADE_WIDTH = 36;
-const VIEWPORT_PAD_INLINE = 34;
-const SCROLL_STEP = 132;
+import "swiper/css";
+import "swiper/css/free-mode";
+
+const SCROLL_INDEX_STEP = 5;
+
+const PILL_STYLE: React.CSSProperties = {
+  background: "rgba(255,255,255,0.92)",
+  backdropFilter: "blur(10px)",
+  WebkitBackdropFilter: "blur(10px)",
+  borderRadius: radius.full,
+  border: `1px solid ${colors.ruleSoft}`,
+  boxShadow: "0 8px 28px rgba(28,24,21,0.12)",
+};
 
 interface ColorSwatchRailProps {
   colors: BagColor[];
@@ -25,331 +37,263 @@ export function ColorSwatchRail({
   compact = false,
   scrollToSelection = false,
 }: ColorSwatchRailProps) {
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const trackRef = useRef<HTMLDivElement>(null);
-  const [canScrollPrev, setCanScrollPrev] = useState(false);
-  const [canScrollNext, setCanScrollNext] = useState(false);
+  const swiperContainerRef = useRef<HTMLDivElement>(null);
+  const swiperRef = useRef<SwiperInstance | null>(null);
+  const progressRef = useRef<HTMLDivElement>(null);
+  const [canScrollStart, setCanScrollStart] = useState(false);
+  const [canScrollEnd, setCanScrollEnd] = useState(false);
   const [scrollProgress, setScrollProgress] = useState(0);
-  const [thumbDragging, setThumbDragging] = useState(false);
-  const [trackWidth, setTrackWidth] = useState(0);
+  const [thumbWidth, setThumbWidth] = useState(40);
+  const [thumbLeft, setThumbLeft] = useState(0);
+  const [draggingProgress, setDraggingProgress] = useState(false);
 
-  const swatchSize = compact ? 30 : 34;
-  const slideGap = compact ? space.sm : 10;
-  const viewportPadInline = compact ? 28 : VIEWPORT_PAD_INLINE;
+  const swatchSize = compact ? 28 : 32;
+  const anchorSize = compact ? 32 : 36;
 
-  const syncChrome = useCallback(() => {
-    const element = scrollRef.current;
-    if (!element) return;
+  const syncChrome = useCallback(
+    (swiper: SwiperInstance) => {
+      setCanScrollStart(!swiper.isBeginning);
+      setCanScrollEnd(!swiper.isEnd);
+      setScrollProgress(swiper.progress);
 
-    const { scrollLeft, scrollWidth, clientWidth } = element;
-    const maxScroll = Math.max(0, scrollWidth - clientWidth);
-
-    setCanScrollPrev(scrollLeft > 2);
-    setCanScrollNext(scrollLeft < maxScroll - 2);
-    setScrollProgress(maxScroll > 0 ? scrollLeft / maxScroll : 0);
-  }, []);
+      const track = progressRef.current;
+      if (track) {
+        const trackWidth = track.clientWidth;
+        const width = Math.max(32, trackWidth / Math.max(swatches.length / 5.5, 1));
+        const travel = Math.max(0, trackWidth - width);
+        setThumbWidth(width);
+        setThumbLeft(swiper.progress * travel);
+      }
+    },
+    [swatches.length]
+  );
 
   useEffect(() => {
-    const scrollElement = scrollRef.current;
-    const trackElement = trackRef.current;
-    if (!scrollElement) return;
+    const container = swiperContainerRef.current;
+    if (!container || swatches.length === 0) return;
 
-    syncChrome();
-
-    const resizeObserver = new ResizeObserver(() => {
-      syncChrome();
-      if (trackElement) setTrackWidth(trackElement.clientWidth);
+    const swiper = new Swiper(container, {
+      modules: [FreeMode, Mousewheel],
+      slidesPerView: "auto",
+      spaceBetween: compact ? 6 : 8,
+      freeMode: {
+        enabled: true,
+        momentum: true,
+        sticky: true,
+      },
+      mousewheel: {
+        forceToAxis: true,
+        sensitivity: 0.8,
+      },
+      resistanceRatio: 0.65,
+      watchOverflow: true,
+      on: {
+        progress: (instance) => syncChrome(instance),
+        slideChange: (instance) => syncChrome(instance),
+        resize: (instance) => syncChrome(instance),
+        init: (instance) => syncChrome(instance),
+      },
     });
 
-    resizeObserver.observe(scrollElement);
-    if (trackElement) {
-      resizeObserver.observe(trackElement);
-      setTrackWidth(trackElement.clientWidth);
-    }
-
-    scrollElement.addEventListener("scroll", syncChrome, { passive: true });
-
-    const onWheel = (event: WheelEvent) => {
-      if (Math.abs(event.deltaY) <= Math.abs(event.deltaX)) return;
-      event.preventDefault();
-      scrollElement.scrollLeft += event.deltaY;
-    };
-    scrollElement.addEventListener("wheel", onWheel, { passive: false });
+    swiperRef.current = swiper;
+    syncChrome(swiper);
 
     return () => {
-      resizeObserver.disconnect();
-      scrollElement.removeEventListener("scroll", syncChrome);
-      scrollElement.removeEventListener("wheel", onWheel);
+      swiper.destroy(true, true);
+      swiperRef.current = null;
     };
-  }, [syncChrome, swatches.length]);
+  }, [compact, swatches.length, syncChrome]);
 
   useEffect(() => {
-    if (!scrollToSelection) return;
+    const swiper = swiperRef.current;
+    if (!swiper || !scrollToSelection) return;
 
-    const selectedButton = scrollRef.current?.querySelector<HTMLButtonElement>(
-      `[data-color-hex="${selectedHex}"]`
-    );
-    selectedButton?.scrollIntoView({
-      inline: "center",
-      block: "nearest",
-      behavior: "smooth",
-    });
+    const index = swatches.findIndex((color) => color.hex === selectedHex);
+    if (index < 0) return;
 
-    const frame = window.requestAnimationFrame(syncChrome);
-    return () => window.cancelAnimationFrame(frame);
-  }, [scrollToSelection, selectedHex, syncChrome]);
+    swiper.slideTo(index, 280);
+    window.requestAnimationFrame(() => syncChrome(swiper));
+  }, [scrollToSelection, selectedHex, swatches, syncChrome]);
 
-  const scrollByStep = useCallback((direction: -1 | 1) => {
-    scrollRef.current?.scrollBy({
-      left: direction * SCROLL_STEP,
-      behavior: "smooth",
-    });
-  }, []);
+  const scrollTowardEnd = () => {
+    const swiper = swiperRef.current;
+    if (!swiper || swiper.isEnd) return;
+    swiper.slideTo(Math.min(swiper.activeIndex + SCROLL_INDEX_STEP, swatches.length - 1), 280);
+  };
 
-  const seekToProgress = useCallback((progress: number) => {
-    const element = scrollRef.current;
-    if (!element) return;
+  const scrollTowardStart = () => {
+    const swiper = swiperRef.current;
+    if (!swiper || swiper.isBeginning) return;
+    swiper.slideTo(Math.max(swiper.activeIndex - SCROLL_INDEX_STEP, 0), 280);
+  };
 
-    const maxScroll = Math.max(0, element.scrollWidth - element.clientWidth);
-    if (maxScroll <= 0) return;
+  const seekProgress = (ratio: number) => {
+    const swiper = swiperRef.current;
+    if (!swiper) return;
+    const clamped = Math.max(0, Math.min(1, ratio));
+    swiper.setProgress(clamped, 0);
+    syncChrome(swiper);
+  };
 
-    const clamped = Math.max(0, Math.min(1, progress));
-    element.scrollLeft = clamped * maxScroll;
-    syncChrome();
-  }, [syncChrome]);
+  const handleProgressPointer = (clientX: number) => {
+    const track = progressRef.current;
+    if (!track || track.clientWidth <= 0) return;
+    const rect = track.getBoundingClientRect();
+    seekProgress((clientX - rect.left) / rect.width);
+  };
 
-  const handleTrackPointer = useCallback(
-    (clientX: number) => {
-      const track = trackRef.current;
-      if (!track || track.clientWidth <= 0) return;
-      const rect = track.getBoundingClientRect();
-      seekToProgress((clientX - rect.left) / rect.width);
-    },
-    [seekToProgress]
-  );
+  if (swatches.length === 0) return null;
 
-  const thumbWidthPx = Math.max(
-    compact ? 28 : 36,
-    trackWidth > 0 ? trackWidth / Math.max(swatches.length / 5.5, 1) : compact ? 28 : 36
-  );
-  const thumbLeftPx =
-    trackWidth > thumbWidthPx ? scrollProgress * (trackWidth - thumbWidthPx) : 0;
-
-  const edgeMask = `linear-gradient(to right, ${
-    canScrollPrev ? "transparent 0%, black 28px" : "black 0%"
-  }, black calc(100% - ${canScrollNext ? "28px" : "0px"}), ${
-    canScrollNext ? "transparent 100%" : "black 100%"
-  })`;
-
-  if (swatches.length === 0) {
-    return null;
-  }
+  const anchorButtonStyle = (enabled: boolean): React.CSSProperties => ({
+    flexShrink: 0,
+    width: anchorSize,
+    height: anchorSize,
+    display: "grid",
+    placeItems: "center",
+    borderRadius: radius.full,
+    border: `1px solid ${enabled ? colors.rule : colors.ruleSoft}`,
+    background: enabled ? "rgba(255,255,255,0.98)" : "rgba(255,255,255,0.55)",
+    color: enabled ? colors.ink : colors.inkSubtle,
+    cursor: enabled ? "pointer" : "default",
+    boxShadow: enabled ? "0 4px 16px rgba(28,24,21,0.12)" : "none",
+    transition: "opacity 160ms ease, box-shadow 160ms ease",
+  });
 
   return (
-    <div style={{ position: "relative", width: "100%", userSelect: "none" }}>
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: compact ? 8 : 12,
+        width: "100%",
+        userSelect: "none",
+      }}
+    >
       <style>{`
-        .color-swatch-rail-scroll {
-          scrollbar-width: none;
-          -ms-overflow-style: none;
+        .color-swatch-swiper {
+          overflow: hidden;
+          width: 100%;
         }
-        .color-swatch-rail-scroll::-webkit-scrollbar {
-          display: none;
+        .color-swatch-swiper .swiper-wrapper {
+          align-items: center;
         }
       `}</style>
-
-      {canScrollPrev ? (
-        <div
-          aria-hidden="true"
-          style={{
-            position: "absolute",
-            insetInlineStart: 0,
-            top: 0,
-            bottom: 22,
-            width: FADE_WIDTH,
-            zIndex: 4,
-            pointerEvents: "none",
-            background: `linear-gradient(to right, ${PILL_SURFACE} 15%, rgba(255,255,255,0))`,
-          }}
-        />
-      ) : null}
-
-      {canScrollNext ? (
-        <div
-          aria-hidden="true"
-          style={{
-            position: "absolute",
-            insetInlineEnd: 0,
-            top: 0,
-            bottom: 22,
-            width: FADE_WIDTH,
-            zIndex: 4,
-            pointerEvents: "none",
-            background: `linear-gradient(to left, ${PILL_SURFACE} 15%, rgba(255,255,255,0))`,
-          }}
-        />
-      ) : null}
-
-      {canScrollPrev ? (
-        <button
-          type="button"
-          aria-label="צבעים קודמים"
-          onClick={() => scrollByStep(-1)}
-          style={{
-            position: "absolute",
-            insetInlineStart: 2,
-            top: "calc(50% - 10px)",
-            transform: "translateY(-50%)",
-            zIndex: 5,
-            width: compact ? 26 : 30,
-            height: compact ? 26 : 30,
-            display: "grid",
-            placeItems: "center",
-            borderRadius: radius.full,
-            border: `1px solid ${colors.rule}`,
-            background: "rgba(255,255,255,0.95)",
-            color: colors.ink,
-            cursor: "pointer",
-            boxShadow: "0 4px 14px rgba(28,24,21,0.12)",
-          }}
-        >
-          <ChevronLeft className={compact ? "size-3.5" : "size-4"} />
-        </button>
-      ) : null}
-
-      {canScrollNext ? (
-        <button
-          type="button"
-          aria-label="צבעים הבאים"
-          onClick={() => scrollByStep(1)}
-          style={{
-            position: "absolute",
-            insetInlineEnd: 2,
-            top: "calc(50% - 10px)",
-            transform: "translateY(-50%)",
-            zIndex: 5,
-            width: compact ? 26 : 30,
-            height: compact ? 26 : 30,
-            display: "grid",
-            placeItems: "center",
-            borderRadius: radius.full,
-            border: `1px solid ${colors.rule}`,
-            background: "rgba(255,255,255,0.95)",
-            color: colors.ink,
-            cursor: "pointer",
-            boxShadow: "0 4px 14px rgba(28,24,21,0.12)",
-          }}
-        >
-          <ChevronRight className={compact ? "size-3.5" : "size-4"} />
-        </button>
-      ) : null}
+      {/* Outside anchor — toward palette end (›) */}
+      <button
+        type="button"
+        aria-label="גלול לסוף הרשימה"
+        onClick={scrollTowardEnd}
+        disabled={!canScrollEnd}
+        style={anchorButtonStyle(canScrollEnd)}
+      >
+        <ChevronRight className={compact ? "size-4" : "size-[18px]"} strokeWidth={2.25} />
+      </button>
 
       <div
-        ref={scrollRef}
-        className="color-swatch-rail-scroll"
         style={{
-          overflowX: "auto",
-          overflowY: "hidden",
-          paddingInline: viewportPadInline,
-          paddingBlock: `${space.xs}px 12px`,
-          WebkitMaskImage: edgeMask,
-          maskImage: edgeMask,
-          WebkitOverflowScrolling: "touch",
-          scrollBehavior: "smooth",
-          scrollSnapType: "x proximity",
+          ...PILL_STYLE,
+          position: "relative",
+          flex: 1,
+          minWidth: 0,
+          padding: `${space.md}px ${space.lg}px`,
         }}
       >
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            width: "max-content",
-            gap: slideGap,
-          }}
-        >
-          {swatches.map((color) => {
-            const isSelected = selectedHex === color.hex;
-            return (
-              <button
-                key={color.id}
-                type="button"
-                data-color-hex={color.hex}
-                title={`${color.name} · ${color.sku} · ${color.hex.toUpperCase()}`}
-                aria-label={`בחר צבע ${color.name} ${color.sku}`}
-                aria-pressed={isSelected ? "true" : "false"}
-                onClick={() => onSelect(color.hex)}
-                className="transition-all duration-200 ease-out hover:scale-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
-                style={{
-                  width: swatchSize,
-                  height: swatchSize,
-                  flexShrink: 0,
-                  borderRadius: radius.full,
-                  border: `2px solid ${colors.surface}`,
-                  background: color.hex,
-                  cursor: "pointer",
-                  boxShadow: isSelected
-                    ? `0 0 0 2px ${colors.accent}, 0 6px 16px rgba(28,24,21,0.18)`
-                    : `0 0 0 1px ${colors.rule}`,
-                  transform: isSelected ? "scale(1.14)" : "scale(1)",
-                  outlineColor: colors.accent,
-                  scrollSnapAlign: "center",
-                }}
-              />
-            );
-          })}
+        <div ref={swiperContainerRef} className="swiper color-swatch-swiper">
+          <div className="swiper-wrapper">
+            {swatches.map((color) => {
+              const isSelected = selectedHex === color.hex;
+              return (
+                <div
+                  key={color.id}
+                  className="swiper-slide"
+                  style={{ width: "auto", height: "auto" }}
+                >
+                  <button
+                    type="button"
+                    data-color-hex={color.hex}
+                    title={`${color.name} · ${color.sku} · ${color.hex.toUpperCase()}`}
+                    aria-label={`בחר צבע ${color.name} ${color.sku}`}
+                    aria-pressed={isSelected ? "true" : "false"}
+                    onClick={() => onSelect(color.hex)}
+                    className="transition-transform duration-150 ease-out hover:scale-105"
+                    style={{
+                      width: swatchSize,
+                      height: swatchSize,
+                      borderRadius: radius.full,
+                      border: `2px solid ${colors.surface}`,
+                      background: color.hex,
+                      cursor: "pointer",
+                      boxShadow: isSelected
+                        ? `0 0 0 2px ${colors.accent}, 0 4px 12px rgba(28,24,21,0.16)`
+                        : `0 0 0 1px ${colors.rule}`,
+                      transform: isSelected ? "scale(1.1)" : undefined,
+                    }}
+                  />
+                </div>
+              );
+            })}
+          </div>
         </div>
+
+        {swatches.length > 1 ? (
+          <div
+            ref={progressRef}
+            role="slider"
+            aria-label="מיקום ברשימת הצבעים"
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={Math.round(scrollProgress * 100)}
+            onPointerDown={(event) => {
+              event.preventDefault();
+              setDraggingProgress(true);
+              handleProgressPointer(event.clientX);
+              event.currentTarget.setPointerCapture(event.pointerId);
+            }}
+            onPointerMove={(event) => {
+              if (!draggingProgress) return;
+              handleProgressPointer(event.clientX);
+            }}
+            onPointerUp={(event) => {
+              setDraggingProgress(false);
+              event.currentTarget.releasePointerCapture(event.pointerId);
+            }}
+            onPointerCancel={() => setDraggingProgress(false)}
+            style={{
+              position: "relative",
+              height: compact ? 4 : 5,
+              marginTop: space.xs,
+              borderRadius: radius.full,
+              background: colors.ruleSoft,
+              cursor: "pointer",
+              overflow: "hidden",
+            }}
+          >
+            <div
+              style={{
+                position: "absolute",
+                top: 0,
+                bottom: 0,
+                left: thumbLeft,
+                width: thumbWidth,
+                borderRadius: radius.full,
+                background: colors.inkMuted,
+                transition: draggingProgress ? "none" : "left 120ms ease, width 120ms ease",
+              }}
+            />
+          </div>
+        ) : null}
       </div>
 
-      {swatches.length > 1 ? (
-        <div
-          ref={trackRef}
-          role="slider"
-          aria-label="מיקום ברשימת הצבעים"
-          aria-valuemin={0}
-          aria-valuemax={100}
-          aria-valuenow={Math.round(scrollProgress * 100)}
-          onPointerDown={(event) => {
-            event.preventDefault();
-            setThumbDragging(true);
-            handleTrackPointer(event.clientX);
-            event.currentTarget.setPointerCapture(event.pointerId);
-          }}
-          onPointerMove={(event) => {
-            if (!thumbDragging) return;
-            handleTrackPointer(event.clientX);
-          }}
-          onPointerUp={(event) => {
-            setThumbDragging(false);
-            event.currentTarget.releasePointerCapture(event.pointerId);
-          }}
-          onPointerCancel={() => setThumbDragging(false)}
-          style={{
-            position: "relative",
-            height: compact ? 5 : 6,
-            marginInline: viewportPadInline,
-            marginTop: 2,
-            borderRadius: radius.full,
-            background: colors.ruleSoft,
-            cursor: "pointer",
-            overflow: "hidden",
-          }}
-        >
-          <div
-            style={{
-              position: "absolute",
-              top: 0,
-              bottom: 0,
-              left: thumbLeftPx,
-              width: thumbWidthPx,
-              borderRadius: radius.full,
-              background: `linear-gradient(90deg, ${colors.inkSubtle}, ${colors.inkMuted})`,
-              boxShadow: thumbDragging
-                ? "0 0 0 2px rgba(156,66,33,0.25)"
-                : "0 1px 3px rgba(28,24,21,0.15)",
-              transition: thumbDragging ? "none" : "left 140ms ease, width 140ms ease",
-            }}
-          />
-        </div>
-      ) : null}
+      {/* Outside anchor — toward palette start (‹) */}
+      <button
+        type="button"
+        aria-label="גלול לתחילת הרשימה"
+        onClick={scrollTowardStart}
+        disabled={!canScrollStart}
+        style={anchorButtonStyle(canScrollStart)}
+      >
+        <ChevronLeft className={compact ? "size-4" : "size-[18px]"} strokeWidth={2.25} />
+      </button>
     </div>
   );
 }
