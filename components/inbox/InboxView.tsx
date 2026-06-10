@@ -234,13 +234,10 @@ export default function InboxView({
                 tone={r.botPaused ? "warn" : "neutral"}
               />
 
-              <IconButton
-                onClick={() => sendIntro(r.sid, r.name || r.phone || r.sid)}
-                disabled={busy === r.sid}
-                title="הצגת חברה — וידאו תדמית + לינקים לאתרים"
-                icon="🎬"
-                tone="neutral"
-              />
+              {/* The hardcoded "🎬 הצגה" button used to live here, but Eli
+                  manages an equivalent "מי אנחנו" template via Settings —
+                  the two duplicate each other. Templates are easier to
+                  edit, so the menu is the single source of truth now. */}
 
               {quickTemplates.length > 0 && (
                 <TemplateMenu
