@@ -322,16 +322,19 @@ export default function InboxView({
             </a>
 
             {/* Action buttons — pinned to the bottom-left of the row (in
-                RTL = visually left because they come AFTER the info area
-                in the DOM, and alignSelf:flex-end glues them to the bottom
-                edge instead of the top). Single horizontal strip: pause
-                toggle + ☰ template menu. */}
+                RTL = visually left, alignSelf glues to the bottom). Each
+                template is its own icon-only button so there's no menu to
+                open: tap = send. Wraps onto a second line if the lead
+                accumulates many active templates. */}
             <div
               style={{
                 display: "flex",
+                flexWrap: "wrap",
                 gap: 6,
                 flexShrink: 0,
                 alignSelf: "flex-end",
+                justifyContent: "flex-start",
+                maxWidth: "60%",
               }}
             >
               <IconButton
@@ -341,15 +344,18 @@ export default function InboxView({
                 icon={busy === r.sid ? "…" : r.botPaused ? "▶" : "⏸"}
                 tone={r.botPaused ? "warn" : "neutral"}
               />
-              {quickTemplates.length > 0 && (
-                <TemplateMenu
-                  templates={quickTemplates}
-                  disabled={busy === r.sid}
-                  onPick={(tpl) =>
+              {quickTemplates.map((tpl) => (
+                <IconButton
+                  key={tpl.id}
+                  onClick={() =>
                     sendTemplate(r.sid, r.name || r.phone || r.sid, tpl)
                   }
+                  disabled={busy === r.sid}
+                  title={`שלח: ${tpl.name}`}
+                  icon={tpl.icon}
+                  tone="neutral"
                 />
-              )}
+              ))}
             </div>
           </div>
         ))}
