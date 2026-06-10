@@ -533,9 +533,16 @@ export const ProductConfigurator: React.FC = () => {
             {toolbarButtons}
           </div>
         ) : null}
-        {/* Contextual pill */}
-        {activeTab === "color" ? (
-          <>
+        {/* Contextual pill — keep mounted so Swiper keeps slide measurements when switching tabs */}
+        <div
+          style={{
+            display: activeTab === "color" ? "flex" : "none",
+            flexDirection: "column",
+            alignItems: "center",
+            gap: isCompact ? 8 : 10,
+            width: "100%",
+          }}
+        >
             <div
               style={{
                 display: "inline-flex",
@@ -609,10 +616,9 @@ export const ProductConfigurator: React.FC = () => {
               selectedHex={selectedColorHex}
               onSelect={setSelectedColorHex}
               compact={isCompact}
-              scrollToSelection={activeTab === "color"}
+              visible={activeTab === "color"}
             />
-          </>
-        ) : null}
+        </div>
 
         {activeTab === "logo" ? (
           <div

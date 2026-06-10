@@ -27,7 +27,8 @@ interface ColorSwatchRailProps {
   selectedHex: string;
   onSelect: (hex: string) => void;
   compact?: boolean;
-  scrollToSelection?: boolean;
+  /** When false the rail may be `display:none` — Swiper needs an explicit update on show. */
+  visible?: boolean;
 }
 
 export function ColorSwatchRail({
@@ -35,7 +36,7 @@ export function ColorSwatchRail({
   selectedHex,
   onSelect,
   compact = false,
-  scrollToSelection = false,
+  visible = true,
 }: ColorSwatchRailProps) {
   const swiperContainerRef = useRef<HTMLDivElement>(null);
   const swiperRef = useRef<SwiperInstance | null>(null);
@@ -49,6 +50,10 @@ export function ColorSwatchRail({
 
   const swatchSize = compact ? 28 : 32;
   const anchorSize = compact ? 32 : 36;
+
+  const selectedHexRef = useRef(selectedHex);
+  selectedHexRef.current = selectedHex;
+  const prevSelectedHexRef = useRef(selectedHex);
 
   const syncChrome = useCallback(
     (swiper: SwiperInstance) => {
@@ -68,6 +73,17 @@ export function ColorSwatchRail({
     [swatches.length]
   );
 
+  const scrollToSelected = useCallback(
+    (swiper: SwiperInstance, speed = 0) => {
+      const index = swatches.findIndex((color) => color.hex === selectedHexRef.current);
+      if (index < 0) return;
+      swiper.update();
+      swiper.slideTo(index, speed);
+      syncChrome(swiper);
+    },
+    [swatches, syncChrome]
+  );
+
   useEffect(() => {
     const container = swiperContainerRef.current;
     if (!container || swatches.length === 0) return;
@@ -76,6 +92,9 @@ export function ColorSwatchRail({
       modules: [FreeMode, Mousewheel],
       slidesPerView: "auto",
       spaceBetween: compact ? 6 : 8,
+      observer: true,
+      observeParents: true,
+      resizeObserver: true,
       freeMode: {
         enabled: true,
         momentum: true,
@@ -91,29 +110,39 @@ export function ColorSwatchRail({
         progress: (instance) => syncChrome(instance),
         slideChange: (instance) => syncChrome(instance),
         resize: (instance) => syncChrome(instance),
-        init: (instance) => syncChrome(instance),
+        init: (instance) => {
+          syncChrome(instance);
+          // Wait for layout so slide widths are measured before scrolling.
+          window.requestAnimationFrame(() => {
+            window.requestAnimationFrame(() => scrollToSelected(instance));
+          });
+        },
       },
     });
 
     swiperRef.current = swiper;
-    syncChrome(swiper);
 
     return () => {
       swiper.destroy(true, true);
       swiperRef.current = null;
     };
-  }, [compact, swatches.length, syncChrome]);
+  }, [compact, swatches.length, syncChrome, scrollToSelected]);
 
   useEffect(() => {
     const swiper = swiperRef.current;
-    if (!swiper || !scrollToSelection) return;
+    if (!swiper || prevSelectedHexRef.current === selectedHex) return;
+    prevSelectedHexRef.current = selectedHex;
+    scrollToSelected(swiper, 280);
+  }, [selectedHex, scrollToSelected]);
 
-    const index = swatches.findIndex((color) => color.hex === selectedHex);
-    if (index < 0) return;
-
-    swiper.slideTo(index, 280);
-    window.requestAnimationFrame(() => syncChrome(swiper));
-  }, [scrollToSelection, selectedHex, swatches, syncChrome]);
+  useEffect(() => {
+    const swiper = swiperRef.current;
+    if (!swiper || !visible) return;
+    window.requestAnimationFrame(() => {
+      swiper.update();
+      syncChrome(swiper);
+    });
+  }, [visible, syncChrome]);
 
   const scrollTowardEnd = () => {
     const swiper = swiperRef.current;
