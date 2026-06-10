@@ -33,6 +33,7 @@ import {
   type CustomerInfo,
   type PricingInfo,
 } from "./configurator-state";
+import ColorSwatchRail from "./ColorSwatchRail";
 import { processLogoFile } from "./logo-assets";
 import { useCompactLayout } from "./useCompactLayout";
 
@@ -198,13 +199,6 @@ export const ProductConfigurator: React.FC = () => {
   const wrapperRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const viewerApiRef = useRef<ViewerApi | null>(null);
-  const selectedSwatchRef = useRef<HTMLButtonElement>(null);
-
-  useEffect(() => {
-    if (activeTab === "color") {
-      selectedSwatchRef.current?.scrollIntoView({ inline: "center", block: "nearest" });
-    }
-  }, [activeTab]);
 
   const selectedColor = useMemo(
     () => BAG_COLORS.find((color) => color.hex === selectedColorHex),
@@ -614,47 +608,16 @@ export const ProductConfigurator: React.FC = () => {
               style={{
                 ...PILL_STYLE,
                 maxWidth: "100%",
-                padding: `${space.sm}px ${space.md}px`,
+                padding: `${space.sm}px ${space.md}px ${space.sm}px`,
               }}
             >
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: space.sm,
-                  overflowX: "auto",
-                  padding: `${space.xs}px 2px`,
-                  scrollbarWidth: "thin",
-                }}
-              >
-                {BAG_COLORS.map((color) => {
-                  const isSelected = selectedColorHex === color.hex;
-                  return (
-                    <button
-                      key={color.id}
-                      ref={isSelected ? selectedSwatchRef : undefined}
-                      type="button"
-                      title={`${color.name} · ${color.sku}`}
-                      aria-label={`בחר צבע ${color.name} ${color.sku}`}
-                      onClick={() => setSelectedColorHex(color.hex)}
-                      className="transition-transform hover:scale-110"
-                      style={{
-                        width: isCompact ? 28 : 30,
-                        height: isCompact ? 28 : 30,
-                        flexShrink: 0,
-                        borderRadius: radius.full,
-                        border: `2px solid ${colors.surface}`,
-                        background: color.hex,
-                        cursor: "pointer",
-                        boxShadow: isSelected
-                          ? `0 0 0 2px ${colors.accent}`
-                          : `0 0 0 1px ${colors.rule}`,
-                        transform: isSelected ? "scale(1.12)" : undefined,
-                      }}
-                    />
-                  );
-                })}
-              </div>
+              <ColorSwatchRail
+                colors={BAG_COLORS}
+                selectedHex={selectedColorHex}
+                onSelect={setSelectedColorHex}
+                compact={isCompact}
+                scrollToSelection={activeTab === "color"}
+              />
             </div>
           </>
         ) : null}
