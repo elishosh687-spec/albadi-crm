@@ -30,6 +30,7 @@ export type DecisionAction =
   | "no_op"
   | "paused"
   | "unpaused_on_inbound"
+  | "bot_remained_paused"
   | "draft_queued";
 
 export type LlmRecommended =
