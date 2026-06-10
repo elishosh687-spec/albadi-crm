@@ -15,14 +15,19 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { messageTemplates } from "@/drizzle/schema";
 
 export const runtime = "nodejs";
 
-const TEMPLATE_NAME = "bag_dimensions_he";
-const TEMPLATE_LABEL = "📐 הסבר מידות שקית";
+// The `name` column is what users SEE in the template picker and what feeds
+// the quick-button icon detection (first emoji char → button label). The
+// idempotency key is also `name`, so changing this string will create a
+// second row instead of updating the existing one — we look up the legacy
+// internal name first and rename in place when found.
+const TEMPLATE_NAME = "📐 הסבר מידות שקית";
+const LEGACY_NAMES = ["bag_dimensions_he", "bag-dimensions-he"];
 const IMAGE_PATH = "/templates/bag-dimensions-he.png";
 
 const BODY = [
@@ -80,16 +85,20 @@ export async function POST(req: NextRequest) {
     // this endpoint can be swapped to uploadBridgeMediaFromUrl(imageUrl).
     const mediaId = imageUrl;
 
-    const existing = await db
-      .select({ id: messageTemplates.id })
+    // Look up by current name OR any legacy name so a re-run after the
+    // rename (English internal → Hebrew display) updates in place.
+    const namesToMatch = [TEMPLATE_NAME, ...LEGACY_NAMES];
+    const existingRows = await db
+      .select({ id: messageTemplates.id, name: messageTemplates.name })
       .from(messageTemplates)
-      .where(eq(messageTemplates.name, TEMPLATE_NAME))
-      .limit(1);
+      .where(inArray(messageTemplates.name, namesToMatch));
+    const existing = existingRows[0];
 
-    if (existing.length > 0) {
+    if (existing) {
       await db
         .update(messageTemplates)
         .set({
+          name: TEMPLATE_NAME,
           type: "cta_url",
           body: BODY,
           headerType: "image",
@@ -99,13 +108,13 @@ export async function POST(req: NextRequest) {
           active: true,
           updatedAt: new Date(),
         })
-        .where(eq(messageTemplates.id, existing[0].id));
+        .where(eq(messageTemplates.id, existing.id));
       return NextResponse.json({
         ok: true,
-        action: "updated",
-        templateId: existing[0].id,
+        action: existing.name === TEMPLATE_NAME ? "updated" : "renamed",
+        templateId: existing.id,
         mediaId,
-        label: TEMPLATE_LABEL,
+        name: TEMPLATE_NAME,
       });
     }
 
@@ -127,7 +136,7 @@ export async function POST(req: NextRequest) {
       action: "inserted",
       templateId: inserted[0]?.id ?? null,
       mediaId,
-      label: TEMPLATE_LABEL,
+      name: TEMPLATE_NAME,
     });
   } catch (e) {
     const detail = e instanceof Error ? e.message : String(e);

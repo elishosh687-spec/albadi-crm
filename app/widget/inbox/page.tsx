@@ -160,10 +160,16 @@ export default async function InboxWidgetPage({
     .orderBy(asc(messageTemplates.sortOrder), asc(messageTemplates.id))
     .limit(QUICK_TEMPLATE_LIMIT);
   const quickTemplates: QuickTemplate[] = templateRows.map((t) => {
-    // Use first grapheme of the name as the visual icon. Defaults to ✉️
-    // when the name has no emoji/leading symbol.
-    const firstChar = Array.from(t.name.trim())[0] ?? "✉️";
-    return { id: t.id, name: t.name, icon: firstChar };
+    const trimmed = t.name.trim();
+    // Use the leading emoji as the icon ONLY when one exists. A bare Hebrew/
+    // Latin letter looks weird as an icon ("מ", "b") — fall back to ✉️.
+    const first = Array.from(trimmed)[0] ?? "";
+    const isEmoji = /\p{Extended_Pictographic}/u.test(first);
+    return {
+      id: t.id,
+      name: trimmed,
+      icon: isEmoji ? first : "✉️",
+    };
   });
 
   return (

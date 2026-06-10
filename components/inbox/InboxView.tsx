@@ -245,15 +245,13 @@ export default function InboxView({
               />
 
               {quickTemplates.map((tpl) => {
-                // Strip the leading icon char from the visible label so the
-                // emoji doesn't repeat (e.g. "📐 הסבר מידות שקית" → "הסבר
-                // מידות שקית"). Limited to ~10 chars to keep the tile
-                // compact; full name still on hover.
+                // Strip the leading emoji from the visible label so the icon
+                // doesn't repeat (e.g. "📐 הסבר מידות שקית" → "הסבר מידות
+                // שקית"). Full name still on hover.
                 const labelText = tpl.name
                   .trim()
                   .replace(/^\p{Extended_Pictographic}\s*/u, "")
-                  .trim()
-                  .slice(0, 12);
+                  .trim();
                 return (
                   <ActionTile
                     key={tpl.id}
@@ -448,13 +446,18 @@ function ActionTile({
       <span
         style={{
           fontSize: 9.5,
-          lineHeight: 1.1,
-          opacity: 0.85,
+          lineHeight: 1.15,
+          opacity: 0.88,
           textAlign: "center",
           maxWidth: 52,
+          // Allow up to 2 lines, then truncate. Hebrew template names like
+          // "הסבר מידות שקית" don't fit on one line at 9.5px in 52px width
+          // but wrap naturally to two.
+          display: "-webkit-box",
+          WebkitBoxOrient: "vertical" as const,
+          WebkitLineClamp: 2,
           overflow: "hidden",
-          textOverflow: "ellipsis",
-          whiteSpace: "nowrap",
+          wordBreak: "break-word",
         }}
       >
         {label}
