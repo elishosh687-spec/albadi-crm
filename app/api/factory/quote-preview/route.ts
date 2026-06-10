@@ -103,6 +103,10 @@ export async function GET(req: NextRequest) {
     ? qtyOverrideParsed
     : null;
 
+  const moldsRaw = sp.get("moldsCostCny");
+  const moldsParsed = moldsRaw ? parseFloat(moldsRaw) : NaN;
+  const moldsCostCny = Number.isFinite(moldsParsed) && moldsParsed > 0 ? moldsParsed : 0;
+
   const dbConfig = await getFactoryConfig({ fresh: true });
   const cfg = buildConfig(dbConfig, marginOverride, customProduct ? [customProduct] : []);
 
@@ -115,6 +119,7 @@ export async function GET(req: NextRequest) {
     logoColors: isCustom ? 1 : colors,
     shippingOptionId: shipping,
     selectedFeatureIds: isCustom ? [] : lamination ? ["f1"] : [],
+    moldsCostCny,
   };
 
   const result = calculateQuote(form, cfg);

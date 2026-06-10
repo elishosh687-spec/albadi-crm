@@ -51,6 +51,7 @@ export interface BreakdownInput {
     laminationAddonCny: number;
     plateFeeCny: number;
     logoAddonCny: number;
+    moldsPerUnitCny?: number;
   } | null;
 
   // Air-vs-sea comparison (optional, customer-side has altResult)

@@ -96,6 +96,10 @@ export interface QuoteFormData {
   logoColors: number;
   shippingOptionId: string | null;
   selectedFeatureIds: string[];
+  // One-time mold/tooling fee from the factory, in CNY. Amortized across the
+  // order quantity into per-unit production cost (so the margin applies to it
+  // like any other factory cost).
+  moldsCostCny?: number;
 }
 
 export interface QuoteResult {
@@ -114,6 +118,8 @@ export interface QuoteResult {
   laminationAddonCny: number;
   logoAddonCny: number;
   plateFeeCny: number;
+  moldsTotalCny: number;
+  moldsPerUnitCny: number;
   unitProductionCny: number;
   unitProductionUsd: number;
   totalCartons: number;

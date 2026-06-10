@@ -106,6 +106,13 @@ export function DetailedBreakdown(props: BreakdownInput & { defaultOpen?: boolea
                 {v.components.logoAddonCny > 0 && (
                   <ComponentRow label="צבעי הדפסה" cny={v.components.logoAddonCny} cnyToIls={v.fx.cnyToIls} />
                 )}
+                {v.components.moldsPerUnitCny !== undefined && v.components.moldsPerUnitCny > 0 && (
+                  <ComponentRow
+                    label={`מולדים (אמורטיזציה על ${input.quantity.toLocaleString("he-IL")} יח׳)`}
+                    cny={v.components.moldsPerUnitCny}
+                    cnyToIls={v.fx.cnyToIls}
+                  />
+                )}
               </div>
             )}
 

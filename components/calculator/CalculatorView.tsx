@@ -49,6 +49,8 @@ export function CalculatorView({ products, quantityTiers, shippingOptions, initi
   const [qtyOverride, setQtyOverride] = useState<string>("");
   const [marginOverride, setMarginOverride] = useState<string>("");
   const [minProfit, setMinProfit] = useState<string>("");
+  // One-time mold/tooling fee from the factory (¥ CNY). Empty = none.
+  const [moldsCost, setMoldsCost] = useState<string>("");
   const [reverseMode, setReverseMode] = useState<"total" | "unit" | "profit">("profit");
   const [reverseInput, setReverseInput] = useState<string>("");
   const [preview, setPreview]     = useState<PreviewResult | null>(null);
@@ -88,6 +90,8 @@ export function CalculatorView({ products, quantityTiers, shippingOptions, initi
   const currentMargin = marginOverrideValid ? marginOverrideParsed : defaultMargin;
   const minProfitParsed = minProfit !== "" ? parseFloat(minProfit) : NaN;
   const minProfitValid = Number.isFinite(minProfitParsed) && minProfitParsed > 0;
+  const moldsParsed = moldsCost !== "" ? parseFloat(moldsCost) : NaN;
+  const moldsValid = Number.isFinite(moldsParsed) && moldsParsed > 0;
 
   const fetchPreview = useCallback(async () => {
     if (manualMode && !manualValid) {
@@ -108,6 +112,7 @@ export function CalculatorView({ products, quantityTiers, shippingOptions, initi
         margin: String(currentMargin),
       });
       if (overrideValid) params.set("qtyOverride", String(overrideParsed));
+      if (moldsValid) params.set("moldsCostCny", String(moldsParsed));
       if (manualMode) {
         params.set("customUnitCostCny", String(manualCnyNum));
         if (manualDesc.trim()) params.set("customDescription", manualDesc.trim());
@@ -140,6 +145,7 @@ export function CalculatorView({ products, quantityTiers, shippingOptions, initi
     manualW, manualH, manualD,
     manualCartonQty, manualCartonWeight, manualCartonL, manualCartonW, manualCartonH,
     productId, qtyId, handles, lamination, colors, shippingId, currentMargin, overrideValid, overrideParsed,
+    moldsValid, moldsParsed,
   ]);
 
   useEffect(() => {
@@ -341,6 +347,25 @@ export function CalculatorView({ products, quantityTiers, shippingOptions, initi
           </div>
         )}
 
+        {/* One-time mold/tooling fee (¥ CNY) — amortized across the order */}
+        <div className="pt-2 border-t border-border/50 flex flex-col gap-1">
+          <label className="text-sm font-medium">מולדים / תבניות (¥ CNY) — חד פעמי</label>
+          <input
+            type="number"
+            min={0}
+            step={50}
+            placeholder="למשל 2000"
+            value={moldsCost}
+            onChange={(e) => setMoldsCost(e.target.value)}
+            className="bg-background/50 border border-border rounded-md px-3 py-1.5 text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-ring/30"
+          />
+          <span className="text-[11px] text-muted-foreground">
+            {moldsValid
+              ? `מתחלק על ${effectiveQty.toLocaleString("he-IL")} יח׳ = ¥${(moldsParsed / effectiveQty).toFixed(3)} ליחידה (נכלל בעלות מפעל וברווח)`
+              : "ריק → ללא עלות מולדים"}
+          </span>
+        </div>
+
         {/* Margin override + min profit (Wave 6: #4, #19) */}
         <div className="grid grid-cols-2 gap-4 pt-2 border-t border-border/50">
           <div className="flex flex-col gap-1">
@@ -448,6 +473,7 @@ export function CalculatorView({ products, quantityTiers, shippingOptions, initi
             laminationAddonCny: r.laminationAddonCny,
             plateFeeCny: r.plateFeeCny,
             logoAddonCny: r.logoAddonCny,
+            moldsPerUnitCny: r.moldsPerUnitCny,
           }}
           alt={
             preview?.altResult

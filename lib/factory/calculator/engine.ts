@@ -86,8 +86,11 @@ export function calculateQuote(
     ? findClosestPrice(colorAddon.pricesByQuantity, quantityKey)
     : 0;
 
-  // Step 3: Unit production cost
-  const unitProductionCny = effectiveBaseCny + colorAddonCny + laminationColorCostCny;
+  // Step 3: Unit production cost — includes amortized one-time mold/tooling fee
+  const moldsTotalCny = Math.max(formData.moldsCostCny ?? 0, 0);
+  const moldsPerUnitCny = moldsTotalCny > 0 ? moldsTotalCny / quantity : 0;
+  const unitProductionCny =
+    effectiveBaseCny + colorAddonCny + laminationColorCostCny + moldsPerUnitCny;
   const unitProductionUsd = unitProductionCny / exchangeRates.usdToCny;
 
   // Step 4: Logistics
@@ -189,6 +192,8 @@ export function calculateQuote(
     laminationAddonCny: r2(laminationAddonCny),
     logoAddonCny: r2(logoAddonCny),
     plateFeeCny: r2(plateFeeCny),
+    moldsTotalCny: r2(moldsTotalCny),
+    moldsPerUnitCny: r3(moldsPerUnitCny),
     unitProductionCny: r2(unitProductionCny),
     unitProductionUsd: r2(unitProductionUsd),
     totalCartons,
