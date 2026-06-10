@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { Canvas, useThree } from "@react-three/fiber";
+import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { Decal, OrbitControls, PerspectiveCamera, useGLTF } from "@react-three/drei";
 import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 import * as THREE from "three";
@@ -27,8 +27,24 @@ interface BagViewer3DProps {
 const BAG_MODEL_PATH = "/Rusable_Bag.glb";
 const MODEL_SCALE = 1.62;
 const BACKDROP_COLOR = "#f0e9dc";
-const DEFAULT_CAMERA_POSITION: [number, number, number] = [0.28, 0.18, 8.2];
-const DEFAULT_TARGET: [number, number, number] = [0, 0.22, 0];
+const DEFAULT_CAMERA_POSITION: [number, number, number] = [0.28, 1.2, 8.2];
+const DEFAULT_TARGET: [number, number, number] = [0, 1.32, 0];
+const BAG_REST_Y = 0.35;
+const BAG_START_Y = 2.85;
+const PEDESTAL_REST_Y = -0.05;
+const ENTRANCE_BAG_DELAY_S = 0.18;
+const ENTRANCE_BAG_DURATION_S = 1.35;
+const ENTRANCE_PEDESTAL_DURATION_S = 0.55;
+
+function easeOutCubic(t: number) {
+  return 1 - (1 - t) ** 3;
+}
+
+function easeOutBack(t: number) {
+  const c1 = 1.35;
+  const c3 = c1 + 1;
+  return 1 + c3 * (t - 1) ** 3 + c1 * (t - 1) ** 2;
+}
 
 // Decal coordinates live in the bag mesh's local space (front face sits at z ≈ +0.28).
 const DECAL_FRONT_Z = 0.26;
@@ -190,7 +206,7 @@ function BagModel({
   const decalY = DECAL_BASE_Y + logoPositionY * 0.55;
 
   return (
-    <group rotation={[0.02, -0.46, 0]} position={[0, -1.35, 0]} scale={MODEL_SCALE}>
+    <group rotation={[0.02, -0.46, 0]} scale={MODEL_SCALE}>
       <mesh
         geometry={bagSource.geometry}
         position={bagSource.position}
@@ -219,9 +235,9 @@ function BagModel({
   );
 }
 
-function Pedestal() {
+function PedestalMeshes() {
   return (
-    <group position={[0, -1.75, 0]}>
+    <>
       <mesh receiveShadow position={[0, 0.035, 0]}>
         <cylinderGeometry args={[1.62, 1.78, 0.07, 64]} />
         <meshStandardMaterial color="#e6ddcc" roughness={0.96} metalness={0} />
@@ -230,7 +246,67 @@ function Pedestal() {
         <circleGeometry args={[1.58, 64]} />
         <meshStandardMaterial color="#ded3bf" transparent opacity={0.55} roughness={1} />
       </mesh>
-    </group>
+    </>
+  );
+}
+
+function EntranceRig({ children }: { children: React.ReactNode }) {
+  const bagRef = useRef<THREE.Group>(null);
+  const pedestalRef = useRef<THREE.Group>(null);
+  const elapsedRef = useRef(0);
+  const finishedRef = useRef(false);
+
+  useFrame((_, delta) => {
+    if (finishedRef.current) return;
+
+    elapsedRef.current += delta;
+    const elapsed = elapsedRef.current;
+
+    const pedestalProgress = Math.min(1, elapsed / ENTRANCE_PEDESTAL_DURATION_S);
+    const pedestalEased = easeOutCubic(pedestalProgress);
+
+    if (pedestalRef.current) {
+      const scale = THREE.MathUtils.lerp(0.68, 1, pedestalEased);
+      pedestalRef.current.scale.setScalar(scale);
+      pedestalRef.current.position.y = THREE.MathUtils.lerp(
+        PEDESTAL_REST_Y - 0.12,
+        PEDESTAL_REST_Y,
+        pedestalEased
+      );
+    }
+
+    const bagElapsed = Math.max(0, elapsed - ENTRANCE_BAG_DELAY_S);
+    const bagProgress = Math.min(1, bagElapsed / ENTRANCE_BAG_DURATION_S);
+    const bagEased = easeOutBack(bagProgress);
+
+    if (bagRef.current) {
+      bagRef.current.position.y = THREE.MathUtils.lerp(BAG_START_Y, BAG_REST_Y, bagEased);
+      const bagScale = THREE.MathUtils.lerp(0.94, 1, bagEased);
+      bagRef.current.scale.setScalar(bagScale);
+    }
+
+    if (pedestalProgress >= 1 && bagProgress >= 1) {
+      finishedRef.current = true;
+      if (bagRef.current) {
+        bagRef.current.position.y = BAG_REST_Y;
+        bagRef.current.scale.setScalar(1);
+      }
+      if (pedestalRef.current) {
+        pedestalRef.current.position.y = PEDESTAL_REST_Y;
+        pedestalRef.current.scale.setScalar(1);
+      }
+    }
+  });
+
+  return (
+    <>
+      <group ref={pedestalRef} position={[0, PEDESTAL_REST_Y - 0.12, 0]} scale={0.68}>
+        <PedestalMeshes />
+      </group>
+      <group ref={bagRef} position={[0, BAG_START_Y, 0]} scale={0.94}>
+        {children}
+      </group>
+    </>
   );
 }
 
@@ -298,18 +374,18 @@ function ViewerScene({
       <directionalLight position={[-3.5, 2, 3]} intensity={0.38} />
 
       <React.Suspense fallback={null}>
-        <BagModel
-          bagColor={bagColor}
-          logoUrl={logoUrl}
-          logoScale={logoScale}
-          logoPositionX={logoPositionX}
-          logoPositionY={logoPositionY}
-          logoRotation={logoRotation}
-          showLogoHint={showLogoHint}
-        />
+        <EntranceRig>
+          <BagModel
+            bagColor={bagColor}
+            logoUrl={logoUrl}
+            logoScale={logoScale}
+            logoPositionX={logoPositionX}
+            logoPositionY={logoPositionY}
+            logoRotation={logoRotation}
+            showLogoHint={showLogoHint}
+          />
+        </EntranceRig>
       </React.Suspense>
-
-      <Pedestal />
     </>
   );
 }

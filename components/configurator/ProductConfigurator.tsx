@@ -328,8 +328,16 @@ export const ProductConfigurator: React.FC = () => {
         aria-label="העלאת קובץ לוגו"
       />
 
-      {/* Full-bleed 3D stage */}
-      <div style={{ position: "absolute", inset: 0 }}>
+      {/* 3D stage — bottom inset keeps bag + pedestal above the dock */}
+      <div
+        style={{
+          position: "absolute",
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: "clamp(128px, 16vh, 168px)",
+        }}
+      >
         <React.Suspense fallback={null}>
           <BagViewer3D
             bagColor={selectedColorHex}
