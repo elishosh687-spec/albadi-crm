@@ -836,67 +836,6 @@ export async function searchCallMessages(
 }
 
 /**
- * Find the most recent call message for a single contact. Used by the
- * disposition webhook handler when GHL's Custom Webhook payload doesn't
- * include the disposition name (the "Custom Disposition" merge tag is not
- * always available in the picker, and `triggerData` arrives empty in some
- * GHL versions).
- *
- * Returns the raw message JSON so the caller can inspect arbitrary fields
- * (the disposition lives in different paths on different GHL accounts).
- */
-export async function findMostRecentCallForContact(
-  contactId: string
-): Promise<Record<string, unknown> | null> {
-  const locationId = requireGHLLocationId();
-  const convRes = await ghlFetch<{
-    conversations?: Array<{ id: string }>;
-  }>(
-    "/conversations/search",
-    { method: "GET" },
-    {
-      locationId,
-      contactId,
-      limit: 5,
-      sort: "desc",
-      sortBy: "last_message_date",
-    }
-  );
-  const conversations = convRes.conversations ?? [];
-  let newest: Record<string, unknown> | null = null;
-  let newestTime = 0;
-  for (const conv of conversations) {
-    const msgRes = await ghlFetch<{
-      messages?: { messages?: Array<Record<string, unknown>> };
-    }>(
-      `/conversations/${conv.id}/messages`,
-      { method: "GET" },
-      { limit: 25 }
-    );
-    const messages = msgRes.messages?.messages ?? [];
-    for (const m of messages) {
-      const type = m.type;
-      const meta = (m.meta as { call?: unknown } | undefined) ?? undefined;
-      const isCall =
-        type === "TYPE_CALL" ||
-        type === 3 ||
-        type === "3" ||
-        type === 1 ||
-        type === "1" ||
-        !!meta?.call;
-      if (!isCall) continue;
-      const dateRaw = (m.dateAdded ?? m.dateUpdated) as string | undefined;
-      const t = dateRaw ? new Date(dateRaw).getTime() : 0;
-      if (t > newestTime) {
-        newestTime = t;
-        newest = m;
-      }
-    }
-  }
-  return newest;
-}
-
-/**
  * Download a call recording. Returns the raw audio bytes (Buffer) along
  * with a best-effort content-type for the multipart hint downstream.
  *
