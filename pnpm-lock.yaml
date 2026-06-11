@@ -41,6 +41,9 @@ importers:
       jspdf:
         specifier: ^4.2.1
         version: 4.2.1
+      keen-slider:
+        specifier: ^6.8.6
+        version: 6.8.6
       lucide-react:
         specifier: ^1.14.0
         version: 1.17.0(react@19.0.0)
@@ -59,9 +62,6 @@ importers:
       recharts:
         specifier: ^3.8.1
         version: 3.8.1(@types/react@19.0.2)(react-dom@19.0.0(react@19.0.0))(react-is@19.2.7)(react@19.0.0)(redux@5.0.1)
-      swiper:
-        specifier: ^12.2.0
-        version: 12.2.0
       tailwind-merge:
         specifier: ^3.6.0
         version: 3.6.0
@@ -1530,6 +1530,9 @@ packages:
   jspdf@4.2.1:
     resolution: {integrity: sha512-YyAXyvnmjTbR4bHQRLzex3CuINCDlQnBqoSYyjJwTP2x9jDLuKDzy7aKUl0hgx3uhcl7xzg32agn5vlie6HIlQ==}
 
+  keen-slider@6.8.6:
+    resolution: {integrity: sha512-dcEQ7GDBpCjUQA8XZeWh3oBBLLmyn8aoeIQFGL/NTVkoEOsmlnXqA4QykUm/SncolAZYGsEk/PfUhLZ7mwMM2w==}
+
   lie@3.3.0:
     resolution: {integrity: sha512-UaiMJzeWRlEujzAuw5LokY1L5ecNQYZKfmyZ9L7wDHb/p5etKaxXhohBcrw0EYby+G/NA52vRSN4N39dxHAIwQ==}
 
@@ -1937,10 +1940,6 @@ packages:
   svg-pathdata@6.0.3:
     resolution: {integrity: sha512-qsjeeq5YjBZ5eMdFuUa4ZosMLxgr5RZ+F+Y1OrDhuOCEInRMA3x74XdBtggJcj9kOeInz0WE+LgCPDkZFlBYJw==}
     engines: {node: '>=12.0.0'}
-
-  swiper@12.2.0:
-    resolution: {integrity: sha512-K8uXsBZU6ME97Ia3xbBge8IRCnR1lOmIILzvY/jGVic7dSTQ530s3uO8RvXbPUtkkXLWIwmZLRPbtDxRWVAFdg==}
-    engines: {node: '>= 4.7.0'}
 
   tailwind-merge@3.6.0:
     resolution: {integrity: sha512-uxL7qAVQriqRQPAyK3pj66VqskWqoZ37PW94jwOTwNfq/z9oyu1V+eqrZqtR2+fCiXdYOZe/Modt8GtvqNzu+w==}
@@ -3273,6 +3272,8 @@ snapshots:
       dompurify: 3.4.9
       html2canvas: 1.4.1
 
+  keen-slider@6.8.6: {}
+
   lie@3.3.0:
     dependencies:
       immediate: 3.0.6
@@ -3643,8 +3644,6 @@ snapshots:
 
   svg-pathdata@6.0.3:
     optional: true
-
-  swiper@12.2.0: {}
 
   tailwind-merge@3.6.0: {}
 

@@ -1,15 +1,12 @@
 "use client";
 
-import React, { useCallback, useEffect, useRef, useState } from "react";
-import Swiper from "swiper";
-import { FreeMode, Mousewheel } from "swiper/modules";
-import type { Swiper as SwiperInstance } from "swiper";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import "keen-slider/keen-slider.min.css";
+import { useKeenSlider } from "keen-slider/react";
+import type { KeenSliderInstance } from "keen-slider";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import type { BagColor } from "@/lib/constants/bagColors";
 import { colors, radius, space } from "@/lib/ui/tokens";
-
-import "swiper/css";
-import "swiper/css/free-mode";
 
 const SCROLL_INDEX_STEP = 5;
 
@@ -27,7 +24,7 @@ interface ColorSwatchRailProps {
   selectedHex: string;
   onSelect: (hex: string) => void;
   compact?: boolean;
-  /** When false the rail may be `display:none` — Swiper needs an explicit update on show. */
+  /** When false the rail may be `display:none` — slider needs update on show. */
   visible?: boolean;
 }
 
@@ -38,8 +35,6 @@ export function ColorSwatchRail({
   compact = false,
   visible = true,
 }: ColorSwatchRailProps) {
-  const swiperContainerRef = useRef<HTMLDivElement>(null);
-  const swiperRef = useRef<SwiperInstance | null>(null);
   const progressRef = useRef<HTMLDivElement>(null);
   const [canScrollStart, setCanScrollStart] = useState(false);
   const [canScrollEnd, setCanScrollEnd] = useState(false);
@@ -50,16 +45,18 @@ export function ColorSwatchRail({
 
   const swatchSize = compact ? 28 : 32;
   const anchorSize = compact ? 32 : 36;
+  const slideGap = compact ? 6 : 8;
 
   const selectedHexRef = useRef(selectedHex);
   selectedHexRef.current = selectedHex;
   const prevSelectedHexRef = useRef(selectedHex);
 
   const syncChrome = useCallback(
-    (swiper: SwiperInstance) => {
-      setCanScrollStart(!swiper.isBeginning);
-      setCanScrollEnd(!swiper.isEnd);
-      setScrollProgress(swiper.progress);
+    (slider: KeenSliderInstance) => {
+      const { progress } = slider.track.details;
+      setCanScrollStart(progress > 0.001);
+      setCanScrollEnd(progress < 0.999);
+      setScrollProgress(progress);
 
       const track = progressRef.current;
       if (track) {
@@ -67,101 +64,83 @@ export function ColorSwatchRail({
         const width = Math.max(32, trackWidth / Math.max(swatches.length / 5.5, 1));
         const travel = Math.max(0, trackWidth - width);
         setThumbWidth(width);
-        setThumbLeft(swiper.progress * travel);
+        setThumbLeft(progress * travel);
       }
     },
     [swatches.length]
   );
 
   const scrollToSelected = useCallback(
-    (swiper: SwiperInstance, speed = 0) => {
+    (slider: KeenSliderInstance, instant = false) => {
       const index = swatches.findIndex((color) => color.hex === selectedHexRef.current);
       if (index < 0) return;
-      swiper.update();
-      swiper.slideTo(index, speed);
-      syncChrome(swiper);
+      slider.moveToIdx(index, false, instant ? { duration: 0 } : undefined);
+      syncChrome(slider);
     },
     [swatches, syncChrome]
   );
 
-  useEffect(() => {
-    const container = swiperContainerRef.current;
-    if (!container || swatches.length === 0) return;
-
-    const swiper = new Swiper(container, {
-      modules: [FreeMode, Mousewheel],
-      slidesPerView: "auto",
-      spaceBetween: compact ? 6 : 8,
-      observer: true,
-      observeParents: true,
-      resizeObserver: true,
-      freeMode: {
-        enabled: true,
-        momentum: true,
-        sticky: true,
+  const sliderOptions = useMemo(
+    () => ({
+      mode: "free-snap" as const,
+      drag: true,
+      rubberband: true,
+      slides: {
+        perView: "auto" as const,
+        spacing: slideGap,
       },
-      mousewheel: {
-        forceToAxis: true,
-        sensitivity: 0.8,
+      detailsChanged(slider: KeenSliderInstance) {
+        syncChrome(slider);
       },
-      resistanceRatio: 0.65,
-      watchOverflow: true,
-      on: {
-        progress: (instance) => syncChrome(instance),
-        slideChange: (instance) => syncChrome(instance),
-        resize: (instance) => syncChrome(instance),
-        init: (instance) => {
-          syncChrome(instance);
-          // Wait for layout so slide widths are measured before scrolling.
-          window.requestAnimationFrame(() => {
-            window.requestAnimationFrame(() => scrollToSelected(instance));
-          });
-        },
+      created(slider: KeenSliderInstance) {
+        window.requestAnimationFrame(() => {
+          scrollToSelected(slider, true);
+        });
       },
-    });
+    }),
+    [slideGap, syncChrome, scrollToSelected]
+  );
 
-    swiperRef.current = swiper;
-
-    return () => {
-      swiper.destroy(true, true);
-      swiperRef.current = null;
-    };
-  }, [compact, swatches.length, syncChrome, scrollToSelected]);
+  const [sliderRef, instanceRef] = useKeenSlider<HTMLDivElement>(sliderOptions);
 
   useEffect(() => {
-    const swiper = swiperRef.current;
-    if (!swiper || prevSelectedHexRef.current === selectedHex) return;
+    if (prevSelectedHexRef.current === selectedHex) return;
     prevSelectedHexRef.current = selectedHex;
-    scrollToSelected(swiper, 280);
-  }, [selectedHex, scrollToSelected]);
+    const slider = instanceRef.current;
+    if (!slider) return;
+    scrollToSelected(slider, false);
+  }, [selectedHex, instanceRef, scrollToSelected]);
 
   useEffect(() => {
-    const swiper = swiperRef.current;
-    if (!swiper || !visible) return;
+    if (!visible) return;
+    const slider = instanceRef.current;
+    if (!slider) return;
+    slider.update();
     window.requestAnimationFrame(() => {
-      swiper.update();
-      syncChrome(swiper);
+      scrollToSelected(slider, true);
     });
-  }, [visible, syncChrome]);
+  }, [visible, instanceRef, scrollToSelected]);
 
   const scrollTowardEnd = () => {
-    const swiper = swiperRef.current;
-    if (!swiper || swiper.isEnd) return;
-    swiper.slideTo(Math.min(swiper.activeIndex + SCROLL_INDEX_STEP, swatches.length - 1), 280);
+    const slider = instanceRef.current;
+    if (!slider) return;
+    const current = slider.track.details.rel;
+    slider.moveToIdx(Math.min(current + SCROLL_INDEX_STEP, swatches.length - 1));
   };
 
   const scrollTowardStart = () => {
-    const swiper = swiperRef.current;
-    if (!swiper || swiper.isBeginning) return;
-    swiper.slideTo(Math.max(swiper.activeIndex - SCROLL_INDEX_STEP, 0), 280);
+    const slider = instanceRef.current;
+    if (!slider) return;
+    const current = slider.track.details.rel;
+    slider.moveToIdx(Math.max(current - SCROLL_INDEX_STEP, 0));
   };
 
   const seekProgress = (ratio: number) => {
-    const swiper = swiperRef.current;
-    if (!swiper) return;
+    const slider = instanceRef.current;
+    if (!slider || swatches.length <= 1) return;
     const clamped = Math.max(0, Math.min(1, ratio));
-    swiper.setProgress(clamped, 0);
-    syncChrome(swiper);
+    slider.moveToIdx(Math.round(clamped * (swatches.length - 1)), false, { duration: 0 });
+    syncChrome(slider);
   };
 
   const handleProgressPointer = (clientX: number) => {
@@ -198,16 +177,6 @@ export function ColorSwatchRail({
         userSelect: "none",
       }}
     >
-      <style>{`
-        .color-swatch-swiper {
-          overflow: hidden;
-          width: 100%;
-        }
-        .color-swatch-swiper .swiper-wrapper {
-          align-items: center;
-        }
-      `}</style>
-      {/* Outside anchor — toward palette end (›) */}
       <button
         type="button"
         aria-label="גלול לסוף הרשימה"
@@ -227,41 +196,43 @@ export function ColorSwatchRail({
           padding: `${space.md}px ${space.lg}px`,
         }}
       >
-        <div ref={swiperContainerRef} className="swiper color-swatch-swiper">
-          <div className="swiper-wrapper">
-            {swatches.map((color) => {
-              const isSelected = selectedHex === color.hex;
-              return (
-                <div
-                  key={color.id}
-                  className="swiper-slide"
-                  style={{ width: "auto", height: "auto" }}
-                >
-                  <button
-                    type="button"
-                    data-color-hex={color.hex}
-                    title={`${color.name} · ${color.sku} · ${color.hex.toUpperCase()}`}
-                    aria-label={`בחר צבע ${color.name} ${color.sku}`}
-                    aria-pressed={isSelected ? "true" : "false"}
-                    onClick={() => onSelect(color.hex)}
-                    className="transition-transform duration-150 ease-out hover:scale-105"
-                    style={{
-                      width: swatchSize,
-                      height: swatchSize,
-                      borderRadius: radius.full,
-                      border: `2px solid ${colors.surface}`,
-                      background: color.hex,
-                      cursor: "pointer",
-                      boxShadow: isSelected
-                        ? `0 0 0 2px ${colors.accent}, 0 4px 12px rgba(28,24,21,0.16)`
-                        : `0 0 0 1px ${colors.rule}`,
-                      transform: isSelected ? "scale(1.1)" : undefined,
-                    }}
-                  />
-                </div>
-              );
-            })}
-          </div>
+        <div ref={sliderRef} className="keen-slider color-swatch-keen">
+          {swatches.map((color) => {
+            const isSelected = selectedHex === color.hex;
+            return (
+              <div
+                key={color.id}
+                className="keen-slider__slide"
+                style={{
+                  minWidth: swatchSize,
+                  maxWidth: swatchSize,
+                  overflow: "visible",
+                }}
+              >
+                <button
+                  type="button"
+                  data-color-hex={color.hex}
+                  title={`${color.name} · ${color.sku} · ${color.hex.toUpperCase()}`}
+                  aria-label={`בחר צבע ${color.name} ${color.sku}`}
+                  aria-pressed={isSelected}
+                  onClick={() => onSelect(color.hex)}
+                  className="transition-transform duration-150 ease-out hover:scale-105"
+                  style={{
+                    width: swatchSize,
+                    height: swatchSize,
+                    borderRadius: radius.full,
+                    border: `2px solid ${colors.surface}`,
+                    background: color.hex,
+                    cursor: "pointer",
+                    boxShadow: isSelected
+                      ? `0 0 0 2px ${colors.accent}, 0 4px 12px rgba(28,24,21,0.16)`
+                      : `0 0 0 1px ${colors.rule}`,
+                    transform: isSelected ? "scale(1.1)" : undefined,
+                  }}
+                />
+              </div>
+            );
+          })}
         </div>
 
         {swatches.length > 1 ? (
@@ -313,7 +284,6 @@ export function ColorSwatchRail({
         ) : null}
       </div>
 
-      {/* Outside anchor — toward palette start (‹) */}
       <button
         type="button"
         aria-label="גלול לתחילת הרשימה"
@@ -323,6 +293,8 @@ export function ColorSwatchRail({
       >
         <ChevronLeft className={compact ? "size-4" : "size-[18px]"} strokeWidth={2.25} />
       </button>
+
+      <style>{`.color-swatch-keen { overflow: hidden; width: 100%; }`}</style>
     </div>
   );
 }

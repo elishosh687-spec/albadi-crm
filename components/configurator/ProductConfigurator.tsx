@@ -665,7 +665,7 @@ export const ProductConfigurator: React.FC = () => {
             {toolbarButtons}
           </div>
         ) : null}
-        {/* Contextual pill — keep mounted so Swiper keeps slide measurements when switching tabs */}
+        {/* Contextual pill — keep mounted so keen-slider keeps layout when switching tabs */}
         <div
           style={{
             display: activeTab === "color" ? "flex" : "none",
