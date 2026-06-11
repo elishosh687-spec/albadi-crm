@@ -287,7 +287,7 @@ export const ProductConfigurator: React.FC = () => {
   const saveDesignToCrm = useCallback(async () => {
     if (!selectedColor) return;
     const apiBase = getConfiguratorApiBase();
-    await fetch(`${apiBase}/api/configurator/designs`, {
+    const res = await fetch(`${apiBase}/api/configurator/designs`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -315,18 +315,18 @@ export const ProductConfigurator: React.FC = () => {
         notes: customerInfo.notes,
         source: sessionToken ? "crm_link" : "website",
       }),
-    })
-      .then(async (res) => {
-        if (!res.ok) return;
-        const data = (await res.json()) as {
-          manychatSubId?: string;
-          leadCreated?: boolean;
-        };
-        if (data.manychatSubId) setLinkedLeadSid(data.manychatSubId);
-      })
-      .catch(() => {
-        /* best-effort CRM sync */
-      });
+    });
+
+    if (!res.ok) {
+      const errBody = (await res.json().catch(() => null)) as { detail?: string } | null;
+      throw new Error(errBody?.detail || `CRM save failed (${res.status})`);
+    }
+
+    const data = (await res.json()) as {
+      manychatSubId?: string;
+      leadCreated?: boolean;
+    };
+    if (data.manychatSubId) setLinkedLeadSid(data.manychatSubId);
   }, [
     selectedColor,
     sessionToken,

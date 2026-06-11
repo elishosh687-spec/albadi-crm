@@ -109,6 +109,7 @@ export interface LeadRow {
   sid: string;
   name: string | null;
   phone: string | null;
+  leadSource: string | null;
   stage: string | null;
   quoteTotal: string | null;
   botSummary: string | null;
@@ -177,9 +178,19 @@ function LeadCard({
 
       {/* Top row */}
       <div className="relative z-10 flex items-start justify-between gap-2">
-        <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${pill}`}>
-          {stageLabel}
-        </span>
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${pill}`}>
+            {stageLabel}
+          </span>
+          {lead.leadSource === "website_configurator" ? (
+            <span
+              className="inline-flex items-center rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-medium text-emerald-700 dark:text-emerald-300"
+              title="נוצר מהמעצב באתר"
+            >
+              מעצב 3D
+            </span>
+          ) : null}
+        </div>
         <div className="flex items-center gap-1 text-xs">
           {lead.botPaused && <span className="text-yellow-400" title="בוט מושהה">⏸</span>}
           {lead.pipelineFlag === "NEEDS_ELI" && <span className="text-red-400" title="דרוש טיפול">🔴</span>}
@@ -434,10 +445,13 @@ export function LeadsView({
     if (activeStage !== "ALL") result = result.filter((l) => l.stage === activeStage);
     if (search.trim()) {
       const q = search.trim().toLowerCase();
+      const qDigits = q.replace(/[^0-9]/g, "");
       result = result.filter(
         (l) =>
           l.name?.toLowerCase().includes(q) ||
           l.phone?.includes(q) ||
+          (qDigits.length >= 4 && l.phone?.replace(/[^0-9]/g, "").includes(qDigits)) ||
+          l.leadSource?.toLowerCase().includes(q) ||
           l.botSummary?.toLowerCase().includes(q)
       );
     }

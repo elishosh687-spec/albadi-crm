@@ -36,6 +36,7 @@ async function LeadsListWrapper() {
         sid: leads.manychatSubId,
         name: leads.name,
         phone: leads.phoneE164,
+        leadSource: leads.leadSource,
         stage: leads.pipelineStage,
         quoteTotal: leads.quoteTotal,
         botSummary: leads.botSummary,

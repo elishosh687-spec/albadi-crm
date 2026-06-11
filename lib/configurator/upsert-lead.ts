@@ -7,12 +7,13 @@ import { db } from "@/lib/db";
 import { leads } from "@/drizzle/schema";
 import { eq, or, sql } from "drizzle-orm";
 import { phoneToJid } from "@/lib/bridge/jid";
+import {
+  israeliPhoneLookupVariants,
+  israeliPhoneSuffix,
+  normalizeIsraeliPhoneE164,
+} from "@/lib/phone/israel";
 
 const LEAD_SOURCE = "website_configurator";
-
-function digitsOnly(phone: string): string {
-  return phone.replace(/[^0-9]/g, "");
-}
 
 export interface UpsertConfiguratorLeadInput {
   name: string;
@@ -32,10 +33,13 @@ export interface UpsertConfiguratorLeadResult {
 export async function upsertLeadFromConfigurator(
   input: UpsertConfiguratorLeadInput
 ): Promise<UpsertConfiguratorLeadResult | null> {
-  const phone = digitsOnly(input.phone);
-  if (!phone || phone.length < 7) return null;
+  const phoneE164 = normalizeIsraeliPhoneE164(input.phone);
+  if (!phoneE164) return null;
 
-  const jid = phoneToJid(phone);
+  const jid = phoneToJid(phoneE164);
+  const suffix = israeliPhoneSuffix(phoneE164);
+  const phoneVariants = israeliPhoneLookupVariants(phoneE164);
+
   const name = input.name.trim() || null;
   const email = input.email.trim() || null;
   const quoteTotal = Number.isFinite(input.quoteTotalIls)
@@ -45,6 +49,11 @@ export async function upsertLeadFromConfigurator(
     `[מעצב 3D] ${new Date().toLocaleDateString("he-IL")} — ` +
     `${input.colorName} · ${input.quantity} יח׳ · ₪${Math.round(input.quoteTotalIls)}` +
     (input.notes?.trim() ? `\n${input.notes.trim()}` : "");
+
+  const phoneMatch =
+    phoneVariants.length > 0
+      ? or(...phoneVariants.map((v) => eq(leads.phoneE164, v)))
+      : undefined;
 
   const [existing] = await db
     .select({
@@ -58,7 +67,13 @@ export async function upsertLeadFromConfigurator(
       notes: leads.notes,
     })
     .from(leads)
-    .where(or(eq(leads.phoneE164, phone), eq(leads.waJid, jid)))
+    .where(
+      or(
+        ...(phoneMatch ? [phoneMatch] : []),
+        eq(leads.waJid, jid),
+        sql`right(regexp_replace(coalesce(${leads.phoneE164}, ''), '[^0-9]', '', 'g'), 9) = ${suffix}`
+      )
+    )
     .limit(1);
 
   if (existing) {
@@ -70,12 +85,13 @@ export async function upsertLeadFromConfigurator(
       .set({
         name: name ?? existing.name,
         email: email ?? existing.email,
-        phoneE164: phone,
+        phoneE164: phoneE164,
         waJid: existing.waJid ?? jid,
         quoteTotal: quoteTotal ?? existing.quoteTotal,
         leadSource: existing.leadSource ?? LEAD_SOURCE,
         pipelineStage: existing.pipelineStage ?? "INTAKE",
         notes: mergedNotes || null,
+        active: true,
         updatedAt: new Date(),
       })
       .where(sql`trim(${leads.manychatSubId}) = ${sid}`);
@@ -86,7 +102,7 @@ export async function upsertLeadFromConfigurator(
   await db.insert(leads).values({
     manychatSubId: jid,
     waJid: jid,
-    phoneE164: phone,
+    phoneE164: phoneE164,
     name,
     email,
     source: "configurator_web",

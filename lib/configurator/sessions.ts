@@ -164,7 +164,12 @@ export async function saveConfiguratorDesign(
     sid = session?.manychatSubId ?? null;
   }
 
-  if (!sid && input.customerPhone.trim()) {
+  // Website visitors: always resolve canonical lead by phone (handles 050 vs 972
+  // and merges onto an existing ManyChat / WhatsApp row).
+  if (
+    input.customerPhone.trim() &&
+    (!sid || input.source === "website")
+  ) {
     const { upsertLeadFromConfigurator } = await import("./upsert-lead");
     const upserted = await upsertLeadFromConfigurator({
       name: input.customerName,
@@ -250,6 +255,20 @@ export async function loadConfiguratorDesignsForLead(
   const sid = manychatSubId.trim();
   if (!sid) return [];
 
+  const { israeliPhoneSuffix, normalizeIsraeliPhoneE164 } = await import(
+    "@/lib/phone/israel"
+  );
+
+  const [leadRow] = await db
+    .select({ phone: leads.phoneE164 })
+    .from(leads)
+    .where(sql`trim(${leads.manychatSubId}) = ${sid}`)
+    .limit(1);
+
+  const phoneSuffix = leadRow?.phone
+    ? israeliPhoneSuffix(normalizeIsraeliPhoneE164(leadRow.phone) ?? leadRow.phone)
+    : null;
+
   const res = await db.execute(sql`
     SELECT id,
            product_id AS "productId",
@@ -262,6 +281,11 @@ export async function loadConfiguratorDesignsForLead(
            created_at AS "createdAt"
     FROM configurator_designs
     WHERE trim(manychat_sub_id) = ${sid}
+      ${
+        phoneSuffix
+          ? sql`OR right(regexp_replace(coalesce(customer_phone, ''), '[^0-9]', '', 'g'), 9) = ${phoneSuffix}`
+          : sql``
+      }
     ORDER BY created_at DESC
     LIMIT ${limit}
   `);
