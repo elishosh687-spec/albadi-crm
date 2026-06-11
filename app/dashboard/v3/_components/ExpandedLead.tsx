@@ -40,6 +40,8 @@ import {
   approveDraftAction,
   rejectDraftAction,
   loadLeadEventsAction,
+  loadConfiguratorDesignsAction,
+  type ConfiguratorDesignRow,
   type TemplateRow,
 } from "@/app/actions/v2";
 import {
@@ -603,6 +605,8 @@ function OverviewTab({
 
         <CrmOpsPanel sid={sid} quoteTotal={summary.quoteTotal} />
 
+        <ConfiguratorDesignsPanel sid={sid} />
+
         <section className="rounded-xl border border-border bg-card p-4 space-y-3">
           <div className="text-xs uppercase tracking-wider text-muted-foreground">
             שלב
@@ -1098,6 +1102,93 @@ function PendingDraftCard({ draft }: { draft: PendingDraftInfo }) {
   );
 }
 
+function ConfiguratorDesignsPanel({ sid }: { sid: string }) {
+  const [designs, setDesigns] = useState<ConfiguratorDesignRow[] | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    loadConfiguratorDesignsAction(sid).then((r) => {
+      if (cancelled) return;
+      setDesigns(r.ok ? r.designs : []);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [sid]);
+
+  if (designs === null) {
+    return (
+      <section className="rounded-xl border border-border bg-card p-4 text-sm text-muted-foreground">
+        טוען עיצובי 3D…
+      </section>
+    );
+  }
+
+  if (designs.length === 0) {
+    return (
+      <section className="rounded-xl border border-border bg-card p-4 space-y-2">
+        <div className="flex items-center gap-2 text-xs uppercase tracking-wider text-muted-foreground">
+          <Box className="size-3.5" />
+          עיצובי מעצב 3D
+        </div>
+        <p className="text-sm text-muted-foreground">
+          עדיין אין עיצובים שמורים. שלח קישור &quot;מעצב 3D&quot; — אחרי שהלקוח מוריד PDF, העיצוב יופיע כאן.
+        </p>
+      </section>
+    );
+  }
+
+  return (
+    <section className="rounded-xl border border-border bg-card p-4 space-y-3">
+      <div className="flex items-center gap-2 text-xs uppercase tracking-wider text-muted-foreground">
+        <Box className="size-3.5" />
+        עיצובי מעצב 3D ({designs.length})
+      </div>
+      <div className="space-y-2">
+        {designs.map((d) => {
+          const when = new Date(d.createdAt).toLocaleString("he-IL", {
+            timeZone: "Asia/Jerusalem",
+            day: "2-digit",
+            month: "2-digit",
+            hour: "2-digit",
+            minute: "2-digit",
+          });
+          return (
+            <div
+              key={d.id}
+              className="flex items-center justify-between gap-3 rounded-lg border border-border bg-background/40 px-3 py-2 text-sm"
+            >
+              <div className="flex items-center gap-2 min-w-0">
+                {d.colorHex ? (
+                  <span
+                    className="size-4 shrink-0 rounded-full border border-border"
+                    style={{ background: d.colorHex }}
+                  />
+                ) : null}
+                <div className="min-w-0">
+                  <div className="truncate font-medium">
+                    {d.colorName ?? "צבע"} · {d.quantity ?? "?"} יח׳
+                    {d.productId ? ` · ${d.productId}` : ""}
+                  </div>
+                  <div className="text-xs text-muted-foreground truncate">
+                    {d.customerName ?? "לקוח"} · {when}
+                    {d.hasLamination ? " · למינציה" : ""}
+                  </div>
+                </div>
+              </div>
+              {d.totalOrderIls != null ? (
+                <span className="shrink-0 text-sm font-medium tabular-nums">
+                  ₪{Math.round(d.totalOrderIls).toLocaleString("he-IL")}
+                </span>
+              ) : null}
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
 const EVENT_LABEL: Record<string, string> = {
   stage_change: "שינוי שלב",
   note_added: "הערה",
@@ -1112,6 +1203,8 @@ const EVENT_LABEL: Record<string, string> = {
   contact_updated: "פרטי קשר עודכנו",
   bot_paused: "בוט מושעה",
   bot_resumed: "בוט פעיל",
+  configurator_link_sent: "נשלח קישור מעצב 3D",
+  configurator_design_saved: "עיצוב 3D נשמר",
 };
 
 function ActivityTab({ sid }: { sid: string }) {

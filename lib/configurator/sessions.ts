@@ -209,3 +209,53 @@ export async function saveConfiguratorDesign(
 
   return { id, manychatSubId: sid };
 }
+
+export interface ConfiguratorDesignRow {
+  id: string;
+  productId: string | null;
+  quantity: number | null;
+  colorName: string | null;
+  colorHex: string | null;
+  totalOrderIls: number | null;
+  customerName: string | null;
+  hasLamination: boolean | null;
+  createdAt: string;
+}
+
+export async function loadConfiguratorDesignsForLead(
+  manychatSubId: string,
+  limit = 10
+): Promise<ConfiguratorDesignRow[]> {
+  await ensureTables();
+  const sid = manychatSubId.trim();
+  if (!sid) return [];
+
+  const res = await db.execute(sql`
+    SELECT id,
+           product_id AS "productId",
+           quantity,
+           color_name AS "colorName",
+           color_hex AS "colorHex",
+           total_order_ils AS "totalOrderIls",
+           customer_name AS "customerName",
+           has_lamination AS "hasLamination",
+           created_at AS "createdAt"
+    FROM configurator_designs
+    WHERE trim(manychat_sub_id) = ${sid}
+    ORDER BY created_at DESC
+    LIMIT ${limit}
+  `);
+
+  const rows = ((res as unknown as { rows?: Record<string, unknown>[] }).rows ?? []);
+  return rows.map((r) => ({
+    id: String(r.id),
+    productId: r.productId ? String(r.productId) : null,
+    quantity: r.quantity != null ? Number(r.quantity) : null,
+    colorName: r.colorName ? String(r.colorName) : null,
+    colorHex: r.colorHex ? String(r.colorHex) : null,
+    totalOrderIls: r.totalOrderIls != null ? Number(r.totalOrderIls) : null,
+    customerName: r.customerName ? String(r.customerName) : null,
+    hasLamination: r.hasLamination === true,
+    createdAt: new Date(String(r.createdAt)).toISOString(),
+  }));
+}

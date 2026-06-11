@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Albadi — מדריך מעצב שקיות 3D</title>
+  <style>
+    @import url("https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;600;700&display=swap");
+    :root {
+      --ink: #1c1815;
+      --muted: #736b62;
+      --accent: #9c4221;
+      --olive: #8b9d6f;
+      --surface: #f5f1e8;
+      --rule: #e5dfd4;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Heebo", system-ui, sans-serif;
+      background: var(--surface);
+      color: var(--ink);
+      line-height: 1.55;
+    }
+    .page {
+      max-width: 820px;
+      margin: 0 auto;
+      padding: 40px 32px 64px;
+      background: #fff;
+    }
+    @media print {
+      body { background: #fff; }
+      .page { padding: 24px; max-width: none; }
+      .no-print { display: none !important; }
+      a { color: inherit; text-decoration: none; }
+    }
+    h1 { font-size: 1.75rem; margin: 0 0 8px; color: var(--accent); }
+    h2 {
+      font-size: 1.1rem;
+      margin: 28px 0 10px;
+      padding-bottom: 6px;
+      border-bottom: 2px solid var(--olive);
+    }
+    h3 { font-size: 0.95rem; margin: 16px 0 6px; }
+    p, li { font-size: 0.92rem; }
+    .subtitle { color: var(--muted); margin-bottom: 24px; }
+    .badge {
+      display: inline-block;
+      background: #e8f0e0;
+      color: #3d4f2e;
+      font-size: 0.75rem;
+      font-weight: 600;
+      padding: 4px 10px;
+      border-radius: 999px;
+      margin-left: 6px;
+    }
+    .badge.pending { background: #fff3cd; color: #856404; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.85rem;
+      margin: 12px 0;
+    }
+    th, td {
+      border: 1px solid var(--rule);
+      padding: 8px 10px;
+      text-align: right;
+    }
+    th { background: var(--surface); }
+    code {
+      background: var(--surface);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 0.82rem;
+      direction: ltr;
+      display: inline-block;
+    }
+    .flow {
+      background: var(--surface);
+      border-radius: 12px;
+      padding: 16px;
+      font-size: 0.85rem;
+      white-space: pre-wrap;
+      direction: ltr;
+      text-align: left;
+    }
+    .ports { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .port-card {
+      border: 1px solid var(--rule);
+      border-radius: 10px;
+      padding: 12px;
+    }
+    .port-card strong { color: var(--accent); font-size: 1.1rem; }
+    .btn {
+      display: inline-block;
+      background: var(--accent);
+      color: #fff;
+      padding: 10px 18px;
+      border-radius: 8px;
+      text-decoration: none;
+      font-weight: 600;
+      margin-top: 12px;
+    }
+    .en { direction: ltr; text-align: left; margin-top: 40px; padding-top: 24px; border-top: 1px dashed var(--rule); }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <p class="no-print"><a class="btn" href="#" onclick="window.print();return false;">הדפס / שמור כ-PDF</a></p>
+
+    <h1>מעצב שקיות Albadi — מדריך שימוש</h1>
+    <p class="subtitle">גרסה 2026-06-11 · מה הושלם, איך לבדוק מקומית, ואיך Eli שולח ללקוח ב-WhatsApp</p>
+
+    <h2>פורטים לבדיקה מקומית</h2>
+    <div class="ports">
+      <div class="port-card">
+        <div>albadi-crm (מנוע 3D + CRM)</div>
+        <strong>:3000</strong>
+        <ul>
+          <li><code>/configurator</code> — מעצב 3D</li>
+          <li><code>/dashboard/v3</code> — קונסולת Eli</li>
+          <li><code>/api/configurator/quote</code> — מחירון</li>
+        </ul>
+      </div>
+      <div class="port-card">
+        <div>bag-quote-app (אתר לקוח)</div>
+        <strong>:8081</strong> (ווב)
+        <ul>
+          <li><code>/landing</code> — דף נחיתה</li>
+          <li><code>/configurator</code> — iframe למעצב</li>
+          <li><code>:3001</code> — API מקומי (אם 3000 תפוס)</li>
+        </ul>
+      </div>
+    </div>
+
+    <h2>מה הושלם <span class="badge">מוכן</span></h2>
+    <table>
+      <thead><tr><th>יכולת</th><th>סטטוס</th><th>איפה</th></tr></thead>
+      <tbody>
+        <tr><td>44 צבעי בד (SKU אמיתי)</td><td>✅</td><td>מעצב → לשונית בד וצבע</td></tr>
+        <tr><td>העלאת לוגו (PNG/JPG/SVG)</td><td>✅</td><td>לשונית לוגו + Decal 3D</td></tr>
+        <tr><td>תצוגת שקית 3D (GLB + סיבוב)</td><td>✅</td><td>במה מלאה</td></tr>
+        <tr><td>מחירון אמיתי (₪ ILS)</td><td>✅</td><td>מנוע המפעל + הגדרות CRM</td></tr>
+        <tr><td>הורדת PDF עם מוקאפ</td><td>✅</td><td>מגירת הצעת מחיר</td></tr>
+        <tr><td>שליחת קישור מ-CRM ל-WhatsApp</td><td>✅</td><td>כפתור מעצב 3D בליד</td></tr>
+        <tr><td>מילוי פרטי לקוח מקישור אישי</td><td>✅</td><td>פרמטר <code>?t=token</code></td></tr>
+        <tr><td>שמירת עיצוב ב-CRM</td><td>✅</td><td>אחרי הורדת PDF + פאנל בליד</td></tr>
+        <tr><td>חיבור לאתר (bag-quote-app)</td><td>✅</td><td><code>/configurator</code> iframe</td></tr>
+        <tr><td>דף נחיתה / פרודקשן</td><td>⏳</td><td>מטופל ע&quot;י צוות דיפלוי</td></tr>
+      </tbody>
+    </table>
+
+    <h2>ממשק המעצב (לקוח)</h2>
+    <h3>1. בד וצבע</h3>
+    <p>גלילה אופקית בין 44 גוונים. לחיצה על צבע מעדכנת את השקית בזמן אמת. אפשר להעתיק SKU/HEX.</p>
+    <h3>2. לוגו</h3>
+    <p>העלאת קובץ → גרירה על השקית או סליידרים (גודל, מיקום, סיבוב). צילום PNG מהסרגל הימני.</p>
+    <h3>3. הצעת מחיר</h3>
+    <p>בחירת גודל שקית (p1–p14), כמות, משלוח, ידיות, למינציה, צבעי לוגו. המחיר מתעדכן אוטומטית מהמחירון.</p>
+    <p>מילוי שם / אימייל / טלפון → <strong>הורד PDF</strong> — כולל צילום 3D וסיכום ₪.</p>
+
+    <h2>זרימת CRM (Eli)</h2>
+    <div class="flow">Dashboard → פתח ליד → כפתור "מעצב 3D"
+  → WhatsApp CTA ללקוח
+  → לקוח פותח קישור אישי (?t=...)
+  → עיצוב + PDF
+  → עיצוב נשמר בליד + הערה + לוג פעילות</div>
+    <p>הכפתור נמצא ב<strong>סקירה</strong> וב<strong>צ׳אט</strong> (Composer). בלשונית סקירה מופיעים עיצובים שמורים.</p>
+
+    <h2>רשימת בדיקה (אחת־אחת)</h2>
+    <ol>
+      <li>פתח <code>http://localhost:3000/configurator</code> — וודא שהשקית נטענת</li>
+      <li>בחר צבע — השקית משתנה</li>
+      <li>העלה לוגו — מופיע על השקית</li>
+      <li>לשונית הצעת מחיר — שנה כמות — המחיר מתעדכן</li>
+      <li>הורד PDF — קובץ עם מוקאפ ומחיר ₪</li>
+      <li>פתח <code>http://localhost:8081/configurator</code> — iframe לאותו מעצב</li>
+      <li>Dashboard → ליד → מעצב 3D (דורש DB + Bridge)</li>
+    </ol>
+
+    <h2>משתני סביבה (פרודקשן)</h2>
+    <table>
+      <tr><td><code>CONFIGURATOR_PUBLIC_URL</code></td><td>https://albadi.ecobrotherss.com/configurator</td></tr>
+      <tr><td><code>NEXT_PUBLIC_CONFIGURATOR_API_URL</code></td><td>ריק אם UI ו-API באותו דומיין</td></tr>
+    </table>
+
+    <div class="en">
+      <h2>English summary</h2>
+      <p><strong>Two repos:</strong> albadi-crm (3D engine, pricing API, CRM send) + bag-quote-app (customer site with /configurator iframe).</p>
+      <p><strong>Completed:</strong> 44 colors, logo upload, 3D GLB viewer, real ILS pricing, PDF export, WhatsApp link from CRM, design save on lead.</p>
+      <p><strong>Pending deploy:</strong> merge SEE-configurator → main, point albadi.ecobrotherss.com/configurator, landing CTA.</p>
+    </div>
+
+    <p style="margin-top:32px;font-size:0.8rem;color:var(--muted)">Albadi CRM · מעצב שקיות 3D · albadi-crm/docs</p>
+  </div>
+</body>
+</html>

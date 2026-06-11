@@ -1535,6 +1535,36 @@ export async function sendConfiguratorLinkAction(
   }
 }
 
+export type ConfiguratorDesignRow = {
+  id: string;
+  productId: string | null;
+  quantity: number | null;
+  colorName: string | null;
+  colorHex: string | null;
+  totalOrderIls: number | null;
+  customerName: string | null;
+  hasLamination: boolean | null;
+  createdAt: string;
+};
+
+export async function loadConfiguratorDesignsAction(
+  manychatSubId: string
+): Promise<
+  { ok: true; designs: ConfiguratorDesignRow[] } | { ok: false; error: string }
+> {
+  const cleanSid = manychatSubId.trim();
+  if (!cleanSid) return { ok: false, error: "missing sid" };
+  try {
+    const { loadConfiguratorDesignsForLead } = await import(
+      "@/lib/configurator/sessions"
+    );
+    const designs = await loadConfiguratorDesignsForLead(cleanSid);
+    return { ok: true, designs };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "load failed" };
+  }
+}
+
 /** Read-only fetch of the lead activity log for the ActivityTab. */
 export async function loadLeadEventsAction(
   manychatSubId: string
