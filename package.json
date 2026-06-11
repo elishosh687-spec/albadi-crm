@@ -14,7 +14,10 @@
     "bot:seed-leads": "tsx scripts/seed-leads.ts",
     "drafts:seed": "tsx scripts/seed-draft.ts",
     "drafts:test": "tsx scripts/test-drafts-api.ts",
-    "drafts:backfill-sender": "tsx scripts/backfill-message-sender.ts"
+    "drafts:backfill-sender": "tsx scripts/backfill-message-sender.ts",
+    "docs:capture-screenshots": "tsx scripts/capture-delivery-screenshots.ts",
+    "docs:delivery-pdf": "tsx scripts/generate-client-delivery-pdf-en.ts",
+    "docs:delivery": "tsx scripts/capture-delivery-screenshots.ts && tsx scripts/generate-client-delivery-pdf-en.ts"
   },
   "dependencies": {
     "@neondatabase/serverless": "^0.10.4",
@@ -46,6 +49,7 @@
     "@types/react-dom": "19.0.2",
     "autoprefixer": "^10.5.0",
     "drizzle-kit": "^0.30.1",
+    "playwright": "1.52.0",
     "postcss": "^8.5.14",
     "tailwindcss": "^4.3.0",
     "tsx": "^4.19.2",
