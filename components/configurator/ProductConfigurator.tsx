@@ -8,8 +8,10 @@ import {
   Check,
   Copy,
   FileText,
+  Film,
   Hand,
   ImagePlus,
+  Loader2,
   Maximize,
   Minimize,
   Pause,
@@ -25,6 +27,13 @@ import type { LogoPlacementMode, ViewerApi } from "./BagViewer3D";
 import { LOGO_POSITION_LIMITS } from "./BagViewer3D";
 import PricingContractForm from "./PricingContractForm";
 import DownloadPdfButton from "./DownloadPdfButton";
+import { CustomerMediaExports } from "./CustomerMediaExports";
+import {
+  downloadBlob,
+  downloadDataUrl,
+  mockupBaseName,
+  pickVideoMimeType,
+} from "@/lib/configurator/download-mockup";
 import {
   DEFAULT_CUSTOMER_INFO,
   DEFAULT_QUOTE_SPEC,
@@ -201,6 +210,7 @@ export const ProductConfigurator: React.FC = () => {
   const [captureReady, setCaptureReady] = useState(false);
   const [logoLoading, setLogoLoading] = useState(false);
   const [colorCopied, setColorCopied] = useState(false);
+  const [exportingVideo, setExportingVideo] = useState(false);
 
   const pricingInfo = useConfiguratorQuote(quoteSpec);
   const isCompact = useCompactLayout();
@@ -385,10 +395,23 @@ export const ProductConfigurator: React.FC = () => {
   const handleSnapshotDownload = async () => {
     const dataUrl = await getScreenshot();
     if (!dataUrl) return;
-    const link = document.createElement("a");
-    link.href = dataUrl;
-    link.download = "albadi-bag-mockup.png";
-    link.click();
+    downloadDataUrl(dataUrl, `${mockupBaseName(selectedColor?.sku)}.png`);
+  };
+
+  const handleVideoDownload = async () => {
+    const api = viewerApiRef.current;
+    if (!api?.recordVideo || exportingVideo || !captureReady) return;
+    setExportingVideo(true);
+    try {
+      const blob = await api.recordVideo({ seconds: 8, fps: 30 });
+      const { extension } = pickVideoMimeType();
+      const ext = blob.type.includes("mp4") ? "mp4" : extension;
+      downloadBlob(blob, `${mockupBaseName(selectedColor?.sku)}.${ext}`);
+    } catch (err) {
+      console.warn("[configurator] video export failed", err);
+    } finally {
+      setExportingVideo(false);
+    }
   };
 
   const toggleFullscreen = () => {
@@ -454,12 +477,24 @@ export const ProductConfigurator: React.FC = () => {
         )}
       </ToolbarButton>
       <ToolbarButton
-        label="הורד צילום מסך PNG"
+        label="הורד תמונה PNG"
         onClick={handleSnapshotDownload}
         disabled={!captureReady}
         compact={isCompact}
       >
         <Camera className={isCompact ? "size-3.5" : "size-4"} />
+      </ToolbarButton>
+      <ToolbarButton
+        label={exportingVideo ? "מקליט וידאו…" : "הורד וידאו סיבוב"}
+        onClick={() => void handleVideoDownload()}
+        disabled={!captureReady || exportingVideo}
+        compact={isCompact}
+      >
+        {exportingVideo ? (
+          <Loader2 className={`${isCompact ? "size-3.5" : "size-4"} animate-spin`} />
+        ) : (
+          <Film className={isCompact ? "size-3.5" : "size-4"} />
+        )}
       </ToolbarButton>
       <ToolbarButton
         label="הצעת מחיר ו-PDF"
@@ -1116,6 +1151,13 @@ export const ProductConfigurator: React.FC = () => {
               shippingOptions={CONFIGURATOR_SHIPPING_OPTIONS}
               onCustomerInfoChange={handleCustomerInfoChange}
               onQuoteSpecChange={handleQuoteSpecChange}
+            />
+
+            <CustomerMediaExports
+              captureReady={captureReady}
+              colorSku={selectedColor?.sku}
+              getScreenshot={getScreenshot}
+              viewerApiRef={viewerApiRef}
             />
 
             <DownloadPdfButton

@@ -5,6 +5,7 @@ import { Canvas, useFrame, useThree, type ThreeEvent } from "@react-three/fiber"
 import { Decal, OrbitControls, PerspectiveCamera, useGLTF } from "@react-three/drei";
 import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 import * as THREE from "three";
+import { pickVideoMimeType } from "@/lib/configurator/download-mockup";
 
 export type LogoPlacementMode = "drag" | "controls";
 
@@ -13,9 +14,18 @@ export const LOGO_POSITION_LIMITS = {
   y: { min: -0.6, max: 0.75 },
 } as const;
 
+export interface RecordVideoOptions {
+  /** Recording length in seconds. Default 8. */
+  seconds?: number;
+  /** Capture frame rate. Default 30. */
+  fps?: number;
+}
+
 export interface ViewerApi {
   screenshot: () => Promise<string>;
   resetView: () => void;
+  /** 360° turntable clip from the live canvas (MP4 or WebM). */
+  recordVideo: (options?: RecordVideoOptions) => Promise<Blob>;
 }
 
 interface BagViewer3DProps {
@@ -460,6 +470,59 @@ function ViewerScene({
         if (controls) {
           controls.target.set(...DEFAULT_TARGET);
           controls.update();
+        }
+      },
+      recordVideo: async (options = {}) => {
+        const seconds = Math.min(20, Math.max(4, options.seconds ?? 8));
+        const fps = Math.min(60, Math.max(24, options.fps ?? 30));
+        const canvas = gl.domElement;
+
+        if (typeof MediaRecorder === "undefined" || !canvas.captureStream) {
+          throw new Error("הדפדפן לא תומך בהקלטת וידאו");
+        }
+
+        gl.render(scene, camera);
+        const stream = canvas.captureStream(fps);
+        const { mimeType } = pickVideoMimeType();
+        const chunks: BlobPart[] = [];
+
+        const controls = controlsRef.current;
+        const prevAutoRotate = controls?.autoRotate ?? false;
+        const prevSpeed = controls?.autoRotateSpeed ?? 1.5;
+
+        if (controls) {
+          controls.autoRotate = true;
+          controls.autoRotateSpeed = 2.4;
+          controls.update();
+        }
+
+        const recorder = new MediaRecorder(stream, {
+          mimeType,
+          videoBitsPerSecond: 4_500_000,
+        });
+
+        try {
+          return await new Promise<Blob>((resolve, reject) => {
+            recorder.ondataavailable = (event) => {
+              if (event.data.size > 0) chunks.push(event.data);
+            };
+            recorder.onerror = () => {
+              reject(recorder.error ?? new Error("הקלטת וידאו נכשלה"));
+            };
+            recorder.onstop = () => {
+              resolve(new Blob(chunks, { type: mimeType }));
+            };
+            recorder.start(250);
+            window.setTimeout(() => {
+              if (recorder.state !== "inactive") recorder.stop();
+            }, seconds * 1000);
+          });
+        } finally {
+          stream.getTracks().forEach((track) => track.stop());
+          if (controls) {
+            controls.autoRotate = prevAutoRotate;
+            controls.autoRotateSpeed = prevSpeed;
+          }
         }
       },
     });
