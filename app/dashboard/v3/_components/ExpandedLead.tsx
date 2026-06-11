@@ -11,6 +11,7 @@ import {
   ExternalLink,
   Sparkles,
   Send,
+  Box,
   Clock,
   LayoutDashboard,
   MessagesSquare,
@@ -34,6 +35,7 @@ import {
   openOpportunityAction,
   listTemplatesAction,
   sendTemplateAction,
+  sendConfiguratorLinkAction,
   setManualFollowupAction,
   approveDraftAction,
   rejectDraftAction,
@@ -428,6 +430,14 @@ function OverviewTab({
     });
   };
 
+  const sendConfigurator = () => {
+    setMsg(null);
+    startTransition(async () => {
+      const r = await sendConfiguratorLinkAction(sid);
+      setMsg({ ok: r.ok, text: r.ok ? r.message ?? "נשלח מעצב 3D" : r.error ?? "כשל" });
+    });
+  };
+
   const waLink = summary.phone
     ? `https://wa.me/${summary.phone.replace(/[^0-9]/g, "")}`
     : null;
@@ -522,6 +532,16 @@ function OverviewTab({
                 <ExternalLink className="size-3" />
               </a>
             )}
+            <button
+              type="button"
+              onClick={sendConfigurator}
+              disabled={isPending}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-background/40 px-3 py-2 text-xs font-medium hover:bg-secondary disabled:opacity-50"
+              title="שלח קישור למעצב 3D — צבע, לוגו והצעת מחיר"
+            >
+              <Box className="size-3.5" />
+              מעצב 3D
+            </button>
             <div className="relative">
               <button
                 type="button"

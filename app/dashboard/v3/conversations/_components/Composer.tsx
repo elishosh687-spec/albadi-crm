@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
-import { Send, Sparkles, ExternalLink } from "lucide-react";
+import { Send, Sparkles, ExternalLink, Box } from "lucide-react";
 import { cn } from "@/lib/cn";
 import {
   suggestRepliesAction,
@@ -9,6 +9,7 @@ import {
   setBotPaused,
   listTemplatesAction,
   sendTemplateAction,
+  sendConfiguratorLinkAction,
   type TemplateRow,
 } from "@/app/actions/v2";
 
@@ -36,6 +37,14 @@ export function Composer({
       if (r.ok) setTemplates((r.templates ?? []).filter((t) => t.active));
     });
   }, []);
+
+  const sendConfigurator = () => {
+    setMsg(null);
+    startTransition(async () => {
+      const r = await sendConfiguratorLinkAction(sid);
+      setMsg({ ok: r.ok, text: r.ok ? r.message ?? "נשלח מעצב 3D" : r.error ?? "כשל" });
+    });
+  };
 
   const sendTemplate = (templateId: number) => {
     setShowTemplatePicker(false);
@@ -208,6 +217,16 @@ export function Composer({
             <ExternalLink className="size-3" />
           </a>
         )}
+        <button
+          type="button"
+          onClick={sendConfigurator}
+          disabled={isPending}
+          className="inline-flex items-center gap-1 text-muted-foreground hover:text-foreground shrink-0 disabled:opacity-50"
+          title="שלח קישור למעצב 3D"
+        >
+          <Box className="size-3" />
+          מעצב 3D
+        </button>
       </div>
 
       {showPauseAsk && (

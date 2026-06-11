@@ -1,13 +1,13 @@
 "use client";
 
 import React from "react";
-import { Building2, Mail, Package2, Phone, ReceiptText, User } from "lucide-react";
+import { Building2, Loader2, Mail, Package2, Phone, ReceiptText, User } from "lucide-react";
 import { colors, fontStack, radius, size, space, weight } from "@/lib/ui/tokens";
 import {
-  calculateTotalPrice,
   formatCurrency,
   type CustomerInfo,
   type PricingInfo,
+  type QuoteSpec,
 } from "./configurator-state";
 
 interface PricingContractFormProps {
@@ -15,8 +15,11 @@ interface PricingContractFormProps {
   hasLogo: boolean;
   customerInfo: CustomerInfo;
   pricingInfo: PricingInfo;
+  quoteSpec: QuoteSpec;
+  products: Array<{ id: string; dimensions: string; description: string }>;
+  shippingOptions: Array<{ id: string; name: string; description: string }>;
   onCustomerInfoChange: (info: CustomerInfo) => void;
-  onPricingChange: (pricing: PricingInfo) => void;
+  onQuoteSpecChange: (spec: QuoteSpec) => void;
 }
 
 const INPUT_STYLE: React.CSSProperties = {
@@ -64,44 +67,33 @@ export const PricingContractForm: React.FC<PricingContractFormProps> = ({
   hasLogo,
   customerInfo,
   pricingInfo,
+  quoteSpec,
+  products,
+  shippingOptions,
   onCustomerInfoChange,
-  onPricingChange,
+  onQuoteSpecChange,
 }) => {
   const handleCustomerChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     const nextCustomerInfo = {
       ...customerInfo,
-      [name]: name === "quantity" ? Math.max(0, Number(value) || 0) : value,
+      [name]: name === "quantity" ? Math.max(1, Number(value) || 0) : value,
     };
     onCustomerInfoChange(nextCustomerInfo);
 
     if (name === "quantity") {
-      onPricingChange({
-        ...pricingInfo,
+      onQuoteSpecChange({
+        ...quoteSpec,
         quantity: nextCustomerInfo.quantity,
-        totalPrice: calculateTotalPrice(
-          nextCustomerInfo.quantity,
-          pricingInfo.unitPrice,
-          pricingInfo.setupFee
-        ),
       });
     }
   };
 
-  const handlePricingInputChange = (field: "unitPrice" | "setupFee", value: string) => {
-    const nextValue = Math.max(0, Number(value) || 0);
-    const nextPricing = {
-      ...pricingInfo,
-      [field]: nextValue,
-      totalPrice: calculateTotalPrice(
-        pricingInfo.quantity,
-        field === "unitPrice" ? nextValue : pricingInfo.unitPrice,
-        field === "setupFee" ? nextValue : pricingInfo.setupFee
-      ),
-    };
-
-    onPricingChange(nextPricing);
+  const patchSpec = (patch: Partial<QuoteSpec>) => {
+    onQuoteSpecChange({ ...quoteSpec, ...patch });
   };
+
+  const selectedProduct = products.find((p) => p.id === quoteSpec.productId);
 
   return (
     <div className="grid gap-6">
@@ -187,8 +179,22 @@ export const PricingContractForm: React.FC<PricingContractFormProps> = ({
           }}
         >
           <ReceiptText className="size-4" />
-          תמחור
+          תמחור (מנוע המחירון)
         </div>
+
+        <Field label="גודל שקית">
+          <select
+            value={quoteSpec.productId}
+            onChange={(e) => patchSpec({ productId: e.target.value })}
+            style={INPUT_STYLE}
+          >
+            {products.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.dimensions} — {p.description}
+              </option>
+            ))}
+          </select>
+        </Field>
 
         <Field label="כמות" icon={<Package2 className="size-4" />}>
           <input
@@ -196,32 +202,58 @@ export const PricingContractForm: React.FC<PricingContractFormProps> = ({
             name="quantity"
             value={customerInfo.quantity}
             onChange={handleCustomerChange}
-            min="1"
+            min="1000"
+            step="500"
             style={INPUT_STYLE}
           />
         </Field>
 
-        <Field label="מחיר ליחידה (USD)">
-          <input
-            type="number"
-            min="0"
-            step="0.01"
-            value={pricingInfo.unitPrice}
-            onChange={(event) => handlePricingInputChange("unitPrice", event.target.value)}
-            style={INPUT_STYLE}
-          />
-        </Field>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Field label="משלוח">
+            <select
+              value={quoteSpec.shippingOptionId}
+              onChange={(e) => patchSpec({ shippingOptionId: e.target.value })}
+              style={INPUT_STYLE}
+            >
+              {shippingOptions.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name} — {s.description}
+                </option>
+              ))}
+            </select>
+          </Field>
 
-        <Field label="Setup fee (USD)">
-          <input
-            type="number"
-            min="0"
-            step="0.01"
-            value={pricingInfo.setupFee}
-            onChange={(event) => handlePricingInputChange("setupFee", event.target.value)}
-            style={INPUT_STYLE}
-          />
-        </Field>
+          <Field label="צבעי לוגו">
+            <select
+              value={quoteSpec.logoColors}
+              onChange={(e) => patchSpec({ logoColors: Number(e.target.value) })}
+              style={INPUT_STYLE}
+            >
+              <option value={1}>צבע אחד</option>
+              <option value={2}>2 צבעים</option>
+              <option value={3}>3 צבעים</option>
+            </select>
+          </Field>
+        </div>
+
+        <div className="flex flex-wrap gap-4 text-sm">
+          <label className="inline-flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={quoteSpec.hasHandles}
+              onChange={(e) => patchSpec({ hasHandles: e.target.checked })}
+            />
+            ידיות
+          </label>
+          <label className="inline-flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={quoteSpec.hasLamination}
+              onChange={(e) => patchSpec({ hasLamination: e.target.checked })}
+            />
+            למינציה
+          </label>
+        </div>
 
         <div
           style={{
@@ -231,48 +263,75 @@ export const PricingContractForm: React.FC<PricingContractFormProps> = ({
             padding: space.lg,
           }}
         >
-          <div
-            style={{
-              display: "grid",
-              gap: space.sm,
-              fontSize: size.sm,
-              color: colors.inkMuted,
-            }}
-          >
-            <div className="flex items-center justify-between gap-3">
-              <span>מוצר</span>
-              <strong style={{ color: colors.ink }}>Non-woven bag</strong>
+          {pricingInfo.loading ? (
+            <div className="flex items-center gap-2 text-sm" style={{ color: colors.inkMuted }}>
+              <Loader2 className="size-4 animate-spin" />
+              מחשב מחיר...
             </div>
-            <div className="flex items-center justify-between gap-3">
-              <span>צבע</span>
-              <strong style={{ color: colors.ink }}>{bagColor}</strong>
-            </div>
-            <div className="flex items-center justify-between gap-3">
-              <span>לוגו</span>
-              <strong style={{ color: hasLogo ? colors.success : colors.warning }}>
-                {hasLogo ? "Uploaded" : "Not uploaded"}
-              </strong>
-            </div>
-            <div className="flex items-center justify-between gap-3">
-              <span>Unit price</span>
-              <strong style={{ color: colors.ink }}>{formatCurrency(pricingInfo.unitPrice)}</strong>
-            </div>
-            <div className="flex items-center justify-between gap-3">
-              <span>Setup fee</span>
-              <strong style={{ color: colors.ink }}>{formatCurrency(pricingInfo.setupFee)}</strong>
-            </div>
+          ) : pricingInfo.error ? (
+            <p style={{ margin: 0, fontSize: size.sm, color: colors.danger }}>
+              {pricingInfo.error}
+            </p>
+          ) : (
             <div
-              className="flex items-center justify-between gap-3"
               style={{
-                paddingTop: space.sm,
-                borderTop: `1px solid ${colors.rule}`,
-                fontSize: size.md,
+                display: "grid",
+                gap: space.sm,
+                fontSize: size.sm,
+                color: colors.inkMuted,
               }}
             >
-              <span style={{ color: colors.ink, fontWeight: weight.medium }}>Total</span>
-              <strong style={{ color: colors.accent }}>{formatCurrency(pricingInfo.totalPrice)}</strong>
+              <div className="flex items-center justify-between gap-3">
+                <span>מידות</span>
+                <strong style={{ color: colors.ink }}>
+                  {selectedProduct?.dimensions ?? pricingInfo.productDimensions}
+                </strong>
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <span>צבע בד</span>
+                <strong style={{ color: colors.ink }}>{bagColor}</strong>
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <span>לוגו</span>
+                <strong style={{ color: hasLogo ? colors.success : colors.warning }}>
+                  {hasLogo ? "הועלה" : "לא הועלה"}
+                </strong>
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <span>משלוח</span>
+                <strong style={{ color: colors.ink }}>{pricingInfo.shippingOptionName}</strong>
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <span>מחיר ליחידה</span>
+                <strong style={{ color: colors.ink }}>
+                  {formatCurrency(pricingInfo.unitPriceIls)}
+                </strong>
+              </div>
+              {pricingInfo.altShipping ? (
+                <div className="flex items-center justify-between gap-3">
+                  <span>חלופה ({pricingInfo.altShipping.shippingOptionName})</span>
+                  <strong style={{ color: colors.inkMuted }}>
+                    {formatCurrency(pricingInfo.altShipping.unitPriceIls)}/יח׳
+                  </strong>
+                </div>
+              ) : null}
+              <div
+                className="flex items-center justify-between gap-3"
+                style={{
+                  paddingTop: space.sm,
+                  borderTop: `1px solid ${colors.rule}`,
+                  fontSize: size.md,
+                }}
+              >
+                <span style={{ color: colors.ink, fontWeight: weight.medium }}>
+                  סה״כ הזמנה ({pricingInfo.quantity} יח׳)
+                </span>
+                <strong style={{ color: colors.accent }}>
+                  {formatCurrency(pricingInfo.totalOrderIls)}
+                </strong>
+              </div>
             </div>
-          </div>
+          )}
         </div>
       </div>
     </div>

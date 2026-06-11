@@ -10,6 +10,7 @@ import {
   hasRequiredCustomerFields,
   type CustomerInfo,
   type PricingInfo,
+  type QuoteSpec,
 } from "./configurator-state";
 
 type FontDoc = jsPDF & {
@@ -34,20 +35,24 @@ function arrayBufferToBase64(buffer: ArrayBuffer) {
 interface DownloadPdfButtonProps {
   customerInfo: CustomerInfo;
   pricingInfo: PricingInfo;
+  quoteSpec: QuoteSpec;
   bagColorName: string;
   bagColorHex: string;
   hasLogo: boolean;
   screenshotCallback?: () => Promise<string>;
+  onAfterDownload?: () => Promise<void>;
   disabled?: boolean;
 }
 
 export const DownloadPdfButton: React.FC<DownloadPdfButtonProps> = ({
   customerInfo,
   pricingInfo,
+  quoteSpec,
   bagColorName,
   bagColorHex,
   hasLogo,
   screenshotCallback,
+  onAfterDownload,
   disabled = false,
 }) => {
   const [loading, setLoading] = useState(false);
@@ -147,9 +152,13 @@ export const DownloadPdfButton: React.FC<DownloadPdfButtonProps> = ({
       yPosition += 4;
 
       sectionTitle("Product summary");
-      row("Product", "Custom non-woven bag");
+      row("Bag size", pricingInfo.productDimensions || quoteSpec.productId);
       row("Selected color", bagColorName);
       row("Logo", hasLogo ? "Uploaded" : "Not uploaded");
+      row("Logo colors", `${quoteSpec.logoColors}`);
+      row("Handles", quoteSpec.hasHandles ? "Yes" : "No");
+      row("Lamination", quoteSpec.hasLamination ? "Yes" : "No");
+      row("Shipping", pricingInfo.shippingOptionName || quoteSpec.shippingOptionId);
       row("Quantity", `${pricingInfo.quantity} pcs`);
 
       doc.setDrawColor(150, 150, 150);
@@ -166,11 +175,15 @@ export const DownloadPdfButton: React.FC<DownloadPdfButtonProps> = ({
       doc.text("Color swatch", margin + 16, yPosition + 1);
       yPosition += 12;
 
-      sectionTitle("Pricing");
-      row("Unit price", formatCurrency(pricingInfo.unitPrice));
-      row("Setup fee", formatCurrency(pricingInfo.setupFee));
-      row("Line total", formatCurrency(pricingInfo.unitPrice * pricingInfo.quantity));
-      row("Grand total", formatCurrency(pricingInfo.totalPrice), { strong: true });
+      sectionTitle("Pricing (ILS)");
+      row("Unit price", formatCurrency(pricingInfo.unitPriceIls));
+      row("Order total", formatCurrency(pricingInfo.totalOrderIls), { strong: true });
+      if (pricingInfo.altShipping) {
+        row(
+          `Alt. shipping (${pricingInfo.altShipping.shippingOptionName})`,
+          formatCurrency(pricingInfo.altShipping.totalOrderIls)
+        );
+      }
       yPosition += 4;
 
       const screenshot = await screenshotCallback();
@@ -223,6 +236,13 @@ export const DownloadPdfButton: React.FC<DownloadPdfButtonProps> = ({
       );
 
       doc.save("pricing-contract-non-woven-bag.pdf");
+      if (onAfterDownload) {
+        try {
+          await onAfterDownload();
+        } catch (saveErr) {
+          console.warn("[configurator] CRM save after PDF failed", saveErr);
+        }
+      }
       setSuccess(true);
       setTimeout(() => setSuccess(false), 3000);
     } catch (err) {

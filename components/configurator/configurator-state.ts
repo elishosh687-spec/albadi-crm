@@ -7,11 +7,36 @@ export interface CustomerInfo {
   notes: string;
 }
 
-export interface PricingInfo {
-  unitPrice: number;
-  setupFee: number;
+export interface QuoteSpec {
+  productId: string;
   quantity: number;
-  totalPrice: number;
+  hasHandles: boolean;
+  logoColors: number;
+  hasLamination: boolean;
+  shippingOptionId: string;
+}
+
+export interface PricingInfo {
+  quantity: number;
+  unitPriceIls: number;
+  totalOrderIls: number;
+  productId: string;
+  productDimensions: string;
+  productDescription: string;
+  shippingOptionId: string;
+  shippingOptionName: string;
+  hasHandles: boolean;
+  logoColors: number;
+  hasLamination: boolean;
+  profitMargin: number;
+  altShipping: {
+    shippingOptionId: string;
+    shippingOptionName: string;
+    unitPriceIls: number;
+    totalOrderIls: number;
+  } | null;
+  loading: boolean;
+  error: string | null;
 }
 
 export const DEFAULT_CUSTOMER_INFO: CustomerInfo = {
@@ -19,42 +44,41 @@ export const DEFAULT_CUSTOMER_INFO: CustomerInfo = {
   email: "",
   phone: "",
   company: "",
-  quantity: 500,
+  quantity: 1000,
   notes: "",
 };
 
-export const DEFAULT_PRICING_INFO: PricingInfo = {
-  unitPrice: 0.68,
-  setupFee: 35,
-  quantity: DEFAULT_CUSTOMER_INFO.quantity,
-  totalPrice: 0,
+export const DEFAULT_QUOTE_SPEC: QuoteSpec = {
+  productId: "p1",
+  quantity: 1000,
+  hasHandles: true,
+  logoColors: 1,
+  hasLamination: false,
+  shippingOptionId: "s1",
 };
 
-export function calculateTotalPrice(quantity: number, unitPrice: number, setupFee: number) {
-  const safeQuantity = Number.isFinite(quantity) ? Math.max(0, quantity) : 0;
-  const safeUnitPrice = Number.isFinite(unitPrice) ? Math.max(0, unitPrice) : 0;
-  const safeSetupFee = Number.isFinite(setupFee) ? Math.max(0, setupFee) : 0;
-
-  return Number((safeQuantity * safeUnitPrice + safeSetupFee).toFixed(2));
-}
-
-export function normalizePricing(pricing: PricingInfo): PricingInfo {
-  const quantity = Number.isFinite(pricing.quantity) ? Math.max(0, pricing.quantity) : 0;
-  const unitPrice = Number.isFinite(pricing.unitPrice) ? Math.max(0, pricing.unitPrice) : 0;
-  const setupFee = Number.isFinite(pricing.setupFee) ? Math.max(0, pricing.setupFee) : 0;
-
-  return {
-    quantity,
-    unitPrice,
-    setupFee,
-    totalPrice: calculateTotalPrice(quantity, unitPrice, setupFee),
-  };
-}
+export const DEFAULT_PRICING_INFO: PricingInfo = {
+  quantity: DEFAULT_QUOTE_SPEC.quantity,
+  unitPriceIls: 0,
+  totalOrderIls: 0,
+  productId: DEFAULT_QUOTE_SPEC.productId,
+  productDimensions: "",
+  productDescription: "",
+  shippingOptionId: DEFAULT_QUOTE_SPEC.shippingOptionId,
+  shippingOptionName: "",
+  hasHandles: DEFAULT_QUOTE_SPEC.hasHandles,
+  logoColors: DEFAULT_QUOTE_SPEC.logoColors,
+  hasLamination: DEFAULT_QUOTE_SPEC.hasLamination,
+  profitMargin: 0,
+  altShipping: null,
+  loading: true,
+  error: null,
+};
 
 export function formatCurrency(value: number) {
-  return new Intl.NumberFormat("en-US", {
+  return new Intl.NumberFormat("he-IL", {
     style: "currency",
-    currency: "USD",
+    currency: "ILS",
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   }).format(value);
@@ -62,4 +86,23 @@ export function formatCurrency(value: number) {
 
 export function hasRequiredCustomerFields(customerInfo: CustomerInfo) {
   return Boolean(customerInfo.name.trim() && customerInfo.email.trim() && customerInfo.phone.trim());
+}
+
+export function normalizePricing(pricing: PricingInfo): PricingInfo {
+  const quantity = Number.isFinite(pricing.quantity)
+    ? Math.max(1, Math.round(pricing.quantity))
+    : 1;
+  const unitPriceIls = Number.isFinite(pricing.unitPriceIls)
+    ? Math.max(0, pricing.unitPriceIls)
+    : 0;
+  const totalOrderIls = Number.isFinite(pricing.totalOrderIls)
+    ? Math.max(0, pricing.totalOrderIls)
+    : 0;
+
+  return {
+    ...pricing,
+    quantity,
+    unitPriceIls,
+    totalOrderIls,
+  };
 }

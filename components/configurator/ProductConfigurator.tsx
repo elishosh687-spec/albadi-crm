@@ -2,6 +2,7 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
+import { useSearchParams } from "next/navigation";
 import {
   Camera,
   Check,
@@ -26,16 +27,21 @@ import PricingContractForm from "./PricingContractForm";
 import DownloadPdfButton from "./DownloadPdfButton";
 import {
   DEFAULT_CUSTOMER_INFO,
-  DEFAULT_PRICING_INFO,
+  DEFAULT_QUOTE_SPEC,
   formatCurrency,
   hasRequiredCustomerFields,
-  normalizePricing,
   type CustomerInfo,
-  type PricingInfo,
+  type QuoteSpec,
 } from "./configurator-state";
 import ColorSwatchRail from "./ColorSwatchRail";
 import { processLogoFile } from "./logo-assets";
 import { useCompactLayout } from "./useCompactLayout";
+import { useConfiguratorQuote } from "./useConfiguratorQuote";
+import { getConfiguratorApiBase } from "@/lib/configurator/urls";
+import {
+  CONFIGURATOR_PRODUCT_OPTIONS,
+  CONFIGURATOR_SHIPPING_OPTIONS,
+} from "@/lib/configurator/catalog-client";
 
 const BagViewer3D = dynamic(() => import("./BagViewer3D"), { ssr: false });
 
@@ -171,6 +177,9 @@ function MiniSlider({
 }
 
 export const ProductConfigurator: React.FC = () => {
+  const searchParams = useSearchParams();
+  const sessionToken = searchParams.get("t")?.trim() || null;
+
   const [selectedColorHex, setSelectedColorHex] = useState<string>(
     DEFAULT_BAG_COLOR?.hex ?? "#2B2A28"
   );
@@ -183,9 +192,8 @@ export const ProductConfigurator: React.FC = () => {
   const [logoRotation, setLogoRotation] = useState<number>(DEFAULT_LOGO_STATE.rotation);
   const [logoPlacementMode, setLogoPlacementMode] = useState<LogoPlacementMode>("drag");
   const [customerInfo, setCustomerInfo] = useState<CustomerInfo>(DEFAULT_CUSTOMER_INFO);
-  const [pricingInfo, setPricingInfo] = useState<PricingInfo>(
-    normalizePricing(DEFAULT_PRICING_INFO)
-  );
+  const [quoteSpec, setQuoteSpec] = useState<QuoteSpec>(DEFAULT_QUOTE_SPEC);
+  const [linkedLeadSid, setLinkedLeadSid] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<DockTab>("color");
   const [quoteOpen, setQuoteOpen] = useState(false);
   const [autoRotate, setAutoRotate] = useState(false);
@@ -194,6 +202,7 @@ export const ProductConfigurator: React.FC = () => {
   const [logoLoading, setLogoLoading] = useState(false);
   const [colorCopied, setColorCopied] = useState(false);
 
+  const pricingInfo = useConfiguratorQuote(quoteSpec);
   const isCompact = useCompactLayout();
 
   const wrapperRef = useRef<HTMLDivElement>(null);
@@ -215,6 +224,33 @@ export const ProductConfigurator: React.FC = () => {
   useEffect(() => {
     setColorCopied(false);
   }, [selectedColorHex]);
+
+  useEffect(() => {
+    if (!sessionToken) return;
+    const apiBase = getConfiguratorApiBase();
+    void fetch(`${apiBase}/api/configurator/session/${encodeURIComponent(sessionToken)}`)
+      .then(async (res) => {
+        if (!res.ok) return;
+        const data = (await res.json()) as {
+          ok: boolean;
+          name?: string;
+          phone?: string;
+          email?: string;
+          manychatSubId?: string;
+        };
+        if (!data.ok) return;
+        setLinkedLeadSid(data.manychatSubId?.trim() || null);
+        setCustomerInfo((current) => ({
+          ...current,
+          name: data.name?.trim() || current.name,
+          phone: data.phone?.trim() || current.phone,
+          email: data.email?.trim() || current.email,
+        }));
+      })
+      .catch(() => {
+        /* prefill is best-effort */
+      });
+  }, [sessionToken]);
 
   const handleCopyColorDetails = useCallback(async () => {
     try {
@@ -239,15 +275,60 @@ export const ProductConfigurator: React.FC = () => {
     setCustomerInfo(nextCustomerInfo);
   }, []);
 
-  const handlePricingChange = useCallback((nextPricing: PricingInfo) => {
-    const normalized = normalizePricing(nextPricing);
-    setPricingInfo(normalized);
+  const handleQuoteSpecChange = useCallback((nextSpec: QuoteSpec) => {
+    setQuoteSpec(nextSpec);
     setCustomerInfo((current) =>
-      current.quantity === normalized.quantity
+      current.quantity === nextSpec.quantity
         ? current
-        : { ...current, quantity: normalized.quantity }
+        : { ...current, quantity: nextSpec.quantity }
     );
   }, []);
+
+  const saveDesignToCrm = useCallback(async () => {
+    if (!selectedColor) return;
+    const apiBase = getConfiguratorApiBase();
+    await fetch(`${apiBase}/api/configurator/designs`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        sessionToken,
+        manychatSubId: linkedLeadSid,
+        productId: quoteSpec.productId,
+        quantity: pricingInfo.quantity,
+        hasHandles: quoteSpec.hasHandles,
+        logoColors: quoteSpec.logoColors,
+        hasLamination: quoteSpec.hasLamination,
+        shippingOptionId: quoteSpec.shippingOptionId,
+        colorSku: selectedColor.sku,
+        colorHex: selectedColor.hex,
+        colorName: selectedColor.name,
+        logoFileName: logoFileName || null,
+        logoScale,
+        logoPositionX,
+        logoPositionY,
+        logoRotation,
+        unitPriceIls: pricingInfo.unitPriceIls,
+        totalOrderIls: pricingInfo.totalOrderIls,
+        customerName: customerInfo.name,
+        customerEmail: customerInfo.email,
+        customerPhone: customerInfo.phone,
+        notes: customerInfo.notes,
+        source: sessionToken ? "crm_link" : "customer",
+      }),
+    });
+  }, [
+    selectedColor,
+    sessionToken,
+    linkedLeadSid,
+    quoteSpec,
+    pricingInfo,
+    logoFileName,
+    logoScale,
+    logoPositionX,
+    logoPositionY,
+    logoRotation,
+    customerInfo,
+  ]);
 
   const resetLogoLayout = () => {
     setLogoScale(DEFAULT_LOGO_STATE.scale);
@@ -319,7 +400,12 @@ export const ProductConfigurator: React.FC = () => {
     }
   };
 
-  const canDownloadPdf = captureReady && hasRequiredCustomerFields(customerInfo);
+  const canDownloadPdf =
+    captureReady &&
+    hasRequiredCustomerFields(customerInfo) &&
+    !pricingInfo.loading &&
+    !pricingInfo.error &&
+    pricingInfo.totalOrderIls > 0;
 
   const stageInset =
     activeTab === "logo" && logoUrl
@@ -869,10 +955,18 @@ export const ProductConfigurator: React.FC = () => {
             }}
           >
             <span style={{ fontSize: size.sm, color: colors.inkMuted }}>
-              {pricingInfo.quantity} יח׳ ·{" "}
-              <strong style={{ color: colors.ink }}>
-                {formatCurrency(pricingInfo.totalPrice)}
-              </strong>
+              {pricingInfo.loading
+                ? "מחשב מחיר..."
+                : pricingInfo.error
+                  ? "שגיאת מחיר"
+                  : (
+                    <>
+                      {pricingInfo.quantity} יח׳ ·{" "}
+                      <strong style={{ color: colors.ink }}>
+                        {formatCurrency(pricingInfo.totalOrderIls)}
+                      </strong>
+                    </>
+                  )}
             </span>
             <button
               type="button"
@@ -1006,17 +1100,22 @@ export const ProductConfigurator: React.FC = () => {
               hasLogo={!!logoUrl}
               customerInfo={customerInfo}
               pricingInfo={pricingInfo}
+              quoteSpec={quoteSpec}
+              products={CONFIGURATOR_PRODUCT_OPTIONS}
+              shippingOptions={CONFIGURATOR_SHIPPING_OPTIONS}
               onCustomerInfoChange={handleCustomerInfoChange}
-              onPricingChange={handlePricingChange}
+              onQuoteSpecChange={handleQuoteSpecChange}
             />
 
             <DownloadPdfButton
               customerInfo={customerInfo}
               pricingInfo={pricingInfo}
+              quoteSpec={quoteSpec}
               bagColorName={selectedColorName}
               bagColorHex={selectedColorHex}
               hasLogo={!!logoUrl}
               screenshotCallback={getScreenshot}
+              onAfterDownload={saveDesignToCrm}
               disabled={!canDownloadPdf}
             />
           </aside>

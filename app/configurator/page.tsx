@@ -1,4 +1,4 @@
-import React from "react";
+import React, { Suspense } from "react";
 import ProductConfigurator from "@/components/configurator/ProductConfigurator";
 
 export const metadata = {
@@ -7,5 +7,9 @@ export const metadata = {
 };
 
 export default function ConfiguratorPage() {
-  return <ProductConfigurator />;
+  return (
+    <Suspense fallback={<div style={{ minHeight: "100vh", background: "#f0e9dc" }} />}>
+      <ProductConfigurator />
+    </Suspense>
+  );
 }

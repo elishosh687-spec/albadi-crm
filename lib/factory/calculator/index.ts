@@ -61,18 +61,28 @@ function findProductIdByDims(w: number, d: number, h: number): string | null {
 }
 
 function findQuantityTierId(qty: number): string | null {
-  // exact match first
-  const exact = DEFAULT_CONFIG.quantityTiers.find((t) => t.quantity === qty);
-  if (exact) return exact.id;
-  // else: closest tier ≤ qty (engine's findClosestPrice mirrors this)
+  return resolveQuantityTier(qty).id;
+}
+
+/** Map a requested quantity to the nearest catalog tier (≤ qty). */
+export function resolveQuantityTier(qty: number): {
+  id: string;
+  quantity: number;
+  exact: boolean;
+} {
+  const safeQty = Number.isFinite(qty) ? Math.max(1, Math.round(qty)) : 1000;
+  const exact = DEFAULT_CONFIG.quantityTiers.find((t) => t.quantity === safeQty);
+  if (exact) {
+    return { id: exact.id, quantity: exact.quantity, exact: true };
+  }
   const sorted = [...DEFAULT_CONFIG.quantityTiers].sort(
     (a, b) => a.quantity - b.quantity
   );
-  let best = sorted[0];
+  let best = sorted[0]!;
   for (const t of sorted) {
-    if (t.quantity <= qty) best = t;
+    if (t.quantity <= safeQty) best = t;
   }
-  return best?.id ?? null;
+  return { id: best.id, quantity: best.quantity, exact: false };
 }
 
 export function computeQuoteBreakdown(spec: {
@@ -92,12 +102,12 @@ export function computeQuoteBreakdown(spec: {
   );
   if (!productId) return null;
 
-  const tierId = findQuantityTierId(spec.quantity);
+  const tier = resolveQuantityTier(spec.quantity);
 
   const form: QuoteFormData = {
     productId,
-    quantityTierId: tierId,
-    quantityOverride: tierId ? null : spec.quantity,
+    quantityTierId: tier.id,
+    quantityOverride: tier.exact ? null : spec.quantity,
     hasHandles: spec.hasHandles,
     logoColors: spec.logoColors,
     shippingOptionId: spec.shippingOptionId,
