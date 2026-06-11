@@ -16,8 +16,11 @@
     "drafts:test": "tsx scripts/test-drafts-api.ts",
     "drafts:backfill-sender": "tsx scripts/backfill-message-sender.ts",
     "docs:capture-screenshots": "tsx scripts/capture-delivery-screenshots.ts",
+    "docs:capture-handover": "tsx scripts/capture-handover-screenshots.ts",
     "docs:delivery-pdf": "tsx scripts/generate-client-delivery-pdf-en.ts",
-    "docs:delivery": "tsx scripts/capture-delivery-screenshots.ts && tsx scripts/generate-client-delivery-pdf-en.ts"
+    "docs:delivery": "tsx scripts/capture-delivery-screenshots.ts && tsx scripts/generate-client-delivery-pdf-en.ts",
+    "docs:handover-pdf": "tsx scripts/generate-client-handover-pdf.ts",
+    "docs:handover": "tsx scripts/capture-handover-screenshots.ts && tsx scripts/generate-client-handover-pdf.ts"
   },
   "dependencies": {
     "@neondatabase/serverless": "^0.10.4",

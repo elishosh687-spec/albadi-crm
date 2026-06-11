@@ -1056,6 +1056,7 @@ export const ProductConfigurator: React.FC = () => {
               <button
                 key={tab.id}
                 type="button"
+                data-dock-tab={tab.id}
                 onClick={() => handleTabSelect(tab.id)}
                 className="transition-colors"
                 style={{

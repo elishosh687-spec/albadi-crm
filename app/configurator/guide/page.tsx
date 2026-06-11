@@ -6,6 +6,19 @@ export const metadata = {
   title: "מדריך מעצב 3D | Albadi",
 };
 
+const linkStyle = (primary = false): React.CSSProperties => ({
+  display: "inline-flex",
+  alignItems: "center",
+  gap: space.sm,
+  padding: `${space.sm}px ${space.lg}px`,
+  borderRadius: radius.md,
+  border: primary ? "none" : `1px solid ${colors.rule}`,
+  background: primary ? colors.accent : colors.surface,
+  color: primary ? colors.surface : colors.ink,
+  fontWeight: weight.medium,
+  textDecoration: "none",
+});
+
 export default function ConfiguratorGuidePage() {
   return (
     <div
@@ -18,7 +31,7 @@ export default function ConfiguratorGuidePage() {
     >
       <div
         style={{
-          maxWidth: 640,
+          maxWidth: 680,
           margin: "0 auto",
           background: colors.surface,
           borderRadius: radius.lg,
@@ -42,97 +55,80 @@ export default function ConfiguratorGuidePage() {
             מדריך מעצב שקיות 3D
           </h1>
           <p style={{ margin: `${space.sm}px 0 0`, color: colors.inkMuted }}>
-            מה הושלם, איך לבדוק מקומית, ואיך לשלוח ללקוח מ-CRM
+            מסירה ללקוח, בדיקה מקומית, ושליחת מעצב 3D מ-CRM
           </p>
         </div>
 
-        <div style={{ display: "flex", flexWrap: "wrap", gap: space.md }}>
-          <a
-            href="/docs/CLIENT-DELIVERY-EN.pdf"
-            download
+        <section>
+          <h2
             style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: space.sm,
-              padding: `${space.sm}px ${space.lg}px`,
-              borderRadius: radius.md,
-              background: colors.accent,
-              color: colors.surface,
+              fontFamily: fontStack.display,
+              fontSize: 16,
               fontWeight: weight.medium,
-              textDecoration: "none",
-            }}
-          >
-            Client PDF (EN)
-          </a>
-          <a
-            href="/docs/CLIENT-DELIVERY-EN.html"
-            target="_blank"
-            rel="noopener noreferrer"
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: space.sm,
-              padding: `${space.sm}px ${space.lg}px`,
-              borderRadius: radius.md,
-              border: `1px solid ${colors.rule}`,
+              margin: `0 0 ${space.sm}px`,
               color: colors.ink,
-              textDecoration: "none",
             }}
           >
-            Client report (EN)
-          </a>
-          <a
-            href="/docs/CONFIGURATOR-GUIDE.pdf"
-            download
+            מסמך מסירה ללקוח (Handover)
+          </h2>
+          <p style={{ fontSize: 14, color: colors.inkMuted, margin: `0 0 ${space.md}px` }}>
+            דוח מלא: מעצב 3D, CRM, WhatsApp, וכל מה שנבנה — בעיצוב Paper &amp; Ink של המערכת.
+          </p>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: space.md }}>
+            <a href="/docs/CLIENT-HANDOVER.pdf" download style={linkStyle(true)}>
+              Client Handover PDF
+            </a>
+            <a
+              href="/docs/CLIENT-HANDOVER.html"
+              target="_blank"
+              rel="noopener noreferrer"
+              style={linkStyle()}
+            >
+              Open handover (HTML)
+            </a>
+          </div>
+        </section>
+
+        <section>
+          <h2
             style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: space.sm,
-              padding: `${space.sm}px ${space.lg}px`,
-              borderRadius: radius.md,
-              border: `1px solid ${colors.rule}`,
+              fontFamily: fontStack.display,
+              fontSize: 16,
+              fontWeight: weight.medium,
+              margin: `0 0 ${space.sm}px`,
               color: colors.ink,
-              textDecoration: "none",
             }}
           >
-            מדריך PDF (עברית)
-          </a>
-          <a
-            href="/docs/configurator-guide.html"
-            target="_blank"
-            rel="noopener noreferrer"
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: space.sm,
-              padding: `${space.sm}px ${space.lg}px`,
-              borderRadius: radius.md,
-              border: `1px solid ${colors.rule}`,
-              color: colors.ink,
-              textDecoration: "none",
-            }}
-          >
-            פתח מדריך HTML (הדפסה)
-          </a>
-          <Link
-            href="/configurator"
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: space.sm,
-              padding: `${space.sm}px ${space.lg}px`,
-              borderRadius: radius.md,
-              border: `1px solid ${colors.rule}`,
-              color: colors.ink,
-              textDecoration: "none",
-            }}
-          >
-            פתח מעצב 3D
-          </Link>
-        </div>
+            מסמכים נוספים
+          </h2>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: space.md }}>
+            <a href="/docs/CONFIGURATOR-GUIDE.pdf" download style={linkStyle()}>
+              מדריך PDF (עברית)
+            </a>
+            <a
+              href="/docs/configurator-guide.html"
+              target="_blank"
+              rel="noopener noreferrer"
+              style={linkStyle()}
+            >
+              מדריך HTML
+            </a>
+            <Link href="/configurator" style={linkStyle()}>
+              פתח מעצב 3D
+            </Link>
+          </div>
+        </section>
 
         <section style={{ fontSize: 14, color: colors.ink, lineHeight: 1.6 }}>
-          <h2 style={{ fontSize: 16, margin: `0 0 ${space.sm}px` }}>בדיקה מקומית</h2>
+          <h2
+            style={{
+              fontFamily: fontStack.display,
+              fontSize: 16,
+              margin: `0 0 ${space.sm}px`,
+            }}
+          >
+            בדיקה מקומית
+          </h2>
           <ul style={{ margin: 0, paddingRight: 20 }}>
             <li>
               <strong>CRM + מעצב:</strong>{" "}
@@ -145,6 +141,10 @@ export default function ConfiguratorGuidePage() {
             <li>
               <strong>אתר (iframe):</strong>{" "}
               <code style={{ direction: "ltr" }}>localhost:8081/configurator</code>
+            </li>
+            <li>
+              <strong>רענון PDF:</strong>{" "}
+              <code style={{ direction: "ltr" }}>pnpm docs:handover</code>
             </li>
           </ul>
         </section>

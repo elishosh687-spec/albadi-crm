@@ -91,6 +91,21 @@ async function main() {
 
   const loggedIn = await loginDashboard(page);
   if (loggedIn) {
+    console.log("[screenshots] CRM — command center");
+    await gotoPage(page, `${CRM}/dashboard/v3`);
+    await page.waitForTimeout(2500);
+    await shot(page, "crm-command-center.jpg");
+
+    console.log("[screenshots] CRM — conversations");
+    await gotoPage(page, `${CRM}/dashboard/v3/conversations`);
+    await page.waitForTimeout(2500);
+    await shot(page, "crm-conversations.jpg");
+
+    console.log("[screenshots] CRM — pipeline");
+    await gotoPage(page, `${CRM}/dashboard/v3/pipeline`);
+    await page.waitForTimeout(2500);
+    await shot(page, "crm-pipeline.jpg");
+
     console.log("[screenshots] CRM — leads grid");
     await gotoPage(page, `${CRM}/dashboard/v3/leads`);
     await page.waitForTimeout(2000);
