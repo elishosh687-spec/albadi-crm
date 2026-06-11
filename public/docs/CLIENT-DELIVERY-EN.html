@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Albadi — 3D Bag Configurator · Delivery Report</title>
+  <style>
+    @import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap");
+    :root {
+      --ink: #1a1816;
+      --muted: #5c5650;
+      --accent: #9c4221;
+      --olive: #6b7f52;
+      --ok: #2d6a4f;
+      --surface: #f7f4ef;
+      --rule: #e2dbd0;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: Inter, system-ui, sans-serif; color: var(--ink); line-height: 1.6; font-size: 15px; }
+    .cover {
+      min-height: 100vh; padding: 64px 48px;
+      background: linear-gradient(145deg, #f0e9dc 0%, #fff 45%);
+      page-break-after: always;
+    }
+    .cover h1 { font-size: 2.2rem; margin: 0 0 12px; color: var(--accent); max-width: 700px; }
+    .cover .meta { color: var(--muted); }
+    .cover .status { display: inline-block; margin-top: 24px; padding: 8px 16px; background: #e8f5e9; color: var(--ok); font-weight: 600; border-radius: 8px; }
+    .page { max-width: 900px; margin: 0 auto; padding: 48px 40px 80px; }
+    @media print { .no-print { display: none !important; } .page { padding: 24px; } img { max-height: 300px; object-fit: contain; } }
+    h2 { font-size: 1.3rem; margin: 36px 0 14px; padding-bottom: 8px; border-bottom: 3px solid var(--olive); }
+    h3 { font-size: 1.05rem; margin: 20px 0 8px; }
+    table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: 0.9rem; }
+    th, td { border: 1px solid var(--rule); padding: 10px 12px; text-align: left; vertical-align: top; }
+    th { background: var(--surface); }
+    .done { color: var(--ok); font-weight: 600; }
+    code { font-family: ui-monospace, monospace; font-size: 0.85rem; background: var(--surface); padding: 2px 6px; border-radius: 4px; }
+    figure { margin: 18px 0; border: 1px solid var(--rule); border-radius: 12px; overflow: hidden; background: #111; }
+    figure img { width: 100%; display: block; }
+    figcaption { padding: 12px 16px; font-size: 0.85rem; color: var(--muted); background: var(--surface); border-top: 1px solid var(--rule); }
+    .flow { background: var(--surface); border-radius: 10px; padding: 18px; font-family: ui-monospace, monospace; font-size: 0.8rem; white-space: pre-wrap; }
+    .btn { display: inline-block; background: var(--accent); color: #fff; padding: 12px 20px; border-radius: 8px; text-decoration: none; font-weight: 600; margin-bottom: 20px; }
+  </style>
+</head>
+<body>
+  <p class="no-print" style="padding:16px;text-align:center;">
+    <a class="btn" href="#" onclick="window.print();return false;">Print / Save as PDF</a>
+  </p>
+
+  <section class="cover">
+    <div class="meta">Albadi CRM + Website · June 2026</div>
+    <h1>3D Non-Woven Bag Configurator<br/>Implementation Delivery Report</h1>
+    <p class="meta" style="max-width:600px;">
+      Full-stack delivery across two repositories: public 3D designer, factory pricing engine, PDF export, CRM lead capture, and WhatsApp outbound from the dashboard.
+    </p>
+    <span class="status">Scope delivered</span>
+  </section>
+
+  <div class="page">
+    <h2>1. Project scope (completed)</h2>
+    <p>Implementation covers dual integration as specified in the project brief:</p>
+    <ol>
+      <li><strong>Public website</strong> — fabric color selection, logo upload, real-time 3D bag preview, ILS pricing, PDF contract download.</li>
+      <li><strong>CRM + WhatsApp</strong> — send personalized 3D designer links from the dashboard; inbound designs and new website leads sync to the leads table.</li>
+    </ol>
+
+    <h2>2. Feature matrix</h2>
+    <table>
+      <thead><tr><th>Deliverable</th><th>Status</th><th>Location</th></tr></thead>
+      <tbody>
+        <tr><td>44 fabric colors, live 3D material update</td><td class="done">Shipped</td><td><code>/configurator</code></td></tr>
+        <tr><td>Logo upload (PNG / JPG / SVG) with 3D decal</td><td class="done">Shipped</td><td>Logo tab</td></tr>
+        <tr><td>GLB bag model, orbit / zoom / snapshot</td><td class="done">Shipped</td><td>Three.js viewer</td></tr>
+        <tr><td>Factory pricing engine (ILS)</td><td class="done">Shipped</td><td><code>/api/configurator/quote</code></td></tr>
+        <tr><td>PDF export with 3D mockup + pricing</td><td class="done">Shipped</td><td>Quote drawer</td></tr>
+        <tr><td>bag-quote-app route (website embed)</td><td class="done">Shipped</td><td><code>/configurator</code> iframe</td></tr>
+        <tr><td>CRM WhatsApp CTA (3D Designer button)</td><td class="done">Shipped</td><td>Lead overview / chat</td></tr>
+        <tr><td>Personalized session links (<code>?t=</code>)</td><td class="done">Shipped</td><td>Configurator sessions API</td></tr>
+        <tr><td>Design save on lead record</td><td class="done">Shipped</td><td><code>configurator_designs</code></td></tr>
+        <tr><td>Anonymous website → auto CRM lead</td><td class="done">Shipped</td><td>On PDF / design submit</td></tr>
+      </tbody>
+    </table>
+
+    <h2>3. System architecture</h2>
+    <div class="flow">bag-quote-app (customer site)          albadi-crm (engine + CRM)
+─────────────────────────────          ─────────────────────────────
+/landing, /quote                       /configurator — 3D UI
+/configurator (iframe) ──────────────▶ /api/configurator/quote
+                                       /api/configurator/designs
+                                       /dashboard/v3 — operations
+                                              │
+                    Website visitor completes PDF ──▶ upsert lead by phone
+                    CRM operator sends link ────────▶ WhatsApp CTA (bridge)</div>
+
+    <h2>4. Production screenshots</h2>
+    <figure>
+      <img src="/docs/assets/crm-leads-grid.png" alt="CRM leads grid" />
+      <figcaption><strong>Figure 1.</strong> Leads index. Website-created leads appear here after configurator completion (matched by phone). Open a card for full actions.</figcaption>
+    </figure>
+    <figure>
+      <img src="/docs/assets/crm-lead-3d-button.png" alt="3D Designer button on lead" />
+      <figcaption><strong>Figure 2.</strong> Lead detail — <em>3D Designer</em> dispatches WhatsApp CTA with a signed session URL.</figcaption>
+    </figure>
+
+    <h2>5. Website visitor flow</h2>
+    <ol>
+      <li>Open <code>/configurator</code> (direct or via bag-quote-app iframe).</li>
+      <li>Select color → upload logo → adjust placement.</li>
+      <li>Configure bag size, quantity, shipping → live ILS quote.</li>
+      <li>Enter name, email, phone → download PDF.</li>
+      <li>Backend upserts CRM lead by phone, stores design, sets <code>leadSource=website_configurator</code>, stage <code>INTAKE</code>.</li>
+    </ol>
+
+    <h2>6. CRM operator flow</h2>
+    <ol>
+      <li>Sign in at <code>/login</code> (credential: <code>ADMIN_PASSWORD</code> env var).</li>
+      <li>Leads → open lead → <strong>3D Designer</strong> (or Preview → Send 3D).</li>
+      <li>Customer receives WhatsApp button → completes design → record updates in place.</li>
+      <li>Saved designs visible under <strong>3D designs</strong> on lead overview.</li>
+    </ol>
+
+    <h2>7. Endpoints &amp; routes</h2>
+    <table>
+      <tr><th>Resource</th><th>URL</th></tr>
+      <tr><td>CRM login</td><td><code>https://albadi-crm.vercel.app/login</code></td></tr>
+      <tr><td>Dashboard</td><td><code>/dashboard/v3</code></td></tr>
+      <tr><td>Leads</td><td><code>/dashboard/v3/leads</code></td></tr>
+      <tr><td>Configurator UI</td><td><code>/configurator</code></td></tr>
+      <tr><td>Quote API</td><td><code>GET /api/configurator/quote</code></td></tr>
+      <tr><td>Design + lead API</td><td><code>POST /api/configurator/designs</code></td></tr>
+      <tr><td>Website embed</td><td><code>https://albadi.ecobrotherss.com/configurator</code> (DNS pending)</td></tr>
+    </table>
+
+    <h2>8. Environment configuration</h2>
+    <table>
+      <tr><th>Variable</th><th>Purpose</th></tr>
+      <tr><td><code>ADMIN_PASSWORD</code></td><td>Dashboard authentication</td></tr>
+      <tr><td><code>CONFIGURATOR_PUBLIC_URL</code></td><td>URL embedded in WhatsApp CTAs</td></tr>
+      <tr><td><code>USE_BRIDGE=1</code></td><td>WhatsApp messaging</td></tr>
+      <tr><td><code>DATABASE_URL</code></td><td>Neon Postgres (leads, designs, sessions)</td></tr>
+    </table>
+
+    <h2>9. Local verification</h2>
+    <table>
+      <tr><th>Service</th><th>Port</th><th>Test</th></tr>
+      <tr><td>albadi-crm</td><td>3000</td><td><code>/configurator</code>, <code>/dashboard/v3</code></td></tr>
+      <tr><td>bag-quote-app (web)</td><td>8081</td><td><code>/configurator</code> iframe</td></tr>
+    </table>
+
+    <h2>10. Sign-off</h2>
+    <p>
+      All specified integration points are implemented: dual-repo 3D configurator, factory pricing, PDF generation, CRM lead capture from anonymous website sessions, and WhatsApp outbound from the operator dashboard. Interactive 3D was implemented instead of pre-rendered video (lower cost, faster delivery, better UX).
+    </p>
+    <p style="color:var(--muted);font-size:0.85rem;margin-top:40px;">Repositories: albadi-crm · bag-quote-app · Branch: SEE-configurator</p>
+  </div>
+</body>
+</html>

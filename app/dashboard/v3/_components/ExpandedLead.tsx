@@ -1205,6 +1205,7 @@ const EVENT_LABEL: Record<string, string> = {
   bot_resumed: "בוט פעיל",
   configurator_link_sent: "נשלח קישור מעצב 3D",
   configurator_design_saved: "עיצוב 3D נשמר",
+  configurator_lead_created: "ליד חדש ממעצב האתר",
 };
 
 function ActivityTab({ sid }: { sid: string }) {

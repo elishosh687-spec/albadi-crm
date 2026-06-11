@@ -58,10 +58,27 @@ export async function POST(req: NextRequest) {
       customerEmail: str("customerEmail"),
       customerPhone: str("customerPhone"),
       notes: str("notes") || null,
-      source: str("source") === "crm_link" ? "crm_link" : "customer",
+      source:
+        str("source") === "crm_link"
+          ? "crm_link"
+          : str("sessionToken")
+            ? "customer"
+            : "website",
     });
 
     if (saved.manychatSubId) {
+      if (saved.leadCreated) {
+        void logLeadEvent({
+          manychatSubId: saved.manychatSubId,
+          eventType: "configurator_lead_created",
+          actor: "system",
+          payload: {
+            designId: saved.id,
+            source: "website_configurator",
+            phone: str("customerPhone"),
+          },
+        });
+      }
       void logLeadEvent({
         manychatSubId: saved.manychatSubId,
         eventType: "configurator_design_saved",
@@ -72,12 +89,18 @@ export async function POST(req: NextRequest) {
           quantity: num("quantity", 1000),
           totalOrderIls: num("totalOrderIls"),
           colorName: str("colorName"),
+          leadCreated: saved.leadCreated ?? false,
         },
       });
     }
 
     return NextResponse.json(
-      { ok: true, id: saved.id, manychatSubId: saved.manychatSubId },
+      {
+        ok: true,
+        id: saved.id,
+        manychatSubId: saved.manychatSubId,
+        leadCreated: saved.leadCreated ?? false,
+      },
       { headers: corsHeaders() }
     );
   } catch (err) {

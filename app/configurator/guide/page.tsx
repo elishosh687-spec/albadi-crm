@@ -48,7 +48,7 @@ export default function ConfiguratorGuidePage() {
 
         <div style={{ display: "flex", flexWrap: "wrap", gap: space.md }}>
           <a
-            href="/docs/CONFIGURATOR-GUIDE.pdf"
+            href="/docs/CLIENT-DELIVERY-EN.pdf"
             download
             style={{
               display: "inline-flex",
@@ -62,7 +62,40 @@ export default function ConfiguratorGuidePage() {
               textDecoration: "none",
             }}
           >
-            הורד PDF
+            Client PDF (EN)
+          </a>
+          <a
+            href="/docs/CLIENT-DELIVERY-EN.html"
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: space.sm,
+              padding: `${space.sm}px ${space.lg}px`,
+              borderRadius: radius.md,
+              border: `1px solid ${colors.rule}`,
+              color: colors.ink,
+              textDecoration: "none",
+            }}
+          >
+            Client report (EN)
+          </a>
+          <a
+            href="/docs/CONFIGURATOR-GUIDE.pdf"
+            download
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: space.sm,
+              padding: `${space.sm}px ${space.lg}px`,
+              borderRadius: radius.md,
+              border: `1px solid ${colors.rule}`,
+              color: colors.ink,
+              textDecoration: "none",
+            }}
+          >
+            מדריך PDF (עברית)
           </a>
           <a
             href="/docs/configurator-guide.html"

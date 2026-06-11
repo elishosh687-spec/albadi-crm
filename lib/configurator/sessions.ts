@@ -147,19 +147,38 @@ export interface SaveConfiguratorDesignInput {
   customerEmail: string;
   customerPhone: string;
   notes?: string | null;
-  source?: "customer" | "crm_link";
+  source?: "customer" | "crm_link" | "website";
 }
 
 export async function saveConfiguratorDesign(
   input: SaveConfiguratorDesignInput
-): Promise<{ id: string; manychatSubId: string | null }> {
+): Promise<{ id: string; manychatSubId: string | null; leadCreated: boolean }> {
   await ensureTables();
   const id = randomBytes(12).toString("base64url");
 
   let sid = input.manychatSubId?.trim() || null;
+  let leadCreated = false;
+
   if (!sid && input.sessionToken?.trim()) {
     const session = await loadConfiguratorSession(input.sessionToken.trim());
     sid = session?.manychatSubId ?? null;
+  }
+
+  if (!sid && input.customerPhone.trim()) {
+    const { upsertLeadFromConfigurator } = await import("./upsert-lead");
+    const upserted = await upsertLeadFromConfigurator({
+      name: input.customerName,
+      email: input.customerEmail,
+      phone: input.customerPhone,
+      quoteTotalIls: input.totalOrderIls,
+      colorName: input.colorName,
+      quantity: input.quantity,
+      notes: input.notes,
+    });
+    if (upserted) {
+      sid = upserted.manychatSubId;
+      leadCreated = upserted.created;
+    }
   }
 
   await db.execute(sql`
@@ -198,7 +217,8 @@ export async function saveConfiguratorDesign(
     )
   `);
 
-  if (sid) {
+  // Note append for CRM-link path only — website upsert already wrote notes.
+  if (sid && input.source === "crm_link") {
     await db
       .update(leads)
       .set({
@@ -207,7 +227,7 @@ export async function saveConfiguratorDesign(
       .where(sql`trim(${leads.manychatSubId}) = ${sid}`);
   }
 
-  return { id, manychatSubId: sid };
+  return { id, manychatSubId: sid, leadCreated: leadCreated ?? false };
 }
 
 export interface ConfiguratorDesignRow {

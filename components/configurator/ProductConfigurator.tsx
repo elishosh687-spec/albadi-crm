@@ -313,9 +313,20 @@ export const ProductConfigurator: React.FC = () => {
         customerEmail: customerInfo.email,
         customerPhone: customerInfo.phone,
         notes: customerInfo.notes,
-        source: sessionToken ? "crm_link" : "customer",
+        source: sessionToken ? "crm_link" : "website",
       }),
-    });
+    })
+      .then(async (res) => {
+        if (!res.ok) return;
+        const data = (await res.json()) as {
+          manychatSubId?: string;
+          leadCreated?: boolean;
+        };
+        if (data.manychatSubId) setLinkedLeadSid(data.manychatSubId);
+      })
+      .catch(() => {
+        /* best-effort CRM sync */
+      });
   }, [
     selectedColor,
     sessionToken,

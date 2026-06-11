@@ -2,10 +2,10 @@
 
 import { useState, useMemo, useTransition } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Search, MessageSquare, X, ExternalLink, Trash2, Loader2 } from "lucide-react";
+import { Search, MessageSquare, X, ExternalLink, Trash2, Loader2, Box } from "lucide-react";
 import { STAGE_LABEL, STAGE_TONE } from "@/app/dashboard/v3/_components/stage-meta";
 import type { SheetGapRow } from "@/lib/sheets/lead-gaps";
-import { setLeadStage, deleteLeadAction } from "@/app/actions/v2";
+import { setLeadStage, deleteLeadAction, sendConfiguratorLinkAction } from "@/app/actions/v2";
 import { V2_PIPELINE_STAGES, type V2PipelineStage } from "@/lib/manychat/stages";
 
 const ALL_STAGES = [
@@ -269,8 +269,18 @@ function LeadCard({
 }
 
 function PreviewDrawer({ lead, onClose }: { lead: LeadRow; onClose: () => void }) {
+  const [cfgMsg, setCfgMsg] = useState<string | null>(null);
+  const [cfgPending, startCfg] = useTransition();
   const pill = STAGE_TONE[lead.stage ?? ""]?.pill ?? "bg-muted text-muted-foreground";
   const stageLabel = STAGE_LABEL[lead.stage ?? ""] ?? lead.stage ?? "—";
+
+  const sendConfigurator = () => {
+    setCfgMsg(null);
+    startCfg(async () => {
+      const r = await sendConfiguratorLinkAction(lead.sid);
+      setCfgMsg(r.ok ? r.message ?? "נשלח מעצב 3D ב-WhatsApp" : r.error ?? "שגיאה");
+    });
+  };
 
   return (
     <>
@@ -349,6 +359,21 @@ function PreviewDrawer({ lead, onClose }: { lead: LeadRow; onClose: () => void }
           )}
         </div>
         <div className="border-t border-border p-4 space-y-2">
+          <button
+            type="button"
+            onClick={sendConfigurator}
+            disabled={cfgPending || !lead.phone}
+            title={!lead.phone ? "אין טלפון/JID לשליחה" : "שלח קישור מעצב 3D ב-WhatsApp"}
+            className="flex w-full items-center justify-center gap-2 rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-2.5 text-sm font-medium text-amber-200 hover:bg-amber-500/20 transition-colors disabled:opacity-50"
+          >
+            {cfgPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Box className="h-4 w-4" />}
+            שלח מעצב 3D
+          </button>
+          {cfgMsg && (
+            <p className={`text-xs text-center ${cfgMsg.includes("שגיא") || cfgMsg.includes("כשל") ? "text-destructive" : "text-emerald-400"}`}>
+              {cfgMsg}
+            </p>
+          )}
           <a
             href={`/dashboard/v3/leads?lead=${encodeURIComponent(lead.sid)}`}
             className="flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
