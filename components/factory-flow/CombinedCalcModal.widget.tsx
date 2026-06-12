@@ -258,6 +258,12 @@ export function CombinedCalcModalWidget({
       )
     : 0;
 
+  const allExpanded =
+    priceableRows.length > 0 && priceableRows.every((r) => expanded.has(r.id));
+  function toggleAll() {
+    setExpanded(allExpanded ? new Set() : new Set(priceableRows.map((r) => r.id)));
+  }
+
   // A product is "send-ready" if it's freshly saved this session, or it was
   // already finalized and hasn't been edited. All priceable products must be
   // send-ready before the combined PDF can be opened (the PDF route 409s on any
@@ -431,10 +437,25 @@ export function CombinedCalcModalWidget({
                 </div>
               )}
 
+              {/* Products header + expand/collapse all */}
+              <div className="flex items-center justify-between pt-1">
+                <span className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold">
+                  מוצרים בהזמנה ({priceableRows.length})
+                </span>
+                <button
+                  type="button"
+                  onClick={toggleAll}
+                  className="text-[11px] font-medium text-primary hover:underline"
+                >
+                  {allExpanded ? "כווץ הכל" : "הרחב הכל"}
+                </button>
+              </div>
+
               {/* One accordion section per product */}
-              {priceableRows.map((row) => (
+              {priceableRows.map((row, idx) => (
                 <ProductCalcSection
                   key={row.id}
+                  index={idx}
                   apiToken={apiToken}
                   row={row}
                   state={sectionState[row.id]}
@@ -567,6 +588,7 @@ export function CombinedCalcModalWidget({
 }
 
 function ProductCalcSection({
+  index,
   apiToken,
   row,
   state,
@@ -577,6 +599,7 @@ function ProductCalcSection({
   onToggle,
   onPatch,
 }: {
+  index: number;
   apiToken: string;
   row: FactoryQuoteRow;
   state: SectionState;
@@ -640,23 +663,32 @@ function ProductCalcSection({
   }
 
   return (
-    <div className="rounded-lg border border-border bg-card/40">
-      {/* Collapsed header */}
+    <div
+      className={`rounded-lg border overflow-hidden transition-colors ${
+        expanded ? "border-primary/40 bg-card/60" : "border-border bg-card/30"
+      }`}
+    >
+      {/* Header */}
       <button
         type="button"
         onClick={onToggle}
-        className="flex w-full items-center gap-2 px-3 py-2 text-right"
+        className={`flex w-full items-center gap-2 px-3 py-2.5 text-right transition-colors ${
+          expanded ? "bg-primary/10" : "hover:bg-secondary/40"
+        }`}
       >
+        <span className="size-5 shrink-0 grid place-items-center rounded-full bg-primary/15 text-primary text-[11px] font-bold tabular-nums">
+          {index + 1}
+        </span>
         <ChevronDown
           className={`size-4 shrink-0 text-muted-foreground transition-transform ${
             expanded ? "" : "-rotate-90"
           }`}
         />
-        <span className="font-mono text-[11px] text-muted-foreground shrink-0">
-          {row.quotationNo ?? row.id.slice(-6)}
-        </span>
-        <span className="truncate flex-1 text-sm">
+        <span className="truncate flex-1 text-sm font-semibold">
           {state.productName || row.productSpec.description || "מוצר"}
+        </span>
+        <span className="font-mono text-[10px] text-muted-foreground shrink-0 hidden sm:inline">
+          {row.quotationNo ?? row.id.slice(-6)}
         </span>
         <span
           className={`text-[10px] rounded-full border px-1.5 py-0.5 shrink-0 ${
@@ -669,7 +701,7 @@ function ProductCalcSection({
         >
           {stale ? "שונה" : finalized ? "סופי" : "חדש"}
         </span>
-        <span className="text-xs font-semibold tabular-nums shrink-0">
+        <span className="text-sm font-bold tabular-nums shrink-0 text-primary">
           {allocated
             ? formatIls(allocated.total)
             : pricing
@@ -679,7 +711,8 @@ function ProductCalcSection({
       </button>
 
       {expanded && (
-        <div className="border-t border-border/60 px-3 py-3 space-y-3">
+        <div className="border-t border-primary/20 px-3 py-3 space-y-3">
+          <SectionLabel>פרטי מוצר ל‑PDF</SectionLabel>
           {/* Image */}
           <div>
             <label className="block text-[11px] text-muted-foreground mb-0.5">
@@ -758,6 +791,10 @@ function ProductCalcSection({
             />
           </div>
 
+          <div className="border-t border-border/50 pt-2.5">
+            <SectionLabel>תמחור ורווח</SectionLabel>
+          </div>
+
           {/* Molds */}
           <div>
             <label className="block text-[11px] text-muted-foreground mb-0.5">
@@ -823,7 +860,9 @@ function ProductCalcSection({
 
           {/* Boss breakdown */}
           {pricing && row.factoryResponse && (
-            <DetailedBreakdown
+            <div className="border-t border-border/50 pt-2.5 space-y-2">
+              <SectionLabel>פירוט מלא לבוס</SectionLabel>
+              <DetailedBreakdown
               unitCost={pricing.unitCost}
               unitShipping={pricing.unitShipping}
               unitProfit={pricing.unitProfit}
@@ -851,6 +890,7 @@ function ProductCalcSection({
               rawCbm={pricing.totalCbm}
               seaMinCbm={1}
             />
+            </div>
           )}
         </div>
       )}
@@ -986,6 +1026,15 @@ function CombinedBreakdown({
           </BSection>
         </div>
       )}
+    </div>
+  );
+}
+
+function SectionLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-primary/80 font-semibold">
+      <span className="size-1.5 rounded-full bg-primary/60" />
+      {children}
     </div>
   );
 }
