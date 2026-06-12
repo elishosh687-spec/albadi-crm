@@ -15,9 +15,12 @@ import type {
 } from "./FactoryQuotePanel";
 import type {
   FactoryPricingConfig,
+  FactoryPricingResult,
+  FactoryProductSpec,
   ShippingOption,
 } from "@/lib/factory/types";
 import { priceFactoryQuote, marginPctFromUnitPrice } from "@/lib/factory/pricing";
+import { computeCombined } from "@/lib/factory/combined";
 import { DetailedBreakdown } from "@/components/calculator/DetailedBreakdown";
 
 function formatIls(n: number): string {
@@ -74,6 +77,24 @@ export function FinalizeModal({
   const [finishing, setFinishing] = useState<string>(s0.finishing ?? "");
   const [customerNotes, setCustomerNotes] = useState<string>(s0.customerNotes ?? "");
   const qtyNum = Math.max(1, Math.floor(Number(qtyStr) || s0.quantity || 1));
+
+  // "חישוב משולב" — other finalized quotes of this customer that ship together.
+  const [otherQuotes, setOtherQuotes] = useState<
+    {
+      id: string;
+      quotationNo: string | null;
+      productSpec: FactoryProductSpec;
+      finalPricing: FactoryPricingResult | null;
+    }[]
+  >([]);
+  const [combinedSel, setCombinedSel] = useState<Set<string>>(new Set());
+  const toggleCombined = (id: string) =>
+    setCombinedSel((prev) => {
+      const n = new Set(prev);
+      if (n.has(id)) n.delete(id);
+      else n.add(id);
+      return n;
+    });
 
   const MARGIN_MIN = 0;
   // margin-on-price is capped below 100% (profit can't be ≥ the price)
@@ -186,6 +207,37 @@ export function FinalizeModal({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch(
+          `/api/factory/list?lead=${encodeURIComponent(row.manychatSubId)}&status=finalized`
+        );
+        const data = await res.json();
+        const list = (data?.requests ?? []) as typeof otherQuotes;
+        setOtherQuotes(list.filter((q) => q.id !== row.id && q.finalPricing));
+      } catch {
+        /* ignore */
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const combinedResult = useMemo(() => {
+    if (!livePricing || !config) return null;
+    const sel = otherQuotes.filter((q) => combinedSel.has(q.id) && q.finalPricing);
+    if (sel.length === 0) return null;
+    const opt =
+      config.shippingOptions.find(
+        (s) => s.id === (shippingOptionId || livePricing.shippingOptionId)
+      ) ?? null;
+    return computeCombined(
+      [livePricing, ...sel.map((q) => q.finalPricing as FactoryPricingResult)],
+      opt,
+      config.usdToIls
+    );
+  }, [livePricing, config, otherQuotes, combinedSel, shippingOptionId]);
 
   const handlePullImage = async () => {
     setPullingImg(true);
@@ -519,6 +571,68 @@ export function FinalizeModal({
                   rawCbm={livePricing.totalCbm}
                   seaMinCbm={1}
                 />
+              )}
+
+              {otherQuotes.length > 0 && livePricing && (
+                <div className="rounded-lg border border-border bg-card/40 p-3 space-y-2">
+                  <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                    חישוב משולב — מוצרים שנשלחים יחד
+                  </div>
+                  <div className="text-[11px] text-muted-foreground">
+                    סמן הזמנות נוספות של הלקוח שנשלחות במשלוח אחד — השילוח מחושב מחדש (זול יותר):
+                  </div>
+                  {otherQuotes.map((q) => (
+                    <label key={q.id} className="flex items-center gap-2 text-xs cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={combinedSel.has(q.id)}
+                        onChange={() => toggleCombined(q.id)}
+                        className="accent-[var(--color-primary,#4A7C59)]"
+                      />
+                      <span className="font-mono text-muted-foreground shrink-0">
+                        {q.quotationNo ?? q.id.slice(-6)}
+                      </span>
+                      <span className="truncate flex-1">
+                        {q.productSpec?.productName || q.productSpec?.description || "מוצר"}
+                      </span>
+                      <span className="text-muted-foreground tabular-nums shrink-0">
+                        {formatIls(q.finalPricing?.totalSellingPrice ?? 0)}
+                      </span>
+                    </label>
+                  ))}
+                  {combinedResult && (
+                    <div className="rounded-md border border-success/30 bg-success/5 p-2.5 space-y-1.5 mt-1">
+                      <div className="text-[10px] uppercase tracking-wider text-success/80">
+                        תוצאה משולבת ({combinedResult.count} מוצרים)
+                      </div>
+                      <PriceRow
+                        label="סה״כ נפח / משקל"
+                        value={`${combinedResult.combinedCbm} m³ · ${combinedResult.combinedWeightKg}kg`}
+                      />
+                      <PriceRow
+                        label="שילוח מאוחד"
+                        value={`${formatIls(combinedResult.combinedShipping)} (בנפרד: ${formatIls(combinedResult.separateShipping)})`}
+                      />
+                      <PriceRow
+                        label="חיסכון בשילוח ללקוח"
+                        value={formatIls(combinedResult.shippingSaving)}
+                        highlight
+                      />
+                      <div className="border-t border-success/20 my-1" />
+                      <PriceRow
+                        label="סה״כ ללקוח (משולב)"
+                        value={`${formatIls(combinedResult.grandTotal)} (בנפרד: ${formatIls(combinedResult.separateGrandTotal)})`}
+                        bold
+                      />
+                      <PriceRow
+                        label="סה״כ רווח"
+                        value={formatIls(combinedResult.totalProfit)}
+                        highlight
+                      />
+                      <PriceRow label="מרווח כולל" value={`${combinedResult.overallMarginPct}%`} />
+                    </div>
+                  )}
+                </div>
               )}
 
               {error && <p className="text-xs text-destructive">{error}</p>}
