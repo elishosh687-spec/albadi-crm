@@ -164,14 +164,10 @@ export function QuoteHtmlPreviewWidget({ apiToken, row }: { apiToken: string; ro
                   <PriceRow label="עלות שילוח ליחידה" value={fmtIls(p.unitShipping)} />
                   <PriceRow label="סה״כ עלות" value={fmtIls(p.totalCost + p.totalShipping)} bold />
                   <PriceRow
-                    label={`רווח ${p.profitMarginPct}% (מעל עלות מפעל)`}
+                    label={`רווח ${p.profitMarginPct}% (מהמחיר, ללא שילוח)`}
                     value={fmtIls(p.totalProfit)}
                     bold
                     primary
-                  />
-                  <PriceRow
-                    label="רווח כ-% מהכנסה"
-                    value={`${p.totalSellingPrice > 0 ? ((p.totalProfit / p.totalSellingPrice) * 100).toFixed(1) : "0"}%`}
                   />
                   <PriceRow
                     label="לוגיסטיקה"

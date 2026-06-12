@@ -4,10 +4,14 @@
  * Inputs: factory's unit cost in CNY + carton spec + shipping option + quantity.
  * Outputs: per-unit cost, shipping, profit, selling price (all in ILS).
  *
- * Key convention (matches the customer-facing rough estimator):
- *   shipping is a **pass-through** cost — margin applies only to production.
- *   selling = (production_cost) × (1 + margin) + shipping_cost
- *   profit  = selling - cost_total = selling - (production + shipping)
+ * Key convention (UNIFIED with the customer-facing calculator, engine.ts):
+ *   **margin-on-price** — the margin is the profit's share of the PRODUCT price
+ *   (the price excluding pass-through shipping). 40% means 40% of the product
+ *   price is profit — identical to what the calculator slider means.
+ *   shipping is a **pass-through** cost — no margin is taken on it.
+ *     productPrice = production_cost / (1 - margin)
+ *     selling      = productPrice + shipping_cost
+ *     profit       = productPrice - production_cost
  */
 
 import type {
@@ -40,6 +44,22 @@ function computeShippingPerUnitUsd(
     return (Math.max(totalCbm, 1) * shipping.seaRate) / quantity;
   }
   return 0;
+}
+
+/**
+ * Inverse of the margin-on-price formula used in priceFactoryQuote: given a
+ * target customer unit price, returns the margin (%) needed to reach it.
+ * Single source of truth for the "תמחור לפי יעד" panels in BOTH the Dashboard
+ * and Widget FinalizeModals — so the reverse math can never drift between them.
+ *   margin = (productPrice − cost) / productPrice,  productPrice = price − shipping
+ */
+export function marginPctFromUnitPrice(
+  perUnitPrice: number,
+  unitCost: number,
+  unitShipping: number
+): number {
+  const productPrice = perUnitPrice - unitShipping;
+  return productPrice > 0 ? ((productPrice - unitCost) / productPrice) * 100 : 0;
 }
 
 export function priceFactoryQuote(
@@ -93,18 +113,23 @@ export function priceFactoryQuote(
       ? input.profitMarginOverride
       : config.defaultProfitMargin;
 
-  // Pass-through shipping (no margin on shipping).
+  // Margin-on-price, matching the calculator (engine.ts): the margin is the
+  // profit's share of the product price (excluding pass-through shipping).
+  // Clamp to <100% so a misconfigured value can never divide-by-zero / go negative.
   // Compute selling price exact first, round display only — profit must NOT be derived
   // from the rounded selling price or a per-unit rounding error compounds over quantity
   // (e.g. a 0.01 ILS/unit rounding delta × 10 000 units = 100 ILS difference between
   // sea and air for identical factory cost).
-  const unitSellingPriceExact = unitCost * (1 + marginPct / 100) + unitShipping;
+  const marginFrac = Math.min(Math.max(marginPct, 0), 99.9) / 100;
+  const unitProductPriceExact = unitCost / (1 - marginFrac);
+  const unitSellingPriceExact = unitProductPriceExact + unitShipping;
   const unitSellingPrice = r2(unitSellingPriceExact);
-  const unitProfit = r2(unitCost * (marginPct / 100));
+  const unitProfitExact = unitProductPriceExact - unitCost;
+  const unitProfit = r2(unitProfitExact);
 
   const totalCost = r2(unitCost * quantity);
   const totalShipping = r2(unitShipping * quantity);
-  const totalProfit = r2(unitCost * (marginPct / 100) * quantity);
+  const totalProfit = r2(unitProfitExact * quantity);
   const totalSellingPrice = r2(unitSellingPriceExact * quantity);
 
   return {

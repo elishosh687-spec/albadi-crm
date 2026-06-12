@@ -177,7 +177,7 @@ export function buildBreakdownView(input: BreakdownInput): BreakdownView {
       ilsPerUnitProfit: r2(input.unitProfit),
       ilsTotalProfit: r2(input.totalProfit),
       pctOfRevenue: r2(pctOfRevenue),
-      formula: `₪${r2(input.unitCost).toFixed(2)} × ${input.profitMarginPct}% = ₪${r2(input.unitProfit).toFixed(2)}/יח׳`,
+      formula: `₪${r2(input.unitCost).toFixed(2)} עלות → ${input.profitMarginPct}% מהמחיר = ₪${r2(input.unitProfit).toFixed(2)}/יח׳ רווח`,
     },
     totals: {
       unitSellingPrice: r2(input.unitSellingPrice),

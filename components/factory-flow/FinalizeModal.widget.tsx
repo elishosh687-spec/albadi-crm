@@ -8,7 +8,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Loader2, X, Sparkles } from "lucide-react";
 import type { FactoryQuoteRow } from "./types";
 import type { FactoryPricingConfig, ShippingOption } from "@/lib/factory/types";
-import { priceFactoryQuote } from "@/lib/factory/pricing";
+import { priceFactoryQuote, marginPctFromUnitPrice } from "@/lib/factory/pricing";
 import { DetailedBreakdown } from "@/components/calculator/DetailedBreakdown";
 import { widgetUrl } from "./widget-url";
 
@@ -45,7 +45,8 @@ export function FinalizeModalWidget({
   const [reverseInput, setReverseInput] = useState<string>("");
 
   const MARGIN_MIN = 0;
-  const MARGIN_MAX = 300;
+  // margin-on-price is capped below 100% (profit can't be ≥ the price)
+  const MARGIN_MAX = 99;
 
   useEffect(() => {
     fetch(widgetUrl("/api/widget/factory/config", apiToken))
@@ -253,9 +254,10 @@ export function FinalizeModalWidget({
                 />
                 <div className="flex justify-between text-[10px] text-muted-foreground mt-0.5">
                   <span>0%</span>
-                  <span>100%</span>
-                  <span>200%</span>
-                  <span>300%</span>
+                  <span>25%</span>
+                  <span>50%</span>
+                  <span>75%</span>
+                  <span>99%</span>
                 </div>
               </div>
 
@@ -378,6 +380,7 @@ function ReverseTargetPanel({
   marginMax: number;
   onApply: (pct: number) => void;
 }) {
+  // margin-on-price: margin is profit ÷ product price (excluding pass-through shipping).
   const n = parseFloat(inputValue);
   const valid = Number.isFinite(n) && n > 0;
   const base = unitCost;
@@ -391,7 +394,7 @@ function ReverseTargetPanel({
     if (mode === "profit") perUnit = totalCostPerUnit + n / quantity;
     else if (mode === "total") perUnit = n / quantity;
     else perUnit = n;
-    marginPct = ((perUnit - unitShipping) / base - 1) * 100;
+    marginPct = marginPctFromUnitPrice(perUnit, unitCost, unitShipping);
     profitPerUnit = perUnit - totalCostPerUnit;
     totalProfit = profitPerUnit * quantity;
     totalPrice = perUnit * quantity;
