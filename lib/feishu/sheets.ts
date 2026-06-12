@@ -423,7 +423,9 @@ export function parseFactoryRequestRow(
   const printing = toStr(row[7]);
   const finishing = toStr(row[8]);
   const quantity = toNum(row[9]);
-  if (picUrl) out.picUrl = picUrl;
+  // Only a real URL — embedded-image cells come back as an object (handled
+  // separately by the media downloader), not a usable string here.
+  if (picUrl && /^https?:\/\//i.test(picUrl)) out.picUrl = picUrl;
   if (description) out.description = description;
   if (material) out.material = material;
   if (size) {

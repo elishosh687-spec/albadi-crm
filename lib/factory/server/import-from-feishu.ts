@@ -21,7 +21,20 @@ import {
   parseFactoryResponseRow,
   baseQuoteNo,
 } from "@/lib/feishu/sheets";
+import { extractFeishuFileToken, feishuImageToBlobUrl } from "@/lib/feishu/media";
 import type { FactoryProductSpec } from "@/lib/factory/types";
+
+/** If the spec has no URL image but the sheet row embeds one, pull it to Blob. */
+async function withSheetImage(
+  spec: FactoryProductSpec,
+  cells: (string | number | null)[]
+): Promise<FactoryProductSpec> {
+  if (spec.picUrl) return spec;
+  const token = extractFeishuFileToken(cells[3]);
+  if (!token) return spec;
+  const url = await feishuImageToBlobUrl(token);
+  return url ? { ...spec, picUrl: url } : spec;
+}
 
 function shortId(): string {
   return Math.random().toString(36).slice(2, 10);
@@ -116,7 +129,7 @@ export async function importFromFeishu(): Promise<ImportFromFeishuResult> {
     }
 
     const resp = parseFactoryResponseRow(cells);
-    const spec = buildSpec(cells);
+    const spec = await withSheetImage(buildSpec(cells), cells);
 
     await db.insert(factoryQuoteRequests).values({
       id: `fq_${Date.now()}_${shortId()}`,
@@ -171,7 +184,7 @@ export async function assignImportedQuote(
 
   const cells = await readRow(rowIndex);
   const resp = parseFactoryResponseRow(cells);
-  const spec = buildSpec(cells);
+  const spec = await withSheetImage(buildSpec(cells), cells);
 
   await db.insert(factoryQuoteRequests).values({
     id: `fq_${Date.now()}_${shortId()}`,

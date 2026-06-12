@@ -51,6 +51,7 @@ export function FinalizeModalWidget({
   const [productName, setProductName] = useState<string>(s0.productName ?? "");
   const [picUrl, setPicUrl] = useState<string>(s0.picUrl ?? "");
   const [uploadingImg, setUploadingImg] = useState(false);
+  const [pullingImg, setPullingImg] = useState(false);
   const [material, setMaterial] = useState<string>(s0.material ?? "");
   const [widthCm, setWidthCm] = useState<string>(s0.widthCm ? String(s0.widthCm) : "");
   const [heightCm, setHeightCm] = useState<string>(s0.heightCm ? String(s0.heightCm) : "");
@@ -147,6 +148,30 @@ export function FinalizeModalWidget({
     }
   };
 
+  const handlePullImage = async () => {
+    setPullingImg(true);
+    setError(null);
+    try {
+      const res = await fetch(widgetUrl(`/api/factory/${row.id}/pull-image`, apiToken), {
+        method: "POST",
+      });
+      const data = await res.json();
+      if (data?.ok && data.url) setPicUrl(data.url);
+      else
+        setError(
+          data?.error === "no_image_in_sheet"
+            ? "אין תמונה בשורה של ההצעה ב-Feishu"
+            : data?.error === "download_failed"
+              ? "הורדת התמונה מ-Feishu נכשלה (ייתכן שחסרה הרשאת Drive לאפליקציה)"
+              : data?.error ?? "משיכת התמונה נכשלה"
+        );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "משיכת התמונה נכשלה");
+    } finally {
+      setPullingImg(false);
+    }
+  };
+
   const handleSubmit = async () => {
     setError(null);
     setSubmitting(true);
@@ -240,6 +265,15 @@ export function FinalizeModalWidget({
                         disabled={uploadingImg}
                       />
                     </label>
+                    <button
+                      type="button"
+                      onClick={handlePullImage}
+                      disabled={pullingImg}
+                      title="משוך את התמונה מהשורה ב-Feishu"
+                      className="shrink-0 rounded-md border border-border bg-secondary px-2.5 py-1.5 text-xs hover:bg-secondary/70 disabled:opacity-60"
+                    >
+                      {pullingImg ? "מושך…" : "משוך מ-Feishu"}
+                    </button>
                     {picUrl.trim() ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img
