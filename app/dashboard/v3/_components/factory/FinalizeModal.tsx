@@ -62,6 +62,7 @@ export function FinalizeModal({
   // editable here before the PDF is generated.
   const s0 = row.productSpec;
   const [productName, setProductName] = useState<string>(s0.productName ?? "");
+  const [picUrl, setPicUrl] = useState<string>(s0.picUrl ?? "");
   const [material, setMaterial] = useState<string>(s0.material ?? "");
   const [widthCm, setWidthCm] = useState<string>(s0.widthCm ? String(s0.widthCm) : "");
   const [heightCm, setHeightCm] = useState<string>(s0.heightCm ? String(s0.heightCm) : "");
@@ -154,6 +155,7 @@ export function FinalizeModal({
           moldsCostCny: moldsValid ? moldsParsed : undefined,
           specOverride: {
             productName: productName.trim() || undefined,
+            picUrl: picUrl.trim() || undefined,
             material: material.trim() || undefined,
             widthCm: widthCm !== "" ? Number(widthCm) : undefined,
             heightCm: heightCm !== "" ? Number(heightCm) : undefined,
@@ -188,7 +190,12 @@ export function FinalizeModal({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between border-b border-border px-5 py-3">
-          <h2 className="text-lg font-semibold">חישוב הצעה סופית</h2>
+          <div className="flex items-baseline gap-2 min-w-0">
+            <h2 className="text-lg font-semibold shrink-0">חישוב הצעה סופית</h2>
+            <span className="text-xs font-mono text-muted-foreground truncate">
+              #{row.quotationNo ?? row.id.slice(-6)}
+            </span>
+          </div>
           <button
             type="button"
             onClick={onClose}
@@ -208,6 +215,23 @@ export function FinalizeModal({
               <div className="rounded-lg border border-border bg-card/40 p-3 space-y-2.5">
                 <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
                   פרטי המוצר ל‑PDF (ניתן לעריכה)
+                </div>
+                <div className="flex items-end gap-2">
+                  <div className="flex-1 min-w-0">
+                    <SpecField label="קישור תמונת מוצר (ל‑PDF)" value={picUrl} onChange={setPicUrl} placeholder="https://…" />
+                  </div>
+                  {picUrl.trim() ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={picUrl}
+                      alt="תמונת מוצר"
+                      className="size-14 shrink-0 rounded-md border border-border object-contain bg-background"
+                    />
+                  ) : (
+                    <div className="size-14 shrink-0 rounded-md border border-dashed border-border grid place-items-center text-[9px] text-muted-foreground">
+                      אין תמונה
+                    </div>
+                  )}
                 </div>
                 <SpecField label="שם המוצר (כותרת)" value={productName} onChange={setProductName} placeholder="שקית אלבדי" />
                 <div className="grid grid-cols-3 gap-2">

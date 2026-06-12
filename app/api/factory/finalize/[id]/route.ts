@@ -26,6 +26,7 @@ const BodySchema = z.object({
       description: z.string().optional(),
       material: z.string().optional(),
       productName: z.string().optional(),
+      picUrl: z.string().optional(),
       widthCm: z.number().min(0).optional(),
       heightCm: z.number().min(0).optional(),
       depthCm: z.number().min(0).optional(),

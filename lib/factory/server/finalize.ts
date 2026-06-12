@@ -13,7 +13,7 @@ import { factoryQuoteRequests, leads } from "@/drizzle/schema";
 import { eq } from "drizzle-orm";
 import { priceFactoryQuote } from "@/lib/factory/pricing";
 import { getFactoryConfig } from "@/lib/factory/config";
-import { renderCustomerQuotePdf } from "@/lib/factory/pdf";
+import { renderCustomerQuotePdf, fetchImageDataUri } from "@/lib/factory/pdf";
 import type {
   FactoryProductSpec,
   FactoryResponse,
@@ -113,12 +113,14 @@ export async function finalizeQuote(
 
   let pdfUrl: string | null = reqRow.pdfUrl ?? null;
   try {
+    const picDataUri = await fetchImageDataUri(spec.picUrl);
     const buf = await renderCustomerQuotePdf({
       customerName,
       spec,
       pricing,
       breakdown: null,
       customerNotes: spec.customerNotes,
+      picDataUri,
       quotationNo: reqRow.quotationNo ?? id.slice(-8).toUpperCase(),
     });
 

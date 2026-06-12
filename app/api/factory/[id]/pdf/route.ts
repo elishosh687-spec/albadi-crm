@@ -12,7 +12,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { factoryQuoteRequests, leads } from "@/drizzle/schema";
 import { eq } from "drizzle-orm";
-import { renderCustomerQuotePdf } from "@/lib/factory/pdf";
+import { renderCustomerQuotePdf, fetchImageDataUri } from "@/lib/factory/pdf";
 import type {
   FactoryProductSpec,
   FactoryPricingResult,
@@ -80,11 +80,14 @@ export async function GET(
     // catalog-derived breakdown ignores factoryResponse.unitCostCny and
     // would display a different total than the WhatsApp text (see lead
     // 972509111981 / quote LHPL3ATC).
+    const picDataUri = await fetchImageDataUri(spec.picUrl);
     const buf = await renderCustomerQuotePdf({
       customerName,
       spec,
       pricing,
       breakdown: null,
+      customerNotes: spec.customerNotes,
+      picDataUri,
       quotationNo: row.quotationNo ?? id.slice(-8).toUpperCase(),
     });
 

@@ -14,7 +14,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { factoryQuoteRequests, leads } from "@/drizzle/schema";
 import { eq, inArray } from "drizzle-orm";
-import { renderCombinedQuotePdf, type CombinedQuoteItem } from "@/lib/factory/pdf";
+import {
+  renderCombinedQuotePdf,
+  fetchImageDataUri,
+  type CombinedQuoteItem,
+} from "@/lib/factory/pdf";
 import type {
   FactoryProductSpec,
   FactoryPricingResult,
@@ -73,10 +77,16 @@ export async function GET(req: NextRequest) {
     .limit(1);
   const customerName = leadRow[0]?.name ?? "";
 
-  const items: CombinedQuoteItem[] = ordered.map((r) => ({
-    spec: r.productSpec as FactoryProductSpec,
-    pricing: r.finalPricing as FactoryPricingResult,
-  }));
+  const items: CombinedQuoteItem[] = await Promise.all(
+    ordered.map(async (r) => {
+      const spec = r.productSpec as FactoryProductSpec;
+      return {
+        spec,
+        pricing: r.finalPricing as FactoryPricingResult,
+        picDataUri: await fetchImageDataUri(spec.picUrl),
+      };
+    })
+  );
 
   try {
     const buf = await renderCombinedQuotePdf({ customerName, items });

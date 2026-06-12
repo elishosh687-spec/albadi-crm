@@ -366,6 +366,7 @@ export function parseSizeLabel(s: string): {
 }
 
 export interface ParsedFactoryRequest {
+  picUrl?: string;
   description?: string;
   material?: string;
   widthCm?: number;
@@ -384,12 +385,14 @@ export function parseFactoryRequestRow(
   row: (string | number | null)[]
 ): ParsedFactoryRequest {
   const out: ParsedFactoryRequest = {};
+  const picUrl = toStr(row[3]);
   const description = toStr(row[4]);
   const material = toStr(row[5]);
   const size = toStr(row[6]);
   const printing = toStr(row[7]);
   const finishing = toStr(row[8]);
   const quantity = toNum(row[9]);
+  if (picUrl) out.picUrl = picUrl;
   if (description) out.description = description;
   if (material) out.material = material;
   if (size) {

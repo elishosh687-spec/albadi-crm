@@ -12,6 +12,7 @@ import {
   Page,
   View,
   Text,
+  Image,
   StyleSheet,
   Font,
   renderToBuffer,
@@ -292,12 +293,15 @@ export interface CustomerQuotePdfProps {
   customerNotes?: string;
   quotationNo?: string;
   validityDays?: number;
+  /** Product image as a data URI (data:image/...;base64,...). Pre-fetched
+   *  server-side via fetchImageDataUri so a broken URL never breaks the PDF. */
+  picDataUri?: string;
 }
 
 function CustomerQuotePDF(props: CustomerQuotePdfProps) {
   // quotationNo is intentionally unused in the customer-facing layout —
   // it lives in the filename only (Content-Disposition) for tracking.
-  const { customerName, spec, pricing, breakdown, customerNotes } = props;
+  const { customerName, spec, pricing, breakdown, customerNotes, picDataUri } = props;
   const date = new Date().toLocaleDateString("he-IL", {
     day: "numeric",
     month: "long",
@@ -417,6 +421,12 @@ function CustomerQuotePDF(props: CustomerQuotePdfProps) {
           </Text>
         </View>
 
+        {picDataUri ? (
+          <View style={{ alignItems: "center", marginBottom: 10 }}>
+            <Image src={picDataUri} style={{ width: 200, height: 200, objectFit: "contain" }} />
+          </View>
+        ) : null}
+
         <Text style={styles.tableTitle}>פירוט ההזמנה</Text>
         <View style={styles.table}>
           <View style={styles.thRow}>
@@ -487,6 +497,28 @@ export async function renderCustomerQuotePdf(
   return renderToBuffer(<CustomerQuotePDF {...props} />);
 }
 
+/**
+ * Fetch a remote image URL and return it as a base64 data URI for embedding in
+ * the PDF. Returns undefined on any failure (bad URL, non-image, fetch error)
+ * so a broken product image can never break PDF generation.
+ */
+export async function fetchImageDataUri(
+  url?: string
+): Promise<string | undefined> {
+  if (!url || !/^https?:\/\//i.test(url)) return undefined;
+  try {
+    const resp = await fetch(url);
+    if (!resp.ok) return undefined;
+    const ct = resp.headers.get("content-type") ?? "";
+    if (!ct.startsWith("image/")) return undefined;
+    const buf = Buffer.from(await resp.arrayBuffer());
+    if (buf.byteLength === 0 || buf.byteLength > 8_000_000) return undefined;
+    return `data:${ct};base64,${buf.toString("base64")}`;
+  } catch {
+    return undefined;
+  }
+}
+
 // ------------------------------------------------------------
 // Combined quote — multiple finalized products in one PDF, a section per
 // product, with a single grand total at the end.
@@ -495,6 +527,8 @@ export async function renderCustomerQuotePdf(
 export interface CombinedQuoteItem {
   spec: FactoryProductSpec;
   pricing: FactoryPricingResult;
+  /** Product image as a data URI (pre-fetched via fetchImageDataUri). */
+  picDataUri?: string;
 }
 
 export interface CombinedQuotePdfProps {
@@ -532,6 +566,7 @@ function CombinedQuotePDF({ customerName, items }: CombinedQuotePdfProps) {
       qty: pricing.quantity,
       total: r2(pricing.totalSellingPrice),
       notes: spec.customerNotes?.trim() || "",
+      picDataUri: it.picDataUri,
     };
   });
   const grandTotal = r2(sections.reduce((s, x) => s + x.total, 0));
@@ -559,6 +594,11 @@ function CombinedQuotePDF({ customerName, items }: CombinedQuotePdfProps) {
             <Text style={[styles.tableTitle, { marginTop: idx === 0 ? 0 : 4 }]}>
               {idx + 1}. {sec.title}
             </Text>
+            {sec.picDataUri ? (
+              <View style={{ alignItems: "center", marginBottom: 6 }}>
+                <Image src={sec.picDataUri} style={{ width: 140, height: 140, objectFit: "contain" }} />
+              </View>
+            ) : null}
             <View style={styles.bullets}>
               {sec.bullets.map((b, i) => (
                 <View key={i} style={styles.bulletRow}>
