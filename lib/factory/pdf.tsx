@@ -275,6 +275,20 @@ function rtl(s: string): string {
   return s ? RLM + s : s;
 }
 
+// Bidi-isolate each "·"-separated segment so a number/Latin run in one segment
+// can't bleed into the next (e.g. the "2" of "2 צבעים" jumping across, or the
+// English material name pulling the next segment's number). Each segment keeps
+// its own internal order; the line as a whole stays RTL.
+const FSI = "⁨"; // first-strong isolate
+const PDI = "⁩"; // pop directional isolate
+function rtlSegments(segments: string[]): string {
+  const joined = segments
+    .filter(Boolean)
+    .map((seg) => FSI + seg + PDI)
+    .join(" · ");
+  return joined ? RLM + joined : "";
+}
+
 function sizeLabel(spec: FactoryProductSpec): string {
   const parts = [
     spec.widthCm ? `${spec.widthCm}` : null,
@@ -565,11 +579,12 @@ function CombinedQuotePDF({ customerName, items }: CombinedQuotePdfProps) {
     // title. sizeLabel already ends with ס"מ — don't append it again.
     const namePart = spec.productName?.trim();
     const title = rtl(namePart ? `${namePart} — ${sizeLabel(spec)}` : sizeLabel(spec));
-    const sub = rtl(
-      [materialHe, printingHe, finishingHe, pricing.shippingOptionName || ""]
-        .filter(Boolean)
-        .join(" · ")
-    );
+    const sub = rtlSegments([
+      materialHe,
+      printingHe,
+      finishingHe,
+      pricing.shippingOptionName || "",
+    ]);
     return {
       title,
       sub,
