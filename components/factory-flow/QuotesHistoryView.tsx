@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useMemo } from "react";
-import { ExternalLink, Search, Loader2, Eye, Download, Trash2, X, MessageCircle, Calculator, Copy, ChevronDown } from "lucide-react";
+import { ExternalLink, Search, Loader2, Eye, Download, Trash2, X, MessageCircle, Calculator, Pencil, ChevronDown } from "lucide-react";
 import { QuoteHtmlPreview } from "@/app/dashboard/v3/_components/factory/QuoteHtmlPreview";
 import type { FactoryQuoteRow as DashboardFactoryQuoteRow } from "@/app/dashboard/v3/_components/factory/FactoryQuotePanel";
 import { FinalizeModalWidget } from "./FinalizeModal.widget";
@@ -175,6 +175,28 @@ export function QuotesHistoryView({ apiToken }: { apiToken: string }) {
       if (!j?.ok) {
         alert(`שגיאה במחיקה: ${j?.error ?? res.status}`);
         return;
+      }
+      await refresh();
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  // Delete the whole combined offer = every quote of this customer.
+  async function handleDeleteGroup(g: CustomerGroup) {
+    if (
+      !confirm(
+        `למחוק את כל ${g.rows.length} ההצעות של ${g.name ?? "הלקוח"}? פעולה לא הפיכה.`
+      )
+    )
+      return;
+    setBusyId(`group:${g.leadSid}`);
+    try {
+      for (const r of g.rows) {
+        await fetch(
+          `/api/factory/${r.id}?widget_token=${encodeURIComponent(apiToken)}`,
+          { method: "DELETE" }
+        );
       }
       await refresh();
     } finally {
@@ -392,7 +414,7 @@ export function QuotesHistoryView({ apiToken }: { apiToken: string }) {
               title="ערוך כעותק חדש — מקור נשמר"
               className="size-7 rounded grid place-items-center text-muted-foreground hover:text-primary hover:bg-primary/10 disabled:opacity-50"
             >
-              {busyId === r.id ? <Loader2 className="size-3.5 animate-spin" /> : <Copy className="size-3.5" />}
+              {busyId === r.id ? <Loader2 className="size-3.5 animate-spin" /> : <Pencil className="size-3.5" />}
             </button>
           )}
           {r.status === "finalized" && (
@@ -572,6 +594,7 @@ export function QuotesHistoryView({ apiToken }: { apiToken: string }) {
               const combinedWa = canSendCombined
                 ? buildCombineWaUrl(finalizedIds, g.name, g.phone, origin)
                 : null;
+              const ghlUrl = g.rows[0]?.ghlUrl ?? null;
               return (
                 <div
                   key={g.leadSid}
@@ -606,18 +629,39 @@ export function QuotesHistoryView({ apiToken }: { apiToken: string }) {
                         ))}
                       </span>
                     </button>
-                    <div className="flex items-center gap-1 shrink-0">
+                    <div className="flex items-center gap-0.5 shrink-0">
+                      {/* Combined-offer toolbar — same actions a single quote has */}
                       {canSendCombined && (
                         <a
                           href={combinedPdfHref}
                           target="_blank"
                           rel="noopener noreferrer"
-                          title="פתח PDF משולב"
+                          title="הצג PDF משולב"
+                          className="size-7 rounded grid place-items-center text-muted-foreground hover:text-foreground hover:bg-secondary"
+                        >
+                          <Eye className="size-3.5" />
+                        </a>
+                      )}
+                      {canSendCombined && (
+                        <a
+                          href={combinedPdfHref}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          title="הורד PDF משולב"
                           className="size-7 rounded grid place-items-center text-muted-foreground hover:text-foreground hover:bg-secondary"
                         >
                           <Download className="size-3.5" />
                         </a>
                       )}
+                      <button
+                        type="button"
+                        onClick={() => setCalcGroup(g)}
+                        disabled={!canCalc}
+                        title={canCalc ? "ערוך / חישוב משולב" : "אין הצעות עם תשובת מפעל"}
+                        className="size-7 rounded grid place-items-center text-primary hover:bg-primary/10 disabled:opacity-40"
+                      >
+                        <Pencil className="size-3.5" />
+                      </button>
                       {combinedWa && (
                         <a
                           href={combinedWa}
@@ -631,14 +675,28 @@ export function QuotesHistoryView({ apiToken }: { apiToken: string }) {
                       )}
                       <button
                         type="button"
-                        onClick={() => setCalcGroup(g)}
-                        disabled={!canCalc}
-                        title={canCalc ? "פתח/ערוך חישוב משולב" : "אין הצעות עם תשובת מפעל"}
-                        className="inline-flex items-center gap-1 rounded-md border border-primary/40 bg-primary/10 px-2.5 py-1 text-[11px] font-medium text-primary hover:bg-primary/20 disabled:opacity-40"
+                        onClick={() => handleDeleteGroup(g)}
+                        disabled={busyId === `group:${g.leadSid}`}
+                        title="מחק את כל הצעות הלקוח"
+                        className="size-7 rounded grid place-items-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 disabled:opacity-50"
                       >
-                        <Calculator className="size-3.5" />
-                        חישוב משולב
+                        {busyId === `group:${g.leadSid}` ? (
+                          <Loader2 className="size-3.5 animate-spin" />
+                        ) : (
+                          <Trash2 className="size-3.5" />
+                        )}
                       </button>
+                      {ghlUrl && (
+                        <a
+                          href={ghlUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          title="פתח ב-GHL"
+                          className="size-7 rounded grid place-items-center text-muted-foreground hover:text-foreground hover:bg-secondary"
+                        >
+                          <ExternalLink className="size-3.5" />
+                        </a>
+                      )}
                     </div>
                   </div>
                   {open && (
