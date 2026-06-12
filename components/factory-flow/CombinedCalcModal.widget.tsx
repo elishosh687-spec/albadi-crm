@@ -107,10 +107,29 @@ export function CombinedCalcModalWidget({
   const [savingAll, setSavingAll] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [sendHint, setSendHint] = useState<string | null>(null);
+  // Which products are part of THIS offer (default: all). Lets the user build a
+  // combined offer from a subset right inside the card.
+  const [selected, setSelected] = useState<Set<string>>(
+    () => new Set(rows.filter((r) => r.factoryResponse).map((r) => r.id))
+  );
 
   // Only quotes with a factory response can be priced + included in the PDF.
   const priceableRows = useMemo(() => rows.filter((r) => r.factoryResponse), [rows]);
   const pendingCount = rows.length - priceableRows.length;
+  const selectedRows = useMemo(
+    () => priceableRows.filter((r) => selected.has(r.id)),
+    [priceableRows, selected]
+  );
+
+  function toggleSelected(id: string) {
+    setSelected((prev) => {
+      const n = new Set(prev);
+      if (n.has(id)) n.delete(id);
+      else n.add(id);
+      return n;
+    });
+    setSendHint(null);
+  }
 
   const origin = typeof window !== "undefined" ? window.location.origin : "";
 
@@ -201,13 +220,14 @@ export function CombinedCalcModalWidget({
 
   const combinedResult = useMemo(() => {
     if (!config) return null;
-    const priced = Object.values(livePricings).filter(
-      (p): p is FactoryPricingResult => !!p
-    );
+    // Only the SELECTED products form the offer.
+    const priced = selectedRows
+      .map((r) => livePricings[r.id])
+      .filter((p): p is FactoryPricingResult => !!p);
     if (priced.length === 0) return null;
     const opt = config.shippingOptions.find((s) => s.id === shippingOptionId) ?? null;
     return computeCombined(priced, opt, config.usdToIls);
-  }, [livePricings, config, shippingOptionId]);
+  }, [livePricings, config, shippingOptionId, selectedRows]);
 
   // Each priceable product paired with its live pricing, for the combined
   // breakdown (the "4 products that make up the one order" view).
@@ -229,7 +249,9 @@ export function CombinedCalcModalWidget({
     const round = (n: number) => Math.round(n * 100) / 100;
     for (const row of rows) {
       const p = livePricings[row.id];
-      if (!p || !combinedResult || combinedResult.combinedCbm <= 0) {
+      // Only selected rows get the combined (allocated) price — unselected ones
+      // aren't part of the merged shipment, so they show their standalone price.
+      if (!p || !selected.has(row.id) || !combinedResult || combinedResult.combinedCbm <= 0) {
         out[row.id] = null;
         continue;
       }
@@ -240,21 +262,21 @@ export function CombinedCalcModalWidget({
       out[row.id] = { total, unit };
     }
     return out;
-  }, [rows, livePricings, combinedResult]);
+  }, [rows, livePricings, combinedResult, selected]);
 
   function setAllMargins(v: number) {
     setSectionState((prev) => {
       const next = { ...prev };
-      for (const row of priceableRows) next[row.id] = { ...next[row.id], margin: v, touched: true };
+      for (const row of selectedRows) next[row.id] = { ...next[row.id], margin: v, touched: true };
       return next;
     });
     setSendHint(null);
   }
 
-  const avgMargin = priceableRows.length
+  const avgMargin = selectedRows.length
     ? Math.round(
-        priceableRows.reduce((s, r) => s + (sectionState[r.id]?.margin ?? 0), 0) /
-          priceableRows.length
+        selectedRows.reduce((s, r) => s + (sectionState[r.id]?.margin ?? 0), 0) /
+          selectedRows.length
       )
     : 0;
 
@@ -269,13 +291,13 @@ export function CombinedCalcModalWidget({
   // send-ready before the combined PDF can be opened (the PDF route 409s on any
   // non-finalized id).
   const sendReady =
-    priceableRows.length >= 1 &&
-    priceableRows.every((r) => {
+    selectedRows.length >= 1 &&
+    selectedRows.every((r) => {
       const st = sectionState[r.id];
       return st && !st.touched && (st.finalizedThisSession || !!r.finalPricing);
     });
   const phoneDigits = (customerPhone ?? "").replace(/[^\d]/g, "");
-  const combineIds = priceableRows.map((r) => r.id);
+  const combineIds = selectedRows.map((r) => r.id);
   const waUrl =
     sendReady && phoneDigits
       ? buildCombineWaUrl(combineIds, customerName, customerPhone, origin)
@@ -288,7 +310,7 @@ export function CombinedCalcModalWidget({
     setSaveError(null);
     setSendHint(null);
     try {
-      for (const row of priceableRows) {
+      for (const row of selectedRows) {
         const st = sectionState[row.id];
         const live = livePricings[row.id];
         if (!st || !live) continue;
@@ -440,7 +462,7 @@ export function CombinedCalcModalWidget({
               {/* Products header + expand/collapse all */}
               <div className="flex items-center justify-between pt-1">
                 <span className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold">
-                  מוצרים בהזמנה ({priceableRows.length})
+                  מוצרים — {selectedRows.length} נבחרו מתוך {priceableRows.length}
                 </span>
                 <button
                   type="button"
@@ -450,6 +472,9 @@ export function CombinedCalcModalWidget({
                   {allExpanded ? "כווץ הכל" : "הרחב הכל"}
                 </button>
               </div>
+              <p className="text-[10px] text-muted-foreground -mt-1.5">
+                סמן ✓ אילו מוצרים ייכנסו להצעה המשולבת (PDF / WhatsApp).
+              </p>
 
               {/* One accordion section per product */}
               {priceableRows.map((row, idx) => (
@@ -462,6 +487,8 @@ export function CombinedCalcModalWidget({
                   pricing={livePricings[row.id]}
                   allocated={allocatedByRow[row.id]}
                   config={config}
+                  checked={selected.has(row.id)}
+                  onCheck={() => toggleSelected(row.id)}
                   expanded={expanded.has(row.id)}
                   onToggle={() => toggleExpanded(row.id)}
                   onPatch={(patch) => patchSection(row.id, patch)}
@@ -471,6 +498,12 @@ export function CombinedCalcModalWidget({
               {pendingCount > 0 && (
                 <div className="text-[11px] text-muted-foreground">
                   {pendingCount} הצעות ממתינות לתשובת מפעל — לא נכללות בחישוב המשולב.
+                </div>
+              )}
+
+              {selectedRows.length === 0 && (
+                <div className="rounded-md border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-[11px] text-amber-400">
+                  לא נבחר אף מוצר — סמן לפחות מוצר אחד כדי ליצור הצעה.
                 </div>
               )}
 
@@ -595,6 +628,8 @@ function ProductCalcSection({
   pricing,
   allocated,
   config,
+  checked,
+  onCheck,
   expanded,
   onToggle,
   onPatch,
@@ -606,6 +641,8 @@ function ProductCalcSection({
   pricing: FactoryPricingResult | null;
   allocated: { total: number; unit: number } | null;
   config: FactoryPricingConfig;
+  checked: boolean;
+  onCheck: () => void;
   expanded: boolean;
   onToggle: () => void;
   onPatch: (patch: Partial<SectionState>) => void;
@@ -666,16 +703,28 @@ function ProductCalcSection({
     <div
       className={`rounded-lg border overflow-hidden transition-colors ${
         expanded ? "border-primary/40 bg-card/60" : "border-border bg-card/30"
-      }`}
+      } ${checked ? "" : "opacity-55"}`}
     >
-      {/* Header */}
-      <button
-        type="button"
-        onClick={onToggle}
-        className={`flex w-full items-center gap-2 px-3 py-2.5 text-right transition-colors ${
-          expanded ? "bg-primary/10" : "hover:bg-secondary/40"
-        }`}
-      >
+      {/* Header: include-checkbox + expand toggle */}
+      <div className={`flex items-stretch ${expanded ? "bg-primary/10" : ""}`}>
+        <label
+          className="flex items-center pr-3 pl-1.5 cursor-pointer shrink-0"
+          title="כלול בהצעה המשולבת"
+        >
+          <input
+            type="checkbox"
+            checked={checked}
+            onChange={onCheck}
+            className="size-4 accent-[var(--color-primary,#4A7C59)]"
+          />
+        </label>
+        <button
+          type="button"
+          onClick={onToggle}
+          className={`flex flex-1 min-w-0 items-center gap-2 py-2.5 pl-3 text-right transition-colors ${
+            expanded ? "" : "hover:bg-secondary/40"
+          }`}
+        >
         <span className="size-5 shrink-0 grid place-items-center rounded-full bg-primary/15 text-primary text-[11px] font-bold tabular-nums">
           {index + 1}
         </span>
@@ -708,7 +757,8 @@ function ProductCalcSection({
               ? formatIls(pricing.totalSellingPrice)
               : "—"}
         </span>
-      </button>
+        </button>
+      </div>
 
       {expanded && (
         <div className="border-t border-primary/20 px-3 py-3 space-y-3">
