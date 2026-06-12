@@ -520,8 +520,8 @@ export async function fetchImageDataUri(
 }
 
 // ------------------------------------------------------------
-// Combined quote — multiple finalized products in one PDF, a section per
-// product, with a single grand total at the end.
+// Combined quote — multiple finalized products in ONE invoice-style table
+// (one row per product) with a single grand total at the end.
 // ------------------------------------------------------------
 
 export interface CombinedQuoteItem {
@@ -550,22 +550,16 @@ function CombinedQuotePDF({ customerName, items }: CombinedQuotePdfProps) {
     const printingHe = stripCjk(spec.printing ? humanizePrinting(spec.printing) : "");
     const finishingHe = stripCjk(spec.finishing ? humanizeFinishing(spec.finishing) : "");
     const materialHe = stripCjk(spec.material ? humanizeMaterial(spec.material) : "");
-    const title = `${spec.productName?.trim() || "שקית אלבדי"} — ${sizeLabel(spec)} (כולל שילוח)`;
-    const bullets = [
-      `מידות: ${sizeLabel(spec)} ס״מ`,
-      `כמות: ${pricing.quantity.toLocaleString("he-IL")} יח׳`,
-      materialHe ? `חומר: ${materialHe}` : null,
-      printingHe ? `הדפסה: ${printingHe}` : null,
-      finishingHe ? `גימור: ${finishingHe}` : null,
-      pricing.shippingOptionName ? `שיטת שילוח: ${pricing.shippingOptionName}` : null,
-    ].filter(Boolean) as string[];
+    const title = `${spec.productName?.trim() || "שקית אלבדי"} — ${sizeLabel(spec)} ס״מ`;
+    const sub = [materialHe, printingHe, finishingHe, pricing.shippingOptionName || ""]
+      .filter(Boolean)
+      .join(" · ");
     return {
       title,
-      bullets,
+      sub,
       unit: r2(pricing.unitSellingPrice),
       qty: pricing.quantity,
       total: r2(pricing.totalSellingPrice),
-      notes: spec.customerNotes?.trim() || "",
       picDataUri: it.picDataUri,
     };
   });
@@ -582,49 +576,51 @@ function CombinedQuotePDF({ customerName, items }: CombinedQuotePdfProps) {
           <Text style={styles.headerDate}>{date}</Text>
         </View>
 
-        <View style={styles.priceBox}>
-          <Text style={styles.priceMain}>{formatILS(grandTotal)}</Text>
-          <Text style={styles.priceSub}>
-            סה״כ ל-{sections.length.toLocaleString("he-IL")} מוצרים
-          </Text>
-        </View>
-
-        {sections.map((sec, idx) => (
-          <View key={idx} style={{ marginBottom: 14 }} wrap={false}>
-            <Text style={[styles.tableTitle, { marginTop: idx === 0 ? 0 : 4 }]}>
-              {idx + 1}. {sec.title}
-            </Text>
-            {sec.picDataUri ? (
-              <View style={{ alignItems: "center", marginBottom: 6 }}>
-                <Image src={sec.picDataUri} style={{ width: 140, height: 140, objectFit: "contain" }} />
-              </View>
-            ) : null}
-            <View style={styles.bullets}>
-              {sec.bullets.map((b, i) => (
-                <View key={i} style={styles.bulletRow}>
-                  <Text style={styles.bulletMark}>•</Text>
-                  <Text style={styles.bulletText}>{b}</Text>
-                </View>
-              ))}
-            </View>
-            {sec.notes ? (
-              <View style={styles.bulletRow}>
-                <Text style={styles.bulletMark}>•</Text>
-                <Text style={styles.bulletText}>הערות: {sec.notes}</Text>
-              </View>
-            ) : null}
-            <View style={styles.tdRowTotal}>
-              <Text style={styles.totalLabel}>
-                מחיר ליחידה {formatILS(sec.unit)} · כמות {sec.qty.toLocaleString("he-IL")}
-              </Text>
-              <Text style={styles.totalValue}>{formatILS(sec.total)}</Text>
-            </View>
-          </View>
-        ))}
-
+        <Text style={styles.tableTitle}>
+          פירוט ההזמנה ({sections.length.toLocaleString("he-IL")} מוצרים)
+        </Text>
         <View style={styles.table}>
+          <View style={styles.thRow}>
+            <Text style={[styles.th, { flex: 2.6, textAlign: "right" }]}>מוצר</Text>
+            <Text style={[styles.th, { flex: 1, textAlign: "center" }]}>מחיר ליחידה</Text>
+            <Text style={[styles.th, { flex: 0.8, textAlign: "center" }]}>כמות</Text>
+            <Text style={[styles.th, { flex: 1.2, textAlign: "left" }]}>סך הכל</Text>
+          </View>
+          {sections.map((sec, idx) => (
+            <View key={idx} style={styles.tdRow} wrap={false}>
+              <View
+                style={{
+                  flex: 2.6,
+                  flexDirection: "row-reverse",
+                  alignItems: "center",
+                  gap: 6,
+                  paddingHorizontal: 6,
+                }}
+              >
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 11, textAlign: "right" }}>{sec.title}</Text>
+                  {sec.sub ? (
+                    <Text style={{ fontSize: 8, color: MUTED, textAlign: "right", marginTop: 1 }}>
+                      {sec.sub}
+                    </Text>
+                  ) : null}
+                </View>
+                {sec.picDataUri ? (
+                  <Image
+                    src={sec.picDataUri}
+                    style={{ width: 30, height: 30, objectFit: "contain" }}
+                  />
+                ) : null}
+              </View>
+              <Text style={styles.cellUnit}>{formatILS(sec.unit)}</Text>
+              <Text style={styles.cellQty}>{sec.qty.toLocaleString("he-IL")}</Text>
+              <Text style={styles.cellTotal}>{formatILS(sec.total)}</Text>
+            </View>
+          ))}
           <View style={styles.tdRowTotal}>
             <Text style={styles.totalLabel}>סה״כ כולל</Text>
+            <Text style={[styles.th, { flex: 1 }]}></Text>
+            <Text style={[styles.th, { flex: 0.8 }]}></Text>
             <Text style={styles.totalValue}>{formatILS(grandTotal)}</Text>
           </View>
         </View>
