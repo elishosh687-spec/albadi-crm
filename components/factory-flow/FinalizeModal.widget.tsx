@@ -50,6 +50,7 @@ export function FinalizeModalWidget({
   const s0 = row.productSpec;
   const [productName, setProductName] = useState<string>(s0.productName ?? "");
   const [picUrl, setPicUrl] = useState<string>(s0.picUrl ?? "");
+  const [uploadingImg, setUploadingImg] = useState(false);
   const [material, setMaterial] = useState<string>(s0.material ?? "");
   const [widthCm, setWidthCm] = useState<string>(s0.widthCm ? String(s0.widthCm) : "");
   const [heightCm, setHeightCm] = useState<string>(s0.heightCm ? String(s0.heightCm) : "");
@@ -123,6 +124,29 @@ export function FinalizeModalWidget({
     );
   }, [config, row, shippingOptionId, margin, moldsValid, moldsParsed, qtyNum]);
 
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setUploadingImg(true);
+    setError(null);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await fetch(widgetUrl("/api/factory/upload-image", apiToken), {
+        method: "POST",
+        body: fd,
+      });
+      const data = await res.json();
+      if (data?.ok && data.url) setPicUrl(data.url);
+      else setError(data?.message ?? data?.error ?? "העלאת התמונה נכשלה");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "העלאת התמונה נכשלה");
+    } finally {
+      setUploadingImg(false);
+    }
+  };
+
   const handleSubmit = async () => {
     setError(null);
     setSubmitting(true);
@@ -194,22 +218,41 @@ export function FinalizeModalWidget({
                 <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
                   פרטי המוצר ל‑PDF (ניתן לעריכה)
                 </div>
-                <div className="flex items-end gap-2">
-                  <div className="flex-1 min-w-0">
-                    <SpecField label="קישור תמונת מוצר (ל‑PDF)" value={picUrl} onChange={setPicUrl} placeholder="https://…" />
-                  </div>
-                  {picUrl.trim() ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={picUrl}
-                      alt="תמונת מוצר"
-                      className="size-14 shrink-0 rounded-md border border-border object-contain bg-background"
+                <div>
+                  <label className="block text-[11px] text-muted-foreground mb-0.5">
+                    תמונת מוצר (נכנסת ל‑PDF)
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={picUrl}
+                      onChange={(e) => setPicUrl(e.target.value)}
+                      placeholder="הדבק קישור או העלה תמונה"
+                      className="flex-1 min-w-0 rounded-md border border-border bg-background/40 px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring/30"
                     />
-                  ) : (
-                    <div className="size-14 shrink-0 rounded-md border border-dashed border-border grid place-items-center text-[9px] text-muted-foreground">
-                      אין תמונה
-                    </div>
-                  )}
+                    <label className="shrink-0 cursor-pointer rounded-md border border-border bg-secondary px-2.5 py-1.5 text-xs hover:bg-secondary/70">
+                      {uploadingImg ? "מעלה…" : "העלה תמונה"}
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={handleImageUpload}
+                        disabled={uploadingImg}
+                      />
+                    </label>
+                    {picUrl.trim() ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={picUrl}
+                        alt="תמונת מוצר"
+                        className="size-12 shrink-0 rounded-md border border-border object-contain bg-background"
+                      />
+                    ) : (
+                      <div className="size-12 shrink-0 rounded-md border border-dashed border-border grid place-items-center text-[9px] text-muted-foreground">
+                        אין
+                      </div>
+                    )}
+                  </div>
                 </div>
                 <SpecField label="שם המוצר (כותרת)" value={productName} onChange={setProductName} placeholder="שקית אלבדי" />
                 <div className="grid grid-cols-3 gap-2">
