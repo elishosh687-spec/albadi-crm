@@ -23,7 +23,11 @@ import type {
   ShippingOption,
 } from "@/lib/factory/types";
 import { priceFactoryQuote } from "@/lib/factory/pricing";
-import { computeCombined, defaultMarginFor } from "@/lib/factory/combined";
+import {
+  computeCombined,
+  defaultMarginFor,
+  type CombinedPricingResult,
+} from "@/lib/factory/combined";
 import { DetailedBreakdown } from "@/components/calculator/DetailedBreakdown";
 import { widgetUrl } from "./widget-url";
 import { buildCombineWaUrl, formatIls, SpecField, PriceRow } from "./calc-shared";
@@ -198,6 +202,18 @@ export function CombinedCalcModalWidget({
     const opt = config.shippingOptions.find((s) => s.id === shippingOptionId) ?? null;
     return computeCombined(priced, opt, config.usdToIls);
   }, [livePricings, config, shippingOptionId]);
+
+  // Each priceable product paired with its live pricing, for the combined
+  // breakdown (the "4 products that make up the one order" view).
+  const breakdownItems = useMemo(
+    () =>
+      priceableRows
+        .map((r) => ({ row: r, pricing: livePricings[r.id] }))
+        .filter(
+          (x): x is { row: FactoryQuoteRow; pricing: FactoryPricingResult } => !!x.pricing
+        ),
+    [priceableRows, livePricings]
+  );
 
   function setAllMargins(v: number) {
     setSectionState((prev) => {
@@ -444,6 +460,12 @@ export function CombinedCalcModalWidget({
                     highlight
                   />
                   <PriceRow label="מרווח כולל" value={`${combinedResult.overallMarginPct}%`} />
+                  <CombinedBreakdown
+                    result={combinedResult}
+                    items={breakdownItems}
+                    config={config}
+                    shippingOptionId={shippingOptionId}
+                  />
                 </div>
               )}
 
@@ -781,6 +803,176 @@ function ProductCalcSection({
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * The combined order treated as ONE product: a full breakdown across all
+ * products — composition, total factory cost, the single merged shipment (and
+ * the volume it takes), total profit, the price summary, and logistics.
+ */
+function CombinedBreakdown({
+  result,
+  items,
+  config,
+  shippingOptionId,
+}: {
+  result: CombinedPricingResult;
+  items: { row: FactoryQuoteRow; pricing: FactoryPricingResult }[];
+  config: FactoryPricingConfig;
+  shippingOptionId: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const opt = config.shippingOptions.find((s) => s.id === shippingOptionId) ?? null;
+  const cartons = items.reduce((s, it) => s + (it.pricing.totalCartons || 0), 0);
+  const effectiveCbm = Math.max(result.combinedCbm, 1);
+  const floorApplied = opt?.type === "sea" && result.combinedCbm < 1;
+
+  function nameOf(row: FactoryQuoteRow): string {
+    return (
+      row.productSpec.productName ||
+      row.productSpec.description ||
+      row.quotationNo ||
+      "מוצר"
+    );
+  }
+
+  return (
+    <div className="rounded-md border border-border/60 bg-background/40 overflow-hidden mt-1">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="w-full flex items-center justify-between gap-2 px-2.5 py-2 text-xs font-medium hover:bg-muted/20"
+        aria-expanded={open}
+      >
+        <span className="flex items-center gap-1.5">
+          <ChevronDown className={`size-3.5 transition-transform ${open ? "" : "-rotate-90"}`} />
+          פירוט מלא — ההזמנה כמוצר אחד
+        </span>
+        {!open && (
+          <span className="text-[10px] text-muted-foreground">{result.overallMarginPct}% רווח</span>
+        )}
+      </button>
+
+      {open && (
+        <div className="border-t border-border/60 px-2.5 py-2.5 space-y-2.5 text-xs tabular-nums">
+          {/* Composition — the products that make up the one order */}
+          <BSection title={`הרכב ההזמנה (${items.length} מוצרים)`}>
+            <div className="space-y-1">
+              {items.map(({ row, pricing }) => (
+                <div key={row.id} className="flex items-center gap-2">
+                  <span className="font-mono text-[10px] text-muted-foreground shrink-0">
+                    {row.quotationNo ?? row.id.slice(-6)}
+                  </span>
+                  <span className="truncate flex-1 text-muted-foreground">
+                    {nameOf(row)} · {pricing.quantity.toLocaleString("he-IL")} יח׳
+                  </span>
+                  <span className="shrink-0">{pricing.totalCbm} m³</span>
+                </div>
+              ))}
+            </div>
+          </BSection>
+
+          {/* Total factory cost */}
+          <BSection title="עלות מפעל כוללת (production — חל עליה רווח)">
+            {items.map(({ row, pricing }) => (
+              <BRow key={row.id} label={nameOf(row)} value={formatIls(pricing.totalCost)} muted />
+            ))}
+            <BRow label="סה״כ עלות מפעל" value={formatIls(result.totalProduction)} strong />
+          </BSection>
+
+          {/* One merged shipment */}
+          <BSection
+            title={
+              opt?.type === "air"
+                ? "שילוח אווירי מאוחד (pass-through — ללא רווח)"
+                : "שילוח ים מאוחד (pass-through — ללא רווח)"
+            }
+          >
+            <BRow label="נפח כולל (כמה מקום תופס)" value={`${result.combinedCbm} m³`} />
+            {opt?.type === "sea" && opt.seaRate ? (
+              <>
+                <BRow
+                  label="CBM בחיוב"
+                  value={
+                    <>
+                      {effectiveCbm.toFixed(3)}
+                      {floorApplied && <span className="text-amber-400"> · ⚠️ רצפת 1 CBM</span>}
+                    </>
+                  }
+                />
+                <BRow label="תעריף" value={`$${opt.seaRate} / CBM`} />
+              </>
+            ) : (
+              <BRow label="משקל כולל" value={`${result.combinedWeightKg} ק״ג`} />
+            )}
+            <BRow label="שילוח מאוחד" value={formatIls(result.combinedShipping)} strong />
+            <BRow label="לעומת שילוח בנפרד" value={formatIls(result.separateShipping)} muted />
+            <BRow label="חיסכון ללקוח" value={formatIls(result.shippingSaving)} success />
+          </BSection>
+
+          {/* Profit */}
+          <BSection title="רווח (חל רק על production, לא על שילוח)">
+            <BRow label="סה״כ רווח" value={formatIls(result.totalProfit)} success strong />
+            <BRow label="מרווח כולל" value={`${result.overallMarginPct}%`} />
+          </BSection>
+
+          {/* Price summary */}
+          <BSection title="סיכום מחיר ללקוח">
+            <BRow label="מחיר מוצרים (עלות + רווח)" value={formatIls(result.productPriceTotal)} />
+            <BRow label="+ שילוח מאוחד" value={formatIls(result.combinedShipping)} />
+            <BRow label="סה״כ ללקוח" value={formatIls(result.grandTotal)} strong />
+            <BRow label="לעומת בנפרד" value={formatIls(result.separateGrandTotal)} muted />
+          </BSection>
+
+          {/* Logistics */}
+          <BSection title="לוגיסטיקה">
+            <BRow
+              label="פירוט"
+              value={`${cartons} קרטונים · ${result.combinedWeightKg} ק״ג · ${result.combinedCbm} CBM`}
+            />
+          </BSection>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function BSection({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="rounded-md border border-border/50 bg-card/30 p-2">
+      <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">{title}</div>
+      {children}
+    </div>
+  );
+}
+
+function BRow({
+  label,
+  value,
+  strong,
+  muted,
+  success,
+}: {
+  label: string;
+  value: React.ReactNode;
+  strong?: boolean;
+  muted?: boolean;
+  success?: boolean;
+}) {
+  return (
+    <div className="flex justify-between gap-2 items-baseline">
+      <span className={muted ? "text-muted-foreground/70" : "text-muted-foreground"}>{label}</span>
+      <span
+        className={[
+          "text-right tabular-nums",
+          strong ? "font-semibold" : "",
+          success ? "text-success" : "",
+        ].join(" ")}
+      >
+        {value}
+      </span>
     </div>
   );
 }
