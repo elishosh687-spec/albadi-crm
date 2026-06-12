@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { type CSSProperties, useEffect, useMemo, useState, useTransition } from "react";
 
 export interface InboxRow {
   sid: string;
@@ -64,6 +64,8 @@ export default function InboxView({
   const [filter, setFilter] = useState("");
   // sid of the row whose mobile template overlay is open. null = closed.
   const [mobileMenuSid, setMobileMenuSid] = useState<string | null>(null);
+  // sid of the row whose inline factory-quotes panel is expanded. null = none.
+  const [expandedSid, setExpandedSid] = useState<string | null>(null);
   const [, startTransition] = useTransition();
 
   // Inbox is self-contained — clicking a name opens the lead's contact
@@ -228,14 +230,20 @@ export default function InboxView({
               background: r.botPaused ? "#2a1d24" : "#1a1d24",
               border: `1px solid ${selectedSid === r.sid.trim() ? "#3b82f6" : "#2a2d34"}`,
               borderRadius: 8,
-              padding: 12,
               display: "flex",
-              gap: 10,
-              // Buttons live at the bottom-left of the row (alignSelf below),
-              // so the row height is driven by the info area on the right.
-              alignItems: "stretch",
+              flexDirection: "column",
             }}
           >
+            <div
+              style={{
+                padding: 12,
+                display: "flex",
+                gap: 10,
+                // Buttons live at the bottom-left of the row (alignSelf below),
+                // so the row height is driven by the info area on the right.
+                alignItems: "stretch",
+              }}
+            >
             <a
               href={r.ghlContactUrl ?? "#"}
               target="_blank"
@@ -385,6 +393,16 @@ export default function InboxView({
                   />
                 );
               })}
+              <ActionTile
+                onClick={() =>
+                  setExpandedSid((cur) => (cur === r.sid.trim() ? null : r.sid.trim()))
+                }
+                disabled={false}
+                title="הצעות מחיר של הלקוח"
+                icon="💰"
+                label="הצעות"
+                tone={expandedSid === r.sid.trim() ? "warn" : "accent"}
+              />
             </div>
 
             {/* Mobile-only — pause + hamburger that opens the full picker */}
@@ -414,7 +432,28 @@ export default function InboxView({
                   tone="neutral"
                 />
               )}
+              <ActionTile
+                onClick={() =>
+                  setExpandedSid((cur) => (cur === r.sid.trim() ? null : r.sid.trim()))
+                }
+                disabled={false}
+                title="הצעות מחיר של הלקוח"
+                icon="💰"
+                label="הצעות"
+                tone={expandedSid === r.sid.trim() ? "warn" : "accent"}
+              />
             </div>
+            </div>
+            {expandedSid === r.sid.trim() && (
+              <div style={{ borderTop: "1px solid #2a2d34", padding: 12 }}>
+                <LeadQuotesInline
+                  apiToken={apiToken}
+                  sid={r.sid.trim()}
+                  name={r.name}
+                  phone={r.phone}
+                />
+              </div>
+            )}
           </div>
         ))}
       </div>
@@ -525,6 +564,220 @@ export default function InboxView({
 //   • warn    — muted red (pause button when bot IS paused — state cue)
 //   • accent  — subtle blue (template buttons — distinguishes them
 //               from system actions like pause)
+const STATUS_HE: Record<string, string> = {
+  draft: "טיוטה",
+  pending: "ממתין",
+  received: "התקבל",
+  finalized: "סופי",
+};
+
+interface InlineQuote {
+  id: string;
+  quotationNo: string | null;
+  createdAt: string;
+  factoryStatus: string;
+  finalPricing: { totalSellingPrice?: number; totalOrderPriceIls?: number } | null;
+  pdfUrl: string | null;
+}
+
+/**
+ * Inline factory-quotes panel shown under a conversation row when its 💰 tile
+ * is tapped. Lists the lead's quotes (open PDF / send on finalized) and lets
+ * the user multi-select finalized ones to combine into one PDF — all without
+ * leaving the שיחות tab.
+ */
+function LeadQuotesInline({
+  apiToken,
+  sid,
+  name,
+  phone,
+}: {
+  apiToken: string;
+  sid: string;
+  name: string | null;
+  phone: string | null;
+}) {
+  const [loading, setLoading] = useState(true);
+  const [quotes, setQuotes] = useState<InlineQuote[] | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const res = await fetch(
+          `/api/widget/factory/list?widget_token=${encodeURIComponent(apiToken)}&lead=${encodeURIComponent(sid)}`
+        );
+        const j = await res.json();
+        if (!alive) return;
+        if (j?.ok) setQuotes(j.requests as InlineQuote[]);
+        else setErr(j?.error ?? "load failed");
+      } catch (e) {
+        if (alive) setErr(e instanceof Error ? e.message : "load failed");
+      } finally {
+        if (alive) setLoading(false);
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [apiToken, sid]);
+
+  const cleanPhone = (phone ?? "").replace(/[^\d]/g, "");
+  const origin = typeof window !== "undefined" ? window.location.origin : "";
+  const toggle = (id: string) =>
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  const money = (q: InlineQuote) => {
+    const v = q.finalPricing?.totalSellingPrice ?? q.finalPricing?.totalOrderPriceIls;
+    return typeof v === "number" ? `₪${Math.round(v).toLocaleString("he-IL")}` : "";
+  };
+
+  const linkStyle: CSSProperties = {
+    fontSize: 12,
+    padding: "4px 8px",
+    borderRadius: 6,
+    textDecoration: "none",
+    border: "1px solid #3a3d44",
+    color: "#e4e4e7",
+    background: "#2a2d34",
+    whiteSpace: "nowrap",
+    cursor: "pointer",
+  };
+  const waStyle: CSSProperties = {
+    ...linkStyle,
+    background: "#15803d",
+    borderColor: "#15803d",
+    color: "#fff",
+  };
+
+  if (loading) return <div style={{ fontSize: 12, color: "#a1a1aa" }}>טוען הצעות…</div>;
+  if (err) return <div style={{ fontSize: 12, color: "#f87171" }}>שגיאה: {err}</div>;
+  if (!quotes || quotes.length === 0)
+    return <div style={{ fontSize: 12, color: "#71717a" }}>אין הצעות מחיר ללקוח הזה.</div>;
+
+  const ids = [...selected].join(",");
+  const combinedWa =
+    selected.size >= 2 && cleanPhone
+      ? `https://wa.me/${cleanPhone}?text=${encodeURIComponent(
+          [
+            name ? `היי ${name},` : "היי,",
+            `מצורפת הצעת מחיר משולבת ל-${selected.size} מוצרים.`,
+            `הצעה מלאה: ${origin}/api/factory/combine/pdf?ids=${ids}`,
+            "ההצעה בתוקף ל-14 יום. נשמח לקבל אישור 🙂",
+          ].join("\n")
+        )}`
+      : null;
+  const sorted = [...quotes].sort((a, b) => (b.createdAt > a.createdAt ? 1 : -1));
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+      <div style={{ fontSize: 11, color: "#71717a" }}>
+        הצעות מחיר ({quotes.length}) · סמן 2+ סופיות לאיחוד ל-PDF אחד
+      </div>
+      {selected.size >= 2 && (
+        <div
+          style={{
+            display: "flex",
+            gap: 6,
+            alignItems: "center",
+            justifyContent: "flex-end",
+            padding: "2px 0",
+          }}
+        >
+          <span style={{ fontSize: 11, color: "#a78bfa" }}>{selected.size} נבחרו</span>
+          <button onClick={() => setSelected(new Set())} style={linkStyle}>
+            נקה
+          </button>
+          <a href={`/api/factory/combine/pdf?ids=${ids}`} target="_blank" rel="noopener noreferrer" style={linkStyle}>
+            פתח PDF
+          </a>
+          {combinedWa && (
+            <a href={combinedWa} target="_blank" rel="noopener noreferrer" style={waStyle}>
+              שלח ב-WhatsApp
+            </a>
+          )}
+        </div>
+      )}
+      {sorted.map((q) => {
+        const isFinal = q.factoryStatus === "finalized" && !!q.finalPricing;
+        const waUrl =
+          isFinal && cleanPhone
+            ? `https://wa.me/${cleanPhone}?text=${encodeURIComponent(
+                [
+                  name ? `היי ${name},` : "היי,",
+                  `מצורפת הצעת מחיר #${q.quotationNo ?? q.id.slice(-6)}.`,
+                  `הצעה מלאה: ${origin}/api/factory/${q.id}/pdf`,
+                  "ההצעה בתוקף ל-14 יום. נשמח לקבל אישור 🙂",
+                ].join("\n")
+              )}`
+            : null;
+        return (
+          <div
+            key={q.id}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              flexWrap: "wrap",
+              padding: "6px 8px",
+              borderRadius: 6,
+              border: "1px solid #2a2d34",
+              background: "#15171c",
+            }}
+          >
+            {isFinal && (
+              <input
+                type="checkbox"
+                checked={selected.has(q.id)}
+                onChange={() => toggle(q.id)}
+                style={{ accentColor: "#7c5cff" }}
+              />
+            )}
+            <span style={{ fontSize: 11, color: "#71717a", fontFamily: "monospace" }}>
+              {q.quotationNo ?? q.id.slice(-6)}
+            </span>
+            <span style={{ fontSize: 11, color: "#71717a" }}>
+              {new Date(q.createdAt).toLocaleDateString("he-IL")}
+            </span>
+            <span
+              style={{
+                fontSize: 10,
+                padding: "1px 6px",
+                borderRadius: 99,
+                border: "1px solid #2a2d34",
+                color: isFinal ? "#34d399" : "#a1a1aa",
+              }}
+            >
+              {STATUS_HE[q.factoryStatus] ?? q.factoryStatus}
+            </span>
+            {isFinal && (
+              <span style={{ fontSize: 12, color: "#34d399", fontWeight: 600 }}>{money(q)}</span>
+            )}
+            <div style={{ marginInlineStart: "auto", display: "flex", gap: 6 }}>
+              {isFinal && (
+                <a href={`/api/factory/${q.id}/pdf`} target="_blank" rel="noopener noreferrer" style={linkStyle}>
+                  פתח PDF
+                </a>
+              )}
+              {waUrl && (
+                <a href={waUrl} target="_blank" rel="noopener noreferrer" style={waStyle}>
+                  שלח
+                </a>
+              )}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function ActionTile({
   onClick,
   disabled,
