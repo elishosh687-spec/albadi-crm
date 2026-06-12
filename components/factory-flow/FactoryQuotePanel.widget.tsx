@@ -981,6 +981,16 @@ function HistoryList({
 }) {
   const [opened, setOpened] = useState<FactoryQuoteRow | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  // Multi-select of finalized quotes → combine into one customer PDF.
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const toggleSelected = (id: string) =>
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  const combineHref = `/api/factory/combine/pdf?ids=${[...selected].join(",")}`;
 
   const handleDelete = async (row: FactoryQuoteRow) => {
     if (!confirm(`למחוק את ההצעה ${row.quotationNo ?? row.id.slice(-6)}? Feishu לא יושפע.`)) return;
@@ -1047,6 +1057,33 @@ function HistoryList({
       <summary className="cursor-pointer text-muted-foreground hover:text-foreground select-none">
         היסטוריית הצעות ({rows.length})
       </summary>
+      <p className="mt-1 text-[10px] text-muted-foreground">
+        סמן שתי הצעות סופיות או יותר כדי לאחד אותן ל-PDF אחד.
+      </p>
+      {selected.size >= 2 && (
+        <div className="mt-2 flex items-center justify-between gap-2 rounded-md border border-primary/40 bg-primary/10 px-2.5 py-1.5">
+          <span className="text-[11px] font-medium text-primary">
+            {selected.size} הצעות נבחרו
+          </span>
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => setSelected(new Set())}
+              className="rounded-md px-2 py-1 text-[11px] text-muted-foreground hover:text-foreground"
+            >
+              נקה
+            </button>
+            <a
+              href={combineHref}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 rounded-md bg-primary px-2.5 py-1 text-[11px] font-medium text-primary-foreground hover:bg-primary/90"
+            >
+              אחד ל-PDF אחד
+            </a>
+          </div>
+        </div>
+      )}
       <ul className="mt-2 space-y-1">
         {rows.map((r) => {
           const isBusy = busyId === r.id;
@@ -1056,6 +1093,15 @@ function HistoryList({
               className="flex items-center justify-between gap-2 rounded-md border border-border/60 bg-background/40 px-2 py-1.5"
             >
               <div className="flex items-center gap-2 min-w-0 flex-1">
+                {r.factoryStatus === "finalized" && (
+                  <input
+                    type="checkbox"
+                    checked={selected.has(r.id)}
+                    onChange={() => toggleSelected(r.id)}
+                    title="בחר לאיחוד ל-PDF"
+                    className="shrink-0 accent-[var(--color-primary,#4A7C59)]"
+                  />
+                )}
                 <span className="text-[11px] text-muted-foreground tabular-nums shrink-0">
                   {new Date(r.createdAt).toLocaleDateString("he-IL")}
                 </span>
