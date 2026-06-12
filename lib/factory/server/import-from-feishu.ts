@@ -12,7 +12,6 @@
 
 import { db } from "@/lib/db";
 import { factoryQuoteRequests, leads } from "@/drizzle/schema";
-import { eq } from "drizzle-orm";
 import {
   readAllRows,
   parseFactoryRequestRow,
@@ -24,6 +23,21 @@ function shortId(): string {
   return Math.random().toString(36).slice(2, 10);
 }
 
+/**
+ * Normalize a customer/lead name for matching: strip apostrophe/geresh variants
+ * (so "חג׳ג׳" == "חג'ג'" == "חגג"), drop RTL marks, collapse whitespace. The
+ * sheet name and the lead name should be the same string, but punctuation and
+ * invisible marks drift between Hebrew keyboards — this makes the match robust.
+ */
+function normName(s: string): string {
+  return s
+    .normalize("NFKC")
+    .toLowerCase()
+    .replace(/['`´‘’׳״‎‏]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 export interface ImportFromFeishuResult {
   ok: true;
   imported: number;
@@ -32,7 +46,7 @@ export interface ImportFromFeishuResult {
 }
 
 export async function importFromFeishu(): Promise<ImportFromFeishuResult> {
-  const rows = await readAllRows(300);
+  const rows = await readAllRows(500);
 
   // Quotation numbers already present in the DB — skip those (not deleted).
   const existing = await db
@@ -43,13 +57,13 @@ export async function importFromFeishu(): Promise<ImportFromFeishuResult> {
   );
 
   // Lead lookup by display name (the only client identifier the sheet carries).
+  // Include ALL leads (not just active) and match on a normalized name.
   const leadRows = await db
     .select({ sid: leads.manychatSubId, name: leads.name })
-    .from(leads)
-    .where(eq(leads.active, true));
+    .from(leads);
   const leadByName = new Map<string, string>();
   for (const l of leadRows) {
-    const key = (l.name ?? "").trim().toLowerCase();
+    const key = normName(l.name ?? "");
     if (key && !leadByName.has(key)) leadByName.set(key, l.sid.trim());
   }
 
@@ -67,7 +81,7 @@ export async function importFromFeishu(): Promise<ImportFromFeishuResult> {
       continue;
     }
     const customer = String(cells[0] ?? "").trim();
-    const sid = customer ? leadByName.get(customer.toLowerCase()) : undefined;
+    const sid = customer ? leadByName.get(normName(customer)) : undefined;
     if (!sid) {
       unmatched.push({ quotationNo, customer });
       continue;

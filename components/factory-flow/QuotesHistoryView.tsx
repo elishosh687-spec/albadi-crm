@@ -131,10 +131,13 @@ export function QuotesHistoryView({ apiToken }: { apiToken: string }) {
       }
       const unm =
         j.unmatched?.length > 0
-          ? `\n${j.unmatched.length} לא נמצא להן ליד תואם (לפי שם): ${j.unmatched
-              .map((u: { quotationNo: string }) => u.quotationNo)
-              .slice(0, 10)
-              .join(", ")}`
+          ? `\n\n${j.unmatched.length} לא נמצא להן ליד תואם (לפי שם) — בדוק שהשם בגיליון זהה לשם הליד במערכת:\n${j.unmatched
+              .map(
+                (u: { quotationNo: string; customer: string }) =>
+                  `• ${u.quotationNo} — ${u.customer || "ללא שם"}`
+              )
+              .slice(0, 20)
+              .join("\n")}`
           : "";
       alert(`יובאו ${j.imported} הצעות.${unm}`);
       await refresh();
