@@ -369,10 +369,21 @@ export function CombinedCalcModalWidget({
     if (!sendReady) {
       e.preventDefault();
       setSendHint('צריך קודם ללחוץ "שמור חישוב" — לא ניתן לשלוח הצעות שעדיין לא חושבו.');
-    } else if (!phoneDigits) {
+      return;
+    }
+    if (!phoneDigits) {
       e.preventDefault();
       setSendHint("אין מספר טלפון ללקוח — אי אפשר לשלוח ב-WhatsApp.");
+      return;
     }
+    // Proceeding to open WhatsApp → optimistically stamp the offer as sent so
+    // the customer card shows "נשלח ✓", then refresh the parent list.
+    fetch(
+      widgetUrl("/api/factory/combine/mark-sent", apiToken, { ids: combineIds.join(",") }),
+      { method: "POST" }
+    )
+      .then(() => onChanged())
+      .catch(() => {});
   }
 
   return (

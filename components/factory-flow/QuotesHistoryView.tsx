@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useMemo } from "react";
-import { ExternalLink, Search, Loader2, Eye, Download, Trash2, X, MessageCircle, Calculator, Pencil, ChevronDown } from "lucide-react";
+import { ExternalLink, Search, Loader2, Eye, Download, Trash2, X, MessageCircle, Calculator, Pencil, ChevronDown, Check } from "lucide-react";
 import { QuoteHtmlPreview } from "@/app/dashboard/v3/_components/factory/QuoteHtmlPreview";
 import type { FactoryQuoteRow as DashboardFactoryQuoteRow } from "@/app/dashboard/v3/_components/factory/FactoryQuotePanel";
 import { FinalizeModalWidget } from "./FinalizeModal.widget";
@@ -86,27 +86,6 @@ export function QuotesHistoryView({ apiToken }: { apiToken: string }) {
   const [importing, setImporting] = useState(false);
   // Rows the import couldn't auto-match to a lead — the user assigns them manually.
   const [unmatched, setUnmatched] = useState<{ quotationNo: string; customer: string }[]>([]);
-  // Multi-select of finalized quotes → combine into one PDF. This list spans
-  // many clients, so selection is locked to the first-picked row's client.
-  const [selected, setSelected] = useState<Set<string>>(new Set());
-  const lockSid =
-    selected.size === 0 || !data
-      ? null
-      : data.find((r) => selected.has(r.id))?.leadSid ?? null;
-  const toggleSelected = (id: string) =>
-    setSelected((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  const combineHref = `/api/factory/combine/pdf?ids=${[...selected].join(",")}`;
-  const combineWaUrl = (() => {
-    if (selected.size < 2 || !data) return null;
-    const sel = data.filter((r) => selected.has(r.id));
-    const origin = typeof window !== "undefined" ? window.location.origin : "";
-    return buildCombineWaUrl([...selected], sel[0]?.name ?? null, sel[0]?.phone ?? null, origin);
-  })();
 
   // Customer cards: which are expanded, and which one's combined-calc is open.
   const [openCards, setOpenCards] = useState<Set<string>>(new Set());
@@ -125,6 +104,19 @@ export function QuotesHistoryView({ apiToken }: { apiToken: string }) {
       const r = await fetch(`/api/widget/quotes/list?widget_token=${encodeURIComponent(apiToken)}&limit=300`);
       const j = await r.json();
       setData(j.quotes);
+    } catch {}
+  }
+
+  // Stamp "sent" on the combined offer's quotes (called when the WhatsApp draft
+  // opens) so the card shows a "נשלח ✓" marker. Fire-and-forget + refresh.
+  async function markCombinedSent(ids: string[]) {
+    if (ids.length === 0) return;
+    try {
+      await fetch(
+        `/api/factory/combine/mark-sent?ids=${ids.join(",")}&widget_token=${encodeURIComponent(apiToken)}`,
+        { method: "POST" }
+      );
+      await refresh();
     } catch {}
   }
 
@@ -342,19 +334,13 @@ export function QuotesHistoryView({ apiToken }: { apiToken: string }) {
         className="flex items-center justify-between gap-2 rounded-md border border-border/60 bg-background/40 px-3 py-2"
       >
         <div className="flex items-center gap-2 min-w-0 flex-1 flex-wrap">
-          {r.status === "finalized" && (
-            <input
-              type="checkbox"
-              checked={selected.has(r.id)}
-              disabled={lockSid !== null && r.leadSid !== lockSid}
-              onChange={() => toggleSelected(r.id)}
-              title={
-                lockSid !== null && r.leadSid !== lockSid
-                  ? "אפשר לאחד רק הצעות של אותו לקוח"
-                  : "בחר לאיחוד ל-PDF"
-              }
-              className="shrink-0 accent-[var(--color-primary,#4A7C59)] disabled:opacity-40"
-            />
+          {r.sentToCustomerAt && (
+            <span
+              title={`נשלח ללקוח ${fmtDate(r.sentToCustomerAt)}`}
+              className="shrink-0 inline-flex items-center gap-0.5 text-[10px] rounded-full border border-emerald-500/30 bg-emerald-500/10 text-emerald-400 px-1.5 py-0.5"
+            >
+              <Check className="size-3" /> נשלח
+            </span>
           )}
           <span className="text-[11px] text-muted-foreground tabular-nums shrink-0">
             {fmtDate(r.createdAt)}
@@ -536,43 +522,8 @@ export function QuotesHistoryView({ apiToken }: { apiToken: string }) {
         </div>
 
         <div className="text-xs text-muted-foreground">
-          מציג {filtered.length} מתוך {data.length} · סמן 2+ הצעות סופיות של אותו לקוח כדי לאחד ל-PDF אחד
+          מציג {filtered.length} מתוך {data.length} · לחישוב/שליחה משולבת — פתח כרטיס לקוח ולחץ "חישוב משולב"
         </div>
-
-        {selected.size >= 2 && (
-          <div className="flex items-center justify-between gap-2 rounded-md border border-primary/40 bg-primary/10 px-3 py-2">
-            <span className="text-xs font-medium text-primary">
-              {selected.size} הצעות נבחרו לאיחוד
-            </span>
-            <div className="flex items-center gap-1.5">
-              <button
-                type="button"
-                onClick={() => setSelected(new Set())}
-                className="rounded-md px-2 py-1 text-[11px] text-muted-foreground hover:text-foreground"
-              >
-                נקה
-              </button>
-              <a
-                href={combineHref}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1 rounded-md border border-primary/40 bg-primary/10 px-2.5 py-1 text-[11px] font-medium text-primary hover:bg-primary/20"
-              >
-                פתח PDF
-              </a>
-              {combineWaUrl && (
-                <a
-                  href={combineWaUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 rounded-md bg-primary px-2.5 py-1 text-[11px] font-medium text-primary-foreground hover:bg-primary/90"
-                >
-                  שלח ב-WhatsApp
-                </a>
-              )}
-            </div>
-          </div>
-        )}
 
         <div className="space-y-1.5">
           {groups.length === 0 ? (
@@ -595,6 +546,7 @@ export function QuotesHistoryView({ apiToken }: { apiToken: string }) {
                 ? buildCombineWaUrl(finalizedIds, g.name, g.phone, origin)
                 : null;
               const ghlUrl = g.rows[0]?.ghlUrl ?? null;
+              const sentCount = g.rows.filter((r) => r.sentToCustomerAt).length;
               return (
                 <div
                   key={g.leadSid}
@@ -618,6 +570,14 @@ export function QuotesHistoryView({ apiToken }: { apiToken: string }) {
                       <span className="text-[11px] text-muted-foreground tabular-nums shrink-0">
                         {fmtDate(g.latestAt)}
                       </span>
+                      {sentCount > 0 && (
+                        <span
+                          title={`${sentCount} הצעות נשלחו ללקוח`}
+                          className="shrink-0 inline-flex items-center gap-0.5 text-[10px] rounded-full border border-emerald-500/40 bg-emerald-500/15 text-emerald-400 px-1.5 py-0.5 font-medium"
+                        >
+                          <Check className="size-3" /> נשלח {sentCount}
+                        </span>
+                      )}
                       <span className="hidden sm:flex items-center gap-1 shrink-0">
                         {Object.entries(g.statusCounts).map(([st, n]) => (
                           <span
@@ -667,6 +627,7 @@ export function QuotesHistoryView({ apiToken }: { apiToken: string }) {
                           href={combinedWa}
                           target="_blank"
                           rel="noopener noreferrer"
+                          onClick={() => markCombinedSent(finalizedIds)}
                           title="שלח הצעה משולבת ב-WhatsApp"
                           className="size-7 rounded grid place-items-center text-muted-foreground hover:text-emerald-400 hover:bg-emerald-500/10"
                         >
