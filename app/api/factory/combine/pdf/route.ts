@@ -19,10 +19,16 @@ import {
   fetchImageDataUri,
   type CombinedQuoteItem,
 } from "@/lib/factory/pdf";
+import { combinedShippingIls } from "@/lib/factory/combined";
+import { getFactoryConfig } from "@/lib/factory/config";
 import type {
   FactoryProductSpec,
   FactoryPricingResult,
 } from "@/lib/factory/types";
+
+function r2(n: number): number {
+  return Math.round(n * 100) / 100;
+}
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
@@ -77,12 +83,42 @@ export async function GET(req: NextRequest) {
     .limit(1);
   const customerName = leadRow[0]?.name ?? "";
 
+  // One shipment → recompute shipping on the merged CBM/weight (cheaper: the
+  // sea 1-CBM floor is counted once) and fold the combined shipping back into
+  // each product's price by its CBM share. Profit is unchanged — only the
+  // pass-through shipping drops, so the customer's combined price is lower.
+  const config = await getFactoryConfig();
+  const pricings = ordered.map((r) => r.finalPricing as FactoryPricingResult);
+  const combinedCbm = r2(pricings.reduce((s, p) => s + (p.totalCbm || 0), 0));
+  const combinedWeight = r2(pricings.reduce((s, p) => s + (p.totalWeightKg || 0), 0));
+  const shipOpt =
+    config.shippingOptions.find((s) => s.id === pricings[0]?.shippingOptionId) ?? null;
+  const combinedShipping = combinedShippingIls(
+    combinedCbm,
+    combinedWeight,
+    shipOpt,
+    config.usdToIls
+  );
+
   const items: CombinedQuoteItem[] = await Promise.all(
     ordered.map(async (r) => {
       const spec = r.productSpec as FactoryProductSpec;
+      const p = r.finalPricing as FactoryPricingResult;
+      const share = combinedCbm > 0 ? (p.totalCbm || 0) / combinedCbm : 1 / pricings.length;
+      const allocShipping = r2(combinedShipping * share);
+      const productPriceTotal = r2(p.totalSellingPrice - p.totalShipping);
+      const newTotal = r2(productPriceTotal + allocShipping);
+      const newUnit = p.quantity > 0 ? r2(newTotal / p.quantity) : newTotal;
+      const adjusted: FactoryPricingResult = {
+        ...p,
+        unitShipping: p.quantity > 0 ? r2(allocShipping / p.quantity) : allocShipping,
+        totalShipping: allocShipping,
+        unitSellingPrice: newUnit,
+        totalSellingPrice: newTotal,
+      };
       return {
         spec,
-        pricing: r.finalPricing as FactoryPricingResult,
+        pricing: adjusted,
         picDataUri: await fetchImageDataUri(spec.picUrl),
       };
     })
