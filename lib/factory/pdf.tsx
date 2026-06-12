@@ -266,6 +266,15 @@ function formatILS(n: number): string {
   return `₪${n.toLocaleString("he-IL", { maximumFractionDigits: 2 })}`;
 }
 
+// @react-pdf/renderer picks a text's base direction from its first strong
+// character, so strings that begin with a number or Latin (dates, sizes,
+// "250 גרם food grade ...") get an LTR base and render scrambled. A leading
+// RLM forces an RTL base; embedded Latin/number runs still read left-to-right.
+const RLM = "‏";
+function rtl(s: string): string {
+  return s ? RLM + s : s;
+}
+
 function sizeLabel(spec: FactoryProductSpec): string {
   const parts = [
     spec.widthCm ? `${spec.widthCm}` : null,
@@ -537,11 +546,13 @@ export interface CombinedQuotePdfProps {
 }
 
 function CombinedQuotePDF({ customerName, items }: CombinedQuotePdfProps) {
-  const date = new Date().toLocaleDateString("he-IL", {
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-  });
+  const date = rtl(
+    new Date().toLocaleDateString("he-IL", {
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+    })
+  );
   const stripCjk = (s: string) =>
     /[　-鿿＀-￯]/.test(s) ? "" : s;
 
@@ -553,10 +564,12 @@ function CombinedQuotePDF({ customerName, items }: CombinedQuotePdfProps) {
     // No fabricated default name: if the product has no name, the size IS the
     // title. sizeLabel already ends with ס"מ — don't append it again.
     const namePart = spec.productName?.trim();
-    const title = namePart ? `${namePart} — ${sizeLabel(spec)}` : sizeLabel(spec);
-    const sub = [materialHe, printingHe, finishingHe, pricing.shippingOptionName || ""]
-      .filter(Boolean)
-      .join(" · ");
+    const title = rtl(namePart ? `${namePart} — ${sizeLabel(spec)}` : sizeLabel(spec));
+    const sub = rtl(
+      [materialHe, printingHe, finishingHe, pricing.shippingOptionName || ""]
+        .filter(Boolean)
+        .join(" · ")
+    );
     return {
       title,
       sub,
