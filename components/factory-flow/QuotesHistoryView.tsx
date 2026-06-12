@@ -70,6 +70,7 @@ export function QuotesHistoryView({ apiToken }: { apiToken: string }) {
   const [opened, setOpened] = useState<ApiQuoteRow | null>(null);
   const [finalizing, setFinalizing] = useState<ApiQuoteRow | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [importing, setImporting] = useState(false);
   // Multi-select of finalized quotes → combine into one PDF. This list spans
   // many clients, so selection is locked to the first-picked row's client.
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -108,6 +109,40 @@ export function QuotesHistoryView({ apiToken }: { apiToken: string }) {
       const j = await r.json();
       setData(j.quotes);
     } catch {}
+  }
+
+  async function handleImport() {
+    if (
+      !confirm(
+        "לייבא מ-Feishu הצעות שנמחקו מהמערכת? הן ייווצרו מחדש עם אותו מספר הצעה ועם תשובת המפעל."
+      )
+    )
+      return;
+    setImporting(true);
+    try {
+      const res = await fetch(
+        `/api/factory/import-feishu?widget_token=${encodeURIComponent(apiToken)}`,
+        { method: "POST" }
+      );
+      const j = await res.json().catch(() => ({}));
+      if (!j?.ok) {
+        alert(`שגיאה בייבוא: ${j?.error ?? res.status}`);
+        return;
+      }
+      const unm =
+        j.unmatched?.length > 0
+          ? `\n${j.unmatched.length} לא נמצא להן ליד תואם (לפי שם): ${j.unmatched
+              .map((u: { quotationNo: string }) => u.quotationNo)
+              .slice(0, 10)
+              .join(", ")}`
+          : "";
+      alert(`יובאו ${j.imported} הצעות.${unm}`);
+      await refresh();
+    } catch (e) {
+      alert(`כשל: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setImporting(false);
+    }
   }
 
   async function handleDelete(r: ApiQuoteRow) {
@@ -239,6 +274,21 @@ export function QuotesHistoryView({ apiToken }: { apiToken: string }) {
             onChange={(e) => setQ(e.target.value)}
             className="w-full rounded-lg border border-border bg-background pr-9 pl-3 py-2 text-sm text-right focus:outline-none focus:ring-2 focus:ring-ring/30"
           />
+        </div>
+
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-[11px] text-muted-foreground">
+            נמחקו הצעות? ייבא אותן מחדש מ-Feishu (עם אותו מס' הצעה).
+          </span>
+          <button
+            type="button"
+            onClick={handleImport}
+            disabled={importing}
+            className="inline-flex items-center gap-1.5 rounded-md border border-primary/40 bg-primary/10 px-2.5 py-1.5 text-xs font-medium text-primary hover:bg-primary/20 disabled:opacity-60"
+          >
+            {importing ? <Loader2 className="size-3.5 animate-spin" /> : <Download className="size-3.5" />}
+            ייבא מ-Feishu
+          </button>
         </div>
 
         <div className="flex gap-2 flex-wrap">

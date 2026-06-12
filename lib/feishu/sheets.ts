@@ -219,6 +219,28 @@ export async function findRowByQuotationNo(
   return null;
 }
 
+/**
+ * Read the full A..R grid (all columns, up to `maxRows`). Used by the
+ * "import from Feishu" flow to re-create quotes that were deleted from the DB
+ * but still exist in the sheet. Index in the returned array maps to 0-based
+ * row; the 1-based Feishu row index is `i + 1`.
+ */
+export async function readAllRows(
+  maxRows = 300
+): Promise<(string | number | null)[][]> {
+  const token = getSpreadsheetToken();
+  const sheetId = await getSheetId();
+  const range = `${sheetId}!A1:R${maxRows}`;
+  type ReadResp = {
+    data: { valueRange: { values: (string | number | null)[][] } };
+  };
+  const resp = await feishuFetch<ReadResp>(
+    `/open-apis/sheets/v2/spreadsheets/${token}/values/${encodeURIComponent(range)}`,
+    { method: "GET" }
+  );
+  return resp.data?.valueRange?.values ?? [];
+}
+
 // ------------------------------------------------------------
 // Request (Eli's side, A..J — column C is the creation date which Feishu
 // auto-fills with a formula. We write it explicitly so the column never
