@@ -48,6 +48,20 @@ Font.register({
   ],
 });
 
+// "How to measure a bag" diagram (רוחב/גובה/עומק) bundled under public/templates.
+// Embedded as a data URL so the customer PDF explains W×H×D. Loaded once; null
+// if the asset is missing so rendering never crashes.
+const DIMENSIONS_DIAGRAM: string | null = (() => {
+  try {
+    const buf = readFileSync(
+      join(process.cwd(), "public", "templates", "bag-dimensions-he.png")
+    );
+    return `data:image/png;base64,${buf.toString("base64")}`;
+  } catch {
+    return null;
+  }
+})();
+
 const PRIMARY = "#4A7C59";
 const PRIMARY_DARK = "#2D5016";
 const BORDER = "#E5E7EB";
@@ -275,13 +289,24 @@ function rtl(s: string): string {
   return s ? RLM + s : s;
 }
 
+// Compact size, in the template's W×H×D order.
 function sizeLabel(spec: FactoryProductSpec): string {
   const parts = [
     spec.widthCm ? `${spec.widthCm}` : null,
-    spec.depthCm > 0 ? `${spec.depthCm}` : null,
     spec.heightCm ? `${spec.heightCm}` : null,
+    spec.depthCm > 0 ? `${spec.depthCm}` : null,
   ].filter(Boolean);
   return parts.join("×") + ' ס"מ';
+}
+
+// Labeled dimensions exactly like the system / the measuring diagram:
+// "רוחב 16 · גובה 16 · עומק 12 ס"מ" (depth omitted when flat).
+function dimsLabeled(spec: FactoryProductSpec): string {
+  const parts: string[] = [];
+  if (spec.widthCm) parts.push(`רוחב ${spec.widthCm}`);
+  if (spec.heightCm) parts.push(`גובה ${spec.heightCm}`);
+  if (spec.depthCm > 0) parts.push(`עומק ${spec.depthCm}`);
+  return parts.length ? `${parts.join(" · ")} ס"מ` : "";
 }
 
 function r2(n: number): number {
@@ -561,14 +586,17 @@ function CombinedQuotePDF({ customerName, items }: CombinedQuotePdfProps) {
     const printingHe = stripCjk(spec.printing ? humanizePrinting(spec.printing) : "");
     const finishingHe = stripCjk(spec.finishing ? humanizeFinishing(spec.finishing) : "");
     const materialHe = stripCjk(spec.material ? humanizeMaterial(spec.material) : "");
-    // No fabricated default name: if the product has no name, the size IS the
-    // title. sizeLabel already ends with ס"מ — don't append it again.
+    // No fabricated default name. With a name: name is the title and the
+    // labeled dimensions are the first spec line. Without: the labeled
+    // dimensions ARE the title (don't repeat them below).
+    const dims = dimsLabeled(spec);
     const namePart = spec.productName?.trim();
-    const title = rtl(namePart ? `${namePart} — ${sizeLabel(spec)}` : sizeLabel(spec));
+    const title = rtl(namePart || dims || "מוצר");
     // Keep the segments separate (not one joined string): each is rendered as
     // its own <Text> so a number/Latin run in one can't bidi-bleed into the
     // next. No isolate chars — @react-pdf draws those as visible glyphs.
     const subParts = [
+      namePart ? dims : "",
       materialHe,
       printingHe,
       finishingHe,
@@ -652,6 +680,27 @@ function CombinedQuotePDF({ customerName, items }: CombinedQuotePdfProps) {
         <View style={styles.vatNote}>
           <Text style={styles.vatText}>המחיר אינו כולל מע״מ</Text>
         </View>
+
+        {/* Measuring guide so the customer understands רוחב/גובה/עומק */}
+        {DIMENSIONS_DIAGRAM ? (
+          <View style={{ marginTop: 14 }} wrap={false}>
+            <Text
+              style={{
+                fontSize: 11,
+                fontWeight: 700,
+                color: PRIMARY_DARK,
+                textAlign: "right",
+                marginBottom: 4,
+              }}
+            >
+              איך מודדים? מדריך מידות (רוחב × גובה × עומק)
+            </Text>
+            <Image
+              src={DIMENSIONS_DIAGRAM}
+              style={{ width: 360, height: 270, objectFit: "contain", alignSelf: "center" }}
+            />
+          </View>
+        ) : null}
 
         <Text style={{ fontSize: 10, color: "#333", textAlign: "right", marginTop: 12, fontWeight: "bold" }}>
           מצאתם מחיר זול יותר? שלחו חשבונית ונבדוק אם נוכל להוזיל.
