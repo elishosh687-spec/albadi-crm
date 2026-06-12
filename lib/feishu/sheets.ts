@@ -190,6 +190,15 @@ export async function readRow(rowIndex: string | number): Promise<(string | numb
  *
  * Scans A1:B{maxRows} once and looks for an exact match on column B.
  */
+/**
+ * Strip a trailing revision suffix ("-A", "-B", "-12") that the factory/sheet
+ * appends to the quotation number, so "EVLGTP1G-A" matches the stored
+ * "EVLGTP1G". Quote numbers themselves never contain a hyphen.
+ */
+export function baseQuoteNo(s: string): string {
+  return s.trim().replace(/-[A-Za-z0-9]+$/, "");
+}
+
 export async function findRowByQuotationNo(
   quotationNo: string,
   maxRows = 200
@@ -209,10 +218,10 @@ export async function findRowByQuotationNo(
     { method: "GET" }
   );
   const rows = resp.data?.valueRange?.values ?? [];
-  const needle = quotationNo.trim();
+  const needle = baseQuoteNo(quotationNo);
   for (let i = 0; i < rows.length; i++) {
     const b = rows[i][1];
-    if (b !== null && b !== undefined && String(b).trim() === needle) {
+    if (b !== null && b !== undefined && baseQuoteNo(String(b)) === needle) {
       return String(i + 1); // 1-based row index
     }
   }

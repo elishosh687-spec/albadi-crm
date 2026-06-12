@@ -19,6 +19,7 @@ import {
   findRowByQuotationNo,
   parseFactoryRequestRow,
   parseFactoryResponseRow,
+  baseQuoteNo,
 } from "@/lib/feishu/sheets";
 import type { FactoryProductSpec } from "@/lib/factory/types";
 
@@ -95,10 +96,14 @@ export async function importFromFeishu(): Promise<ImportFromFeishuResult> {
 
   for (let i = 0; i < rows.length; i++) {
     const cells = rows[i];
-    const quotationNo = String(cells[1] ?? "").trim();
-    // Only real quote numbers (uppercase alphanumeric ≥4) — skips header/blank.
-    if (!/^[A-Z0-9]{4,}$/i.test(quotationNo)) continue;
+    const rawQuoteNo = String(cells[1] ?? "").trim();
+    // Real quote numbers: alphanumeric ≥4, with an optional "-A" revision
+    // suffix (e.g. "EVLGTP1G-A"). Skips headers/blanks.
+    if (!/^[A-Z0-9]{4,}(-[A-Z0-9]+)?$/i.test(rawQuoteNo)) continue;
     withQuoteNo++;
+    // Store/compare by the base number (without the revision suffix) so it
+    // matches the original DB convention and doesn't duplicate.
+    const quotationNo = baseQuoteNo(rawQuoteNo);
     if (existingNos.has(quotationNo)) {
       skippedExisting++;
       continue;
