@@ -70,6 +70,37 @@ export function QuotesHistoryView({ apiToken }: { apiToken: string }) {
   const [opened, setOpened] = useState<ApiQuoteRow | null>(null);
   const [finalizing, setFinalizing] = useState<ApiQuoteRow | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  // Multi-select of finalized quotes → combine into one PDF. This list spans
+  // many clients, so selection is locked to the first-picked row's client.
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const lockSid =
+    selected.size === 0 || !data
+      ? null
+      : data.find((r) => selected.has(r.id))?.leadSid ?? null;
+  const toggleSelected = (id: string) =>
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  const combineHref = `/api/factory/combine/pdf?ids=${[...selected].join(",")}`;
+  const combineWaUrl = (() => {
+    if (selected.size < 2 || !data) return null;
+    const sel = data.filter((r) => selected.has(r.id));
+    const phone = sel[0]?.phone?.replace(/[^\d]/g, "") || "";
+    if (!phone) return null;
+    const name = sel[0]?.name ?? "";
+    const origin = typeof window !== "undefined" ? window.location.origin : "";
+    const link = `${origin}/api/factory/combine/pdf?ids=${[...selected].join(",")}`;
+    const caption = [
+      name ? `היי ${name},` : "היי,",
+      `מצורפת הצעת מחיר משולבת ל-${selected.size} מוצרים.`,
+      `הצעה מלאה: ${link}`,
+      "ההצעה בתוקף ל-14 יום. נשמח לקבל אישור 🙂",
+    ].join("\n");
+    return `https://wa.me/${phone}?text=${encodeURIComponent(caption)}`;
+  })();
 
   async function refresh() {
     try {
@@ -232,8 +263,43 @@ export function QuotesHistoryView({ apiToken }: { apiToken: string }) {
         </div>
 
         <div className="text-xs text-muted-foreground">
-          מציג {filtered.length} מתוך {data.length}
+          מציג {filtered.length} מתוך {data.length} · סמן 2+ הצעות סופיות של אותו לקוח כדי לאחד ל-PDF אחד
         </div>
+
+        {selected.size >= 2 && (
+          <div className="flex items-center justify-between gap-2 rounded-md border border-primary/40 bg-primary/10 px-3 py-2">
+            <span className="text-xs font-medium text-primary">
+              {selected.size} הצעות נבחרו לאיחוד
+            </span>
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => setSelected(new Set())}
+                className="rounded-md px-2 py-1 text-[11px] text-muted-foreground hover:text-foreground"
+              >
+                נקה
+              </button>
+              <a
+                href={combineHref}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 rounded-md border border-primary/40 bg-primary/10 px-2.5 py-1 text-[11px] font-medium text-primary hover:bg-primary/20"
+              >
+                פתח PDF
+              </a>
+              {combineWaUrl && (
+                <a
+                  href={combineWaUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 rounded-md bg-primary px-2.5 py-1 text-[11px] font-medium text-primary-foreground hover:bg-primary/90"
+                >
+                  שלח ב-WhatsApp
+                </a>
+              )}
+            </div>
+          </div>
+        )}
 
         <ul className="space-y-1">
           {filtered.length === 0 ? (
@@ -247,6 +313,20 @@ export function QuotesHistoryView({ apiToken }: { apiToken: string }) {
                 className="flex items-center justify-between gap-2 rounded-md border border-border/60 bg-background/40 px-3 py-2"
               >
                 <div className="flex items-center gap-2 min-w-0 flex-1 flex-wrap">
+                  {r.status === "finalized" && (
+                    <input
+                      type="checkbox"
+                      checked={selected.has(r.id)}
+                      disabled={lockSid !== null && r.leadSid !== lockSid}
+                      onChange={() => toggleSelected(r.id)}
+                      title={
+                        lockSid !== null && r.leadSid !== lockSid
+                          ? "אפשר לאחד רק הצעות של אותו לקוח"
+                          : "בחר לאיחוד ל-PDF"
+                      }
+                      className="shrink-0 accent-[var(--color-primary,#4A7C59)] disabled:opacity-40"
+                    />
+                  )}
                   <span className="text-[11px] text-muted-foreground tabular-nums shrink-0">
                     {fmtDate(r.createdAt)}
                   </span>
