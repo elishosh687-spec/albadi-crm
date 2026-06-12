@@ -133,9 +133,11 @@ export function QuotesHistoryView({ apiToken }: { apiToken: string }) {
       }
       setUnmatched(j.unmatched ?? []);
       alert(
-        `יובאו ${j.imported} הצעות.` +
+        `יובאו ${j.imported} הצעות.\n` +
+          `אבחון: נסרקו ${j.scanned} שורות, ${j.withQuoteNo} עם מס' הצעה, ` +
+          `${j.skippedExisting} כבר קיימות, ${j.unmatched?.length ?? 0} ללא ליד תואם.` +
           (j.unmatched?.length
-            ? `\n${j.unmatched.length} לא הותאמו אוטומטית — בחר להן לקוח ידנית בתיבה למטה.`
+            ? `\nבחר ללא-המותאמות לקוח ידנית בתיבה למטה.`
             : "")
       );
       await refresh();

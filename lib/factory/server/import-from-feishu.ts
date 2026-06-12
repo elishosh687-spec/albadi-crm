@@ -59,6 +59,8 @@ function normName(s: string): string {
 
 export interface ImportFromFeishuResult {
   ok: true;
+  scanned: number;
+  withQuoteNo: number;
   imported: number;
   skippedExisting: number;
   unmatched: { quotationNo: string; customer: string }[];
@@ -88,6 +90,7 @@ export async function importFromFeishu(): Promise<ImportFromFeishuResult> {
 
   let imported = 0;
   let skippedExisting = 0;
+  let withQuoteNo = 0;
   const unmatched: { quotationNo: string; customer: string }[] = [];
 
   for (let i = 0; i < rows.length; i++) {
@@ -95,6 +98,7 @@ export async function importFromFeishu(): Promise<ImportFromFeishuResult> {
     const quotationNo = String(cells[1] ?? "").trim();
     // Only real quote numbers (uppercase alphanumeric ≥4) — skips header/blank.
     if (!/^[A-Z0-9]{4,}$/i.test(quotationNo)) continue;
+    withQuoteNo++;
     if (existingNos.has(quotationNo)) {
       skippedExisting++;
       continue;
@@ -122,7 +126,14 @@ export async function importFromFeishu(): Promise<ImportFromFeishuResult> {
     imported++;
   }
 
-  return { ok: true, imported, skippedExisting, unmatched };
+  return {
+    ok: true,
+    scanned: rows.length,
+    withQuoteNo,
+    imported,
+    skippedExisting,
+    unmatched,
+  };
 }
 
 export interface AssignResult {
