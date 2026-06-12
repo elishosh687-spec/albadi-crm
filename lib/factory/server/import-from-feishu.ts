@@ -12,8 +12,11 @@
 
 import { db } from "@/lib/db";
 import { factoryQuoteRequests, leads } from "@/drizzle/schema";
+import { eq } from "drizzle-orm";
 import {
   readAllRows,
+  readRow,
+  findRowByQuotationNo,
   parseFactoryRequestRow,
   parseFactoryResponseRow,
 } from "@/lib/feishu/sheets";
@@ -21,6 +24,22 @@ import type { FactoryProductSpec } from "@/lib/factory/types";
 
 function shortId(): string {
   return Math.random().toString(36).slice(2, 10);
+}
+
+/** Build a full FactoryProductSpec from a parsed Feishu request row. */
+function buildSpec(cells: (string | number | null)[]): FactoryProductSpec {
+  const req = parseFactoryRequestRow(cells);
+  return {
+    description: req.description ?? "",
+    material: req.material ?? "",
+    widthCm: req.widthCm ?? 0,
+    heightCm: req.heightCm ?? 0,
+    depthCm: req.depthCm ?? 0,
+    quantity: req.quantity ?? 0,
+    printing: req.printing ?? "",
+    finishing: req.finishing ?? "",
+    ...(req.picUrl ? { picUrl: req.picUrl } : {}),
+  };
 }
 
 /**
@@ -87,19 +106,8 @@ export async function importFromFeishu(): Promise<ImportFromFeishuResult> {
       continue;
     }
 
-    const req = parseFactoryRequestRow(cells);
     const resp = parseFactoryResponseRow(cells);
-    const spec: FactoryProductSpec = {
-      description: req.description ?? "",
-      material: req.material ?? "",
-      widthCm: req.widthCm ?? 0,
-      heightCm: req.heightCm ?? 0,
-      depthCm: req.depthCm ?? 0,
-      quantity: req.quantity ?? 0,
-      printing: req.printing ?? "",
-      finishing: req.finishing ?? "",
-      ...(req.picUrl ? { picUrl: req.picUrl } : {}),
-    };
+    const spec = buildSpec(cells);
 
     await db.insert(factoryQuoteRequests).values({
       id: `fq_${Date.now()}_${shortId()}`,
@@ -115,4 +123,48 @@ export async function importFromFeishu(): Promise<ImportFromFeishuResult> {
   }
 
   return { ok: true, imported, skippedExisting, unmatched };
+}
+
+export interface AssignResult {
+  ok: boolean;
+  error?: string;
+}
+
+/**
+ * Manually re-import a single quote from Feishu, attaching it to a lead the
+ * user picked (used when name matching failed). Re-reads the sheet row by
+ * quotationNo so we don't trust stale client data.
+ */
+export async function assignImportedQuote(
+  quotationNo: string,
+  leadSid: string
+): Promise<AssignResult> {
+  const qNo = quotationNo.trim();
+  const sid = leadSid.trim();
+  if (!qNo || !sid) return { ok: false, error: "missing_params" };
+
+  const existing = await db
+    .select({ id: factoryQuoteRequests.id })
+    .from(factoryQuoteRequests)
+    .where(eq(factoryQuoteRequests.quotationNo, qNo))
+    .limit(1);
+  if (existing.length > 0) return { ok: false, error: "already_exists" };
+
+  const rowIndex = await findRowByQuotationNo(qNo);
+  if (!rowIndex) return { ok: false, error: "not_in_sheet" };
+
+  const cells = await readRow(rowIndex);
+  const resp = parseFactoryResponseRow(cells);
+  const spec = buildSpec(cells);
+
+  await db.insert(factoryQuoteRequests).values({
+    id: `fq_${Date.now()}_${shortId()}`,
+    manychatSubId: sid,
+    quotationNo: qNo,
+    productSpec: spec,
+    factoryResponse: resp.hasResponse ? resp : null,
+    factoryStatus: resp.hasResponse ? "received" : "pending",
+    feishuRowIndex: rowIndex,
+  });
+  return { ok: true };
 }

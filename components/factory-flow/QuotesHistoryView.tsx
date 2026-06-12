@@ -71,6 +71,8 @@ export function QuotesHistoryView({ apiToken }: { apiToken: string }) {
   const [finalizing, setFinalizing] = useState<ApiQuoteRow | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [importing, setImporting] = useState(false);
+  // Rows the import couldn't auto-match to a lead — the user assigns them manually.
+  const [unmatched, setUnmatched] = useState<{ quotationNo: string; customer: string }[]>([]);
   // Multi-select of finalized quotes → combine into one PDF. This list spans
   // many clients, so selection is locked to the first-picked row's client.
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -129,17 +131,13 @@ export function QuotesHistoryView({ apiToken }: { apiToken: string }) {
         alert(`שגיאה בייבוא: ${j?.error ?? res.status}`);
         return;
       }
-      const unm =
-        j.unmatched?.length > 0
-          ? `\n\n${j.unmatched.length} לא נמצא להן ליד תואם (לפי שם) — בדוק שהשם בגיליון זהה לשם הליד במערכת:\n${j.unmatched
-              .map(
-                (u: { quotationNo: string; customer: string }) =>
-                  `• ${u.quotationNo} — ${u.customer || "ללא שם"}`
-              )
-              .slice(0, 20)
-              .join("\n")}`
-          : "";
-      alert(`יובאו ${j.imported} הצעות.${unm}`);
+      setUnmatched(j.unmatched ?? []);
+      alert(
+        `יובאו ${j.imported} הצעות.` +
+          (j.unmatched?.length
+            ? `\n${j.unmatched.length} לא הותאמו אוטומטית — בחר להן לקוח ידנית בתיבה למטה.`
+            : "")
+      );
       await refresh();
     } catch (e) {
       alert(`כשל: ${e instanceof Error ? e.message : String(e)}`);
@@ -293,6 +291,38 @@ export function QuotesHistoryView({ apiToken }: { apiToken: string }) {
             ייבא מ-Feishu
           </button>
         </div>
+
+        {unmatched.length > 0 && (
+          <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 space-y-2">
+            <div className="text-xs font-medium text-amber-400">
+              {unmatched.length} הצעות לא הותאמו ללקוח — בחר לכל אחת:
+            </div>
+            {unmatched.map((u) => (
+              <div
+                key={u.quotationNo}
+                className="flex items-center gap-2 flex-wrap rounded-md border border-border/60 bg-background/40 px-2 py-1.5"
+              >
+                <span className="text-[11px] font-mono text-muted-foreground shrink-0">
+                  {u.quotationNo}
+                </span>
+                <span className="text-xs shrink-0">{u.customer || "ללא שם"}</span>
+                <div className="flex-1 min-w-[180px]">
+                  <LeadPickerAssign
+                    apiToken={apiToken}
+                    quotationNo={u.quotationNo}
+                    customer={u.customer}
+                    onDone={() => {
+                      setUnmatched((cur) =>
+                        cur.filter((x) => x.quotationNo !== u.quotationNo)
+                      );
+                      refresh();
+                    }}
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
 
         <div className="flex gap-2 flex-wrap">
           {([
@@ -492,6 +522,108 @@ export function QuotesHistoryView({ apiToken }: { apiToken: string }) {
         />
       )}
     </>
+  );
+}
+
+function LeadPickerAssign({
+  apiToken,
+  quotationNo,
+  customer,
+  onDone,
+}: {
+  apiToken: string;
+  quotationNo: string;
+  customer: string;
+  onDone: () => void;
+}) {
+  const [q, setQ] = useState(customer ?? "");
+  const [results, setResults] = useState<
+    { sid: string; name: string | null; phone: string | null }[]
+  >([]);
+  const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    const t = setTimeout(async () => {
+      try {
+        const res = await fetch(
+          `/api/widget/leads/recent?widget_token=${encodeURIComponent(
+            apiToken
+          )}&q=${encodeURIComponent(q.trim())}`
+        );
+        const j = await res.json();
+        if (alive && j?.ok) setResults(j.leads ?? []);
+      } catch {
+        /* ignore */
+      }
+    }, 250);
+    return () => {
+      alive = false;
+      clearTimeout(t);
+    };
+  }, [q, apiToken]);
+
+  async function pick(sid: string) {
+    if (busy) return;
+    setBusy(true);
+    try {
+      const res = await fetch(
+        `/api/factory/import-feishu/assign?widget_token=${encodeURIComponent(apiToken)}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ quotationNo, leadSid: sid }),
+        }
+      );
+      const j = await res.json().catch(() => ({}));
+      if (!j?.ok) {
+        alert(`שגיאה בשיוך: ${j?.error ?? res.status}`);
+        return;
+      }
+      setOpen(false);
+      onDone();
+    } catch (e) {
+      alert(`כשל: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="relative">
+      <input
+        type="text"
+        value={q}
+        onChange={(e) => {
+          setQ(e.target.value);
+          setOpen(true);
+        }}
+        onFocus={() => setOpen(true)}
+        placeholder="חפש לקוח לשיוך…"
+        disabled={busy}
+        className="w-full rounded-md border border-border bg-background px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-ring/30"
+      />
+      {open && results.length > 0 && (
+        <div className="absolute z-20 mt-1 w-full max-h-48 overflow-auto rounded-md border border-border bg-popover shadow-lg">
+          {results.map((r) => (
+            <button
+              key={r.sid}
+              type="button"
+              onClick={() => pick(r.sid)}
+              disabled={busy}
+              className="block w-full text-right px-2 py-1.5 text-xs hover:bg-accent disabled:opacity-60"
+            >
+              <span className="font-medium">{r.name || "(ללא שם)"}</span>
+              {r.phone ? <span className="text-muted-foreground"> · {r.phone}</span> : null}
+            </button>
+          ))}
+        </div>
+      )}
+      {busy && (
+        <Loader2 className="absolute left-2 top-1/2 -translate-y-1/2 size-3.5 animate-spin text-muted-foreground" />
+      )}
+    </div>
   );
 }
 
