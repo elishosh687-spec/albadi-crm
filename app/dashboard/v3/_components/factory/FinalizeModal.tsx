@@ -21,7 +21,11 @@ import type {
   ShippingOption,
 } from "@/lib/factory/types";
 import { priceFactoryQuote, marginPctFromUnitPrice } from "@/lib/factory/pricing";
-import { computeCombined, priceQuoteForCombine } from "@/lib/factory/combined";
+import {
+  computeCombined,
+  priceQuoteForCombine,
+  defaultMarginFor,
+} from "@/lib/factory/combined";
 import { DetailedBreakdown } from "@/components/calculator/DetailedBreakdown";
 
 function formatIls(n: number): string {
@@ -90,12 +94,27 @@ export function FinalizeModal({
     }[]
   >([]);
   const [combinedSel, setCombinedSel] = useState<Set<string>>(new Set());
-  const toggleCombined = (id: string) =>
+  const [combinedMargins, setCombinedMargins] = useState<Record<string, number>>({});
+  const toggleCombined = (id: string) => {
     setCombinedSel((prev) => {
       const n = new Set(prev);
       if (n.has(id)) n.delete(id);
       else n.add(id);
       return n;
+    });
+    setCombinedMargins((prev) => {
+      if (prev[id] !== undefined || !config) return prev;
+      const q = otherQuotes.find((x) => x.id === id);
+      return q ? { ...prev, [id]: defaultMarginFor(q, config) } : prev;
+    });
+  };
+  const setCombinedMargin = (id: string, v: number) =>
+    setCombinedMargins((prev) => ({ ...prev, [id]: v }));
+  const setAllCombinedMargins = (v: number) =>
+    setCombinedMargins((prev) => {
+      const next = { ...prev };
+      for (const id of combinedSel) next[id] = v;
+      return next;
     });
 
   const MARGIN_MIN = 0;
@@ -233,12 +252,12 @@ export function FinalizeModal({
     const shipId = shippingOptionId || livePricing.shippingOptionId;
     const sel = otherQuotes
       .filter((q) => combinedSel.has(q.id))
-      .map((q) => priceQuoteForCombine(q, config, shipId))
+      .map((q) => priceQuoteForCombine(q, config, shipId, combinedMargins[q.id]))
       .filter((p): p is FactoryPricingResult => !!p);
     if (sel.length === 0) return null;
     const opt = config.shippingOptions.find((s) => s.id === shipId) ?? null;
     return computeCombined([livePricing, ...sel], opt, config.usdToIls);
-  }, [livePricing, config, otherQuotes, combinedSel, shippingOptionId]);
+  }, [livePricing, config, otherQuotes, combinedSel, combinedMargins, shippingOptionId]);
 
   const handlePullImage = async () => {
     setPullingImg(true);
@@ -582,31 +601,82 @@ export function FinalizeModal({
                   <div className="text-[11px] text-muted-foreground">
                     סמן הזמנות נוספות של הלקוח שנשלחות במשלוח אחד — השילוח מחושב מחדש (זול יותר):
                   </div>
-                  {otherQuotes.map((q) => (
-                    <label key={q.id} className="flex items-center gap-2 text-xs cursor-pointer">
+                  {combinedSel.size > 0 && (
+                    <div className="rounded-md border border-primary/30 bg-primary/5 px-2.5 py-1.5">
+                      <div className="text-[10px] text-muted-foreground mb-0.5">
+                        קבע אחוז רווח לכל המסומנות יחד
+                      </div>
                       <input
-                        type="checkbox"
-                        checked={combinedSel.has(q.id)}
-                        onChange={() => toggleCombined(q.id)}
-                        className="accent-[var(--color-primary,#4A7C59)]"
-                      />
-                      <span className="font-mono text-muted-foreground shrink-0">
-                        {q.quotationNo ?? q.id.slice(-6)}
-                      </span>
-                      <span className="truncate flex-1">
-                        {q.productSpec?.productName || q.productSpec?.description || "מוצר"}
-                      </span>
-                      <span className="text-muted-foreground tabular-nums shrink-0">
-                        {formatIls(
-                          priceQuoteForCombine(
-                            q,
-                            config,
-                            shippingOptionId || livePricing.shippingOptionId
-                          )?.totalSellingPrice ?? 0
+                        type="range"
+                        min={0}
+                        max={99}
+                        step={1}
+                        value={Math.round(
+                          [...combinedSel].reduce(
+                            (s, id) =>
+                              s +
+                              (combinedMargins[id] ??
+                                defaultMarginFor(otherQuotes.find((x) => x.id === id)!, config)),
+                            0
+                          ) / Math.max(combinedSel.size, 1)
                         )}
-                      </span>
-                    </label>
-                  ))}
+                        onChange={(e) => setAllCombinedMargins(parseInt(e.target.value, 10))}
+                        className="w-full accent-[var(--color-primary,#4A7C59)]"
+                      />
+                    </div>
+                  )}
+                  {otherQuotes.map((q) => {
+                    const checked = combinedSel.has(q.id);
+                    const shipId = shippingOptionId || livePricing.shippingOptionId;
+                    const m = combinedMargins[q.id] ?? defaultMarginFor(q, config);
+                    const priced = priceQuoteForCombine(q, config, shipId, checked ? m : undefined);
+                    return (
+                      <div
+                        key={q.id}
+                        className="rounded-md border border-border/60 bg-background/30 px-2 py-1.5"
+                      >
+                        <label className="flex items-center gap-2 text-xs cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() => toggleCombined(q.id)}
+                            className="accent-[var(--color-primary,#4A7C59)]"
+                          />
+                          <span className="font-mono text-muted-foreground shrink-0">
+                            {q.quotationNo ?? q.id.slice(-6)}
+                          </span>
+                          <span className="truncate flex-1">
+                            {q.productSpec?.productName || q.productSpec?.description || "מוצר"}
+                          </span>
+                          <span className="text-muted-foreground tabular-nums shrink-0">
+                            {formatIls(priced?.totalSellingPrice ?? 0)}
+                          </span>
+                        </label>
+                        {checked && (
+                          <div className="mt-1.5 pr-5">
+                            <div className="flex items-center justify-between text-[10px]">
+                              <span className="text-muted-foreground">אחוז רווח</span>
+                              <span className="font-semibold text-primary">{Math.round(m)}%</span>
+                            </div>
+                            <input
+                              type="range"
+                              min={0}
+                              max={99}
+                              step={1}
+                              value={Math.round(m)}
+                              onChange={(e) =>
+                                setCombinedMargin(q.id, parseInt(e.target.value, 10))
+                              }
+                              className="w-full accent-[var(--color-primary,#4A7C59)]"
+                            />
+                            <div className="text-[10px] text-muted-foreground">
+                              רווח: {formatIls(priced?.totalProfit ?? 0)}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                   {combinedResult && (
                     <div className="rounded-md border border-success/30 bg-success/5 p-2.5 space-y-1.5 mt-1">
                       <div className="text-[10px] uppercase tracking-wider text-success/80">

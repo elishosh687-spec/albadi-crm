@@ -38,25 +38,39 @@ function snapMargin(config: FactoryPricingConfig, qty: number): number {
   return config.defaultProfitMargin;
 }
 
+export interface CombinableQuote {
+  productSpec: FactoryProductSpec;
+  factoryResponse: FactoryResponse | null;
+  finalPricing: FactoryPricingResult | null;
+}
+
+/** The margin to show by default for a quote in the combined view. */
+export function defaultMarginFor(
+  q: CombinableQuote,
+  config: FactoryPricingConfig
+): number {
+  if (q.finalPricing) return q.finalPricing.profitMarginPct;
+  return snapMargin(config, q.productSpec.quantity);
+}
+
 /**
- * Pricing for a quote to feed the combined calc. Uses the saved finalPricing
- * when finalized; otherwise prices the factory response on the fly with the
- * default (per-qty) margin, so "received" quotes can be combined before they're
- * individually finalized.
+ * Pricing for a quote to feed the combined calc. With `marginOverride` it
+ * always re-prices at that margin (so each product's slider drives it). Without
+ * it: saved finalPricing if finalized, else priced on the fly with the default
+ * margin — so "received" quotes can be combined before they're finalized.
  */
 export function priceQuoteForCombine(
-  q: {
-    productSpec: FactoryProductSpec;
-    factoryResponse: FactoryResponse | null;
-    finalPricing: FactoryPricingResult | null;
-  },
+  q: CombinableQuote,
   config: FactoryPricingConfig,
-  shippingOptionId: string | null
+  shippingOptionId: string | null,
+  marginOverride?: number
 ): FactoryPricingResult | null {
-  if (q.finalPricing) return q.finalPricing;
+  if (marginOverride === undefined && q.finalPricing) return q.finalPricing;
   const resp = q.factoryResponse;
-  if (!resp) return null;
+  if (!resp) return q.finalPricing ?? null;
   const qty = q.productSpec.quantity;
+  const margin =
+    marginOverride ?? q.finalPricing?.profitMarginPct ?? snapMargin(config, qty);
   return priceFactoryQuote(
     {
       factoryUnitCostCny: resp.unitCostCny,
@@ -70,7 +84,7 @@ export function priceQuoteForCombine(
         widthCm: resp.cartonWidthCm,
         heightCm: resp.cartonHeightCm,
       },
-      profitMarginOverride: snapMargin(config, qty),
+      profitMarginOverride: margin,
       moldsCostCny: 0,
     },
     config
