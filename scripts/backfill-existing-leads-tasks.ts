@@ -24,7 +24,11 @@
 import { db } from "../lib/db";
 import { leads, ghlOauthTokens } from "../drizzle/schema";
 import { and, eq, inArray, isNotNull, desc } from "drizzle-orm";
-import { createContactTask, listContactTasks } from "../integrations/ghl/client";
+import {
+  createContactTask,
+  listContactTasks,
+  updateContactTask,
+} from "../integrations/ghl/client";
 import { clampToWorkWindow } from "../lib/clock/callback-window";
 
 const ACTIVE_SALES_STAGES = [
@@ -35,11 +39,24 @@ const ACTIVE_SALES_STAGES = [
 ];
 const MARKER_VERSION = "BACKFILL v1";
 
-const STAGE_LABEL: Record<string, string> = {
-  INTAKE: "שלחנו הצעה — לבדוק תגובה",
+// Hebrew detection — many bot_summary values are internal English, which the
+// (Hebrew-only) salesperson can't read. Use the summary only when it's Hebrew.
+const HEBREW = /[֐-׿]/;
+
+// Hebrew, action-oriented title per stage (fallback when summary isn't Hebrew).
+const STAGE_TITLE: Record<string, string> = {
+  INTAKE: "הצעה אוטומטית נשלחה — לבדוק תגובה",
   DISCAVERY: "שיחת בירור — להמשיך",
   FACTORY_WAIT: "ממתין למפעל — לעקוב",
-  CONSIDERATION: "שוקל הצעה — לסגור",
+  CONSIDERATION: "שוקל הצעה / מו״מ — לסגור",
+};
+
+// Hebrew stage name for the task body (instead of the English enum).
+const STAGE_HE: Record<string, string> = {
+  INTAKE: "שאלון + הצעה",
+  DISCAVERY: "שיחת בירור",
+  FACTORY_WAIT: "בדיקת מפעל",
+  CONSIDERATION: "שוקל הצעה / מו״מ",
 };
 
 // Same env-hydration trick as scripts/_test-call-pipeline.ts: Vercel's
@@ -70,8 +87,24 @@ function titleFor(lead: {
   botSummary: string | null;
 }): string {
   const summary = (lead.botSummary ?? "").trim();
-  if (summary) return `📞 חזרה: ${summary.slice(0, 70)}`;
-  return `📞 חזרה: ${STAGE_LABEL[lead.pipelineStage ?? ""] ?? "מעקב"}`;
+  // Use the bot summary only if it's actually Hebrew — else a Hebrew stage label.
+  if (summary && HEBREW.test(summary)) return `📞 חזרה: ${summary.slice(0, 70)}`;
+  return `📞 חזרה: ${STAGE_TITLE[lead.pipelineStage ?? ""] ?? "מעקב"}`;
+}
+
+function bodyFor(
+  lead: { pipelineStage: string | null; botSummary: string | null },
+  marker: string,
+): string {
+  const lines = [
+    marker,
+    `שלב: ${STAGE_HE[lead.pipelineStage ?? ""] ?? lead.pipelineStage ?? "—"}`,
+  ];
+  // Only carry the summary into the body if it's Hebrew.
+  if (lead.botSummary && HEBREW.test(lead.botSummary)) {
+    lines.push(`סיכום: ${lead.botSummary}`);
+  }
+  return lines.join("\n");
 }
 
 async function dueFor(followUpDate: string | null): Promise<Date> {
@@ -117,6 +150,7 @@ async function main() {
   );
 
   let created = 0;
+  let updated = 0;
   let skipped = 0;
   let failed = 0;
 
@@ -134,6 +168,8 @@ async function main() {
       minute: "2-digit",
     });
 
+    const body = bodyFor(lead, marker);
+
     if (dryRun) {
       console.log(
         `[DRY] ${(lead.name ?? lead.sid).padEnd(28)} ${(lead.pipelineStage ?? "").padEnd(14)} ${dueLocal}  | ${title}`,
@@ -144,17 +180,21 @@ async function main() {
 
     try {
       const existing = await listContactTasks(contactId);
-      if (existing.some((t) => (t.body ?? "").includes(marker))) {
-        skipped++;
+      const found = existing.find((t) => (t.body ?? "").includes(marker));
+      if (found) {
+        // Already backfilled — update title/body in place if they changed
+        // (e.g. English → Hebrew title fix), else leave alone.
+        if ((found.title ?? "") !== title || (found.body ?? "") !== body) {
+          await updateContactTask(contactId, found.id, { title, body });
+          updated++;
+          console.log(
+            `↻ ${(lead.name ?? lead.sid).padEnd(28)} ${(lead.pipelineStage ?? "").padEnd(14)} | ${title}`,
+          );
+        } else {
+          skipped++;
+        }
         continue;
       }
-      const body = [
-        marker,
-        `שלב: ${lead.pipelineStage ?? "—"}`,
-        lead.botSummary ? `סיכום: ${lead.botSummary}` : "",
-      ]
-        .filter(Boolean)
-        .join("\n");
       await createContactTask(contactId, {
         title,
         body,
@@ -174,7 +214,7 @@ async function main() {
   }
 
   console.log(
-    `\n${dryRun ? "[DRY] would create" : "created"}=${created} skipped=${skipped} failed=${failed}`,
+    `\n${dryRun ? "[DRY] would create" : "created"}=${created} updated=${updated} skipped=${skipped} failed=${failed}`,
   );
 }
 
