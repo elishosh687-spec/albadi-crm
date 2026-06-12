@@ -991,6 +991,25 @@ function HistoryList({
       return next;
     });
   const combineHref = `/api/factory/combine/pdf?ids=${[...selected].join(",")}`;
+  // wa.me link to send the combined PDF to the customer (same pattern as the
+  // single-quote "פתח ב-WhatsApp"). Phone/name taken from any selected row —
+  // they all belong to the same client.
+  const combineWaUrl = (() => {
+    if (selected.size < 2) return null;
+    const sel = rows.filter((r) => selected.has(r.id));
+    const phone = sel[0]?.customerPhone?.replace(/[^\d]/g, "") || "";
+    if (!phone) return null;
+    const name = sel[0]?.customerName ?? "";
+    const origin = typeof window !== "undefined" ? window.location.origin : "";
+    const link = `${origin}/api/factory/combine/pdf?ids=${[...selected].join(",")}`;
+    const caption = [
+      name ? `היי ${name},` : "היי,",
+      `מצורפת הצעת מחיר משולבת ל-${selected.size} מוצרים.`,
+      `הצעה מלאה: ${link}`,
+      "ההצעה בתוקף ל-14 יום. נשמח לקבל אישור 🙂",
+    ].join("\n");
+    return `https://wa.me/${phone}?text=${encodeURIComponent(caption)}`;
+  })();
 
   const handleDelete = async (row: FactoryQuoteRow) => {
     if (!confirm(`למחוק את ההצעה ${row.quotationNo ?? row.id.slice(-6)}? Feishu לא יושפע.`)) return;
@@ -1077,10 +1096,20 @@ function HistoryList({
               href={combineHref}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-1 rounded-md bg-primary px-2.5 py-1 text-[11px] font-medium text-primary-foreground hover:bg-primary/90"
+              className="inline-flex items-center gap-1 rounded-md border border-primary/40 bg-primary/10 px-2.5 py-1 text-[11px] font-medium text-primary hover:bg-primary/20"
             >
-              אחד ל-PDF אחד
+              פתח PDF
             </a>
+            {combineWaUrl && (
+              <a
+                href={combineWaUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 rounded-md bg-primary px-2.5 py-1 text-[11px] font-medium text-primary-foreground hover:bg-primary/90"
+              >
+                שלח ב-WhatsApp
+              </a>
+            )}
           </div>
         </div>
       )}
