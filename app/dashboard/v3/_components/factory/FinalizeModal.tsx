@@ -17,10 +17,11 @@ import type {
   FactoryPricingConfig,
   FactoryPricingResult,
   FactoryProductSpec,
+  FactoryResponse,
   ShippingOption,
 } from "@/lib/factory/types";
 import { priceFactoryQuote, marginPctFromUnitPrice } from "@/lib/factory/pricing";
-import { computeCombined } from "@/lib/factory/combined";
+import { computeCombined, priceQuoteForCombine } from "@/lib/factory/combined";
 import { DetailedBreakdown } from "@/components/calculator/DetailedBreakdown";
 
 function formatIls(n: number): string {
@@ -84,6 +85,7 @@ export function FinalizeModal({
       id: string;
       quotationNo: string | null;
       productSpec: FactoryProductSpec;
+      factoryResponse: FactoryResponse | null;
       finalPricing: FactoryPricingResult | null;
     }[]
   >([]);
@@ -212,11 +214,13 @@ export function FinalizeModal({
     (async () => {
       try {
         const res = await fetch(
-          `/api/factory/list?lead=${encodeURIComponent(row.manychatSubId)}&status=finalized`
+          `/api/factory/list?lead=${encodeURIComponent(row.manychatSubId)}`
         );
         const data = await res.json();
         const list = (data?.requests ?? []) as typeof otherQuotes;
-        setOtherQuotes(list.filter((q) => q.id !== row.id && q.finalPricing));
+        setOtherQuotes(
+          list.filter((q) => q.id !== row.id && (q.finalPricing || q.factoryResponse))
+        );
       } catch {
         /* ignore */
       }
@@ -226,17 +230,14 @@ export function FinalizeModal({
 
   const combinedResult = useMemo(() => {
     if (!livePricing || !config) return null;
-    const sel = otherQuotes.filter((q) => combinedSel.has(q.id) && q.finalPricing);
+    const shipId = shippingOptionId || livePricing.shippingOptionId;
+    const sel = otherQuotes
+      .filter((q) => combinedSel.has(q.id))
+      .map((q) => priceQuoteForCombine(q, config, shipId))
+      .filter((p): p is FactoryPricingResult => !!p);
     if (sel.length === 0) return null;
-    const opt =
-      config.shippingOptions.find(
-        (s) => s.id === (shippingOptionId || livePricing.shippingOptionId)
-      ) ?? null;
-    return computeCombined(
-      [livePricing, ...sel.map((q) => q.finalPricing as FactoryPricingResult)],
-      opt,
-      config.usdToIls
-    );
+    const opt = config.shippingOptions.find((s) => s.id === shipId) ?? null;
+    return computeCombined([livePricing, ...sel], opt, config.usdToIls);
   }, [livePricing, config, otherQuotes, combinedSel, shippingOptionId]);
 
   const handlePullImage = async () => {
@@ -573,7 +574,7 @@ export function FinalizeModal({
                 />
               )}
 
-              {otherQuotes.length > 0 && livePricing && (
+              {otherQuotes.length > 0 && livePricing && config && (
                 <div className="rounded-lg border border-border bg-card/40 p-3 space-y-2">
                   <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
                     חישוב משולב — מוצרים שנשלחים יחד
@@ -596,7 +597,13 @@ export function FinalizeModal({
                         {q.productSpec?.productName || q.productSpec?.description || "מוצר"}
                       </span>
                       <span className="text-muted-foreground tabular-nums shrink-0">
-                        {formatIls(q.finalPricing?.totalSellingPrice ?? 0)}
+                        {formatIls(
+                          priceQuoteForCombine(
+                            q,
+                            config,
+                            shippingOptionId || livePricing.shippingOptionId
+                          )?.totalSellingPrice ?? 0
+                        )}
                       </span>
                     </label>
                   ))}

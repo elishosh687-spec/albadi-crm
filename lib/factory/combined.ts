@@ -10,10 +10,71 @@
  * Shared by the FinalizeModal "חישוב משולב" panel and the combined PDF.
  */
 
-import type { ShippingOption } from "./types";
+import { priceFactoryQuote } from "./pricing";
+import type {
+  FactoryPricingConfig,
+  FactoryPricingResult,
+  FactoryProductSpec,
+  FactoryResponse,
+  ShippingOption,
+} from "./types";
 
 function r2(n: number): number {
   return Math.round(n * 100) / 100;
+}
+
+/** Default profit margin for a quantity, using the per-qty matrix (snap-down). */
+function snapMargin(config: FactoryPricingConfig, qty: number): number {
+  const m = config.profitMarginByQuantity;
+  if (m && Object.keys(m).length > 0) {
+    if (m[String(qty)] !== undefined) return m[String(qty)];
+    const keys = Object.keys(m)
+      .map(Number)
+      .sort((a, b) => a - b);
+    let best = keys[0];
+    for (const k of keys) if (k <= qty) best = k;
+    return m[String(best)] ?? config.defaultProfitMargin;
+  }
+  return config.defaultProfitMargin;
+}
+
+/**
+ * Pricing for a quote to feed the combined calc. Uses the saved finalPricing
+ * when finalized; otherwise prices the factory response on the fly with the
+ * default (per-qty) margin, so "received" quotes can be combined before they're
+ * individually finalized.
+ */
+export function priceQuoteForCombine(
+  q: {
+    productSpec: FactoryProductSpec;
+    factoryResponse: FactoryResponse | null;
+    finalPricing: FactoryPricingResult | null;
+  },
+  config: FactoryPricingConfig,
+  shippingOptionId: string | null
+): FactoryPricingResult | null {
+  if (q.finalPricing) return q.finalPricing;
+  const resp = q.factoryResponse;
+  if (!resp) return null;
+  const qty = q.productSpec.quantity;
+  return priceFactoryQuote(
+    {
+      factoryUnitCostCny: resp.unitCostCny,
+      quantity: qty,
+      shippingOptionId: shippingOptionId || q.productSpec.shippingOptionId || null,
+      cartonSpec: {
+        qty: resp.cartonQty,
+        weightKg: resp.weightKg,
+        cbm: resp.cartonCbm,
+        lengthCm: resp.cartonLengthCm,
+        widthCm: resp.cartonWidthCm,
+        heightCm: resp.cartonHeightCm,
+      },
+      profitMarginOverride: snapMargin(config, qty),
+      moldsCostCny: 0,
+    },
+    config
+  );
 }
 
 /** Total shipping (ILS) for a single shipment of the given CBM + weight. */
