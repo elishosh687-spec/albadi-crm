@@ -374,7 +374,61 @@ totalProfit           = ₪2,313
 
 ---
 
-## 11. Open questions / TODO
+## 11. עריכת פרטי המוצר + תמונה ב-FinalizeModal (חדש, 2026-06-12)
+
+מיקום: [`FinalizeModal.tsx`](../app/dashboard/v3/_components/factory/FinalizeModal.tsx) + [`FinalizeModal.widget.tsx`](../components/factory-flow/FinalizeModal.widget.tsx).
+
+כל מה שמופיע ב-PDF ניתן לעריכה בחלון לפני ההפקה:
+- שם מוצר (`spec.productName`, ברירת מחדל "שקית אלבדי" — כותרת ה-PDF), מידות (W/H/D), כמות, חומר, הדפסה, גימור, הערות ללקוח (`spec.customerNotes`).
+- **כמות היא קלט תמחור** — שינוי שלה מריץ מחדש את `priceFactoryQuote` (משפיע על שילוח/קרטונים).
+- העריכות נשלחות כ-`specOverride` ל-finalize, ממוזגות מעל ה-spec, ונשמרות חזרה ל-`productSpec`. מספר ההצעה מוצג בכותרת החלון.
+
+**תמונה (`lib/feishu/media.ts`):**
+- מקור: התמונות **מוטמעות** בעמודה D בגיליון Feishu (אובייקט עם `fileToken` + לינק auth-gated). לא קישור ישיר.
+- `feishuImageToBlobUrl(fileToken)` מוריד את הקובץ ב-tenant token (`/open-apis/drive/v1/medias/{token}/download`) ומעלה ל-Vercel Blob ציבורי.
+- בחלון: משיכה **אוטומטית** בפתיחה אם אין `picUrl` (`POST /api/factory/[id]/pull-image`) + כפתורי "משוך מ-Feishu" / "העלה תמונה" (`POST /api/factory/upload-image`). ה-URL נשמר ב-`spec.picUrl`.
+- ב-PDF: `fetchImageDataUri` (ב-`pdf.tsx`) מושך את ה-URL ל-data-URI ומטמיע `<Image>`. כשל במשיכה → מושמט בחן (לא שובר PDF). ה-PDF הסופי נשמר ב-Blob עם `addRandomSuffix` כדי שעדכון תמונה לא יוגש מ-cache ישן.
+
+---
+
+## 12. חישוב משולב — משלוח אחד (חדש, 2026-06-12)
+
+מיקום: [`lib/factory/combined.ts`](../lib/factory/combined.ts) — משותף ל-FinalizeModal ול-`app/api/factory/combine/pdf`.
+
+**הרעיון:** כמה מוצרים שנשלחים יחד = משלוח אחד. השילוח pass-through (אין עליו רווח), ומשלוח אחד **זול** ממשלוחים נפרדים — רצפת 1-CBM נספרת פעם אחת, מדרגות משקל אווירי על המשקל המאוחד. את החיסכון מעבירים ללקוח (הרווח לא משתנה — רק השילוח יורד).
+
+```
+combinedShippingIls(totalCbm, totalWeightKg, opt, usdToIls)   ← שילוח כולל לשורה אחת
+computeCombined(items, opt, usdToIls) → {
+  combinedShipping, separateShipping, shippingSaving,
+  totalProduction, totalProfit,           // profit unchanged
+  grandTotal = production + profit + combinedShipping,
+  overallMarginPct = profit / (production+profit)
+}
+priceQuoteForCombine(q, config, shipId, marginOverride?)      ← finalPricing אם סופית,
+   אחרת מתמחר את factoryResponse לפי margin (matrix snap או override מהסליידר)
+```
+
+**הפצת השילוח חזרה למחיר:** ב-`/api/factory/combine/pdf` השילוח המאוחד מתחלק בין המוצרים לפי חלק-נפח (CBM share) ומקופל למחיר ליחידה — כך ה-PDF המשולב מציג מחיר נמוך יותר, **בלי שורת שילוח נפרדת** (כמו ה-PDF הבודד).
+
+**UI:** פאנל "חישוב משולב" ב-FinalizeModal — צ'ק-בוקס לכל הצעה אחרת של הלקוח (כולל `received`), סליידר מרווח לכל מוצר מסומן + סליידר "קבע לכולן", וסיכום משולב חי. ההצעה הנוכחית נכנסת לפי הסליידר הראשי.
+
+> ⚠️ הכוונון בפאנל הוא לתצוגה/חישוב. כדי לשלוח ללקוח את ה-PDF המשולב הזול, ההצעות צריכות להיות **סופיות** (היסטוריה → "אחד ל-PDF אחד" / שליחת WhatsApp). "סיים ושלח משולב" — TODO.
+
+---
+
+## 13. ייבוא מ-Feishu (חדש, 2026-06-12)
+
+מיקום: [`lib/factory/server/import-from-feishu.ts`](../lib/factory/server/import-from-feishu.ts).
+
+מחיקת הצעה = מחיקה מלאה מה-DB, אבל שורת ה-Feishu נשארת. כפתור **"ייבא מ-Feishu"** (ב-`QuotesHistoryView`) סורק את הגיליון (`readAllRows`) ויוצר מחדש כל הצעה שמספר ההצעה שלה (עמודה B) **לא קיים** ב-DB:
+- שומר את **אותו מספר הצעה** (לא חדש), `productSpec` (A..J), תשובת המפעל (K..R), והתמונה המוטמעת.
+- מספרי הצעה כוללים סיומת revision "-A" — `baseQuoteNo` משווה/שומר לפי הבסיס (`EVLGTP1G-A` → `EVLGTP1G`). זה גם תיקן את התאמת השורה ב-`findRowByQuotationNo` (רענון).
+- ליד מותאם לפי **שם מנורמל** (`normName` — חסין גרש ׳/'/׳, רווחים, סימני RTL). שורות שלא הותאמו → **בורר ליד ידני** (`POST /api/factory/import-feishu/assign`).
+
+---
+
+## 14. Open questions / TODO
 
 - [x] **לאחד את הקונבנציות.** ✅ בוצע 2026-06-12 — ה-FinalizeModal עבר ל-margin-on-price כמו המחשבון. עכשיו 40% = 40% מהמחיר בשני המקומות, ואותו אחוז נותן אותו מחיר. ערכי ה-config (`profitMarginByQuantity`) נשארו 40 ומתפרשים כעת כ-margin-on-price בשני המנועים.
 - [ ] **מולדים בצד הקטלוג** — קיים גם ב-CalculatorView (margin-on-price), אבל אין שם persistence — הוא רק לתחזית. אם בעתיד נרצה לשמור גם אותם, ה-quote-preview API צריך לשמור את ה-input בנפרד.
