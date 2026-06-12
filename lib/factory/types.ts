@@ -20,6 +20,13 @@ export interface FactoryProductSpec {
   finishing: string;     // e.g. "Handles / not laminated"
   picUrl?: string;
   notes?: string;
+  // Product title shown in the customer PDF headline. Defaults to "שקית אלבדי"
+  // when empty. Editable in the FinalizeModal so the boss can rename the
+  // product when it isn't a bag. Optional for back-compat.
+  productName?: string;
+  // Free-text note rendered in the customer PDF ("הערות") — editable in the
+  // FinalizeModal before generating the PDF. Optional for back-compat.
+  customerNotes?: string;
   // Customer's shipping choice from the bot questionnaire (`s1` / `s2`).
   // Carried so the FinalizeModal pre-selects what the customer actually
   // asked for instead of defaulting to the first enabled option (which used

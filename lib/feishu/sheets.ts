@@ -343,3 +343,63 @@ export function parseFactoryResponseRow(
     hasResponse: unitCost !== undefined && unitCost > 0,
   };
 }
+
+// ------------------------------------------------------------
+// Request (operator/product side, A..J = indices 0..9, C=date at index 2)
+// ------------------------------------------------------------
+
+/** Parse the "H{h}*D{d}*W{w}" size label written by buildFactoryRow back into
+ *  cm dimensions. Tolerates missing parts and either `*` or `×` separators. */
+export function parseSizeLabel(s: string): {
+  widthCm?: number;
+  heightCm?: number;
+  depthCm?: number;
+} {
+  const out: { widthCm?: number; heightCm?: number; depthCm?: number } = {};
+  const h = s.match(/H\s*([\d.]+)/i);
+  const d = s.match(/D\s*([\d.]+)/i);
+  const w = s.match(/W\s*([\d.]+)/i);
+  if (h) out.heightCm = parseFloat(h[1]);
+  if (d) out.depthCm = parseFloat(d[1]);
+  if (w) out.widthCm = parseFloat(w[1]);
+  return out;
+}
+
+export interface ParsedFactoryRequest {
+  description?: string;
+  material?: string;
+  widthCm?: number;
+  heightCm?: number;
+  depthCm?: number;
+  printing?: string;
+  finishing?: string;
+  quantity?: number;
+}
+
+/** Parse the operator/product side of a Feishu row (A..J, indices 0..9 with
+ *  C=date at index 2). Only returns fields that are actually present, so a
+ *  caller can safely merge non-empty values over an existing spec without
+ *  clobbering it with blanks. */
+export function parseFactoryRequestRow(
+  row: (string | number | null)[]
+): ParsedFactoryRequest {
+  const out: ParsedFactoryRequest = {};
+  const description = toStr(row[4]);
+  const material = toStr(row[5]);
+  const size = toStr(row[6]);
+  const printing = toStr(row[7]);
+  const finishing = toStr(row[8]);
+  const quantity = toNum(row[9]);
+  if (description) out.description = description;
+  if (material) out.material = material;
+  if (size) {
+    const dims = parseSizeLabel(size);
+    if (dims.widthCm !== undefined) out.widthCm = dims.widthCm;
+    if (dims.heightCm !== undefined) out.heightCm = dims.heightCm;
+    if (dims.depthCm !== undefined) out.depthCm = dims.depthCm;
+  }
+  if (printing) out.printing = printing;
+  if (finishing) out.finishing = finishing;
+  if (quantity !== undefined) out.quantity = quantity;
+  return out;
+}

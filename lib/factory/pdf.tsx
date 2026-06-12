@@ -323,7 +323,7 @@ function CustomerQuotePDF(props: CustomerQuotePdfProps) {
     // see a separate shipping line item (boss-only data). Method name still
     // appears in the bullets section for transparency.
     const baseBagDesc =
-      `שקית אלבדי — ${breakdown.dimensions} ס״מ (כולל שילוח)`;
+      `${spec.productName?.trim() || "שקית אלבדי"} — ${breakdown.dimensions} ס״מ (כולל שילוח)`;
     const baseBagWithShipping = r2(
       breakdown.baseBagPerUnit + breakdown.shippingPerUnit
     );
@@ -372,7 +372,7 @@ function CustomerQuotePDF(props: CustomerQuotePdfProps) {
     // Fallback: 1-row honest layout from FactoryPricingResult. Shipping cost
     // is folded into the bag unit price so no separate line item leaks to
     // the customer.
-    const bagDescParts: string[] = [`שקית אלבדי — ${sizeLabel(spec)} (כולל שילוח)`];
+    const bagDescParts: string[] = [`${spec.productName?.trim() || "שקית אלבדי"} — ${sizeLabel(spec)} (כולל שילוח)`];
     if (finishingHe) bagDescParts.push(finishingHe);
     if (printingHe) bagDescParts.push(printingHe);
     const bagDesc = bagDescParts.join(" · ");
@@ -485,4 +485,131 @@ export async function renderCustomerQuotePdf(
   props: CustomerQuotePdfProps
 ): Promise<Buffer> {
   return renderToBuffer(<CustomerQuotePDF {...props} />);
+}
+
+// ------------------------------------------------------------
+// Combined quote — multiple finalized products in one PDF, a section per
+// product, with a single grand total at the end.
+// ------------------------------------------------------------
+
+export interface CombinedQuoteItem {
+  spec: FactoryProductSpec;
+  pricing: FactoryPricingResult;
+}
+
+export interface CombinedQuotePdfProps {
+  customerName: string;
+  items: CombinedQuoteItem[];
+}
+
+function CombinedQuotePDF({ customerName, items }: CombinedQuotePdfProps) {
+  const date = new Date().toLocaleDateString("he-IL", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
+  const stripCjk = (s: string) =>
+    /[　-鿿＀-￯]/.test(s) ? "" : s;
+
+  const sections = items.map((it) => {
+    const { spec, pricing } = it;
+    const printingHe = stripCjk(spec.printing ? humanizePrinting(spec.printing) : "");
+    const finishingHe = stripCjk(spec.finishing ? humanizeFinishing(spec.finishing) : "");
+    const materialHe = stripCjk(spec.material ? humanizeMaterial(spec.material) : "");
+    const title = `${spec.productName?.trim() || "שקית אלבדי"} — ${sizeLabel(spec)} (כולל שילוח)`;
+    const bullets = [
+      `מידות: ${sizeLabel(spec)} ס״מ`,
+      `כמות: ${pricing.quantity.toLocaleString("he-IL")} יח׳`,
+      materialHe ? `חומר: ${materialHe}` : null,
+      printingHe ? `הדפסה: ${printingHe}` : null,
+      finishingHe ? `גימור: ${finishingHe}` : null,
+      pricing.shippingOptionName ? `שיטת שילוח: ${pricing.shippingOptionName}` : null,
+    ].filter(Boolean) as string[];
+    return {
+      title,
+      bullets,
+      unit: r2(pricing.unitSellingPrice),
+      qty: pricing.quantity,
+      total: r2(pricing.totalSellingPrice),
+      notes: spec.customerNotes?.trim() || "",
+    };
+  });
+  const grandTotal = r2(sections.reduce((s, x) => s + x.total, 0));
+
+  return (
+    <Document>
+      <Page size="A4" style={styles.page}>
+        <View style={styles.header}>
+          <Text style={styles.headerTitle}>הצעת מחיר — Albadi</Text>
+          {customerName ? (
+            <Text style={styles.headerCustomer}>{customerName}</Text>
+          ) : null}
+          <Text style={styles.headerDate}>{date}</Text>
+        </View>
+
+        <View style={styles.priceBox}>
+          <Text style={styles.priceMain}>{formatILS(grandTotal)}</Text>
+          <Text style={styles.priceSub}>
+            סה״כ ל-{sections.length.toLocaleString("he-IL")} מוצרים
+          </Text>
+        </View>
+
+        {sections.map((sec, idx) => (
+          <View key={idx} style={{ marginBottom: 14 }} wrap={false}>
+            <Text style={[styles.tableTitle, { marginTop: idx === 0 ? 0 : 4 }]}>
+              {idx + 1}. {sec.title}
+            </Text>
+            <View style={styles.bullets}>
+              {sec.bullets.map((b, i) => (
+                <View key={i} style={styles.bulletRow}>
+                  <Text style={styles.bulletMark}>•</Text>
+                  <Text style={styles.bulletText}>{b}</Text>
+                </View>
+              ))}
+            </View>
+            {sec.notes ? (
+              <View style={styles.bulletRow}>
+                <Text style={styles.bulletMark}>•</Text>
+                <Text style={styles.bulletText}>הערות: {sec.notes}</Text>
+              </View>
+            ) : null}
+            <View style={styles.tdRowTotal}>
+              <Text style={styles.totalLabel}>
+                מחיר ליחידה {formatILS(sec.unit)} · כמות {sec.qty.toLocaleString("he-IL")}
+              </Text>
+              <Text style={styles.totalValue}>{formatILS(sec.total)}</Text>
+            </View>
+          </View>
+        ))}
+
+        <View style={styles.table}>
+          <View style={styles.tdRowTotal}>
+            <Text style={styles.totalLabel}>סה״כ כולל</Text>
+            <Text style={styles.totalValue}>{formatILS(grandTotal)}</Text>
+          </View>
+        </View>
+
+        <View style={styles.vatNote}>
+          <Text style={styles.vatText}>המחיר אינו כולל מע״מ</Text>
+        </View>
+
+        <Text style={{ fontSize: 10, color: "#333", textAlign: "right", marginTop: 12, fontWeight: "bold" }}>
+          מצאתם מחיר זול יותר? שלחו חשבונית ונבדוק אם נוכל להוזיל.
+        </Text>
+
+        <Text style={styles.footer}>
+          ההצעה תקפה ל-14 ימים מיום ההצעה. המחירים נקובים בש״ח וכוללים את כל ההוצאות מלבד מע״מ.
+        </Text>
+      </Page>
+    </Document>
+  );
+}
+
+/**
+ * Render a combined multi-product quote to a Node Buffer.
+ */
+export async function renderCombinedQuotePdf(
+  props: CombinedQuotePdfProps
+): Promise<Buffer> {
+  return renderToBuffer(<CombinedQuotePDF {...props} />);
 }

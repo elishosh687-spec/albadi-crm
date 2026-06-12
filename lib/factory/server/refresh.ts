@@ -12,8 +12,10 @@ import { and, eq, isNotNull, sql } from "drizzle-orm";
 import {
   readRow,
   parseFactoryResponseRow,
+  parseFactoryRequestRow,
   findRowByQuotationNo,
 } from "@/lib/feishu/sheets";
+import type { FactoryProductSpec } from "@/lib/factory/types";
 import { sendEliDM } from "@/lib/notify/eli";
 
 export interface RefreshResult {
@@ -64,11 +66,21 @@ export async function refreshFromFeishu(): Promise<RefreshResult> {
       const cells = await readRow(activeIndex);
       const parsed = parseFactoryResponseRow(cells);
       if (!parsed.hasResponse) continue;
+      // Also pull the product side (A..J) from the table and merge any
+      // non-empty values over the stored spec — so the operator sees the
+      // table's current product details (dims/material/qty/...) in the
+      // FinalizeModal, just like the price is pulled from the table.
+      const reqParsed = parseFactoryRequestRow(cells);
+      const mergedSpec: FactoryProductSpec = {
+        ...(row.productSpec as FactoryProductSpec),
+        ...reqParsed,
+      };
       await db
         .update(factoryQuoteRequests)
         .set({
           factoryStatus: "received",
           factoryResponse: parsed,
+          productSpec: mergedSpec,
           feishuRowIndex: activeIndex,
           updatedAt: new Date(),
         })

@@ -15,6 +15,20 @@ const BodySchema = z.object({
   profitMarginOverride: z.number().min(0).max(99.9).optional(),
   shippingOptionId: z.string().optional(),
   moldsCostCny: z.number().min(0).optional(),
+  specOverride: z
+    .object({
+      description: z.string().optional(),
+      material: z.string().optional(),
+      productName: z.string().optional(),
+      widthCm: z.number().min(0).optional(),
+      heightCm: z.number().min(0).optional(),
+      depthCm: z.number().min(0).optional(),
+      quantity: z.number().int().positive().optional(),
+      printing: z.string().optional(),
+      finishing: z.string().optional(),
+      customerNotes: z.string().optional(),
+    })
+    .optional(),
 });
 
 export async function POST(

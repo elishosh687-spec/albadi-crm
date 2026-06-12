@@ -44,6 +44,21 @@ export function FinalizeModalWidget({
   const [reverseMode, setReverseMode] = useState<"profit" | "total" | "unit">("profit");
   const [reverseInput, setReverseInput] = useState<string>("");
 
+  // Editable product details that flow into the customer PDF. Pre-filled from
+  // the stored spec (kept in sync with the Feishu table by the refresh), and
+  // editable here before the PDF is generated.
+  const s0 = row.productSpec;
+  const [productName, setProductName] = useState<string>(s0.productName ?? "");
+  const [material, setMaterial] = useState<string>(s0.material ?? "");
+  const [widthCm, setWidthCm] = useState<string>(s0.widthCm ? String(s0.widthCm) : "");
+  const [heightCm, setHeightCm] = useState<string>(s0.heightCm ? String(s0.heightCm) : "");
+  const [depthCm, setDepthCm] = useState<string>(s0.depthCm ? String(s0.depthCm) : "");
+  const [qtyStr, setQtyStr] = useState<string>(s0.quantity ? String(s0.quantity) : "");
+  const [printing, setPrinting] = useState<string>(s0.printing ?? "");
+  const [finishing, setFinishing] = useState<string>(s0.finishing ?? "");
+  const [customerNotes, setCustomerNotes] = useState<string>(s0.customerNotes ?? "");
+  const qtyNum = Math.max(1, Math.floor(Number(qtyStr) || s0.quantity || 1));
+
   const MARGIN_MIN = 0;
   // margin-on-price is capped below 100% (profit can't be ≥ the price)
   const MARGIN_MAX = 99;
@@ -90,7 +105,7 @@ export function FinalizeModalWidget({
     return priceFactoryQuote(
       {
         factoryUnitCostCny: row.factoryResponse.unitCostCny,
-        quantity: row.productSpec.quantity,
+        quantity: qtyNum,
         shippingOptionId: shippingOptionId || null,
         cartonSpec: {
           qty: row.factoryResponse.cartonQty,
@@ -105,7 +120,7 @@ export function FinalizeModalWidget({
       },
       config
     );
-  }, [config, row, shippingOptionId, margin, moldsValid, moldsParsed]);
+  }, [config, row, shippingOptionId, margin, moldsValid, moldsParsed, qtyNum]);
 
   const handleSubmit = async () => {
     setError(null);
@@ -118,6 +133,17 @@ export function FinalizeModalWidget({
           profitMarginOverride: margin,
           shippingOptionId: shippingOptionId || undefined,
           moldsCostCny: moldsValid ? moldsParsed : undefined,
+          specOverride: {
+            productName: productName.trim() || undefined,
+            material: material.trim() || undefined,
+            widthCm: widthCm !== "" ? Number(widthCm) : undefined,
+            heightCm: heightCm !== "" ? Number(heightCm) : undefined,
+            depthCm: depthCm !== "" ? Number(depthCm) : undefined,
+            quantity: qtyNum,
+            printing: printing.trim() || undefined,
+            finishing: finishing.trim() || undefined,
+            customerNotes: customerNotes.trim() || undefined,
+          },
         }),
       });
       const data = await res.json();
@@ -157,43 +183,40 @@ export function FinalizeModalWidget({
             </div>
           ) : (
             <>
-              <div className="rounded-lg border border-border bg-card/40 p-3 text-xs space-y-1">
-                {(() => {
-                  const s = row.productSpec;
-                  const dimParts: string[] = [];
-                  if (s.widthCm) dimParts.push(`רוחב ${s.widthCm}`);
-                  if (s.depthCm) dimParts.push(`עומק ${s.depthCm}`);
-                  if (s.heightCm) dimParts.push(`גובה ${s.heightCm}`);
-                  const dims = dimParts.length ? `${dimParts.join(" × ")} ס״מ` : null;
-                  return dims ? (
-                    <div className="flex justify-between gap-2">
-                      <span className="text-muted-foreground">מידות מוצר:</span>
-                      <span className="tabular-nums text-right">{dims}</span>
-                    </div>
-                  ) : null;
-                })()}
-                {row.productSpec.description && (
-                  <div className="flex justify-between gap-2">
-                    <span className="text-muted-foreground">תיאור:</span>
-                    <span className="text-right truncate ml-2">{row.productSpec.description}</span>
-                  </div>
-                )}
-                {row.productSpec.material && (
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">חומר:</span>
-                    <span>{row.productSpec.material}</span>
-                  </div>
-                )}
-                <div className="flex justify-between">
+              <div className="rounded-lg border border-border bg-card/40 p-3 space-y-2.5">
+                <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                  פרטי המוצר ל‑PDF (ניתן לעריכה)
+                </div>
+                <SpecField label="שם המוצר (כותרת)" value={productName} onChange={setProductName} placeholder="שקית אלבדי" />
+                <div className="grid grid-cols-3 gap-2">
+                  <SpecField label="רוחב (ס״מ)" value={widthCm} onChange={setWidthCm} type="number" />
+                  <SpecField label="גובה (ס״מ)" value={heightCm} onChange={setHeightCm} type="number" />
+                  <SpecField label="עומק (ס״מ)" value={depthCm} onChange={setDepthCm} type="number" />
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <SpecField label="כמות" value={qtyStr} onChange={setQtyStr} type="number" />
+                  <SpecField label="חומר" value={material} onChange={setMaterial} placeholder="80g non-woven" />
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <SpecField label="הדפסה" value={printing} onChange={setPrinting} />
+                  <SpecField label="גימור" value={finishing} onChange={setFinishing} />
+                </div>
+                <div>
+                  <label className="block text-[11px] text-muted-foreground mb-0.5">הערות ללקוח (ב‑PDF)</label>
+                  <textarea
+                    value={customerNotes}
+                    onChange={(e) => setCustomerNotes(e.target.value)}
+                    rows={2}
+                    placeholder="טקסט חופשי שיופיע בתחתית ההצעה"
+                    className="w-full rounded-md border border-border bg-background/40 px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring/30"
+                  />
+                </div>
+                <div className="flex justify-between text-xs pt-1.5 border-t border-border/40">
                   <span className="text-muted-foreground">עלות מפעל ליחידה:</span>
                   <span className="tabular-nums">¥{row.factoryResponse?.unitCostCny}</span>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">כמות:</span>
-                  <span className="tabular-nums">{row.productSpec.quantity.toLocaleString("he-IL")}</span>
-                </div>
                 {row.factoryResponse?.supplier && (
-                  <div className="flex justify-between">
+                  <div className="flex justify-between text-xs">
                     <span className="text-muted-foreground">ספק:</span>
                     <span>{row.factoryResponse.supplier}</span>
                   </div>
@@ -465,6 +488,33 @@ function ModeBtn({ active, onClick, children }: { active: boolean; onClick: () =
     >
       {children}
     </button>
+  );
+}
+
+function SpecField({
+  label,
+  value,
+  onChange,
+  placeholder,
+  type = "text",
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  placeholder?: string;
+  type?: string;
+}) {
+  return (
+    <div>
+      <label className="block text-[11px] text-muted-foreground mb-0.5">{label}</label>
+      <input
+        type={type}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        className="w-full rounded-md border border-border bg-background/40 px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring/30"
+      />
+    </div>
   );
 }
 

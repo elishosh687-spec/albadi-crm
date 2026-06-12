@@ -26,6 +26,11 @@ export interface FinalizeInput {
   shippingOptionId?: string;
   /** One-time mold/tooling fee in CNY (amortized across the order). */
   moldsCostCny?: number;
+  /** Manual overrides for the product spec (description, material, dims,
+   *  quantity, printing, finishing, productName, customerNotes). Merged over
+   *  the stored spec before the PDF is rendered, then persisted back to
+   *  productSpec — so the boss can edit exactly what appears in the PDF. */
+  specOverride?: Partial<FactoryProductSpec>;
 }
 
 export interface FinalizeOk {
@@ -66,7 +71,12 @@ export async function finalizeQuote(
     };
   }
 
-  const spec = reqRow.productSpec as FactoryProductSpec;
+  const storedSpec = reqRow.productSpec as FactoryProductSpec;
+  // Apply the boss's manual edits (if any) before pricing + PDF. A blank
+  // override field would have been omitted client-side, so a spread is safe.
+  const spec: FactoryProductSpec = body.specOverride
+    ? { ...storedSpec, ...body.specOverride }
+    : storedSpec;
   const resp = reqRow.factoryResponse as FactoryResponse;
   const config = await getFactoryConfig();
 
@@ -108,6 +118,7 @@ export async function finalizeQuote(
       spec,
       pricing,
       breakdown: null,
+      customerNotes: spec.customerNotes,
       quotationNo: reqRow.quotationNo ?? id.slice(-8).toUpperCase(),
     });
 
@@ -134,6 +145,7 @@ export async function finalizeQuote(
     .set({
       factoryStatus: "finalized",
       finalPricing: pricing,
+      productSpec: spec,
       pdfUrl,
       updatedAt: new Date(),
     })
