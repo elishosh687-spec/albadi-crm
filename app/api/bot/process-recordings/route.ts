@@ -26,10 +26,14 @@ import { appConfig, callRecordingImports } from "@/drizzle/schema";
 import { and, eq, isNotNull, isNull, lte, sql } from "drizzle-orm";
 import {
   addContactNote,
+  createContactTask,
   downloadRecording,
   listContactNotes,
+  listContactTasks,
   searchCallMessages,
 } from "@/integrations/ghl/client";
+import { GHL_SALESPERSON_USER_ID } from "@/integrations/ghl/config";
+import { clampToWorkWindow } from "@/lib/clock/callback-window";
 import { transcribeAudio, TranscribeError } from "@/lib/transcription/whisper";
 import {
   analyzeCall,
@@ -47,6 +51,7 @@ const CURSOR_OVERLAP_MS = 30 * 60 * 1000; // 30min belt-and-suspenders rewind
 const MAX_PER_TICK_DOWNLOADS = 10;
 const MAX_ATTEMPTS = 3;
 const NOTE_MARKER_VERSION = "CALL-ANALYSIS v1";
+const CALLBACK_MARKER_VERSION = "CALLBACK v1";
 
 function authorized(req: NextRequest): boolean {
   // Accept either BOT_SECRET (shared with the rest of the internal API) or
@@ -62,6 +67,89 @@ function authorized(req: NextRequest): boolean {
 
 function markerFor(messageId: string): string {
   return `[${NOTE_MARKER_VERSION}] msg=${messageId}`;
+}
+
+function callbackMarkerFor(messageId: string): string {
+  return `[${CALLBACK_MARKER_VERSION}] msg=${messageId}`;
+}
+
+/**
+ * Auto-create the salesperson's "callback" GHL task from the call analysis.
+ * Fires only when the LLM extracted a concrete `callback_at`. Idempotent:
+ * `callback_task_id` is a cheap re-entry guard, and a marker scan over the
+ * contact's existing tasks closes the create→persist crash window.
+ *
+ * Non-fatal by design — a failure here must never block the note from posting.
+ * Run BEFORE the note logic so the note's early-return (marker already present)
+ * can't skip it.
+ */
+async function ensureCallbackTask(row: {
+  id: number;
+  ghlContactId: string;
+  ghlMessageId: string;
+  analysis: CallAnalysis;
+  callbackTaskId: string | null;
+}): Promise<void> {
+  const cbAt = row.analysis.callback_at;
+  if (!cbAt) return; // no callback agreed on the call → no task
+  if (row.callbackTaskId) return; // already created (cheap guard, no API)
+
+  try {
+    const due = await clampToWorkWindow(new Date(cbAt));
+    const marker = callbackMarkerFor(row.ghlMessageId);
+
+    // Dedupe across crashes: a prior run may have created the task but failed
+    // to persist the id. Scan existing tasks for our marker first.
+    const existing = await listContactTasks(row.ghlContactId);
+    const found = existing.find((t) => (t.body ?? "").includes(marker));
+    if (found) {
+      await db
+        .update(callRecordingImports)
+        .set({ callbackTaskId: found.id, updatedAt: new Date() })
+        .where(eq(callRecordingImports.id, row.id));
+      return;
+    }
+
+    const reason = (row.analysis.callback_reason ?? "").trim();
+    const title = reason
+      ? `📞 חזרה ללקוח: ${reason.slice(0, 60)}`
+      : "📞 חזרה ללקוח";
+    const dueLocal = due.toLocaleString("he-IL", {
+      timeZone: "Asia/Jerusalem",
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+    const body = [
+      marker,
+      "הלקוח ביקש שנחזור אליו.",
+      `מועד מבוקש: ${dueLocal}`,
+      `סיבה: ${reason || "—"}`,
+      "",
+      `סיכום השיחה: ${row.analysis.call_summary || "—"}`,
+    ].join("\n");
+
+    const created = await createContactTask(row.ghlContactId, {
+      title,
+      body,
+      dueDate: due.toISOString(),
+      assignedTo: GHL_SALESPERSON_USER_ID || undefined,
+    });
+    await db
+      .update(callRecordingImports)
+      .set({ callbackTaskId: created.id, updatedAt: new Date() })
+      .where(eq(callRecordingImports.id, row.id));
+  } catch (err) {
+    // Non-fatal: the note still posts. We log loudly because once
+    // posted_back_at is set the cron won't retry this row, so a lost callback
+    // task needs human visibility.
+    console.warn(
+      `[process-recordings] callback task creation failed for msg=${row.ghlMessageId}:`,
+      err instanceof Error ? err.message : String(err),
+    );
+  }
 }
 
 function formatHebrewNote(args: {
@@ -339,7 +427,9 @@ async function stage3Analyze(): Promise<{ done: number }> {
   let done = 0;
   for (const row of rows) {
     try {
-      const analysis = await analyzeCall(row.transcript ?? "");
+      const analysis = await analyzeCall(row.transcript ?? "", {
+        callStartedAt: row.callStartedAt,
+      });
       if (!analysis) {
         await recordError(
           row.id,
@@ -393,6 +483,18 @@ async function stage4PostBack(): Promise<{ done: number }> {
         );
         continue;
       }
+
+      // Auto-create the salesperson's callback task from the analysis. Runs
+      // before the note logic so the note's marker early-return can't skip it.
+      // Non-fatal: never blocks the note.
+      await ensureCallbackTask({
+        id: row.id,
+        ghlContactId: row.ghlContactId,
+        ghlMessageId: row.ghlMessageId,
+        analysis: row.analysis as CallAnalysis,
+        callbackTaskId: row.callbackTaskId,
+      });
+
       // Idempotency: if a previous run created the note but crashed before
       // updating `posted_back_at`, the marker is already in the contact's
       // note list — skip.

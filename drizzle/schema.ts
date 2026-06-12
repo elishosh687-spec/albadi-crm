@@ -554,6 +554,11 @@ export const callRecordingImports = pgTable(
     postedBackAt: timestamp("posted_back_at", { withTimezone: true }),
     postedNoteId: text("posted_note_id"),
 
+    // GHL Contact Task id for the auto-created "callback" task — set by stage 4
+    // when analysis.callback_at is present. Null if no callback was agreed, or
+    // before stage 4 ran. Persisted so re-entry is a cheap NULL check (no API).
+    callbackTaskId: text("callback_task_id"),
+
     // State + retry tracking. Lets the cron query "what's stuck" cheaply.
     status: text("status").notNull().default("pending"),
     // 'pending' | 'transcribing' | 'analyzing' | 'posted'

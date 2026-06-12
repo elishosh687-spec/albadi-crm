@@ -97,14 +97,41 @@ async function main() {
   console.log(`  preview: ${transcript.slice(0, 200).replace(/\s+/g, " ")}…`);
 
   console.log(`\n=== Stage: analyze ===`);
+  const callStartedAt = target.dateAdded ? new Date(target.dateAdded) : null;
+  console.log(`  call-start anchor: ${callStartedAt?.toISOString() ?? "(unknown → now)"}`);
   const t1 = Date.now();
-  const analysis = await analyzeCall(transcript);
+  const analysis = await analyzeCall(transcript, { callStartedAt });
   console.log(`  ${Date.now() - t1}ms`);
   if (!analysis) {
     console.error("  ❌ analyzeCall returned null");
     return;
   }
   console.log(JSON.stringify(analysis, null, 2));
+
+  console.log(`\n=== Stage: callback task (DRY — not creating) ===`);
+  if (!analysis.callback_at) {
+    console.log("  (no callback_at extracted → no task would be created)");
+  } else {
+    const { clampToWorkWindow } = await import("../lib/clock/callback-window");
+    const due = await clampToWorkWindow(new Date(analysis.callback_at));
+    const reason = (analysis.callback_reason ?? "").trim();
+    const dueLocal = due.toLocaleString("he-IL", {
+      timeZone: "Asia/Jerusalem",
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+    console.log(`  callback_at (raw):     ${analysis.callback_at}`);
+    console.log(`  callback_reason:       ${reason || "—"}`);
+    console.log(`  clamped due (ISO):     ${due.toISOString()}`);
+    console.log(`  clamped due (Israel):  ${dueLocal}`);
+    console.log(
+      `  task title:            ${reason ? `📞 חזרה ללקוח: ${reason.slice(0, 60)}` : "📞 חזרה ללקוח"}`,
+    );
+    console.log(`  assignedTo:            ${process.env.GHL_SALESPERSON_USER_ID || "(unset)"}`);
+  }
 
   console.log(`\n=== Stage: format note (DRY — not posting) ===`);
   // Hand-inline the formatter to avoid importing the cron handler.

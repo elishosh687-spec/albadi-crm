@@ -16,7 +16,7 @@ import {
   ghlLeadTasks,
 } from "@/drizzle/schema";
 import { and, eq, sql } from "drizzle-orm";
-import { ENABLE_GHL_SYNC } from "@/integrations/ghl/config";
+import { ENABLE_GHL_SYNC, ENABLE_GHL_SIGNAL_TASKS } from "@/integrations/ghl/config";
 import {
   createContactTask,
   updateContactTask,
@@ -151,6 +151,9 @@ export async function reconcileGHLTasksForLead(
   sid: string
 ): Promise<ReconcileResult | null> {
   if (!ENABLE_GHL_SYNC) return null;
+  // Disabled 2026-06-12: the salesperson board shows only callback/follow-up
+  // tasks. No new bot-signal tasks are created/updated/deleted in GHL.
+  if (!ENABLE_GHL_SIGNAL_TASKS) return null;
   try {
     const loaded = await loadSnapshot(sid);
     if (!loaded) return null;

@@ -34,6 +34,13 @@ export function requireGHLLocationId(): string {
 
 export const GHL_PIPELINE_ID = readEnv("GHL_PIPELINE_ID");
 
+// GHL user id the salesperson logs in as. Callback tasks (auto-created from
+// call analysis) and the existing-lead backfill tasks are assigned to this
+// user via `assignedTo` so they land on his "My Day" Tasks board. Empty in
+// envs where no salesperson is configured → tasks are created unassigned.
+// See docs/SALESPERSON-WORKFLOW.md.
+export const GHL_SALESPERSON_USER_ID = readEnv("GHL_SALESPERSON_USER_ID");
+
 // Custom Conversation Provider id (assigned by GHL when our Marketplace App
 // is installed in the location). When set, messages mirrored into GHL via
 // forwardMessage are routed through this provider so inbound + outbound
@@ -45,6 +52,14 @@ export const GHL_CONVERSATION_PROVIDER_ID = readEnv(
 // Toggle to start mirroring leads/messages to GHL. Off by default until
 // bootstrap script populates all stage + custom-field ids.
 export const ENABLE_GHL_SYNC = readEnv("ENABLE_GHL_SYNC") === "1";
+
+// Kill-switch for the legacy signal-derived GHL task system (lib/ghl-tasks/*
+// — bot_paused / needs_eli / factory_received / etc.). OFF by default as of
+// 2026-06-12: the salesperson's "My Day" board must show ONLY the callback /
+// follow-up tasks (assigned to him), not these unassigned bot-signal tasks.
+// Set ENABLE_GHL_SIGNAL_TASKS=1 to re-enable. See docs/SALESPERSON-WORKFLOW.md.
+export const ENABLE_GHL_SIGNAL_TASKS =
+  readEnv("ENABLE_GHL_SIGNAL_TASKS") === "1";
 
 // ---- Pipeline stage mapping ----
 // Local stage  →  GHL Opportunity Stage ID (UUID)
