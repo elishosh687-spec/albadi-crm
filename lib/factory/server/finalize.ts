@@ -126,11 +126,13 @@ export async function finalizeQuote(
 
     if (process.env.BLOB_READ_WRITE_TOKEN) {
       const { put } = await import("@vercel/blob");
+      // Fresh path per finalize (random suffix) so a re-render — e.g. after
+      // adding/replacing the product image — never gets served stale from the
+      // Blob CDN cache under a reused key.
       const blob = await put(`factory-quotes/${id}.pdf`, buf, {
         access: "public",
         contentType: "application/pdf",
-        addRandomSuffix: false,
-        allowOverwrite: true,
+        addRandomSuffix: true,
       });
       pdfUrl = blob.url;
     } else {
