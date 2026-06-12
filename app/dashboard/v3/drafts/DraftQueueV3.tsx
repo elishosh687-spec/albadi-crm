@@ -4,7 +4,8 @@ import { useState, useTransition } from "react";
 import { Check, X, MessageSquare, ExternalLink, Send } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { approveDraftAction, rejectDraftAction } from "@/app/actions/v2";
-import { STAGE_LABEL, STAGE_TONE, timeAgoHe } from "../_components/stage-meta";
+import { STAGE_LABEL, STAGE_TONE } from "../_components/stage-meta";
+import { TimeAgo } from "../_components/TimeAgo";
 
 export interface DraftV3Row {
   id: number;
@@ -106,7 +107,7 @@ function DraftRowButton({
           {draft.leadName || draft.leadPhone || draft.manychatSubId}
         </span>
         <span className="text-[10px] text-muted-foreground tabular-nums shrink-0">
-          {timeAgoHe(draft.generatedAt)}
+          <TimeAgo iso={draft.generatedAt} />
         </span>
       </div>
       <div className="flex items-center gap-1.5">
@@ -170,7 +171,7 @@ function DraftDetail({ draft }: { draft: DraftV3Row }) {
             </div>
             <div className="text-xs text-muted-foreground mt-0.5 truncate">
               {draft.leadPhone || draft.manychatSubId}
-              {draft.lastInboundAt && ` · ${timeAgoHe(draft.lastInboundAt)}`}
+              {draft.lastInboundAt && <> · <TimeAgo iso={draft.lastInboundAt} /></>}
             </div>
           </div>
           {draft.leadStage && (

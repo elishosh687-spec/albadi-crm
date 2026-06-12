@@ -3,6 +3,7 @@
 import { useEffect, useRef } from "react";
 import { Bot, User, UserCog } from "lucide-react";
 import { cn } from "@/lib/cn";
+import { useMounted } from "@/hooks/useMounted";
 
 export interface ChatMessage {
   id: number;
@@ -67,10 +68,13 @@ function formatDay(iso: string): string {
 
 export function ChatThread({ messages }: { messages: ChatMessage[] }) {
   const bottomRef = useRef<HTMLDivElement>(null);
+  const mounted = useMounted();
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "auto", block: "end" });
-  }, [messages.length]);
+    if (mounted) {
+      bottomRef.current?.scrollIntoView({ behavior: "auto", block: "end" });
+    }
+  }, [messages.length, mounted]);
 
   if (messages.length === 0) {
     return (
@@ -80,7 +84,19 @@ export function ChatThread({ messages }: { messages: ChatMessage[] }) {
     );
   }
 
-  // Group messages by day for the date separators.
+  return (
+    <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-background/40">
+      {mounted ? (
+        <GroupedMessages messages={messages} />
+      ) : (
+        messages.map((m) => <Bubble key={m.id} message={m} />)
+      )}
+      <div ref={bottomRef} />
+    </div>
+  );
+}
+
+function GroupedMessages({ messages }: { messages: ChatMessage[] }) {
   const grouped: Array<{ day: string; items: ChatMessage[] }> = [];
   for (const m of messages) {
     const day = formatDay(m.receivedAt);
@@ -93,7 +109,7 @@ export function ChatThread({ messages }: { messages: ChatMessage[] }) {
   }
 
   return (
-    <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-background/40">
+    <>
       {grouped.map((g, gi) => (
         <div key={gi} className="space-y-2.5">
           <div className="sticky top-0 z-10 flex justify-center">
@@ -106,8 +122,7 @@ export function ChatThread({ messages }: { messages: ChatMessage[] }) {
           ))}
         </div>
       ))}
-      <div ref={bottomRef} />
-    </div>
+    </>
   );
 }
 

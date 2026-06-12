@@ -3,7 +3,8 @@
 import { useMemo, useState } from "react";
 import { Pause, Play, AlertCircle, Info } from "lucide-react";
 import { cn } from "@/lib/cn";
-import { STAGE_LABEL, STAGE_TONE, timeAgoHe } from "../_components/stage-meta";
+import { STAGE_LABEL, STAGE_TONE } from "../_components/stage-meta";
+import { TimeAgo } from "../_components/TimeAgo";
 
 export interface PipelineCard {
   sid: string;
@@ -181,7 +182,7 @@ function PipelineLeadCard({ card }: { card: PipelineCard }) {
           <span />
         )}
         <span className="text-[10px] text-muted-foreground tabular-nums">
-          {timeAgoHe(card.lastInboundAt ?? card.updatedAt)}
+          <TimeAgo iso={card.lastInboundAt ?? card.updatedAt} />
         </span>
       </div>
     </div>

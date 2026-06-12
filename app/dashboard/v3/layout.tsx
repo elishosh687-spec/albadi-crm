@@ -3,6 +3,7 @@ import { botDrafts, factoryQuoteRequests } from "@/drizzle/schema";
 import { eq } from "drizzle-orm";
 import { Sidebar } from "./_components/Sidebar";
 import { MobileMenu } from "./_components/MobileMenu";
+import { BottomNavBar } from "./_components/BottomNavBar";
 import { AiChat } from "./_components/AiChat";
 
 export const dynamic = "force-dynamic";
@@ -35,10 +36,11 @@ export default async function V3Layout({
           pendingDrafts={pendingDraftsRows.length}
           factoryReceived={factoryReceivedRows.length}
         />
-        <main className="flex-1 min-w-0 p-4 md:p-8 max-w-[1600px] pt-16 md:pt-8">
+        <main className="flex-1 min-w-0 p-4 md:p-8 max-w-[1600px] pt-16 md:pt-8 pb-20 md:pb-8">
           {children}
         </main>
       </div>
+      <BottomNavBar />
       <AiChat />
     </div>
   );

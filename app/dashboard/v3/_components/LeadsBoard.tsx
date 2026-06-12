@@ -12,7 +12,8 @@ import {
   Loader2,
 } from "lucide-react";
 import { cn } from "@/lib/cn";
-import { STAGE_LABEL, STAGE_TONE, timeAgoHe } from "./stage-meta";
+import { STAGE_LABEL, STAGE_TONE } from "./stage-meta";
+import { TimeAgo } from "./TimeAgo";
 import {
   BUCKET_LABEL,
   BUCKET_ORDER,
@@ -391,7 +392,7 @@ function LeadCard({
           )}
         </div>
         <span className="text-[10px] text-muted-foreground tabular-nums">
-          {timeAgoHe(card.lastInboundAt ?? card.updatedAt)}
+          <TimeAgo iso={card.lastInboundAt ?? card.updatedAt} />
         </span>
       </div>
       </button>

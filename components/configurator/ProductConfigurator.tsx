@@ -556,6 +556,7 @@ export const ProductConfigurator: React.FC = () => {
       >
         <React.Suspense fallback={null}>
           <BagViewer3D
+            productId={quoteSpec.productId}
             bagColor={selectedColorHex}
             logoUrl={logoUrl}
             logoScale={logoScale}

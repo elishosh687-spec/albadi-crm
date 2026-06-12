@@ -30,7 +30,8 @@ import {
   type LifecycleKey,
   type PriorityBand,
 } from "./crm-insights";
-import { STAGE_LABEL, STAGE_TONE, timeAgoHe } from "./stage-meta";
+import { STAGE_LABEL, STAGE_TONE } from "./stage-meta";
+import { TimeAgo } from "./TimeAgo";
 
 export interface CommandCenterData {
   cards: LeadCardData[];
@@ -382,7 +383,7 @@ export function CommandCenter({ data }: { data: CommandCenterData }) {
                   <div className="flex items-center justify-between gap-3">
                     <span className="truncate text-sm font-medium">{task.title}</span>
                     <span className="text-xs text-muted-foreground">
-                      {task.dueAt ? timeAgoHe(task.dueAt) : "ללא יעד"}
+                      {task.dueAt ? <TimeAgo iso={task.dueAt} /> : "ללא יעד"}
                     </span>
                   </div>
                   <div className="mt-1 text-xs text-muted-foreground">{task.taskType}</div>
@@ -417,7 +418,7 @@ export function CommandCenter({ data }: { data: CommandCenterData }) {
                   <div className="flex items-center justify-between gap-3">
                     <span className="truncate text-sm font-medium">{timer.slaType}</span>
                     <span className="text-xs text-muted-foreground">
-                      {timeAgoHe(timer.dueAt)}
+                      <TimeAgo iso={timer.dueAt} />
                     </span>
                   </div>
                   <div className={cn("mt-1 text-xs", timer.breached ? "text-rose-200" : "text-muted-foreground")}>
@@ -451,7 +452,7 @@ export function CommandCenter({ data }: { data: CommandCenterData }) {
                       {card.name || card.phone || shortSid(card.sid)}
                     </span>
                     <span className="shrink-0 text-xs text-warning tabular-nums">
-                      {timeAgoHe(card.lastInboundAt ?? card.updatedAt)}
+                      <TimeAgo iso={card.lastInboundAt ?? card.updatedAt} />
                     </span>
                   </div>
                   <div className="mt-1 line-clamp-1 text-xs text-muted-foreground">
@@ -689,7 +690,7 @@ function WorkQueueRow({
 
       <div className="flex items-center justify-between gap-3 lg:min-w-40 lg:justify-end">
         <span className="text-xs text-muted-foreground tabular-nums">
-          {timeAgoHe(card.lastInboundAt ?? card.updatedAt)}
+          <TimeAgo iso={card.lastInboundAt ?? card.updatedAt} />
         </span>
         <span className="inline-flex items-center gap-1 rounded-md bg-primary px-2.5 py-1.5 text-xs font-medium text-primary-foreground">
           <Sparkles className="size-3" />

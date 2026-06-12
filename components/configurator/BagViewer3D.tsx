@@ -2,10 +2,16 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Canvas, useFrame, useThree, type ThreeEvent } from "@react-three/fiber";
-import { Decal, OrbitControls, PerspectiveCamera, useGLTF } from "@react-three/drei";
+import { OrbitControls, PerspectiveCamera, useGLTF } from "@react-three/drei";
 import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 import * as THREE from "three";
+import {
+  ALL_BAG_GLB_PATHS,
+  getBagGlbPathForProduct,
+} from "@/lib/configurator/bag-models";
+import { BAG_REST_Y, getBagViewerFraming, getDefaultFraming } from "@/lib/configurator/bag-framing";
 import { pickVideoMimeType } from "@/lib/configurator/download-mockup";
+import { prepareBagMesh } from "@/lib/configurator/prepare-bag-mesh";
 
 export type LogoPlacementMode = "drag" | "controls";
 
@@ -15,26 +21,23 @@ export const LOGO_POSITION_LIMITS = {
 } as const;
 
 export interface RecordVideoOptions {
-  /** Recording length in seconds. Default 8. */
   seconds?: number;
-  /** Capture frame rate. Default 30. */
   fps?: number;
 }
 
 export interface ViewerApi {
   screenshot: () => Promise<string>;
   resetView: () => void;
-  /** 360° turntable clip from the live canvas (MP4 or WebM). */
   recordVideo: (options?: RecordVideoOptions) => Promise<Blob>;
 }
 
 interface BagViewer3DProps {
+  productId: string;
   bagColor: string;
   logoUrl?: string | null;
   logoScale: number;
   logoPositionX: number;
   logoPositionY: number;
-  /** Degrees, rotates the decal around the surface normal. */
   logoRotation: number;
   logoPlacementMode?: LogoPlacementMode;
   onLogoPositionChange?: (positionX: number, positionY: number) => void;
@@ -44,12 +47,7 @@ interface BagViewer3DProps {
   onApiReady: (api: ViewerApi) => void;
 }
 
-const BAG_MODEL_PATH = "/Rusable_Bag.glb";
-const MODEL_SCALE = 1.62;
 const BACKDROP_COLOR = "#f0e9dc";
-const DEFAULT_CAMERA_POSITION: [number, number, number] = [0.28, 1.2, 8.2];
-const DEFAULT_TARGET: [number, number, number] = [0, 1.32, 0];
-const BAG_REST_Y = 0.35;
 const BAG_START_Y = 2.85;
 const PEDESTAL_REST_Y = -0.05;
 const ENTRANCE_BAG_DELAY_S = 0.18;
@@ -66,28 +64,38 @@ function easeOutBack(t: number) {
   return 1 + c3 * (t - 1) ** 3 + c1 * (t - 1) ** 2;
 }
 
-// Decal coordinates live in the bag mesh's local space (front face sits at z ≈ +0.28).
-const DECAL_FRONT_Z = 0.26;
-const DECAL_BASE_Y = -0.5;
-const LOGO_X_SCALE = 0.42;
-const LOGO_Y_SCALE = 0.55;
-
-function logoStateToDecalPosition(logoPositionX: number, logoPositionY: number) {
+function logoStateToDecalPosition(
+  logoPositionX: number,
+  logoPositionY: number,
+  footprint: number,
+  height: number
+) {
+  const xScale = footprint * 0.48;
+  const yScale = height * 0.38;
+  const baseY = height * 0.28;
   return {
-    x: logoPositionX * LOGO_X_SCALE,
-    y: DECAL_BASE_Y + logoPositionY * LOGO_Y_SCALE,
+    x: logoPositionX * xScale,
+    y: baseY + logoPositionY * yScale,
+    xScale,
+    yScale,
+    baseY,
   };
 }
 
-function decalLocalPointToLogoState(local: THREE.Vector3) {
+function decalLocalPointToLogoState(
+  local: THREE.Vector3,
+  xScale: number,
+  yScale: number,
+  baseY: number
+) {
   return {
     x: THREE.MathUtils.clamp(
-      local.x / LOGO_X_SCALE,
+      local.x / xScale,
       LOGO_POSITION_LIMITS.x.min,
       LOGO_POSITION_LIMITS.x.max
     ),
     y: THREE.MathUtils.clamp(
-      (local.y - DECAL_BASE_Y) / LOGO_Y_SCALE,
+      (local.y - baseY) / yScale,
       LOGO_POSITION_LIMITS.y.min,
       LOGO_POSITION_LIMITS.y.max
     ),
@@ -109,65 +117,97 @@ function useLogoTexture(logoUrl?: string | null) {
   const { gl } = useThree();
   const [texture, setTexture] = useState<THREE.Texture | null>(null);
   const [aspectRatio, setAspectRatio] = useState(1);
+  const textureRef = useRef<THREE.Texture | null>(null);
 
   useEffect(() => {
-    let disposed = false;
-    let nextTexture: THREE.Texture | null = null;
+    let cancelled = false;
     const maxAnisotropy = gl.capabilities.getMaxAnisotropy();
 
     if (!logoUrl) {
-      setTexture((current) => {
-        current?.dispose();
-        return null;
-      });
+      setTexture(null);
       setAspectRatio(1);
-      return;
+      return () => {
+        textureRef.current?.dispose();
+        textureRef.current = null;
+      };
     }
 
     const loader = new THREE.TextureLoader();
     loader.load(
       logoUrl,
       (loadedTexture) => {
-        if (disposed) {
+        if (cancelled) {
           loadedTexture.dispose();
           return;
         }
-
         configureLogoTexture(loadedTexture, maxAnisotropy);
-        nextTexture = loadedTexture;
+        textureRef.current?.dispose();
+        textureRef.current = loadedTexture;
         setAspectRatio(
           loadedTexture.image?.width && loadedTexture.image?.height
             ? loadedTexture.image.width / loadedTexture.image.height
             : 1
         );
-        setTexture((current) => {
-          current?.dispose();
-          return loadedTexture;
-        });
+        setTexture(loadedTexture);
       },
       undefined,
       () => {
-        if (!disposed) {
-          setTexture((current) => {
-            current?.dispose();
-            return null;
-          });
+        if (!cancelled) {
+          setTexture(null);
           setAspectRatio(1);
         }
       }
     );
 
     return () => {
-      disposed = true;
-      if (nextTexture) nextTexture.dispose();
+      cancelled = true;
     };
   }, [gl, logoUrl]);
+
+  useEffect(() => {
+    return () => {
+      textureRef.current?.dispose();
+      textureRef.current = null;
+    };
+  }, []);
 
   return { texture, aspectRatio };
 }
 
+/** Plane logo on the bag front — avoids drei Decal removeChild races on model swap. */
+function BagLogoPlane({
+  texture,
+  position,
+  rotationZ,
+  width,
+  height,
+}: {
+  texture: THREE.Texture;
+  position: [number, number, number];
+  rotationZ: number;
+  width: number;
+  height: number;
+}) {
+  return (
+    <mesh position={position} rotation={[0, 0, rotationZ]} renderOrder={2}>
+      <planeGeometry args={[width, height]} />
+      <meshStandardMaterial
+        map={texture}
+        transparent
+        depthTest
+        depthWrite={false}
+        polygonOffset
+        polygonOffsetFactor={-2}
+        side={THREE.DoubleSide}
+        toneMapped={false}
+      />
+    </mesh>
+  );
+}
+
 type BagModelProps = Pick<
   BagViewer3DProps,
+  | "productId"
   | "bagColor"
   | "logoUrl"
   | "logoScale"
@@ -177,9 +217,13 @@ type BagModelProps = Pick<
   | "logoPlacementMode"
   | "onLogoPositionChange"
   | "showLogoHint"
->;
+  | "isCompact"
+> & {
+  onFramingChange: (framing: ReturnType<typeof getBagViewerFraming>) => void;
+};
 
 function BagModel({
+  productId,
   bagColor,
   logoUrl,
   logoScale,
@@ -189,10 +233,26 @@ function BagModel({
   logoPlacementMode = "controls",
   onLogoPositionChange,
   showLogoHint,
+  isCompact = false,
+  onFramingChange,
 }: BagModelProps) {
-  const gltf = useGLTF(BAG_MODEL_PATH, true);
+  const modelPath = getBagGlbPathForProduct(productId);
+  const gltf = useGLTF(modelPath, true);
   const { texture, aspectRatio } = useLogoTexture(logoUrl);
   const meshRef = useRef<THREE.Mesh>(null);
+  const materialRef = useRef<THREE.MeshStandardMaterial>(null);
+
+  const prepared = useMemo(() => prepareBagMesh(gltf.scene), [gltf.scene, modelPath]);
+
+  const framing = useMemo(() => {
+    if (!prepared) return getDefaultFraming(productId, isCompact);
+    return getBagViewerFraming(productId, prepared.height, isCompact);
+  }, [productId, prepared, isCompact]);
+
+  useEffect(() => {
+    onFramingChange(framing);
+  }, [framing, onFramingChange]);
+
   const draggingRef = useRef(false);
   const { camera, gl } = useThree();
   const raycaster = useMemo(() => new THREE.Raycaster(), []);
@@ -214,7 +274,10 @@ function BagModel({
       if (!hit) return;
 
       const local = mesh.worldToLocal(hit.point.clone());
-      const next = decalLocalPointToLogoState(local);
+      const footprint = mesh.userData.footprint as number;
+      const height = mesh.userData.height as number;
+      const { xScale, yScale, baseY } = logoStateToDecalPosition(0, 0, footprint, height);
+      const next = decalLocalPointToLogoState(local, xScale, yScale, baseY);
       onLogoPositionChange(next.x, next.y);
     },
     [camera, gl, onLogoPositionChange, pointer, raycaster]
@@ -263,66 +326,68 @@ function BagModel({
     [dragEnabled, gl, updatePositionFromClient]
   );
 
-  const bagSource = useMemo(() => {
-    let mesh: THREE.Mesh | null = null;
-    gltf.scene.traverse((object) => {
-      if (!mesh && object instanceof THREE.Mesh) {
-        mesh = object;
-      }
-    });
-    return mesh as THREE.Mesh | null;
-  }, [gltf.scene]);
-
-  const bagGeometry = useMemo(() => {
-    if (!bagSource) return null;
-    return bagSource.geometry.clone();
-  }, [bagSource]);
-
-  const modelMaterial = useMemo(
-    () =>
-      new THREE.MeshLambertMaterial({
-        color: bagColor,
-        side: THREE.FrontSide,
-      }),
-    [bagColor]
-  );
+  useEffect(() => {
+    const mat = materialRef.current;
+    if (!mat) return;
+    mat.color.set(bagColor);
+  }, [bagColor]);
 
   useEffect(() => {
-    return () => {
-      modelMaterial.dispose();
-    };
-  }, [modelMaterial]);
+    const mat = materialRef.current;
+    if (!mat) return;
+    mat.normalMap = prepared?.normalMap ?? null;
+    mat.normalScale.set(0.85, 0.85);
+    mat.needsUpdate = true;
+  }, [prepared?.normalMap]);
 
-  if (!bagSource || !bagGeometry) return null;
+  if (!prepared) return null;
 
+  const { geometry, height, footprint, frontZ } = prepared;
   const clampedAspect = Math.max(aspectRatio, 0.65);
-  const decalWidth = Math.min(0.86, 0.5 * logoScale * clampedAspect);
-  const decalHeight = Math.min(0.5, (0.5 * logoScale) / clampedAspect);
-  const { x: decalX, y: decalY } = logoStateToDecalPosition(logoPositionX, logoPositionY);
+  const logoWidth = Math.min(footprint * 0.72, footprint * 0.42 * logoScale * clampedAspect);
+  const logoHeight = Math.min(height * 0.42, (height * 0.42 * logoScale) / clampedAspect);
+  const { x: logoX, y: logoY } = logoStateToDecalPosition(
+    logoPositionX,
+    logoPositionY,
+    footprint,
+    height
+  );
+  const logoZ = frontZ + 0.008;
 
   return (
-    <group rotation={[0.02, -0.46, 0]} scale={MODEL_SCALE}>
+    <group rotation={[0.02, -0.46, 0]} scale={framing.sizeScale}>
       <mesh
-        ref={meshRef}
-        geometry={bagGeometry}
-        position={bagSource.position}
-        material={modelMaterial}
+        ref={(node) => {
+          meshRef.current = node;
+          if (node) {
+            node.userData.footprint = footprint;
+            node.userData.height = height;
+          }
+        }}
+        geometry={geometry}
         onPointerDown={handlePointerDown}
       >
-        {texture ? (
-          <Decal
-            position={[decalX, decalY, DECAL_FRONT_Z]}
-            rotation={[0, 0, -THREE.MathUtils.degToRad(logoRotation)]}
-            scale={[decalWidth, decalHeight, 0.32]}
-            map={texture}
-            depthTest
-          />
-        ) : null}
+        <meshStandardMaterial
+          ref={materialRef}
+          roughness={0.72}
+          metalness={0.04}
+          side={THREE.DoubleSide}
+        />
       </mesh>
 
+      {texture ? (
+        <BagLogoPlane
+          texture={texture}
+          position={[logoX, logoY, logoZ]}
+          rotationZ={-THREE.MathUtils.degToRad(logoRotation)}
+          width={logoWidth}
+          height={logoHeight}
+        />
+      ) : null}
+
       {showLogoHint && !texture ? (
-        <mesh position={[0, 0.36, 0.31]} renderOrder={2}>
-          <planeGeometry args={[0.92, 0.58]} />
+        <mesh position={[0, height * 0.52, frontZ + 0.04]} renderOrder={2}>
+          <planeGeometry args={[footprint * 0.78, height * 0.38]} />
           <meshStandardMaterial color="#ffffff" transparent opacity={0.18} depthWrite={false} />
         </mesh>
       ) : null}
@@ -330,7 +395,7 @@ function BagModel({
   );
 }
 
-function PedestalMeshes() {
+function PedestalMeshes({ radius }: { radius: number }) {
   const discTexture = useMemo(() => {
     const canvas = document.createElement("canvas");
     canvas.width = 512;
@@ -359,7 +424,7 @@ function PedestalMeshes() {
 
   return (
     <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.04, 0]}>
-      <circleGeometry args={[1.72, 128]} />
+      <circleGeometry args={[radius, 128]} />
       <meshBasicMaterial
         map={discTexture ?? undefined}
         color="#e3d9c8"
@@ -371,7 +436,13 @@ function PedestalMeshes() {
   );
 }
 
-function EntranceRig({ children }: { children: React.ReactNode }) {
+function EntranceRig({
+  children,
+  pedestalRadius,
+}: {
+  children: React.ReactNode;
+  pedestalRadius: number;
+}) {
   const bagRef = useRef<THREE.Group>(null);
   const pedestalRef = useRef<THREE.Group>(null);
   const elapsedRef = useRef(0);
@@ -422,7 +493,7 @@ function EntranceRig({ children }: { children: React.ReactNode }) {
   return (
     <>
       <group ref={pedestalRef} position={[0, PEDESTAL_REST_Y - 0.12, 0]} scale={0.68}>
-        <PedestalMeshes />
+        <PedestalMeshes radius={pedestalRadius} />
       </group>
       <group ref={bagRef} position={[0, BAG_START_Y, 0]} scale={0.94}>
         {children}
@@ -432,6 +503,7 @@ function EntranceRig({ children }: { children: React.ReactNode }) {
 }
 
 function ViewerScene({
+  productId,
   bagColor,
   logoUrl,
   logoScale,
@@ -448,6 +520,38 @@ function ViewerScene({
   const { camera, gl, scene } = useThree();
   const controlsRef = useRef<OrbitControlsImpl | null>(null);
   const lockCamera = logoPlacementMode === "drag" && !!logoUrl;
+  const modelPath = getBagGlbPathForProduct(productId);
+
+  const initialFraming = useMemo(
+    () => getDefaultFraming(productId, isCompact),
+    [productId, isCompact]
+  );
+  const framingRef = useRef(initialFraming);
+  const [framing, setFraming] = useState(initialFraming);
+
+  const handleFramingChange = useCallback((next: typeof initialFraming) => {
+    framingRef.current = next;
+    setFraming(next);
+  }, []);
+
+  useEffect(() => {
+    const defaults = getDefaultFraming(productId, isCompact);
+    framingRef.current = defaults;
+    setFraming(defaults);
+  }, [productId, isCompact]);
+
+  useEffect(() => {
+    const controls = controlsRef.current;
+    if (!controls) return;
+    controls.target.set(...framing.orbitTarget);
+    controls.minDistance = framing.minDistance;
+    controls.maxDistance = framing.maxDistance;
+    controls.update();
+  }, [framing]);
+
+  useEffect(() => {
+    camera.position.set(...framing.cameraPosition);
+  }, [camera, framing.cameraPosition]);
 
   useEffect(() => {
     onApiReady({
@@ -465,10 +569,13 @@ function ViewerScene({
         }
       },
       resetView: () => {
-        camera.position.set(...DEFAULT_CAMERA_POSITION);
+        const f = framingRef.current;
+        camera.position.set(...f.cameraPosition);
         const controls = controlsRef.current;
         if (controls) {
-          controls.target.set(...DEFAULT_TARGET);
+          controls.target.set(...f.orbitTarget);
+          controls.minDistance = f.minDistance;
+          controls.maxDistance = f.maxDistance;
           controls.update();
         }
       },
@@ -507,7 +614,7 @@ function ViewerScene({
               if (event.data.size > 0) chunks.push(event.data);
             };
             recorder.onerror = () => {
-              reject(recorder.error ?? new Error("הקלטת וידאו נכשלה"));
+              reject(new Error("הקלטת וידאו נכשלה"));
             };
             recorder.onstop = () => {
               resolve(new Blob(chunks, { type: mimeType }));
@@ -530,15 +637,15 @@ function ViewerScene({
 
   return (
     <>
-      <PerspectiveCamera makeDefault position={DEFAULT_CAMERA_POSITION} fov={isCompact ? 36 : 32} />
+      <PerspectiveCamera makeDefault position={framing.cameraPosition} fov={framing.fov} />
       <OrbitControls
         ref={controlsRef}
         makeDefault
         enabled={!lockCamera}
         enablePan={false}
-        target={DEFAULT_TARGET}
-        minDistance={5.2}
-        maxDistance={11}
+        target={framing.orbitTarget}
+        minDistance={framing.minDistance}
+        maxDistance={framing.maxDistance}
         minPolarAngle={0.7}
         maxPolarAngle={1.72}
         autoRotate={autoRotate && !lockCamera}
@@ -546,14 +653,17 @@ function ViewerScene({
       />
 
       <color attach="background" args={[BACKDROP_COLOR]} />
-      <ambientLight intensity={1.35} />
-      <hemisphereLight color="#fffaf3" groundColor="#d9d1c4" intensity={0.65} />
-      <directionalLight position={[3.5, 5.4, 4.5]} intensity={0.95} />
-      <directionalLight position={[-3.5, 2, 3]} intensity={0.28} />
+      <ambientLight intensity={1.05} />
+      <hemisphereLight color="#fffaf3" groundColor="#d9d1c4" intensity={0.62} />
+      <directionalLight position={[2.5, 6, 5]} intensity={1.2} />
+      <directionalLight position={[-4, 3, 2.5]} intensity={0.38} />
+      <directionalLight position={[0, 2, -4]} intensity={0.22} />
 
-      <React.Suspense fallback={null}>
-        <EntranceRig>
+      <EntranceRig pedestalRadius={framing.pedestalRadius}>
+        <React.Suspense fallback={null}>
           <BagModel
+            key={modelPath}
+            productId={productId}
             bagColor={bagColor}
             logoUrl={logoUrl}
             logoScale={logoScale}
@@ -563,9 +673,11 @@ function ViewerScene({
             logoPlacementMode={logoPlacementMode}
             onLogoPositionChange={onLogoPositionChange}
             showLogoHint={showLogoHint}
+            isCompact={isCompact}
+            onFramingChange={handleFramingChange}
           />
-        </EntranceRig>
-      </React.Suspense>
+        </React.Suspense>
+      </EntranceRig>
     </>
   );
 }
@@ -591,4 +703,6 @@ export const BagViewer3D = (props: BagViewer3DProps) => {
 
 export default BagViewer3D;
 
-useGLTF.preload(BAG_MODEL_PATH, true);
+for (const path of ALL_BAG_GLB_PATHS) {
+  useGLTF.preload(path, true);
+}

@@ -18,7 +18,8 @@ import {
   LayoutDashboard,
 } from "lucide-react";
 import { cn } from "@/lib/cn";
-import { STAGE_LABEL, STAGE_TONE, timeAgoHe } from "../../_components/stage-meta";
+import { STAGE_LABEL, STAGE_TONE } from "../../_components/stage-meta";
+import { TimeAgo } from "../../_components/TimeAgo";
 import type { ConversationRow } from "../page";
 import { ChatThread, type ChatMessage } from "./ChatThread";
 import { OrderSummary, type OrderSummaryData } from "./OrderSummary";
@@ -427,7 +428,7 @@ function ConversationListItem({
             )}
           </div>
           <span className="text-[10px] text-muted-foreground tabular-nums shrink-0 mt-0.5">
-            {timeAgoHe(row.lastAt)}
+            <TimeAgo iso={row.lastAt} />
           </span>
         </div>
         <div className="flex items-center gap-1.5 flex-wrap">
