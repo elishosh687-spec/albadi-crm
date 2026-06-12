@@ -561,6 +561,17 @@ export function QuotesHistoryView({ apiToken }: { apiToken: string }) {
             groups.map((g) => {
               const open = openCards.has(g.leadSid);
               const canCalc = g.priceableCount > 0;
+              // Combined offer = all this customer's FINALIZED quotes (the
+              // combined PDF route requires every id to be finalized).
+              const finalizedIds = g.rows
+                .filter((r) => r.status === "finalized" && r.finalPricing)
+                .map((r) => r.id);
+              const canSendCombined = finalizedIds.length >= 1;
+              const combinedPdfHref = `/api/factory/combine/pdf?ids=${finalizedIds.join(",")}`;
+              const origin = typeof window !== "undefined" ? window.location.origin : "";
+              const combinedWa = canSendCombined
+                ? buildCombineWaUrl(finalizedIds, g.name, g.phone, origin)
+                : null;
               return (
                 <div
                   key={g.leadSid}
@@ -595,16 +606,40 @@ export function QuotesHistoryView({ apiToken }: { apiToken: string }) {
                         ))}
                       </span>
                     </button>
-                    <button
-                      type="button"
-                      onClick={() => setCalcGroup(g)}
-                      disabled={!canCalc}
-                      title={canCalc ? "פתח חישוב משולב לכל ההזמנות" : "אין הצעות עם תשובת מפעל"}
-                      className="inline-flex items-center gap-1 rounded-md border border-primary/40 bg-primary/10 px-2.5 py-1 text-[11px] font-medium text-primary hover:bg-primary/20 disabled:opacity-40 shrink-0"
-                    >
-                      <Calculator className="size-3.5" />
-                      חישוב משולב
-                    </button>
+                    <div className="flex items-center gap-1 shrink-0">
+                      {canSendCombined && (
+                        <a
+                          href={combinedPdfHref}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          title="פתח PDF משולב"
+                          className="size-7 rounded grid place-items-center text-muted-foreground hover:text-foreground hover:bg-secondary"
+                        >
+                          <Download className="size-3.5" />
+                        </a>
+                      )}
+                      {combinedWa && (
+                        <a
+                          href={combinedWa}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          title="שלח הצעה משולבת ב-WhatsApp"
+                          className="size-7 rounded grid place-items-center text-muted-foreground hover:text-emerald-400 hover:bg-emerald-500/10"
+                        >
+                          <MessageCircle className="size-3.5" />
+                        </a>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => setCalcGroup(g)}
+                        disabled={!canCalc}
+                        title={canCalc ? "פתח/ערוך חישוב משולב" : "אין הצעות עם תשובת מפעל"}
+                        className="inline-flex items-center gap-1 rounded-md border border-primary/40 bg-primary/10 px-2.5 py-1 text-[11px] font-medium text-primary hover:bg-primary/20 disabled:opacity-40"
+                      >
+                        <Calculator className="size-3.5" />
+                        חישוב משולב
+                      </button>
+                    </div>
                   </div>
                   {open && (
                     <ul className="space-y-1 border-t border-border/60 bg-background/30 px-2 py-2">
