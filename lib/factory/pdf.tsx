@@ -275,20 +275,6 @@ function rtl(s: string): string {
   return s ? RLM + s : s;
 }
 
-// Bidi-isolate each "·"-separated segment so a number/Latin run in one segment
-// can't bleed into the next (e.g. the "2" of "2 צבעים" jumping across, or the
-// English material name pulling the next segment's number). Each segment keeps
-// its own internal order; the line as a whole stays RTL.
-const FSI = "⁨"; // first-strong isolate
-const PDI = "⁩"; // pop directional isolate
-function rtlSegments(segments: string[]): string {
-  const joined = segments
-    .filter(Boolean)
-    .map((seg) => FSI + seg + PDI)
-    .join(" · ");
-  return joined ? RLM + joined : "";
-}
-
 function sizeLabel(spec: FactoryProductSpec): string {
   const parts = [
     spec.widthCm ? `${spec.widthCm}` : null,
@@ -579,15 +565,18 @@ function CombinedQuotePDF({ customerName, items }: CombinedQuotePdfProps) {
     // title. sizeLabel already ends with ס"מ — don't append it again.
     const namePart = spec.productName?.trim();
     const title = rtl(namePart ? `${namePart} — ${sizeLabel(spec)}` : sizeLabel(spec));
-    const sub = rtlSegments([
+    // Keep the segments separate (not one joined string): each is rendered as
+    // its own <Text> so a number/Latin run in one can't bidi-bleed into the
+    // next. No isolate chars — @react-pdf draws those as visible glyphs.
+    const subParts = [
       materialHe,
       printingHe,
       finishingHe,
       pricing.shippingOptionName || "",
-    ]);
+    ].filter(Boolean);
     return {
       title,
-      sub,
+      subParts,
       unit: r2(pricing.unitSellingPrice),
       qty: pricing.quantity,
       total: r2(pricing.totalSellingPrice),
@@ -630,10 +619,21 @@ function CombinedQuotePDF({ customerName, items }: CombinedQuotePdfProps) {
               >
                 <View style={{ flex: 1 }}>
                   <Text style={{ fontSize: 11, textAlign: "right" }}>{sec.title}</Text>
-                  {sec.sub ? (
-                    <Text style={{ fontSize: 8, color: MUTED, textAlign: "right", marginTop: 1 }}>
-                      {sec.sub}
-                    </Text>
+                  {sec.subParts.length > 0 ? (
+                    <View
+                      style={{
+                        flexDirection: "row-reverse",
+                        flexWrap: "wrap",
+                        marginTop: 1,
+                      }}
+                    >
+                      {sec.subParts.map((part, i) => (
+                        <Text key={i} style={{ fontSize: 8, color: MUTED }}>
+                          {rtl(part)}
+                          {i < sec.subParts.length - 1 ? "  ·  " : ""}
+                        </Text>
+                      ))}
+                    </View>
                   ) : null}
                 </View>
                 {sec.picDataUri ? (
