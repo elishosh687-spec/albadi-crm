@@ -613,33 +613,26 @@ function CombinedQuotePDF({ customerName, items }: CombinedQuotePdfProps) {
                   flex: 2.6,
                   flexDirection: "row-reverse",
                   alignItems: "center",
-                  gap: 6,
+                  gap: 8,
                   paddingHorizontal: 6,
                 }}
               >
                 <View style={{ flex: 1 }}>
                   <Text style={{ fontSize: 11, textAlign: "right" }}>{sec.title}</Text>
-                  {sec.subParts.length > 0 ? (
-                    <View
-                      style={{
-                        flexDirection: "row-reverse",
-                        flexWrap: "wrap",
-                        marginTop: 1,
-                      }}
+                  {/* Each spec on its own line — readable + no bidi bleed */}
+                  {sec.subParts.map((part, i) => (
+                    <Text
+                      key={i}
+                      style={{ fontSize: 8.5, color: MUTED, textAlign: "right", marginTop: 2 }}
                     >
-                      {sec.subParts.map((part, i) => (
-                        <Text key={i} style={{ fontSize: 8, color: MUTED }}>
-                          {rtl(part)}
-                          {i < sec.subParts.length - 1 ? "  ·  " : ""}
-                        </Text>
-                      ))}
-                    </View>
-                  ) : null}
+                      {rtl(part)}
+                    </Text>
+                  ))}
                 </View>
                 {sec.picDataUri ? (
                   <Image
                     src={sec.picDataUri}
-                    style={{ width: 30, height: 30, objectFit: "contain" }}
+                    style={{ width: 58, height: 58, objectFit: "contain", borderRadius: 4 }}
                   />
                 ) : null}
               </View>

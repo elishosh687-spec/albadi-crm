@@ -114,12 +114,47 @@ export function humanizeFinishing(en: string): string {
   return parts.length ? parts.join(", ") : en;
 }
 
+// Common factory material phrases → Hebrew. Longest/most-specific first so a
+// whole phrase ("food grade white card") wins over its parts ("white", "card").
+const MATERIAL_TERMS: [RegExp, string][] = [
+  [/(\d+)\s*gsm/gi, "$1 גרם"],
+  [/food[\s-]?grade\s+white\s+card(board)?/gi, "קרטון לבן למגע מזון"],
+  [/food[\s-]?grade/gi, "למגע מזון"],
+  [/white\s+card(board)?/gi, "קרטון לבן"],
+  [/non[\s-]?woven/gi, "נון-וובן"],
+  [/kraft\s+paper/gi, "נייר קראפט"],
+  [/kraft/gi, "קראפט"],
+  [/art\s+paper/gi, "נייר כרומו"],
+  [/coated\s+paper/gi, "נייר מצופה"],
+  [/couche/gi, "קושה"],
+  [/ivory\s+board/gi, "קרטון אייבורי"],
+  [/ivory/gi, "אייבורי"],
+  [/corrugated/gi, "קרטון גלי"],
+  [/card\s?board/gi, "קרטון"],
+  [/\bcard\b/gi, "קרטון"],
+  [/cotton/gi, "כותנה"],
+  [/canvas/gi, "קנבס"],
+  [/coated/gi, "מצופה"],
+  [/matte?/gi, "מט"],
+  [/glossy|gloss/gi, "מבריק"],
+  [/paper/gi, "נייר"],
+  [/white/gi, "לבן"],
+  [/\bpp\b/gi, "פוליפרופילן"],
+];
+
 export function humanizeMaterial(en: string): string {
-  // Localize a leading gram weight but KEEP the rest of the description:
-  // "250g food grade white card" → "250 גרם food grade white card".
-  const m = en.match(/^(\d+)\s*g\b\s*(.*)$/i);
-  if (m) return m[2] ? `${m[1]} גרם ${m[2]}` : `${m[1]} גרם`;
-  return en;
+  // "250g food grade white card" → "250 גרם קרטון לבן למגע מזון".
+  // Pull a leading gram weight, then translate the rest to Hebrew.
+  let rest = en;
+  let weight = "";
+  const m = rest.match(/^(\d+)\s*g\b\s*/i);
+  if (m) {
+    weight = `${m[1]} גרם`;
+    rest = rest.slice(m[0].length);
+  }
+  for (const [re, he] of MATERIAL_TERMS) rest = rest.replace(re, he);
+  rest = rest.replace(/\s+/g, " ").trim();
+  return [weight, rest].filter(Boolean).join(" ");
 }
 
 export function formatHebrewDate(iso: unknown): string {
