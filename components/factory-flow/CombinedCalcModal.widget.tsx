@@ -66,7 +66,13 @@ function initSection(row: FactoryQuoteRow): SectionState {
     widthCm: s.widthCm ? String(s.widthCm) : "",
     heightCm: s.heightCm ? String(s.heightCm) : "",
     depthCm: s.depthCm ? String(s.depthCm) : "",
-    qtyStr: s.quantity ? String(s.quantity) : "",
+    // Open at the SAVED quantity (what the PDF uses) when finalized, so the
+    // calc reproduces the PDF — not the productSpec qty, which can differ.
+    qtyStr: row.finalPricing?.quantity
+      ? String(row.finalPricing.quantity)
+      : s.quantity
+        ? String(s.quantity)
+        : "",
     printing: s.printing ?? "",
     finishing: s.finishing ?? "",
     customerNotes: s.customerNotes ?? "",
@@ -214,6 +220,27 @@ export function CombinedCalcModalWidget({
         ),
     [priceableRows, livePricings]
   );
+
+  // Each product's price AFTER the combined (cheaper) shipping is split by CBM
+  // share — exactly what the combined PDF prints. Same formula as the PDF route
+  // so the calc shows the same per-product number the customer gets.
+  const allocatedByRow = useMemo(() => {
+    const out: Record<string, { total: number; unit: number } | null> = {};
+    const round = (n: number) => Math.round(n * 100) / 100;
+    for (const row of rows) {
+      const p = livePricings[row.id];
+      if (!p || !combinedResult || combinedResult.combinedCbm <= 0) {
+        out[row.id] = null;
+        continue;
+      }
+      const share = p.totalCbm / combinedResult.combinedCbm;
+      const alloc = combinedResult.combinedShipping * share;
+      const total = round(p.totalSellingPrice - p.totalShipping + alloc);
+      const unit = p.quantity > 0 ? round(total / p.quantity) : total;
+      out[row.id] = { total, unit };
+    }
+    return out;
+  }, [rows, livePricings, combinedResult]);
 
   function setAllMargins(v: number) {
     setSectionState((prev) => {
@@ -412,6 +439,7 @@ export function CombinedCalcModalWidget({
                   row={row}
                   state={sectionState[row.id]}
                   pricing={livePricings[row.id]}
+                  allocated={allocatedByRow[row.id]}
                   config={config}
                   expanded={expanded.has(row.id)}
                   onToggle={() => toggleExpanded(row.id)}
@@ -543,6 +571,7 @@ function ProductCalcSection({
   row,
   state,
   pricing,
+  allocated,
   config,
   expanded,
   onToggle,
@@ -552,6 +581,7 @@ function ProductCalcSection({
   row: FactoryQuoteRow;
   state: SectionState;
   pricing: FactoryPricingResult | null;
+  allocated: { total: number; unit: number } | null;
   config: FactoryPricingConfig;
   expanded: boolean;
   onToggle: () => void;
@@ -640,7 +670,11 @@ function ProductCalcSection({
           {stale ? "שונה" : finalized ? "סופי" : "חדש"}
         </span>
         <span className="text-xs font-semibold tabular-nums shrink-0">
-          {pricing ? formatIls(pricing.totalSellingPrice) : "—"}
+          {allocated
+            ? formatIls(allocated.total)
+            : pricing
+              ? formatIls(pricing.totalSellingPrice)
+              : "—"}
         </span>
       </button>
 
@@ -760,11 +794,28 @@ function ProductCalcSection({
           {/* Live pricing summary */}
           {pricing && (
             <div className="rounded-lg border border-success/30 bg-success/5 p-3 space-y-1.5 text-sm">
-              <PriceRow label="מחיר ללקוח / יחידה" value={formatIls(pricing.unitSellingPrice)} bold />
-              <PriceRow label="סה״כ הזמנה" value={formatIls(pricing.totalSellingPrice)} bold />
+              {allocated ? (
+                <>
+                  <PriceRow
+                    label="מחיר ללקוח / יחידה (משולב — ב‑PDF)"
+                    value={formatIls(allocated.unit)}
+                    bold
+                  />
+                  <PriceRow label="סה״כ מוצר (משולב — ב‑PDF)" value={formatIls(allocated.total)} bold />
+                  <PriceRow
+                    label="מחיר בודד (ללא שילוח מאוחד)"
+                    value={formatIls(pricing.totalSellingPrice)}
+                  />
+                </>
+              ) : (
+                <>
+                  <PriceRow label="מחיר ללקוח / יחידה" value={formatIls(pricing.unitSellingPrice)} bold />
+                  <PriceRow label="סה״כ הזמנה" value={formatIls(pricing.totalSellingPrice)} bold />
+                </>
+              )}
               <div className="border-t border-success/20 my-1" />
               <PriceRow label="עלות יחידה (CNY→₪)" value={formatIls(pricing.unitCost)} />
-              <PriceRow label="שילוח / יחידה" value={formatIls(pricing.unitShipping)} />
+              <PriceRow label="שילוח / יחידה (בודד)" value={formatIls(pricing.unitShipping)} />
               <PriceRow label="רווח / יחידה" value={formatIls(pricing.unitProfit)} highlight />
               <PriceRow label="סה״כ רווח" value={formatIls(pricing.totalProfit)} highlight />
             </div>
