@@ -98,7 +98,7 @@ export interface BreakdownView {
   totals: {
     unitSellingPrice: number;
     totalSellingPrice: number;
-    profitShareOfPriceLabel: string; // "מהמחיר X%"
+    profitShareOfPriceLabel: string; // "X% רווח" — same margin as the slider
   };
   components: BreakdownInput["components"];
   plateFee: {
@@ -182,7 +182,7 @@ export function buildBreakdownView(input: BreakdownInput): BreakdownView {
     totals: {
       unitSellingPrice: r2(input.unitSellingPrice),
       totalSellingPrice: r2(input.totalSellingPrice),
-      profitShareOfPriceLabel: `${r2(pctOfRevenue).toFixed(1)}% מהמחיר`,
+      profitShareOfPriceLabel: `${input.profitMarginPct}% רווח`,
     },
     components: input.components ?? null,
     plateFee:

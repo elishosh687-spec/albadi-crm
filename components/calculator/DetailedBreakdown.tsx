@@ -203,9 +203,7 @@ export function DetailedBreakdown(props: BreakdownInput & { defaultOpen?: boolea
               <Row
                 label="מתוכו רווח"
                 value={
-                  <span className="text-success">
-                    {fmtIls(v.margin.ilsTotalProfit)} ({v.margin.pctOfRevenue.toFixed(1)}%)
-                  </span>
+                  <span className="text-success">{fmtIls(v.margin.ilsTotalProfit)}</span>
                 }
               />
             </div>
