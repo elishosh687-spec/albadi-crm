@@ -164,6 +164,29 @@ export function FinalizeModal({
     }
   };
 
+  // Auto-pull the embedded product image from Feishu when the screen opens
+  // (once, only if the quote has no image yet) — like the price is pulled.
+  useEffect(() => {
+    if (s0.picUrl) return;
+    let alive = true;
+    (async () => {
+      setPullingImg(true);
+      try {
+        const res = await fetch(`/api/factory/${row.id}/pull-image`, { method: "POST" });
+        const data = await res.json();
+        if (alive && data?.ok && data.url) setPicUrl(data.url);
+      } catch {
+        /* silent — the manual button stays available */
+      } finally {
+        if (alive) setPullingImg(false);
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const handlePullImage = async () => {
     setPullingImg(true);
     setError(null);
