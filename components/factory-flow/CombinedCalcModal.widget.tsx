@@ -1,0 +1,786 @@
+"use client";
+
+/**
+ * Unified multi-product calc window (widget side).
+ *
+ * Opened from a customer card in QuotesHistoryView. Shows ALL of that
+ * customer's priceable quotes as an accordion — one section per product with
+ * the full editable breakdown (spec fields, margin slider, shipping, boss
+ * breakdown), exactly like the single-product FinalizeModal but stacked on one
+ * screen. A combined summary at the bottom reuses lib/factory/combined.ts.
+ *
+ * Two SEPARATE actions (by design): "שמור חישוב" finalizes every product at its
+ * chosen margin; "שלח ב-WhatsApp" opens the combined-PDF link and is only
+ * enabled once everything is saved — it never auto-sends and never finalizes.
+ */
+
+import { useEffect, useMemo, useState } from "react";
+import { Loader2, X, Sparkles, ChevronDown, MessageCircle } from "lucide-react";
+import type { FactoryQuoteRow } from "./types";
+import type {
+  FactoryPricingConfig,
+  FactoryPricingResult,
+  ShippingOption,
+} from "@/lib/factory/types";
+import { priceFactoryQuote } from "@/lib/factory/pricing";
+import { computeCombined, defaultMarginFor } from "@/lib/factory/combined";
+import { DetailedBreakdown } from "@/components/calculator/DetailedBreakdown";
+import { widgetUrl } from "./widget-url";
+import { buildCombineWaUrl, formatIls, SpecField, PriceRow } from "./calc-shared";
+
+const MARGIN_MIN = 0;
+const MARGIN_MAX = 99;
+
+interface SectionState {
+  margin: number;
+  moldsCny: string;
+  productName: string;
+  picUrl: string;
+  material: string;
+  widthCm: string;
+  heightCm: string;
+  depthCm: string;
+  qtyStr: string;
+  printing: string;
+  finishing: string;
+  customerNotes: string;
+  finalizedThisSession: boolean;
+  touched: boolean; // edited since last save/open → on-disk PDF would be stale
+}
+
+function initSection(row: FactoryQuoteRow): SectionState {
+  const s = row.productSpec;
+  return {
+    margin: row.finalPricing?.profitMarginPct ?? 40,
+    moldsCny:
+      row.finalPricing?.moldsTotalCny && row.finalPricing.moldsTotalCny > 0
+        ? String(row.finalPricing.moldsTotalCny)
+        : "",
+    productName: s.productName ?? "",
+    picUrl: s.picUrl ?? "",
+    material: s.material ?? "",
+    widthCm: s.widthCm ? String(s.widthCm) : "",
+    heightCm: s.heightCm ? String(s.heightCm) : "",
+    depthCm: s.depthCm ? String(s.depthCm) : "",
+    qtyStr: s.quantity ? String(s.quantity) : "",
+    printing: s.printing ?? "",
+    finishing: s.finishing ?? "",
+    customerNotes: s.customerNotes ?? "",
+    finalizedThisSession: false,
+    touched: false,
+  };
+}
+
+export function CombinedCalcModalWidget({
+  apiToken,
+  rows,
+  customerName,
+  customerPhone,
+  onClose,
+  onChanged,
+}: {
+  apiToken: string;
+  rows: FactoryQuoteRow[];
+  customerName: string | null;
+  customerPhone: string | null;
+  onClose: () => void;
+  onChanged: () => void;
+}) {
+  const [config, setConfig] = useState<FactoryPricingConfig | null>(null);
+  const [shippingOptionId, setShippingOptionId] = useState<string>("");
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [sectionState, setSectionState] = useState<Record<string, SectionState>>(() => {
+    const init: Record<string, SectionState> = {};
+    for (const row of rows) init[row.id] = initSection(row);
+    return init;
+  });
+  const [savingAll, setSavingAll] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [sendHint, setSendHint] = useState<string | null>(null);
+
+  // Only quotes with a factory response can be priced + included in the PDF.
+  const priceableRows = useMemo(() => rows.filter((r) => r.factoryResponse), [rows]);
+  const pendingCount = rows.length - priceableRows.length;
+
+  const origin = typeof window !== "undefined" ? window.location.origin : "";
+
+  function patchSection(id: string, patch: Partial<SectionState>) {
+    setSectionState((prev) => ({
+      ...prev,
+      [id]: { ...prev[id], ...patch, touched: true },
+    }));
+    setSendHint(null);
+  }
+
+  function toggleExpanded(id: string) {
+    setExpanded((prev) => {
+      const n = new Set(prev);
+      if (n.has(id)) n.delete(id);
+      else n.add(id);
+      return n;
+    });
+  }
+
+  // Load pricing config; set the shared shipping default + snap default margins
+  // for not-yet-finalized rows (re-finalized rows keep their saved margin).
+  useEffect(() => {
+    fetch(widgetUrl("/api/widget/factory/config", apiToken))
+      .then((r) => r.json())
+      .then((data) => {
+        if (!data?.ok || !data?.config) return;
+        const cfg = data.config as FactoryPricingConfig;
+        setConfig(cfg);
+        setShippingOptionId((prev) => {
+          if (prev) return prev;
+          const fromRow =
+            rows[0]?.finalPricing?.shippingOptionId ??
+            rows[0]?.productSpec.shippingOptionId ??
+            "";
+          if (fromRow) return fromRow;
+          const first = (cfg.shippingOptions as ShippingOption[]).find((s) => s.enabled);
+          return first ? first.id : "";
+        });
+        setSectionState((prev) => {
+          const next = { ...prev };
+          for (const row of rows) {
+            if (!row.finalPricing) {
+              next[row.id] = { ...next[row.id], margin: defaultMarginFor(row, cfg) };
+            }
+          }
+          return next;
+        });
+      })
+      .catch((err) => setSaveError(String(err)));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Live pricing per product (keyed by row id), recomputed on any edit.
+  const livePricings = useMemo(() => {
+    const out: Record<string, FactoryPricingResult | null> = {};
+    for (const row of rows) {
+      const st = sectionState[row.id];
+      const resp = row.factoryResponse;
+      if (!config || !st || !resp) {
+        out[row.id] = null;
+        continue;
+      }
+      const qtyNum = Math.max(1, Math.floor(Number(st.qtyStr) || row.productSpec.quantity || 1));
+      const molds = st.moldsCny !== "" ? parseFloat(st.moldsCny) : NaN;
+      const moldsValid = Number.isFinite(molds) && molds > 0;
+      out[row.id] = priceFactoryQuote(
+        {
+          factoryUnitCostCny: resp.unitCostCny,
+          quantity: qtyNum,
+          shippingOptionId: shippingOptionId || null,
+          cartonSpec: {
+            qty: resp.cartonQty,
+            weightKg: resp.weightKg,
+            cbm: resp.cartonCbm,
+            lengthCm: resp.cartonLengthCm,
+            widthCm: resp.cartonWidthCm,
+            heightCm: resp.cartonHeightCm,
+          },
+          profitMarginOverride: st.margin,
+          moldsCostCny: moldsValid ? molds : 0,
+        },
+        config
+      );
+    }
+    return out;
+  }, [config, rows, sectionState, shippingOptionId]);
+
+  const combinedResult = useMemo(() => {
+    if (!config) return null;
+    const priced = Object.values(livePricings).filter(
+      (p): p is FactoryPricingResult => !!p
+    );
+    if (priced.length === 0) return null;
+    const opt = config.shippingOptions.find((s) => s.id === shippingOptionId) ?? null;
+    return computeCombined(priced, opt, config.usdToIls);
+  }, [livePricings, config, shippingOptionId]);
+
+  function setAllMargins(v: number) {
+    setSectionState((prev) => {
+      const next = { ...prev };
+      for (const row of priceableRows) next[row.id] = { ...next[row.id], margin: v, touched: true };
+      return next;
+    });
+    setSendHint(null);
+  }
+
+  const avgMargin = priceableRows.length
+    ? Math.round(
+        priceableRows.reduce((s, r) => s + (sectionState[r.id]?.margin ?? 0), 0) /
+          priceableRows.length
+      )
+    : 0;
+
+  // A product is "send-ready" if it's freshly saved this session, or it was
+  // already finalized and hasn't been edited. All priceable products must be
+  // send-ready before the combined PDF can be opened (the PDF route 409s on any
+  // non-finalized id).
+  const sendReady =
+    priceableRows.length >= 1 &&
+    priceableRows.every((r) => {
+      const st = sectionState[r.id];
+      return st && !st.touched && (st.finalizedThisSession || !!r.finalPricing);
+    });
+  const phoneDigits = (customerPhone ?? "").replace(/[^\d]/g, "");
+  const combineIds = priceableRows.map((r) => r.id);
+  const waUrl =
+    sendReady && phoneDigits
+      ? buildCombineWaUrl(combineIds, customerName, customerPhone, origin)
+      : null;
+  const combinePdfHref = `${origin}/api/factory/combine/pdf?ids=${combineIds.join(",")}`;
+
+  async function handleSaveAll() {
+    if (!config) return;
+    setSavingAll(true);
+    setSaveError(null);
+    setSendHint(null);
+    try {
+      for (const row of priceableRows) {
+        const st = sectionState[row.id];
+        const live = livePricings[row.id];
+        if (!st || !live) continue;
+        const qtyNum = Math.max(
+          1,
+          Math.floor(Number(st.qtyStr) || row.productSpec.quantity || 1)
+        );
+        const molds = st.moldsCny !== "" ? parseFloat(st.moldsCny) : NaN;
+        const moldsValid = Number.isFinite(molds) && molds > 0;
+        const res = await fetch(
+          widgetUrl(`/api/widget/factory/${row.id}/finalize`, apiToken),
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              profitMarginOverride: st.margin,
+              shippingOptionId: shippingOptionId || undefined,
+              moldsCostCny: moldsValid ? molds : undefined,
+              specOverride: {
+                productName: st.productName.trim() || undefined,
+                picUrl: st.picUrl.trim() || undefined,
+                material: st.material.trim() || undefined,
+                widthCm: st.widthCm !== "" ? Number(st.widthCm) : undefined,
+                heightCm: st.heightCm !== "" ? Number(st.heightCm) : undefined,
+                depthCm: st.depthCm !== "" ? Number(st.depthCm) : undefined,
+                quantity: qtyNum,
+                printing: st.printing.trim() || undefined,
+                finishing: st.finishing.trim() || undefined,
+                customerNotes: st.customerNotes.trim() || undefined,
+              },
+            }),
+          }
+        );
+        const data = await res.json().catch(() => ({}));
+        if (!data?.ok) {
+          throw new Error(
+            `כשל בהצעה ${row.quotationNo ?? row.id.slice(-6)}: ${
+              data?.error ?? data?.detail ?? res.status
+            }`
+          );
+        }
+        setSectionState((prev) => ({
+          ...prev,
+          [row.id]: { ...prev[row.id], finalizedThisSession: true, touched: false },
+        }));
+      }
+      onChanged();
+    } catch (e) {
+      setSaveError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setSavingAll(false);
+    }
+  }
+
+  function handleSendClick(e: React.MouseEvent) {
+    if (!sendReady) {
+      e.preventDefault();
+      setSendHint('צריך קודם ללחוץ "שמור חישוב" — לא ניתן לשלוח הצעות שעדיין לא חושבו.');
+    } else if (!phoneDigits) {
+      e.preventDefault();
+      setSendHint("אין מספר טלפון ללקוח — אי אפשר לשלוח ב-WhatsApp.");
+    }
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-2xl max-h-[90vh] overflow-auto rounded-2xl border border-border bg-background shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-border bg-background px-5 py-3">
+          <div className="flex items-baseline gap-2 min-w-0">
+            <h2 className="text-lg font-semibold shrink-0">חישוב משולב</h2>
+            <span className="text-xs text-muted-foreground truncate">
+              {customerName ?? "לקוח"} · {priceableRows.length} מוצרים
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="size-7 rounded-md grid place-items-center text-muted-foreground hover:text-foreground hover:bg-secondary"
+          >
+            <X className="size-4" />
+          </button>
+        </div>
+
+        <div className="px-5 py-4 space-y-3">
+          {!config ? (
+            <div className="text-sm text-muted-foreground flex items-center gap-2">
+              <Loader2 className="size-3.5 animate-spin" /> טוען הגדרות…
+            </div>
+          ) : priceableRows.length === 0 ? (
+            <div className="text-sm text-muted-foreground">
+              אין הצעות עם תשובת מפעל ללקוח הזה — אין מה לחשב עדיין.
+            </div>
+          ) : (
+            <>
+              {/* Shared shipping option (one shipment) */}
+              <div>
+                <label className="block text-sm font-medium mb-1">
+                  שיטת שילוח (משותפת לכל ההזמנה)
+                </label>
+                <select
+                  value={shippingOptionId}
+                  onChange={(e) => {
+                    setShippingOptionId(e.target.value);
+                    setSendHint(null);
+                  }}
+                  className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+                >
+                  <option value="">— ללא שילוח —</option>
+                  {config.shippingOptions
+                    .filter((s) => s.enabled)
+                    .map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.name} ({s.type === "sea" ? "ים" : "אוויר"})
+                      </option>
+                    ))}
+                </select>
+              </div>
+
+              {/* Set-all-margins */}
+              {priceableRows.length > 1 && (
+                <div className="rounded-md border border-primary/30 bg-primary/5 px-3 py-2">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-[11px] text-muted-foreground">
+                      קבע אחוז רווח לכל המוצרים יחד
+                    </span>
+                    <span className="text-xs font-semibold text-primary tabular-nums">
+                      ~{avgMargin}%
+                    </span>
+                  </div>
+                  <input
+                    type="range"
+                    min={MARGIN_MIN}
+                    max={MARGIN_MAX}
+                    step={1}
+                    value={avgMargin}
+                    onChange={(e) => setAllMargins(parseInt(e.target.value, 10))}
+                    className="w-full accent-[var(--color-primary,#4A7C59)]"
+                  />
+                </div>
+              )}
+
+              {/* One accordion section per product */}
+              {priceableRows.map((row) => (
+                <ProductCalcSection
+                  key={row.id}
+                  apiToken={apiToken}
+                  row={row}
+                  state={sectionState[row.id]}
+                  pricing={livePricings[row.id]}
+                  config={config}
+                  expanded={expanded.has(row.id)}
+                  onToggle={() => toggleExpanded(row.id)}
+                  onPatch={(patch) => patchSection(row.id, patch)}
+                />
+              ))}
+
+              {pendingCount > 0 && (
+                <div className="text-[11px] text-muted-foreground">
+                  {pendingCount} הצעות ממתינות לתשובת מפעל — לא נכללות בחישוב המשולב.
+                </div>
+              )}
+
+              {/* Combined summary */}
+              {combinedResult && (
+                <div className="rounded-lg border border-success/30 bg-success/5 p-3 space-y-1.5 mt-1">
+                  <div className="text-[10px] uppercase tracking-wider text-success/80">
+                    תוצאה משולבת ({combinedResult.count} מוצרים)
+                  </div>
+                  <PriceRow
+                    label="סה״כ נפח / משקל"
+                    value={`${combinedResult.combinedCbm} m³ · ${combinedResult.combinedWeightKg}kg`}
+                  />
+                  <PriceRow
+                    label="שילוח מאוחד"
+                    value={`${formatIls(combinedResult.combinedShipping)} (בנפרד: ${formatIls(
+                      combinedResult.separateShipping
+                    )})`}
+                  />
+                  <PriceRow
+                    label="חיסכון בשילוח ללקוח"
+                    value={formatIls(combinedResult.shippingSaving)}
+                    highlight
+                  />
+                  <div className="border-t border-success/20 my-1" />
+                  <PriceRow
+                    label="סה״כ ללקוח (משולב)"
+                    value={`${formatIls(combinedResult.grandTotal)} (בנפרד: ${formatIls(
+                      combinedResult.separateGrandTotal
+                    )})`}
+                    bold
+                  />
+                  <PriceRow
+                    label="סה״כ רווח"
+                    value={formatIls(combinedResult.totalProfit)}
+                    highlight
+                  />
+                  <PriceRow label="מרווח כולל" value={`${combinedResult.overallMarginPct}%`} />
+                </div>
+              )}
+
+              {saveError && <p className="text-xs text-destructive">{saveError}</p>}
+              {sendHint && <p className="text-xs text-amber-400">{sendHint}</p>}
+            </>
+          )}
+        </div>
+
+        {/* Footer — calc and send are SEPARATE buttons */}
+        {config && priceableRows.length > 0 && (
+          <div className="sticky bottom-0 z-10 flex items-center justify-between gap-2 border-t border-border bg-background px-5 py-3">
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-md border border-border bg-background/40 px-3 py-1.5 text-sm hover:bg-secondary"
+            >
+              ביטול
+            </button>
+            <div className="flex items-center gap-2">
+              {sendReady && (
+                <a
+                  href={combinePdfHref}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="rounded-md border border-border bg-background/40 px-3 py-1.5 text-sm hover:bg-secondary"
+                >
+                  פתח PDF
+                </a>
+              )}
+              <a
+                href={waUrl ?? "#"}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={handleSendClick}
+                aria-disabled={!waUrl}
+                title={
+                  !sendReady
+                    ? 'שמור חישוב קודם'
+                    : !phoneDigits
+                      ? 'אין טלפון ללקוח'
+                      : 'שלח הצעה משולבת ב-WhatsApp'
+                }
+                className={[
+                  "inline-flex items-center gap-1.5 rounded-md border border-emerald-500/40 bg-emerald-500/10 px-3 py-1.5 text-sm font-medium text-emerald-400 hover:bg-emerald-500/20",
+                  waUrl ? "" : "opacity-50 cursor-not-allowed",
+                ].join(" ")}
+              >
+                <MessageCircle className="size-3.5" />
+                שלח ב-WhatsApp
+              </a>
+              <button
+                type="button"
+                onClick={handleSaveAll}
+                disabled={savingAll || !combinedResult}
+                className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
+              >
+                {savingAll ? (
+                  <Loader2 className="size-3.5 animate-spin" />
+                ) : (
+                  <Sparkles className="size-3.5" />
+                )}
+                שמור חישוב
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ProductCalcSection({
+  apiToken,
+  row,
+  state,
+  pricing,
+  config,
+  expanded,
+  onToggle,
+  onPatch,
+}: {
+  apiToken: string;
+  row: FactoryQuoteRow;
+  state: SectionState;
+  pricing: FactoryPricingResult | null;
+  config: FactoryPricingConfig;
+  expanded: boolean;
+  onToggle: () => void;
+  onPatch: (patch: Partial<SectionState>) => void;
+}) {
+  const [uploadingImg, setUploadingImg] = useState(false);
+  const [pullingImg, setPullingImg] = useState(false);
+  const [imgError, setImgError] = useState<string | null>(null);
+
+  const finalized = state.finalizedThisSession || !!row.finalPricing;
+  const stale = finalized && state.touched;
+
+  async function handleImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setUploadingImg(true);
+    setImgError(null);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await fetch(widgetUrl("/api/factory/upload-image", apiToken), {
+        method: "POST",
+        body: fd,
+      });
+      const data = await res.json();
+      if (data?.ok && data.url) onPatch({ picUrl: data.url });
+      else setImgError(data?.message ?? data?.error ?? "העלאת התמונה נכשלה");
+    } catch (err) {
+      setImgError(err instanceof Error ? err.message : "העלאת התמונה נכשלה");
+    } finally {
+      setUploadingImg(false);
+    }
+  }
+
+  async function handlePullImage() {
+    setPullingImg(true);
+    setImgError(null);
+    try {
+      const res = await fetch(widgetUrl(`/api/factory/${row.id}/pull-image`, apiToken), {
+        method: "POST",
+      });
+      const data = await res.json();
+      if (data?.ok && data.url) onPatch({ picUrl: data.url });
+      else
+        setImgError(
+          data?.error === "no_image_in_sheet"
+            ? "אין תמונה בשורה ב-Feishu"
+            : data?.error ?? "משיכת התמונה נכשלה"
+        );
+    } catch (err) {
+      setImgError(err instanceof Error ? err.message : "משיכת התמונה נכשלה");
+    } finally {
+      setPullingImg(false);
+    }
+  }
+
+  return (
+    <div className="rounded-lg border border-border bg-card/40">
+      {/* Collapsed header */}
+      <button
+        type="button"
+        onClick={onToggle}
+        className="flex w-full items-center gap-2 px-3 py-2 text-right"
+      >
+        <ChevronDown
+          className={`size-4 shrink-0 text-muted-foreground transition-transform ${
+            expanded ? "" : "-rotate-90"
+          }`}
+        />
+        <span className="font-mono text-[11px] text-muted-foreground shrink-0">
+          {row.quotationNo ?? row.id.slice(-6)}
+        </span>
+        <span className="truncate flex-1 text-sm">
+          {state.productName || row.productSpec.description || "מוצר"}
+        </span>
+        <span
+          className={`text-[10px] rounded-full border px-1.5 py-0.5 shrink-0 ${
+            stale
+              ? "border-amber-500/30 bg-amber-500/10 text-amber-400"
+              : finalized
+                ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400"
+                : "border-blue-500/30 bg-blue-500/10 text-blue-400"
+          }`}
+        >
+          {stale ? "שונה" : finalized ? "סופי" : "חדש"}
+        </span>
+        <span className="text-xs font-semibold tabular-nums shrink-0">
+          {pricing ? formatIls(pricing.totalSellingPrice) : "—"}
+        </span>
+      </button>
+
+      {expanded && (
+        <div className="border-t border-border/60 px-3 py-3 space-y-3">
+          {/* Image */}
+          <div>
+            <label className="block text-[11px] text-muted-foreground mb-0.5">
+              תמונת מוצר (נכנסת ל‑PDF)
+            </label>
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                value={state.picUrl}
+                onChange={(e) => onPatch({ picUrl: e.target.value })}
+                placeholder="הדבק קישור או העלה תמונה"
+                className="flex-1 min-w-0 rounded-md border border-border bg-background/40 px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring/30"
+              />
+              <label className="shrink-0 cursor-pointer rounded-md border border-border bg-secondary px-2.5 py-1.5 text-xs hover:bg-secondary/70">
+                {uploadingImg ? "מעלה…" : "העלה"}
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={handleImageUpload}
+                  disabled={uploadingImg}
+                />
+              </label>
+              <button
+                type="button"
+                onClick={handlePullImage}
+                disabled={pullingImg}
+                title="משוך את התמונה מהשורה ב-Feishu"
+                className="shrink-0 rounded-md border border-border bg-secondary px-2.5 py-1.5 text-xs hover:bg-secondary/70 disabled:opacity-60"
+              >
+                {pullingImg ? "מושך…" : "Feishu"}
+              </button>
+              {state.picUrl.trim() ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={state.picUrl}
+                  alt="תמונת מוצר"
+                  className="size-12 shrink-0 rounded-md border border-border object-contain bg-background"
+                />
+              ) : (
+                <div className="size-12 shrink-0 rounded-md border border-dashed border-border grid place-items-center text-[9px] text-muted-foreground">
+                  אין
+                </div>
+              )}
+            </div>
+            {imgError && <p className="text-[10px] text-destructive mt-0.5">{imgError}</p>}
+          </div>
+
+          <SpecField
+            label="שם המוצר (כותרת)"
+            value={state.productName}
+            onChange={(v) => onPatch({ productName: v })}
+            placeholder="שקית אלבדי"
+          />
+          <div className="grid grid-cols-3 gap-2">
+            <SpecField label="רוחב (ס״מ)" value={state.widthCm} onChange={(v) => onPatch({ widthCm: v })} type="number" />
+            <SpecField label="גובה (ס״מ)" value={state.heightCm} onChange={(v) => onPatch({ heightCm: v })} type="number" />
+            <SpecField label="עומק (ס״מ)" value={state.depthCm} onChange={(v) => onPatch({ depthCm: v })} type="number" />
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <SpecField label="כמות" value={state.qtyStr} onChange={(v) => onPatch({ qtyStr: v })} type="number" />
+            <SpecField label="חומר" value={state.material} onChange={(v) => onPatch({ material: v })} placeholder="80g non-woven" />
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <SpecField label="הדפסה" value={state.printing} onChange={(v) => onPatch({ printing: v })} />
+            <SpecField label="גימור" value={state.finishing} onChange={(v) => onPatch({ finishing: v })} />
+          </div>
+          <div>
+            <label className="block text-[11px] text-muted-foreground mb-0.5">הערות ללקוח (ב‑PDF)</label>
+            <textarea
+              value={state.customerNotes}
+              onChange={(e) => onPatch({ customerNotes: e.target.value })}
+              rows={2}
+              placeholder="טקסט חופשי שיופיע בתחתית ההצעה"
+              className="w-full rounded-md border border-border bg-background/40 px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring/30"
+            />
+          </div>
+
+          {/* Molds */}
+          <div>
+            <label className="block text-[11px] text-muted-foreground mb-0.5">
+              מולדים / תבניות (¥ CNY) — חד פעמי
+            </label>
+            <input
+              type="number"
+              min={0}
+              step={50}
+              placeholder="למשל 2000"
+              value={state.moldsCny}
+              onChange={(e) => onPatch({ moldsCny: e.target.value })}
+              className="w-full rounded-md border border-border bg-background/40 px-2.5 py-1.5 text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-ring/30"
+            />
+          </div>
+
+          {/* Margin slider */}
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <label className="text-[11px] text-muted-foreground">אחוז רווח</label>
+              <span className="text-sm font-semibold text-primary tabular-nums">{state.margin}%</span>
+            </div>
+            <input
+              type="range"
+              min={MARGIN_MIN}
+              max={MARGIN_MAX}
+              step={1}
+              value={state.margin}
+              onChange={(e) => onPatch({ margin: parseInt(e.target.value, 10) })}
+              className="w-full accent-[var(--color-primary,#4A7C59)]"
+            />
+          </div>
+
+          {/* Live pricing summary */}
+          {pricing && (
+            <div className="rounded-lg border border-success/30 bg-success/5 p-3 space-y-1.5 text-sm">
+              <PriceRow label="מחיר ללקוח / יחידה" value={formatIls(pricing.unitSellingPrice)} bold />
+              <PriceRow label="סה״כ הזמנה" value={formatIls(pricing.totalSellingPrice)} bold />
+              <div className="border-t border-success/20 my-1" />
+              <PriceRow label="עלות יחידה (CNY→₪)" value={formatIls(pricing.unitCost)} />
+              <PriceRow label="שילוח / יחידה" value={formatIls(pricing.unitShipping)} />
+              <PriceRow label="רווח / יחידה" value={formatIls(pricing.unitProfit)} highlight />
+              <PriceRow label="סה״כ רווח" value={formatIls(pricing.totalProfit)} highlight />
+            </div>
+          )}
+
+          {/* Boss breakdown */}
+          {pricing && row.factoryResponse && (
+            <DetailedBreakdown
+              unitCost={pricing.unitCost}
+              unitShipping={pricing.unitShipping}
+              unitProfit={pricing.unitProfit}
+              unitSellingPrice={pricing.unitSellingPrice}
+              totalCost={pricing.totalCost}
+              totalShipping={pricing.totalShipping}
+              totalProfit={pricing.totalProfit}
+              totalSellingPrice={pricing.totalSellingPrice}
+              quantity={pricing.quantity}
+              profitMarginPct={pricing.profitMarginPct}
+              totalCartons={pricing.totalCartons}
+              totalWeightKg={pricing.totalWeightKg}
+              totalCbm={pricing.totalCbm}
+              shippingType={
+                config.shippingOptions.find((s) => s.id === pricing.shippingOptionId)?.type ?? null
+              }
+              factoryUnitCostCny={row.factoryResponse.unitCostCny}
+              usdToIls={config.usdToIls}
+              usdToCny={config.usdToCny}
+              seaRate={
+                config.shippingOptions.find(
+                  (s) => s.id === pricing.shippingOptionId && s.type === "sea"
+                )?.seaRate
+              }
+              rawCbm={pricing.totalCbm}
+              seaMinCbm={1}
+            />
+          )}
+        </div>
+      )}
+    </div>
+  );
+}

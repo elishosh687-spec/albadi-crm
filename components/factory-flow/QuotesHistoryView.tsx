@@ -1,10 +1,12 @@
 "use client";
 
 import { useEffect, useState, useMemo } from "react";
-import { ExternalLink, Search, Loader2, Eye, Download, Trash2, X, MessageCircle, Calculator, Copy } from "lucide-react";
+import { ExternalLink, Search, Loader2, Eye, Download, Trash2, X, MessageCircle, Calculator, Copy, ChevronDown } from "lucide-react";
 import { QuoteHtmlPreview } from "@/app/dashboard/v3/_components/factory/QuoteHtmlPreview";
 import type { FactoryQuoteRow as DashboardFactoryQuoteRow } from "@/app/dashboard/v3/_components/factory/FactoryQuotePanel";
 import { FinalizeModalWidget } from "./FinalizeModal.widget";
+import { CombinedCalcModalWidget } from "./CombinedCalcModal.widget";
+import { buildCombineWaUrl } from "./calc-shared";
 
 interface ApiQuoteRow {
   id: string;
@@ -62,6 +64,17 @@ function toDashboardRow(r: ApiQuoteRow): DashboardFactoryQuoteRow {
   };
 }
 
+// One card per customer: all their quotes, newest first, with a status summary.
+interface CustomerGroup {
+  leadSid: string;
+  name: string | null;
+  phone: string | null;
+  rows: ApiQuoteRow[];
+  latestAt: string;
+  statusCounts: Record<string, number>;
+  priceableCount: number;
+}
+
 export function QuotesHistoryView({ apiToken }: { apiToken: string }) {
   const [data, setData] = useState<ApiQuoteRow[] | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -91,19 +104,21 @@ export function QuotesHistoryView({ apiToken }: { apiToken: string }) {
   const combineWaUrl = (() => {
     if (selected.size < 2 || !data) return null;
     const sel = data.filter((r) => selected.has(r.id));
-    const phone = sel[0]?.phone?.replace(/[^\d]/g, "") || "";
-    if (!phone) return null;
-    const name = sel[0]?.name ?? "";
     const origin = typeof window !== "undefined" ? window.location.origin : "";
-    const link = `${origin}/api/factory/combine/pdf?ids=${[...selected].join(",")}`;
-    const caption = [
-      name ? `היי ${name},` : "היי,",
-      `מצורפת הצעת מחיר משולבת ל-${selected.size} מוצרים.`,
-      `הצעה מלאה: ${link}`,
-      "ההצעה בתוקף ל-14 יום. נשמח לקבל אישור 🙂",
-    ].join("\n");
-    return `https://wa.me/${phone}?text=${encodeURIComponent(caption)}`;
+    return buildCombineWaUrl([...selected], sel[0]?.name ?? null, sel[0]?.phone ?? null, origin);
   })();
+
+  // Customer cards: which are expanded, and which one's combined-calc is open.
+  const [openCards, setOpenCards] = useState<Set<string>>(new Set());
+  const [calcGroup, setCalcGroup] = useState<CustomerGroup | null>(null);
+  function toggleCard(sid: string) {
+    setOpenCards((prev) => {
+      const n = new Set(prev);
+      if (n.has(sid)) n.delete(sid);
+      else n.add(sid);
+      return n;
+    });
+  }
 
   async function refresh() {
     try {
@@ -246,6 +261,38 @@ export function QuotesHistoryView({ apiToken }: { apiToken: string }) {
     });
   }, [data, q, statusFilter]);
 
+  // Group the filtered rows into one card per customer (by leadSid), each
+  // sorted newest-first, cards ordered by most-recent activity.
+  const groups = useMemo<CustomerGroup[]>(() => {
+    const m = new Map<string, ApiQuoteRow[]>();
+    for (const r of filtered) {
+      const arr = m.get(r.leadSid) ?? [];
+      arr.push(r);
+      m.set(r.leadSid, arr);
+    }
+    return [...m.entries()]
+      .map(([leadSid, rs]) => {
+        const sorted = [...rs].sort(
+          (a, b) => +new Date(b.createdAt) - +new Date(a.createdAt)
+        );
+        const statusCounts: Record<string, number> = {};
+        for (const r of sorted) statusCounts[r.status] = (statusCounts[r.status] ?? 0) + 1;
+        const priceableCount = sorted.filter(
+          (r) => r.factoryResponse || r.finalPricing
+        ).length;
+        return {
+          leadSid,
+          name: sorted[0].name,
+          phone: sorted[0].phone,
+          rows: sorted,
+          latestAt: sorted[0].createdAt,
+          statusCounts,
+          priceableCount,
+        };
+      })
+      .sort((a, b) => +new Date(b.latestAt) - +new Date(a.latestAt));
+  }, [filtered]);
+
   const counts = useMemo(() => {
     if (!data) return { all: 0, pending: 0, received: 0, finalized: 0 };
     return {
@@ -262,6 +309,125 @@ export function QuotesHistoryView({ apiToken }: { apiToken: string }) {
       <div className="text-muted-foreground text-sm flex items-center gap-2">
         <Loader2 className="size-3.5 animate-spin" /> טוען...
       </div>
+    );
+  }
+
+  // One quote row — rendered inside its customer card (unchanged behaviour).
+  function renderQuoteRow(r: ApiQuoteRow) {
+    return (
+      <li
+        key={r.id}
+        className="flex items-center justify-between gap-2 rounded-md border border-border/60 bg-background/40 px-3 py-2"
+      >
+        <div className="flex items-center gap-2 min-w-0 flex-1 flex-wrap">
+          {r.status === "finalized" && (
+            <input
+              type="checkbox"
+              checked={selected.has(r.id)}
+              disabled={lockSid !== null && r.leadSid !== lockSid}
+              onChange={() => toggleSelected(r.id)}
+              title={
+                lockSid !== null && r.leadSid !== lockSid
+                  ? "אפשר לאחד רק הצעות של אותו לקוח"
+                  : "בחר לאיחוד ל-PDF"
+              }
+              className="shrink-0 accent-[var(--color-primary,#4A7C59)] disabled:opacity-40"
+            />
+          )}
+          <span className="text-[11px] text-muted-foreground tabular-nums shrink-0">
+            {fmtDate(r.createdAt)}
+          </span>
+          <span className="text-[11px] font-mono text-muted-foreground shrink-0">
+            {r.quotationNo ?? r.id.slice(-6)}
+          </span>
+          <span className={`text-[10px] rounded-full border px-1.5 py-0.5 shrink-0 ${STATUS_LABEL[r.status]?.cls ?? "bg-muted"}`}>
+            {STATUS_LABEL[r.status]?.text ?? r.status}
+          </span>
+          <span className="text-sm font-medium truncate min-w-0">
+            {r.name ?? r.leadSid.slice(0, 20)}
+          </span>
+          {r.status === "finalized" && r.finalPricing && (
+            <span className="text-[11px] tabular-nums text-emerald-400 shrink-0">
+              {fmtMoney((r.finalPricing as any).totalOrderPriceIls ?? (r.finalPricing as any).totalSellingPrice)}
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-0.5 shrink-0">
+          <button
+            type="button"
+            onClick={() => setOpened(r)}
+            title="פתח מפרט מלא"
+            disabled={busyId === r.id}
+            className="size-7 rounded grid place-items-center text-muted-foreground hover:text-foreground hover:bg-secondary disabled:opacity-50"
+          >
+            <Eye className="size-3.5" />
+          </button>
+          {r.pdfUrl && (
+            <a
+              href={r.pdfUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              title="הורד PDF"
+              className="size-7 rounded grid place-items-center text-muted-foreground hover:text-foreground hover:bg-secondary"
+            >
+              <Download className="size-3.5" />
+            </a>
+          )}
+          {r.status === "received" && !r.finalPricing && (
+            <button
+              type="button"
+              onClick={() => setFinalizing(r)}
+              disabled={busyId === r.id}
+              title="חשב הצעת מחיר"
+              className="size-7 rounded grid place-items-center text-primary hover:bg-primary/10 disabled:opacity-50"
+            >
+              <Calculator className="size-3.5" />
+            </button>
+          )}
+          {r.status === "finalized" && (
+            <button
+              type="button"
+              onClick={() => handleEditAsNew(r)}
+              disabled={busyId === r.id}
+              title="ערוך כעותק חדש — מקור נשמר"
+              className="size-7 rounded grid place-items-center text-muted-foreground hover:text-primary hover:bg-primary/10 disabled:opacity-50"
+            >
+              {busyId === r.id ? <Loader2 className="size-3.5 animate-spin" /> : <Copy className="size-3.5" />}
+            </button>
+          )}
+          {r.status === "finalized" && (
+            <button
+              type="button"
+              onClick={() => handleSendWhatsApp(r)}
+              disabled={busyId === r.id}
+              title="שלח ללקוח ב-WhatsApp"
+              className="size-7 rounded grid place-items-center text-muted-foreground hover:text-emerald-400 hover:bg-emerald-500/10 disabled:opacity-50"
+            >
+              {busyId === r.id ? <Loader2 className="size-3.5 animate-spin" /> : <MessageCircle className="size-3.5" />}
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => handleDelete(r)}
+            disabled={busyId === r.id}
+            title="מחק הצעה"
+            className="size-7 rounded grid place-items-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 disabled:opacity-50"
+          >
+            <Trash2 className="size-3.5" />
+          </button>
+          {r.ghlUrl && (
+            <a
+              href={r.ghlUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              title="פתח ב-GHL"
+              className="size-7 rounded grid place-items-center text-muted-foreground hover:text-foreground hover:bg-secondary"
+            >
+              <ExternalLink className="size-3.5" />
+            </a>
+          )}
+        </div>
+      </li>
     );
   }
 
@@ -386,129 +552,70 @@ export function QuotesHistoryView({ apiToken }: { apiToken: string }) {
           </div>
         )}
 
-        <ul className="space-y-1">
-          {filtered.length === 0 ? (
-            <li className="p-6 text-center text-muted-foreground text-sm rounded-lg border border-border bg-card/40">
+        <div className="space-y-1.5">
+          {groups.length === 0 ? (
+            <div className="p-6 text-center text-muted-foreground text-sm rounded-lg border border-border bg-card/40">
               לא נמצאו הצעות מתאימות
-            </li>
+            </div>
           ) : (
-            filtered.map((r) => (
-              <li
-                key={r.id}
-                className="flex items-center justify-between gap-2 rounded-md border border-border/60 bg-background/40 px-3 py-2"
-              >
-                <div className="flex items-center gap-2 min-w-0 flex-1 flex-wrap">
-                  {r.status === "finalized" && (
-                    <input
-                      type="checkbox"
-                      checked={selected.has(r.id)}
-                      disabled={lockSid !== null && r.leadSid !== lockSid}
-                      onChange={() => toggleSelected(r.id)}
-                      title={
-                        lockSid !== null && r.leadSid !== lockSid
-                          ? "אפשר לאחד רק הצעות של אותו לקוח"
-                          : "בחר לאיחוד ל-PDF"
-                      }
-                      className="shrink-0 accent-[var(--color-primary,#4A7C59)] disabled:opacity-40"
-                    />
-                  )}
-                  <span className="text-[11px] text-muted-foreground tabular-nums shrink-0">
-                    {fmtDate(r.createdAt)}
-                  </span>
-                  <span className="text-[11px] font-mono text-muted-foreground shrink-0">
-                    {r.quotationNo ?? r.id.slice(-6)}
-                  </span>
-                  <span className={`text-[10px] rounded-full border px-1.5 py-0.5 shrink-0 ${STATUS_LABEL[r.status]?.cls ?? "bg-muted"}`}>
-                    {STATUS_LABEL[r.status]?.text ?? r.status}
-                  </span>
-                  <span className="text-sm font-medium truncate min-w-0">
-                    {r.name ?? r.leadSid.slice(0, 20)}
-                  </span>
-                  {r.status === "finalized" && r.finalPricing && (
-                    <span className="text-[11px] tabular-nums text-emerald-400 shrink-0">
-                      {fmtMoney((r.finalPricing as any).totalOrderPriceIls ?? (r.finalPricing as any).totalSellingPrice)}
-                    </span>
-                  )}
-                </div>
-                <div className="flex items-center gap-0.5 shrink-0">
-                  <button
-                    type="button"
-                    onClick={() => setOpened(r)}
-                    title="פתח מפרט מלא"
-                    disabled={busyId === r.id}
-                    className="size-7 rounded grid place-items-center text-muted-foreground hover:text-foreground hover:bg-secondary disabled:opacity-50"
-                  >
-                    <Eye className="size-3.5" />
-                  </button>
-                  {r.pdfUrl && (
-                    <a
-                      href={r.pdfUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      title="הורד PDF"
-                      className="size-7 rounded grid place-items-center text-muted-foreground hover:text-foreground hover:bg-secondary"
-                    >
-                      <Download className="size-3.5" />
-                    </a>
-                  )}
-                  {r.status === "received" && !r.finalPricing && (
+            groups.map((g) => {
+              const open = openCards.has(g.leadSid);
+              const canCalc = g.priceableCount > 0;
+              return (
+                <div
+                  key={g.leadSid}
+                  className="rounded-lg border border-border/60 bg-card/30 overflow-hidden"
+                >
+                  <div className="flex items-center justify-between gap-2 px-3 py-2">
                     <button
                       type="button"
-                      onClick={() => setFinalizing(r)}
-                      disabled={busyId === r.id}
-                      title="חשב הצעת מחיר"
-                      className="size-7 rounded grid place-items-center text-primary hover:bg-primary/10 disabled:opacity-50"
+                      onClick={() => toggleCard(g.leadSid)}
+                      className="flex items-center gap-2 min-w-0 flex-1 text-right"
+                    >
+                      <ChevronDown
+                        className={`size-4 shrink-0 text-muted-foreground transition-transform ${open ? "" : "-rotate-90"}`}
+                      />
+                      <span className="text-sm font-medium truncate min-w-0">
+                        {g.name ?? g.leadSid.slice(0, 20)}
+                      </span>
+                      <span className="text-[10px] rounded-full border border-border px-1.5 py-0.5 text-muted-foreground shrink-0">
+                        {g.rows.length} הצעות
+                      </span>
+                      <span className="text-[11px] text-muted-foreground tabular-nums shrink-0">
+                        {fmtDate(g.latestAt)}
+                      </span>
+                      <span className="hidden sm:flex items-center gap-1 shrink-0">
+                        {Object.entries(g.statusCounts).map(([st, n]) => (
+                          <span
+                            key={st}
+                            className={`text-[10px] rounded-full border px-1.5 py-0.5 ${STATUS_LABEL[st]?.cls ?? "bg-muted"}`}
+                          >
+                            {STATUS_LABEL[st]?.text ?? st} {n}
+                          </span>
+                        ))}
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setCalcGroup(g)}
+                      disabled={!canCalc}
+                      title={canCalc ? "פתח חישוב משולב לכל ההזמנות" : "אין הצעות עם תשובת מפעל"}
+                      className="inline-flex items-center gap-1 rounded-md border border-primary/40 bg-primary/10 px-2.5 py-1 text-[11px] font-medium text-primary hover:bg-primary/20 disabled:opacity-40 shrink-0"
                     >
                       <Calculator className="size-3.5" />
+                      חישוב משולב
                     </button>
-                  )}
-                  {r.status === "finalized" && (
-                    <button
-                      type="button"
-                      onClick={() => handleEditAsNew(r)}
-                      disabled={busyId === r.id}
-                      title="ערוך כעותק חדש — מקור נשמר"
-                      className="size-7 rounded grid place-items-center text-muted-foreground hover:text-primary hover:bg-primary/10 disabled:opacity-50"
-                    >
-                      {busyId === r.id ? <Loader2 className="size-3.5 animate-spin" /> : <Copy className="size-3.5" />}
-                    </button>
-                  )}
-                  {r.status === "finalized" && (
-                    <button
-                      type="button"
-                      onClick={() => handleSendWhatsApp(r)}
-                      disabled={busyId === r.id}
-                      title="שלח ללקוח ב-WhatsApp"
-                      className="size-7 rounded grid place-items-center text-muted-foreground hover:text-emerald-400 hover:bg-emerald-500/10 disabled:opacity-50"
-                    >
-                      {busyId === r.id ? <Loader2 className="size-3.5 animate-spin" /> : <MessageCircle className="size-3.5" />}
-                    </button>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => handleDelete(r)}
-                    disabled={busyId === r.id}
-                    title="מחק הצעה"
-                    className="size-7 rounded grid place-items-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 disabled:opacity-50"
-                  >
-                    <Trash2 className="size-3.5" />
-                  </button>
-                  {r.ghlUrl && (
-                    <a
-                      href={r.ghlUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      title="פתח ב-GHL"
-                      className="size-7 rounded grid place-items-center text-muted-foreground hover:text-foreground hover:bg-secondary"
-                    >
-                      <ExternalLink className="size-3.5" />
-                    </a>
+                  </div>
+                  {open && (
+                    <ul className="space-y-1 border-t border-border/60 bg-background/30 px-2 py-2">
+                      {g.rows.map((r) => renderQuoteRow(r))}
+                    </ul>
                   )}
                 </div>
-              </li>
-            ))
+              );
+            })
           )}
-        </ul>
+        </div>
       </div>
 
       {opened && <QuoteModal row={opened} onClose={() => setOpened(null)} widgetToken={apiToken} />}
@@ -521,6 +628,16 @@ export function QuotesHistoryView({ apiToken }: { apiToken: string }) {
             setFinalizing(null);
             await refresh();
           }}
+        />
+      )}
+      {calcGroup && (
+        <CombinedCalcModalWidget
+          apiToken={apiToken}
+          rows={calcGroup.rows.map(toDashboardRow)}
+          customerName={calcGroup.name}
+          customerPhone={calcGroup.phone}
+          onClose={() => setCalcGroup(null)}
+          onChanged={refresh}
         />
       )}
     </>
