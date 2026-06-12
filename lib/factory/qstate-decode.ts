@@ -115,8 +115,10 @@ export function humanizeFinishing(en: string): string {
 }
 
 export function humanizeMaterial(en: string): string {
-  const m = en.match(/^(\d+)\s*g/i);
-  if (m) return `${m[1]} גרם`;
+  // Localize a leading gram weight but KEEP the rest of the description:
+  // "250g food grade white card" → "250 גרם food grade white card".
+  const m = en.match(/^(\d+)\s*g\b\s*(.*)$/i);
+  if (m) return m[2] ? `${m[1]} גרם ${m[2]}` : `${m[1]} גרם`;
   return en;
 }
 

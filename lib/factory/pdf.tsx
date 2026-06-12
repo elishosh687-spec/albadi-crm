@@ -550,7 +550,10 @@ function CombinedQuotePDF({ customerName, items }: CombinedQuotePdfProps) {
     const printingHe = stripCjk(spec.printing ? humanizePrinting(spec.printing) : "");
     const finishingHe = stripCjk(spec.finishing ? humanizeFinishing(spec.finishing) : "");
     const materialHe = stripCjk(spec.material ? humanizeMaterial(spec.material) : "");
-    const title = `${spec.productName?.trim() || "שקית אלבדי"} — ${sizeLabel(spec)} ס״מ`;
+    // No fabricated default name: if the product has no name, the size IS the
+    // title. sizeLabel already ends with ס"מ — don't append it again.
+    const namePart = spec.productName?.trim();
+    const title = namePart ? `${namePart} — ${sizeLabel(spec)}` : sizeLabel(spec);
     const sub = [materialHe, printingHe, finishingHe, pricing.shippingOptionName || ""]
       .filter(Boolean)
       .join(" · ");
