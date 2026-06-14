@@ -456,18 +456,16 @@ export const ProductConfigurator: React.FC = () => {
     void handleSendToCustomer();
   }, [agentMode, handleSendToCustomer]);
 
-  const stageInset =
-    activeTab === "logo" && logoUrl
-      ? isCompact
-        ? "clamp(220px, 34vh, 280px)"
-        : "clamp(188px, 24vh, 228px)"
+  // On desktop the controls live in a floating side panel, so the 3D stage
+  // can fill the whole frame. On mobile we keep the bottom-dock inset so the
+  // bag + pedestal stay above the stacked dock.
+  const stageInset = !isCompact
+    ? 0
+    : activeTab === "logo" && logoUrl
+      ? "clamp(220px, 34vh, 280px)"
       : activeTab === "logo"
-        ? isCompact
-          ? "clamp(168px, 26vh, 220px)"
-          : "clamp(148px, 18vh, 188px)"
-        : isCompact
-          ? "clamp(148px, 22vh, 196px)"
-          : "clamp(128px, 16vh, 168px)";
+        ? "clamp(168px, 26vh, 220px)"
+        : "clamp(148px, 22vh, 196px)";
 
   const toolbarButtons = (
     <>
@@ -530,6 +528,498 @@ export const ProductConfigurator: React.FC = () => {
           <Maximize className={isCompact ? "size-3.5" : "size-4"} />
         )}
       </ToolbarButton>
+    </>
+  );
+
+  // ── Shared control fragments (used by both the desktop side panel and the
+  //    mobile bottom dock so behaviour/handlers stay identical) ──────────────
+
+  const tabSwitcher = (
+    <div
+      style={{
+        ...PILL_STYLE,
+        display: "inline-flex",
+        width: isCompact ? "fit-content" : "100%",
+        maxWidth: "100%",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 4,
+        padding: 4,
+      }}
+    >
+      {DOCK_TABS.map((tab) => {
+        const isActive = activeTab === tab.id;
+        return (
+          <button
+            key={tab.id}
+            type="button"
+            data-dock-tab={tab.id}
+            onClick={() => handleTabSelect(tab.id)}
+            className="transition-colors"
+            style={{
+              border: "none",
+              borderRadius: radius.full,
+              flex: isCompact ? undefined : 1,
+              padding: isCompact
+                ? `${space.sm}px ${space.md}px`
+                : `${space.sm}px ${space.lg}px`,
+              fontSize: isCompact ? size.xs : size.sm,
+              fontWeight: isActive ? weight.semibold : weight.regular,
+              background: isActive ? colors.ink : "transparent",
+              color: isActive ? colors.surface : colors.inkMuted,
+              cursor: "pointer",
+              whiteSpace: "nowrap",
+              minHeight: 40,
+            }}
+          >
+            {tab.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+
+  const sizeSelect = (
+    <select
+      value={sizeProductId}
+      onChange={(event) => setSizeProductId(event.target.value)}
+      aria-label="מידת התיק"
+      dir="rtl"
+      style={{
+        maxWidth: "100%",
+        width: isCompact ? undefined : "100%",
+        background: "rgba(255,255,255,0.92)",
+        border: `1px solid ${colors.ruleSoft}`,
+        borderRadius: radius.full,
+        padding: isCompact ? `8px ${space.lg}px` : `9px ${space.lg}px`,
+        fontSize: isCompact ? size.xs : size.sm,
+        fontWeight: weight.semibold,
+        color: colors.ink,
+        cursor: "pointer",
+        minHeight: 38,
+        textAlign: "center",
+        textAlignLast: "center",
+      }}
+    >
+      {BAG_SIZE_OPTIONS.map((option) => (
+        <option key={option.productId} value={option.productId}>
+          {option.description
+            ? `${option.label} — ${option.description}`
+            : option.label}
+        </option>
+      ))}
+    </select>
+  );
+
+  const colorChip = (
+    <div
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: space.sm,
+        maxWidth: "100%",
+        width: isCompact ? undefined : "100%",
+        fontSize: size.xs,
+        color: colors.inkMuted,
+        background: "rgba(255,255,255,0.92)",
+        borderRadius: radius.full,
+        border: `1px solid ${colors.ruleSoft}`,
+        padding: `4px ${space.sm}px 4px ${space.md}px`,
+      }}
+    >
+      <span
+        style={{
+          width: 14,
+          height: 14,
+          flexShrink: 0,
+          borderRadius: radius.full,
+          border: `1px solid ${colors.rule}`,
+          background: selectedColorHex,
+        }}
+        aria-hidden="true"
+      />
+      <span
+        style={{
+          minWidth: 0,
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+          whiteSpace: "nowrap",
+          color: colors.ink,
+        }}
+      >
+        {selectedColor?.name ?? "צבע נבחר"}
+      </span>
+      <code
+        style={{
+          flexShrink: 0,
+          fontSize: 10,
+          fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+          color: colors.inkMuted,
+          letterSpacing: "0.02em",
+        }}
+      >
+        {selectedColorClipboardText}
+      </code>
+      <button
+        type="button"
+        onClick={handleCopyColorDetails}
+        title="העתק SKU וקוד צבע"
+        aria-label="העתק SKU וקוד צבע"
+        style={{
+          flexShrink: 0,
+          width: 28,
+          height: 28,
+          display: "grid",
+          placeItems: "center",
+          borderRadius: radius.full,
+          border: "none",
+          background: colorCopied ? colors.successBg : colors.surfaceMuted,
+          color: colorCopied ? colors.success : colors.inkMuted,
+          cursor: "pointer",
+        }}
+      >
+        {colorCopied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
+      </button>
+    </div>
+  );
+
+  // Color tab body: size dropdown + selected-color chip + swatch rail.
+  // Kept mounted (display toggled) so keen-slider preserves its layout.
+  const colorSection = (
+    <div
+      style={{
+        display: activeTab === "color" ? "flex" : "none",
+        flexDirection: "column",
+        alignItems: isCompact ? "center" : "stretch",
+        gap: isCompact ? 8 : 10,
+        width: "100%",
+      }}
+    >
+      {sizeSelect}
+      {colorChip}
+      <ColorSwatchRail
+        colors={BAG_COLORS}
+        selectedHex={selectedColorHex}
+        onSelect={setSelectedColorHex}
+        compact={isCompact}
+        visible={activeTab === "color"}
+      />
+    </div>
+  );
+
+  const logoSection =
+    activeTab === "logo" ? (
+      <div
+        style={{
+          ...PILL_STYLE,
+          borderRadius: isCompact ? 20 : 24,
+          maxWidth: "100%",
+          width: "100%",
+          padding: isCompact ? `${space.sm}px ${space.md}px` : `${space.sm}px ${space.lg}px`,
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "stretch",
+          gap: space.md,
+        }}
+      >
+        {!logoUrl ? (
+          <>
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={logoLoading}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: space.sm,
+                padding: `${space.sm}px ${space.lg}px`,
+                borderRadius: radius.full,
+                border: "none",
+                background: colors.ink,
+                color: colors.surface,
+                fontSize: size.sm,
+                fontWeight: weight.medium,
+                cursor: logoLoading ? "wait" : "pointer",
+                opacity: logoLoading ? 0.7 : 1,
+                minHeight: 44,
+              }}
+            >
+              <ImagePlus className="size-4" />
+              {logoLoading ? "מעבד לוגו..." : "העלה לוגו"}
+            </button>
+            <span
+              style={{
+                fontSize: size.xs,
+                color: colors.inkMuted,
+                textAlign: "center",
+                lineHeight: 1.5,
+              }}
+            >
+              PNG, JPG או SVG · עד 8MB · איכות גבוהה לתצוגה ו-PDF
+            </span>
+          </>
+        ) : (
+          <>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: space.md,
+                width: "100%",
+              }}
+            >
+              <button
+                type="button"
+                title="החלף לוגו"
+                aria-label="החלף לוגו"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={logoLoading}
+                style={{
+                  width: 44,
+                  height: 44,
+                  flexShrink: 0,
+                  borderRadius: radius.lg,
+                  border: `1px solid ${colors.rule}`,
+                  background: colors.surface,
+                  padding: 4,
+                  cursor: logoLoading ? "wait" : "pointer",
+                  display: "grid",
+                  placeItems: "center",
+                  overflow: "hidden",
+                }}
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={logoUrl}
+                  alt={logoFileName || "לוגו"}
+                  style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }}
+                />
+              </button>
+              <div style={{ minWidth: 0, flex: 1 }}>
+                <div
+                  style={{
+                    fontSize: size.sm,
+                    fontWeight: weight.medium,
+                    color: colors.ink,
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {logoFileName || "לוגו"}
+                </div>
+                <div style={{ fontSize: size.xs, color: colors.inkMuted }}>
+                  {logoPlacementMode === "drag"
+                    ? "גרור על השקית · המודל נשאר קבוע"
+                    : "בקרות מדויקות · סובב את המודל"}
+                </div>
+              </div>
+              <div style={{ display: "flex", gap: 2, flexShrink: 0 }}>
+                <ToolbarButton
+                  label="איפוס מיקום הלוגו"
+                  onClick={resetLogoLayout}
+                  compact={isCompact}
+                >
+                  <RotateCcw className="size-4" />
+                </ToolbarButton>
+                <ToolbarButton label="הסר לוגו" onClick={handleRemoveLogo} compact={isCompact}>
+                  <Trash2 className="size-4" />
+                </ToolbarButton>
+              </div>
+            </div>
+
+            <div
+              style={{
+                display: "flex",
+                width: "100%",
+                padding: 3,
+                borderRadius: radius.full,
+                background: colors.surfaceMuted,
+                gap: 3,
+              }}
+              role="tablist"
+              aria-label="אופן מיקום הלוגו"
+            >
+              {(
+                [
+                  { id: "drag" as const, label: "גרירה על השקית", icon: Hand },
+                  { id: "controls" as const, label: "בקרות מדויקות", icon: SlidersHorizontal },
+                ] as const
+              ).map(({ id, label, icon: Icon }) => {
+                const active = logoPlacementMode === id;
+                return (
+                  <button
+                    key={id}
+                    type="button"
+                    role="tab"
+                    aria-selected={active ? "true" : "false"}
+                    onClick={() => setLogoPlacementMode(id)}
+                    style={{
+                      flex: 1,
+                      display: "inline-flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      gap: 6,
+                      minHeight: 36,
+                      padding: `0 ${space.sm}px`,
+                      borderRadius: radius.full,
+                      border: "none",
+                      background: active ? colors.ink : "transparent",
+                      color: active ? colors.surface : colors.inkMuted,
+                      fontSize: isCompact ? 11 : size.xs,
+                      fontWeight: active ? weight.medium : weight.regular,
+                      cursor: "pointer",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    <Icon className="size-3.5 shrink-0" />
+                    {isCompact ? (id === "drag" ? "גרירה" : "בקרות") : label}
+                  </button>
+                );
+              })}
+            </div>
+
+            <div
+              className="flex w-full gap-3 overflow-x-auto pb-1"
+              style={{
+                scrollbarWidth: "thin",
+                WebkitOverflowScrolling: "touch",
+              }}
+            >
+              <MiniSlider
+                label="גודל"
+                value={logoScale}
+                display={`${logoScale.toFixed(2)}x`}
+                min={0.4}
+                max={1.9}
+                step={0.05}
+                onChange={setLogoScale}
+                compact={isCompact}
+              />
+              {logoPlacementMode === "controls" ? (
+                <>
+                  <MiniSlider
+                    label="אופקי"
+                    value={logoPositionX}
+                    display={logoPositionX.toFixed(2)}
+                    min={LOGO_POSITION_LIMITS.x.min}
+                    max={LOGO_POSITION_LIMITS.x.max}
+                    step={0.01}
+                    onChange={setLogoPositionX}
+                    compact={isCompact}
+                  />
+                  <MiniSlider
+                    label="אנכי"
+                    value={logoPositionY}
+                    display={logoPositionY.toFixed(2)}
+                    min={LOGO_POSITION_LIMITS.y.min}
+                    max={LOGO_POSITION_LIMITS.y.max}
+                    step={0.01}
+                    onChange={setLogoPositionY}
+                    compact={isCompact}
+                  />
+                </>
+              ) : null}
+              <MiniSlider
+                label="סיבוב"
+                value={logoRotation}
+                display={`${Math.round(logoRotation)}°`}
+                min={-180}
+                max={180}
+                step={1}
+                onChange={setLogoRotation}
+                compact={isCompact}
+              />
+            </div>
+          </>
+        )}
+
+        {logoError ? (
+          <span style={{ fontSize: size.xs, color: colors.danger, width: "100%", textAlign: "center" }}>
+            {logoError}
+          </span>
+        ) : null}
+      </div>
+    ) : null;
+
+  // Send-to-customer action — agent mode opens a contact picker; ?t session
+  // sends to the linked contact. Hidden on the plain public tool.
+  const sendAction =
+    agentMode || sessionToken ? (
+      <div
+        style={{
+          ...PILL_STYLE,
+          maxWidth: "100%",
+          padding: `${space.xs}px ${space.sm}px`,
+          display: "flex",
+          alignItems: "center",
+          gap: space.sm,
+        }}
+      >
+        <button
+          type="button"
+          onClick={handleSendClick}
+          disabled={!canSendToCustomer || sendState === "sending"}
+          title={
+            agentMode
+              ? "בחר לקוח ושלח הדמיה בוואטסאפ"
+              : canSendToCustomer
+                ? "שלח הדמיה ללקוח בוואטסאפ"
+                : "פתח את המעצב מקישור ללקוח כדי לשלוח"
+          }
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: space.sm,
+            padding: `${space.sm}px ${space.lg}px`,
+            borderRadius: radius.full,
+            border: "none",
+            background:
+              sendState === "sent"
+                ? colors.success
+                : sendState === "error"
+                  ? colors.danger
+                  : colors.accent,
+            color: colors.surface,
+            fontSize: size.sm,
+            fontWeight: weight.semibold,
+            cursor: !canSendToCustomer || sendState === "sending" ? "not-allowed" : "pointer",
+            opacity: !canSendToCustomer ? 0.55 : 1,
+            minHeight: 40,
+          }}
+        >
+          {sendState === "sending" ? (
+            <Loader2 className="size-4 animate-spin" />
+          ) : sendState === "sent" ? (
+            <Check className="size-4" />
+          ) : (
+            <Send className="size-4" />
+          )}
+          {sendState === "sending"
+            ? "שולח…"
+            : sendState === "sent"
+              ? "נשלח ללקוח"
+              : sendState === "error"
+                ? "נסה שוב"
+                : "שלח ללקוח"}
+        </button>
+        {!agentMode && !linkedLeadSid ? (
+          <span style={{ fontSize: size.xs, color: colors.inkMuted }}>
+            אין לקוח מקושר
+          </span>
+        ) : sendState === "error" && sendError ? (
+          <span style={{ fontSize: size.xs, color: colors.danger }}>{sendError}</span>
+        ) : null}
+      </div>
+    ) : null;
+
+  // The grouped design controls (tabs + active section) shared by both layouts.
+  const designControls = (
+    <>
+      {tabSwitcher}
+      {colorSection}
+      {logoSection}
     </>
   );
 
@@ -626,43 +1116,90 @@ export const ProductConfigurator: React.FC = () => {
         </span>
       </div>
 
-      {/* Desktop / tablet toolbar */}
+      {/* ─────────────────────────────────────────────────────────────────
+          DESKTOP layout: bag is the centerpiece, controls live on the sides.
+          - Utility toolbar: top-right floating bar.
+          - Design panel: left-side floating card (tabs + size + color/logo).
+          - Send action: its own card pinned bottom-left, kept deliberate.
+          ───────────────────────────────────────────────────────────────── */}
       {!isCompact ? (
+        <>
+          {/* Utility toolbar — top-right corner */}
+          <div
+            style={{
+              position: "absolute",
+              top: 16,
+              right: 16,
+              display: "flex",
+              flexDirection: "row",
+              gap: 2,
+              padding: 5,
+              ...PILL_STYLE,
+              zIndex: 10,
+            }}
+          >
+            {toolbarButtons}
+          </div>
+
+          {/* Design controls — left-side floating card, vertically centered */}
+          <div
+            style={{
+              position: "absolute",
+              top: "50%",
+              left: 16,
+              transform: "translateY(-50%)",
+              maxHeight: "calc(100dvh - 32px)",
+              width: "min(340px, 32vw)",
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "stretch",
+              gap: 10,
+              padding: space.lg,
+              overflowY: "auto",
+              overflowX: "hidden",
+              ...PILL_STYLE,
+              borderRadius: radius.xl,
+              zIndex: 10,
+            }}
+          >
+            {designControls}
+          </div>
+
+          {/* Send action — its own card, bottom-left corner */}
+          {sendAction ? (
+            <div
+              style={{
+                position: "absolute",
+                bottom: `calc(16px + env(safe-area-inset-bottom))`,
+                left: 16,
+                zIndex: 10,
+              }}
+            >
+              {sendAction}
+            </div>
+          ) : null}
+        </>
+      ) : null}
+
+      {/* ─────────────────────────────────────────────────────────────────
+          MOBILE layout: keep the centered, stacked bottom dock.
+          ───────────────────────────────────────────────────────────────── */}
+      {isCompact ? (
         <div
           style={{
             position: "absolute",
-            right: 14,
-            top: "50%",
-            transform: "translateY(-50%)",
+            bottom: `calc(10px + env(safe-area-inset-bottom))`,
+            left: "50%",
+            transform: "translateX(-50%)",
             display: "flex",
             flexDirection: "column",
-            gap: 2,
-            padding: 5,
-            ...PILL_STYLE,
+            alignItems: "center",
+            gap: 8,
+            width: "min(100%, calc(100vw - 16px))",
+            paddingInline: 8,
             zIndex: 10,
           }}
         >
-          {toolbarButtons}
-        </div>
-      ) : null}
-
-      {/* Bottom dock */}
-      <div
-        style={{
-          position: "absolute",
-          bottom: `calc(${isCompact ? 10 : 18}px + env(safe-area-inset-bottom))`,
-          left: "50%",
-          transform: "translateX(-50%)",
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          gap: isCompact ? 8 : 10,
-          width: isCompact ? "min(100%, calc(100vw - 16px))" : "min(720px, 94vw)",
-          paddingInline: isCompact ? 8 : 0,
-          zIndex: 10,
-        }}
-      >
-        {isCompact ? (
           <div
             style={{
               display: "flex",
@@ -677,471 +1214,12 @@ export const ProductConfigurator: React.FC = () => {
           >
             {toolbarButtons}
           </div>
-        ) : null}
-        {/* Contextual pill — keep mounted so keen-slider keeps layout when switching tabs */}
-        <div
-          style={{
-            display: activeTab === "color" ? "flex" : "none",
-            flexDirection: "column",
-            alignItems: "center",
-            gap: isCompact ? 8 : 10,
-            width: "100%",
-          }}
-        >
-            {/* Size / model selector (dropdown) — changes the displayed 3D bag only */}
-            <select
-              value={sizeProductId}
-              onChange={(event) => setSizeProductId(event.target.value)}
-              aria-label="מידת התיק"
-              dir="rtl"
-              style={{
-                maxWidth: "100%",
-                background: "rgba(255,255,255,0.92)",
-                border: `1px solid ${colors.ruleSoft}`,
-                borderRadius: radius.full,
-                padding: isCompact ? `8px ${space.lg}px` : `9px ${space.lg}px`,
-                fontSize: isCompact ? size.xs : size.sm,
-                fontWeight: weight.semibold,
-                color: colors.ink,
-                cursor: "pointer",
-                minHeight: 38,
-                textAlign: "center",
-                textAlignLast: "center",
-              }}
-            >
-              {BAG_SIZE_OPTIONS.map((option) => (
-                <option key={option.productId} value={option.productId}>
-                  {option.description
-                    ? `${option.label} — ${option.description}`
-                    : option.label}
-                </option>
-              ))}
-            </select>
-            <div
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: space.sm,
-                maxWidth: "100%",
-                fontSize: size.xs,
-                color: colors.inkMuted,
-                background: "rgba(255,255,255,0.92)",
-                borderRadius: radius.full,
-                border: `1px solid ${colors.ruleSoft}`,
-                padding: `4px ${space.sm}px 4px ${space.md}px`,
-              }}
-            >
-              <span
-                style={{
-                  width: 14,
-                  height: 14,
-                  flexShrink: 0,
-                  borderRadius: radius.full,
-                  border: `1px solid ${colors.rule}`,
-                  background: selectedColorHex,
-                }}
-                aria-hidden="true"
-              />
-              <span
-                style={{
-                  minWidth: 0,
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
-                  whiteSpace: "nowrap",
-                  color: colors.ink,
-                }}
-              >
-                {selectedColor?.name ?? "צבע נבחר"}
-              </span>
-              <code
-                style={{
-                  flexShrink: 0,
-                  fontSize: 10,
-                  fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
-                  color: colors.inkMuted,
-                  letterSpacing: "0.02em",
-                }}
-              >
-                {selectedColorClipboardText}
-              </code>
-              <button
-                type="button"
-                onClick={handleCopyColorDetails}
-                title="העתק SKU וקוד צבע"
-                aria-label="העתק SKU וקוד צבע"
-                style={{
-                  flexShrink: 0,
-                  width: 28,
-                  height: 28,
-                  display: "grid",
-                  placeItems: "center",
-                  borderRadius: radius.full,
-                  border: "none",
-                  background: colorCopied ? colors.successBg : colors.surfaceMuted,
-                  color: colorCopied ? colors.success : colors.inkMuted,
-                  cursor: "pointer",
-                }}
-              >
-                {colorCopied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
-              </button>
-            </div>
-            <ColorSwatchRail
-              colors={BAG_COLORS}
-              selectedHex={selectedColorHex}
-              onSelect={setSelectedColorHex}
-              compact={isCompact}
-              visible={activeTab === "color"}
-            />
+          {colorSection}
+          {logoSection}
+          {sendAction}
+          {tabSwitcher}
         </div>
-
-        {activeTab === "logo" ? (
-          <div
-            style={{
-              ...PILL_STYLE,
-              borderRadius: isCompact ? 20 : 24,
-              maxWidth: "100%",
-              width: "100%",
-              padding: isCompact ? `${space.sm}px ${space.md}px` : `${space.sm}px ${space.lg}px`,
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "stretch",
-              gap: space.md,
-            }}
-          >
-            {!logoUrl ? (
-              <>
-                <button
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={logoLoading}
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    gap: space.sm,
-                    padding: `${space.sm}px ${space.lg}px`,
-                    borderRadius: radius.full,
-                    border: "none",
-                    background: colors.ink,
-                    color: colors.surface,
-                    fontSize: size.sm,
-                    fontWeight: weight.medium,
-                    cursor: logoLoading ? "wait" : "pointer",
-                    opacity: logoLoading ? 0.7 : 1,
-                    minHeight: 44,
-                  }}
-                >
-                  <ImagePlus className="size-4" />
-                  {logoLoading ? "מעבד לוגו..." : "העלה לוגו"}
-                </button>
-                <span
-                  style={{
-                    fontSize: size.xs,
-                    color: colors.inkMuted,
-                    textAlign: "center",
-                    lineHeight: 1.5,
-                  }}
-                >
-                  PNG, JPG או SVG · עד 8MB · איכות גבוהה לתצוגה ו-PDF
-                </span>
-              </>
-            ) : (
-              <>
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: space.md,
-                    width: "100%",
-                  }}
-                >
-                  <button
-                    type="button"
-                    title="החלף לוגו"
-                    aria-label="החלף לוגו"
-                    onClick={() => fileInputRef.current?.click()}
-                    disabled={logoLoading}
-                    style={{
-                      width: 44,
-                      height: 44,
-                      flexShrink: 0,
-                      borderRadius: radius.lg,
-                      border: `1px solid ${colors.rule}`,
-                      background: colors.surface,
-                      padding: 4,
-                      cursor: logoLoading ? "wait" : "pointer",
-                      display: "grid",
-                      placeItems: "center",
-                      overflow: "hidden",
-                    }}
-                  >
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={logoUrl}
-                      alt={logoFileName || "לוגו"}
-                      style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }}
-                    />
-                  </button>
-                  <div style={{ minWidth: 0, flex: 1 }}>
-                    <div
-                      style={{
-                        fontSize: size.sm,
-                        fontWeight: weight.medium,
-                        color: colors.ink,
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                        whiteSpace: "nowrap",
-                      }}
-                    >
-                      {logoFileName || "לוגו"}
-                    </div>
-                    <div style={{ fontSize: size.xs, color: colors.inkMuted }}>
-                      {logoPlacementMode === "drag"
-                        ? "גרור על השקית · המודל נשאר קבוע"
-                        : "בקרות מדויקות · סובב את המודל"}
-                    </div>
-                  </div>
-                  <div style={{ display: "flex", gap: 2, flexShrink: 0 }}>
-                    <ToolbarButton
-                      label="איפוס מיקום הלוגו"
-                      onClick={resetLogoLayout}
-                      compact={isCompact}
-                    >
-                      <RotateCcw className="size-4" />
-                    </ToolbarButton>
-                    <ToolbarButton label="הסר לוגו" onClick={handleRemoveLogo} compact={isCompact}>
-                      <Trash2 className="size-4" />
-                    </ToolbarButton>
-                  </div>
-                </div>
-
-                <div
-                  style={{
-                    display: "flex",
-                    width: "100%",
-                    padding: 3,
-                    borderRadius: radius.full,
-                    background: colors.surfaceMuted,
-                    gap: 3,
-                  }}
-                  role="tablist"
-                  aria-label="אופן מיקום הלוגו"
-                >
-                  {(
-                    [
-                      { id: "drag" as const, label: "גרירה על השקית", icon: Hand },
-                      { id: "controls" as const, label: "בקרות מדויקות", icon: SlidersHorizontal },
-                    ] as const
-                  ).map(({ id, label, icon: Icon }) => {
-                    const active = logoPlacementMode === id;
-                    return (
-                      <button
-                        key={id}
-                        type="button"
-                        role="tab"
-                        aria-selected={active ? "true" : "false"}
-                        onClick={() => setLogoPlacementMode(id)}
-                        style={{
-                          flex: 1,
-                          display: "inline-flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          gap: 6,
-                          minHeight: 36,
-                          padding: `0 ${space.sm}px`,
-                          borderRadius: radius.full,
-                          border: "none",
-                          background: active ? colors.ink : "transparent",
-                          color: active ? colors.surface : colors.inkMuted,
-                          fontSize: isCompact ? 11 : size.xs,
-                          fontWeight: active ? weight.medium : weight.regular,
-                          cursor: "pointer",
-                          whiteSpace: "nowrap",
-                        }}
-                      >
-                        <Icon className="size-3.5 shrink-0" />
-                        {isCompact ? (id === "drag" ? "גרירה" : "בקרות") : label}
-                      </button>
-                    );
-                  })}
-                </div>
-
-                <div
-                  className="flex w-full gap-3 overflow-x-auto pb-1"
-                  style={{
-                    scrollbarWidth: "thin",
-                    WebkitOverflowScrolling: "touch",
-                  }}
-                >
-                  <MiniSlider
-                    label="גודל"
-                    value={logoScale}
-                    display={`${logoScale.toFixed(2)}x`}
-                    min={0.4}
-                    max={1.9}
-                    step={0.05}
-                    onChange={setLogoScale}
-                    compact={isCompact}
-                  />
-                  {logoPlacementMode === "controls" ? (
-                    <>
-                      <MiniSlider
-                        label="אופקי"
-                        value={logoPositionX}
-                        display={logoPositionX.toFixed(2)}
-                        min={LOGO_POSITION_LIMITS.x.min}
-                        max={LOGO_POSITION_LIMITS.x.max}
-                        step={0.01}
-                        onChange={setLogoPositionX}
-                        compact={isCompact}
-                      />
-                      <MiniSlider
-                        label="אנכי"
-                        value={logoPositionY}
-                        display={logoPositionY.toFixed(2)}
-                        min={LOGO_POSITION_LIMITS.y.min}
-                        max={LOGO_POSITION_LIMITS.y.max}
-                        step={0.01}
-                        onChange={setLogoPositionY}
-                        compact={isCompact}
-                      />
-                    </>
-                  ) : null}
-                  <MiniSlider
-                    label="סיבוב"
-                    value={logoRotation}
-                    display={`${Math.round(logoRotation)}°`}
-                    min={-180}
-                    max={180}
-                    step={1}
-                    onChange={setLogoRotation}
-                    compact={isCompact}
-                  />
-                </div>
-              </>
-            )}
-
-            {logoError ? (
-              <span style={{ fontSize: size.xs, color: colors.danger, width: "100%", textAlign: "center" }}>
-                {logoError}
-              </span>
-            ) : null}
-          </div>
-        ) : null}
-
-        {/* Send-to-customer — agent mode opens a contact picker; ?t session
-            sends to the linked contact. Hidden on the plain public tool. */}
-        {agentMode || sessionToken ? (
-          <div
-            style={{
-              ...PILL_STYLE,
-              maxWidth: "100%",
-              padding: `${space.xs}px ${space.sm}px`,
-              display: "flex",
-              alignItems: "center",
-              gap: space.sm,
-            }}
-          >
-            <button
-              type="button"
-              onClick={handleSendClick}
-              disabled={!canSendToCustomer || sendState === "sending"}
-              title={
-                agentMode
-                  ? "בחר לקוח ושלח הדמיה בוואטסאפ"
-                  : canSendToCustomer
-                    ? "שלח הדמיה ללקוח בוואטסאפ"
-                    : "פתח את המעצב מקישור ללקוח כדי לשלוח"
-              }
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: space.sm,
-                padding: `${space.sm}px ${space.lg}px`,
-                borderRadius: radius.full,
-                border: "none",
-                background:
-                  sendState === "sent"
-                    ? colors.success
-                    : sendState === "error"
-                      ? colors.danger
-                      : colors.accent,
-                color: colors.surface,
-                fontSize: size.sm,
-                fontWeight: weight.semibold,
-                cursor: !canSendToCustomer || sendState === "sending" ? "not-allowed" : "pointer",
-                opacity: !canSendToCustomer ? 0.55 : 1,
-                minHeight: 40,
-              }}
-            >
-              {sendState === "sending" ? (
-                <Loader2 className="size-4 animate-spin" />
-              ) : sendState === "sent" ? (
-                <Check className="size-4" />
-              ) : (
-                <Send className="size-4" />
-              )}
-              {sendState === "sending"
-                ? "שולח…"
-                : sendState === "sent"
-                  ? "נשלח ללקוח"
-                  : sendState === "error"
-                    ? "נסה שוב"
-                    : "שלח ללקוח"}
-            </button>
-            {!agentMode && !linkedLeadSid ? (
-              <span style={{ fontSize: size.xs, color: colors.inkMuted }}>
-                אין לקוח מקושר
-              </span>
-            ) : sendState === "error" && sendError ? (
-              <span style={{ fontSize: size.xs, color: colors.danger }}>{sendError}</span>
-            ) : null}
-          </div>
-        ) : null}
-
-        {/* Tabs pill */}
-        <div
-          style={{
-            ...PILL_STYLE,
-            display: "inline-flex",
-            width: "fit-content",
-            maxWidth: "100%",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: 4,
-            padding: 4,
-          }}
-        >
-          {DOCK_TABS.map((tab) => {
-            const isActive = activeTab === tab.id;
-            return (
-              <button
-                key={tab.id}
-                type="button"
-                data-dock-tab={tab.id}
-                onClick={() => handleTabSelect(tab.id)}
-                className="transition-colors"
-                style={{
-                  border: "none",
-                  borderRadius: radius.full,
-                  padding: isCompact
-                    ? `${space.sm}px ${space.md}px`
-                    : `${space.sm}px ${space.lg}px`,
-                  fontSize: isCompact ? size.xs : size.sm,
-                  fontWeight: isActive ? weight.semibold : weight.regular,
-                  background: isActive ? colors.ink : "transparent",
-                  color: isActive ? colors.surface : colors.inkMuted,
-                  cursor: "pointer",
-                  whiteSpace: "nowrap",
-                  minHeight: 40,
-                }}
-              >
-                {tab.label}
-              </button>
-            );
-          })}
-        </div>
-      </div>
+      ) : null}
 
       {/* Exports drawer — visual media (PNG / JPG / video), no pricing */}
       {exportsOpen ? (
