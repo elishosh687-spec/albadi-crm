@@ -94,7 +94,16 @@ export async function sendQuoteWhatsapp(
   }
   const host = hostHeader ?? "albadi-crm.vercel.app";
   const proto = host.startsWith("localhost") ? "http" : "https";
-  const pdfMediaUrl = `${proto}://${host}/api/factory/${id}/pdf`;
+  // GreenAPI's sendFileByUrl does NOT follow 3xx redirects — if urlFile
+  // returns a redirect it sends the link as plain text instead of attaching
+  // the document. The /api/factory/[id]/pdf route 302-redirects to the Blob
+  // URL when row.pdfUrl is set, which broke the send into a bare link. So:
+  // hand GreenAPI a direct-download URL — the Blob URL itself when present,
+  // otherwise the proxy path (?stream=1 returns the bytes with no redirect).
+  const pdfMediaUrl =
+    row.pdfUrl && !row.pdfUrl.includes("/api/factory/")
+      ? row.pdfUrl
+      : `${proto}://${host}/api/factory/${id}/pdf?stream=1`;
 
   const leadRows = await db
     .select({
