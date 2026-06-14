@@ -1,0 +1,310 @@
+[
+  {
+    "id": "G60",
+    "sku": "G60",
+    "name": "Green-Yellow",
+    "category": "GREENS",
+    "hex": "#9CC833"
+  },
+  {
+    "id": "G68",
+    "sku": "G68",
+    "name": "Green",
+    "category": "GREENS",
+    "hex": "#44B04A"
+  },
+  {
+    "id": "G61",
+    "sku": "G61",
+    "name": "Deep Green",
+    "category": "GREENS",
+    "hex": "#369048"
+  },
+  {
+    "id": "G67",
+    "sku": "G67",
+    "name": "Dark Green",
+    "category": "GREENS",
+    "hex": "#287757"
+  },
+  {
+    "id": "G66",
+    "sku": "G66",
+    "name": "Forest Green",
+    "category": "GREENS",
+    "hex": "#3C6857"
+  },
+  {
+    "id": "G661",
+    "sku": "G661",
+    "name": "Turquoise",
+    "category": "GREENS",
+    "hex": "#30B8C8"
+  },
+  {
+    "id": "R18",
+    "sku": "R18",
+    "name": "Red",
+    "category": "REDS_AND_PINKS",
+    "hex": "#E13C28"
+  },
+  {
+    "id": "R152",
+    "sku": "R152",
+    "name": "Red and White",
+    "category": "REDS_AND_PINKS",
+    "hex": "#C04838"
+  },
+  {
+    "id": "R153",
+    "sku": "R153",
+    "name": "Dark red",
+    "category": "REDS_AND_PINKS",
+    "hex": "#C83838"
+  },
+  {
+    "id": "R106",
+    "sku": "R106",
+    "name": "Mob",
+    "category": "REDS_AND_PINKS",
+    "hex": "#BE5580"
+  },
+  {
+    "id": "R112",
+    "sku": "R112",
+    "name": "Bordeaux",
+    "category": "REDS_AND_PINKS",
+    "hex": "#7E3048"
+  },
+  {
+    "id": "R16",
+    "sku": "R16",
+    "name": "Pink",
+    "category": "REDS_AND_PINKS",
+    "hex": "#D79FB8"
+  },
+  {
+    "id": "R129",
+    "sku": "R129",
+    "name": "Light pink",
+    "category": "REDS_AND_PINKS",
+    "hex": "#DCA1C1"
+  },
+  {
+    "id": "R11",
+    "sku": "R11",
+    "name": "Fuchsia",
+    "category": "REDS_AND_PINKS",
+    "hex": "#C22870"
+  },
+  {
+    "id": "R17",
+    "sku": "R17",
+    "name": "Magenta",
+    "category": "REDS_AND_PINKS",
+    "hex": "#BE2568"
+  },
+  {
+    "id": "Y218",
+    "sku": "Y218",
+    "name": "Green beige",
+    "category": "YELLOWS_AND_ORANGES",
+    "hex": "#BCBCA0"
+  },
+  {
+    "id": "Y202",
+    "sku": "Y202",
+    "name": "Light beige",
+    "category": "YELLOWS_AND_ORANGES",
+    "hex": "#C9C5AC"
+  },
+  {
+    "id": "Y209",
+    "sku": "Y209",
+    "name": "Beige Butter",
+    "category": "YELLOWS_AND_ORANGES",
+    "hex": "#C0B894"
+  },
+  {
+    "id": "Y22",
+    "sku": "Y22",
+    "name": "Yellow",
+    "category": "YELLOWS_AND_ORANGES",
+    "hex": "#D5C82A"
+  },
+  {
+    "id": "Y23",
+    "sku": "Y23",
+    "name": "Golden Yellow",
+    "category": "YELLOWS_AND_ORANGES",
+    "hex": "#D4A821"
+  },
+  {
+    "id": "Y25",
+    "sku": "Y25",
+    "name": "Inbar",
+    "category": "YELLOWS_AND_ORANGES",
+    "hex": "#C78817"
+  },
+  {
+    "id": "Y259",
+    "sku": "Y259",
+    "name": "Orange",
+    "category": "YELLOWS_AND_ORANGES",
+    "hex": "#E06017"
+  },
+  {
+    "id": "Y28",
+    "sku": "Y28",
+    "name": "Orange-red",
+    "category": "YELLOWS_AND_ORANGES",
+    "hex": "#D84017"
+  },
+  {
+    "id": "B56",
+    "sku": "B56",
+    "name": "Tekhelet",
+    "category": "BLUES",
+    "hex": "#40A7D0"
+  },
+  {
+    "id": "B58",
+    "sku": "B58",
+    "name": "Blue",
+    "category": "BLUES",
+    "hex": "#2F80CF"
+  },
+  {
+    "id": "B59",
+    "sku": "B59",
+    "name": "Dark Blue",
+    "category": "BLUES",
+    "hex": "#2848AF"
+  },
+  {
+    "id": "B55",
+    "sku": "B55",
+    "name": "Blue-gray",
+    "category": "BLUES",
+    "hex": "#5968A9"
+  },
+  {
+    "id": "B521",
+    "sku": "B521",
+    "name": "Steel Blue",
+    "category": "BLUES",
+    "hex": "#5C6880"
+  },
+  {
+    "id": "B527",
+    "sku": "B527",
+    "name": "Blue Jeans",
+    "category": "BLUES",
+    "hex": "#4160A0"
+  },
+  {
+    "id": "P016",
+    "sku": "P016",
+    "name": "Lilac",
+    "category": "PURPLE",
+    "hex": "#9080BF"
+  },
+  {
+    "id": "P01",
+    "sku": "P01",
+    "name": "Purple",
+    "category": "PURPLE",
+    "hex": "#603FC1"
+  },
+  {
+    "id": "P02",
+    "sku": "P02",
+    "name": "Dark purple",
+    "category": "PURPLE",
+    "hex": "#502880"
+  },
+  {
+    "id": "N811",
+    "sku": "N811",
+    "name": "Hamra",
+    "category": "NEUTRAL_AND_NATURAL",
+    "hex": "#BFA060"
+  },
+  {
+    "id": "N822",
+    "sku": "N822",
+    "name": "Golden Beige",
+    "category": "NEUTRAL_AND_NATURAL",
+    "hex": "#C09840"
+  },
+  {
+    "id": "N899",
+    "sku": "N899",
+    "name": "Taup",
+    "category": "NEUTRAL_AND_NATURAL",
+    "hex": "#907061"
+  },
+  {
+    "id": "E05",
+    "sku": "E05",
+    "name": "Gray-Green",
+    "category": "NEUTRAL_AND_NATURAL",
+    "hex": "#A8AB9A"
+  },
+  {
+    "id": "E06",
+    "sku": "E06",
+    "name": "Grayish Khaki",
+    "category": "NEUTRAL_AND_NATURAL",
+    "hex": "#777868"
+  },
+  {
+    "id": "E08",
+    "sku": "E08",
+    "name": "Dark Grey",
+    "category": "GREY_WHITE_AND_BLACK",
+    "hex": "#565855"
+  },
+  {
+    "id": "W001-35",
+    "sku": "W001-35",
+    "name": "Light gray",
+    "category": "GREY_WHITE_AND_BLACK",
+    "hex": "#C8C5BC"
+  },
+  {
+    "id": "W001-80",
+    "sku": "W001-80",
+    "name": "Broken White",
+    "category": "GREY_WHITE_AND_BLACK",
+    "hex": "#E2DFD6"
+  },
+  {
+    "id": "W001-115",
+    "sku": "W001-115",
+    "name": "Cream",
+    "category": "GREY_WHITE_AND_BLACK",
+    "hex": "#EDEBDF"
+  },
+  {
+    "id": "W002",
+    "sku": "W002",
+    "name": "White",
+    "category": "GREY_WHITE_AND_BLACK",
+    "hex": "#EFEEE9"
+  },
+  {
+    "id": "C07-80",
+    "sku": "C07-80",
+    "name": "Coal",
+    "category": "GREY_WHITE_AND_BLACK",
+    "hex": "#3C3D38"
+  },
+  {
+    "id": "C07-115",
+    "sku": "C07-115",
+    "name": "Black",
+    "category": "GREY_WHITE_AND_BLACK",
+    "hex": "#2B2A28"
+  }
+]

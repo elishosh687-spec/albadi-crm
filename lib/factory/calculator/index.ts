@@ -75,6 +75,31 @@ function findQuantityTierId(qty: number): string | null {
   return best?.id ?? null;
 }
 
+/**
+ * Map a requested quantity to the nearest catalog tier (≤ qty). Used by the 3D
+ * configurator quote builder, which needs the tier id + whether it was exact
+ * (to decide on a quantityOverride).
+ */
+export function resolveQuantityTier(qty: number): {
+  id: string;
+  quantity: number;
+  exact: boolean;
+} {
+  const safeQty = Number.isFinite(qty) ? Math.max(1, Math.round(qty)) : 1000;
+  const exact = DEFAULT_CONFIG.quantityTiers.find((t) => t.quantity === safeQty);
+  if (exact) {
+    return { id: exact.id, quantity: exact.quantity, exact: true };
+  }
+  const sorted = [...DEFAULT_CONFIG.quantityTiers].sort(
+    (a, b) => a.quantity - b.quantity
+  );
+  let best = sorted[0]!;
+  for (const t of sorted) {
+    if (t.quantity <= safeQty) best = t;
+  }
+  return { id: best.id, quantity: best.quantity, exact: false };
+}
+
 export function computeQuoteBreakdown(spec: {
   widthCm: number;
   heightCm: number;

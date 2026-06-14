@@ -51,6 +51,11 @@ const TABS: TabDef[] = [
     label: "🧮 מחשבון",
     url: (t, sid) => withSid(`/widget/calculator?widget_token=${encodeURIComponent(t)}`, sid),
   },
+  {
+    id: "designer",
+    label: "🎨 מעצב 3D",
+    url: (t) => `/widget/configurator-send?widget_token=${encodeURIComponent(t)}`,
+  },
 ];
 
 export default async function HubWidgetPage({

@@ -1507,3 +1507,44 @@ export async function loadLeadEventsAction(
   }
 }
 
+/** Send a personalized 3D configurator link to the lead via WhatsApp. */
+export async function sendConfiguratorLinkAction(
+  manychatSubId: string
+): Promise<SimpleResult> {
+  const cleanSid = manychatSubId.trim();
+  if (!cleanSid) return { ok: false, error: "missing sid" };
+  try {
+    const { createConfiguratorSession } = await import("@/lib/configurator/sessions");
+
+    const [leadRow] = await db
+      .select({ jid: leads.waJid, phone: leads.phoneE164 })
+      .from(leads)
+      .where(sql`trim(${leads.manychatSubId}) = ${cleanSid}`)
+      .limit(1);
+    if (!leadRow) return { ok: false, error: "ליד לא נמצא" };
+    const jid = leadRow.jid ?? leadRow.phone;
+    if (!jid) return { ok: false, error: "אין JID/טלפון לליד" };
+
+    const { link, token } = await createConfiguratorSession(cleanSid);
+
+    await sendCtaUrlMessage(jid, {
+      body:
+        "בחרו צבע בד, העלו לוגו וצפו בשקית שלכם בתלת-ממד 🎨\n" +
+        "הקישור אישי אליכם — אפשר לשנות ולהוריד הצעת מחיר.",
+      ctaLabel: "פתח מעצב 3D",
+      ctaUrl: link,
+    });
+
+    void logLeadEvent({
+      manychatSubId: cleanSid,
+      eventType: "configurator_link_sent",
+      actor: "eli",
+      payload: { token, link },
+    });
+
+    return { ok: true, message: "נשלח מעצב 3D" };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "שגיאת שליחה" };
+  }
+}
+

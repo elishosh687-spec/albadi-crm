@@ -19,17 +19,22 @@
   "dependencies": {
     "@neondatabase/serverless": "^0.10.4",
     "@react-pdf/renderer": "^4.5.1",
+    "@react-three/drei": "^10.7.7",
+    "@react-three/fiber": "^9.6.1",
     "@vercel/blob": "^2.3.3",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "dotenv": "^16.6.1",
     "drizzle-orm": "^0.36.4",
+    "jspdf": "^4.2.1",
+    "keen-slider": "^6.8.6",
     "lucide-react": "^1.14.0",
     "next": "^16.2.5",
     "react": "19.0.0",
     "react-dom": "19.0.0",
     "recharts": "^3.8.1",
     "tailwind-merge": "^3.6.0",
+    "three": "^0.184.0",
     "zod": "^3.24.1"
   },
   "devDependencies": {
