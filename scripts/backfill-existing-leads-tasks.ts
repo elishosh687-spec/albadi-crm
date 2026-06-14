@@ -29,7 +29,7 @@ import {
   listContactTasks,
   updateContactTask,
 } from "../integrations/ghl/client";
-import { clampToWorkWindow } from "../lib/clock/callback-window";
+import { clampToWorkWindow, jerusalemWorkdayAt } from "../lib/clock/callback-window";
 
 const ACTIVE_SALES_STAGES = [
   "INTAKE",
@@ -57,6 +57,16 @@ const STAGE_HE: Record<string, string> = {
   DISCAVERY: "שיחת בירור",
   FACTORY_WAIT: "בדיקת מפעל",
   CONSIDERATION: "שוקל הצעה / מו״מ",
+};
+
+// Call-order priority (Eli 2026-06-14: hot leads first → speed-to-lead).
+// Lower rank = earlier on the board. Each rank adds 20 min to the 09:00 base
+// so the stages cluster in order when sorted by due time.
+const STAGE_PRIORITY: Record<string, number> = {
+  INTAKE: 0,
+  DISCAVERY: 1,
+  FACTORY_WAIT: 2,
+  CONSIDERATION: 3,
 };
 
 // Same env-hydration trick as scripts/_test-call-pipeline.ts: Vercel's
@@ -107,15 +117,22 @@ function bodyFor(
   return lines.join("\n");
 }
 
-async function dueFor(followUpDate: string | null): Promise<Date> {
+async function dueFor(
+  followUpDate: string | null,
+  pipelineStage: string | null,
+): Promise<Date> {
   const fud = (followUpDate ?? "").trim();
+  // Respect a genuine FUTURE scheduled callback (e.g. "call after the holiday").
   if (/^\d{4}-\d{2}-\d{2}/.test(fud)) {
-    // Anchor at midnight UTC of that date (= early morning Israel, same
-    // calendar day) so the clamp pulls it to 09:00 — or rolls a past date
-    // forward to the next work slot.
-    return clampToWorkWindow(new Date(`${fud.slice(0, 10)}T00:00:00Z`));
+    const d = new Date(`${fud.slice(0, 10)}T00:00:00Z`);
+    if (d.getTime() > Date.now() + 12 * 60 * 60 * 1000) {
+      return clampToWorkWindow(d);
+    }
   }
-  return clampToWorkWindow(new Date());
+  // Otherwise this is the kickoff board — schedule today (or next workday),
+  // staggered by stage priority so hot leads sort to the top.
+  const rank = STAGE_PRIORITY[pipelineStage ?? ""] ?? 4;
+  return jerusalemWorkdayAt(9, rank * 20);
 }
 
 async function main() {
@@ -158,7 +175,7 @@ async function main() {
     const contactId = lead.ghlContactId!;
     const marker = markerFor(lead.sid);
     const title = titleFor(lead);
-    const due = await dueFor(lead.followUpDate);
+    const due = await dueFor(lead.followUpDate, lead.pipelineStage);
     const dueLocal = due.toLocaleString("he-IL", {
       timeZone: "Asia/Jerusalem",
       weekday: "short",
@@ -182,13 +199,19 @@ async function main() {
       const existing = await listContactTasks(contactId);
       const found = existing.find((t) => (t.body ?? "").includes(marker));
       if (found) {
-        // Already backfilled — update title/body in place if they changed
-        // (e.g. English → Hebrew title fix), else leave alone.
-        if ((found.title ?? "") !== title || (found.body ?? "") !== body) {
-          await updateContactTask(contactId, found.id, { title, body });
+        // Already backfilled — update title/body/dueDate in place if any
+        // changed (Hebrew-title fix, priority re-stagger), else leave alone.
+        const dueChanged =
+          !found.dueDate || new Date(found.dueDate).getTime() !== due.getTime();
+        if ((found.title ?? "") !== title || (found.body ?? "") !== body || dueChanged) {
+          await updateContactTask(contactId, found.id, {
+            title,
+            body,
+            dueDate: due.toISOString(),
+          });
           updated++;
           console.log(
-            `↻ ${(lead.name ?? lead.sid).padEnd(28)} ${(lead.pipelineStage ?? "").padEnd(14)} | ${title}`,
+            `↻ ${(lead.name ?? lead.sid).padEnd(28)} ${(lead.pipelineStage ?? "").padEnd(14)} ${dueLocal} | ${title}`,
           );
         } else {
           skipped++;

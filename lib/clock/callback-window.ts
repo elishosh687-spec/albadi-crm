@@ -145,3 +145,29 @@ export async function clampToWorkWindow(
   // Fallback (only on a pathological holiday run beyond the cap).
   return cur;
 }
+
+/**
+ * The next sales workday (today if it's a workday, else roll forward over
+ * weekends/holidays) at a given Israel wall-clock time. Unlike
+ * clampToWorkWindow this does NOT past-guard the time — so same-day tasks can
+ * be staggered by time, and an already-passed slot simply shows as overdue
+ * (which is the desired behaviour for a daily priority board).
+ */
+export async function jerusalemWorkdayAt(
+  hour: number,
+  minute: number,
+  from: Date = new Date(),
+): Promise<Date> {
+  let cur = new Date(from.getTime());
+  for (let i = 0; i < MAX_ROLL_ITERATIONS; i++) {
+    const p = jerusalemParts(cur);
+    if (await isNoSendDay(cur)) {
+      const next = addCalendarDays(p.year, p.month, p.day, 1);
+      cur = jerusalemWallClock(next.year, next.month, next.day, WORK_START_HOUR, 0);
+      continue;
+    }
+    return jerusalemWallClock(p.year, p.month, p.day, hour, minute);
+  }
+  const p = jerusalemParts(cur);
+  return jerusalemWallClock(p.year, p.month, p.day, hour, minute);
+}
