@@ -672,52 +672,35 @@ export const ProductConfigurator: React.FC = () => {
             width: "100%",
           }}
         >
-            {/* Size / model selector — changes the displayed 3D bag only */}
-            <div
-              style={{
-                display: "flex",
-                flexWrap: "nowrap",
-                alignItems: "center",
-                gap: 3,
-                padding: 4,
-                ...PILL_STYLE,
-                maxWidth: "100%",
-                overflowX: "auto",
-                scrollbarWidth: "none",
-              }}
-              role="tablist"
+            {/* Size / model selector (dropdown) — changes the displayed 3D bag only */}
+            <select
+              value={sizeProductId}
+              onChange={(event) => setSizeProductId(event.target.value)}
               aria-label="מידת התיק"
+              dir="rtl"
+              style={{
+                maxWidth: "100%",
+                background: "rgba(255,255,255,0.92)",
+                border: `1px solid ${colors.ruleSoft}`,
+                borderRadius: radius.full,
+                padding: isCompact ? `8px ${space.lg}px` : `9px ${space.lg}px`,
+                fontSize: isCompact ? size.xs : size.sm,
+                fontWeight: weight.semibold,
+                color: colors.ink,
+                cursor: "pointer",
+                minHeight: 38,
+                textAlign: "center",
+                textAlignLast: "center",
+              }}
             >
-              {BAG_SIZE_OPTIONS.map((option) => {
-                const active = sizeProductId === option.productId;
-                return (
-                  <button
-                    key={option.productId}
-                    type="button"
-                    role="tab"
-                    aria-selected={active ? "true" : "false"}
-                    title={option.description || option.label}
-                    onClick={() => setSizeProductId(option.productId)}
-                    className="transition-colors"
-                    style={{
-                      border: "none",
-                      borderRadius: radius.full,
-                      padding: isCompact ? `6px ${space.md}px` : `6px ${space.lg}px`,
-                      fontSize: isCompact ? size.xs : size.sm,
-                      fontWeight: active ? weight.semibold : weight.regular,
-                      background: active ? colors.ink : "transparent",
-                      color: active ? colors.surface : colors.inkMuted,
-                      cursor: "pointer",
-                      whiteSpace: "nowrap",
-                      minHeight: 34,
-                      flexShrink: 0,
-                    }}
-                  >
-                    {option.label}
-                  </button>
-                );
-              })}
-            </div>
+              {BAG_SIZE_OPTIONS.map((option) => (
+                <option key={option.productId} value={option.productId}>
+                  {option.description
+                    ? `${option.label} — ${option.description}`
+                    : option.label}
+                </option>
+              ))}
+            </select>
             <div
               style={{
                 display: "inline-flex",
