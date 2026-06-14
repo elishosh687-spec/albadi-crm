@@ -747,44 +747,6 @@ function FinalizedState({
       : spec.description
     : sizeHe || "—";
 
-  // wa.me fallback — works even without BLOB_READ_WRITE_TOKEN. The PDF is
-  // served by /api/factory/[id]/pdf which the middleware exempts from auth
-  // for GET. The customer taps the WhatsApp link, the operator's phone opens
-  // a chat with the customer pre-filled with the caption + PDF link.
-  const waPhone = row.customerPhone
-    ? row.customerPhone.replace(/[^\d]/g, "")
-    : "";
-  const waCaption = (() => {
-    const greeting = row.customerName ? `היי ${row.customerName},` : "היי,";
-    const product = spec.description || "שקיות";
-    const sizeStr = [
-      spec.widthCm ? `W${spec.widthCm}` : null,
-      spec.depthCm ? `D${spec.depthCm}` : null,
-      spec.heightCm ? `H${spec.heightCm}` : null,
-    ]
-      .filter(Boolean)
-      .join("×");
-    const quotationNo = row.quotationNo ?? row.id.slice(-8).toUpperCase();
-    const origin =
-      typeof window !== "undefined" ? window.location.origin : "";
-    const pdfLink = `${origin}/api/factory/${row.id}/pdf`;
-    return [
-      greeting,
-      `מצורפת הצעת מחיר #${quotationNo} ל-${product}.`,
-      sizeStr
-        ? `מפרט: ${sizeStr} cm · ${spec.quantity.toLocaleString("he-IL")} יח'.`
-        : `כמות: ${spec.quantity.toLocaleString("he-IL")} יח'.`,
-      `מחיר ליחידה: ${formatIls(p.unitSellingPrice)} · סה"כ: ${formatIls(p.totalSellingPrice)} (לא כולל מע"מ).`,
-      p.shippingOptionName ? `שיטת שילוח: ${p.shippingOptionName}.` : null,
-      pdfLink ? `הצעה מלאה: ${pdfLink}` : null,
-      "ההצעה בתוקף ל-14 יום. נשמח לקבל אישור 🙂",
-    ]
-      .filter(Boolean)
-      .join("\n");
-  })();
-  const waMeUrl = waPhone
-    ? `https://wa.me/${waPhone}?text=${encodeURIComponent(waCaption)}`
-    : null;
   const materialHe = spec.material ? humanizeMaterial(spec.material) : "";
   const printingHe = spec.printing ? humanizePrinting(spec.printing) : "";
   const finishingHe = spec.finishing ? humanizeFinishing(spec.finishing) : "";
@@ -901,43 +863,24 @@ function FinalizedState({
           <Download className="size-3.5" />
           הורד PDF
         </a>
-        {row.pdfUrl ? (
-          <button
-            type="button"
-            onClick={onSendWhatsapp}
-            disabled={whatsappLoading}
-            title="שלח את ה-PDF ישירות ב-WhatsApp דרך ה-bridge"
-            className="inline-flex items-center justify-center gap-1.5 rounded-md bg-[#25D366] px-3 py-2 text-sm font-medium text-white hover:bg-[#1da856] disabled:opacity-60"
-          >
-            {whatsappLoading ? (
-              <Loader2 className="size-3.5 animate-spin" />
-            ) : (
-              <MessageCircle className="size-3.5" />
-            )}
-            שלח ב-WhatsApp
-          </button>
-        ) : waMeUrl ? (
-          <a
-            href={waMeUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            title="פתח שיחת WhatsApp עם הודעה מוכנה + קישור ל-PDF"
-            className="inline-flex items-center justify-center gap-1.5 rounded-md bg-[#25D366] px-3 py-2 text-sm font-medium text-white hover:bg-[#1da856]"
-          >
+        {/* Always send via the bot endpoint — it attaches the real PDF
+            (re-rendering on the fly when pdfUrl is empty). The old wa.me
+            fallback only prefilled a text *link*, which is what made the
+            summary card "send a link instead of the PDF". */}
+        <button
+          type="button"
+          onClick={onSendWhatsapp}
+          disabled={whatsappLoading}
+          title="שלח את ה-PDF ישירות ב-WhatsApp"
+          className="inline-flex items-center justify-center gap-1.5 rounded-md bg-[#25D366] px-3 py-2 text-sm font-medium text-white hover:bg-[#1da856] disabled:opacity-60"
+        >
+          {whatsappLoading ? (
+            <Loader2 className="size-3.5 animate-spin" />
+          ) : (
             <MessageCircle className="size-3.5" />
-            פתח ב-WhatsApp
-          </a>
-        ) : (
-          <button
-            type="button"
-            disabled
-            title="חסר טלפון בליד"
-            className="inline-flex items-center justify-center gap-1.5 rounded-md bg-[#25D366]/40 px-3 py-2 text-sm font-medium text-white opacity-60"
-          >
-            <MessageCircle className="size-3.5" />
-            חסר טלפון
-          </button>
-        )}
+          )}
+          שלח ב-WhatsApp
+        </button>
       </div>
 
       <button
