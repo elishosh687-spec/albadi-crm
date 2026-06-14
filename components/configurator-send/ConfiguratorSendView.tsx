@@ -16,7 +16,7 @@ interface Props {
   initialRows: ConfiguratorSendRow[];
 }
 
-type SendState = "idle" | "sending" | "sent" | "error";
+type SendState = "idle" | "opening" | "opened" | "error";
 
 export default function ConfiguratorSendView({ apiToken, initialRows }: Props) {
   const [filter, setFilter] = useState("");
@@ -32,13 +32,19 @@ export default function ConfiguratorSendView({ apiToken, initialRows }: Props) {
     );
   }, [initialRows, filter]);
 
-  async function send(row: ConfiguratorSendRow) {
+  // Open the configurator FOR this contact: mint a contact-linked session and
+  // open it in a new tab. The agent designs (color + logo), then sends the
+  // mockup to the customer from the "שלח ללקוח" button inside the configurator.
+  async function openDesigner(row: ConfiguratorSendRow) {
     const sid = row.sid;
-    setState((s) => ({ ...s, [sid]: "sending" }));
+    setState((s) => ({ ...s, [sid]: "opening" }));
     setErrors((e) => ({ ...e, [sid]: "" }));
+    // Open the tab synchronously (before await) so the browser doesn't block
+    // the popup; we set its URL once the session link comes back.
+    const win = window.open("", "_blank");
     try {
       const res = await fetch(
-        `/api/widget/send-configurator?widget_token=${encodeURIComponent(apiToken)}`,
+        `/api/widget/configurator-open?widget_token=${encodeURIComponent(apiToken)}`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -46,9 +52,12 @@ export default function ConfiguratorSendView({ apiToken, initialRows }: Props) {
         }
       );
       const json = await res.json();
-      if (!json.ok) throw new Error(json.error || "send failed");
-      setState((s) => ({ ...s, [sid]: "sent" }));
+      if (!json.ok || !json.link) throw new Error(json.error || "open failed");
+      if (win) win.location.href = json.link;
+      else window.open(json.link, "_blank");
+      setState((s) => ({ ...s, [sid]: "opened" }));
     } catch (e) {
+      if (win) win.close();
       setState((s) => ({ ...s, [sid]: "error" }));
       setErrors((er) => ({
         ...er,
@@ -61,11 +70,11 @@ export default function ConfiguratorSendView({ apiToken, initialRows }: Props) {
     startTransition(() => location.reload());
   }
 
-  function btnLabel(st: SendState, already: boolean): string {
-    if (st === "sending") return "שולח…";
-    if (st === "sent") return "✓ נשלח";
+  function btnLabel(st: SendState): string {
+    if (st === "opening") return "פותח…";
+    if (st === "opened") return "✓ נפתח — עצב ושלח";
     if (st === "error") return "↻ נסה שוב";
-    return already ? "שלח שוב 🎨" : "שלח מעצב 3D 🎨";
+    return "עצב ושלח 🎨";
   }
 
   return (
@@ -122,13 +131,13 @@ export default function ConfiguratorSendView({ apiToken, initialRows }: Props) {
         )}
         {visible.map((r) => {
           const st = state[r.sid] ?? "idle";
-          const sent = st === "sent";
+          const opened = st === "opened";
           return (
             <div
               key={r.sid}
               style={{
-                background: sent ? "#13241a" : "#1a1d24",
-                border: `1px solid ${sent ? "#15803d" : "#2a2d34"}`,
+                background: opened ? "#13241a" : "#1a1d24",
+                border: `1px solid ${opened ? "#15803d" : "#2a2d34"}`,
                 borderRadius: 8,
                 padding: 12,
                 display: "flex",
@@ -168,7 +177,7 @@ export default function ConfiguratorSendView({ apiToken, initialRows }: Props) {
                   {r.phone && <span style={{ color: "#52525b" }}>{r.phone}</span>}
                   {r.alreadySent && st === "idle" && (
                     <span style={{ background: "#1e3a8a", color: "#bfdbfe", padding: "2px 6px", borderRadius: 4 }}>
-                      כבר נשלח
+                      עוצב בעבר
                     </span>
                   )}
                   {st === "error" && errors[r.sid] && (
@@ -178,23 +187,23 @@ export default function ConfiguratorSendView({ apiToken, initialRows }: Props) {
               </div>
 
               <button
-                onClick={() => send(r)}
-                disabled={st === "sending"}
+                onClick={() => openDesigner(r)}
+                disabled={st === "opening"}
                 style={{
-                  minWidth: 130,
+                  minWidth: 140,
                   height: 44,
                   fontSize: 14,
                   fontWeight: 600,
-                  background: sent ? "#15803d" : st === "error" ? "#7c2d12" : "#7c3aed",
+                  background: opened ? "#15803d" : st === "error" ? "#7c2d12" : "#7c3aed",
                   color: "#ffffff",
                   border: "none",
                   borderRadius: 8,
-                  cursor: st === "sending" ? "wait" : "pointer",
+                  cursor: st === "opening" ? "wait" : "pointer",
                   touchAction: "manipulation",
                   flexShrink: 0,
                 }}
               >
-                {btnLabel(st, r.alreadySent)}
+                {btnLabel(st)}
               </button>
             </div>
           );

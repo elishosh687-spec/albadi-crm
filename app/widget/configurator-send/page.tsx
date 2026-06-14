@@ -88,7 +88,7 @@ export default async function ConfiguratorSendWidgetPage({
           marginBottom: 10,
         }}
       >
-        <strong style={{ fontSize: 14 }}>🎨 שליחת מעצב 3D ({rows.length})</strong>
+        <strong style={{ fontSize: 14 }}>🎨 מעצב 3D — בחר לקוח לעיצוב ({rows.length})</strong>
       </div>
       <ConfiguratorSendView apiToken={token} initialRows={rows} />
     </div>
