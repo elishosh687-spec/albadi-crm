@@ -76,6 +76,26 @@ export function getBagGlbPathForDimensions(dimensions: string): string {
   return BAG_GLB_BY_SIZE[classifyBagModelSize(parsed.h, parsed.d, parsed.w)];
 }
 
+/**
+ * Visual size/model options for the design tool. Each maps to a representative
+ * factory productId so BagViewer3D's `productId` prop still selects the right
+ * GLB via getBagModelSizeForProduct(). No pricing meaning — purely visual.
+ */
+export interface BagSizeOption {
+  size: BagModelSize;
+  productId: string;
+  label: string;
+  dimensions: string;
+}
+
+export const BAG_SIZE_OPTIONS: readonly BagSizeOption[] = [
+  { size: "small", productId: "p1", label: "קטן", dimensions: "20×8×25 ס״מ" },
+  { size: "medium", productId: "p2", label: "בינוני", dimensions: "30×10×30 ס״מ" },
+  { size: "large", productId: "p4", label: "גדול", dimensions: "40×15×50 ס״מ" },
+];
+
+export const DEFAULT_BAG_SIZE_OPTION = BAG_SIZE_OPTIONS[1];
+
 /** Normalized scene height per size tier (world units, bottom at y = 0). */
 export const BAG_SCENE_HEIGHT: Record<BagModelSize, number> = {
   small: 1.48,

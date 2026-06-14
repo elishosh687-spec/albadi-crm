@@ -56,7 +56,8 @@ export type LeadEventType =
   | "bot_resumed"
   | "configurator_link_sent"
   | "configurator_lead_created"
-  | "configurator_design_saved";
+  | "configurator_design_saved"
+  | "configurator_design_sent";
 
 export async function logLeadEvent(input: {
   manychatSubId: string;

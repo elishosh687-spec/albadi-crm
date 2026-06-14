@@ -38,12 +38,9 @@ export async function POST(req: NextRequest) {
     const saved = await saveConfiguratorDesign({
       sessionToken: str("sessionToken") || null,
       manychatSubId: str("manychatSubId") || null,
+      // Visual model id (size). Commercial fields below default to neutral
+      // values — the design tool no longer collects pricing inputs.
       productId: str("productId") || "p1",
-      quantity: Math.max(1, Math.round(num("quantity", 1000))),
-      hasHandles: body.hasHandles === undefined ? true : bool("hasHandles"),
-      logoColors: Math.min(3, Math.max(1, Math.round(num("logoColors", 1)))),
-      hasLamination: bool("hasLamination"),
-      shippingOptionId: str("shippingOptionId") || "s1",
       colorSku: str("colorSku"),
       colorHex: str("colorHex"),
       colorName: str("colorName"),
@@ -52,8 +49,6 @@ export async function POST(req: NextRequest) {
       logoPositionX: num("logoPositionX", 0),
       logoPositionY: num("logoPositionY", 0),
       logoRotation: num("logoRotation", 0),
-      unitPriceIls: num("unitPriceIls"),
-      totalOrderIls: num("totalOrderIls"),
       customerName: str("customerName"),
       customerEmail: str("customerEmail"),
       customerPhone: str("customerPhone"),
@@ -86,8 +81,6 @@ export async function POST(req: NextRequest) {
         payload: {
           designId: saved.id,
           productId: str("productId"),
-          quantity: num("quantity", 1000),
-          totalOrderIls: num("totalOrderIls"),
           colorName: str("colorName"),
           leadCreated: saved.leadCreated ?? false,
         },

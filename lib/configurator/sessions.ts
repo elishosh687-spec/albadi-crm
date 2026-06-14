@@ -127,12 +127,8 @@ export async function loadConfiguratorSession(
 export interface SaveConfiguratorDesignInput {
   sessionToken?: string | null;
   manychatSubId?: string | null;
+  /** Visual model id (size tier). Commercial fields below are optional. */
   productId: string;
-  quantity: number;
-  hasHandles: boolean;
-  logoColors: number;
-  hasLamination: boolean;
-  shippingOptionId: string;
   colorSku: string;
   colorHex: string;
   colorName: string;
@@ -141,13 +137,20 @@ export interface SaveConfiguratorDesignInput {
   logoPositionX: number;
   logoPositionY: number;
   logoRotation: number;
-  unitPriceIls: number;
-  totalOrderIls: number;
   customerName: string;
   customerEmail: string;
   customerPhone: string;
   notes?: string | null;
   source?: "customer" | "crm_link" | "website";
+  // Legacy commercial fields — kept optional so the design-only flow can omit
+  // them. DB columns persist; they default to neutral values when absent.
+  quantity?: number;
+  hasHandles?: boolean;
+  logoColors?: number;
+  hasLamination?: boolean;
+  shippingOptionId?: string;
+  unitPriceIls?: number;
+  totalOrderIls?: number;
 }
 
 export async function saveConfiguratorDesign(
@@ -155,6 +158,15 @@ export async function saveConfiguratorDesign(
 ): Promise<{ id: string; manychatSubId: string | null; leadCreated: boolean }> {
   await ensureTables();
   const id = randomBytes(12).toString("base64url");
+
+  // Neutral defaults for legacy commercial columns (design-only flow omits them).
+  const quantity = Number.isFinite(input.quantity) ? Math.max(1, Math.round(input.quantity as number)) : 0;
+  const hasHandles = input.hasHandles ?? false;
+  const logoColors = Number.isFinite(input.logoColors) ? (input.logoColors as number) : 0;
+  const hasLamination = input.hasLamination ?? false;
+  const shippingOptionId = input.shippingOptionId ?? null;
+  const unitPriceIls = Number.isFinite(input.unitPriceIls) ? (input.unitPriceIls as number) : 0;
+  const totalOrderIls = Number.isFinite(input.totalOrderIls) ? (input.totalOrderIls as number) : 0;
 
   let sid = input.manychatSubId?.trim() || null;
   let leadCreated = false;
@@ -175,9 +187,9 @@ export async function saveConfiguratorDesign(
       name: input.customerName,
       email: input.customerEmail,
       phone: input.customerPhone,
-      quoteTotalIls: input.totalOrderIls,
+      quoteTotalIls: totalOrderIls,
       colorName: input.colorName,
-      quantity: input.quantity,
+      quantity,
       notes: input.notes,
     });
     if (upserted) {
@@ -199,11 +211,11 @@ export async function saveConfiguratorDesign(
       ${input.sessionToken?.trim() || null},
       ${sid},
       ${input.productId},
-      ${input.quantity},
-      ${input.hasHandles},
-      ${input.logoColors},
-      ${input.hasLamination},
-      ${input.shippingOptionId},
+      ${quantity},
+      ${hasHandles},
+      ${logoColors},
+      ${hasLamination},
+      ${shippingOptionId},
       ${input.colorSku},
       ${input.colorHex},
       ${input.colorName},
@@ -212,8 +224,8 @@ export async function saveConfiguratorDesign(
       ${input.logoPositionX},
       ${input.logoPositionY},
       ${input.logoRotation},
-      ${input.unitPriceIls},
-      ${input.totalOrderIls},
+      ${unitPriceIls},
+      ${totalOrderIls},
       ${input.customerName},
       ${input.customerEmail},
       ${input.customerPhone},
@@ -227,7 +239,7 @@ export async function saveConfiguratorDesign(
     await db
       .update(leads)
       .set({
-        notes: sql`COALESCE(${leads.notes}, '') || ${`\n\n[מעצב 3D ${new Date().toLocaleDateString("he-IL")}] ${input.colorName} · ${input.quantity} יח׳ · ₪${input.totalOrderIls.toFixed(0)}`}`,
+        notes: sql`COALESCE(${leads.notes}, '') || ${`\n\n[מעצב 3D ${new Date().toLocaleDateString("he-IL")}] ${input.colorName}${input.logoFileName ? ` · לוגו: ${input.logoFileName}` : ""}`}`,
       })
       .where(sql`trim(${leads.manychatSubId}) = ${sid}`);
   }

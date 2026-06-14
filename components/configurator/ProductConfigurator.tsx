@@ -7,7 +7,7 @@ import {
   Camera,
   Check,
   Copy,
-  FileText,
+  Download,
   Film,
   Hand,
   ImagePlus,
@@ -17,6 +17,7 @@ import {
   Pause,
   Play,
   RotateCcw,
+  Send,
   SlidersHorizontal,
   Trash2,
   X,
@@ -25,8 +26,6 @@ import { BAG_COLORS } from "@/lib/constants/bagColors";
 import { colors, fontStack, radius, size, space, weight } from "@/lib/ui/tokens";
 import type { LogoPlacementMode, ViewerApi } from "./BagViewer3D";
 import { LOGO_POSITION_LIMITS } from "./BagViewer3D";
-import PricingContractForm from "./PricingContractForm";
-import DownloadPdfButton from "./DownloadPdfButton";
 import { CustomerMediaExports } from "./CustomerMediaExports";
 import {
   downloadBlob,
@@ -36,21 +35,16 @@ import {
 } from "@/lib/configurator/download-mockup";
 import {
   DEFAULT_CUSTOMER_INFO,
-  DEFAULT_QUOTE_SPEC,
-  formatCurrency,
-  hasRequiredCustomerFields,
   type CustomerInfo,
-  type QuoteSpec,
 } from "./configurator-state";
 import ColorSwatchRail from "./ColorSwatchRail";
 import { processLogoFile } from "./logo-assets";
 import { useCompactLayout } from "./useCompactLayout";
-import { useConfiguratorQuote } from "./useConfiguratorQuote";
 import { getConfiguratorApiBase } from "@/lib/configurator/urls";
 import {
-  CONFIGURATOR_PRODUCT_OPTIONS,
-  CONFIGURATOR_SHIPPING_OPTIONS,
-} from "@/lib/configurator/catalog-client";
+  BAG_SIZE_OPTIONS,
+  DEFAULT_BAG_SIZE_OPTION,
+} from "@/lib/configurator/bag-models";
 
 const BagViewer3D = dynamic(() => import("./BagViewer3D"), { ssr: false });
 
@@ -64,12 +58,11 @@ const DEFAULT_LOGO_STATE = {
   rotation: 0,
 } as const;
 
-type DockTab = "color" | "logo" | "quote";
+type DockTab = "color" | "logo";
 
 const DOCK_TABS: Array<{ id: DockTab; label: string }> = [
   { id: "color", label: "בד וצבע" },
   { id: "logo", label: "לוגו" },
-  { id: "quote", label: "הצעת מחיר" },
 ];
 
 const PILL_STYLE: React.CSSProperties = {
@@ -201,18 +194,23 @@ export const ProductConfigurator: React.FC = () => {
   const [logoRotation, setLogoRotation] = useState<number>(DEFAULT_LOGO_STATE.rotation);
   const [logoPlacementMode, setLogoPlacementMode] = useState<LogoPlacementMode>("drag");
   const [customerInfo, setCustomerInfo] = useState<CustomerInfo>(DEFAULT_CUSTOMER_INFO);
-  const [quoteSpec, setQuoteSpec] = useState<QuoteSpec>(DEFAULT_QUOTE_SPEC);
+  const [sizeProductId, setSizeProductId] = useState<string>(
+    DEFAULT_BAG_SIZE_OPTION.productId
+  );
   const [linkedLeadSid, setLinkedLeadSid] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<DockTab>("color");
-  const [quoteOpen, setQuoteOpen] = useState(false);
   const [autoRotate, setAutoRotate] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [captureReady, setCaptureReady] = useState(false);
   const [logoLoading, setLogoLoading] = useState(false);
   const [colorCopied, setColorCopied] = useState(false);
   const [exportingVideo, setExportingVideo] = useState(false);
+  const [exportsOpen, setExportsOpen] = useState(false);
+  const [sendState, setSendState] = useState<"idle" | "sending" | "sent" | "error">(
+    "idle"
+  );
+  const [sendError, setSendError] = useState<string | null>(null);
 
-  const pricingInfo = useConfiguratorQuote(quoteSpec);
   const isCompact = useCompactLayout();
 
   const wrapperRef = useRef<HTMLDivElement>(null);
@@ -223,10 +221,6 @@ export const ProductConfigurator: React.FC = () => {
     () => BAG_COLORS.find((color) => color.hex === selectedColorHex),
     [selectedColorHex]
   );
-  const selectedColorName = selectedColor
-    ? `${selectedColor.name} (${selectedColor.sku})`
-    : selectedColorHex;
-
   const selectedColorClipboardText = selectedColor
     ? `${selectedColor.sku} · ${selectedColor.hex.toUpperCase()}`
     : selectedColorHex.toUpperCase();
@@ -281,19 +275,6 @@ export const ProductConfigurator: React.FC = () => {
     return viewerApiRef.current?.screenshot() ?? "";
   }, []);
 
-  const handleCustomerInfoChange = useCallback((nextCustomerInfo: CustomerInfo) => {
-    setCustomerInfo(nextCustomerInfo);
-  }, []);
-
-  const handleQuoteSpecChange = useCallback((nextSpec: QuoteSpec) => {
-    setQuoteSpec(nextSpec);
-    setCustomerInfo((current) =>
-      current.quantity === nextSpec.quantity
-        ? current
-        : { ...current, quantity: nextSpec.quantity }
-    );
-  }, []);
-
   const saveDesignToCrm = useCallback(async () => {
     if (!selectedColor) return;
     const apiBase = getConfiguratorApiBase();
@@ -303,12 +284,7 @@ export const ProductConfigurator: React.FC = () => {
       body: JSON.stringify({
         sessionToken,
         manychatSubId: linkedLeadSid,
-        productId: quoteSpec.productId,
-        quantity: pricingInfo.quantity,
-        hasHandles: quoteSpec.hasHandles,
-        logoColors: quoteSpec.logoColors,
-        hasLamination: quoteSpec.hasLamination,
-        shippingOptionId: quoteSpec.shippingOptionId,
+        productId: sizeProductId,
         colorSku: selectedColor.sku,
         colorHex: selectedColor.hex,
         colorName: selectedColor.name,
@@ -317,8 +293,6 @@ export const ProductConfigurator: React.FC = () => {
         logoPositionX,
         logoPositionY,
         logoRotation,
-        unitPriceIls: pricingInfo.unitPriceIls,
-        totalOrderIls: pricingInfo.totalOrderIls,
         customerName: customerInfo.name,
         customerEmail: customerInfo.email,
         customerPhone: customerInfo.phone,
@@ -341,8 +315,7 @@ export const ProductConfigurator: React.FC = () => {
     selectedColor,
     sessionToken,
     linkedLeadSid,
-    quoteSpec,
-    pricingInfo,
+    sizeProductId,
     logoFileName,
     logoScale,
     logoPositionX,
@@ -350,6 +323,40 @@ export const ProductConfigurator: React.FC = () => {
     logoRotation,
     customerInfo,
   ]);
+
+  const handleSendToCustomer = useCallback(async () => {
+    if (!linkedLeadSid && !sessionToken) return;
+    if (!captureReady) return;
+    setSendState("sending");
+    setSendError(null);
+    try {
+      const imageDataUrl = await getScreenshot();
+      if (!imageDataUrl) throw new Error("לא ניתן ללכוד את התצוגה");
+      const apiBase = getConfiguratorApiBase();
+      const res = await fetch(`${apiBase}/api/configurator/send-to-customer`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sessionToken,
+          manychatSubId: linkedLeadSid,
+          imageDataUrl,
+        }),
+      });
+      const data = (await res.json().catch(() => null)) as
+        | { ok: boolean; error?: string; detail?: string }
+        | null;
+      if (!res.ok || !data?.ok) {
+        throw new Error(data?.detail || data?.error || `שליחה נכשלה (${res.status})`);
+      }
+      // Best-effort: persist the design alongside the send.
+      void saveDesignToCrm().catch(() => {});
+      setSendState("sent");
+      window.setTimeout(() => setSendState("idle"), 2500);
+    } catch (err) {
+      setSendState("error");
+      setSendError(err instanceof Error ? err.message : "שליחה נכשלה");
+    }
+  }, [linkedLeadSid, sessionToken, captureReady, getScreenshot, saveDesignToCrm]);
 
   const resetLogoLayout = () => {
     setLogoScale(DEFAULT_LOGO_STATE.scale);
@@ -429,17 +436,9 @@ export const ProductConfigurator: React.FC = () => {
 
   const handleTabSelect = (tab: DockTab) => {
     setActiveTab(tab);
-    if (tab === "quote") {
-      setQuoteOpen(true);
-    }
   };
 
-  const canDownloadPdf =
-    captureReady &&
-    hasRequiredCustomerFields(customerInfo) &&
-    !pricingInfo.loading &&
-    !pricingInfo.error &&
-    pricingInfo.totalOrderIls > 0;
+  const canSendToCustomer = Boolean(linkedLeadSid && captureReady);
 
   const stageInset =
     activeTab === "logo" && logoUrl
@@ -497,15 +496,12 @@ export const ProductConfigurator: React.FC = () => {
         )}
       </ToolbarButton>
       <ToolbarButton
-        label="הצעת מחיר ו-PDF"
-        onClick={() => {
-          setActiveTab("quote");
-          setQuoteOpen(true);
-        }}
-        active={quoteOpen}
+        label="ייצוא מדיה (תמונה / וידאו)"
+        onClick={() => setExportsOpen(true)}
+        active={exportsOpen}
         compact={isCompact}
       >
-        <FileText className={isCompact ? "size-3.5" : "size-4"} />
+        <Download className={isCompact ? "size-3.5" : "size-4"} />
       </ToolbarButton>
       <ToolbarButton
         label={isFullscreen ? "צא ממסך מלא" : "מסך מלא"}
@@ -556,7 +552,7 @@ export const ProductConfigurator: React.FC = () => {
       >
         <React.Suspense fallback={null}>
           <BagViewer3D
-            productId={quoteSpec.productId}
+            productId={sizeProductId}
             bagColor={selectedColorHex}
             logoUrl={logoUrl}
             logoScale={logoScale}
@@ -676,6 +672,48 @@ export const ProductConfigurator: React.FC = () => {
             width: "100%",
           }}
         >
+            {/* Size / model selector — changes the displayed 3D bag only */}
+            <div
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 3,
+                padding: 4,
+                ...PILL_STYLE,
+                maxWidth: "100%",
+              }}
+              role="tablist"
+              aria-label="גודל התיק"
+            >
+              {BAG_SIZE_OPTIONS.map((option) => {
+                const active = sizeProductId === option.productId;
+                return (
+                  <button
+                    key={option.productId}
+                    type="button"
+                    role="tab"
+                    aria-selected={active ? "true" : "false"}
+                    title={option.dimensions}
+                    onClick={() => setSizeProductId(option.productId)}
+                    className="transition-colors"
+                    style={{
+                      border: "none",
+                      borderRadius: radius.full,
+                      padding: isCompact ? `6px ${space.md}px` : `6px ${space.lg}px`,
+                      fontSize: isCompact ? size.xs : size.sm,
+                      fontWeight: active ? weight.semibold : weight.regular,
+                      background: active ? colors.ink : "transparent",
+                      color: active ? colors.surface : colors.inkMuted,
+                      cursor: "pointer",
+                      whiteSpace: "nowrap",
+                      minHeight: 34,
+                    }}
+                  >
+                    {option.label}
+                  </button>
+                );
+              })}
+            </div>
             <div
               style={{
                 display: "inline-flex",
@@ -988,36 +1026,27 @@ export const ProductConfigurator: React.FC = () => {
           </div>
         ) : null}
 
-        {activeTab === "quote" ? (
+        {/* Send-to-customer — only when a contact is linked via ?t session */}
+        {sessionToken ? (
           <div
             style={{
               ...PILL_STYLE,
               maxWidth: "100%",
-              padding: `${space.sm}px ${space.lg}px`,
+              padding: `${space.xs}px ${space.sm}px`,
               display: "flex",
               alignItems: "center",
-              flexWrap: "wrap",
-              justifyContent: "center",
-              gap: space.lg,
+              gap: space.sm,
             }}
           >
-            <span style={{ fontSize: size.sm, color: colors.inkMuted }}>
-              {pricingInfo.loading
-                ? "מחשב מחיר..."
-                : pricingInfo.error
-                  ? "שגיאת מחיר"
-                  : (
-                    <>
-                      {pricingInfo.quantity} יח׳ ·{" "}
-                      <strong style={{ color: colors.ink }}>
-                        {formatCurrency(pricingInfo.totalOrderIls)}
-                      </strong>
-                    </>
-                  )}
-            </span>
             <button
               type="button"
-              onClick={() => setQuoteOpen(true)}
+              onClick={() => void handleSendToCustomer()}
+              disabled={!canSendToCustomer || sendState === "sending"}
+              title={
+                canSendToCustomer
+                  ? "שלח הדמיה ללקוח בוואטסאפ"
+                  : "פתח את המעצב מקישור ללקוח כדי לשלוח"
+              }
               style={{
                 display: "inline-flex",
                 alignItems: "center",
@@ -1025,16 +1054,42 @@ export const ProductConfigurator: React.FC = () => {
                 padding: `${space.sm}px ${space.lg}px`,
                 borderRadius: radius.full,
                 border: "none",
-                background: colors.accent,
+                background:
+                  sendState === "sent"
+                    ? colors.success
+                    : sendState === "error"
+                      ? colors.danger
+                      : colors.accent,
                 color: colors.surface,
                 fontSize: size.sm,
-                fontWeight: weight.medium,
-                cursor: "pointer",
+                fontWeight: weight.semibold,
+                cursor: !canSendToCustomer || sendState === "sending" ? "not-allowed" : "pointer",
+                opacity: !canSendToCustomer ? 0.55 : 1,
+                minHeight: 40,
               }}
             >
-              <FileText className="size-4" />
-              מלא פרטים והורד PDF
+              {sendState === "sending" ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : sendState === "sent" ? (
+                <Check className="size-4" />
+              ) : (
+                <Send className="size-4" />
+              )}
+              {sendState === "sending"
+                ? "שולח…"
+                : sendState === "sent"
+                  ? "נשלח ללקוח"
+                  : sendState === "error"
+                    ? "נסה שוב"
+                    : "שלח ללקוח"}
             </button>
+            {!linkedLeadSid ? (
+              <span style={{ fontSize: size.xs, color: colors.inkMuted }}>
+                אין לקוח מקושר
+              </span>
+            ) : sendState === "error" && sendError ? (
+              <span style={{ fontSize: size.xs, color: colors.danger }}>{sendError}</span>
+            ) : null}
           </div>
         ) : null}
 
@@ -1082,11 +1137,11 @@ export const ProductConfigurator: React.FC = () => {
         </div>
       </div>
 
-      {/* Quote drawer */}
-      {quoteOpen ? (
+      {/* Exports drawer — visual media (PNG / JPG / video), no pricing */}
+      {exportsOpen ? (
         <>
           <div
-            onClick={() => setQuoteOpen(false)}
+            onClick={() => setExportsOpen(false)}
             style={{
               position: "absolute",
               inset: 0,
@@ -1132,46 +1187,22 @@ export const ProductConfigurator: React.FC = () => {
                     color: colors.ink,
                   }}
                 >
-                  הצעת מחיר
+                  ייצוא מדיה
                 </h2>
                 <p style={{ margin: `${space.xs}px 0 0`, fontSize: size.sm, color: colors.inkMuted }}>
-                  פרטי לקוח, תמחור והורדת PDF עם צילום המוצר.
+                  הורד תמונה או וידאו סיבוב של השקית עם הצבע והלוגו הנוכחיים.
                 </p>
               </div>
-              <ToolbarButton label="סגור" onClick={() => setQuoteOpen(false)}>
+              <ToolbarButton label="סגור" onClick={() => setExportsOpen(false)}>
                 <X className="size-4" />
               </ToolbarButton>
             </div>
-
-            <PricingContractForm
-              bagColor={selectedColorName}
-              hasLogo={!!logoUrl}
-              customerInfo={customerInfo}
-              pricingInfo={pricingInfo}
-              quoteSpec={quoteSpec}
-              products={CONFIGURATOR_PRODUCT_OPTIONS}
-              shippingOptions={CONFIGURATOR_SHIPPING_OPTIONS}
-              onCustomerInfoChange={handleCustomerInfoChange}
-              onQuoteSpecChange={handleQuoteSpecChange}
-            />
 
             <CustomerMediaExports
               captureReady={captureReady}
               colorSku={selectedColor?.sku}
               getScreenshot={getScreenshot}
               viewerApiRef={viewerApiRef}
-            />
-
-            <DownloadPdfButton
-              customerInfo={customerInfo}
-              pricingInfo={pricingInfo}
-              quoteSpec={quoteSpec}
-              bagColorName={selectedColorName}
-              bagColorHex={selectedColorHex}
-              hasLogo={!!logoUrl}
-              screenshotCallback={getScreenshot}
-              onAfterDownload={saveDesignToCrm}
-              disabled={!canDownloadPdf}
             />
           </aside>
         </>
