@@ -675,15 +675,18 @@ export const ProductConfigurator: React.FC = () => {
             {/* Size / model selector — changes the displayed 3D bag only */}
             <div
               style={{
-                display: "inline-flex",
+                display: "flex",
+                flexWrap: "nowrap",
                 alignItems: "center",
                 gap: 3,
                 padding: 4,
                 ...PILL_STYLE,
                 maxWidth: "100%",
+                overflowX: "auto",
+                scrollbarWidth: "none",
               }}
               role="tablist"
-              aria-label="גודל התיק"
+              aria-label="מידת התיק"
             >
               {BAG_SIZE_OPTIONS.map((option) => {
                 const active = sizeProductId === option.productId;
@@ -693,7 +696,7 @@ export const ProductConfigurator: React.FC = () => {
                     type="button"
                     role="tab"
                     aria-selected={active ? "true" : "false"}
-                    title={option.dimensions}
+                    title={option.description || option.label}
                     onClick={() => setSizeProductId(option.productId)}
                     className="transition-colors"
                     style={{
@@ -707,6 +710,7 @@ export const ProductConfigurator: React.FC = () => {
                       cursor: "pointer",
                       whiteSpace: "nowrap",
                       minHeight: 34,
+                      flexShrink: 0,
                     }}
                   >
                     {option.label}

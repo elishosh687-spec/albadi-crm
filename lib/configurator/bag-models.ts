@@ -84,17 +84,31 @@ export function getBagGlbPathForDimensions(dimensions: string): string {
 export interface BagSizeOption {
   size: BagModelSize;
   productId: string;
+  /** Formatted dimensions used as the on-screen label, e.g. "H20×D8×W25". */
   label: string;
-  dimensions: string;
+  /** Free-text description from the catalog (shown as a hint / title). */
+  description: string;
 }
 
-export const BAG_SIZE_OPTIONS: readonly BagSizeOption[] = [
-  { size: "small", productId: "p1", label: "קטן", dimensions: "20×8×25 ס״מ" },
-  { size: "medium", productId: "p2", label: "בינוני", dimensions: "30×10×30 ס״מ" },
-  { size: "large", productId: "p4", label: "גדול", dimensions: "40×15×50 ס״מ" },
-];
+/** "H20*D8*W25" → "H20×D8×W25" (matches the site's dimension display). */
+function formatBagDimensions(dimensions: string): string {
+  return dimensions.replace(/\*/g, "×");
+}
 
-export const DEFAULT_BAG_SIZE_OPTION = BAG_SIZE_OPTIONS[1];
+// ALL catalog sizes are selectable (same set the website exposes) — purely a
+// visual/design choice. The 3D model snaps to the nearest GLB via
+// getBagModelSizeForProduct(); there is no pricing meaning here.
+export const BAG_SIZE_OPTIONS: readonly BagSizeOption[] = [...DEFAULT_CONFIG.products]
+  .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0))
+  .map((p) => ({
+    size: getBagModelSizeForProduct(p.id),
+    productId: p.id,
+    label: formatBagDimensions(p.dimensions),
+    description: p.description ?? "",
+  }));
+
+export const DEFAULT_BAG_SIZE_OPTION =
+  BAG_SIZE_OPTIONS.find((o) => o.productId === "p2") ?? BAG_SIZE_OPTIONS[0];
 
 /** Normalized scene height per size tier (world units, bottom at y = 0). */
 export const BAG_SCENE_HEIGHT: Record<BagModelSize, number> = {
