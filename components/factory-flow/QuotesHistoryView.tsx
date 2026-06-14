@@ -6,7 +6,6 @@ import { QuoteHtmlPreview } from "@/app/dashboard/v3/_components/factory/QuoteHt
 import type { FactoryQuoteRow as DashboardFactoryQuoteRow } from "@/app/dashboard/v3/_components/factory/FactoryQuotePanel";
 import { FinalizeModalWidget } from "./FinalizeModal.widget";
 import { CombinedCalcModalWidget } from "./CombinedCalcModal.widget";
-import { buildCombineWaUrl } from "./calc-shared";
 
 interface ApiQuoteRow {
   id: string;
@@ -104,19 +103,6 @@ export function QuotesHistoryView({ apiToken }: { apiToken: string }) {
       const r = await fetch(`/api/widget/quotes/list?widget_token=${encodeURIComponent(apiToken)}&limit=300`);
       const j = await r.json();
       setData(j.quotes);
-    } catch {}
-  }
-
-  // Stamp "sent" on the combined offer's quotes (called when the WhatsApp draft
-  // opens) so the card shows a "נשלח ✓" marker. Fire-and-forget + refresh.
-  async function markCombinedSent(ids: string[]) {
-    if (ids.length === 0) return;
-    try {
-      await fetch(
-        `/api/factory/combine/mark-sent?ids=${ids.join(",")}&widget_token=${encodeURIComponent(apiToken)}`,
-        { method: "POST" }
-      );
-      await refresh();
     } catch {}
   }
 
@@ -233,6 +219,38 @@ export function QuotesHistoryView({ apiToken }: { apiToken: string }) {
     try {
       const res = await fetch(
         `/api/factory/${r.id}/send-whatsapp?widget_token=${encodeURIComponent(apiToken)}`,
+        { method: "POST" }
+      );
+      const j = await res.json().catch(() => ({}));
+      if (!j?.ok) {
+        alert(`שגיאה בשליחה: ${j?.error ?? j?.detail ?? res.status}`);
+        return;
+      }
+      alert("נשלח בהצלחה ✓");
+      await refresh();
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  // Send the combined PDF as a real WhatsApp document via the bridge (not a
+  // wa.me text link). Stamps every quote as sent.
+  async function handleSendCombined(
+    leadSid: string,
+    name: string | null,
+    ids: string[]
+  ) {
+    if (ids.length === 0) return;
+    const who = name ?? "לקוח";
+    const label =
+      ids.length > 1 ? `הצעה משולבת (${ids.length} מוצרים)` : "ההצעה";
+    if (!confirm(`לשלוח ${label} ל-${who} ב-WhatsApp?`)) return;
+    setBusyId(`combine:${leadSid}`);
+    try {
+      const res = await fetch(
+        `/api/factory/combine/send-whatsapp?ids=${encodeURIComponent(
+          ids.join(",")
+        )}&widget_token=${encodeURIComponent(apiToken)}`,
         { method: "POST" }
       );
       const j = await res.json().catch(() => ({}));
@@ -541,10 +559,6 @@ export function QuotesHistoryView({ apiToken }: { apiToken: string }) {
                 .map((r) => r.id);
               const canSendCombined = finalizedIds.length >= 1;
               const combinedPdfHref = `/api/factory/combine/pdf?ids=${finalizedIds.join(",")}`;
-              const origin = typeof window !== "undefined" ? window.location.origin : "";
-              const combinedWa = canSendCombined
-                ? buildCombineWaUrl(finalizedIds, g.name, g.phone, origin)
-                : null;
               const ghlUrl = g.rows[0]?.ghlUrl ?? null;
               const sentCount = g.rows.filter((r) => r.sentToCustomerAt).length;
               return (
@@ -622,17 +636,22 @@ export function QuotesHistoryView({ apiToken }: { apiToken: string }) {
                       >
                         <Pencil className="size-3.5" />
                       </button>
-                      {combinedWa && (
-                        <a
-                          href={combinedWa}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          onClick={() => markCombinedSent(finalizedIds)}
+                      {canSendCombined && (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            handleSendCombined(g.leadSid, g.name, finalizedIds)
+                          }
+                          disabled={busyId === `combine:${g.leadSid}`}
                           title="שלח הצעה משולבת ב-WhatsApp"
-                          className="size-7 rounded grid place-items-center text-muted-foreground hover:text-emerald-400 hover:bg-emerald-500/10"
+                          className="size-7 rounded grid place-items-center text-muted-foreground hover:text-emerald-400 hover:bg-emerald-500/10 disabled:opacity-50"
                         >
-                          <MessageCircle className="size-3.5" />
-                        </a>
+                          {busyId === `combine:${g.leadSid}` ? (
+                            <Loader2 className="size-3.5 animate-spin" />
+                          ) : (
+                            <MessageCircle className="size-3.5" />
+                          )}
+                        </button>
                       )}
                       <button
                         type="button"

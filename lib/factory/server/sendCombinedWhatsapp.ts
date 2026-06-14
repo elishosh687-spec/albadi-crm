@@ -73,8 +73,8 @@ export async function sendCombinedQuoteWhatsapp(
   ids: string[],
   hostHeader: string | null
 ): Promise<SendWhatsappOk | SendWhatsappErr> {
-  if (ids.length < 2) {
-    return { ok: false, status: 400, error: "need_two_quotes" };
+  if (ids.length < 1) {
+    return { ok: false, status: 400, error: "no_ids" };
   }
 
   const rows = await db
@@ -143,10 +143,14 @@ export async function sendCombinedQuoteWhatsapp(
   const grandTotal = await combinedGrandTotal(pricings);
 
   const greeting = lead.name ? `היי ${lead.name} 👋` : "היי 👋";
+  const title =
+    ids.length > 1
+      ? `*הצעת מחיר משולבת — ${ids.length} מוצרים*`
+      : "*הצעת מחיר*";
   const caption = [
     greeting,
     "",
-    `*הצעת מחיר משולבת — ${ids.length} מוצרים*`,
+    title,
     "",
     `*💵 סה״כ: ${formatIls(grandTotal)}*`,
     "_(כולל שילוח, לא כולל מע״מ)_",

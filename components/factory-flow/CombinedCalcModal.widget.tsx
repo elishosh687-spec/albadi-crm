@@ -30,7 +30,7 @@ import {
 } from "@/lib/factory/combined";
 import { DetailedBreakdown } from "@/components/calculator/DetailedBreakdown";
 import { widgetUrl } from "./widget-url";
-import { buildCombineWaUrl, formatIls, SpecField, PriceRow } from "./calc-shared";
+import { formatIls, SpecField, PriceRow } from "./calc-shared";
 
 const MARGIN_MIN = 0;
 const MARGIN_MAX = 99;
@@ -107,6 +107,7 @@ export function CombinedCalcModalWidget({
   const [savingAll, setSavingAll] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [sendHint, setSendHint] = useState<string | null>(null);
+  const [sendingWa, setSendingWa] = useState(false);
   // Which products are part of THIS offer (default: all). Lets the user build a
   // combined offer from a subset right inside the card.
   const [selected, setSelected] = useState<Set<string>>(
@@ -298,10 +299,7 @@ export function CombinedCalcModalWidget({
     });
   const phoneDigits = (customerPhone ?? "").replace(/[^\d]/g, "");
   const combineIds = selectedRows.map((r) => r.id);
-  const waUrl =
-    sendReady && phoneDigits
-      ? buildCombineWaUrl(combineIds, customerName, customerPhone, origin)
-      : null;
+  const canSendWa = sendReady && !!phoneDigits;
   const combinePdfHref = `${origin}/api/factory/combine/pdf?ids=${combineIds.join(",")}`;
 
   async function handleSaveAll() {
@@ -365,25 +363,38 @@ export function CombinedCalcModalWidget({
     }
   }
 
-  function handleSendClick(e: React.MouseEvent) {
+  async function handleSend() {
     if (!sendReady) {
-      e.preventDefault();
       setSendHint('צריך קודם ללחוץ "שמור חישוב" — לא ניתן לשלוח הצעות שעדיין לא חושבו.');
       return;
     }
     if (!phoneDigits) {
-      e.preventDefault();
       setSendHint("אין מספר טלפון ללקוח — אי אפשר לשלוח ב-WhatsApp.");
       return;
     }
-    // Proceeding to open WhatsApp → optimistically stamp the offer as sent so
-    // the customer card shows "נשלח ✓", then refresh the parent list.
-    fetch(
-      widgetUrl("/api/factory/combine/mark-sent", apiToken, { ids: combineIds.join(",") }),
-      { method: "POST" }
-    )
-      .then(() => onChanged())
-      .catch(() => {});
+    setSendHint(null);
+    setSendingWa(true);
+    try {
+      // Send the merged PDF as a real WhatsApp document via the bridge — the
+      // endpoint also stamps every quote as sent.
+      const res = await fetch(
+        widgetUrl("/api/factory/combine/send-whatsapp", apiToken, {
+          ids: combineIds.join(","),
+        }),
+        { method: "POST" }
+      );
+      const j = await res.json().catch(() => ({}));
+      if (!j?.ok) {
+        setSendHint(`שגיאה בשליחה: ${j?.error ?? j?.detail ?? res.status}`);
+        return;
+      }
+      await onChanged();
+      onClose();
+    } catch (e) {
+      setSendHint(`כשל בשליחה: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setSendingWa(false);
+    }
   }
 
   return (
@@ -589,12 +600,10 @@ export function CombinedCalcModalWidget({
                   פתח PDF
                 </a>
               )}
-              <a
-                href={waUrl ?? "#"}
-                target="_blank"
-                rel="noopener noreferrer"
-                onClick={handleSendClick}
-                aria-disabled={!waUrl}
+              <button
+                type="button"
+                onClick={handleSend}
+                disabled={!canSendWa || sendingWa}
                 title={
                   !sendReady
                     ? 'שמור חישוב קודם'
@@ -604,12 +613,16 @@ export function CombinedCalcModalWidget({
                 }
                 className={[
                   "inline-flex items-center gap-1.5 rounded-md border border-emerald-500/40 bg-emerald-500/10 px-3 py-1.5 text-sm font-medium text-emerald-400 hover:bg-emerald-500/20",
-                  waUrl ? "" : "opacity-50 cursor-not-allowed",
+                  canSendWa && !sendingWa ? "" : "opacity-50 cursor-not-allowed",
                 ].join(" ")}
               >
-                <MessageCircle className="size-3.5" />
+                {sendingWa ? (
+                  <Loader2 className="size-3.5 animate-spin" />
+                ) : (
+                  <MessageCircle className="size-3.5" />
+                )}
                 שלח ב-WhatsApp
-              </a>
+              </button>
               <button
                 type="button"
                 onClick={handleSaveAll}
