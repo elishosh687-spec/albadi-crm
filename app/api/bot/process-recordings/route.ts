@@ -27,6 +27,7 @@ import { and, eq, isNotNull, isNull, lte, sql } from "drizzle-orm";
 import {
   addContactNote,
   createContactTask,
+  deleteContactTask,
   downloadRecording,
   listContactNotes,
   listContactTasks,
@@ -101,6 +102,19 @@ async function ensureCallbackTask(row: {
     // Dedupe across crashes: a prior run may have created the task but failed
     // to persist the id. Scan existing tasks for our marker first.
     const existing = await listContactTasks(row.ghlContactId);
+
+    // The call-driven callback supersedes the one-time backfill "seed" task —
+    // remove it so the lead doesn't show two tasks once it has real activity.
+    const seed = existing.find((t) => (t.body ?? "").includes("[BACKFILL v1]"));
+    if (seed) {
+      await deleteContactTask(row.ghlContactId, seed.id).catch((e) =>
+        console.warn(
+          `[process-recordings] backfill seed cleanup failed for ${row.ghlContactId}:`,
+          e instanceof Error ? e.message : String(e),
+        ),
+      );
+    }
+
     const found = existing.find((t) => (t.body ?? "").includes(marker));
     if (found) {
       await db

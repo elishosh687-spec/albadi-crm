@@ -13,7 +13,12 @@ import { JERUSALEM_TZ } from "./quiet-hours";
 import { isNoSendDay } from "./hebcal";
 
 const WORK_START_HOUR = 9; // 09:00 inclusive
-const WORK_END_HOUR = 18; // 18:00 exclusive
+// 21:00 exclusive — aligned with the bot's quiet-hours boundary (contact is
+// allowed until 21:00). A short-fuse callback like "call me in 30 min" made at
+// ~18:20 must stay TODAY, not roll to tomorrow 09:00. Only genuinely late-night
+// callbacks (>= 21:00) roll forward. (Was 18:00 — too early; see Alon Nimrodi
+// 2026-06-14: 17:51 call + 30 min = 18:21 wrongly pushed to next-day 09:00.)
+const WORK_END_HOUR = 21;
 const MAX_ROLL_ITERATIONS = 14; // guard against pathological holiday stretches
 
 interface JerusalemParts {
