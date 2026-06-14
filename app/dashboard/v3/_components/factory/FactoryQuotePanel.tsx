@@ -1035,25 +1035,35 @@ function HistoryList({
       return next;
     });
   const combineHref = `/api/factory/combine/pdf?ids=${[...selected].join(",")}`;
-  // wa.me link to send the combined PDF to the customer (same pattern as the
-  // single-quote "פתח ב-WhatsApp"). Phone/name from any selected row — all
-  // belong to the same client.
-  const combineWaUrl = (() => {
-    if (selected.size < 2) return null;
-    const sel = rows.filter((r) => selected.has(r.id));
-    const phone = sel[0]?.customerPhone?.replace(/[^\d]/g, "") || "";
-    if (!phone) return null;
-    const name = sel[0]?.customerName ?? "";
-    const origin = typeof window !== "undefined" ? window.location.origin : "";
-    const link = `${origin}/api/factory/combine/pdf?ids=${[...selected].join(",")}`;
-    const caption = [
-      name ? `היי ${name},` : "היי,",
-      `מצורפת הצעת מחיר משולבת ל-${selected.size} מוצרים.`,
-      `הצעה מלאה: ${link}`,
-      "ההצעה בתוקף ל-14 יום. נשמח לקבל אישור 🙂",
-    ].join("\n");
-    return `https://wa.me/${phone}?text=${encodeURIComponent(caption)}`;
-  })();
+  const [sendingCombined, setSendingCombined] = useState(false);
+  // Send the merged PDF to the customer as a real WhatsApp document via the
+  // bridge — same path as the single-quote "שלח ב-WhatsApp" (no wa.me link).
+  const handleSendCombined = async () => {
+    if (selected.size < 2) return;
+    const name = rows.find((r) => selected.has(r.id))?.customerName ?? "הלקוח";
+    if (!confirm(`לשלוח הצעה משולבת (${selected.size} מוצרים) ב-WhatsApp ל-${name}?`))
+      return;
+    setSendingCombined(true);
+    try {
+      const ids = [...selected].join(",");
+      const res = await fetch(
+        `/api/factory/combine/send-whatsapp?ids=${encodeURIComponent(ids)}`,
+        { method: "POST" }
+      );
+      const data = await res.json();
+      if (data?.ok) {
+        alert("נשלח ✓");
+        setSelected(new Set());
+        await onChange();
+      } else {
+        alert(`שגיאה: ${data?.error ?? "unknown"}\n${data?.message ?? data?.detail ?? ""}`);
+      }
+    } catch (err) {
+      alert(`כשל: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setSendingCombined(false);
+    }
+  };
 
   const handleDelete = async (row: FactoryQuoteRow) => {
     if (!confirm(`למחוק את ההצעה ${row.quotationNo ?? row.id.slice(-6)}? Feishu לא יושפע.`)) {
@@ -1146,16 +1156,20 @@ function HistoryList({
             >
               פתח PDF
             </a>
-            {combineWaUrl && (
-              <a
-                href={combineWaUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1 rounded-md bg-primary px-2.5 py-1 text-[11px] font-medium text-primary-foreground hover:bg-primary/90"
-              >
-                שלח ב-WhatsApp
-              </a>
-            )}
+            <button
+              type="button"
+              onClick={handleSendCombined}
+              disabled={sendingCombined}
+              title="שלח את ה-PDF המשולב ישירות ב-WhatsApp"
+              className="inline-flex items-center gap-1 rounded-md bg-[#25D366] px-2.5 py-1 text-[11px] font-medium text-white hover:bg-[#1da856] disabled:opacity-60"
+            >
+              {sendingCombined ? (
+                <Loader2 className="size-3 animate-spin" />
+              ) : (
+                <MessageCircle className="size-3" />
+              )}
+              שלח ב-WhatsApp
+            </button>
           </div>
         </div>
       )}
