@@ -38,6 +38,7 @@ import {
   type CustomerInfo,
 } from "./configurator-state";
 import ColorSwatchRail from "./ColorSwatchRail";
+import ContactPickerOverlay from "./ContactPickerOverlay";
 import { processLogoFile } from "./logo-assets";
 import { useCompactLayout } from "./useCompactLayout";
 import { getConfiguratorApiBase } from "@/lib/configurator/urls";
@@ -181,6 +182,8 @@ function MiniSlider({
 export const ProductConfigurator: React.FC = () => {
   const searchParams = useSearchParams();
   const sessionToken = searchParams.get("t")?.trim() || null;
+  const widgetToken = searchParams.get("widget_token")?.trim() || null;
+  const agentMode = !!widgetToken;
 
   const [selectedColorHex, setSelectedColorHex] = useState<string>(
     DEFAULT_BAG_COLOR?.hex ?? "#2B2A28"
@@ -210,6 +213,7 @@ export const ProductConfigurator: React.FC = () => {
     "idle"
   );
   const [sendError, setSendError] = useState<string | null>(null);
+  const [pickerOpen, setPickerOpen] = useState(false);
 
   const isCompact = useCompactLayout();
 
@@ -438,7 +442,19 @@ export const ProductConfigurator: React.FC = () => {
     setActiveTab(tab);
   };
 
-  const canSendToCustomer = Boolean(linkedLeadSid && captureReady);
+  // Agent mode: enabled once the viewer can capture (picks recipient later).
+  // Public ?t mode: needs a session-linked contact.
+  const canSendToCustomer = agentMode
+    ? captureReady
+    : Boolean(linkedLeadSid && captureReady);
+
+  const handleSendClick = useCallback(() => {
+    if (agentMode) {
+      setPickerOpen(true);
+      return;
+    }
+    void handleSendToCustomer();
+  }, [agentMode, handleSendToCustomer]);
 
   const stageInset =
     activeTab === "logo" && logoUrl
@@ -1013,8 +1029,9 @@ export const ProductConfigurator: React.FC = () => {
           </div>
         ) : null}
 
-        {/* Send-to-customer — only when a contact is linked via ?t session */}
-        {sessionToken ? (
+        {/* Send-to-customer — agent mode opens a contact picker; ?t session
+            sends to the linked contact. Hidden on the plain public tool. */}
+        {agentMode || sessionToken ? (
           <div
             style={{
               ...PILL_STYLE,
@@ -1027,12 +1044,14 @@ export const ProductConfigurator: React.FC = () => {
           >
             <button
               type="button"
-              onClick={() => void handleSendToCustomer()}
+              onClick={handleSendClick}
               disabled={!canSendToCustomer || sendState === "sending"}
               title={
-                canSendToCustomer
-                  ? "שלח הדמיה ללקוח בוואטסאפ"
-                  : "פתח את המעצב מקישור ללקוח כדי לשלוח"
+                agentMode
+                  ? "בחר לקוח ושלח הדמיה בוואטסאפ"
+                  : canSendToCustomer
+                    ? "שלח הדמיה ללקוח בוואטסאפ"
+                    : "פתח את המעצב מקישור ללקוח כדי לשלוח"
               }
               style={{
                 display: "inline-flex",
@@ -1070,7 +1089,7 @@ export const ProductConfigurator: React.FC = () => {
                     ? "נסה שוב"
                     : "שלח ללקוח"}
             </button>
-            {!linkedLeadSid ? (
+            {!agentMode && !linkedLeadSid ? (
               <span style={{ fontSize: size.xs, color: colors.inkMuted }}>
                 אין לקוח מקושר
               </span>
@@ -1193,6 +1212,16 @@ export const ProductConfigurator: React.FC = () => {
             />
           </aside>
         </>
+      ) : null}
+
+      {/* Agent-mode contact picker — design → pick → send, no new tab */}
+      {agentMode && pickerOpen && widgetToken ? (
+        <ContactPickerOverlay
+          widgetToken={widgetToken}
+          getScreenshot={getScreenshot}
+          onClose={() => setPickerOpen(false)}
+          isCompact={isCompact}
+        />
       ) : null}
     </div>
   );

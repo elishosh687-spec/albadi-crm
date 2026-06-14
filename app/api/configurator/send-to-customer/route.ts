@@ -6,6 +6,7 @@ import { sql } from "drizzle-orm";
 import { loadConfiguratorSession } from "@/lib/configurator/sessions";
 import { sendBridgeMessage } from "@/lib/bridge/client";
 import { logLeadEvent } from "@/lib/events/lead-events";
+import { verifyWidgetToken } from "@/integrations/ghl/widget-auth";
 
 export const runtime = "nodejs";
 
@@ -47,11 +48,23 @@ export async function POST(req: NextRequest) {
   const sessionToken = str("sessionToken") || null;
   let manychatSubId = str("manychatSubId") || null;
   const imageDataUrl = str("imageDataUrl");
+  const widgetToken =
+    str("widgetToken") || req.nextUrl.searchParams.get("widget_token")?.trim() || null;
 
   if (!imageDataUrl) {
     return NextResponse.json(
       { ok: false, error: "missing_image" },
       { status: 400, headers: corsHeaders() }
+    );
+  }
+
+  // Agent path: a directly-provided manychatSubId can target ANY contact, so
+  // it requires a valid widget token. The customer self-serve path (lead
+  // resolved from a sessionToken) stays open as before.
+  if (manychatSubId && !verifyWidgetToken(widgetToken)) {
+    return NextResponse.json(
+      { ok: false, error: "unauthorized" },
+      { status: 401, headers: corsHeaders() }
     );
   }
 

@@ -54,7 +54,7 @@ const TABS: TabDef[] = [
   {
     id: "designer",
     label: "🎨 מעצב 3D",
-    url: (t) => `/widget/configurator-send?widget_token=${encodeURIComponent(t)}`,
+    url: (t) => `/configurator?widget_token=${encodeURIComponent(t)}`,
   },
 ];
 
