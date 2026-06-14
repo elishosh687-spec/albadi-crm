@@ -348,6 +348,10 @@ export async function syncLeadToGHL(sid: string): Promise<void> {
       "@/lib/ghl-tasks/reconcile"
     );
     void reconcileGHLTasksForLead(sid);
+    // Ensure a "call this lead" task once it exits the questionnaire into
+    // INTAKE or FACTORY_WAIT (custom/large orders skip intake). Idempotent.
+    const { ensureNewLeadTask } = await import("@/lib/ghl-tasks/new-lead-task");
+    void ensureNewLeadTask(sid, contactId);
   } catch (err) {
     console.error("[ghl.sync] syncLeadToGHL failed", sid, err);
   }
