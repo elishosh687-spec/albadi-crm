@@ -96,9 +96,9 @@ export interface QuoteFormData {
   logoColors: number;
   shippingOptionId: string | null;
   selectedFeatureIds: string[];
-  // One-time mold/tooling fee from the factory, in CNY. Amortized across the
-  // order quantity into per-unit production cost (so the margin applies to it
-  // like any other factory cost).
+  // One-time mold/tooling fee from the factory, in CNY. Treated as a SEPARATE
+  // one-time line in the quote (not amortized into per-bag price). The same
+  // margin applies, but it surfaces as its own row in the PDF and breakdown.
   moldsCostCny?: number;
 }
 
@@ -118,8 +118,13 @@ export interface QuoteResult {
   laminationAddonCny: number;
   logoAddonCny: number;
   plateFeeCny: number;
+  // One-time mold/tooling — separate line item, NOT folded into per-unit
+  // selling/cost/profit. See FactoryPricingResult for field semantics.
   moldsTotalCny: number;
   moldsPerUnitCny: number;
+  moldsTotalCostIls: number;
+  moldsTotalSellingPriceIls: number;
+  moldsTotalProfitIls: number;
   unitProductionCny: number;
   unitProductionUsd: number;
   totalCartons: number;

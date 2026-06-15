@@ -86,11 +86,13 @@ export function calculateQuote(
     ? findClosestPrice(colorAddon.pricesByQuantity, quantityKey)
     : 0;
 
-  // Step 3: Unit production cost — includes amortized one-time mold/tooling fee
+  // Step 3: Unit production cost — bag only. The one-time mold/tooling fee is
+  // priced as its OWN line at the bottom (see "Step 11" below) and never folded
+  // into per-bag price. The customer sees "תבניות (חד פעמי)" as a separate row.
   const moldsTotalCny = Math.max(formData.moldsCostCny ?? 0, 0);
   const moldsPerUnitCny = moldsTotalCny > 0 ? moldsTotalCny / quantity : 0;
   const unitProductionCny =
-    effectiveBaseCny + colorAddonCny + laminationColorCostCny + moldsPerUnitCny;
+    effectiveBaseCny + colorAddonCny + laminationColorCostCny;
   const unitProductionUsd = unitProductionCny / exchangeRates.usdToCny;
 
   // Step 4: Logistics
@@ -156,11 +158,23 @@ export function calculateQuote(
   const sellingPricePerUnitIlsExact =
     marginableBaseIls / (1 - marginFrac) + shippingPerUnitIls;
   const sellingPricePerUnitIls = r2(sellingPricePerUnitIlsExact);
-  const totalOrderPriceIls = r2(sellingPricePerUnitIlsExact * quantity);
+
+  // Step 11: One-time mold/tooling, priced as its own line with the same margin
+  // (no shipping component — molds aren't billed per kg/cbm). Surfaced in the
+  // result so the PDF + boss breakdown can show "תבניות (חד פעמי): ₪X".
+  const moldsTotalCostIlsExact = (moldsTotalCny / exchangeRates.usdToCny) * targetRate;
+  const moldsTotalSellingPriceIlsExact =
+    moldsTotalCostIlsExact > 0 ? moldsTotalCostIlsExact / (1 - marginFrac) : 0;
+  const moldsTotalProfitIlsExact =
+    moldsTotalSellingPriceIlsExact - moldsTotalCostIlsExact;
+
+  const totalOrderPriceIls = r2(
+    sellingPricePerUnitIlsExact * quantity + moldsTotalSellingPriceIlsExact
+  );
 
   // Step 10: Profit — derived from exact selling price so profit = factory × margin
   const profitPerUnitIls = r2(sellingPricePerUnitIlsExact - totalCostPerUnitIls);
-  const totalProfitIls = r2(profitPerUnitIls * quantity);
+  const totalProfitIls = r2(profitPerUnitIls * quantity + moldsTotalProfitIlsExact);
 
   // Breakdown for invoice
   const baseBagCny = findClosestPrice(product.withoutHandles.prices, quantityKey);
@@ -194,6 +208,9 @@ export function calculateQuote(
     plateFeeCny: r2(plateFeeCny),
     moldsTotalCny: r2(moldsTotalCny),
     moldsPerUnitCny: r3(moldsPerUnitCny),
+    moldsTotalCostIls: r2(moldsTotalCostIlsExact),
+    moldsTotalSellingPriceIls: r2(moldsTotalSellingPriceIlsExact),
+    moldsTotalProfitIls: r2(moldsTotalProfitIlsExact),
     unitProductionCny: r2(unitProductionCny),
     unitProductionUsd: r2(unitProductionUsd),
     totalCartons,

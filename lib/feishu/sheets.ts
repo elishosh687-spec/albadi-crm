@@ -324,9 +324,32 @@ function toNum(v: unknown): number | undefined {
   return Number.isFinite(n) ? n : undefined;
 }
 
+/**
+ * Feishu rich-text cells come back as arrays of segment objects:
+ *   [{ segmentStyle: {...}, text: "With handles / ", type: "text" },
+ *    { segmentStyle: {...}, text: "laminated",      type: "text" }]
+ * Default String() coercion gives "[object Object],[object Object]" — useless.
+ * Concatenate the `.text` from each segment instead. Returns null if the value
+ * isn't a recognized rich-text shape so the caller falls back to String().
+ */
+function richTextToPlain(v: unknown): string | null {
+  if (!Array.isArray(v)) return null;
+  let out = "";
+  for (const seg of v) {
+    if (seg && typeof seg === "object" && "text" in seg && typeof (seg as { text: unknown }).text === "string") {
+      out += (seg as { text: string }).text;
+    } else {
+      // Mixed/unknown shape — bail to default coercion.
+      return null;
+    }
+  }
+  return out;
+}
+
 function toStr(v: unknown): string | undefined {
   if (v === null || v === undefined) return undefined;
-  const s = String(v).trim();
+  const rich = richTextToPlain(v);
+  const s = (rich ?? String(v)).trim();
   return s ? s : undefined;
 }
 

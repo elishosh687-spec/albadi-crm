@@ -522,10 +522,17 @@ export function FinalizeModal({
                     תוצאת חישוב חיה
                   </div>
                   <PriceRow
-                    label="מחיר ללקוח / יחידה"
+                    label="מחיר ללקוח / יחידה (לשקית)"
                     value={formatIls(livePricing.unitSellingPrice)}
                     bold
                   />
+                  {livePricing.moldsTotalSellingPriceIls > 0 && (
+                    <PriceRow
+                      label="תבניות (חד-פעמי)"
+                      value={formatIls(livePricing.moldsTotalSellingPriceIls)}
+                      bold
+                    />
+                  )}
                   <PriceRow
                     label="סה״כ הזמנה"
                     value={formatIls(livePricing.totalSellingPrice)}
@@ -538,8 +545,8 @@ export function FinalizeModal({
                   />
                   {livePricing.moldsTotalCny > 0 && (
                     <PriceRow
-                      label={`מולדים (¥${livePricing.moldsTotalCny} ÷ ${livePricing.quantity} יח׳)`}
-                      value={`¥${livePricing.moldsPerUnitCny.toFixed(3)}/יח׳`}
+                      label={`עלות תבניות (¥${livePricing.moldsTotalCny}, חד-פעמי)`}
+                      value={formatIls(livePricing.moldsTotalCostIls)}
                     />
                   )}
                   <PriceRow

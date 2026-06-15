@@ -12,6 +12,12 @@
  *     productPrice = production_cost / (1 - margin)
  *     selling      = productPrice + shipping_cost
  *     profit       = productPrice - production_cost
+ *
+ * Mold/tooling: a one-time fee. NOT amortized into per-bag price. Customer
+ * sees it as its own line ("תבניות (חד-פעמי)") in the PDF. Same margin formula
+ * as the bag (cost / (1 - margin)), no shipping component. Per-unit numbers
+ * (unitCost/unitProfit/unitSellingPrice) are bag-only; totalCost/totalProfit/
+ * totalSellingPrice are GRAND totals (bags + mold one-time).
  */
 
 import type {
@@ -91,12 +97,13 @@ export function priceFactoryQuote(
     ? config.shippingOptions.find((s) => s.id === input.shippingOptionId) ?? null
     : null;
 
-  // One-time mold/tooling fee (CNY) — amortized across the order and folded
-  // into the per-unit production CNY so the margin applies to it too.
+  // One-time mold/tooling fee (CNY) — treated as a SEPARATE one-time line item.
+  // Same margin formula as the bag, but it never gets folded into the per-unit
+  // bag price. Customer sees it as its own row "תבניות (חד פעמי)" in the PDF.
   const moldsTotalCny = Math.max(input.moldsCostCny ?? 0, 0);
   const moldsPerUnitCny = moldsTotalCny > 0 ? moldsTotalCny / quantity : 0;
 
-  const unitProductionCny = input.factoryUnitCostCny + moldsPerUnitCny;
+  const unitProductionCny = input.factoryUnitCostCny;
   const unitCostUsd = unitProductionCny * cnyToUsd;
   const unitShippingUsd = computeShippingPerUnitUsd(
     shipping,
@@ -127,10 +134,21 @@ export function priceFactoryQuote(
   const unitProfitExact = unitProductPriceExact - unitCost;
   const unitProfit = r2(unitProfitExact);
 
-  const totalCost = r2(unitCost * quantity);
+  // Mold one-time: convert CNY → ILS, apply the same margin (no shipping on it).
+  const moldsTotalCostIlsExact = moldsTotalCny * cnyToUsd * usdToTarget;
+  const moldsTotalSellingPriceIlsExact =
+    moldsTotalCostIlsExact > 0 ? moldsTotalCostIlsExact / (1 - marginFrac) : 0;
+  const moldsTotalProfitIlsExact =
+    moldsTotalSellingPriceIlsExact - moldsTotalCostIlsExact;
+
+  const bagsCost = unitCost * quantity;
+  const bagsProfit = unitProfitExact * quantity;
+  const bagsSellingPrice = unitSellingPriceExact * quantity;
+
+  const totalCost = r2(bagsCost + moldsTotalCostIlsExact);
   const totalShipping = r2(unitShipping * quantity);
-  const totalProfit = r2(unitProfitExact * quantity);
-  const totalSellingPrice = r2(unitSellingPriceExact * quantity);
+  const totalProfit = r2(bagsProfit + moldsTotalProfitIlsExact);
+  const totalSellingPrice = r2(bagsSellingPrice + moldsTotalSellingPriceIlsExact);
 
   return {
     quantity,
@@ -151,5 +169,8 @@ export function priceFactoryQuote(
     shippingOptionName: shipping?.name ?? null,
     moldsTotalCny: r2(moldsTotalCny),
     moldsPerUnitCny: Math.round(moldsPerUnitCny * 1000) / 1000,
+    moldsTotalCostIls: r2(moldsTotalCostIlsExact),
+    moldsTotalSellingPriceIls: r2(moldsTotalSellingPriceIlsExact),
+    moldsTotalProfitIls: r2(moldsTotalProfitIlsExact),
   };
 }

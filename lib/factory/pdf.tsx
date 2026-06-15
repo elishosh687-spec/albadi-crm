@@ -407,9 +407,11 @@ function CustomerQuotePDF(props: CustomerQuotePdfProps) {
     displayTotalOrder = breakdown.totalOrder;
     displayUnitPrice = breakdown.totalPerUnit;
   } else {
-    // Fallback: 1-row honest layout from FactoryPricingResult. Shipping cost
-    // is folded into the bag unit price so no separate line item leaks to
-    // the customer.
+    // Fallback: honest layout from FactoryPricingResult. Shipping cost
+    // is folded into the bag unit price so no separate shipping line leaks to
+    // the customer. Per-unit price is BAG ONLY — the one-time mold/tooling
+    // charge gets its own row below ("תבניות (חד פעמי)") so the customer
+    // sees a clean per-bag price.
     const bagDescParts: string[] = [`${spec.productName?.trim() || "שקית אלבדי"} — ${sizeLabel(spec)} (כולל שילוח)`];
     if (finishingHe) bagDescParts.push(finishingHe);
     if (printingHe) bagDescParts.push(printingHe);
@@ -421,6 +423,15 @@ function CustomerQuotePDF(props: CustomerQuotePdfProps) {
       qty: pricing.quantity,
       total: r2(bagUnit * pricing.quantity),
     });
+    if (pricing.moldsTotalSellingPriceIls > 0) {
+      const moldTotal = r2(pricing.moldsTotalSellingPriceIls);
+      rows.push({
+        desc: "תבניות / מולדים (תשלום חד-פעמי)",
+        unit: moldTotal,
+        qty: 1,
+        total: moldTotal,
+      });
+    }
     displayTotalOrder = pricing.totalSellingPrice;
     displayUnitPrice = pricing.unitSellingPrice;
   }
@@ -581,7 +592,17 @@ function CombinedQuotePDF({ customerName, items }: CombinedQuotePdfProps) {
   const stripCjk = (s: string) =>
     /[　-鿿＀-￯]/.test(s) ? "" : s;
 
-  const sections = items.map((it) => {
+  type Section = {
+    title: string;
+    subParts: string[];
+    unit: number;
+    qty: number;
+    total: number;
+    picDataUri?: string;
+    isMold?: boolean;
+  };
+  const sections: Section[] = [];
+  for (const it of items) {
     const { spec, pricing } = it;
     const printingHe = stripCjk(spec.printing ? humanizePrinting(spec.printing) : "");
     const finishingHe = stripCjk(spec.finishing ? humanizeFinishing(spec.finishing) : "");
@@ -602,15 +623,30 @@ function CombinedQuotePDF({ customerName, items }: CombinedQuotePdfProps) {
       finishingHe,
       pricing.shippingOptionName || "",
     ].filter(Boolean);
-    return {
+    // Per-bag selling price now excludes the one-time mold. totalSellingPrice
+    // on the result is the grand total (bags + mold), so derive the bag-only
+    // subtotal explicitly.
+    const moldTotal = r2(pricing.moldsTotalSellingPriceIls);
+    const bagsTotal = r2(pricing.unitSellingPrice * pricing.quantity);
+    sections.push({
       title,
       subParts,
       unit: r2(pricing.unitSellingPrice),
       qty: pricing.quantity,
-      total: r2(pricing.totalSellingPrice),
+      total: bagsTotal,
       picDataUri: it.picDataUri,
-    };
-  });
+    });
+    if (moldTotal > 0) {
+      sections.push({
+        title: rtl(`תבניות / מולדים — ${namePart || dims || "מוצר"} (חד-פעמי)`),
+        subParts: [],
+        unit: moldTotal,
+        qty: 1,
+        total: moldTotal,
+        isMold: true,
+      });
+    }
+  }
   const grandTotal = r2(sections.reduce((s, x) => s + x.total, 0));
 
   return (

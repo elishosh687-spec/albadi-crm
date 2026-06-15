@@ -100,8 +100,10 @@ export interface FactoryPricingInput {
   /** Override the default margin (e.g. slider 30-50%) */
   profitMarginOverride?: number;
   /** One-time mold/tooling fee from the factory in CNY.
-   *  Amortized across `quantity` and folded into the per-unit production cost
-   *  so the margin applies to it like any other factory cost. */
+   *  Treated as a SEPARATE one-time line in the quote (not amortized into
+   *  per-bag price). The same margin applies to it like any other cost, but
+   *  it shows up as its own row in the PDF and as its own "סה״כ מולדים"
+   *  total — the per-unit bag price stays mold-free. */
   moldsCostCny?: number;
 }
 
@@ -131,7 +133,20 @@ export interface FactoryPricingResult {
   shippingOptionId: string | null;
   shippingOptionName: string | null;
 
-  // one-time mold/tooling charge (echoed for persistence + display); 0 = none
+  // One-time mold/tooling charge — a SEPARATE line item, NOT folded into
+  // unitCost / unitSellingPrice / unitProfit. Per-unit numbers are bag-only.
+  // Totals (totalCost / totalSellingPrice / totalProfit) ARE grand totals
+  // and include the mold one-time amounts below.
+  //   moldsTotalCny:   raw factory mold cost in CNY (echo of input)
+  //   moldsPerUnitCny: legacy field — moldsTotalCny ÷ quantity. Kept so
+  //                    existing internal UIs that displayed it don't break;
+  //                    nothing in the pricing math uses it any more.
+  //   moldsTotalCostIls:         moldsTotalCny converted to ILS at FX (no margin)
+  //   moldsTotalSellingPriceIls: customer's one-time mold charge (with margin)
+  //   moldsTotalProfitIls:       sellingPrice − cost on the mold
   moldsTotalCny: number;
   moldsPerUnitCny: number;
+  moldsTotalCostIls: number;
+  moldsTotalSellingPriceIls: number;
+  moldsTotalProfitIls: number;
 }

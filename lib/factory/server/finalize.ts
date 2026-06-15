@@ -21,6 +21,46 @@ import type {
   ShippingOption,
 } from "@/lib/factory/types";
 
+/**
+ * Coerce a value to a plain text string at write boundaries. Catches three
+ * historical failure modes:
+ *   1. Feishu rich-text array ([{text, type, segmentStyle}, ...]) — concat texts
+ *   2. Stringified `[object Object]` leftovers — null them out (treat as blank)
+ *   3. Non-string primitives (numbers, booleans) — String()
+ */
+function toPlainString(v: unknown): string {
+  if (v === null || v === undefined) return "";
+  if (typeof v === "string") {
+    return v.includes("[object Object]") ? "" : v;
+  }
+  if (Array.isArray(v)) {
+    let out = "";
+    for (const seg of v) {
+      if (seg && typeof seg === "object" && "text" in seg && typeof (seg as { text: unknown }).text === "string") {
+        out += (seg as { text: string }).text;
+      }
+    }
+    return out;
+  }
+  return String(v);
+}
+
+/** Defensively normalize the text fields on a FactoryProductSpec before
+ *  persisting. Prevents "[object Object]" garbage from leaking into product_spec
+ *  even if the client form was seeded with a Feishu rich-text value. */
+function normalizeSpec(spec: FactoryProductSpec): FactoryProductSpec {
+  return {
+    ...spec,
+    description: toPlainString(spec.description),
+    material: toPlainString(spec.material),
+    printing: toPlainString(spec.printing),
+    finishing: toPlainString(spec.finishing),
+    ...(spec.productName !== undefined ? { productName: toPlainString(spec.productName) } : {}),
+    ...(spec.customerNotes !== undefined ? { customerNotes: toPlainString(spec.customerNotes) } : {}),
+    ...(spec.notes !== undefined ? { notes: toPlainString(spec.notes) } : {}),
+  };
+}
+
 export interface FinalizeInput {
   profitMarginOverride?: number;
   shippingOptionId?: string;
@@ -74,9 +114,13 @@ export async function finalizeQuote(
   const storedSpec = reqRow.productSpec as FactoryProductSpec;
   // Apply the boss's manual edits (if any) before pricing + PDF. A blank
   // override field would have been omitted client-side, so a spread is safe.
-  const spec: FactoryProductSpec = body.specOverride
-    ? { ...storedSpec, ...body.specOverride }
-    : storedSpec;
+  // Then defensively normalize text fields so a Feishu rich-text leftover
+  // (or "[object Object]") can never reach the customer PDF.
+  const spec: FactoryProductSpec = normalizeSpec(
+    body.specOverride
+      ? { ...storedSpec, ...body.specOverride }
+      : storedSpec
+  );
   const resp = reqRow.factoryResponse as FactoryResponse;
   const config = await getFactoryConfig();
 

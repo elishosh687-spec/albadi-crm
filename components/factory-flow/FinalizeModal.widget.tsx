@@ -505,14 +505,21 @@ export function FinalizeModalWidget({
               {livePricing && (
                 <div className="rounded-lg border border-success/30 bg-success/5 p-3 space-y-1.5 text-sm">
                   <div className="text-[10px] uppercase tracking-wider text-success/80">תוצאת חישוב חיה</div>
-                  <PriceRow label="מחיר ללקוח / יחידה" value={formatIls(livePricing.unitSellingPrice)} bold />
+                  <PriceRow label="מחיר ללקוח / יחידה (לשקית)" value={formatIls(livePricing.unitSellingPrice)} bold />
+                  {livePricing.moldsTotalSellingPriceIls > 0 && (
+                    <PriceRow
+                      label="תבניות (חד-פעמי)"
+                      value={formatIls(livePricing.moldsTotalSellingPriceIls)}
+                      bold
+                    />
+                  )}
                   <PriceRow label="סה״כ הזמנה" value={formatIls(livePricing.totalSellingPrice)} bold />
                   <div className="border-t border-success/20 my-1" />
                   <PriceRow label="עלות יחידה (CNY→₪)" value={formatIls(livePricing.unitCost)} />
                   {livePricing.moldsTotalCny > 0 && (
                     <PriceRow
-                      label={`מולדים (¥${livePricing.moldsTotalCny} ÷ ${livePricing.quantity} יח׳)`}
-                      value={`¥${livePricing.moldsPerUnitCny.toFixed(3)}/יח׳`}
+                      label={`עלות תבניות (¥${livePricing.moldsTotalCny}, חד-פעמי)`}
+                      value={formatIls(livePricing.moldsTotalCostIls)}
                     />
                   )}
                   <PriceRow label="שילוח / יחידה" value={formatIls(livePricing.unitShipping)} />

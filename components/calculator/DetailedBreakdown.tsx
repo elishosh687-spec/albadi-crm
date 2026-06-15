@@ -108,7 +108,7 @@ export function DetailedBreakdown(props: BreakdownInput & { defaultOpen?: boolea
                 )}
                 {v.components.moldsPerUnitCny !== undefined && v.components.moldsPerUnitCny > 0 && (
                   <ComponentRow
-                    label={`מולדים (אמורטיזציה על ${input.quantity.toLocaleString("he-IL")} יח׳)`}
+                    label={`מולדים — חד-פעמי (≈ ${v.components.moldsPerUnitCny.toFixed(3)}¥/יח׳ אם היו מתחלקים על ${input.quantity.toLocaleString("he-IL")})`}
                     cny={v.components.moldsPerUnitCny}
                     cnyToIls={v.fx.cnyToIls}
                   />
