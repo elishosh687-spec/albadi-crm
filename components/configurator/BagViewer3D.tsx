@@ -603,6 +603,33 @@ function ViewerScene({
           controls.update();
         }
 
+        // Drive the rotation ourselves for the duration of the capture. R3F's
+        // own loop won't reliably advance OrbitControls.autoRotate every frame,
+        // so without this the captured stream is static (looks like a still).
+        // Each frame: advance auto-rotation + render so the canvas — and thus
+        // the captured MediaStream — actually shows the bag spinning.
+        let rafId = 0;
+        let lastT = performance.now();
+        const spin = (now: number) => {
+          const dt = (now - lastT) / 1000;
+          lastT = now;
+          if (controls) {
+            // autoRotate advances on update(); nudge azimuth by speed*dt as a
+            // fallback in case update() doesn't apply rotation on its own.
+            controls.update();
+            try {
+              controls.setAzimuthalAngle(
+                controls.getAzimuthalAngle() - (controls.autoRotateSpeed * dt) / 6
+              );
+            } catch {
+              /* some control builds lack the helpers — update() covers it */
+            }
+          }
+          gl.render(scene, camera);
+          rafId = requestAnimationFrame(spin);
+        };
+        rafId = requestAnimationFrame(spin);
+
         const recorder = new MediaRecorder(stream, {
           mimeType,
           videoBitsPerSecond: 4_500_000,
@@ -625,6 +652,7 @@ function ViewerScene({
             }, seconds * 1000);
           });
         } finally {
+          cancelAnimationFrame(rafId);
           stream.getTracks().forEach((track) => track.stop());
           if (controls) {
             controls.autoRotate = prevAutoRotate;
