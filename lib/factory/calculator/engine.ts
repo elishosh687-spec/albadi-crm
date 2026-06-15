@@ -159,14 +159,11 @@ export function calculateQuote(
     marginableBaseIls / (1 - marginFrac) + shippingPerUnitIls;
   const sellingPricePerUnitIls = r2(sellingPricePerUnitIlsExact);
 
-  // Step 11: One-time mold/tooling, priced as its own line with the same margin
-  // (no shipping component — molds aren't billed per kg/cbm). Surfaced in the
-  // result so the PDF + boss breakdown can show "תבניות (חד פעמי): ₪X".
+  // Step 11: One-time mold/tooling, priced as its own line. PASS-THROUGH — we
+  // charge the customer exactly what the factory charges us (no margin).
   const moldsTotalCostIlsExact = (moldsTotalCny / exchangeRates.usdToCny) * targetRate;
-  const moldsTotalSellingPriceIlsExact =
-    moldsTotalCostIlsExact > 0 ? moldsTotalCostIlsExact / (1 - marginFrac) : 0;
-  const moldsTotalProfitIlsExact =
-    moldsTotalSellingPriceIlsExact - moldsTotalCostIlsExact;
+  const moldsTotalSellingPriceIlsExact = moldsTotalCostIlsExact;
+  const moldsTotalProfitIlsExact = 0;
 
   const totalOrderPriceIls = r2(
     sellingPricePerUnitIlsExact * quantity + moldsTotalSellingPriceIlsExact

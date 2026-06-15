@@ -14,10 +14,10 @@
  *     profit       = productPrice - production_cost
  *
  * Mold/tooling: a one-time fee. NOT amortized into per-bag price. Customer
- * sees it as its own line ("תבניות (חד-פעמי)") in the PDF. Same margin formula
- * as the bag (cost / (1 - margin)), no shipping component. Per-unit numbers
- * (unitCost/unitProfit/unitSellingPrice) are bag-only; totalCost/totalProfit/
- * totalSellingPrice are GRAND totals (bags + mold one-time).
+ * sees it as its own line ("תבניות (חד-פעמי)") in the PDF. PASS-THROUGH — no
+ * margin: we charge the customer the same CNY→ILS cost we paid the factory.
+ * Per-unit numbers (unitCost/unitProfit/unitSellingPrice) are bag-only;
+ * totalCost/totalProfit/totalSellingPrice are GRAND totals (bags + mold).
  */
 
 import type {
@@ -134,12 +134,11 @@ export function priceFactoryQuote(
   const unitProfitExact = unitProductPriceExact - unitCost;
   const unitProfit = r2(unitProfitExact);
 
-  // Mold one-time: convert CNY → ILS, apply the same margin (no shipping on it).
+  // Mold one-time: convert CNY → ILS. PASS-THROUGH — same cost charged to the
+  // customer, no margin. So sellingPrice == cost and profit == 0.
   const moldsTotalCostIlsExact = moldsTotalCny * cnyToUsd * usdToTarget;
-  const moldsTotalSellingPriceIlsExact =
-    moldsTotalCostIlsExact > 0 ? moldsTotalCostIlsExact / (1 - marginFrac) : 0;
-  const moldsTotalProfitIlsExact =
-    moldsTotalSellingPriceIlsExact - moldsTotalCostIlsExact;
+  const moldsTotalSellingPriceIlsExact = moldsTotalCostIlsExact;
+  const moldsTotalProfitIlsExact = 0;
 
   const bagsCost = unitCost * quantity;
   const bagsProfit = unitProfitExact * quantity;
