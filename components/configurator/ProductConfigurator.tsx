@@ -9,10 +9,12 @@ import {
   Copy,
   Download,
   Film,
+  Hand,
   ImagePlus,
   Loader2,
   Maximize,
   Minimize,
+  Move,
   Pause,
   Play,
   RotateCcw,
@@ -193,9 +195,12 @@ export const ProductConfigurator: React.FC = () => {
   const [logoPositionX, setLogoPositionX] = useState<number>(DEFAULT_LOGO_STATE.positionX);
   const [logoPositionY, setLogoPositionY] = useState<number>(DEFAULT_LOGO_STATE.positionY);
   const [logoRotation, setLogoRotation] = useState<number>(DEFAULT_LOGO_STATE.rotation);
-  // Logo is always positioned via the precise sliders so mouse-drag is free to
-  // rotate the bag (and Play/auto-rotate) at all times — no camera lock.
-  const logoPlacementMode: LogoPlacementMode = "controls";
+  // Placement mode toggle: "controls" = mouse-drag rotates the bag, logo is
+  // moved via the sliders (default). "drag" = mouse-drag on the bag moves the
+  // logo (camera locked while active). The toggle button lets the user switch
+  // so the two gestures never conflict.
+  const [logoPlacementMode, setLogoPlacementMode] =
+    useState<LogoPlacementMode>("controls");
   const [customerInfo, setCustomerInfo] = useState<CustomerInfo>(DEFAULT_CUSTOMER_INFO);
   const [sizeProductId, setSizeProductId] = useState<string>(
     DEFAULT_BAG_SIZE_OPTION.productId
@@ -832,10 +837,32 @@ export const ProductConfigurator: React.FC = () => {
                   {logoFileName || "לוגו"}
                 </div>
                 <div style={{ fontSize: size.xs, color: colors.inkMuted }}>
-                  מקם עם הבקרות · גרור את השקית כדי לסובב
+                  {logoPlacementMode === "drag"
+                    ? "גרור את הלוגו על השקית למיקום"
+                    : "גרור את השקית כדי לסובב · מקם עם הבקרות"}
                 </div>
               </div>
               <div style={{ display: "flex", gap: 2, flexShrink: 0 }}>
+                <ToolbarButton
+                  label={
+                    logoPlacementMode === "drag"
+                      ? "מצב סיבוב שקית"
+                      : "מצב הזזת לוגו"
+                  }
+                  active={logoPlacementMode === "drag"}
+                  onClick={() =>
+                    setLogoPlacementMode((m) =>
+                      m === "drag" ? "controls" : "drag"
+                    )
+                  }
+                  compact={isCompact}
+                >
+                  {logoPlacementMode === "drag" ? (
+                    <Hand className="size-4" />
+                  ) : (
+                    <Move className="size-4" />
+                  )}
+                </ToolbarButton>
                 <ToolbarButton
                   label="איפוס מיקום הלוגו"
                   onClick={resetLogoLayout}
