@@ -179,17 +179,20 @@ function BagLogoPlane({
   texture,
   position,
   rotationZ,
+  rotationY = 0,
   width,
   height,
 }: {
   texture: THREE.Texture;
   position: [number, number, number];
   rotationZ: number;
+  /** Y rotation — π for the back face so the logo faces outward and reads correctly. */
+  rotationY?: number;
   width: number;
   height: number;
 }) {
   return (
-    <mesh position={position} rotation={[0, 0, rotationZ]} renderOrder={2}>
+    <mesh position={position} rotation={[0, rotationY, rotationZ]} renderOrder={2}>
       <planeGeometry args={[width, height]} />
       <meshStandardMaterial
         map={texture}
@@ -376,13 +379,26 @@ function BagModel({
       </mesh>
 
       {texture ? (
-        <BagLogoPlane
-          texture={texture}
-          position={[logoX, logoY, logoZ]}
-          rotationZ={-THREE.MathUtils.degToRad(logoRotation)}
-          width={logoWidth}
-          height={logoHeight}
-        />
+        <>
+          {/* Front face */}
+          <BagLogoPlane
+            texture={texture}
+            position={[logoX, logoY, logoZ]}
+            rotationZ={-THREE.MathUtils.degToRad(logoRotation)}
+            width={logoWidth}
+            height={logoHeight}
+          />
+          {/* Back face — mirrored X, flipped 180° so the logo faces outward and
+              reads correctly from behind. Same logo appears on both sides. */}
+          <BagLogoPlane
+            texture={texture}
+            position={[-logoX, logoY, -logoZ]}
+            rotationY={Math.PI}
+            rotationZ={THREE.MathUtils.degToRad(logoRotation)}
+            width={logoWidth}
+            height={logoHeight}
+          />
+        </>
       ) : null}
 
       {showLogoHint && !texture ? (
