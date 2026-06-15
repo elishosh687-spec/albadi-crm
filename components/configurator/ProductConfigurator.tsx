@@ -456,11 +456,11 @@ export const ProductConfigurator: React.FC = () => {
     void handleSendToCustomer();
   }, [agentMode, handleSendToCustomer]);
 
-  // On desktop the controls live in a floating side panel, so the 3D stage
-  // can fill the whole frame. On mobile we keep the bottom-dock inset so the
-  // bag + pedestal stay above the stacked dock.
+  // Desktop: controls live in a single sticky bottom bar, so the 3D stage is
+  // inset from the bottom to keep the bag + pedestal visible above the bar.
+  // Mobile keeps the bottom-dock inset so the bag stays above the stacked dock.
   const stageInset = !isCompact
-    ? 0
+    ? 190
     : activeTab === "logo" && logoUrl
       ? "clamp(220px, 34vh, 280px)"
       : activeTab === "logo"
@@ -539,12 +539,13 @@ export const ProductConfigurator: React.FC = () => {
       style={{
         ...PILL_STYLE,
         display: "inline-flex",
-        width: isCompact ? "fit-content" : "100%",
+        width: "fit-content",
         maxWidth: "100%",
         alignItems: "center",
         justifyContent: "center",
         gap: 4,
         padding: 4,
+        flexShrink: 0,
       }}
     >
       {DOCK_TABS.map((tab) => {
@@ -559,7 +560,7 @@ export const ProductConfigurator: React.FC = () => {
             style={{
               border: "none",
               borderRadius: radius.full,
-              flex: isCompact ? undefined : 1,
+              flex: undefined,
               padding: isCompact
                 ? `${space.sm}px ${space.md}px`
                 : `${space.sm}px ${space.lg}px`,
@@ -587,7 +588,8 @@ export const ProductConfigurator: React.FC = () => {
       dir="rtl"
       style={{
         maxWidth: "100%",
-        width: isCompact ? undefined : "100%",
+        width: undefined,
+        flexShrink: 0,
         background: "rgba(255,255,255,0.92)",
         border: `1px solid ${colors.ruleSoft}`,
         borderRadius: radius.full,
@@ -618,7 +620,8 @@ export const ProductConfigurator: React.FC = () => {
         alignItems: "center",
         gap: space.sm,
         maxWidth: "100%",
-        width: isCompact ? undefined : "100%",
+        width: isCompact ? undefined : "auto",
+        flexShrink: 0,
         fontSize: size.xs,
         color: colors.inkMuted,
         background: "rgba(255,255,255,0.92)",
@@ -683,27 +686,31 @@ export const ProductConfigurator: React.FC = () => {
     </div>
   );
 
-  // Color tab body: size dropdown + selected-color chip + swatch rail.
+  // Color tab body: selected-color chip + swatch rail. On mobile the size
+  // dropdown rides along here; on desktop it lives in the bottom-bar header row.
   // Kept mounted (display toggled) so keen-slider preserves its layout.
   const colorSection = (
     <div
       style={{
         display: activeTab === "color" ? "flex" : "none",
-        flexDirection: "column",
-        alignItems: isCompact ? "center" : "stretch",
-        gap: isCompact ? 8 : 10,
+        flexDirection: isCompact ? "column" : "row",
+        alignItems: "center",
+        gap: isCompact ? 8 : space.md,
         width: "100%",
+        minWidth: 0,
       }}
     >
-      {sizeSelect}
+      {isCompact ? sizeSelect : null}
       {colorChip}
-      <ColorSwatchRail
-        colors={BAG_COLORS}
-        selectedHex={selectedColorHex}
-        onSelect={setSelectedColorHex}
-        compact={isCompact}
-        visible={activeTab === "color"}
-      />
+      <div style={{ flex: 1, minWidth: 0, width: isCompact ? "100%" : undefined }}>
+        <ColorSwatchRail
+          colors={BAG_COLORS}
+          selectedHex={selectedColorHex}
+          onSelect={setSelectedColorHex}
+          compact={isCompact}
+          visible={activeTab === "color"}
+        />
+      </div>
     </div>
   );
 
@@ -951,6 +958,7 @@ export const ProductConfigurator: React.FC = () => {
         style={{
           ...PILL_STYLE,
           maxWidth: "100%",
+          flexShrink: 0,
           padding: `${space.xs}px ${space.sm}px`,
           display: "flex",
           alignItems: "center",
@@ -980,7 +988,7 @@ export const ProductConfigurator: React.FC = () => {
                 ? colors.success
                 : sendState === "error"
                   ? colors.danger
-                  : colors.accent,
+                  : "#A16207",
             color: colors.surface,
             fontSize: size.sm,
             fontWeight: weight.semibold,
@@ -1013,15 +1021,6 @@ export const ProductConfigurator: React.FC = () => {
         ) : null}
       </div>
     ) : null;
-
-  // The grouped design controls (tabs + active section) shared by both layouts.
-  const designControls = (
-    <>
-      {tabSwitcher}
-      {colorSection}
-      {logoSection}
-    </>
-  );
 
   return (
     <div
@@ -1117,10 +1116,11 @@ export const ProductConfigurator: React.FC = () => {
       </div>
 
       {/* ─────────────────────────────────────────────────────────────────
-          DESKTOP layout: bag is the centerpiece, controls live on the sides.
-          - Utility toolbar: top-right floating bar.
-          - Design panel: left-side floating card (tabs + size + color/logo).
-          - Send action: its own card pinned bottom-left, kept deliberate.
+          DESKTOP layout: the 3D bag is the centerpiece; all controls live in
+          ONE centered sticky bottom bar (Interactive 3D Configurator pattern).
+          - Utility toolbar: stays top-right floating bar (on-pattern).
+          - Bottom bar row 1 (header): tab switcher · spacer · size · gold CTA.
+          - Bottom bar row 2 (active section): colorSection / logoSection.
           ───────────────────────────────────────────────────────────────── */}
       {!isCompact ? (
         <>
@@ -1141,43 +1141,42 @@ export const ProductConfigurator: React.FC = () => {
             {toolbarButtons}
           </div>
 
-          {/* Design controls — left-side floating card, vertically centered */}
+          {/* Sticky bottom bar — single frosted card, two rows */}
           <div
             style={{
               position: "absolute",
-              top: "50%",
-              left: 16,
-              transform: "translateY(-50%)",
-              maxHeight: "calc(100dvh - 32px)",
-              width: "min(340px, 32vw)",
+              bottom: `calc(16px + env(safe-area-inset-bottom))`,
+              left: "50%",
+              transform: "translateX(-50%)",
+              width: "min(900px, calc(100vw - 32px))",
               display: "flex",
               flexDirection: "column",
-              alignItems: "stretch",
-              gap: 10,
+              gap: space.md,
               padding: space.lg,
-              overflowY: "auto",
-              overflowX: "hidden",
               ...PILL_STYLE,
               borderRadius: radius.xl,
               zIndex: 10,
             }}
           >
-            {designControls}
-          </div>
-
-          {/* Send action — its own card, bottom-left corner */}
-          {sendAction ? (
+            {/* Header row: tabs · spacer · size · send CTA */}
             <div
               style={{
-                position: "absolute",
-                bottom: `calc(16px + env(safe-area-inset-bottom))`,
-                left: 16,
-                zIndex: 10,
+                display: "flex",
+                alignItems: "center",
+                gap: space.md,
+                width: "100%",
               }}
             >
+              {tabSwitcher}
+              <div style={{ flex: 1, minWidth: 0 }} />
+              {sizeSelect}
               {sendAction}
             </div>
-          ) : null}
+
+            {/* Active-section row: color swatch rail / logo controls */}
+            {colorSection}
+            {logoSection}
+          </div>
         </>
       ) : null}
 
