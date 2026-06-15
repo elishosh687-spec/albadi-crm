@@ -167,15 +167,37 @@ export function QuoteHtmlPreviewWidget({ apiToken, row }: { apiToken: string; ro
               <div className="bg-gray-900 px-4 py-2 text-xs font-semibold text-gray-300">סיכום רווחיות</div>
               <table className="w-full text-sm">
                 <tbody>
-                  <PriceRow label="עלות מפעל ליחידה" value={fmtIls(p.unitCost)} />
+                  <PriceRow label="עלות מפעל ליחידה (שקית)" value={fmtIls(p.unitCost)} />
                   <PriceRow label="עלות שילוח ליחידה" value={fmtIls(p.unitShipping)} />
-                  <PriceRow label="סה״כ עלות" value={fmtIls(p.totalCost + p.totalShipping)} bold />
+                  {p.moldsTotalCostIls !== undefined && p.moldsTotalCostIls > 0 && (
+                    <PriceRow
+                      label={`עלות מולד (חד-פעמי, ¥${p.moldsTotalCny ?? "?"})`}
+                      value={fmtIls(p.moldsTotalCostIls)}
+                    />
+                  )}
+                  <PriceRow
+                    label="סה״כ עלות (שקיות + שילוח + מולד)"
+                    value={fmtIls((p.totalCost ?? 0) + (p.totalShipping ?? 0))}
+                    bold
+                  />
+                  {p.moldsTotalSellingPriceIls !== undefined && p.moldsTotalSellingPriceIls > 0 && (
+                    <PriceRow
+                      label="מחיר מולד ללקוח (חד-פעמי)"
+                      value={fmtIls(p.moldsTotalSellingPriceIls)}
+                    />
+                  )}
                   <PriceRow
                     label={`רווח ${p.profitMarginPct}% (מהמחיר, ללא שילוח)`}
                     value={fmtIls(p.totalProfit)}
                     bold
                     primary
                   />
+                  {p.moldsTotalProfitIls !== undefined && p.moldsTotalProfitIls > 0 && (
+                    <PriceRow
+                      label="מתוכו: רווח מהמולד (חד-פעמי)"
+                      value={fmtIls(p.moldsTotalProfitIls)}
+                    />
+                  )}
                   <PriceRow
                     label="לוגיסטיקה"
                     value={`${p.totalCartons} קרטונים · ${p.totalWeightKg} ק״ג · ${p.totalCbm} m³`}
