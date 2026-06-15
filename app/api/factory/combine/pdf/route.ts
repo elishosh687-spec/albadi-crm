@@ -106,15 +106,22 @@ export async function GET(req: NextRequest) {
       const p = r.finalPricing as FactoryPricingResult;
       const share = combinedCbm > 0 ? (p.totalCbm || 0) / combinedCbm : 1 / pricings.length;
       const allocShipping = r2(combinedShipping * share);
-      const productPriceTotal = r2(p.totalSellingPrice - p.totalShipping);
-      const newTotal = r2(productPriceTotal + allocShipping);
-      const newUnit = p.quantity > 0 ? r2(newTotal / p.quantity) : newTotal;
+      // p.totalSellingPrice is the grand total (bags + mold + shipping). Strip
+      // both the original shipping AND the mold one-time before reallocating
+      // shipping, so per-unit ends up bag-only (matches the single-quote PDF).
+      // Older quotes finalized before the mold-split deploy won't have
+      // moldsTotalSellingPriceIls — treat undefined as 0.
+      const moldOneTime = p.moldsTotalSellingPriceIls ?? 0;
+      const bagsSellingTotal = r2(p.totalSellingPrice - p.totalShipping - moldOneTime);
+      const newBagsTotal = r2(bagsSellingTotal + allocShipping);
+      const newUnit = p.quantity > 0 ? r2(newBagsTotal / p.quantity) : newBagsTotal;
+      const newGrand = r2(newBagsTotal + moldOneTime);
       const adjusted: FactoryPricingResult = {
         ...p,
         unitShipping: p.quantity > 0 ? r2(allocShipping / p.quantity) : allocShipping,
         totalShipping: allocShipping,
-        unitSellingPrice: newUnit,
-        totalSellingPrice: newTotal,
+        unitSellingPrice: newUnit,      // bag-only — CombinedQuotePDF renders the mold as its own row
+        totalSellingPrice: newGrand,    // grand total: bags + reallocated shipping + mold one-time
       };
       return {
         spec,
