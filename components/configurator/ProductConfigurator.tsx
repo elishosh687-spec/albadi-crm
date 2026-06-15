@@ -9,7 +9,6 @@ import {
   Copy,
   Download,
   Film,
-  Hand,
   ImagePlus,
   Loader2,
   Maximize,
@@ -18,7 +17,6 @@ import {
   Play,
   RotateCcw,
   Send,
-  SlidersHorizontal,
   Trash2,
   X,
 } from "lucide-react";
@@ -195,7 +193,9 @@ export const ProductConfigurator: React.FC = () => {
   const [logoPositionX, setLogoPositionX] = useState<number>(DEFAULT_LOGO_STATE.positionX);
   const [logoPositionY, setLogoPositionY] = useState<number>(DEFAULT_LOGO_STATE.positionY);
   const [logoRotation, setLogoRotation] = useState<number>(DEFAULT_LOGO_STATE.rotation);
-  const [logoPlacementMode, setLogoPlacementMode] = useState<LogoPlacementMode>("drag");
+  // Logo is always positioned via the precise sliders so mouse-drag is free to
+  // rotate the bag (and Play/auto-rotate) at all times — no camera lock.
+  const logoPlacementMode: LogoPlacementMode = "controls";
   const [customerInfo, setCustomerInfo] = useState<CustomerInfo>(DEFAULT_CUSTOMER_INFO);
   const [sizeProductId, setSizeProductId] = useState<string>(
     DEFAULT_BAG_SIZE_OPTION.productId
@@ -832,9 +832,7 @@ export const ProductConfigurator: React.FC = () => {
                   {logoFileName || "לוגו"}
                 </div>
                 <div style={{ fontSize: size.xs, color: colors.inkMuted }}>
-                  {logoPlacementMode === "drag"
-                    ? "גרור על השקית · המודל נשאר קבוע"
-                    : "בקרות מדויקות · סובב את המודל"}
+                  מקם עם הבקרות · גרור את השקית כדי לסובב
                 </div>
               </div>
               <div style={{ display: "flex", gap: 2, flexShrink: 0 }}>
@@ -849,57 +847,6 @@ export const ProductConfigurator: React.FC = () => {
                   <Trash2 className="size-4" />
                 </ToolbarButton>
               </div>
-            </div>
-
-            <div
-              style={{
-                display: "flex",
-                width: "100%",
-                padding: 3,
-                borderRadius: radius.full,
-                background: colors.surfaceMuted,
-                gap: 3,
-              }}
-              role="tablist"
-              aria-label="אופן מיקום הלוגו"
-            >
-              {(
-                [
-                  { id: "drag" as const, label: "גרירה על השקית", icon: Hand },
-                  { id: "controls" as const, label: "בקרות מדויקות", icon: SlidersHorizontal },
-                ] as const
-              ).map(({ id, label, icon: Icon }) => {
-                const active = logoPlacementMode === id;
-                return (
-                  <button
-                    key={id}
-                    type="button"
-                    role="tab"
-                    aria-selected={active ? "true" : "false"}
-                    onClick={() => setLogoPlacementMode(id)}
-                    style={{
-                      flex: 1,
-                      display: "inline-flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      gap: 6,
-                      minHeight: 36,
-                      padding: `0 ${space.sm}px`,
-                      borderRadius: radius.full,
-                      border: "none",
-                      background: active ? colors.ink : "transparent",
-                      color: active ? colors.surface : colors.inkMuted,
-                      fontSize: isCompact ? 11 : size.xs,
-                      fontWeight: active ? weight.medium : weight.regular,
-                      cursor: "pointer",
-                      whiteSpace: "nowrap",
-                    }}
-                  >
-                    <Icon className="size-3.5 shrink-0" />
-                    {isCompact ? (id === "drag" ? "גרירה" : "בקרות") : label}
-                  </button>
-                );
-              })}
             </div>
 
             <div
@@ -919,30 +866,26 @@ export const ProductConfigurator: React.FC = () => {
                 onChange={setLogoScale}
                 compact={isCompact}
               />
-              {logoPlacementMode === "controls" ? (
-                <>
-                  <MiniSlider
-                    label="אופקי"
-                    value={logoPositionX}
-                    display={logoPositionX.toFixed(2)}
-                    min={LOGO_POSITION_LIMITS.x.min}
-                    max={LOGO_POSITION_LIMITS.x.max}
-                    step={0.01}
-                    onChange={setLogoPositionX}
-                    compact={isCompact}
-                  />
-                  <MiniSlider
-                    label="אנכי"
-                    value={logoPositionY}
-                    display={logoPositionY.toFixed(2)}
-                    min={LOGO_POSITION_LIMITS.y.min}
-                    max={LOGO_POSITION_LIMITS.y.max}
-                    step={0.01}
-                    onChange={setLogoPositionY}
-                    compact={isCompact}
-                  />
-                </>
-              ) : null}
+              <MiniSlider
+                label="אופקי"
+                value={logoPositionX}
+                display={logoPositionX.toFixed(2)}
+                min={LOGO_POSITION_LIMITS.x.min}
+                max={LOGO_POSITION_LIMITS.x.max}
+                step={0.01}
+                onChange={setLogoPositionX}
+                compact={isCompact}
+              />
+              <MiniSlider
+                label="אנכי"
+                value={logoPositionY}
+                display={logoPositionY.toFixed(2)}
+                min={LOGO_POSITION_LIMITS.y.min}
+                max={LOGO_POSITION_LIMITS.y.max}
+                step={0.01}
+                onChange={setLogoPositionY}
+                compact={isCompact}
+              />
               <MiniSlider
                 label="סיבוב"
                 value={logoRotation}
@@ -1079,7 +1022,7 @@ export const ProductConfigurator: React.FC = () => {
             logoPositionX={logoPositionX}
             logoPositionY={logoPositionY}
             logoRotation={logoRotation}
-            logoPlacementMode={logoUrl ? logoPlacementMode : "controls"}
+            logoPlacementMode={logoPlacementMode}
             onLogoPositionChange={handleLogoPositionChange}
             autoRotate={autoRotate}
             showLogoHint={activeTab === "logo"}
