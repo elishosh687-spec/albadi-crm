@@ -613,33 +613,24 @@ function ViewerScene({
         const prevAutoRotate = controls?.autoRotate ?? false;
         const prevSpeed = controls?.autoRotateSpeed ?? 1.5;
 
-        if (controls) {
-          controls.autoRotate = true;
-          controls.autoRotateSpeed = 2.4;
-          controls.update();
-        }
+        // Drive a deterministic, exactly-one-full-turn (360°) spin over the
+        // capture duration so the recorded clip ALWAYS completes a full
+        // revolution — independent of fps/timing. autoRotate is disabled so it
+        // doesn't double-drive the angle. Each frame we set the azimuth from
+        // elapsed time and render, so the captured MediaStream shows the spin.
+        if (controls) controls.autoRotate = false;
+        const startAngle =
+          controls && typeof controls.getAzimuthalAngle === "function"
+            ? controls.getAzimuthalAngle()
+            : 0;
 
-        // Drive the rotation ourselves for the duration of the capture. R3F's
-        // own loop won't reliably advance OrbitControls.autoRotate every frame,
-        // so without this the captured stream is static (looks like a still).
-        // Each frame: advance auto-rotation + render so the canvas — and thus
-        // the captured MediaStream — actually shows the bag spinning.
         let rafId = 0;
-        let lastT = performance.now();
+        const startT = performance.now();
         const spin = (now: number) => {
-          const dt = (now - lastT) / 1000;
-          lastT = now;
-          if (controls) {
-            // autoRotate advances on update(); nudge azimuth by speed*dt as a
-            // fallback in case update() doesn't apply rotation on its own.
+          const fraction = Math.min(1, (now - startT) / (seconds * 1000));
+          if (controls && typeof controls.setAzimuthalAngle === "function") {
+            controls.setAzimuthalAngle(startAngle - fraction * Math.PI * 2);
             controls.update();
-            try {
-              controls.setAzimuthalAngle(
-                controls.getAzimuthalAngle() - (controls.autoRotateSpeed * dt) / 6
-              );
-            } catch {
-              /* some control builds lack the helpers — update() covers it */
-            }
           }
           gl.render(scene, camera);
           rafId = requestAnimationFrame(spin);

@@ -7,10 +7,12 @@ name: Poll factory refresh
 
 on:
   schedule:
-    # Factory replies ~twice a day. Every 30 min is generous: worst-case
-    # latency 30 min, daily invocations capped at 48. workflow_dispatch
-    # lets us trigger on demand from the Actions tab or `gh workflow run`.
-    - cron: "0 */2 * * *"
+    # Every 15 min. Factory replies ~twice a day so latency is what matters,
+    # not throughput. GitHub Actions free-tier skips scheduled runs under load
+    # — 15 min cadence means a 1–2 skip burst still keeps worst-case latency
+    # under an hour. ~96 runs/day × ~15s ≈ 720 min/month, well under the
+    # 2000-min free quota. workflow_dispatch lets us trigger on demand.
+    - cron: "*/15 * * * *"
   workflow_dispatch: {}
 
 jobs:
