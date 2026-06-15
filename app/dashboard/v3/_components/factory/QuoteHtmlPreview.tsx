@@ -151,8 +151,18 @@ export function QuoteHtmlPreview({
           <div className="bg-gray-900 px-4 py-2 text-xs font-semibold text-gray-300">פירוט מחיר</div>
           <table className="w-full text-sm">
             <tbody>
-              <PriceRow label="מחיר ליחידה" value={fmtIls(p.unitSellingPrice)} />
+              <PriceRow label="מחיר ליחידה (לשקית)" value={fmtIls(p.unitSellingPrice)} />
               <PriceRow label="כמות" value={`${p.quantity.toLocaleString("he-IL")} יח׳`} />
+              <PriceRow
+                label="סה״כ שקיות"
+                value={fmtIls(p.unitSellingPrice * p.quantity)}
+              />
+              {p.moldsTotalSellingPriceIls !== undefined && p.moldsTotalSellingPriceIls > 0 && (
+                <PriceRow
+                  label="תבניות / מולדים (תשלום חד-פעמי)"
+                  value={fmtIls(p.moldsTotalSellingPriceIls)}
+                />
+              )}
               <PriceRow
                 label="סה״כ הזמנה"
                 value={fmtIls(p.totalSellingPrice)}
