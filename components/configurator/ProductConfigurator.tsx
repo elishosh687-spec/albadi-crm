@@ -279,6 +279,21 @@ export const ProductConfigurator: React.FC = () => {
     return viewerApiRef.current?.screenshot() ?? "";
   }, []);
 
+  // Record a short rotation clip for the agent contact-picker "video" path.
+  // Returns the recorded Blob plus the actual extension WhatsApp should see
+  // (mp4 if the recorder produced mp4, else the picked fallback — webm).
+  const getVideo = useCallback(async (): Promise<{
+    blob: Blob;
+    extension: "mp4" | "webm";
+  }> => {
+    const api = viewerApiRef.current;
+    if (!api?.recordVideo) throw new Error("הקלטת וידאו אינה זמינה");
+    const blob = await api.recordVideo({ seconds: 6, fps: 30 });
+    const { extension } = pickVideoMimeType();
+    const ext = blob.type.includes("mp4") ? "mp4" : extension;
+    return { blob, extension: ext };
+  }, []);
+
   const saveDesignToCrm = useCallback(async () => {
     if (!selectedColor) return;
     const apiBase = getConfiguratorApiBase();
@@ -1296,6 +1311,8 @@ export const ProductConfigurator: React.FC = () => {
         <ContactPickerOverlay
           widgetToken={widgetToken}
           getScreenshot={getScreenshot}
+          getVideo={getVideo}
+          baseName={mockupBaseName(selectedColor?.sku)}
           onClose={() => setPickerOpen(false)}
           isCompact={isCompact}
         />

@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { Check, Loader2, Search, Send, X } from "lucide-react";
+import { Check, Image as ImageIcon, Loader2, Search, Send, Video, X } from "lucide-react";
 import { colors, fontStack, radius, size, space, weight } from "@/lib/ui/tokens";
 import { getConfiguratorApiBase } from "@/lib/configurator/urls";
 
@@ -13,8 +13,11 @@ interface RecentLead {
   updatedAt?: string | null;
 }
 
+type MediaType = "image" | "video";
+
 type SendStatus =
   | { kind: "idle" }
+  | { kind: "recording"; sid: string }
   | { kind: "sending"; sid: string }
   | { kind: "sent"; name: string }
   | { kind: "error"; message: string };
@@ -27,11 +30,15 @@ type SendStatus =
 export default function ContactPickerOverlay({
   widgetToken,
   getScreenshot,
+  getVideo,
+  baseName = "bag-mockup",
   onClose,
   isCompact = false,
 }: {
   widgetToken: string;
   getScreenshot: () => Promise<string>;
+  getVideo: () => Promise<{ blob: Blob; extension: "mp4" | "webm" }>;
+  baseName?: string;
   onClose: () => void;
   isCompact?: boolean;
 }) {
@@ -41,6 +48,7 @@ export default function ContactPickerOverlay({
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [status, setStatus] = useState<SendStatus>({ kind: "idle" });
+  const [mediaType, setMediaType] = useState<MediaType>("image");
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -85,20 +93,46 @@ export default function ContactPickerOverlay({
     };
   }, [debouncedQuery, widgetToken]);
 
-  const sendingSid = status.kind === "sending" ? status.sid : null;
+  const busy = status.kind === "recording" || status.kind === "sending";
+  const activeSid =
+    status.kind === "recording" || status.kind === "sending" ? status.sid : null;
 
   const handlePick = async (lead: RecentLead) => {
     const sid = lead.sid?.trim();
-    if (!sid || status.kind === "sending") return;
-    setStatus({ kind: "sending", sid });
+    if (!sid || busy) return;
     try {
-      const imageDataUrl = await getScreenshot();
-      if (!imageDataUrl) throw new Error("לא ניתן ללכוד את התצוגה");
+      // Build the file payload for the chosen media type.
+      let file: Blob;
+      let filename: string;
+      if (mediaType === "video") {
+        // Recording the rotation takes several seconds — show a clear state
+        // and keep the rest of the picker disabled meanwhile.
+        setStatus({ kind: "recording", sid });
+        const { blob, extension } = await getVideo();
+        if (!blob || blob.size === 0) throw new Error("הקלטת הווידאו נכשלה");
+        file = blob;
+        filename = `${baseName}.${extension}`;
+      } else {
+        setStatus({ kind: "sending", sid });
+        const imageDataUrl = await getScreenshot();
+        if (!imageDataUrl) throw new Error("לא ניתן ללכוד את התצוגה");
+        // Convert the PNG data URL to a Blob so both paths send raw bytes.
+        file = await (await fetch(imageDataUrl)).blob();
+        filename = `${baseName}.png`;
+      }
+
+      setStatus({ kind: "sending", sid });
+      const form = new FormData();
+      form.append("file", file, filename);
+      form.append("manychatSubId", sid);
+      form.append("widgetToken", widgetToken);
+      form.append("mediaType", mediaType);
+      form.append("filename", filename);
+
       const apiBase = getConfiguratorApiBase();
       const res = await fetch(`${apiBase}/api/configurator/send-to-customer`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ manychatSubId: sid, imageDataUrl, widgetToken }),
+        body: form,
       });
       const data = (await res.json().catch(() => null)) as
         | { ok?: boolean; error?: string; detail?: string }
@@ -231,6 +265,59 @@ export default function ContactPickerOverlay({
               <Loader2 className="size-4 animate-spin" style={{ color: colors.inkSubtle }} />
             ) : null}
           </div>
+
+          {/* Media-type toggle: image (default) / video */}
+          <div
+            role="tablist"
+            aria-label="סוג מדיה לשליחה"
+            style={{
+              display: "flex",
+              marginTop: space.md,
+              padding: 3,
+              gap: 3,
+              borderRadius: radius.full,
+              background: colors.surfaceMuted,
+              border: `1px solid ${colors.ruleSoft}`,
+            }}
+          >
+            {(
+              [
+                { id: "image" as const, label: "תמונה", Icon: ImageIcon },
+                { id: "video" as const, label: "וידאו", Icon: Video },
+              ]
+            ).map(({ id, label, Icon }) => {
+              const active = mediaType === id;
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  role="tab"
+                  aria-selected={active ? "true" : "false"}
+                  onClick={() => setMediaType(id)}
+                  disabled={busy}
+                  style={{
+                    flex: 1,
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: 6,
+                    minHeight: 36,
+                    borderRadius: radius.full,
+                    border: "none",
+                    background: active ? colors.ink : "transparent",
+                    color: active ? colors.surface : colors.inkMuted,
+                    fontSize: size.xs,
+                    fontWeight: active ? weight.semibold : weight.regular,
+                    cursor: busy ? "default" : "pointer",
+                    opacity: busy && !active ? 0.55 : 1,
+                  }}
+                >
+                  <Icon className="size-3.5 shrink-0" />
+                  {label}
+                </button>
+              );
+            })}
+          </div>
         </div>
 
         {/* Banner: sent / error */}
@@ -282,8 +369,9 @@ export default function ContactPickerOverlay({
             <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 2 }}>
               {leads.map((lead, idx) => {
                 const sid = lead.sid?.trim() ?? "";
-                const isSending = sendingSid === sid;
-                const disabled = status.kind === "sending" || !sid;
+                const isActive = activeSid === sid;
+                const isRecording = isActive && status.kind === "recording";
+                const disabled = busy || !sid;
                 return (
                   <li key={sid || `row-${idx}`}>
                     <button
@@ -301,7 +389,7 @@ export default function ContactPickerOverlay({
                         background: "transparent",
                         textAlign: "right",
                         cursor: disabled ? "default" : "pointer",
-                        opacity: disabled && !isSending ? 0.55 : 1,
+                        opacity: disabled && !isActive ? 0.55 : 1,
                       }}
                       onMouseEnter={(e) => {
                         if (!disabled) e.currentTarget.style.background = colors.surfaceMuted;
@@ -351,6 +439,11 @@ export default function ContactPickerOverlay({
                               {lead.stage}
                             </span>
                           ) : null}
+                          {isActive ? (
+                            <span style={{ color: colors.accent, fontWeight: weight.medium }}>
+                              {isRecording ? "מקליט וידאו…" : "שולח…"}
+                            </span>
+                          ) : null}
                         </div>
                       </div>
                       <span
@@ -362,11 +455,11 @@ export default function ContactPickerOverlay({
                           display: "grid",
                           placeItems: "center",
                           borderRadius: radius.full,
-                          background: isSending ? colors.accent : colors.accentSoft,
-                          color: isSending ? colors.surface : colors.accent,
+                          background: isActive ? colors.accent : colors.accentSoft,
+                          color: isActive ? colors.surface : colors.accent,
                         }}
                       >
-                        {isSending ? (
+                        {isActive ? (
                           <Loader2 className="size-4 animate-spin" />
                         ) : (
                           <Send className="size-3.5" />
