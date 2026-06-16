@@ -14,12 +14,52 @@ import { eq } from "drizzle-orm";
 import { priceFactoryQuote } from "@/lib/factory/pricing";
 import { getFactoryConfig } from "@/lib/factory/config";
 import { renderCustomerQuotePdf, fetchImageDataUri } from "@/lib/factory/pdf";
+import { readRow, parseFactoryResponseRow } from "@/lib/feishu/sheets";
 import type {
   FactoryProductSpec,
   FactoryResponse,
   FactoryPricingResult,
   ShippingOption,
 } from "@/lib/factory/types";
+
+/** Pick the first defined+non-empty+non-zero value. Used for merging fresh Feishu
+ *  data over a stored factory_response — fresh wins when present, stored is the
+ *  fallback. */
+function pickNum(...vals: (number | undefined | null)[]): number | undefined {
+  for (const v of vals) {
+    if (v !== undefined && v !== null && v !== 0 && Number.isFinite(v)) return v;
+  }
+  return undefined;
+}
+function pickStr(...vals: (string | undefined | null)[]): string | undefined {
+  for (const v of vals) {
+    if (v !== undefined && v !== null && v !== "") return v;
+  }
+  return undefined;
+}
+
+/** Merge a fresh Feishu factory response with the stored one. Fresh wins for
+ *  any field where it has a real value; stored is the fallback. Returns the
+ *  merged response and a boolean for whether anything actually changed. */
+function mergeFactoryResponse(
+  stored: FactoryResponse,
+  fresh: ReturnType<typeof parseFactoryResponseRow>
+): { merged: FactoryResponse; changed: boolean } {
+  const merged: FactoryResponse = {
+    unitCostCny: pickNum(fresh.unitCostCny, stored.unitCostCny) ?? 0,
+    cartonQty: pickNum(fresh.cartonQty, stored.cartonQty),
+    cartonLengthCm: pickNum(fresh.cartonLengthCm, stored.cartonLengthCm),
+    cartonWidthCm: pickNum(fresh.cartonWidthCm, stored.cartonWidthCm),
+    cartonHeightCm: pickNum(fresh.cartonHeightCm, stored.cartonHeightCm),
+    cartonCbm: pickNum(fresh.cartonCbm, stored.cartonCbm),
+    weightKg: pickNum(fresh.weightKg, stored.weightKg),
+    supplier: pickStr(fresh.supplier, stored.supplier),
+    notes: pickStr(fresh.notes, stored.notes),
+  };
+  // Compare scalar fields only — JSON.stringify is good enough here.
+  const changed = JSON.stringify(merged) !== JSON.stringify(stored);
+  return { merged, changed };
+}
 
 /**
  * Coerce a value to a plain text string at write boundaries. Catches three
@@ -121,7 +161,34 @@ export async function finalizeQuote(
       ? { ...storedSpec, ...body.specOverride }
       : storedSpec
   );
-  const resp = reqRow.factoryResponse as FactoryResponse;
+  // Re-pull factory_response fresh from Feishu before pricing. Why: the cron
+  // flips a row to 'received' as soon as unitCost is present in column K, but
+  // the carton/weight/cbm fields (L..Q) may not be filled yet — and refresh
+  // skips 'received' rows. Without this re-pull, finalize would price on the
+  // partial stored response (totalCbm=0, totalWeightKg=0), which inflates the
+  // sea-shipping floor and gives the customer a deeply under-charged shipping.
+  let resp = reqRow.factoryResponse as FactoryResponse;
+  if (reqRow.feishuRowIndex) {
+    try {
+      const cells = await readRow(reqRow.feishuRowIndex);
+      const fresh = parseFactoryResponseRow(cells);
+      const { merged, changed } = mergeFactoryResponse(resp, fresh);
+      if (changed) {
+        resp = merged;
+        // Persist the enriched response so the boss view + future pricing see
+        // it too (don't wait for the next cron, which might not happen).
+        await db
+          .update(factoryQuoteRequests)
+          .set({ factoryResponse: resp, updatedAt: new Date() })
+          .where(eq(factoryQuoteRequests.id, id));
+      }
+    } catch (err) {
+      console.warn(
+        `[factory/finalize] re-pull from Feishu failed for id=${id} row=${reqRow.feishuRowIndex}:`,
+        err
+      );
+    }
+  }
   const config = await getFactoryConfig();
 
   const shippingOptionId =

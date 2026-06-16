@@ -8,13 +8,49 @@
 
 import { db } from "@/lib/db";
 import { factoryQuoteRequests, leads } from "@/drizzle/schema";
-import { and, eq, isNotNull, sql } from "drizzle-orm";
+import { and, eq, isNotNull, or, sql } from "drizzle-orm";
 import {
   readRow,
   parseFactoryResponseRow,
   findRowByQuotationNo,
 } from "@/lib/feishu/sheets";
 import { sendEliDM } from "@/lib/notify/eli";
+import type { FactoryResponse } from "@/lib/factory/types";
+
+/** Same merge logic as finalize.ts. Fresh wins for any field where it has a
+ *  real value; stored is the fallback. Returns the merged response and whether
+ *  anything actually changed. */
+function pickNum(...vals: (number | undefined | null)[]): number | undefined {
+  for (const v of vals) {
+    if (v !== undefined && v !== null && v !== 0 && Number.isFinite(v)) return v;
+  }
+  return undefined;
+}
+function pickStr(...vals: (string | undefined | null)[]): string | undefined {
+  for (const v of vals) {
+    if (v !== undefined && v !== null && v !== "") return v;
+  }
+  return undefined;
+}
+function mergeFactoryResponse(
+  stored: FactoryResponse | null,
+  fresh: ReturnType<typeof parseFactoryResponseRow>
+): { merged: FactoryResponse; changed: boolean } {
+  const s = stored ?? { unitCostCny: 0 };
+  const merged: FactoryResponse = {
+    unitCostCny: pickNum(fresh.unitCostCny, s.unitCostCny) ?? 0,
+    cartonQty: pickNum(fresh.cartonQty, s.cartonQty),
+    cartonLengthCm: pickNum(fresh.cartonLengthCm, s.cartonLengthCm),
+    cartonWidthCm: pickNum(fresh.cartonWidthCm, s.cartonWidthCm),
+    cartonHeightCm: pickNum(fresh.cartonHeightCm, s.cartonHeightCm),
+    cartonCbm: pickNum(fresh.cartonCbm, s.cartonCbm),
+    weightKg: pickNum(fresh.weightKg, s.weightKg),
+    supplier: pickStr(fresh.supplier, s.supplier),
+    notes: pickStr(fresh.notes, s.notes),
+  };
+  const changed = JSON.stringify(merged) !== JSON.stringify(s);
+  return { merged, changed };
+}
 
 export interface RefreshResult {
   ok: true;
@@ -24,14 +60,38 @@ export interface RefreshResult {
   dmResults: { id: string; dmStatus: string }[];
 }
 
+// (helpers defined below; declared above for type narrowness)
+
 export async function refreshFromFeishu(): Promise<RefreshResult> {
-  const pending = await db
+  // Scan both:
+  //  - 'pending' rows (waiting for any factory response)
+  //  - 'received' rows where carton data is still missing — the factory often
+  //    fills unitCost (col K) first and the carton/weight (L..Q) later. If we
+  //    only scanned 'pending', the late carton fill would be lost and finalize
+  //    would price on partial data (totalCbm=0 / weight=0 ⇒ sea 1-CBM floor).
+  const candidates = await db
     .select()
     .from(factoryQuoteRequests)
     .where(
       and(
-        eq(factoryQuoteRequests.factoryStatus, "pending"),
-        isNotNull(factoryQuoteRequests.feishuRowIndex)
+        isNotNull(factoryQuoteRequests.feishuRowIndex),
+        or(
+          eq(factoryQuoteRequests.factoryStatus, "pending"),
+          and(
+            eq(factoryQuoteRequests.factoryStatus, "received"),
+            // Backfill window: the row reached 'received' but the carton data
+            // is still incomplete. Bail out via JSON path checks — anything
+            // missing (jsonb path returns NULL) or zero counts as incomplete.
+            sql`(
+              (factory_response->>'cartonQty') IS NULL
+              OR (factory_response->>'cartonQty')::numeric = 0
+              OR (factory_response->>'weightKg') IS NULL
+              OR (factory_response->>'weightKg')::numeric = 0
+              OR (factory_response->>'cartonCbm') IS NULL
+              OR (factory_response->>'cartonCbm')::numeric = 0
+            )`
+          )
+        )
       )
     );
 
@@ -44,7 +104,7 @@ export async function refreshFromFeishu(): Promise<RefreshResult> {
     unitCostCny: number;
   }[] = [];
 
-  for (const row of pending) {
+  for (const row of candidates) {
     if (!row.feishuRowIndex) continue;
     try {
       let activeIndex: string = row.feishuRowIndex;
@@ -64,6 +124,17 @@ export async function refreshFromFeishu(): Promise<RefreshResult> {
       const cells = await readRow(activeIndex);
       const parsed = parseFactoryResponseRow(cells);
       if (!parsed.hasResponse) continue;
+
+      const wasPending = row.factoryStatus === "pending";
+      // Merge fresh values over stored — fresh wins where present, stored kept
+      // otherwise. Avoids clobbering an Eli-edited supplier or notes if any.
+      const { merged, changed } = mergeFactoryResponse(
+        (row.factoryResponse as FactoryResponse | null),
+        parsed
+      );
+      // No transition + no change → don't bother writing.
+      if (!wasPending && !changed) continue;
+
       // NOTE: we deliberately do NOT overwrite productSpec from the Feishu row
       // here. The sheet's request columns (A..J) can fall out of alignment with
       // the stored row (row drift, missing quotationNo), which would write a
@@ -74,20 +145,22 @@ export async function refreshFromFeishu(): Promise<RefreshResult> {
       await db
         .update(factoryQuoteRequests)
         .set({
-          factoryStatus: "received",
-          factoryResponse: parsed,
+          factoryStatus: "received", // safe to re-assert for already-received rows
+          factoryResponse: merged,
           feishuRowIndex: activeIndex,
           updatedAt: new Date(),
         })
         .where(eq(factoryQuoteRequests.id, row.id));
       updated += 1;
       updates.push({ id: row.id, rowIndex: activeIndex });
-      transitioned.push({
-        id: row.id,
-        manychatSubId: row.manychatSubId,
-        quotationNo: row.quotationNo,
-        unitCostCny: parsed.unitCostCny,
-      });
+      if (wasPending) {
+        transitioned.push({
+          id: row.id,
+          manychatSubId: row.manychatSubId,
+          quotationNo: row.quotationNo,
+          unitCostCny: merged.unitCostCny,
+        });
+      }
     } catch (err) {
       console.warn(
         `[factory/refresh] readRow failed for id=${row.id} row=${row.feishuRowIndex}:`,
@@ -134,5 +207,5 @@ export async function refreshFromFeishu(): Promise<RefreshResult> {
     }
   }
 
-  return { ok: true, scanned: pending.length, updated, updates, dmResults };
+  return { ok: true, scanned: candidates.length, updated, updates, dmResults };
 }
