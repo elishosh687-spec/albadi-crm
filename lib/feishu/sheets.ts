@@ -398,6 +398,28 @@ export function parseFactoryResponseRow(
   };
 }
 
+/**
+ * Does this factory response carry the carton "master data" needed to price
+ * shipping correctly? Pricing needs:
+ *   - cartonQty   → totalCartons = ceil(quantity / cartonQty); 0 ⇒ everything 0
+ *   - weightKg    → air shipping is billed per kg
+ *   - a real CBM  → sea shipping is billed per CBM (1-CBM floor if 0)
+ * We require all three so neither sea nor air can fall back to the floor /
+ * zero. The price (col K) alone is NOT enough — that's exactly the half-filled
+ * state that produced the under-charged TZYXNDEW quote.
+ */
+export function hasCartonMasterData(r: {
+  cartonQty?: number;
+  weightKg?: number;
+  cartonCbm?: number;
+}): boolean {
+  return (
+    (r.cartonQty ?? 0) > 0 &&
+    (r.weightKg ?? 0) > 0 &&
+    (r.cartonCbm ?? 0) > 0
+  );
+}
+
 // ------------------------------------------------------------
 // Request (operator/product side, A..J = indices 0..9, C=date at index 2)
 // ------------------------------------------------------------

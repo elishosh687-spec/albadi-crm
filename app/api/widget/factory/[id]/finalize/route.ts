@@ -30,6 +30,7 @@ const BodySchema = z.object({
       customerNotes: z.string().optional(),
     })
     .optional(),
+  allowMissingCarton: z.boolean().optional(),
 });
 
 export async function POST(

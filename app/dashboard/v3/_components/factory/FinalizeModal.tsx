@@ -310,7 +310,7 @@ export function FinalizeModal({
       if (data?.ok) {
         onFinalized();
       } else {
-        setError(data?.error ?? data?.detail ?? "כשל בחישוב");
+        setError(data?.message ?? data?.error ?? data?.detail ?? "כשל בחישוב");
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));

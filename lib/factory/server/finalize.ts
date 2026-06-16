@@ -14,7 +14,7 @@ import { eq } from "drizzle-orm";
 import { priceFactoryQuote } from "@/lib/factory/pricing";
 import { getFactoryConfig } from "@/lib/factory/config";
 import { renderCustomerQuotePdf, fetchImageDataUri } from "@/lib/factory/pdf";
-import { readRow, parseFactoryResponseRow } from "@/lib/feishu/sheets";
+import { readRow, parseFactoryResponseRow, hasCartonMasterData } from "@/lib/feishu/sheets";
 import type {
   FactoryProductSpec,
   FactoryResponse,
@@ -111,6 +111,10 @@ export interface FinalizeInput {
    *  the stored spec before the PDF is rendered, then persisted back to
    *  productSpec — so the boss can edit exactly what appears in the PDF. */
   specOverride?: Partial<FactoryProductSpec>;
+  /** Escape hatch: finalize even when the factory hasn't filled carton master
+   *  data (qty/weight/CBM). Off by default — finalize blocks with a clear
+   *  error so a shipping-less quote can't be sent by accident. */
+  allowMissingCarton?: boolean;
 }
 
 export interface FinalizeOk {
@@ -189,6 +193,22 @@ export async function finalizeQuote(
       );
     }
   }
+
+  // GUARD: never finalize on incomplete carton master data. Pricing shipping
+  // without cartonQty/weight/CBM silently falls back to the sea 1-CBM floor /
+  // 0 kg, producing a deeply under-charged quote (the TZYXNDEW bug). Block here
+  // so the boss gets a clear error instead of a wrong PDF. allowMissingCarton
+  // lets the operator override for genuinely carton-less items if ever needed.
+  if (!body.allowMissingCarton && !hasCartonMasterData(resp)) {
+    return {
+      ok: false,
+      status: 409,
+      error: "carton_master_missing",
+      message:
+        "המפעל עדיין לא מילא את נתוני הקרטון (כמות באריזה / משקל / נפח). לא ניתן לתמחר שילוח עד שהם קיימים — בדוק את ההצעה ב-Feishu.",
+    };
+  }
+
   const config = await getFactoryConfig();
 
   const shippingOptionId =

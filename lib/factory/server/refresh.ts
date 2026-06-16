@@ -13,6 +13,7 @@ import {
   readRow,
   parseFactoryResponseRow,
   findRowByQuotationNo,
+  hasCartonMasterData,
 } from "@/lib/feishu/sheets";
 import { sendEliDM } from "@/lib/notify/eli";
 import type { FactoryResponse } from "@/lib/factory/types";
@@ -132,6 +133,34 @@ export async function refreshFromFeishu(): Promise<RefreshResult> {
         (row.factoryResponse as FactoryResponse | null),
         parsed
       );
+
+      // GATE: do NOT mark a quote 'received' until the factory has filled the
+      // carton master data (qty + weight + CBM). The price (col K) alone is the
+      // half-filled state that produced the under-charged TZYXNDEW quote: the
+      // shipping would price on a 0-CBM / 0-kg shipment (1-CBM floor). While the
+      // master data is missing we keep the row 'pending' so the cron keeps
+      // re-checking — but we still persist any partial data we did pull, so it
+      // accumulates toward completeness instead of being re-read every cycle.
+      const masterReady = hasCartonMasterData(merged);
+
+      if (wasPending && !masterReady) {
+        // Stay pending. Only write if the partial response actually changed.
+        if (changed) {
+          await db
+            .update(factoryQuoteRequests)
+            .set({
+              factoryResponse: merged,
+              feishuRowIndex: activeIndex,
+              updatedAt: new Date(),
+            })
+            .where(eq(factoryQuoteRequests.id, row.id));
+          console.log(
+            `[factory/refresh] ${row.quotationNo ?? row.id}: price present but carton master incomplete — kept pending (qty=${merged.cartonQty ?? "—"} kg=${merged.weightKg ?? "—"} cbm=${merged.cartonCbm ?? "—"})`
+          );
+        }
+        continue;
+      }
+
       // No transition + no change → don't bother writing.
       if (!wasPending && !changed) continue;
 
