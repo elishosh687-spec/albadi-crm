@@ -226,6 +226,8 @@ export function calculateQuote(
     totalCartons,
     totalWeightKg: r2(totalWeightKg),
     totalCbm: r3(totalCbm),
+    volumetricWeightKg: r2(totalCbm * VOLUMETRIC_KG_PER_CBM),
+    chargeableWeightKg: r2(Math.max(totalWeightKg, totalCbm * VOLUMETRIC_KG_PER_CBM)),
     shippingPerUnitUsd: r2(shippingPerUnitUsd),
     finalUnitCostUsd: r2(finalUnitCostUsd),
     finalUnitCostIls: r2(finalUnitCostIls),

@@ -130,6 +130,12 @@ export interface QuoteResult {
   totalCartons: number;
   totalWeightKg: number;
   totalCbm: number;
+  // AIR chargeable-weight breakdown (display). volumetricWeightKg = cbm × 167
+  // (IATA divisor 6000); chargeableWeightKg = max(physical, volumetric) — the
+  // kg air freight actually bills on. Computed for every shipping type but only
+  // meaningful for air (sea is priced per CBM, ignores weight).
+  volumetricWeightKg: number;
+  chargeableWeightKg: number;
   shippingPerUnitUsd: number;
   finalUnitCostUsd: number;
   finalUnitCostIls: number;

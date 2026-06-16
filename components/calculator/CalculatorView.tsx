@@ -701,6 +701,43 @@ function BreakdownCard({
         <span>·</span>
         <span>{r.quantity.toLocaleString("he-IL")} יחידות</span>
       </div>
+
+      {/* Air weight breakdown — physical vs volumetric vs chargeable.
+          Air is billed on the chargeable kg = max(physical, cbm × 167), so the
+          bulky-but-light case is where volume wins. Sea ignores weight, so we
+          only show this block for air. */}
+      {r.shippingOption?.type === "air" && (
+        <div className="border-t border-border px-5 py-3 text-xs tabular-nums">
+          <div className="text-muted-foreground mb-2 text-center">פירוט משקל לחיוב אווירי</div>
+          <div className="grid grid-cols-3 gap-2 text-center">
+            <div>
+              <div className="text-muted-foreground">משקל פיזי</div>
+              <div className="font-medium">{r.totalWeightKg.toLocaleString("he-IL")} ק״ג</div>
+            </div>
+            <div>
+              <div className="text-muted-foreground">משקל נפחי</div>
+              <div className="font-medium">{r.volumetricWeightKg.toLocaleString("he-IL")} ק״ג</div>
+            </div>
+            <div>
+              <div className="text-muted-foreground">משקל לחיוב</div>
+              <div
+                className={
+                  r.chargeableWeightKg > r.totalWeightKg
+                    ? "font-bold text-amber-500"
+                    : "font-bold"
+                }
+              >
+                {r.chargeableWeightKg.toLocaleString("he-IL")} ק״ג
+              </div>
+            </div>
+          </div>
+          <div className="text-muted-foreground text-center mt-2 text-[11px]">
+            {r.chargeableWeightKg > r.totalWeightKg
+              ? `הנפח גובר — מחויב לפי ${r.volumetricWeightKg.toLocaleString("he-IL")} ק״ג (CBM × 167)`
+              : "המשקל הפיזי גובר — מחויב לפי המשקל בפועל"}
+          </div>
+        </div>
+      )}
     </section>
   );
 }
