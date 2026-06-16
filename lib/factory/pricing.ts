@@ -31,6 +31,11 @@ function r2(n: number): number {
   return Math.round(n * 100) / 100;
 }
 
+/** Volumetric (dimensional) weight factor for AIR freight: kg per CBM.
+ *  IATA standard air divisor 6000 → 1 m³ = 166.67 kg, rounded to 167.
+ *  Used to bill air shipments on chargeable weight = max(actual, cbm × this). */
+const VOLUMETRIC_KG_PER_CBM = 167;
+
 function computeShippingPerUnitUsd(
   shipping: ShippingOption | null,
   totalWeightKg: number,
@@ -40,11 +45,18 @@ function computeShippingPerUnitUsd(
   if (!shipping || quantity <= 0) return 0;
   if (shipping.type === "air" && shipping.airRates) {
     const rates = shipping.airRates;
+    // Air is billed on CHARGEABLE (volumetric) weight, not physical weight:
+    // chargeable = max(actual kg, volumetric kg) where volumetric = cbm × 167
+    // (IATA standard, divisor 6000). A bulky/light shipment whose volume
+    // outweighs its scale weight is billed by the volume — matching how the
+    // forwarder actually charges. Dense cargo (physical > volumetric) is
+    // unaffected. The rate tier (thresholdKg) is judged on the chargeable kg.
+    const chargeableKg = Math.max(totalWeightKg, totalCbm * VOLUMETRIC_KG_PER_CBM);
     const rate =
-      totalWeightKg <= rates.thresholdKg
+      chargeableKg <= rates.thresholdKg
         ? rates.rateBelowThreshold
         : rates.rateAboveThreshold;
-    return (totalWeightKg * rate) / quantity;
+    return (chargeableKg * rate) / quantity;
   }
   if (shipping.type === "sea" && shipping.seaRate && shipping.seaRate > 0) {
     return (Math.max(totalCbm, 1) * shipping.seaRate) / quantity;
