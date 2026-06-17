@@ -129,6 +129,31 @@ export async function setCellDateFormat(
 }
 
 /**
+ * Write a value into a single cell (e.g. the Remark column S of a just-appended
+ * request row). `appendRow` only writes A..J, so anything past J needs its own
+ * targeted write. Non-fatal callers should wrap in try/catch.
+ *
+ * Feishu API: PUT /open-apis/sheets/v2/spreadsheets/{token}/values
+ */
+export async function setCellValue(
+  rowIndex: string | number,
+  columnLetter: string,
+  value: string | number
+): Promise<void> {
+  const token = getSpreadsheetToken();
+  const sheetId = await getSheetId();
+  const idx = typeof rowIndex === "string" ? parseInt(rowIndex, 10) : rowIndex;
+  if (!Number.isFinite(idx) || idx <= 0) {
+    throw new Error(`setCellValue: invalid rowIndex=${rowIndex}`);
+  }
+  const range = `${sheetId}!${columnLetter}${idx}:${columnLetter}${idx}`;
+  await feishuFetch(`/open-apis/sheets/v2/spreadsheets/${token}/values`, {
+    method: "PUT",
+    body: JSON.stringify({ valueRange: { range, values: [[value]] } }),
+  });
+}
+
+/**
  * Set the height (in pixels) of a specific row.
  *
  * Feishu API: PUT /open-apis/sheets/v2/spreadsheets/{token}/dimension_range

@@ -15,6 +15,7 @@ import {
   buildFactoryRow,
   setRowHeight,
   setCellDateFormat,
+  setCellValue,
   FEISHU_ROW_HEIGHT_PX,
 } from "@/lib/feishu/sheets";
 import type { FactoryProductSpec } from "./types";
@@ -105,6 +106,21 @@ export async function createFactoryRequest(
       "[factory/create-request] setCellDateFormat failed (non-fatal)",
       err
     );
+  }
+
+  // Operator's "הערות למפעל" → the Remark column (S). appendRow only writes
+  // A..J, so this needs its own targeted cell write. Non-fatal — the request
+  // row already exists; only the remark is missing on failure.
+  const factoryNote = (spec.notes ?? "").trim();
+  if (factoryNote) {
+    try {
+      await setCellValue(feishuRowIndex, "S", factoryNote);
+    } catch (err) {
+      console.warn(
+        "[factory/create-request] remark write (col S) failed (non-fatal)",
+        err
+      );
+    }
   }
 
   await db
