@@ -12,7 +12,7 @@
  */
 
 import { useState } from "react";
-import { Plus, Trash2, Ship, CheckCircle2, Circle, ChevronDown } from "lucide-react";
+import { Plus, Trash2, Ship, ChevronDown } from "lucide-react";
 import { cn } from "@/lib/cn";
 import type { SeaCarrierProfile } from "@/lib/factory/types";
 import { seaPerOrderUsd, seaShipmentCost, MAX_CBM_LEVEL } from "@/lib/factory/sea-carriers";
@@ -186,15 +186,28 @@ function CarrierCard({
         <div className="flex items-center gap-2 flex-1 min-w-0">
           <button
             type="button"
-            onClick={onSetActive}
-            title={isActive ? "ספק פעיל" : "הפוך לפעיל"}
-            className={cn(
-              "inline-flex items-center gap-1 text-xs shrink-0",
-              isActive ? "text-primary" : "text-muted-foreground hover:text-foreground"
-            )}
+            onClick={() => { if (!isActive) onSetActive(); }}
+            role="switch"
+            aria-checked={isActive}
+            title={isActive ? "ספק פעיל — לחץ על ספק אחר כדי להחליף" : "הפעל ספק זה (יכבה את האחר)"}
+            className="inline-flex items-center gap-1.5 shrink-0"
           >
-            {isActive ? <CheckCircle2 className="size-4" /> : <Circle className="size-4" />}
-            {isActive ? "פעיל" : "הפעל"}
+            <span
+              className={cn(
+                "relative inline-flex h-5 w-9 items-center rounded-full transition-colors",
+                isActive ? "bg-success" : "bg-muted"
+              )}
+            >
+              <span
+                className={cn(
+                  "inline-block size-4 rounded-full bg-white transition-transform",
+                  isActive ? "translate-x-0.5" : "translate-x-[18px]"
+                )}
+              />
+            </span>
+            <span className={cn("text-xs", isActive ? "text-success font-medium" : "text-muted-foreground")}>
+              {isActive ? "פעיל" : "כבוי"}
+            </span>
           </button>
           <Ship className="size-4 text-primary shrink-0" />
           <input
