@@ -52,7 +52,9 @@ export interface ShippingOption {
   name: string;
   type: "sea" | "air";
   enabled: boolean;
-  seaRate?: number; // USD per CBM
+  seaRate?: number; // USD per CBM — LEGACY flat rate. Superseded by the
+  // active SeaCarrierProfile (see seaCarriers below). Kept only as a fallback
+  // for configs written before carrier profiles existed.
   airRates?: {
     thresholdKg: number;
     rateBelowThreshold: number; // USD per kg below threshold
@@ -60,8 +62,79 @@ export interface ShippingOption {
   };
 }
 
+/**
+ * One stepped band of a sea-cost component. `maxCbm` is the INCLUSIVE upper
+ * bound of the band in CBM; the matching band is the first whose `maxCbm >= cbm`
+ * (so a value above every band falls back to the last/highest band). `value`
+ * is in the component's own currency — USD for china-inland/terminal, ILS for
+ * the inland-delivery bands. Mirrors the IF(cbm<=1,..,IF(cbm<=3,..,..)) tiers
+ * in the Yeadim pricing sheet.
+ */
+export interface CbmTier {
+  maxCbm: number;
+  value: number;
+}
+
+/**
+ * A full sea-freight cost profile for ONE forwarder (e.g. "ידים לוגיסטיקה").
+ * The system holds a list of these and one is marked active; ALL sea pricing
+ * is computed by summing this profile's line items for the shipment's CBM.
+ * Adding a new forwarder later = adding another profile, no code change.
+ *
+ * Line items mirror the Yeadim sheet exactly:
+ *   total = chinaInland(cbm) + broker + customs + lclPerCbm×cbm + terminal(cbm)   [USD]
+ *         + ( reshumon + inland(region,cbm) + extraStops×extraStop ) / fx          [ILS→USD]
+ * Components a given forwarder doesn't charge are simply set to 0 / [].
+ */
+export interface SeaCarrierProfile {
+  id: string;
+  name: string;
+  enabled: boolean;
+  /** This forwarder's own USD→ILS rate, used to fold its ILS line items into
+   *  the USD total (the Yeadim sheet uses 2.9, independent of the quote FX). */
+  fxUsdToIls: number;
+  // ---- USD-denominated components ----
+  /** China inland transport, stepped by CBM band. USD. */
+  chinaInlandTiers: CbmTier[];
+  /** China-side broker — flat per shipment. USD. */
+  brokerUsd: number;
+  /** Israel customs — flat per shipment. USD. */
+  customsUsd: number;
+  /** Sea LCL — linear, per CBM. USD. */
+  lclPerCbmUsd: number;
+  /** Terminal handling, stepped by CBM band. USD. */
+  terminalTiers: CbmTier[];
+  // ---- ILS-denominated components ----
+  /** Customs declaration (רשומון) — flat per shipment. ILS. */
+  reshumonIls: number;
+  /** Inland delivery within Israel — center region, stepped by CBM band. ILS. */
+  inlandCenterTiers: CbmTier[];
+  /** Inland delivery within Israel — north region, stepped by CBM band. ILS. */
+  inlandNorthTiers: CbmTier[];
+  /** Extra delivery stop beyond the first — per stop. ILS. */
+  extraStopIls: number;
+}
+
 export interface FactoryPricingConfig {
   shippingOptions: ShippingOption[];
+  /**
+   * Sea-freight cost profiles, one per forwarder. The active one (see
+   * `activeSeaCarrierId`) drives ALL sea pricing — it replaces the legacy flat
+   * `ShippingOption.seaRate`. Optional for back-compat: when missing/empty the
+   * engine falls back to the flat seaRate of the chosen sea ShippingOption.
+   */
+  seaCarriers?: SeaCarrierProfile[];
+  /** Id of the active SeaCarrierProfile. Falls back to the first enabled one. */
+  activeSeaCarrierId?: string;
+  /**
+   * Assumed shipment volume (CBM) used as the DEFAULT pricing basis for a
+   * single order. Small orders (most are 1–3 CBM) are billed at the per-CBM
+   * cost evaluated at THIS volume — i.e. as if they ride inside a shipment of
+   * this size — so a 1-CBM order isn't punished by the fixed costs it can't
+   * amortise alone. Orders larger than this are billed on their own (cheaper)
+   * true per-CBM cost. Defaults to 3. See `seaPerOrderUsd` in sea-carriers.ts.
+   */
+  assumedShipmentCbm?: number;
   /** USD → ILS conversion (factory quotes are CNY → USD → ILS) */
   usdToIls: number;
   /** CNY → USD divisor (i.e. 1 USD = X CNY) */
@@ -106,6 +179,16 @@ export interface FactoryPricingInput {
   };
   /** Override the default margin (e.g. slider 30-50%) */
   profitMarginOverride?: number;
+  /** Sea inland-delivery region for the active carrier. Defaults to "center". */
+  seaRegion?: "center" | "north";
+  /** Extra delivery stops beyond the first (each adds `extraStopIls`). Default 0. */
+  seaExtraStops?: number;
+  /**
+   * When true, price sea on this order's OWN volume (true single-shipment cost)
+   * instead of the assumed-volume basis. For the boss to flip per-quote on a
+   * one-off large order that fills a shipment by itself. Default false.
+   */
+  seaUseTrueCost?: boolean;
   /** One-time mold/tooling fee from the factory in CNY.
    *  Treated as a SEPARATE one-time line in the quote (not amortized into
    *  per-bag price). The same margin applies to it like any other cost, but

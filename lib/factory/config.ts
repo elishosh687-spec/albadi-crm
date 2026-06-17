@@ -7,6 +7,7 @@ import { db } from "@/lib/db";
 import { appConfig } from "@/drizzle/schema";
 import { eq } from "drizzle-orm";
 import type { FactoryPricingConfig } from "./types";
+import { YEADIM_CARRIER, DEFAULT_ASSUMED_SHIPMENT_CBM } from "./sea-carriers";
 
 const KEY = "factory_pricing";
 const TTL_MS = 60_000;
@@ -25,7 +26,8 @@ export const DEFAULT_FACTORY_CONFIG: FactoryPricingConfig = {
       name: "ים — סטנדרט",
       type: "sea",
       enabled: true,
-      seaRate: 500, // USD per CBM
+      seaRate: 500, // USD per CBM — LEGACY fallback only; the active sea carrier
+      // profile (seaCarriers) drives real sea pricing.
     },
     {
       id: "air-express",
@@ -39,6 +41,9 @@ export const DEFAULT_FACTORY_CONFIG: FactoryPricingConfig = {
       },
     },
   ],
+  seaCarriers: [YEADIM_CARRIER],
+  activeSeaCarrierId: YEADIM_CARRIER.id,
+  assumedShipmentCbm: DEFAULT_ASSUMED_SHIPMENT_CBM,
   usdToIls: 3.7,
   usdToCny: 7.2,
   ilsToCny: 1.95,
@@ -54,19 +59,37 @@ export const DEFAULT_FACTORY_CONFIG: FactoryPricingConfig = {
  * Pure function — does not mutate the input.
  */
 function normalizeConfig(raw: FactoryPricingConfig): FactoryPricingConfig {
-  if (raw.profitMarginByQuantity && Object.keys(raw.profitMarginByQuantity).length > 0) {
-    return raw;
+  let out = raw;
+
+  // Backfill the per-quantity margin matrix (legacy rows predate it).
+  if (!(out.profitMarginByQuantity && Object.keys(out.profitMarginByQuantity).length > 0)) {
+    const fallback = out.defaultProfitMargin ?? 40;
+    out = {
+      ...out,
+      profitMarginByQuantity: {
+        "1000": fallback,
+        "3000": fallback,
+        "5000": fallback,
+        "10000": fallback,
+      },
+    };
   }
-  const fallback = raw.defaultProfitMargin ?? 40;
-  return {
-    ...raw,
-    profitMarginByQuantity: {
-      "1000": fallback,
-      "3000": fallback,
-      "5000": fallback,
-      "10000": fallback,
-    },
-  };
+
+  // Backfill sea carrier profiles (rows written before multi-carrier sea
+  // pricing existed). Seed the Yeadim forwarder + the 3-CBM assumed basis so
+  // existing prod configs start pricing sea correctly without a manual edit.
+  if (!out.seaCarriers || out.seaCarriers.length === 0) {
+    out = {
+      ...out,
+      seaCarriers: [YEADIM_CARRIER],
+      activeSeaCarrierId: out.activeSeaCarrierId ?? YEADIM_CARRIER.id,
+    };
+  }
+  if (out.assumedShipmentCbm === undefined) {
+    out = { ...out, assumedShipmentCbm: DEFAULT_ASSUMED_SHIPMENT_CBM };
+  }
+
+  return out;
 }
 
 /**

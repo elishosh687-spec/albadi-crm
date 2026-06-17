@@ -26,6 +26,11 @@ import type {
   FactoryPricingResult,
   ShippingOption,
 } from "./types";
+import {
+  getActiveSeaCarrier,
+  seaPerOrderUsd,
+  DEFAULT_ASSUMED_SHIPMENT_CBM,
+} from "./sea-carriers";
 
 function r2(n: number): number {
   return Math.round(n * 100) / 100;
@@ -40,7 +45,13 @@ function computeShippingPerUnitUsd(
   shipping: ShippingOption | null,
   totalWeightKg: number,
   totalCbm: number,
-  quantity: number
+  quantity: number,
+  config: FactoryPricingConfig,
+  seaOpts?: {
+    region?: "center" | "north";
+    extraStops?: number;
+    useTrueCost?: boolean;
+  }
 ): number {
   if (!shipping || quantity <= 0) return 0;
   if (shipping.type === "air" && shipping.airRates) {
@@ -58,8 +69,24 @@ function computeShippingPerUnitUsd(
         : rates.rateAboveThreshold;
     return (chargeableKg * rate) / quantity;
   }
-  if (shipping.type === "sea" && shipping.seaRate && shipping.seaRate > 0) {
-    return (Math.max(totalCbm, 1) * shipping.seaRate) / quantity;
+  if (shipping.type === "sea") {
+    // Active forwarder profile drives sea pricing. The per-order rule bills
+    // small orders at the assumed-volume (default 3 CBM) per-CBM rate; larger
+    // orders pay their own true cost. See seaPerOrderUsd.
+    const carrier = getActiveSeaCarrier(config);
+    if (carrier) {
+      const res = seaPerOrderUsd(carrier, totalCbm, {
+        assumedCbm: config.assumedShipmentCbm ?? DEFAULT_ASSUMED_SHIPMENT_CBM,
+        region: seaOpts?.region ?? "center",
+        extraStops: seaOpts?.extraStops ?? 0,
+        useTrueCost: seaOpts?.useTrueCost ?? false,
+      });
+      return res.shipmentUsd / quantity;
+    }
+    // Legacy fallback: flat $/CBM with a 1-CBM floor (pre-carrier configs).
+    if (shipping.seaRate && shipping.seaRate > 0) {
+      return (Math.max(totalCbm, 1) * shipping.seaRate) / quantity;
+    }
   }
   return 0;
 }
@@ -121,7 +148,13 @@ export function priceFactoryQuote(
     shipping,
     totalWeightKg,
     totalCbm,
-    quantity
+    quantity,
+    config,
+    {
+      region: input.seaRegion ?? "center",
+      extraStops: input.seaExtraStops ?? 0,
+      useTrueCost: input.seaUseTrueCost ?? false,
+    }
   );
 
   const unitCost = unitCostUsd * usdToTarget;

@@ -15,8 +15,10 @@ import { Save, Plus, Trash2, Ship, Plane } from "lucide-react";
 import { cn } from "@/lib/cn";
 import type {
   FactoryPricingConfig,
+  SeaCarrierProfile,
   ShippingOption,
 } from "@/lib/factory/types";
+import { SeaCarriersSection } from "./SeaCarriersSection";
 
 function slugify(s: string): string {
   return (
@@ -131,6 +133,13 @@ export function FactoryPricingForm({ initial }: { initial: FactoryPricingConfig 
     }));
   };
 
+  const setCarriers = (next: SeaCarrierProfile[]) =>
+    setState((s) => ({ ...s, seaCarriers: next }));
+  const setActiveCarrier = (id: string) =>
+    setState((s) => ({ ...s, activeSeaCarrierId: id }));
+  const setAssumedCbm = (v: number) =>
+    setState((s) => ({ ...s, assumedShipmentCbm: v > 0 ? v : 1 }));
+
   return (
     <section className="rounded-xl border border-border bg-card p-5">
       <h2 className="text-base font-medium mb-1">הגדרות תמחור מפעל</h2>
@@ -199,6 +208,17 @@ export function FactoryPricingForm({ initial }: { initial: FactoryPricingConfig 
           ))}
         </div>
       </div>
+
+      {/* Sea carriers — the tiered forwarder pricing that drives sea cost */}
+      <SeaCarriersSection
+        carriers={state.seaCarriers ?? []}
+        activeId={state.activeSeaCarrierId}
+        assumedCbm={state.assumedShipmentCbm ?? 3}
+        usdToIls={state.usdToIls}
+        onCarriersChange={setCarriers}
+        onActiveChange={setActiveCarrier}
+        onAssumedChange={setAssumedCbm}
+      />
 
       {/* Shipping options */}
       <div className="mb-2 flex items-center justify-between">
@@ -365,8 +385,8 @@ function ShippingOptionCard({
 
       {opt.type === "sea" ? (
         <NumField
-          label="USD per CBM"
-          hint="עלות שילוח לקובייה (m³)"
+          label="USD per CBM (גיבוי ישן)"
+          hint="לא בשימוש כשיש ספק ים פעיל למעלה — נשאר רק כגיבוי לתאימות. תעריף שטוח לקובייה (m³)."
           value={opt.seaRate ?? 0}
           step={1}
           onChange={(v) => onChange({ seaRate: Number(v) || 0 })}
@@ -449,6 +469,8 @@ function validate(s: FactoryPricingConfig): Record<string, unknown> {
       if (!(pct >= 0 && pct < 100)) errors[`margin:${qty}`] = "חובה 0–99";
     }
   }
+  if (s.assumedShipmentCbm !== undefined && !(s.assumedShipmentCbm > 0))
+    errors.assumedShipmentCbm = "חובה > 0";
   s.shippingOptions.forEach((opt, i) => {
     const optErr: Record<string, string> = {};
     if (opt.type === "sea") {
