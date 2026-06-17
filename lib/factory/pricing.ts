@@ -47,11 +47,7 @@ function computeShippingPerUnitUsd(
   totalCbm: number,
   quantity: number,
   config: FactoryPricingConfig,
-  seaOpts?: {
-    region?: "center" | "north";
-    extraStops?: number;
-    useTrueCost?: boolean;
-  }
+  seaOpts?: { useTrueCost?: boolean }
 ): number {
   if (!shipping || quantity <= 0) return 0;
   if (shipping.type === "air" && shipping.airRates) {
@@ -77,8 +73,6 @@ function computeShippingPerUnitUsd(
     if (carrier) {
       const res = seaPerOrderUsd(carrier, totalCbm, {
         assumedCbm: config.assumedShipmentCbm ?? DEFAULT_ASSUMED_SHIPMENT_CBM,
-        region: seaOpts?.region ?? "center",
-        extraStops: seaOpts?.extraStops ?? 0,
         useTrueCost: seaOpts?.useTrueCost ?? false,
       });
       return res.shipmentUsd / quantity;
@@ -150,11 +144,7 @@ export function priceFactoryQuote(
     totalCbm,
     quantity,
     config,
-    {
-      region: input.seaRegion ?? "center",
-      extraStops: input.seaExtraStops ?? 0,
-      useTrueCost: input.seaUseTrueCost ?? false,
-    }
+    { useTrueCost: input.seaUseTrueCost ?? false }
   );
 
   const unitCost = unitCostUsd * usdToTarget;

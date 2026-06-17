@@ -63,56 +63,23 @@ export interface ShippingOption {
 }
 
 /**
- * One stepped band of a sea-cost component. `maxCbm` is the INCLUSIVE upper
- * bound of the band in CBM; the matching band is the first whose `maxCbm >= cbm`
- * (so a value above every band falls back to the last/highest band). `value`
- * is in the component's own currency — USD for china-inland/terminal, ILS for
- * the inland-delivery bands. Mirrors the IF(cbm<=1,..,IF(cbm<=3,..,..)) tiers
- * in the Yeadim pricing sheet.
- */
-export interface CbmTier {
-  maxCbm: number;
-  value: number;
-}
-
-/**
- * A full sea-freight cost profile for ONE forwarder (e.g. "ידים לוגיסטיקה").
- * The system holds a list of these and one is marked active; ALL sea pricing
- * is computed by summing this profile's line items for the shipment's CBM.
- * Adding a new forwarder later = adding another profile, no code change.
+ * A sea-freight cost profile for ONE forwarder (e.g. "ידים לוגיסטיקה"),
+ * SIMPLIFIED: just the bottom-line **cost per CBM** at each whole shipment
+ * volume from 1 to 7 CBM — exactly the "עלות לקוב" row of the forwarder's
+ * pricing sheet. No component breakdown. Switching/adding a forwarder = type
+ * its 7 numbers off its sheet.
  *
- * Line items mirror the Yeadim sheet exactly:
- *   total = chinaInland(cbm) + broker + customs + lclPerCbm×cbm + terminal(cbm)   [USD]
- *         + ( reshumon + inland(region,cbm) + extraStops×extraStop ) / fx          [ILS→USD]
- * Components a given forwarder doesn't charge are simply set to 0 / [].
+ * `perCbmByLevel[i]` = USD cost per CBM when the whole shipment is (i+1) CBM.
+ * So index 0 → 1 CBM, index 2 → 3 CBM, index 6 → 7 CBM. Total cost at an
+ * integer level L = perCbmByLevel[L-1] × L; in-between volumes interpolate
+ * (see seaShipmentCost in sea-carriers.ts).
  */
 export interface SeaCarrierProfile {
   id: string;
   name: string;
   enabled: boolean;
-  /** This forwarder's own USD→ILS rate, used to fold its ILS line items into
-   *  the USD total (the Yeadim sheet uses 2.9, independent of the quote FX). */
-  fxUsdToIls: number;
-  // ---- USD-denominated components ----
-  /** China inland transport, stepped by CBM band. USD. */
-  chinaInlandTiers: CbmTier[];
-  /** China-side broker — flat per shipment. USD. */
-  brokerUsd: number;
-  /** Israel customs — flat per shipment. USD. */
-  customsUsd: number;
-  /** Sea LCL — linear, per CBM. USD. */
-  lclPerCbmUsd: number;
-  /** Terminal handling, stepped by CBM band. USD. */
-  terminalTiers: CbmTier[];
-  // ---- ILS-denominated components ----
-  /** Customs declaration (רשומון) — flat per shipment. ILS. */
-  reshumonIls: number;
-  /** Inland delivery within Israel — center region, stepped by CBM band. ILS. */
-  inlandCenterTiers: CbmTier[];
-  /** Inland delivery within Israel — north region, stepped by CBM band. ILS. */
-  inlandNorthTiers: CbmTier[];
-  /** Extra delivery stop beyond the first — per stop. ILS. */
-  extraStopIls: number;
+  /** USD cost per CBM at shipment volumes 1..7 CBM (length 7). */
+  perCbmByLevel: number[];
 }
 
 export interface FactoryPricingConfig {
@@ -179,10 +146,6 @@ export interface FactoryPricingInput {
   };
   /** Override the default margin (e.g. slider 30-50%) */
   profitMarginOverride?: number;
-  /** Sea inland-delivery region for the active carrier. Defaults to "center". */
-  seaRegion?: "center" | "north";
-  /** Extra delivery stops beyond the first (each adds `extraStopIls`). Default 0. */
-  seaExtraStops?: number;
   /**
    * When true, price sea on this order's OWN volume (true single-shipment cost)
    * instead of the assumed-volume basis. For the boss to flip per-quote on a

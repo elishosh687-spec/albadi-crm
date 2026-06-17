@@ -38,8 +38,6 @@ export function ConsolidationView({
   ghlContactBase?: string;
 }) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [region, setRegion] = useState<"center" | "north">("center");
-  const [extraStops, setExtraStops] = useState(0);
 
   const toggle = (id: string) =>
     setSelected((s) => {
@@ -55,19 +53,19 @@ export function ConsolidationView({
     const items = candidates
       .filter((c) => selected.has(c.id))
       .map((c) => ({ id: c.id, cbm: c.cbm }));
-    return consolidateShipment(carrier, items, { region, extraStops });
-  }, [carrier, candidates, selected, region, extraStops]);
+    return consolidateShipment(carrier, items);
+  }, [carrier, candidates, selected]);
 
   // Per-row solo cost (true cost of shipping that order alone) for display.
   const soloUsdById = useMemo(() => {
     const m = new Map<string, number>();
     if (carrier) {
       for (const c of candidates) {
-        m.set(c.id, seaShipmentCost(carrier, c.cbm, { region, extraStops }).totalUsd);
+        m.set(c.id, seaShipmentCost(carrier, c.cbm).totalUsd);
       }
     }
     return m;
-  }, [carrier, candidates, region, extraStops]);
+  }, [carrier, candidates]);
 
   if (!carrier) {
     return (
@@ -89,39 +87,6 @@ export function ConsolidationView({
           אחת בנפרד. כלי תכנון בלבד — לא משנה מחירים ללקוחות. ספק: {carrier.name}.
         </p>
       </header>
-
-      {/* Region + extra stops */}
-      <div className="flex flex-wrap items-end gap-4">
-        <div className="flex flex-col gap-1">
-          <label className="text-[11px] font-medium text-muted-foreground">אזור מסירה</label>
-          <div className="inline-flex rounded-md border border-border p-0.5 gap-0.5">
-            {(["center", "north"] as const).map((r) => (
-              <button
-                key={r}
-                type="button"
-                onClick={() => setRegion(r)}
-                className={cn(
-                  "px-3 py-1 text-xs rounded",
-                  region === r ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-secondary"
-                )}
-              >
-                {r === "center" ? "מרכז" : "צפון"}
-              </button>
-            ))}
-          </div>
-        </div>
-        <div className="flex flex-col gap-1">
-          <label className="text-[11px] font-medium text-muted-foreground">עצירות נוספות</label>
-          <input
-            type="number"
-            min={0}
-            step={1}
-            value={extraStops}
-            onChange={(e) => setExtraStops(Math.max(0, Number(e.target.value) || 0))}
-            className="bg-background/50 border border-border rounded-md px-2 py-1 text-sm tabular-nums w-20 focus:outline-none focus:ring-2 focus:ring-ring/30"
-          />
-        </div>
-      </div>
 
       {/* Candidate list */}
       {candidates.length === 0 ? (
@@ -196,22 +161,6 @@ export function ConsolidationView({
             <PackageCheck className="size-4 text-primary shrink-0 mt-0.5" />
             <span>{result.recommendation.text}</span>
           </div>
-          {/* merged shipment breakdown */}
-          <details className="text-[11px] text-muted-foreground">
-            <summary className="cursor-pointer select-none">פירוט עלות המשלוח המאוחד</summary>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-1 mt-2 tabular-nums">
-              <Line label="הובלה בסין" usd={result.breakdown.chinaInlandUsd} ils={ils} />
-              <Line label="ברוקר" usd={result.breakdown.brokerUsd} ils={ils} />
-              <Line label="מכס" usd={result.breakdown.customsUsd} ils={ils} />
-              <Line label="LCL" usd={result.breakdown.lclUsd} ils={ils} />
-              <Line label="טרמינל" usd={result.breakdown.terminalUsd} ils={ils} />
-              <Line label="רשומון" usd={result.breakdown.reshumonUsd} ils={ils} />
-              <Line label="הובלה פנים" usd={result.breakdown.inlandUsd} ils={ils} />
-              {result.breakdown.extraStopsUsd > 0 && (
-                <Line label="עצירות" usd={result.breakdown.extraStopsUsd} ils={ils} />
-              )}
-            </div>
-          </details>
         </div>
       )}
     </section>
@@ -234,23 +183,6 @@ function Stat({
       <span className="text-[11px] text-muted-foreground">{label}</span>
       <span className={cn("text-lg font-semibold tabular-nums", highlight && "text-success")}>{value}</span>
       {sub && <span className="text-[10px] text-muted-foreground tabular-nums">{sub}</span>}
-    </div>
-  );
-}
-
-function Line({
-  label,
-  usd,
-  ils,
-}: {
-  label: string;
-  usd: number;
-  ils: (usd: number) => string;
-}) {
-  return (
-    <div className="flex justify-between gap-2">
-      <span>{label}</span>
-      <span>₪{ils(usd)}</span>
     </div>
   );
 }

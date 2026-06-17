@@ -7,7 +7,11 @@ import { db } from "@/lib/db";
 import { appConfig } from "@/drizzle/schema";
 import { eq } from "drizzle-orm";
 import type { FactoryPricingConfig } from "./types";
-import { YEADIM_CARRIER, DEFAULT_ASSUMED_SHIPMENT_CBM } from "./sea-carriers";
+import {
+  YEADIM_CARRIER,
+  DEFAULT_ASSUMED_SHIPMENT_CBM,
+  isSimplifiedCarrier,
+} from "./sea-carriers";
 
 const KEY = "factory_pricing";
 const TTL_MS = 60_000;
@@ -75,14 +79,19 @@ function normalizeConfig(raw: FactoryPricingConfig): FactoryPricingConfig {
     };
   }
 
-  // Backfill sea carrier profiles (rows written before multi-carrier sea
-  // pricing existed). Seed the Yeadim forwarder + the 3-CBM assumed basis so
-  // existing prod configs start pricing sea correctly without a manual edit.
-  if (!out.seaCarriers || out.seaCarriers.length === 0) {
+  // Backfill / migrate sea carrier profiles. Seed Yeadim when none exist, and
+  // replace any profile written in the OLD component-based shape with the new
+  // simplified per-CBM Yeadim profile (only Yeadim ever shipped, so a reset is
+  // safe). Keeps existing prod configs pricing sea correctly with no manual edit.
+  const hasValidCarriers =
+    Array.isArray(out.seaCarriers) &&
+    out.seaCarriers.length > 0 &&
+    out.seaCarriers.every(isSimplifiedCarrier);
+  if (!hasValidCarriers) {
     out = {
       ...out,
       seaCarriers: [YEADIM_CARRIER],
-      activeSeaCarrierId: out.activeSeaCarrierId ?? YEADIM_CARRIER.id,
+      activeSeaCarrierId: YEADIM_CARRIER.id,
     };
   }
   if (out.assumedShipmentCbm === undefined) {

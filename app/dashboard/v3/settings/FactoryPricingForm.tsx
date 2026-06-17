@@ -384,14 +384,10 @@ function ShippingOptionCard({
       </div>
 
       {opt.type === "sea" ? (
-        <NumField
-          label="USD per CBM (גיבוי ישן)"
-          hint="לא בשימוש כשיש ספק ים פעיל למעלה — נשאר רק כגיבוי לתאימות. תעריף שטוח לקובייה (m³)."
-          value={opt.seaRate ?? 0}
-          step={1}
-          onChange={(v) => onChange({ seaRate: Number(v) || 0 })}
-          error={errors?.seaRate}
-        />
+        <p className="text-[11px] text-muted-foreground">
+          התעריפים נקבעים לפי הספק הפעיל ב"ספקי שילוח ים" למעלה. כאן רק שם
+          האפשרות וההפעלה.
+        </p>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <NumField
@@ -474,8 +470,7 @@ function validate(s: FactoryPricingConfig): Record<string, unknown> {
   s.shippingOptions.forEach((opt, i) => {
     const optErr: Record<string, string> = {};
     if (opt.type === "sea") {
-      if (!(typeof opt.seaRate === "number" && opt.seaRate > 0))
-        optErr.seaRate = "חובה > 0";
+      // Sea rate comes from the active carrier profile, not this option.
     } else {
       const r = opt.airRates;
       if (!r || !(r.thresholdKg > 0)) optErr.thresholdKg = "חובה > 0";

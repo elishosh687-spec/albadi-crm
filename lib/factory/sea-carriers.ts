@@ -1,26 +1,21 @@
 /**
- * Sea-freight cost engine — multi-forwarder.
+ * Sea-freight cost engine — multi-forwarder, SIMPLIFIED.
  *
- * Replaces the old flat `seaRate × CBM` model. Each forwarder is a
- * `SeaCarrierProfile` (config.seaCarriers); the active one drives all sea
- * pricing. A shipment's cost is the SUM of the profile's line items evaluated
- * for the shipment's CBM — some flat, some stepped by CBM band, one linear
- * per CBM. Mirrors the "ידים לוגיסטיקה" pricing sheet 1:1.
+ * A carrier is just its bottom-line cost-per-CBM at shipment volumes 1..7 CBM
+ * (the "עלות לקוב" row of its pricing sheet) — no component breakdown. The
+ * active carrier drives all sea pricing. Switching/adding a forwarder = type
+ * its 7 numbers.
  *
- * Two ways the cost is consumed:
- *   1. Per-order default pricing (`seaPerOrderUsd`): small orders are billed at
- *      the per-CBM cost evaluated at the ASSUMED shipment volume (default 3 CBM)
- *      — the boss's bet that orders accumulate to fill a shipment. Orders bigger
- *      than that fall back to their own (cheaper) true per-CBM cost.
- *   2. Consolidation planning (`seaShipmentCostUsd`): the true cost of an actual
- *      merged shipment of N CBM — used by the consolidation tool.
+ * Two consumers:
+ *   1. Per-order default pricing (`seaPerOrderUsd`): small orders billed at the
+ *      per-CBM cost evaluated at the ASSUMED shipment volume (default 3 CBM) —
+ *      the boss's bet that orders accumulate. Orders bigger than that fall back
+ *      to their own (cheaper) true per-CBM cost.
+ *   2. Consolidation planning (`seaShipmentCost` / `consolidateShipment`): the
+ *      true cost of an actual merged shipment of N CBM.
  */
 
-import type {
-  CbmTier,
-  FactoryPricingConfig,
-  SeaCarrierProfile,
-} from "./types";
+import type { FactoryPricingConfig, SeaCarrierProfile } from "./types";
 
 function r2(n: number): number {
   return Math.round(n * 100) / 100;
@@ -29,136 +24,64 @@ function r2(n: number): number {
 /** Default assumed shipment volume (CBM) for per-order pricing. */
 export const DEFAULT_ASSUMED_SHIPMENT_CBM = 3;
 
+/** Highest volume level a carrier table covers. */
+export const MAX_CBM_LEVEL = 7;
+
 /**
- * The "ידים לוגיסטיקה" forwarder, transcribed verbatim from the pricing sheet
- * (tab "מחירון Yeadim"). Bands: ≤1 / 1–3 / 3–7 CBM. fx 2.9 ₪/$.
+ * The "ידים לוגיסטיקה" forwarder — cost per CBM at 1..7 CBM, taken straight
+ * from the "עלות לקוב $" row of its sheet (center, one stop).
+ *   1→686  2→481  3→379  4→383  5→342  6→314  7→294
  */
 export const YEADIM_CARRIER: SeaCarrierProfile = {
   id: "yeadim",
   name: "ידים לוגיסטיקה",
   enabled: true,
-  fxUsdToIls: 2.9,
-  // USD components
-  chinaInlandTiers: [
-    { maxCbm: 1, value: 50 },
-    { maxCbm: 3, value: 80 },
-    { maxCbm: 7, value: 140 },
-  ],
-  brokerUsd: 100,
-  customsUsd: 50,
-  lclPerCbmUsd: 175,
-  terminalTiers: [
-    { maxCbm: 1, value: 180 },
-    { maxCbm: 3, value: 250 },
-    { maxCbm: 7, value: 350 },
-  ],
-  // ILS components
-  reshumonIls: 80,
-  inlandCenterTiers: [
-    { maxCbm: 3, value: 300 },
-    { maxCbm: 7, value: 480 },
-  ],
-  inlandNorthTiers: [
-    { maxCbm: 3, value: 550 },
-    { maxCbm: 7, value: 700 },
-  ],
-  extraStopIls: 150,
+  perCbmByLevel: [686, 481, 379, 383, 342, 314, 294],
 };
 
-/**
- * Pick the value of a stepped component for a given CBM: the first band whose
- * `maxCbm >= cbm`, falling back to the last (highest) band for volumes above
- * every band. Empty tiers → 0.
- */
-export function tierValue(tiers: CbmTier[], cbm: number): number {
-  if (!tiers || tiers.length === 0) return 0;
-  const sorted = [...tiers].sort((a, b) => a.maxCbm - b.maxCbm);
-  for (const t of sorted) {
-    if (cbm <= t.maxCbm) return t.value;
-  }
-  return sorted[sorted.length - 1].value;
+/** Total USD cost for a shipment of `cbm` with this carrier.
+ *  Integer level L → perCbmByLevel[L-1] × L. Fractional → linear interpolation
+ *  of the two surrounding levels. Below 1 / above the table → nearest level's
+ *  per-CBM rate × cbm. */
+export function seaTotalUsd(carrier: SeaCarrierProfile, cbm: number): number {
+  const lv = carrier.perCbmByLevel ?? [];
+  const max = lv.length;
+  const v = Math.max(cbm, 0);
+  if (v === 0 || max === 0) return 0;
+
+  const totalAtLevel = (i: number) => (lv[i - 1] ?? lv[lv.length - 1] ?? 0) * i;
+
+  if (v <= 1) return lv[0] * v;
+  if (v >= max) return lv[max - 1] * v; // extrapolate at the cheapest top rate
+
+  const lo = Math.floor(v);
+  const hi = Math.ceil(v);
+  if (lo === hi) return totalAtLevel(lo);
+  const tLo = totalAtLevel(lo);
+  const tHi = totalAtLevel(hi);
+  return tLo + (tHi - tLo) * (v - lo);
 }
 
-export interface SeaCostBreakdown {
+/** Cost per CBM at a given shipment volume. */
+export function seaPerCbmAt(carrier: SeaCarrierProfile, cbm: number): number {
+  const v = Math.max(cbm, 0);
+  return v > 0 ? seaTotalUsd(carrier, v) / v : 0;
+}
+
+export interface SeaCost {
   cbm: number;
-  region: "center" | "north";
-  extraStops: number;
-  // each line in USD (ILS components already converted at the carrier fx)
-  chinaInlandUsd: number;
-  brokerUsd: number;
-  customsUsd: number;
-  lclUsd: number;
-  terminalUsd: number;
-  reshumonUsd: number;
-  inlandUsd: number;
-  extraStopsUsd: number;
-  /** grand total for the whole shipment, USD */
   totalUsd: number;
-  /** total ÷ cbm, USD per CBM at this volume */
   perCbmUsd: number;
 }
 
-export interface SeaCostOptions {
-  region?: "center" | "north";
-  extraStops?: number;
-}
-
-/**
- * True cost of a single sea shipment of `cbm` cubic metres with this carrier.
- * This is the authoritative cost function — everything else derives from it.
- */
+/** True cost of a single sea shipment of `cbm` CBM. */
 export function seaShipmentCost(
   carrier: SeaCarrierProfile,
-  cbm: number,
-  opts?: SeaCostOptions
-): SeaCostBreakdown {
-  const region = opts?.region ?? "center";
-  const extraStops = Math.max(0, Math.floor(opts?.extraStops ?? 0));
-  const fx = carrier.fxUsdToIls > 0 ? carrier.fxUsdToIls : 1;
+  cbm: number
+): SeaCost {
   const v = Math.max(cbm, 0);
-
-  const chinaInlandUsd = tierValue(carrier.chinaInlandTiers, v);
-  const brokerUsd = carrier.brokerUsd || 0;
-  const customsUsd = carrier.customsUsd || 0;
-  const lclUsd = (carrier.lclPerCbmUsd || 0) * v;
-  const terminalUsd = tierValue(carrier.terminalTiers, v);
-
-  const reshumonIls = carrier.reshumonIls || 0;
-  const inlandIls = tierValue(
-    region === "north" ? carrier.inlandNorthTiers : carrier.inlandCenterTiers,
-    v
-  );
-  const extraStopsIls = (carrier.extraStopIls || 0) * extraStops;
-
-  const reshumonUsd = reshumonIls / fx;
-  const inlandUsd = inlandIls / fx;
-  const extraStopsUsd = extraStopsIls / fx;
-
-  const totalUsd =
-    chinaInlandUsd +
-    brokerUsd +
-    customsUsd +
-    lclUsd +
-    terminalUsd +
-    reshumonUsd +
-    inlandUsd +
-    extraStopsUsd;
-
-  return {
-    cbm: v,
-    region,
-    extraStops,
-    chinaInlandUsd: r2(chinaInlandUsd),
-    brokerUsd: r2(brokerUsd),
-    customsUsd: r2(customsUsd),
-    lclUsd: r2(lclUsd),
-    terminalUsd: r2(terminalUsd),
-    reshumonUsd: r2(reshumonUsd),
-    inlandUsd: r2(inlandUsd),
-    extraStopsUsd: r2(extraStopsUsd),
-    totalUsd: r2(totalUsd),
-    perCbmUsd: v > 0 ? r2(totalUsd / v) : 0,
-  };
+  const totalUsd = seaTotalUsd(carrier, v);
+  return { cbm: r2(v), totalUsd: r2(totalUsd), perCbmUsd: v > 0 ? r2(totalUsd / v) : 0 };
 }
 
 export interface SeaPerOrderResult {
@@ -172,43 +95,35 @@ export interface SeaPerOrderResult {
   orderCbm: number;
   /** whether the assumed-volume basis was used (false = order's own true cost) */
   assumedBasisUsed: boolean;
-  /** breakdown of the shipment the per-CBM rate was derived from */
-  breakdown: SeaCostBreakdown;
 }
 
 /**
- * Sea cost to bill a SINGLE order, per the default pricing rule:
+ * Sea cost to bill a SINGLE order:
  *   billingCbm = useTrueCost ? orderCbm : max(orderCbm, assumedCbm)
- *   perCbm     = seaShipmentCost(carrier, billingCbm) / billingCbm
- *   shipmentUsd = orderCbm × perCbm
- *
- * Net effect: orders below the assumed volume are billed at the (higher) per-CBM
- * rate of the assumed shipment — the boss's 3-CBM bet — while orders at/above it
- * pay their own true cost, which is the same or cheaper per CBM.
+ *   shipmentUsd = orderCbm × perCbmAt(billingCbm)
+ * Small orders pay the assumed-volume (default 3 CBM) per-CBM rate; orders at or
+ * above it pay their own (same/cheaper) true cost.
  */
 export function seaPerOrderUsd(
   carrier: SeaCarrierProfile,
   orderCbm: number,
-  opts?: SeaCostOptions & { assumedCbm?: number; useTrueCost?: boolean }
+  opts?: { assumedCbm?: number; useTrueCost?: boolean }
 ): SeaPerOrderResult {
   const assumedCbm = Math.max(opts?.assumedCbm ?? DEFAULT_ASSUMED_SHIPMENT_CBM, 0);
   const raw = Math.max(orderCbm, 0);
   const useTrueCost = opts?.useTrueCost ?? false;
   const billingCbm = useTrueCost ? Math.max(raw, 0.0001) : Math.max(raw, assumedCbm);
-  const breakdown = seaShipmentCost(carrier, billingCbm, opts);
-  const perCbmUsd = billingCbm > 0 ? breakdown.totalUsd / billingCbm : 0;
+  const perCbmUsd = seaPerCbmAt(carrier, billingCbm);
   return {
     shipmentUsd: r2(raw * perCbmUsd),
     billingCbm: r2(billingCbm),
     perCbmUsd: r2(perCbmUsd),
     orderCbm: r2(raw),
     assumedBasisUsed: !useTrueCost && raw < assumedCbm,
-    breakdown,
   };
 }
 
 export interface ConsolidationItem {
-  /** opaque id of the order/quote (for the UI) */
   id: string;
   cbm: number;
 }
@@ -223,50 +138,32 @@ export interface ConsolidationResult {
   /** soloTotal − combined (the consolidation saving, ≥ 0) */
   savingUsd: number;
   combinedPerCbmUsd: number;
-  /** per-item solo breakdown, same order as input */
   perItem: { id: string; cbm: number; soloUsd: number }[];
-  /** the merged shipment's component breakdown */
-  breakdown: SeaCostBreakdown;
-  /** band-edge guidance for the combined volume */
-  recommendation: {
-    /** nearest optimal band edge to aim for (e.g. 3 or 7) */
-    targetCbm: number;
-    /** extra CBM needed to reach targetCbm (0 if already at/above) */
-    addCbm: number;
-    /** human Hebrew hint */
-    text: string;
-  };
+  recommendation: { targetCbm: number; addCbm: number; text: string };
 }
 
-/** Optimal band edges for the Yeadim-style stepped pricing (top of each band). */
+/** Optimal band edges (top of each pricing band) to aim a shipment at. */
 const BAND_EDGES = [3, 7];
 
 /**
  * Plan a consolidated shipment: compare shipping every item ALONE (true cost)
  * vs merging them into one shipment, and advise which band edge to aim for.
- * Pure — drives the consolidation planning screen.
  */
 export function consolidateShipment(
   carrier: SeaCarrierProfile,
-  items: ConsolidationItem[],
-  opts?: SeaCostOptions
+  items: ConsolidationItem[]
 ): ConsolidationResult {
   const perItem = items.map((it) => ({
     id: it.id,
     cbm: r2(Math.max(it.cbm, 0)),
-    soloUsd: seaShipmentCost(carrier, it.cbm, opts).totalUsd,
+    soloUsd: seaShipmentCost(carrier, it.cbm).totalUsd,
   }));
   const soloTotalUsd = perItem.reduce((s, i) => s + i.soloUsd, 0);
   const combinedCbm = r2(perItem.reduce((s, i) => s + i.cbm, 0));
-  const breakdown = seaShipmentCost(carrier, combinedCbm, opts);
-  const combinedUsd = breakdown.totalUsd;
+  const merged = seaShipmentCost(carrier, combinedCbm);
 
-  // Recommendation: aim for the next band edge ≥ current volume (or the top
-  // edge once past it). Filling to an edge amortises the stepped costs best.
   let targetCbm = BAND_EDGES.find((e) => combinedCbm <= e) ?? combinedCbm;
-  if (combinedCbm > BAND_EDGES[BAND_EDGES.length - 1]) {
-    targetCbm = Math.ceil(combinedCbm); // above the table — already large
-  }
+  if (combinedCbm > BAND_EDGES[BAND_EDGES.length - 1]) targetCbm = Math.ceil(combinedCbm);
   const addCbm = r2(Math.max(0, targetCbm - combinedCbm));
   const atEdge = BAND_EDGES.includes(r2(combinedCbm));
   let text: string;
@@ -275,20 +172,18 @@ export function consolidateShipment(
   } else if (combinedCbm > BAND_EDGES[BAND_EDGES.length - 1]) {
     text = `${combinedCbm} קוב — מעל הטבלה, נצילות טובה. אפשר לשלח.`;
   } else {
-    const perNow = breakdown.perCbmUsd;
-    const perTarget = targetCbm > 0 ? seaShipmentCost(carrier, targetCbm, opts).perCbmUsd : perNow;
-    text = `${combinedCbm} קוב → $${perNow.toFixed(0)}/קוב. הוסף ${addCbm} קוב כדי להגיע ל-${targetCbm} קוב ($${perTarget.toFixed(0)}/קוב).`;
+    const perTarget = seaPerCbmAt(carrier, targetCbm);
+    text = `${combinedCbm} קוב → $${merged.perCbmUsd.toFixed(0)}/קוב. הוסף ${addCbm} קוב כדי להגיע ל-${targetCbm} קוב ($${perTarget.toFixed(0)}/קוב).`;
   }
 
   return {
     count: items.length,
     combinedCbm,
     soloTotalUsd: r2(soloTotalUsd),
-    combinedUsd: r2(combinedUsd),
-    savingUsd: r2(soloTotalUsd - combinedUsd),
-    combinedPerCbmUsd: breakdown.perCbmUsd,
+    combinedUsd: merged.totalUsd,
+    savingUsd: r2(soloTotalUsd - merged.totalUsd),
+    combinedPerCbmUsd: merged.perCbmUsd,
     perItem,
-    breakdown,
     recommendation: { targetCbm, addCbm, text },
   };
 }
@@ -304,4 +199,13 @@ export function getActiveSeaCarrier(
     : null;
   if (byId) return byId;
   return list.find((c) => c.enabled !== false) ?? null;
+}
+
+/** True when a carrier profile uses the new simplified per-CBM shape. */
+export function isSimplifiedCarrier(c: unknown): c is SeaCarrierProfile {
+  return (
+    !!c &&
+    typeof c === "object" &&
+    Array.isArray((c as SeaCarrierProfile).perCbmByLevel)
+  );
 }
