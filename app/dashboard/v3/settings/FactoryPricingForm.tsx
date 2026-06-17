@@ -71,7 +71,7 @@ export function FactoryPricingForm({ initial }: { initial: FactoryPricingConfig 
   };
 
   const updateNumber = (
-    key: "usdToIls" | "usdToCny" | "defaultProfitMargin",
+    key: "usdToIls" | "usdToCny" | "defaultProfitMargin" | "commissionPct",
     v: string
   ) => {
     const num = Number(v);
@@ -165,6 +165,14 @@ export function FactoryPricingForm({ initial }: { initial: FactoryPricingConfig 
           step={1}
           onChange={(v) => updateNumber("defaultProfitMargin", v)}
           error={errors.defaultProfitMargin as string | undefined}
+        />
+        <NumField
+          label="עמלת מכירות (% מהעסקה)"
+          hint="עמלת איש המכירות, אחוז מסכום העסקה הכולל. תצוגה לבוס בלבד — לא משפיע על מחיר הלקוח."
+          value={state.commissionPct ?? 10}
+          step={0.5}
+          onChange={(v) => updateNumber("commissionPct", v)}
+          error={errors.commissionPct as string | undefined}
         />
       </div>
 
@@ -433,6 +441,9 @@ function validate(s: FactoryPricingConfig): Record<string, unknown> {
   // Margin is % of PRICE → must be 0..<100 (≥100 is mathematically impossible).
   if (!(s.defaultProfitMargin >= 0 && s.defaultProfitMargin < 100))
     errors.defaultProfitMargin = "חובה 0–99";
+  // Commission is % of the gross sale → 0..100 is the sane range.
+  if (s.commissionPct !== undefined && !(s.commissionPct >= 0 && s.commissionPct <= 100))
+    errors.commissionPct = "חובה 0–100";
   if (s.profitMarginByQuantity) {
     for (const [qty, pct] of Object.entries(s.profitMarginByQuantity)) {
       if (!(pct >= 0 && pct < 100)) errors[`margin:${qty}`] = "חובה 0–99";

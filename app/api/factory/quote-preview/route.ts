@@ -145,6 +145,6 @@ export async function GET(req: NextRequest) {
     ok: true,
     result,
     altResult,
-    computed: { productionPerUnitIls, shippingPerUnitIls, usdToIls, usdToCny: dbConfig.usdToCny },
+    computed: { productionPerUnitIls, shippingPerUnitIls, usdToIls, usdToCny: dbConfig.usdToCny, commissionPct: dbConfig.commissionPct },
   });
 }

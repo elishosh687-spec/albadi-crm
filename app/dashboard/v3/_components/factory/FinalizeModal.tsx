@@ -21,6 +21,7 @@ import type {
   ShippingOption,
 } from "@/lib/factory/types";
 import { priceFactoryQuote, marginPctFromUnitPrice } from "@/lib/factory/pricing";
+import { computeCommission } from "@/lib/factory/commission";
 import {
   computeCombined,
   priceQuoteForCombine,
@@ -563,6 +564,26 @@ export function FinalizeModal({
                     value={formatIls(livePricing.totalProfit)}
                     highlight
                   />
+                  {(() => {
+                    const c = computeCommission(
+                      livePricing.totalSellingPrice,
+                      livePricing.totalProfit,
+                      livePricing.commissionPct
+                    );
+                    return (
+                      <>
+                        <PriceRow
+                          label={`עמלת מכירות (${c.pct}% מהעסקה · ${Math.round(c.ofProfitPct)}% מהרווח)`}
+                          value={`−${formatIls(c.commission)}`}
+                        />
+                        <PriceRow
+                          label="רווח נטו (אחרי עמלה)"
+                          value={formatIls(c.netProfit)}
+                          highlight
+                        />
+                      </>
+                    );
+                  })()}
                   <div className="border-t border-success/20 my-1" />
                   <PriceRow
                     label="לוגיסטיקה"

@@ -44,6 +44,7 @@ export const DEFAULT_FACTORY_CONFIG: FactoryPricingConfig = {
   ilsToCny: 1.95,
   defaultProfitMargin: 40,
   profitMarginByQuantity: { "1000": 40, "3000": 40, "5000": 40, "10000": 40 },
+  commissionPct: 10,
   currency: "ILS",
 };
 

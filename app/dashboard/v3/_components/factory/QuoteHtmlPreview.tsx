@@ -14,6 +14,7 @@ import type { FactoryQuoteRow } from "./FactoryQuotePanel";
 import { humanizeMaterial, humanizePrinting, humanizeFinishing } from "@/lib/factory/qstate-decode";
 import { DetailedBreakdown } from "@/components/calculator/DetailedBreakdown";
 import type { FactoryPricingConfig } from "@/lib/factory/types";
+import { computeCommission } from "@/lib/factory/commission";
 
 const PRODUCT_LABEL = "שקית אלבדי";
 const stripCjk = (s: string | null | undefined): string =>
@@ -227,6 +228,18 @@ export function QuoteHtmlPreview({
                       value={fmtIls(p.moldsTotalProfitIls)}
                     />
                   )}
+                  {(() => {
+                    const c = computeCommission(p.totalSellingPrice, p.totalProfit, p.commissionPct);
+                    return (
+                      <>
+                        <PriceRow
+                          label={`עמלת מכירות (${c.pct}% מהעסקה · ${Math.round(c.ofProfitPct)}% מהרווח)`}
+                          value={`−${fmtIls(c.commission)}`}
+                        />
+                        <PriceRow label="רווח נטו (אחרי עמלה)" value={fmtIls(c.netProfit)} bold primary />
+                      </>
+                    );
+                  })()}
                   <PriceRow
                     label="לוגיסטיקה"
                     value={`${p.totalCartons} קרטונים · ${p.totalWeightKg} ק״ג · ${p.totalCbm} m³`}

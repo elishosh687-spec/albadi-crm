@@ -74,6 +74,13 @@ export interface FactoryPricingConfig {
   /** Default profit margin % when caller doesn't override and no per-qty value */
   defaultProfitMargin: number;
   /**
+   * Salesperson commission %, applied to the TOTAL sale (gross deal amount).
+   * Display-only and boss-only: it never changes the customer price — it just
+   * shows the boss what the rep earns and the net profit after commission.
+   * Defaults to 10 when missing (back-compat with rows written before this field).
+   */
+  commissionPct?: number;
+  /**
    * Profit margin % per quantity tier. Keys are quantity strings matching
    * `quantityTiers[].quantity` (e.g. "1000","3000","5000","10000"). Falls back
    * to `defaultProfitMargin` when the customer's quantity isn't in the map.
@@ -132,6 +139,10 @@ export interface FactoryPricingResult {
   profitMarginPct: number;
   shippingOptionId: string | null;
   shippingOptionName: string | null;
+  /** Salesperson commission % (echoed from config). Display/boss-only — the
+   *  commission is computed from this against totalSellingPrice and never alters
+   *  any customer-facing price. Undefined falls back to the default (10). */
+  commissionPct?: number;
 
   // One-time mold/tooling charge — a SEPARATE line item, NOT folded into
   // unitCost / unitSellingPrice / unitProfit. Per-unit numbers are bag-only.

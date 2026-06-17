@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { Loader2, Send, Copy, Check, Search, X } from "lucide-react";
 import { cn } from "@/lib/cn";
 import type { Product, QuantityTier, ShippingOption, QuoteResult } from "@/lib/factory/calculator/types";
+import { computeCommission } from "@/lib/factory/commission";
 import { DetailedBreakdown } from "./DetailedBreakdown";
 
 interface Props {
@@ -32,6 +33,7 @@ interface PreviewResult {
     shippingPerUnitIls: number;
     usdToIls: number;
     usdToCny: number;
+    commissionPct?: number;
   };
 }
 
@@ -641,7 +643,7 @@ function BreakdownCard({
   computed: c,
 }: {
   result: QuoteResult;
-  computed: { productionPerUnitIls: number; shippingPerUnitIls: number };
+  computed: { productionPerUnitIls: number; shippingPerUnitIls: number; commissionPct?: number };
 }) {
   const productionUnit = r2(c.productionPerUnitIls);
   const shippingUnit   = r2(c.shippingPerUnitIls);
@@ -651,6 +653,10 @@ function BreakdownCard({
   const productionTotal = r2(productionUnit * r.quantity);
   const shippingTotal   = r2(shippingUnit * r.quantity);
   const totalCostTotal  = r2(r.totalCostPerUnitIls * r.quantity);
+
+  // Salesperson commission — boss-only, display-only (does not change the
+  // customer price). On the total order, out of profit.
+  const comm = computeCommission(r.totalOrderPriceIls, r.totalProfitIls, c.commissionPct);
 
   return (
     <section className="rounded-xl border border-border bg-card overflow-hidden">
@@ -685,6 +691,8 @@ function BreakdownCard({
               { label: "עלות שילוח", value: `₪${ils(shippingTotal)}` },
               { label: "סה״כ עלות", value: `₪${ils(totalCostTotal)}`, bold: true },
               { label: `רווח ${r.profitMargin}%`, value: `₪${ils(r.totalProfitIls)}`, bold: true, green: true },
+              { label: `עמלת מכירות (${comm.pct}% · ${Math.round(comm.ofProfitPct)}% מהרווח)`, value: `−₪${ils(comm.commission)}` },
+              { label: "רווח נטו (אחרי עמלה)", value: `₪${ils(comm.netProfit)}`, bold: true, green: true },
               { label: "מחיר ללקוח", value: `₪${ils(r.totalOrderPriceIls)}`, hero: true },
             ]}
           />

@@ -178,6 +178,7 @@ export function priceFactoryQuote(
     profitMarginPct: marginPct,
     shippingOptionId: shipping?.id ?? null,
     shippingOptionName: shipping?.name ?? null,
+    commissionPct: config.commissionPct,
     moldsTotalCny: r2(moldsTotalCny),
     moldsPerUnitCny: Math.round(moldsPerUnitCny * 1000) / 1000,
     moldsTotalCostIls: r2(moldsTotalCostIlsExact),
