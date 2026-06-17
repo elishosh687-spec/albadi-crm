@@ -18,7 +18,7 @@ import type {
   SeaCarrierProfile,
   ShippingOption,
 } from "@/lib/factory/types";
-import { SeaCarriersSection } from "./SeaCarriersSection";
+import { SeaCarriersSection } from "@/components/settings/SeaCarriersSection";
 
 function slugify(s: string): string {
   return (

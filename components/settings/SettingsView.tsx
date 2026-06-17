@@ -11,9 +11,17 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Save, Plus, Trash2, Ship, Plane, Loader2, RefreshCw } from "lucide-react";
+import {
+  Save, Plus, Trash2, Ship, Plane, Loader2, RefreshCw,
+  ArrowLeftRight, Percent, Truck, Users,
+} from "lucide-react";
 import { cn } from "@/lib/cn";
-import type { FactoryPricingConfig, ShippingOption } from "@/lib/factory/types";
+import type {
+  FactoryPricingConfig,
+  SeaCarrierProfile,
+  ShippingOption,
+} from "@/lib/factory/types";
+import { SeaCarriersSection } from "@/components/settings/SeaCarriersSection";
 
 function widgetUrl(path: string, token: string): string {
   const u = new URL(path, "http://placeholder.local");
@@ -170,6 +178,13 @@ export function SettingsView({ apiToken }: { apiToken: string }) {
     );
   };
 
+  const setCarriers = (next: SeaCarrierProfile[]) =>
+    setState((s) => (s ? { ...s, seaCarriers: next } : s));
+  const setActiveCarrier = (id: string) =>
+    setState((s) => (s ? { ...s, activeSeaCarrierId: id } : s));
+  const setAssumedCbm = (v: number) =>
+    setState((s) => (s ? { ...s, assumedShipmentCbm: v > 0 ? v : 1 } : s));
+
   if (loading) {
     return (
       <div className="rounded-xl border border-border bg-card/30 p-12 text-center text-sm text-muted-foreground" dir="rtl">
@@ -268,6 +283,17 @@ export function SettingsView({ apiToken }: { apiToken: string }) {
           ))}
         </div>
       </div>
+
+      {/* Sea carriers — the tiered forwarder pricing that drives sea cost */}
+      <SeaCarriersSection
+        carriers={state.seaCarriers ?? []}
+        activeId={state.activeSeaCarrierId}
+        assumedCbm={state.assumedShipmentCbm ?? 3}
+        usdToIls={state.usdToIls}
+        onCarriersChange={setCarriers}
+        onActiveChange={setActiveCarrier}
+        onAssumedChange={setAssumedCbm}
+      />
 
       <div className="mb-2 flex items-center justify-between">
         <h3 className="text-sm font-medium">אפשרויות שילוח</h3>
@@ -425,8 +451,8 @@ function ShippingOptionCard({
 
       {opt.type === "sea" ? (
         <NumField
-          label="USD per CBM"
-          hint="עלות שילוח לקובייה (m³)"
+          label="USD per CBM (גיבוי ישן)"
+          hint="לא בשימוש כשיש ספק ים פעיל למעלה — נשאר רק כגיבוי לתאימות. תעריף שטוח לקובייה (m³)."
           value={opt.seaRate ?? 0}
           step={1}
           onChange={(v) => onChange({ seaRate: Number(v) || 0 })}
@@ -495,6 +521,8 @@ function validate(s: FactoryPricingConfig): Record<string, unknown> {
       if (!(pct >= 0)) errors[`margin:${qty}`] = "חובה ≥ 0";
     }
   }
+  if (s.assumedShipmentCbm !== undefined && !(s.assumedShipmentCbm > 0))
+    errors.assumedShipmentCbm = "חובה > 0";
   s.shippingOptions.forEach((opt, i) => {
     const optErr: Record<string, string> = {};
     if (opt.type === "sea") {

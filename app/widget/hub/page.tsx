@@ -56,6 +56,11 @@ const TABS: TabDef[] = [
     label: "🎨 מעצב 3D",
     url: (t) => `/configurator?widget_token=${encodeURIComponent(t)}`,
   },
+  {
+    id: "settings",
+    label: "⚙️ הגדרות",
+    url: (t) => `/widget/settings?widget_token=${encodeURIComponent(t)}`,
+  },
 ];
 
 export default async function HubWidgetPage({
