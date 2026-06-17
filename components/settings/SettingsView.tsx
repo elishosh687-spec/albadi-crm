@@ -13,7 +13,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Save, Plus, Trash2, Ship, Plane, Loader2, RefreshCw,
-  ArrowLeftRight, Percent, Truck,
+  ArrowLeftRight, Percent, Truck, ChevronDown,
 } from "lucide-react";
 import { cn } from "@/lib/cn";
 import type {
@@ -333,28 +333,43 @@ function FormSection({
   desc,
   action,
   children,
+  defaultOpen = false,
 }: {
   icon: typeof Truck;
   title: string;
   desc?: string;
   action?: React.ReactNode;
   children: React.ReactNode;
+  /** open on first render; default collapsed so the page is compact. */
+  defaultOpen?: boolean;
 }) {
+  const [open, setOpen] = useState(defaultOpen);
   return (
     <div className="rounded-xl border border-border/70 bg-background/20 p-4">
-      <div className="flex items-start justify-between gap-3 mb-3">
-        <div className="flex items-center gap-2">
+      <div className="flex items-start justify-between gap-3">
+        <button
+          type="button"
+          onClick={() => setOpen((o) => !o)}
+          aria-expanded={open}
+          className="flex items-center gap-2 flex-1 min-w-0 text-right"
+        >
+          <ChevronDown
+            className={cn(
+              "size-4 text-muted-foreground shrink-0 transition-transform",
+              open ? "" : "-rotate-90"
+            )}
+          />
           <span className="grid place-items-center size-7 rounded-lg bg-primary/10 text-primary shrink-0">
             <Icon className="size-4" />
           </span>
-          <div>
+          <div className="min-w-0">
             <h3 className="text-sm font-semibold leading-tight">{title}</h3>
             {desc && <p className="text-[11px] text-muted-foreground leading-tight">{desc}</p>}
           </div>
-        </div>
-        {action}
+        </button>
+        {open && action}
       </div>
-      {children}
+      {open && <div className="mt-3">{children}</div>}
     </div>
   );
 }

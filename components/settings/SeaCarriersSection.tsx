@@ -13,7 +13,8 @@
  * server-only modules (per the client-bundle import rule in CLAUDE.md).
  */
 
-import { Plus, Trash2, Ship, CheckCircle2, Circle } from "lucide-react";
+import { useState } from "react";
+import { Plus, Trash2, Ship, CheckCircle2, Circle, ChevronDown } from "lucide-react";
 import { cn } from "@/lib/cn";
 import type { CbmTier, SeaCarrierProfile } from "@/lib/factory/types";
 import { seaPerOrderUsd, seaShipmentCost } from "@/lib/factory/sea-carriers";
@@ -101,26 +102,45 @@ export function SeaCarriersSection({
     onCarriersChange(carriers.filter((_, i) => i !== idx));
   };
 
+  const [open, setOpen] = useState(false);
+
   return (
     <div className="mb-6">
-      <div className="mb-2 flex items-center justify-between">
-        <div>
-          <h3 className="text-sm font-medium">ספקי שילוח ים (מחירון מדורג)</h3>
-          <p className="text-[11px] text-muted-foreground mt-0.5">
-            כל ספק = מחירון מלא. הספק הפעיל קובע את חישוב השילוח לכל הצעה חדשה.
-            במקום "תעריף לקוב" יחיד — המערכת מחברת את כל הרכיבים לפי הנפח.
-          </p>
-        </div>
+      <div className="mb-2 flex items-start justify-between gap-3">
         <button
           type="button"
-          onClick={addCarrier}
-          className="inline-flex items-center gap-1 text-xs rounded-md border border-border bg-background/40 px-2 py-1 hover:bg-secondary shrink-0"
+          onClick={() => setOpen((o) => !o)}
+          aria-expanded={open}
+          className="flex items-start gap-2 flex-1 min-w-0 text-right"
         >
-          <Plus className="size-3" />
-          ספק
+          <ChevronDown
+            className={cn(
+              "size-4 text-muted-foreground shrink-0 mt-0.5 transition-transform",
+              open ? "" : "-rotate-90"
+            )}
+          />
+          <span className="min-w-0">
+            <span className="block text-sm font-medium">ספקי שילוח ים (מחירון מדורג)</span>
+            <span className="block text-[11px] text-muted-foreground mt-0.5">
+              כל ספק = מחירון מלא. הספק הפעיל קובע את חישוב השילוח לכל הצעה חדשה.
+              במקום "תעריף לקוב" יחיד — המערכת מחברת את כל הרכיבים לפי הנפח.
+            </span>
+          </span>
         </button>
+        {open && (
+          <button
+            type="button"
+            onClick={addCarrier}
+            className="inline-flex items-center gap-1 text-xs rounded-md border border-border bg-background/40 px-2 py-1 hover:bg-secondary shrink-0"
+          >
+            <Plus className="size-3" />
+            ספק
+          </button>
+        )}
       </div>
 
+      {!open ? null : (
+      <>
       {/* Assumed shipment volume — the default pricing basis */}
       <div className="rounded-lg border border-primary/30 bg-primary/5 p-3 mb-3">
         <label className="text-sm font-medium">נפח משלוח משוער (קוב)</label>
@@ -158,6 +178,8 @@ export function SeaCarriersSection({
           </p>
         )}
       </div>
+      </>
+      )}
     </div>
   );
 }
