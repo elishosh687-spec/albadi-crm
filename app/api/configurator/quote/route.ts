@@ -28,7 +28,8 @@ export async function GET(req: NextRequest) {
         ok: true,
         products: CONFIGURATOR_PRODUCTS,
         shippingOptions: CONFIGURATOR_SHIPPING_OPTIONS,
-        quantityTiers: [1000, 3000, 5000, 10000],
+        // 1000 retired from selection 2026-06-17 (pricing still supports it).
+        quantityTiers: [3000, 5000, 10000],
         logoColorOptions: [1, 2, 3],
       },
       { headers: corsHeaders() }

@@ -71,7 +71,10 @@ const QUESTIONS: Question[] = [
     field: "quantity",
     prompt: "📦 כמה יחידות אתם צריכים?",
     options: [
-      { value: "q0", label: "1,000 יחידות" },
+      // q0 (1,000 יחידות) hidden 2026-06-17 — 1,000-unit orders no longer
+      // offered; minimum is 3,000. Decode map (qstate-decode q0:1000) is kept
+      // for back-compat with in-flight leads. To re-offer: restore this line.
+      // { value: "q0", label: "1,000 יחידות" },
       { value: "q1", label: "3,000 יחידות" },
       { value: "q2", label: "5,000 יחידות" },
       { value: "q3", label: "10,000 יחידות" },
@@ -513,16 +516,18 @@ export function parseCustomQuantity(raw?: string | null): number | null {
  * Rules:
  *   - Custom dimensions → always factory. Calculator has no pricing curve
  *     for arbitrary box sizes.
- *   - Custom quantity that parses to ≥ 1000 → calculator. It already snaps
- *     down to the nearest tier price via `findClosestPrice`, so 1500 →
- *     tier-1000 unit price × 1500 units. No human needed.
- *   - Custom quantity < 1000 or unparseable → factory. Below tier floor.
+ *   - Custom quantity that parses to ≥ 3000 → calculator. It already snaps
+ *     down to the nearest tier price via `findClosestPrice`, so 4000 →
+ *     tier-3000 unit price × 4000 units. No human needed.
+ *   - Custom quantity < 3000 or unparseable → factory. Below tier floor.
+ *     (Floor raised from 1000 → 3000 on 2026-06-17 when the 1,000-unit tier
+ *     was retired from customer selection.)
  */
 export function shouldRouteToFactory(state: QState): boolean {
   if (state.product === "custom") return true;
   if (state.quantity === "custom") {
     const n = parseCustomQuantity(state.quantityCustom);
-    if (n === null || n < 1000) return true;
+    if (n === null || n < 3000) return true;
   }
   return false;
 }

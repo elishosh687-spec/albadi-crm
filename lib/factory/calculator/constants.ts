@@ -108,6 +108,19 @@ const DEFAULT_QUANTITY_TIERS: QuantityTier[] = [
   { id: "q3", quantity: 10000, label: "10,000 יחידות", sortOrder: 3 },
 ];
 
+/**
+ * Quantities hidden from any customer-/operator-facing selection. The tier
+ * definition above AND its "1000" pricing keys stay intact ("in the warehouse")
+ * — we only stop OFFERING it. To re-show a quantity, remove its value here.
+ * Disabled 2026-06-17: 1,000-unit orders no longer offered; minimum is 3,000.
+ */
+export const HIDDEN_QUANTITIES: number[] = [1000];
+
+/** quantityTiers minus HIDDEN_QUANTITIES — use this for any selectable UI. */
+export const VISIBLE_QUANTITY_TIERS: QuantityTier[] = DEFAULT_QUANTITY_TIERS.filter(
+  (t) => !HIDDEN_QUANTITIES.includes(t.quantity)
+);
+
 const DEFAULT_SHIPPING_OPTIONS: ShippingOption[] = [
   {
     id: "s1", name: "אקספרס", description: "אספקה תוך ~25 יום",

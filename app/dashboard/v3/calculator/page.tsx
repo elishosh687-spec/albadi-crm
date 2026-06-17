@@ -1,5 +1,5 @@
 import { getFactoryConfig } from "@/lib/factory/config";
-import { DEFAULT_CONFIG } from "@/lib/factory/calculator/constants";
+import { DEFAULT_CONFIG, VISIBLE_QUANTITY_TIERS } from "@/lib/factory/calculator/constants";
 import { CalculatorView } from "@/components/calculator/CalculatorView";
 
 export const dynamic = "force-dynamic";
@@ -18,7 +18,7 @@ export default async function CalculatorPage() {
       <h1 className="text-xl font-semibold mb-6">מחשבון מחיר</h1>
       <CalculatorView
         products={DEFAULT_CONFIG.products}
-        quantityTiers={DEFAULT_CONFIG.quantityTiers}
+        quantityTiers={VISIBLE_QUANTITY_TIERS}
         shippingOptions={DEFAULT_CONFIG.shippingOptions
           .map((s) => {
             const dbOpt = dbConfig.shippingOptions.find((d) => d.type === s.type && d.enabled);

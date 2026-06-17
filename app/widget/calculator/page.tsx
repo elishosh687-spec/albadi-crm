@@ -9,7 +9,7 @@
  * iframe is contact-aware).
  */
 import { getFactoryConfig } from "@/lib/factory/config";
-import { DEFAULT_CONFIG } from "@/lib/factory/calculator/constants";
+import { DEFAULT_CONFIG, VISIBLE_QUANTITY_TIERS } from "@/lib/factory/calculator/constants";
 import { CalculatorWithSettings } from "@/components/calculator/CalculatorWithSettings";
 import SendCompanyIntroButton from "@/components/widget/SendCompanyIntroButton";
 import { verifyWidgetToken } from "@/integrations/ghl/widget-auth";
@@ -170,7 +170,7 @@ export default async function CalculatorWidgetPage({
 
       <CalculatorWithSettings
         products={DEFAULT_CONFIG.products}
-        quantityTiers={DEFAULT_CONFIG.quantityTiers}
+        quantityTiers={VISIBLE_QUANTITY_TIERS}
         shippingOptions={shippingOptions}
         initialMargins={margins}
         apiToken={token}
