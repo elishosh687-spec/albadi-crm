@@ -102,7 +102,7 @@ export function SettingsView({ apiToken }: { apiToken: string }) {
   };
 
   const updateNumber = (
-    key: "usdToIls" | "usdToCny" | "ilsToCny" | "defaultProfitMargin",
+    key: "usdToIls" | "usdToCny" | "ilsToCny" | "defaultProfitMargin" | "commissionPct",
     v: string
   ) => {
     const num = Number(v);
@@ -238,6 +238,14 @@ export function SettingsView({ apiToken }: { apiToken: string }) {
           step={1}
           onChange={(v) => updateNumber("defaultProfitMargin", v)}
           error={errors.defaultProfitMargin as string | undefined}
+        />
+        <NumField
+          label="עמלת מכירות (% מהעסקה)"
+          hint="עמלת איש המכירות, אחוז מסכום העסקה. תצוגה לבוס בלבד — לא משפיע על מחיר הלקוח."
+          value={state.commissionPct ?? 10}
+          step={0.5}
+          onChange={(v) => updateNumber("commissionPct", v)}
+          error={errors.commissionPct as string | undefined}
         />
       </div>
 
@@ -480,6 +488,8 @@ function validate(s: FactoryPricingConfig): Record<string, unknown> {
   if (!(s.usdToCny > 0)) errors.usdToCny = "חובה > 0";
   if (s.ilsToCny !== undefined && !(s.ilsToCny > 0)) errors.ilsToCny = "חובה > 0";
   if (!(s.defaultProfitMargin >= 0)) errors.defaultProfitMargin = "חובה ≥ 0";
+  if (s.commissionPct !== undefined && !(s.commissionPct >= 0 && s.commissionPct <= 100))
+    errors.commissionPct = "חובה 0–100";
   if (s.profitMarginByQuantity) {
     for (const [qty, pct] of Object.entries(s.profitMarginByQuantity)) {
       if (!(pct >= 0)) errors[`margin:${qty}`] = "חובה ≥ 0";
