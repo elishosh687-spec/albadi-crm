@@ -3,15 +3,19 @@
 /**
  * Collapsible "פירוט מלא לבוס" panel — shows the full pricing pipeline
  * (¥ → $ → ₪, shipping floor, margin formula, plate fee amortization,
- * air/sea comparison). Default closed.
+ * salesperson commission, air/sea comparison). Default closed.
  *
  * Used by: FinalizeModal (live calc), FactoryQuotePanel (finalized state),
- * CalculatorView (per-quote preview). Each surface feeds a different set
- * of optional inputs (components, alt shipping, plate fee) — the panel
- * gracefully hides sections when data is absent.
+ * CalculatorView (per-quote preview), and the widget variants embedded in
+ * GHL. Each surface feeds a different set of optional inputs (components, alt
+ * shipping, plate fee) — the panel gracefully hides sections when data is
+ * absent. Boss-only: never rendered in the customer copy.
  */
 
-import { ChevronDown, AlertTriangle, Plane, Ship } from "lucide-react";
+import {
+  ChevronDown, AlertTriangle, Plane, Ship, ArrowLeftRight, Factory,
+  TrendingUp, Receipt, Boxes, GitCompareArrows, type LucideIcon,
+} from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/cn";
 import { buildBreakdownView, type BreakdownInput } from "@/lib/factory/breakdown";
@@ -30,32 +34,46 @@ export function DetailedBreakdown(props: BreakdownInput & { defaultOpen?: boolea
   const { defaultOpen = false, ...input } = props;
   const [open, setOpen] = useState(defaultOpen);
   const v = buildBreakdownView(input);
+  const ShipIcon = v.shipping.type === "air" ? Plane : Ship;
 
   return (
-    <div className="rounded-lg border border-border bg-muted/10 overflow-hidden">
+    <div className="rounded-xl border border-border bg-card/40 overflow-hidden">
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="w-full flex items-center justify-between gap-2 px-3 py-2 text-sm font-medium hover:bg-muted/20 transition-colors"
+        className="w-full flex items-center justify-between gap-2 px-3.5 py-2.5 text-sm font-medium hover:bg-muted/20 transition-colors"
         aria-expanded={open}
       >
         <span className="flex items-center gap-2">
           <ChevronDown
-            className={cn("size-4 transition-transform", open ? "rotate-0" : "-rotate-90")}
+            className={cn("size-4 text-muted-foreground transition-transform", open ? "rotate-0" : "-rotate-90")}
           />
           פירוט מלא לבוס
         </span>
         {!open && (
-          <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
-            {v.totals.profitShareOfPriceLabel}
+          <span className="flex items-center gap-2 text-xs tabular-nums">
+            <span className="text-muted-foreground">רווח נטו</span>
+            <span className="font-semibold text-success">{fmtIls(v.commission.netProfitIls)}</span>
           </span>
         )}
       </button>
 
       {open && (
-        <div className="border-t border-border px-3 py-3 space-y-3 text-xs tabular-nums">
+        <div className="border-t border-border px-3 py-3 space-y-2.5 text-xs tabular-nums">
+          {/* Bottom-line hero — the three numbers the boss cares about, up front */}
+          <div className="grid grid-cols-3 gap-2">
+            <Stat label="סה״כ הזמנה" value={fmtIls(v.totals.totalSellingPrice)} tone="primary" />
+            <Stat label="רווח" value={fmtIls(v.margin.ilsTotalProfit)} tone="success" />
+            <Stat
+              label="רווח נטו"
+              value={fmtIls(v.commission.netProfitIls)}
+              tone="success"
+              sub={`עמלה −${fmtIls(v.commission.ils)}`}
+            />
+          </div>
+
           {/* FX rates */}
-          <Section title="שערי המרה (כפי שמופיעים בקונפיג כעת)">
+          <Section icon={ArrowLeftRight} title="שערי המרה (כפי שמופיעים בקונפיג כעת)">
             <div className="grid grid-cols-3 gap-2 text-center">
               <FxCell label="1$ = ₪" value={v.fx.usdToIls.toFixed(2)} />
               <FxCell label="1$ = ¥" value={v.fx.usdToCny.toFixed(2)} />
@@ -64,7 +82,7 @@ export function DetailedBreakdown(props: BreakdownInput & { defaultOpen?: boolea
           </Section>
 
           {/* Factory cost */}
-          <Section title="עלות מפעל (production — חל עליה רווח)">
+          <Section icon={Factory} title="עלות מפעל (production — חל עליה רווח)">
             {v.factory.cnyPerUnit !== null && v.factory.usdPerUnit !== null ? (
               <div className="space-y-1">
                 <Row
@@ -133,6 +151,7 @@ export function DetailedBreakdown(props: BreakdownInput & { defaultOpen?: boolea
 
           {/* Shipping */}
           <Section
+            icon={ShipIcon}
             title={
               v.shipping.type === "sea"
                 ? "שילוח ים (pass-through — ללא רווח)"
@@ -151,7 +170,7 @@ export function DetailedBreakdown(props: BreakdownInput & { defaultOpen?: boolea
                       <>
                         {v.shipping.effectiveCbm.toFixed(3)}
                         {v.shipping.floorApplied && (
-                          <span className="text-warning"> · ⚠️ הופעלה רצפת 1 CBM</span>
+                          <span className="text-warning"> · הופעלה רצפת 1 CBM</span>
                         )}
                       </>
                     }
@@ -182,13 +201,14 @@ export function DetailedBreakdown(props: BreakdownInput & { defaultOpen?: boolea
             </div>
           </Section>
 
-          {/* Margin */}
-          <Section title="רווח (חל רק על production, לא על שילוח)">
+          {/* Margin + commission */}
+          <Section icon={TrendingUp} title="רווח ועמלה" tone="success">
             <div className="space-y-1">
               <Row label="מרג'ין" value={<strong>{v.margin.pct}%</strong>} />
               <Row label="נוסחה" value={<span className="text-muted-foreground">{v.margin.formula}</span>} />
               <Row label="רווח ליחידה" value={<strong className="text-success">{fmtIls(v.margin.ilsPerUnitProfit)}</strong>} />
               <Row label="סה״כ רווח" value={<strong className="text-success">{fmtIls(v.margin.ilsTotalProfit)}</strong>} />
+              <div className="my-1 border-t border-border/40" />
               <Row
                 label={`עמלת מכירות (${v.commission.pct}% מהעסקה · ${Math.round(v.commission.ofProfitPct)}% מהרווח)`}
                 value={<span className="text-warning">−{fmtIls(v.commission.ils)}</span>}
@@ -201,25 +221,23 @@ export function DetailedBreakdown(props: BreakdownInput & { defaultOpen?: boolea
           </Section>
 
           {/* Summary */}
-          <Section title="סיכום מחיר ללקוח">
+          <Section icon={Receipt} title="סיכום מחיר ללקוח" tone="primary">
             <div className="space-y-1">
               <Row label="מחיר/יחידה" value={<strong>{fmtIls(v.totals.unitSellingPrice)}</strong>} />
               <Row
                 label="סה״כ חשבונית"
-                value={<strong className="text-base">{fmtIls(v.totals.totalSellingPrice)}</strong>}
+                value={<strong className="text-sm">{fmtIls(v.totals.totalSellingPrice)}</strong>}
               />
               <Row
                 label="מתוכו רווח"
-                value={
-                  <span className="text-success">{fmtIls(v.margin.ilsTotalProfit)}</span>
-                }
+                value={<span className="text-success">{fmtIls(v.margin.ilsTotalProfit)}</span>}
               />
             </div>
           </Section>
 
           {/* Alt shipping comparison */}
           {v.alt && (
-            <Section title="השוואת שיטות שילוח">
+            <Section icon={GitCompareArrows} title="השוואת שיטות שילוח">
               <div className="grid grid-cols-2 gap-2 text-center">
                 <AltCell
                   type={v.shipping.type ?? "sea"}
@@ -250,7 +268,7 @@ export function DetailedBreakdown(props: BreakdownInput & { defaultOpen?: boolea
           )}
 
           {/* Logistics */}
-          <Section title="לוגיסטיקה">
+          <Section icon={Boxes} title="לוגיסטיקה">
             <Row
               label="פירוט"
               value={
@@ -266,11 +284,52 @@ export function DetailedBreakdown(props: BreakdownInput & { defaultOpen?: boolea
   );
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+type Tone = "muted" | "success" | "warning" | "primary";
+const TONE_TEXT: Record<Tone, string> = {
+  muted: "text-muted-foreground",
+  success: "text-success",
+  warning: "text-warning",
+  primary: "text-primary",
+};
+
+function Stat({
+  label,
+  value,
+  sub,
+  tone = "muted",
+}: {
+  label: string;
+  value: string;
+  sub?: string;
+  tone?: Tone;
+}) {
   return (
-    <div className="rounded-md border border-border/60 bg-background/30 p-2.5">
-      <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1.5">{title}</div>
-      {children}
+    <div className="rounded-lg border border-border/60 bg-background/40 px-2 py-2 text-center">
+      <div className="text-[10px] uppercase tracking-wider text-muted-foreground">{label}</div>
+      <div className={cn("text-sm font-bold tabular-nums mt-0.5", TONE_TEXT[tone])}>{value}</div>
+      {sub && <div className="text-[10px] text-muted-foreground mt-0.5">{sub}</div>}
+    </div>
+  );
+}
+
+function Section({
+  icon: Icon,
+  title,
+  tone = "muted",
+  children,
+}: {
+  icon?: LucideIcon;
+  title: string;
+  tone?: Tone;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="rounded-lg border border-border/60 bg-background/30 overflow-hidden">
+      <div className="flex items-center gap-1.5 px-2.5 py-1.5 border-b border-border/40 bg-muted/15">
+        {Icon && <Icon className={cn("size-3.5 shrink-0", TONE_TEXT[tone])} />}
+        <span className="text-[11px] font-medium text-foreground/90">{title}</span>
+      </div>
+      <div className="p-2.5">{children}</div>
     </div>
   );
 }

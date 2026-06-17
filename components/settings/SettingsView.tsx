@@ -13,7 +13,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Save, Plus, Trash2, Ship, Plane, Loader2, RefreshCw,
-  ArrowLeftRight, Percent, Truck, Users,
+  ArrowLeftRight, Percent, Truck,
 } from "lucide-react";
 import { cn } from "@/lib/cn";
 import type {
@@ -213,76 +213,39 @@ export function SettingsView({ apiToken }: { apiToken: string }) {
   if (!state) return null;
 
   return (
-    <section className="rounded-xl border border-border bg-card p-5" dir="rtl">
-      <h2 className="text-base font-medium mb-1">הגדרות תמחור מפעל</h2>
-      <p className="text-xs text-muted-foreground mb-4">
-        שערי המרה ועלויות שילוח בשימוש לכל הצעה סופית. שינויים נכנסים מיידית
-        (cache מתאפס בשמירה).
-      </p>
-      <div className="border-b border-border mb-4" />
-
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
-        <NumField
-          label="USD → ILS"
-          hint="שער דולר אמריקאי לשקל"
-          value={state.usdToIls}
-          step={0.01}
-          onChange={(v) => updateNumber("usdToIls", v)}
-          error={errors.usdToIls as string | undefined}
-        />
-        <NumField
-          label="USD → CNY"
-          hint="כמה יואן בדולר (לחישוב עלות יחידה ¥ → ₪)"
-          value={state.usdToCny}
-          step={0.01}
-          onChange={(v) => updateNumber("usdToCny", v)}
-          error={errors.usdToCny as string | undefined}
-        />
-        <NumField
-          label="ILS → CNY"
-          hint="כמה יואן בשקל — להצגה בלבד ב-boss view של ההצעה"
-          value={state.ilsToCny ?? 0}
-          step={0.01}
-          onChange={(v) => updateNumber("ilsToCny", v)}
-          error={errors.ilsToCny as string | undefined}
-        />
-        <NumField
-          label="רווח ברירת מחדל (%)"
-          hint="נופל-חזרה כשאין ערך בטבלת הכמויות (לכמויות חופשיות)"
-          value={state.defaultProfitMargin}
-          step={1}
-          onChange={(v) => updateNumber("defaultProfitMargin", v)}
-          error={errors.defaultProfitMargin as string | undefined}
-        />
-        <NumField
-          label="עמלת מכירות (% מהעסקה)"
-          hint="עמלת איש המכירות, אחוז מסכום העסקה. תצוגה לבוס בלבד — לא משפיע על מחיר הלקוח."
-          value={state.commissionPct ?? 10}
-          step={0.5}
-          onChange={(v) => updateNumber("commissionPct", v)}
-          error={errors.commissionPct as string | undefined}
-        />
-      </div>
-
-      <div className="mb-6">
-        <h3 className="text-sm font-medium mb-1">אחוזי רווחיות לפי כמות</h3>
-        <p className="text-[11px] text-muted-foreground mb-3">
-          השאלון בווצאפ לוקח את האחוז המתאים לפי הכמות שהלקוח בחר. כמות שלא
-          ברשימה → "רווח ברירת מחדל" שלמעלה.
+    <section className="rounded-xl border border-border bg-card p-5 sm:p-6 space-y-6" dir="rtl">
+      <header className="space-y-1">
+        <h2 className="text-lg font-semibold tracking-tight">הגדרות תמחור מפעל</h2>
+        <p className="text-xs text-muted-foreground">
+          שערי המרה, רווחיות ועלויות שילוח לכל הצעה סופית. שינויים נכנסים מיידית (cache מתאפס בשמירה).
         </p>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          {QTY_TIERS.map((q) => (
-            <NumField
-              key={q}
-              label={`${Number(q).toLocaleString()} יח'`}
-              value={state.profitMarginByQuantity?.[q] ?? state.defaultProfitMargin}
-              step={1}
-              onChange={(v) => updateMarginTier(q, v)}
-              error={errors[`margin:${q}`] as string | undefined}
-            />
-          ))}
+      </header>
+
+      <FormSection icon={ArrowLeftRight} title="שערי המרה" desc="המרות מטבע לחישוב עלות והצעה">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <NumField label="USD → ILS" suffix="₪" hint="שער דולר אמריקאי לשקל" value={state.usdToIls} step={0.01} onChange={(v) => updateNumber("usdToIls", v)} error={errors.usdToIls as string | undefined} />
+          <NumField label="USD → CNY" suffix="¥" hint="כמה יואן בדולר (לעלות יחידה ¥ → ₪)" value={state.usdToCny} step={0.01} onChange={(v) => updateNumber("usdToCny", v)} error={errors.usdToCny as string | undefined} />
+          <NumField label="ILS → CNY" suffix="¥" hint="להצגה בלבד ב-boss view של ההצעה" value={state.ilsToCny ?? 0} step={0.01} onChange={(v) => updateNumber("ilsToCny", v)} error={errors.ilsToCny as string | undefined} />
         </div>
-      </div>
+      </FormSection>
+
+      <FormSection icon={Percent} title="רווחיות ועמלות" desc="הרווח שלך והעמלה לאיש המכירות">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <NumField label="רווח ברירת מחדל" suffix="%" hint="נופל-חזרה כשאין ערך בטבלת הכמויות (לכמויות חופשיות)" value={state.defaultProfitMargin} step={1} onChange={(v) => updateNumber("defaultProfitMargin", v)} error={errors.defaultProfitMargin as string | undefined} />
+          <NumField label="עמלת מכירות" suffix="%" badge="לבוס בלבד" accent hint="אחוז מסכום העסקה הכולל — לא משפיע על מחיר הלקוח." value={state.commissionPct ?? 10} step={0.5} onChange={(v) => updateNumber("commissionPct", v)} error={errors.commissionPct as string | undefined} />
+        </div>
+        <div className="mt-4 rounded-lg border border-border/60 bg-background/30 p-3">
+          <h3 className="text-xs font-medium mb-0.5">אחוזי רווחיות לפי כמות</h3>
+          <p className="text-[11px] text-muted-foreground mb-3">
+            השאלון בווצאפ לוקח את האחוז המתאים לפי הכמות שהלקוח בחר. כמות שלא ברשימה → "רווח ברירת מחדל".
+          </p>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            {QTY_TIERS.map((q) => (
+              <NumField key={q} label={`${Number(q).toLocaleString()} יח'`} suffix="%" value={state.profitMarginByQuantity?.[q] ?? state.defaultProfitMargin} step={1} onChange={(v) => updateMarginTier(q, v)} error={errors[`margin:${q}`] as string | undefined} />
+            ))}
+          </div>
+        </div>
+      </FormSection>
 
       {/* Sea carriers — the tiered forwarder pricing that drives sea cost */}
       <SeaCarriersSection
@@ -295,44 +258,49 @@ export function SettingsView({ apiToken }: { apiToken: string }) {
         onAssumedChange={setAssumedCbm}
       />
 
-      <div className="mb-2 flex items-center justify-between">
-        <h3 className="text-sm font-medium">אפשרויות שילוח</h3>
-        <div className="flex gap-1">
-          <button
-            type="button"
-            onClick={() => addOption("sea")}
-            className="inline-flex items-center gap-1 text-xs rounded-md border border-border bg-background/40 px-2 py-1 hover:bg-secondary"
-          >
-            <Plus className="size-3" />
-            ים
-          </button>
-          <button
-            type="button"
-            onClick={() => addOption("air")}
-            className="inline-flex items-center gap-1 text-xs rounded-md border border-border bg-background/40 px-2 py-1 hover:bg-secondary"
-          >
-            <Plus className="size-3" />
-            אוויר
-          </button>
+      <FormSection
+        icon={Truck}
+        title="אפשרויות שילוח"
+        desc="ים / אוויר — שמות, תעריפים והפעלה"
+        action={
+          <div className="flex gap-1">
+            <button
+              type="button"
+              onClick={() => addOption("sea")}
+              className="inline-flex items-center gap-1 text-xs rounded-md border border-border bg-background/40 px-2 py-1 hover:bg-secondary"
+            >
+              <Plus className="size-3" />
+              ים
+            </button>
+            <button
+              type="button"
+              onClick={() => addOption("air")}
+              className="inline-flex items-center gap-1 text-xs rounded-md border border-border bg-background/40 px-2 py-1 hover:bg-secondary"
+            >
+              <Plus className="size-3" />
+              אוויר
+            </button>
+          </div>
+        }
+      >
+        <div className="flex flex-col gap-3">
+          {state.shippingOptions.map((opt, idx) => (
+            <ShippingOptionCard
+              key={opt.id + idx}
+              opt={opt}
+              errors={errors[`opt:${idx}`] as Record<string, string> | undefined}
+              onChange={(patch) => updateOption(idx, patch)}
+              onSlugifyId={() => updateOption(idx, { id: slugify(opt.name) || opt.id })}
+              onRemove={() => removeOption(idx)}
+            />
+          ))}
+          {state.shippingOptions.length === 0 && (
+            <p className="text-xs text-muted-foreground py-3 text-center border border-dashed border-border rounded-md">
+              אין אפשרויות שילוח. הוסף לפחות אחת כדי לאפשר finalize.
+            </p>
+          )}
         </div>
-      </div>
-      <div className="flex flex-col gap-3">
-        {state.shippingOptions.map((opt, idx) => (
-          <ShippingOptionCard
-            key={opt.id + idx}
-            opt={opt}
-            errors={errors[`opt:${idx}`] as Record<string, string> | undefined}
-            onChange={(patch) => updateOption(idx, patch)}
-            onSlugifyId={() => updateOption(idx, { id: slugify(opt.name) || opt.id })}
-            onRemove={() => removeOption(idx)}
-          />
-        ))}
-        {state.shippingOptions.length === 0 && (
-          <p className="text-xs text-muted-foreground py-3 text-center border border-dashed border-border rounded-md">
-            אין אפשרויות שילוח. הוסף לפחות אחת כדי לאפשר finalize.
-          </p>
-        )}
-      </div>
+      </FormSection>
 
       <div className="mt-6 flex items-center gap-3 border-t border-border pt-4">
         <button
@@ -359,6 +327,38 @@ export function SettingsView({ apiToken }: { apiToken: string }) {
   );
 }
 
+function FormSection({
+  icon: Icon,
+  title,
+  desc,
+  action,
+  children,
+}: {
+  icon: typeof Truck;
+  title: string;
+  desc?: string;
+  action?: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="rounded-xl border border-border/70 bg-background/20 p-4">
+      <div className="flex items-start justify-between gap-3 mb-3">
+        <div className="flex items-center gap-2">
+          <span className="grid place-items-center size-7 rounded-lg bg-primary/10 text-primary shrink-0">
+            <Icon className="size-4" />
+          </span>
+          <div>
+            <h3 className="text-sm font-semibold leading-tight">{title}</h3>
+            {desc && <p className="text-[11px] text-muted-foreground leading-tight">{desc}</p>}
+          </div>
+        </div>
+        {action}
+      </div>
+      {children}
+    </div>
+  );
+}
+
 function NumField({
   label,
   hint,
@@ -366,6 +366,9 @@ function NumField({
   step,
   onChange,
   error,
+  suffix,
+  badge,
+  accent,
 }: {
   label: string;
   hint?: string;
@@ -373,21 +376,39 @@ function NumField({
   step: number;
   onChange: (v: string) => void;
   error?: string;
+  suffix?: string;
+  badge?: string;
+  accent?: boolean;
 }) {
   return (
     <div className="flex flex-col gap-1">
-      <label className="text-sm font-medium">{label}</label>
-      {hint && <p className="text-[11px] text-muted-foreground">{hint}</p>}
-      <input
-        type="number"
-        step={step}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className={cn(
-          "bg-background/50 border rounded-md px-3 py-1.5 text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-ring/30",
-          error ? "border-destructive" : "border-border"
+      <div className="flex items-center gap-1.5">
+        <label className="text-sm font-medium">{label}</label>
+        {badge && (
+          <span className="rounded-full bg-warning/15 text-warning text-[9px] font-medium px-1.5 py-0.5">
+            {badge}
+          </span>
         )}
-      />
+      </div>
+      {hint && <p className="text-[11px] text-muted-foreground leading-tight">{hint}</p>}
+      <div className="relative">
+        <input
+          type="number"
+          step={step}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          className={cn(
+            "w-full bg-background/50 border rounded-md px-3 py-1.5 text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-ring/30",
+            suffix && "pl-8",
+            error ? "border-destructive" : accent ? "border-warning/50 ring-1 ring-warning/20" : "border-border"
+          )}
+        />
+        {suffix && (
+          <span className="pointer-events-none absolute inset-y-0 left-2 flex items-center text-xs text-muted-foreground">
+            {suffix}
+          </span>
+        )}
+      </div>
       {error && <span className="text-[11px] text-destructive">{error}</span>}
     </div>
   );
