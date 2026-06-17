@@ -207,6 +207,92 @@ export function seaPerOrderUsd(
   };
 }
 
+export interface ConsolidationItem {
+  /** opaque id of the order/quote (for the UI) */
+  id: string;
+  cbm: number;
+}
+
+export interface ConsolidationResult {
+  count: number;
+  combinedCbm: number;
+  /** sum of each item shipped ALONE at its own true cost */
+  soloTotalUsd: number;
+  /** true cost of the single merged shipment */
+  combinedUsd: number;
+  /** soloTotal − combined (the consolidation saving, ≥ 0) */
+  savingUsd: number;
+  combinedPerCbmUsd: number;
+  /** per-item solo breakdown, same order as input */
+  perItem: { id: string; cbm: number; soloUsd: number }[];
+  /** the merged shipment's component breakdown */
+  breakdown: SeaCostBreakdown;
+  /** band-edge guidance for the combined volume */
+  recommendation: {
+    /** nearest optimal band edge to aim for (e.g. 3 or 7) */
+    targetCbm: number;
+    /** extra CBM needed to reach targetCbm (0 if already at/above) */
+    addCbm: number;
+    /** human Hebrew hint */
+    text: string;
+  };
+}
+
+/** Optimal band edges for the Yeadim-style stepped pricing (top of each band). */
+const BAND_EDGES = [3, 7];
+
+/**
+ * Plan a consolidated shipment: compare shipping every item ALONE (true cost)
+ * vs merging them into one shipment, and advise which band edge to aim for.
+ * Pure — drives the consolidation planning screen.
+ */
+export function consolidateShipment(
+  carrier: SeaCarrierProfile,
+  items: ConsolidationItem[],
+  opts?: SeaCostOptions
+): ConsolidationResult {
+  const perItem = items.map((it) => ({
+    id: it.id,
+    cbm: r2(Math.max(it.cbm, 0)),
+    soloUsd: seaShipmentCost(carrier, it.cbm, opts).totalUsd,
+  }));
+  const soloTotalUsd = perItem.reduce((s, i) => s + i.soloUsd, 0);
+  const combinedCbm = r2(perItem.reduce((s, i) => s + i.cbm, 0));
+  const breakdown = seaShipmentCost(carrier, combinedCbm, opts);
+  const combinedUsd = breakdown.totalUsd;
+
+  // Recommendation: aim for the next band edge ≥ current volume (or the top
+  // edge once past it). Filling to an edge amortises the stepped costs best.
+  let targetCbm = BAND_EDGES.find((e) => combinedCbm <= e) ?? combinedCbm;
+  if (combinedCbm > BAND_EDGES[BAND_EDGES.length - 1]) {
+    targetCbm = Math.ceil(combinedCbm); // above the table — already large
+  }
+  const addCbm = r2(Math.max(0, targetCbm - combinedCbm));
+  const atEdge = BAND_EDGES.includes(r2(combinedCbm));
+  let text: string;
+  if (atEdge) {
+    text = `אתה בדיוק על ${combinedCbm} קוב — קצה מדרגה מושלם. שלח עכשיו.`;
+  } else if (combinedCbm > BAND_EDGES[BAND_EDGES.length - 1]) {
+    text = `${combinedCbm} קוב — מעל הטבלה, נצילות טובה. אפשר לשלח.`;
+  } else {
+    const perNow = breakdown.perCbmUsd;
+    const perTarget = targetCbm > 0 ? seaShipmentCost(carrier, targetCbm, opts).perCbmUsd : perNow;
+    text = `${combinedCbm} קוב → $${perNow.toFixed(0)}/קוב. הוסף ${addCbm} קוב כדי להגיע ל-${targetCbm} קוב ($${perTarget.toFixed(0)}/קוב).`;
+  }
+
+  return {
+    count: items.length,
+    combinedCbm,
+    soloTotalUsd: r2(soloTotalUsd),
+    combinedUsd: r2(combinedUsd),
+    savingUsd: r2(soloTotalUsd - combinedUsd),
+    combinedPerCbmUsd: breakdown.perCbmUsd,
+    perItem,
+    breakdown,
+    recommendation: { targetCbm, addCbm, text },
+  };
+}
+
 /** The active sea carrier for a config, or null when none is configured. */
 export function getActiveSeaCarrier(
   config: FactoryPricingConfig

@@ -57,6 +57,11 @@ const TABS: TabDef[] = [
     url: (t) => `/configurator?widget_token=${encodeURIComponent(t)}`,
   },
   {
+    id: "shipping",
+    label: "📦 צירוף משלוחים",
+    url: (t) => `/widget/shipping?widget_token=${encodeURIComponent(t)}`,
+  },
+  {
     id: "settings",
     label: "⚙️ הגדרות",
     url: (t) => `/widget/settings?widget_token=${encodeURIComponent(t)}`,
