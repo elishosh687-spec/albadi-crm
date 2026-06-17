@@ -450,6 +450,7 @@ export function CalculatorView({ products, quantityTiers, shippingOptions, initi
           totalSellingPrice={r.totalOrderPriceIls}
           quantity={r.quantity}
           profitMarginPct={r.profitMargin}
+          commissionPct={c.commissionPct}
           totalCartons={r.totalCartons}
           totalWeightKg={r.totalWeightKg}
           totalCbm={r.totalCbm}

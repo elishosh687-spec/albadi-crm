@@ -604,6 +604,7 @@ export function FinalizeModal({
                   totalSellingPrice={livePricing.totalSellingPrice}
                   quantity={livePricing.quantity}
                   profitMarginPct={livePricing.profitMarginPct}
+                  commissionPct={livePricing.commissionPct}
                   totalCartons={livePricing.totalCartons}
                   totalWeightKg={livePricing.totalWeightKg}
                   totalCbm={livePricing.totalCbm}

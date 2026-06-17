@@ -325,6 +325,7 @@ export function QuoteHtmlPreview({
                   totalSellingPrice={p.totalSellingPrice}
                   quantity={p.quantity}
                   profitMarginPct={p.profitMarginPct}
+                  commissionPct={p.commissionPct}
                   totalCartons={p.totalCartons}
                   totalWeightKg={p.totalWeightKg}
                   totalCbm={p.totalCbm}

@@ -8,6 +8,8 @@
  * Keep this UI-agnostic — no JSX, no formatting.
  */
 
+import { computeCommission } from "./commission";
+
 export interface BreakdownInput {
   // Per-unit ILS values from the pricing engine
   unitCost: number; // production only, ILS, no shipping
@@ -20,6 +22,9 @@ export interface BreakdownInput {
   totalSellingPrice: number;
   quantity: number;
   profitMarginPct: number;
+  /** Salesperson commission % of the total sale (boss-only, display-only).
+   *  Undefined falls back to the default (10). */
+  commissionPct?: number;
   totalCartons: number;
   totalWeightKg: number;
   totalCbm: number; // raw, post-Math.max if engine already floored — see floorApplied
@@ -94,6 +99,14 @@ export interface BreakdownView {
     ilsTotalProfit: number;
     pctOfRevenue: number; // totalProfit / totalSellingPrice * 100
     formula: string; // human-readable "₪X × Y% = ₪Z/יח׳"
+  };
+  /** Salesperson commission — boss-only, display-only (out of profit, never
+   *  changes the customer price). */
+  commission: {
+    pct: number;
+    ils: number; // commission amount on the total sale
+    netProfitIls: number; // profit − commission
+    ofProfitPct: number; // commission as % of profit
   };
   totals: {
     unitSellingPrice: number;
@@ -179,6 +192,15 @@ export function buildBreakdownView(input: BreakdownInput): BreakdownView {
       pctOfRevenue: r2(pctOfRevenue),
       formula: `₪${r2(input.unitCost).toFixed(2)} עלות → ${input.profitMarginPct}% מהמחיר = ₪${r2(input.unitProfit).toFixed(2)}/יח׳ רווח`,
     },
+    commission: (() => {
+      const c = computeCommission(input.totalSellingPrice, input.totalProfit, input.commissionPct);
+      return {
+        pct: c.pct,
+        ils: r2(c.commission),
+        netProfitIls: r2(c.netProfit),
+        ofProfitPct: r2(c.ofProfitPct),
+      };
+    })(),
     totals: {
       unitSellingPrice: r2(input.unitSellingPrice),
       totalSellingPrice: r2(input.totalSellingPrice),

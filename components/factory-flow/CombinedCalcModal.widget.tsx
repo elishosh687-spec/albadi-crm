@@ -947,6 +947,7 @@ function ProductCalcSection({
               totalSellingPrice={pricing.totalSellingPrice}
               quantity={pricing.quantity}
               profitMarginPct={pricing.profitMarginPct}
+              commissionPct={pricing.commissionPct}
               totalCartons={pricing.totalCartons}
               totalWeightKg={pricing.totalWeightKg}
               totalCbm={pricing.totalCbm}

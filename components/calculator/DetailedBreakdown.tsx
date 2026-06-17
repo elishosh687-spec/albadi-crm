@@ -189,6 +189,14 @@ export function DetailedBreakdown(props: BreakdownInput & { defaultOpen?: boolea
               <Row label="נוסחה" value={<span className="text-muted-foreground">{v.margin.formula}</span>} />
               <Row label="רווח ליחידה" value={<strong className="text-success">{fmtIls(v.margin.ilsPerUnitProfit)}</strong>} />
               <Row label="סה״כ רווח" value={<strong className="text-success">{fmtIls(v.margin.ilsTotalProfit)}</strong>} />
+              <Row
+                label={`עמלת מכירות (${v.commission.pct}% מהעסקה · ${Math.round(v.commission.ofProfitPct)}% מהרווח)`}
+                value={<span className="text-warning">−{fmtIls(v.commission.ils)}</span>}
+              />
+              <Row
+                label="רווח נטו (אחרי עמלה)"
+                value={<strong className="text-success">{fmtIls(v.commission.netProfitIls)}</strong>}
+              />
             </div>
           </Section>
 
