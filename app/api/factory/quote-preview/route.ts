@@ -18,6 +18,9 @@ function buildConfig(
   return {
     ...DEFAULT_CONFIG,
     products: [...DEFAULT_CONFIG.products, ...extraProducts],
+    seaCarriers: dbConfig.seaCarriers ?? DEFAULT_CONFIG.seaCarriers,
+    activeSeaCarrierId: dbConfig.activeSeaCarrierId ?? DEFAULT_CONFIG.activeSeaCarrierId,
+    assumedShipmentCbm: dbConfig.assumedShipmentCbm ?? DEFAULT_CONFIG.assumedShipmentCbm,
     exchangeRates: { usdToIls: dbConfig.usdToIls, usdToCny: dbConfig.usdToCny },
     adminSettings: {
       globalProfitMargin: marginOverride ?? dbConfig.defaultProfitMargin,

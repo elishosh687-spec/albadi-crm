@@ -86,6 +86,12 @@ export interface AppConfig {
   features: Feature[];
   exchangeRates: ExchangeRates;
   adminSettings: AdminSettings;
+  // Sea-freight carrier pricing (mirrors FactoryPricingConfig). When present,
+  // the active carrier drives sea cost instead of the flat ShippingOption.seaRate.
+  seaCarriers?: import("../types").SeaCarrierProfile[];
+  activeSeaCarrierId?: string;
+  /** assumed shipment volume (CBM) — default per-order sea pricing basis. */
+  assumedShipmentCbm?: number;
 }
 
 export interface QuoteFormData {

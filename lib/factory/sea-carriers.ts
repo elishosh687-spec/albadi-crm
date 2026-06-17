@@ -15,7 +15,7 @@
  *      true cost of an actual merged shipment of N CBM.
  */
 
-import type { FactoryPricingConfig, SeaCarrierProfile } from "./types";
+import type { SeaCarrierProfile } from "./types";
 
 function r2(n: number): number {
   return Math.round(n * 100) / 100;
@@ -188,9 +188,11 @@ export function consolidateShipment(
   };
 }
 
-/** The active sea carrier for a config, or null when none is configured. */
+/** The active sea carrier for a config, or null when none is configured.
+ *  Accepts any object carrying the two carrier fields (FactoryPricingConfig or
+ *  the calculator's AppConfig). */
 export function getActiveSeaCarrier(
-  config: FactoryPricingConfig
+  config: { seaCarriers?: SeaCarrierProfile[]; activeSeaCarrierId?: string }
 ): SeaCarrierProfile | null {
   const list = config.seaCarriers;
   if (!list || list.length === 0) return null;

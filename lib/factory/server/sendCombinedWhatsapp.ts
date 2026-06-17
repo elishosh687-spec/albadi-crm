@@ -56,12 +56,7 @@ async function combinedGrandTotal(
   const shipOpt =
     config.shippingOptions.find((s) => s.id === pricings[0]?.shippingOptionId) ??
     null;
-  const combinedShipping = combinedShippingIls(
-    combinedCbm,
-    combinedWeight,
-    shipOpt,
-    config.usdToIls
-  );
+  const combinedShipping = combinedShippingIls(combinedCbm, combinedWeight, shipOpt, config);
   const productsTotal = pricings.reduce(
     (s, p) => s + r2(p.totalSellingPrice - p.totalShipping),
     0

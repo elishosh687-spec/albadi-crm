@@ -11,6 +11,11 @@ import type {
   QuoteFormData,
   QuoteResult,
 } from "./types";
+import {
+  getActiveSeaCarrier,
+  seaPerOrderUsd,
+  DEFAULT_ASSUMED_SHIPMENT_CBM,
+} from "../sea-carriers";
 
 function r2(n: number): number {
   return Math.round(n * 100) / 100;
@@ -127,12 +132,19 @@ export function calculateQuote(
           ? rates.rateBelowThreshold
           : rates.rateAboveThreshold;
       shippingPerUnitUsd = (chargeableKg * rate) / quantity;
-    } else if (
-      shippingOption.type === "sea" &&
-      shippingOption.seaRate &&
-      shippingOption.seaRate > 0
-    ) {
-      shippingPerUnitUsd = (Math.max(totalCbm, 1) * shippingOption.seaRate) / quantity;
+    } else if (shippingOption.type === "sea") {
+      // Active forwarder profile drives sea cost (same engine as real quotes):
+      // small orders billed at the assumed-volume per-CBM rate, larger orders at
+      // their own true cost. Falls back to the legacy flat seaRate if no carrier.
+      const carrier = getActiveSeaCarrier(config);
+      if (carrier) {
+        const res = seaPerOrderUsd(carrier, totalCbm, {
+          assumedCbm: config.assumedShipmentCbm ?? DEFAULT_ASSUMED_SHIPMENT_CBM,
+        });
+        shippingPerUnitUsd = res.shipmentUsd / quantity;
+      } else if (shippingOption.seaRate && shippingOption.seaRate > 0) {
+        shippingPerUnitUsd = (Math.max(totalCbm, 1) * shippingOption.seaRate) / quantity;
+      }
     }
   }
 

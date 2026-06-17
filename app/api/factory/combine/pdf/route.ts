@@ -93,12 +93,7 @@ export async function GET(req: NextRequest) {
   const combinedWeight = r2(pricings.reduce((s, p) => s + (p.totalWeightKg || 0), 0));
   const shipOpt =
     config.shippingOptions.find((s) => s.id === pricings[0]?.shippingOptionId) ?? null;
-  const combinedShipping = combinedShippingIls(
-    combinedCbm,
-    combinedWeight,
-    shipOpt,
-    config.usdToIls
-  );
+  const combinedShipping = combinedShippingIls(combinedCbm, combinedWeight, shipOpt, config);
 
   const items: CombinedQuoteItem[] = await Promise.all(
     ordered.map(async (r) => {

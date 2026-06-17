@@ -247,7 +247,7 @@ export function FinalizeModalWidget({
       .filter((p): p is FactoryPricingResult => !!p);
     if (sel.length === 0) return null;
     const opt = config.shippingOptions.find((s) => s.id === shipId) ?? null;
-    return computeCombined([livePricing, ...sel], opt, config.usdToIls);
+    return computeCombined([livePricing, ...sel], opt, config);
   }, [livePricing, config, otherQuotes, combinedSel, combinedMargins, shippingOptionId]);
 
   const handlePullImage = async () => {

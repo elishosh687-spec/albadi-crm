@@ -11,6 +11,11 @@
  */
 
 import { priceFactoryQuote } from "./pricing";
+import {
+  getActiveSeaCarrier,
+  seaPerOrderUsd,
+  DEFAULT_ASSUMED_SHIPMENT_CBM,
+} from "./sea-carriers";
 import type {
   FactoryPricingConfig,
   FactoryPricingResult,
@@ -91,17 +96,28 @@ export function priceQuoteForCombine(
   );
 }
 
-/** Total shipping (ILS) for a single shipment of the given CBM + weight. */
+/** Total shipping (ILS) for a single shipment of the given CBM + weight.
+ *  Sea uses the active carrier profile (same per-order rule as single quotes —
+ *  the merged CBM is billed at the assumed-volume basis or its own true cost);
+ *  air uses the chosen option's weight tiers. */
 export function combinedShippingIls(
   totalCbm: number,
   totalWeightKg: number,
   opt: ShippingOption | null | undefined,
-  usdToIls: number
+  config: FactoryPricingConfig
 ): number {
   if (!opt) return 0;
+  const usdToIls = config.usdToIls;
   let usd = 0;
-  if (opt.type === "sea" && opt.seaRate && opt.seaRate > 0) {
-    usd = Math.max(totalCbm, 1) * opt.seaRate; // 1-CBM floor counted ONCE
+  if (opt.type === "sea") {
+    const carrier = getActiveSeaCarrier(config);
+    if (carrier) {
+      usd = seaPerOrderUsd(carrier, totalCbm, {
+        assumedCbm: config.assumedShipmentCbm ?? DEFAULT_ASSUMED_SHIPMENT_CBM,
+      }).shipmentUsd;
+    } else if (opt.seaRate && opt.seaRate > 0) {
+      usd = Math.max(totalCbm, 1) * opt.seaRate; // legacy fallback
+    }
   } else if (opt.type === "air" && opt.airRates) {
     const r = opt.airRates;
     const rate =
@@ -139,7 +155,7 @@ export interface CombinedPricingResult {
 export function computeCombined(
   items: CombinedItemInput[],
   opt: ShippingOption | null | undefined,
-  usdToIls: number
+  config: FactoryPricingConfig
 ): CombinedPricingResult {
   const sum = (f: (i: CombinedItemInput) => number) =>
     items.reduce((s, i) => s + (f(i) || 0), 0);
@@ -150,7 +166,7 @@ export function computeCombined(
     combinedCbm,
     combinedWeightKg,
     opt,
-    usdToIls
+    config
   );
   const separateShipping = r2(sum((i) => i.totalShipping));
   const totalProduction = r2(sum((i) => i.totalCost));

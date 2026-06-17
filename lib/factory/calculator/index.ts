@@ -211,6 +211,9 @@ async function buildMergedConfig(): Promise<AppConfig> {
   const matrix = dbConfig.profitMarginByQuantity ?? {};
   const merged: AppConfig = {
     ...DEFAULT_CONFIG,
+    seaCarriers: dbConfig.seaCarriers ?? DEFAULT_CONFIG.seaCarriers,
+    activeSeaCarrierId: dbConfig.activeSeaCarrierId ?? DEFAULT_CONFIG.activeSeaCarrierId,
+    assumedShipmentCbm: dbConfig.assumedShipmentCbm ?? DEFAULT_CONFIG.assumedShipmentCbm,
     exchangeRates: {
       usdToIls: dbConfig.usdToIls,
       usdToCny: dbConfig.usdToCny,

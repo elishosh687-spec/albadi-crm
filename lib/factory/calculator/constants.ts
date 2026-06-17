@@ -18,6 +18,7 @@ import type {
   ExchangeRates,
   AdminSettings,
 } from "./types";
+import { YEADIM_CARRIER, DEFAULT_ASSUMED_SHIPMENT_CBM } from "../sea-carriers";
 
 // Generated from newfactory.xlsx (May 2026 update 2 — Kunming Shengximengtai Trading).
 // Values are CNY per unit. Plate fee (laminationColorPlateFee) varies per product
@@ -152,4 +153,7 @@ export const DEFAULT_CONFIG: AppConfig = {
   features: DEFAULT_FEATURES,
   exchangeRates: DEFAULT_EXCHANGE_RATES,
   adminSettings: DEFAULT_ADMIN_SETTINGS,
+  seaCarriers: [YEADIM_CARRIER],
+  activeSeaCarrierId: YEADIM_CARRIER.id,
+  assumedShipmentCbm: DEFAULT_ASSUMED_SHIPMENT_CBM,
 };

@@ -227,7 +227,7 @@ export function CombinedCalcModalWidget({
       .filter((p): p is FactoryPricingResult => !!p);
     if (priced.length === 0) return null;
     const opt = config.shippingOptions.find((s) => s.id === shippingOptionId) ?? null;
-    return computeCombined(priced, opt, config.usdToIls);
+    return computeCombined(priced, opt, config);
   }, [livePricings, config, shippingOptionId, selectedRows]);
 
   // Each priceable product paired with its live pricing, for the combined
