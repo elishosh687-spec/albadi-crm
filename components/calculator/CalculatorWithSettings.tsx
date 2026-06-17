@@ -1,16 +1,16 @@
 "use client";
 
 /**
- * Tabbed wrapper for the calculator widget — tab "מחשבון" renders the live
- * pricing calculator, tab "הגדרות" renders the same SettingsView used by the
- * /widget/settings standalone widget. Lets Eli edit FX / margin / shipping
- * without leaving the calculator screen.
+ * Thin wrapper around the calculator widget. Settings (FX / margin / shipping /
+ * sea carriers) live ONLY in the dedicated "⚙️ הגדרות" hub tab — they are NOT
+ * duplicated here. This wrapper just renders the calculator and keeps its
+ * per-quantity margins fresh: it re-pulls the live config on mount so a margin
+ * edited in the settings tab takes effect when the calculator is reopened,
+ * without a manual page refresh.
  */
 
 import { useState, useEffect } from "react";
-import { Calculator as CalcIcon, Settings as SettingsIcon } from "lucide-react";
 import { CalculatorView } from "./CalculatorView";
-import { SettingsView } from "@/components/settings/SettingsView";
 import type { Product, QuantityTier, ShippingOption } from "@/lib/factory/calculator/types";
 
 interface Props {
@@ -23,18 +23,10 @@ interface Props {
   leadName?: string | null;
 }
 
-type Tab = "calculator" | "settings";
-
 export function CalculatorWithSettings(props: Props) {
-  const [tab, setTab] = useState<Tab>("calculator");
-  // The "הגדרות" tab saves margins to the DB but does NOT reload the page, so
-  // the calculator tab would keep the margins it got at page-load. Re-pull the
-  // live config whenever we (re)enter the calculator tab, so an edit made in
-  // settings takes effect immediately without a manual page refresh.
   const [margins, setMargins] = useState<Record<string, number>>(props.initialMargins);
 
   useEffect(() => {
-    if (tab !== "calculator") return;
     let cancelled = false;
     fetch(
       `/api/widget/factory/config?widget_token=${encodeURIComponent(props.apiToken)}`,
@@ -51,59 +43,17 @@ export function CalculatorWithSettings(props: Props) {
     return () => {
       cancelled = true;
     };
-  }, [tab, props.apiToken]);
+  }, [props.apiToken]);
 
   return (
-    <div className="flex flex-col gap-4" dir="rtl">
-      <div className="inline-flex self-start rounded-lg border border-border bg-card/40 p-1 gap-1">
-        <TabButton active={tab === "calculator"} onClick={() => setTab("calculator")}>
-          <CalcIcon className="size-3.5" />
-          מחשבון
-        </TabButton>
-        <TabButton active={tab === "settings"} onClick={() => setTab("settings")}>
-          <SettingsIcon className="size-3.5" />
-          הגדרות
-        </TabButton>
-      </div>
-
-      {tab === "calculator" ? (
-        <CalculatorView
-          products={props.products}
-          quantityTiers={props.quantityTiers}
-          shippingOptions={props.shippingOptions}
-          initialMargins={margins}
-          apiToken={props.apiToken}
-          sid={props.sid}
-          leadName={props.leadName}
-        />
-      ) : (
-        <SettingsView apiToken={props.apiToken} />
-      )}
-    </div>
-  );
-}
-
-function TabButton({
-  active,
-  onClick,
-  children,
-}: {
-  active: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={[
-        "inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
-        active
-          ? "bg-primary text-primary-foreground"
-          : "text-muted-foreground hover:bg-secondary hover:text-foreground",
-      ].join(" ")}
-    >
-      {children}
-    </button>
+    <CalculatorView
+      products={props.products}
+      quantityTiers={props.quantityTiers}
+      shippingOptions={props.shippingOptions}
+      initialMargins={margins}
+      apiToken={props.apiToken}
+      sid={props.sid}
+      leadName={props.leadName}
+    />
   );
 }
