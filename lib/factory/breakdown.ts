@@ -85,6 +85,9 @@ export interface BreakdownView {
     ilsPerUnit: number;
     ilsTotal: number;
     rate: number | null; // sea: $/CBM, air: undefined
+    /** effective $/CBM actually charged for sea (total ÷ raw CBM) — reflects
+     *  the active carrier's per-order pricing, not any flat rate. */
+    effectivePerCbmUsd: number | null;
     rawCbm: number | null;
     effectiveCbm: number | null;
     floorApplied: boolean;
@@ -177,6 +180,10 @@ export function buildBreakdownView(input: BreakdownInput): BreakdownView {
       ilsPerUnit: r2(input.unitShipping),
       ilsTotal: r2(input.totalShipping),
       rate,
+      effectivePerCbmUsd:
+        isSea && rawCbm && rawCbm > 0 && input.usdToIls > 0
+          ? r2(input.totalShipping / input.usdToIls / rawCbm)
+          : null,
       rawCbm: rawCbm !== null ? r3(rawCbm) : null,
       effectiveCbm: effectiveCbm !== null ? r3(effectiveCbm) : null,
       floorApplied,

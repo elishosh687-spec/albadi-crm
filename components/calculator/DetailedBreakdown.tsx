@@ -13,7 +13,7 @@
  */
 
 import {
-  ChevronDown, AlertTriangle, Plane, Ship, ArrowLeftRight, Factory,
+  ChevronDown, Plane, Ship, ArrowLeftRight, Factory,
   TrendingUp, Receipt, Boxes, GitCompareArrows, type LucideIcon,
 } from "lucide-react";
 import { useState } from "react";
@@ -161,26 +161,15 @@ export function DetailedBreakdown(props: BreakdownInput & { defaultOpen?: boolea
             }
           >
             <div className="space-y-1">
-              {v.shipping.type === "sea" && v.shipping.rate !== null && v.shipping.rawCbm !== null && v.shipping.effectiveCbm !== null ? (
+              {v.shipping.type === "sea" && v.shipping.effectivePerCbmUsd !== null && v.shipping.rawCbm !== null ? (
                 <>
-                  <Row label="CBM גולמי (לפי קרטונים)" value={v.shipping.rawCbm.toFixed(3)} />
-                  <Row
-                    label="CBM בחיוב"
-                    value={
-                      <>
-                        {v.shipping.effectiveCbm.toFixed(3)}
-                        {v.shipping.floorApplied && (
-                          <span className="text-warning"> · הופעלה רצפת 1 CBM</span>
-                        )}
-                      </>
-                    }
-                  />
-                  <Row label="תעריף" value={`${fmtUsd(v.shipping.rate, 0)} / CBM`} />
+                  <Row label="נפח (CBM)" value={v.shipping.rawCbm.toFixed(3)} />
+                  <Row label="עלות לקוב בפועל" value={`${fmtUsd(v.shipping.effectivePerCbmUsd, 0)} / CBM`} />
                   <Row
                     label="חישוב"
                     value={
                       <span className="text-muted-foreground">
-                        {v.shipping.effectiveCbm.toFixed(3)} × {fmtUsd(v.shipping.rate, 0)} ÷ {input.quantity.toLocaleString("he-IL")} יח׳ × {v.fx.usdToIls} = <strong className="text-foreground">{fmtIls(v.shipping.ilsPerUnit, 3)}/יח׳</strong>
+                        {v.shipping.rawCbm.toFixed(3)} × {fmtUsd(v.shipping.effectivePerCbmUsd, 0)} ÷ {input.quantity.toLocaleString("he-IL")} יח׳ × {v.fx.usdToIls} = <strong className="text-foreground">{fmtIls(v.shipping.ilsPerUnit, 3)}/יח׳</strong>
                       </span>
                     }
                   />
@@ -189,15 +178,6 @@ export function DetailedBreakdown(props: BreakdownInput & { defaultOpen?: boolea
                 <Row label="עלות יחידה" value={fmtIls(v.shipping.ilsPerUnit, 3)} />
               )}
               <Row label="סה״כ שילוח" value={<strong>{fmtIls(v.shipping.ilsTotal)}</strong>} />
-
-              {v.shipping.utilizationLow && (
-                <div className="mt-2 flex items-start gap-1.5 rounded-md border border-warning/30 bg-warning/5 p-2 text-[11px] text-warning">
-                  <AlertTriangle className="size-3.5 shrink-0 mt-0.5" />
-                  <div>
-                    ניצול CBM נמוך ({v.shipping.utilizationPct?.toFixed(0)}%) — הזמנה זו לבד תשלם {fmtUsd(v.shipping.floorImpactUsd, 0)} (={fmtIls(v.shipping.floorImpactIls)}) על אוויר ריק. שווה לשקול אקספרס אווירי.
-                  </div>
-                </div>
-              )}
             </div>
           </Section>
 
