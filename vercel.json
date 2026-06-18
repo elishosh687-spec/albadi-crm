@@ -3,10 +3,6 @@
     {
       "path": "/api/bot/followups",
       "schedule": "0 9 * * *"
-    },
-    {
-      "path": "/api/factory/refresh",
-      "schedule": "*/5 * * * *"
     }
   ],
   "functions": {

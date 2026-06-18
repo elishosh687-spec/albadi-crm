@@ -605,6 +605,20 @@ export async function POST(req: NextRequest) {
     elevenlabs = { ok: false, error: String(e) };
   }
 
+  // Piggyback factory-quote refresh on the same every-5-min routine. Vercel
+  // Hobby doesn't allow sub-daily crons, so this is how a factory completing
+  // a Feishu row (price → dims → weight) gets picked up within 5 min instead
+  // of waiting for someone to click "🔄 רענן" in the dashboard.
+  // ADDITIVE + non-fatal: never blocks the recording pipeline.
+  let factory: unknown = { skipped: true };
+  try {
+    const { refreshFromFeishu } = await import("@/lib/factory/server/refresh");
+    factory = await refreshFromFeishu();
+  } catch (e) {
+    console.warn("[process-recordings] factory refresh piggyback failed", e);
+    factory = { ok: false, error: String(e) };
+  }
+
   return NextResponse.json({
     elapsedMs: Date.now() - startedAt,
     discovered,
@@ -612,6 +626,7 @@ export async function POST(req: NextRequest) {
     analyzed,
     posted,
     elevenlabs,
+    factory,
   });
 }
 
