@@ -28,6 +28,23 @@ export const DEFAULT_ASSUMED_SHIPMENT_CBM = 3;
 export const MAX_CBM_LEVEL = 7;
 
 /**
+ * Volume (CBM) above which an order enters consolidation / full-container
+ * territory, where real sea-freight cost drops sharply and Eli can negotiate
+ * a better rate (and possibly lower the customer's price). This is an
+ * INTERNAL, operator-only signal — it never surfaces to the customer.
+ */
+export const CBM_CONSOLIDATION_THRESHOLD = MAX_CBM_LEVEL; // 7
+
+export function isOverCbmConsolidationThreshold(totalCbm: number): boolean {
+  return totalCbm > CBM_CONSOLIDATION_THRESHOLD;
+}
+
+/** Canonical operator-facing alert text for the >7 CBM consolidation signal. */
+export function cbmConsolidationAlert(totalCbm: number): string {
+  return `נפח ${totalCbm.toFixed(2)} קוב — מעל ${CBM_CONSOLIDATION_THRESHOLD} קוב. עלות השילוח יורדת משמעותית (קונסולידציה/מכולה) — שקול לעדכן את ההצעה ללקוח.`;
+}
+
+/**
  * The "ידים לוגיסטיקה" forwarder — cost per CBM at 1..7 CBM, taken straight
  * from the "עלות לקוב $" row of its sheet (center, one stop).
  *   1→686  2→481  3→379  4→383  5→342  6→314  7→294

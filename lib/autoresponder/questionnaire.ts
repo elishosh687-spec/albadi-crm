@@ -29,6 +29,10 @@ import { sendEliDM } from "../notify/eli";
 import { calculateQuoteByCodes } from "../factory/calculator";
 import { buildQuoteMessage } from "../factory/calculator/message";
 import {
+  isOverCbmConsolidationThreshold,
+  cbmConsolidationAlert,
+} from "../factory/sea-carriers";
+import {
   extractSpecFromText,
   extractSingleField,
   classifyConfirmation,
@@ -536,6 +540,8 @@ export interface QuoteCalcOutput {
   text: string;
   totalIls: number;
   altTotalIls: number | null;
+  /** Total shipment volume (CBM) — used for the internal >7 CBM signal. */
+  cbm: number;
 }
 
 async function fetchQuote(state: QState): Promise<QuoteCalcOutput> {
@@ -597,6 +603,7 @@ async function fetchQuote(state: QState): Promise<QuoteCalcOutput> {
     text,
     totalIls: calc.result.totalOrderPriceIls,
     altTotalIls: calc.altResult?.totalOrderPriceIls ?? null,
+    cbm: calc.result.totalCbm,
   };
 }
 
@@ -813,6 +820,7 @@ async function routeToQuoted(
 ): Promise<void> {
   try {
     const quote = await fetchQuote(state);
+    const overCbm = isOverCbmConsolidationThreshold(quote.cbm);
     const done: QState = {
       ...state,
       step: 10, // 9 = confirmation gate; 10 = terminal done state
@@ -825,7 +833,9 @@ async function routeToQuoted(
       .set({
         qState: { ...(done as any), subFlow: "awaiting_estimate_decision" },
         pipelineStage: "INTAKE",
-        botSummary: "questionnaire complete, quote sent, awaiting decision",
+        botSummary: overCbm
+          ? `questionnaire complete, quote sent, awaiting decision · 🚢 >7 CBM (${quote.cbm.toFixed(2)}) — שילוח מוזל אפשרי`
+          : "questionnaire complete, quote sent, awaiting decision",
         followUpCount: 0,
         lastFollowUpAt: new Date(),
         updatedAt: new Date(),
@@ -842,6 +852,12 @@ async function routeToQuoted(
     await sendBridgeMessage(ctx.jid, quote.text);
     await sendCompanyTemplate(ctx.jid);
     await sendBridgeMessage(ctx.jid, DECISION_PROMPT);
+    if (overCbm) {
+      // INTERNAL alert — push to Eli so he can revise the offer on cheap freight.
+      await sendEliDM(
+        `🚢 הצעה אוטומטית ל-${ctx.name ?? ctx.phone ?? "ליד"}: ${cbmConsolidationAlert(quote.cbm)}`
+      );
+    }
   } catch (e) {
     const bailed: QState = { ...state, bailed: true };
     await saveState(ctx.sid, bailed);

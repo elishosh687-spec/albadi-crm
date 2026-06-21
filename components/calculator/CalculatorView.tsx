@@ -5,6 +5,7 @@ import { Loader2, Send, Copy, Check, Search, X } from "lucide-react";
 import { cn } from "@/lib/cn";
 import type { Product, QuantityTier, ShippingOption, QuoteResult } from "@/lib/factory/calculator/types";
 import { computeCommission } from "@/lib/factory/commission";
+import { isOverCbmConsolidationThreshold, cbmConsolidationAlert } from "@/lib/factory/sea-carriers";
 import { DetailedBreakdown } from "./DetailedBreakdown";
 
 interface Props {
@@ -699,6 +700,14 @@ function BreakdownCard({
           />
         </div>
       </div>
+
+      {/* >7 CBM consolidation signal — INTERNAL only. Above 7 CBM sea cost
+          drops sharply (container/consolidation) so Eli can revise the offer. */}
+      {isOverCbmConsolidationThreshold(r.totalCbm) && (
+        <div className="border-t border-amber-500/50 bg-amber-500/15 px-5 py-3 text-center text-sm font-bold text-amber-700 dark:text-amber-400">
+          🚢 {cbmConsolidationAlert(r.totalCbm)}
+        </div>
+      )}
 
       {/* Footer */}
       <div className="border-t border-border px-5 py-3 text-xs text-muted-foreground text-center flex flex-wrap justify-center gap-x-4 gap-y-1 tabular-nums">

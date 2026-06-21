@@ -23,6 +23,7 @@ import type {
   ShippingOption,
 } from "@/lib/factory/types";
 import { priceFactoryQuote } from "@/lib/factory/pricing";
+import { isOverCbmConsolidationThreshold, cbmConsolidationAlert } from "@/lib/factory/sea-carriers";
 import {
   computeCombined,
   defaultMarginFor,
@@ -535,6 +536,11 @@ export function CombinedCalcModalWidget({
                   <div className="text-[10px] uppercase tracking-wider text-success/80">
                     תוצאה משולבת ({combinedResult.count} מוצרים)
                   </div>
+                  {isOverCbmConsolidationThreshold(combinedResult.combinedCbm) && (
+                    <div className="rounded-md border border-amber-500/50 bg-amber-500/15 px-3 py-2 text-xs font-bold text-amber-600 dark:text-amber-400">
+                      🚢 {cbmConsolidationAlert(combinedResult.combinedCbm)}
+                    </div>
+                  )}
                   <PriceRow
                     label="סה״כ נפח / משקל"
                     value={`${combinedResult.combinedCbm} m³ · ${combinedResult.combinedWeightKg}kg`}

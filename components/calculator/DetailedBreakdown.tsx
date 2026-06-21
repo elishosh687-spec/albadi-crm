@@ -19,6 +19,7 @@ import {
 import { useState } from "react";
 import { cn } from "@/lib/cn";
 import { buildBreakdownView, type BreakdownInput } from "@/lib/factory/breakdown";
+import { isOverCbmConsolidationThreshold, cbmConsolidationAlert } from "@/lib/factory/sea-carriers";
 
 function fmtIls(n: number, digits = 2): string {
   return `₪${n.toLocaleString("he-IL", { minimumFractionDigits: digits, maximumFractionDigits: digits })}`;
@@ -257,6 +258,11 @@ export function DetailedBreakdown(props: BreakdownInput & { defaultOpen?: boolea
                 </>
               }
             />
+            {isOverCbmConsolidationThreshold(v.logistics.cbm) && (
+              <div className="mt-2 rounded-md border border-amber-500/50 bg-amber-500/15 px-3 py-2 text-[11px] font-bold text-amber-700 dark:text-amber-400">
+                🚢 {cbmConsolidationAlert(v.logistics.cbm)}
+              </div>
+            )}
           </Section>
         </div>
       )}
