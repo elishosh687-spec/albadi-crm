@@ -6,6 +6,7 @@ import { cn } from "@/lib/cn";
 import type { Product, QuantityTier, ShippingOption, QuoteResult } from "@/lib/factory/calculator/types";
 import { computeCommission } from "@/lib/factory/commission";
 import { isOverCbmConsolidationThreshold, cbmConsolidationAlert } from "@/lib/factory/sea-carriers";
+import { customerBreakdownIls } from "@/lib/factory/calculator/customer-breakdown";
 import { DetailedBreakdown } from "./DetailedBreakdown";
 
 interface Props {
@@ -526,6 +527,7 @@ export function CalculatorView({ products, quantityTiers, shippingOptions, initi
             totalSellingPriceIls: r.totalOrderPriceIls,
             shippingPerUnitIls: c.shippingPerUnitIls,
             totalShippingIls: c.shippingPerUnitIls * r.quantity,
+            result: r,
           })}
         />
       )}
@@ -804,6 +806,8 @@ function buildQuoteText(opts: {
   totalSellingPriceIls: number;
   shippingPerUnitIls: number;
   totalShippingIls: number;
+  /** Full quote result — drives the customer-safe itemised breakdown. */
+  result: QuoteResult;
 }): string {
   const ilsFmt = (n: number) =>
     `₪${n.toLocaleString("he-IL", { maximumFractionDigits: 2 })}`;
@@ -816,6 +820,13 @@ function buildQuoteText(opts: {
     ? `${opts.shippingName}${opts.shippingType === "air" ? " (אווירי)" : opts.shippingType === "sea" ? " (ימי)" : ""}`
     : null;
 
+  // Customer-safe per-unit breakdown (shipping folded into the base line; no
+  // costs/margin). Each chosen option is shown as its own up-charge so the
+  // customer sees exactly what lamination / handles / colours add.
+  const b = customerBreakdownIls(opts.result);
+  const hasLamination = opts.result.selectedFeatures.some((f) => f.id === "f1");
+  const logoColors = opts.result.logoColors;
+
   const lines: (string | null)[] = [
     greeting,
     "",
@@ -825,7 +836,18 @@ function buildQuoteText(opts: {
     productDesc ? `מוצר: ${productDesc}` : null,
     `כמות: ${qty} יח׳`,
     "",
-    "💰 *תמחור* _(כולל שילוח)_",
+    "💰 *תמחור — מחיר ליחידה* _(כולל שילוח)_",
+    `▪️ שקית${shippingMethod ? " + שילוח" : ""}: ${ilsFmt(b.productIls)}`,
+    opts.result.hasHandles && b.handlesIls > 0
+      ? `▪️ ידיות: +${ilsFmt(b.handlesIls)}`
+      : null,
+    hasLamination && b.laminationIls > 0
+      ? `▪️ למינציה: +${ilsFmt(b.laminationIls)}`
+      : null,
+    !hasLamination && b.logoColorsIls > 0
+      ? `▪️ צבעי לוגו (${logoColors}): +${ilsFmt(b.logoColorsIls)}`
+      : null,
+    "",
     `📦 ${qty} יחידות × ${ilsFmt(opts.unitSellingPriceIls)}`,
   ];
   if (shippingMethod) {

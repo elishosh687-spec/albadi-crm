@@ -4,6 +4,7 @@ import {
   resolveQuantityTier,
 } from "@/lib/factory/calculator";
 import type { QuoteResult } from "@/lib/factory/calculator";
+import { customerBreakdownIls } from "@/lib/factory/calculator/customer-breakdown";
 
 /**
  * Customer-safe per-unit price breakdown (ILS). Itemises only what the customer
@@ -50,42 +51,6 @@ export interface ConfiguratorQuoteResponse {
 
 function round2(n: number) {
   return Math.round(n * 100) / 100;
-}
-
-/**
- * Decompose a quote into customer-safe per-unit ILS line items. Derived purely
- * from the QuoteResult: each CNY production component is converted at the same
- * implied FX + margin the engine used, so the parts reconcile to the unit price.
- *
- * factor = (unit selling price − shipping per unit) / unit production CNY
- * which equals (componentCNY → USD → ILS) / (1 − margin) per component.
- * `usdToIls` is recovered as finalUnitCostIls / finalUnitCostUsd (no config read).
- */
-function customerBreakdown(result: QuoteResult): ConfiguratorQuoteBreakdown {
-  const unitPrice = result.sellingPricePerUnitIls;
-  const usdToIls =
-    result.finalUnitCostUsd > 0
-      ? result.finalUnitCostIls / result.finalUnitCostUsd
-      : 0;
-  const shippingPerUnitIls = result.shippingPerUnitUsd * usdToIls;
-  const productionSellingIls = unitPrice - shippingPerUnitIls;
-  const factor =
-    result.unitProductionCny > 0
-      ? productionSellingIls / result.unitProductionCny
-      : 0;
-
-  const handlesIls = round2(result.handlesAddonCny * factor);
-  const laminationIls = round2(
-    (result.laminationAddonCny + result.plateFeeCny) * factor
-  );
-  const logoColorsIls = round2(result.logoAddonCny * factor);
-  // Base absorbs the remainder (base bag + folded shipping) so the parts
-  // always sum exactly to the displayed unit price.
-  const productIls = round2(
-    unitPrice - handlesIls - laminationIls - logoColorsIls
-  );
-
-  return { productIls, handlesIls, laminationIls, logoColorsIls };
 }
 
 function summarizeResult(result: QuoteResult) {
@@ -140,7 +105,7 @@ export async function buildConfiguratorQuote(input: {
     unitPriceIls: main.unitPriceIls,
     totalOrderIls: main.totalOrderIls,
     profitMargin: main.profitMargin,
-    breakdown: customerBreakdown(out.result),
+    breakdown: customerBreakdownIls(out.result),
     altShipping: alt
       ? {
           shippingOptionId: out.altResult!.shippingOption?.id ?? "",
