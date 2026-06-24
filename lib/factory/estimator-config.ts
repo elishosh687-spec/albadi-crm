@@ -28,7 +28,11 @@ export interface AffineCoef { makeFee: number; perCm2: number }
 export interface TierCoef {
   base: AffineCoef | null;
   lam: AffineCoef | null;
-  color: Record<string, number>; // "2"|"3" → extra-colour add-on (non-lam)
+  color: Record<string, number>;    // "2"|"3" → extra-colour add-on (non-lam)
+  lamColor?: Record<string, number>; // "2"|"3" → extra-colour add-on for LAMINATED per-unit.
+                                      // Empty today: our laminated data has no per-colour price
+                                      // variants, so lamination colour cost lives entirely in the
+                                      // per-colour 版费 (plate fee). Auto-fills if such quotes arrive.
   handle: number;
   lamHandle: number;
 }

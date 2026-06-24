@@ -327,6 +327,9 @@ export interface CustomerQuotePdfProps {
   customerNotes?: string;
   quotationNo?: string;
   validityDays?: number;
+  /** Preliminary self-quote estimate (NOT a factory-confirmed quote): marks the
+   *  header + footer "אומדן ראשוני — כפוף לאישור" and defaults validity to 7 days. */
+  isEstimate?: boolean;
   /** Product image as a data URI (data:image/...;base64,...). Pre-fetched
    *  server-side via fetchImageDataUri so a broken URL never breaks the PDF. */
   picDataUri?: string;
@@ -335,7 +338,8 @@ export interface CustomerQuotePdfProps {
 function CustomerQuotePDF(props: CustomerQuotePdfProps) {
   // quotationNo is intentionally unused in the customer-facing layout —
   // it lives in the filename only (Content-Disposition) for tracking.
-  const { customerName, spec, pricing, breakdown, customerNotes, picDataUri } = props;
+  const { customerName, spec, pricing, breakdown, customerNotes, picDataUri, isEstimate } = props;
+  const validityDays = props.validityDays ?? (isEstimate ? 7 : 14);
   const date = new Date().toLocaleDateString("he-IL", {
     day: "numeric",
     month: "long",
@@ -451,7 +455,7 @@ function CustomerQuotePDF(props: CustomerQuotePdfProps) {
     <Document>
       <Page size="A4" style={styles.page}>
         <View style={styles.header}>
-          <Text style={styles.headerTitle}>הצעת מחיר — Albadi</Text>
+          <Text style={styles.headerTitle}>{isEstimate ? "אומדן מחיר ראשוני — Albadi" : "הצעת מחיר — Albadi"}</Text>
           {customerName ? (
             <Text style={styles.headerCustomer}>{customerName}</Text>
           ) : null}
@@ -526,7 +530,9 @@ function CustomerQuotePDF(props: CustomerQuotePdfProps) {
         </Text>
 
         <Text style={styles.footer}>
-          ההצעה תקפה ל-14 ימים מיום ההצעה. המחירים נקובים בש״ח וכוללים את כל ההוצאות מלבד מע״מ.
+          {isEstimate
+            ? `אומדן ראשוני בלבד — המחיר הסופי כפוף לאישור המפעל. תקף ל-${validityDays} ימים. המחירים בש״ח, ללא מע״מ.`
+            : `ההצעה תקפה ל-${validityDays} ימים מיום ההצעה. המחירים נקובים בש״ח וכוללים את כל ההוצאות מלבד מע״מ.`}
         </Text>
       </Page>
     </Document>

@@ -110,8 +110,12 @@ function predictFactory(fc: FactoryCoef, tier: number, spec: EstimateSpec, area:
   if (spec.hasLamination) {
     if (!t.lam) return null; // factory doesn't laminate (heat-press) → can't model
     const lamBase = t.lam.makeFee + t.lam.perCm2 * area;
+    // Per-unit laminated colour add-on. Empty today (no multi-colour lam price data) → colours
+    // are priced via the per-colour 版费 (plate fee) below; this auto-activates if such data arrives.
+    const colorKey = String(Math.min(3, Math.max(1, spec.logoColors)));
+    const lamColor = spec.logoColors > 1 ? (t.lamColor?.[colorKey] ?? t.lamColor?.["3"] ?? 0) : 0;
     const handle = spec.hasHandles ? fallbackAddon(fc, (x) => x.lamHandle, t.lamHandle) : 0;
-    return { unit: lamBase + handle, bd: { baseCny: r3(lamBase), colorCny: 0, handleCny: r3(handle), lamCny: 0 } };
+    return { unit: lamBase + lamColor + handle, bd: { baseCny: r3(lamBase), colorCny: r3(lamColor), handleCny: r3(handle), lamCny: 0 } };
   }
   if (!t.base) return null;
   const base = t.base.makeFee + t.base.perCm2 * area;
@@ -163,9 +167,13 @@ export async function estimateFactoryCny(spec: EstimateSpec, coeffsArg?: Estimat
       : `חומר גלם (בסיס, 1 צבע) = ¥${winner.bd.baseCny.toFixed(3)}`,
   ];
   if (!spec.hasLamination && winner.bd.colorCny > 0) reasoning.push(`+ ${spec.logoColors} צבעים = ¥${winner.bd.colorCny.toFixed(3)}`);
+  if (spec.hasLamination && winner.bd.colorCny > 0) reasoning.push(`+ ${spec.logoColors} צבעים (למינציה) = ¥${winner.bd.colorCny.toFixed(3)}`);
   if (winner.bd.handleCny > 0) reasoning.push(`+ ידיות = ¥${winner.bd.handleCny.toFixed(3)}`);
   reasoning.push(`= עלות יחידה מהמפעל ¥${r2(winner.unitCny).toFixed(2)}`);
-  if (plateOneTime > 0) reasoning.push(`版费 (${spec.logoColors} צבעים) = ¥${plateOneTime.toFixed(0)} — עלות חד‑פעמית בנפרד`);
+  if (plateOneTime > 0) {
+    const perUnit = plateOneTime / Math.max(1, spec.quantity);
+    reasoning.push(`版费 למינציה = ${spec.logoColors} צבעים × ¥${r2(platePer).toFixed(0)}/צבע = ¥${plateOneTime.toFixed(0)} חד‑פעמי (≈ ¥${perUnit.toFixed(3)}/יח׳ על ${spec.quantity.toLocaleString("he-IL")} יח׳)`);
+  }
   reasoning.push(`→ המרה לשקל + מרווח + שילוח מחושבים על בסיס עלות זו`);
   // Carton / packing reasoning (the shipping-volume driver).
   const cbmL = (carton.cbmPerUnit * 1000).toFixed(2); // litres/bag for readability

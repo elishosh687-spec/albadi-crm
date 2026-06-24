@@ -99,13 +99,14 @@ export const snapTier = (q: number) => { let t = TIERS[0] as number; for (const 
 
 export interface FacModel {
   base: Record<number, ReturnType<typeof affine>>; lam: Record<number, ReturnType<typeof affine>>;
-  color: Record<number, Record<number, number>>; handle: Record<number, number>; lamHandle: Record<number, number>;
+  color: Record<number, Record<number, number>>; lamColor: Record<number, Record<number, number>>;
+  handle: Record<number, number>; lamHandle: Record<number, number>;
   plate: ReturnType<typeof affine>; areaMin: number; areaMax: number;
 }
 export function buildModel(catAll: Pt[], qlAll: Pt[], fac: string, dropQuoteKey?: string): FacModel {
   const cat = catAll.filter((p) => p.factory === fac);
   const ql = qlAll.filter((p) => p.factory === fac && p.qty <= MAX_QTY && (!dropQuoteKey || `${p.size}|${p.qty}|${p.hasLam}|${p.hasHandle}` !== dropQuoteKey));
-  const base: FacModel["base"] = {}, lam: FacModel["lam"] = {}, color: FacModel["color"] = {}, handle: FacModel["handle"] = {}, lamHandle: FacModel["lamHandle"] = {};
+  const base: FacModel["base"] = {}, lam: FacModel["lam"] = {}, color: FacModel["color"] = {}, lamColor: FacModel["lamColor"] = {}, handle: FacModel["handle"] = {}, lamHandle: FacModel["lamHandle"] = {};
   for (const q of TIERS) {
     const baseP = cat.filter((p) => p.qty === q && !p.hasHandle && !p.hasLam && p.colors === 1);
     base[q] = affine(baseP.map((p) => p.area), baseP.map((p) => p.price));
@@ -118,6 +119,18 @@ export function buildModel(catAll: Pt[], qlAll: Pt[], fac: string, dropQuoteKey?
         if (one != null && cv != null) ds.push(cv - one);
       }
       color[q][cc] = ds.length ? ds.reduce((a, b) => a + b, 0) / ds.length : 0;
+    }
+    // Per-unit LAMINATED colour add-on — same averaging as `color`, but on laminated rows.
+    // Empty unless multi-colour laminated price variants exist (none today → colours via 版费).
+    lamColor[q] = {};
+    for (const cc of [2, 3]) {
+      const ds: number[] = [];
+      for (const size of new Set(cat.filter((p) => p.hasLam).map((p) => p.size))) {
+        const one = cat.find((p) => p.size === size && p.qty === q && !p.hasHandle && p.hasLam && p.colors === 1)?.price;
+        const cv = cat.find((p) => p.size === size && p.qty === q && !p.hasHandle && p.hasLam && p.colors === cc)?.price;
+        if (one != null && cv != null) ds.push(cv - one);
+      }
+      if (ds.length) lamColor[q][cc] = ds.reduce((a, b) => a + b, 0) / ds.length;
     }
     const hd: number[] = [];
     for (const size of new Set(cat.map((p) => p.size))) {
@@ -143,7 +156,7 @@ export function buildModel(catAll: Pt[], qlAll: Pt[], fac: string, dropQuoteKey?
   const plateP = cat.filter((p) => p.hasLam && p.plateFee != null && p.plateFee! > 0);
   const plate = affine(plateP.map((p) => p.area), plateP.map((p) => p.plateFee!));
   const areas = cat.map((p) => p.area);
-  return { base, lam, color, handle, lamHandle, plate, areaMin: areas.length ? Math.min(...areas) : 0, areaMax: areas.length ? Math.max(...areas) : 0 };
+  return { base, lam, color, lamColor, handle, lamHandle, plate, areaMin: areas.length ? Math.min(...areas) : 0, areaMax: areas.length ? Math.max(...areas) : 0 };
 }
 
 export function predict(m: FacModel, p: { area: number; qty: number; hasHandle: boolean; hasLam: boolean; colors: number | null }): { unit: number; conf: "high" | "low" } | null {
@@ -250,6 +263,7 @@ export function toCoeffs(cat: Pt[], ql: Pt[], loo: LooResult, fittedAt: string, 
         // lamination ⇒ Mandy only (亚森 laminates by sewing → route to factory).
         lam: f === "亚森" ? null : (m.lam[q] ? { makeFee: r3(m.lam[q]!.intercept), perCm2: m.lam[q]!.slope } : null),
         color: { "2": r3(m.color[q][2] ?? 0), "3": r3(m.color[q][3] ?? 0) },
+        lamColor: f === "亚森" ? {} : { ...(m.lamColor[q][2] != null ? { "2": r3(m.lamColor[q][2]) } : {}), ...(m.lamColor[q][3] != null ? { "3": r3(m.lamColor[q][3]) } : {}) },
         handle: r3(m.handle[q]), lamHandle: r3(m.lamHandle[q]),
       }])),
     };

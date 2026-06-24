@@ -868,6 +868,18 @@ function EstimateTab({ apiToken, shippingOptions, sid, leadName }: { apiToken?: 
               totalShippingIls: c.shippingPerUnitIls * r.quantity,
               result: r,
             })}
+            estimate={{
+              heightCm: parseFloat(h) || 0,
+              depthCm: parseFloat(d) || 0,
+              widthCm: parseFloat(w) || 0,
+              qty: r.quantity,
+              colors,
+              handles,
+              lamination: lam,
+              shipping: shippingId,
+              cartonConfidence: est.carton?.confidence,
+              totalIls: r.totalOrderPriceIls,
+            }}
           />
         </>
       )}
@@ -1120,16 +1132,26 @@ interface LeadPickerOption {
   updatedAt: string;
 }
 
+interface EstimateSendContext {
+  heightCm: number; depthCm: number; widthCm: number; qty: number;
+  colors: number; handles: boolean; lamination: boolean; shipping: string;
+  cartonConfidence?: "high" | "low";
+  totalIls?: number;
+}
 function QuoteShareCard({
   apiToken,
   sid,
   leadName,
   quoteText,
+  estimate,
 }: {
   apiToken: string | undefined;
   sid: string | undefined;
   leadName: string | null | undefined;
   quoteText: string;
+  /** When present (estimate tab), also render "send preliminary PDF to customer"
+   *  + "request real quote from factory" buttons, both using the picked lead. */
+  estimate?: EstimateSendContext;
 }) {
   const [sending, setSending] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -1253,6 +1275,49 @@ function QuoteShareCard({
     }
   };
 
+  // Estimate-tab extras: send the preliminary PDF to the customer, or request the
+  // real quote from the factory. Both use the picked lead. Widget → token route; v3 → cookie route.
+  const [busy, setBusy] = useState<null | "pdf" | "factory">(null);
+  const apiBase = (widgetPath: string, dashPath: string) =>
+    apiToken ? `${widgetPath}?widget_token=${encodeURIComponent(apiToken)}` : dashPath;
+
+  const sendEstimatePdf = async () => {
+    if (!pickedSid || !estimate) return;
+    if (estimate.cartonConfidence === "low" && !confirm("אומדן האריזה לצורה הזו לא ודאי (שטוחה/חריגה). לשלוח בכל זאת אומדן ראשוני ללקוח?")) return;
+    if (!confirm(`לשלוח אומדן ראשוני ל-${pickedName ?? "לקוח"} ב-WhatsApp (PDF)?`)) return;
+    setBusy("pdf"); setStatus(null); setError(null);
+    try {
+      const res = await fetch(apiBase("/api/widget/factory/estimate/send-customer", "/api/factory/estimate/send-customer"), {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sid: pickedSid, customerName: pickedName, heightCm: estimate.heightCm, depthCm: estimate.depthCm, widthCm: estimate.widthCm, qty: estimate.qty, colors: estimate.colors, handles: estimate.handles, lamination: estimate.lamination, shipping: estimate.shipping }),
+      });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok || !j?.ok) { setError(j?.message ?? j?.error ?? `HTTP ${res.status}`); return; }
+      setStatus(`אומדן ראשוני נשלח ל-${pickedName ?? "לקוח"} ✓${j.pdf ? " (כולל PDF)" : " (טקסט בלבד)"}`);
+    } catch (e) { setError(e instanceof Error ? e.message : String(e)); } finally { setBusy(null); }
+  };
+
+  const sendToFactory = async () => {
+    if (!pickedSid || !estimate) return;
+    if (!confirm(`לשלוח את המפרט למפעל ולבקש הצעת מחיר אמיתית עבור ${pickedName ?? "הלקוח"}?`)) return;
+    setBusy("factory"); setStatus(null); setError(null);
+    try {
+      const productSpec = {
+        description: "שקית אל-ארוג 80 גרם", material: "80g non-woven",
+        widthCm: estimate.widthCm, heightCm: estimate.heightCm, depthCm: estimate.depthCm, quantity: estimate.qty,
+        printing: `${estimate.colors} color(s)`,
+        finishing: `${estimate.handles ? "With handles" : "No handles"} / ${estimate.lamination ? "Laminated" : "Not laminated"}`,
+      };
+      const res = await fetch(apiBase("/api/widget/factory/quote-request", "/api/factory/quote-request"), {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ manychatSubId: pickedSid, customerName: pickedName ?? undefined, productSpec }),
+      });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok || !j?.ok) { setError(j?.detail ?? j?.error ?? `HTTP ${res.status}`); return; }
+      setStatus(`נשלח למפעל ✓ הצעה #${j.quotationNo} — תחזור עם המחיר האמיתי לסיום ושליחה.`);
+    } catch (e) { setError(e instanceof Error ? e.message : String(e)); } finally { setBusy(null); }
+  };
+
   return (
     <section className="rounded-xl border border-border bg-card p-4 flex flex-col gap-3" dir="rtl">
       <div className="flex items-center justify-between gap-2 flex-wrap">
@@ -1357,6 +1422,38 @@ function QuoteShareCard({
         value={quoteText}
         className="w-full min-h-[220px] bg-background/30 border border-border rounded-md px-3 py-2 text-xs leading-relaxed font-mono whitespace-pre-wrap focus:outline-none"
       />
+
+      {estimate && (
+        <div className="flex flex-col gap-2 border-t border-border/60 pt-3">
+          <div className="text-[11px] text-muted-foreground">מהאומדן אפשר גם:</div>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={sendEstimatePdf}
+              disabled={!pickedSid || busy !== null}
+              title={!pickedSid ? "בחר ליד כדי לאפשר שליחה" : undefined}
+              className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background/40 px-3 py-1.5 text-xs font-medium hover:bg-secondary disabled:opacity-50"
+            >
+              {busy === "pdf" ? <Loader2 className="size-3.5 animate-spin" /> : <Send className="size-3.5" />}
+              שלח אומדן ראשוני ללקוח 📄
+            </button>
+            <button
+              type="button"
+              onClick={sendToFactory}
+              disabled={!pickedSid || busy !== null}
+              title={!pickedSid ? "בחר ליד כדי לאפשר שליחה" : undefined}
+              className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background/40 px-3 py-1.5 text-xs font-medium hover:bg-secondary disabled:opacity-50"
+            >
+              {busy === "factory" ? <Loader2 className="size-3.5 animate-spin" /> : <Send className="size-3.5" />}
+              בקש הצעת מחיר מהמפעל 🏭
+            </button>
+          </div>
+          {estimate.cartonConfidence === "low" && (
+            <div className="text-[11px] text-amber-700 dark:text-amber-400">⚠️ אומדן האריזה לצורה הזו לא ודאי — כדאי לאמת מול המפעל לפני שליחה ללקוח.</div>
+          )}
+        </div>
+      )}
+
       {status && <p className="text-[11px] text-success">{status}</p>}
       {error && <p className="text-[11px] text-destructive">⚠️ {error}</p>}
     </section>
