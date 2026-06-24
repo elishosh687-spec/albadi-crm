@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
-import { Loader2, Send, Copy, Check, Search, X } from "lucide-react";
+import { Loader2, Send, Copy, Check, Search, X, ChevronDown, Calculator } from "lucide-react";
 import { cn } from "@/lib/cn";
 import type { Product, QuantityTier, ShippingOption, QuoteResult } from "@/lib/factory/calculator/types";
 import { computeCommission } from "@/lib/factory/commission";
@@ -777,12 +777,26 @@ function EstimateTab({ apiToken, shippingOptions, sid, leadName }: { apiToken?: 
           </div>
 
           {est.reasoning && (
-            <section className="rounded-xl border border-border bg-background/40 p-4">
-              <h3 className="text-xs uppercase tracking-wider text-muted-foreground mb-2">ההיגיון מאחורי המחיר</h3>
-              <ul className="flex flex-col gap-1 text-xs tabular-nums">
-                {est.reasoning.map((step, i) => (<li key={i} className="text-foreground/90">• {step}</li>))}
-              </ul>
-            </section>
+            <details className="group rounded-xl border border-border bg-background/40 [&_summary::-webkit-details-marker]:hidden">
+              <summary className="flex cursor-pointer select-none items-center justify-between gap-2 px-4 py-3 list-none">
+                <span className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+                  <Calculator className="size-3.5" />
+                  ההיגיון מאחורי המחיר
+                </span>
+                <span className="flex items-center gap-1.5 text-[11px] text-muted-foreground/70">
+                  הצג פירוט
+                  <ChevronDown className="size-4 transition-transform group-open:rotate-180" />
+                </span>
+              </summary>
+              <ol className="flex flex-col gap-2 border-t border-border/60 px-4 py-3 text-xs tabular-nums">
+                {est.reasoning.map((step, i) => (
+                  <li key={i} className="flex gap-2.5 leading-relaxed">
+                    <span className="shrink-0 text-muted-foreground/40">{i + 1}</span>
+                    <span className="text-foreground/90">{step}</span>
+                  </li>
+                ))}
+              </ol>
+            </details>
           )}
 
           {est.carton && (
