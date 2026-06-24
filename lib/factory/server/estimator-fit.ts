@@ -13,7 +13,9 @@
  */
 import { getTenantAccessToken, feishuFetch } from "@/lib/feishu/client";
 import * as XLSX from "xlsx";
-import type { EstimatorCoeffs } from "@/lib/factory/estimator-config";
+import type { EstimatorCoeffs, CartonCoef } from "@/lib/factory/estimator-config";
+import { DEFAULT_CARTON_COEF } from "@/lib/factory/estimator-config";
+import { DEFAULT_CONFIG } from "@/lib/factory/calculator/constants";
 
 const CAT = "PBKystZ1dhCsZgtp4qgc2nzxnMf";
 const QLOG = "E727shGUTh0BZ8tA7bZcivRhnsh";
@@ -168,8 +170,75 @@ export function looValidate(cat: Pt[], ql: Pt[]): LooResult {
   return { errs, refused, stats: errs.length ? pct(errs) : null };
 }
 
+/* ───────────────────────── Carton / packing model ─────────────────────────
+ * VERIFIED 2026-06-24 (workflow wf_699152fc-834). A flat-stacked folded bag occupies
+ * `area × T`, so CBM/unit (m³) = T_mm · area · 1e-7. T fitted on GUSSETED 80g bags only
+ * (D>2, H≥10, area in envelope) — flat/tray geometries are not formula-quotable. The
+ * carton's discrete standard-box choice cancels out of CBM/unit (bigger box ⇒ more pcs). */
+export interface CartonPt { factory: string; area: number; depth: number; height: number; cbmPerUnit: number; src: "catalog" | "db" }
+const GUSSET_MIN = 2, TRAY_H_MIN = 10;
+export const impliedTmm = (p: CartonPt) => (p.cbmPerUnit / p.area) * 1e7; // m³/cm² → mm stacked thickness
+export function isGussetedNormal(p: { depth: number; height: number; area: number }, areaMin = DEFAULT_CARTON_COEF.areaMin, areaMax = DEFAULT_CARTON_COEF.areaMax) {
+  return p.depth > GUSSET_MIN && p.height >= TRAY_H_MIN && p.area >= areaMin && p.area <= areaMax;
+}
+
+/** Catalog packing (constants.ts) → carton points. The dense clean backbone. */
+export function catalogCartonPts(): CartonPt[] {
+  const out: CartonPt[] = [];
+  for (const p of DEFAULT_CONFIG.products) {
+    const m = p.dimensions.replace(/×/g, "*").match(/H(\d+)(?:\*D(\d+))?\*W(\d+)/i); if (!m) continue;
+    const h = +m[1], d = m[2] ? +m[2] : 0, w = +m[3]; const area = bagAreaCm2(h, d, w);
+    for (const v of [p.withHandles, p.withoutHandles]) {
+      const c = v.carton; if (!c?.qty) continue;
+      out.push({ factory: "catalog", area, depth: d, height: h, cbmPerUnit: (c.length * c.width * c.height / 1e6) / c.qty, src: "catalog" });
+    }
+  }
+  return out;
+}
+
+const median = (xs: number[]) => { const a = xs.slice().sort((x, y) => x - y); return a.length ? a[Math.floor(a.length / 2)] : 0; };
+
+/** Fit T (gusseted only) + per-factory T, from catalog + DB carton points. */
+export function fitCartonT(pts: CartonPt[]): { tMmGusseted: number; perFactoryTMm: Record<string, number>; areaMin: number; areaMax: number; n: number } {
+  const g = pts.filter((p) => isGussetedNormal(p));
+  const tMmGusseted = g.length ? Math.round(median(g.map(impliedTmm)) * 1000) / 1000 : DEFAULT_CARTON_COEF.tMmGusseted;
+  const perFactoryTMm: Record<string, number> = {};
+  for (const f of new Set(g.map((p) => p.factory))) {
+    if (f === "catalog") continue;
+    const fts = g.filter((p) => p.factory === f).map(impliedTmm);
+    if (fts.length >= 3) perFactoryTMm[f] = Math.round(median(fts) * 1000) / 1000;
+  }
+  const areas = g.map((p) => p.area);
+  return { tMmGusseted, perFactoryTMm, areaMin: areas.length ? Math.min(...areas) : DEFAULT_CARTON_COEF.areaMin, areaMax: areas.length ? Math.max(...areas) : DEFAULT_CARTON_COEF.areaMax, n: g.length };
+}
+
+/** Strict leave-one-out for CBM/unit = area×T on the gusseted scope. */
+export function looCartonT(pts: CartonPt[]): ReturnType<typeof pct> {
+  const g = pts.filter((p) => isGussetedNormal(p));
+  const errs: number[] = [];
+  for (let i = 0; i < g.length; i++) {
+    const others = g.filter((_, j) => j !== i).map(impliedTmm);
+    if (!others.length) continue;
+    const T = median(others);
+    const pred = T * g[i].area * 1e-7;
+    errs.push((pred - g[i].cbmPerUnit) / g[i].cbmPerUnit * 100);
+  }
+  return pct(errs.length ? errs : [0]);
+}
+
+/** Build the publishable CartonCoef, keeping the verified defaults for the discrete-carton knobs. */
+export function toCartonCoef(pts: CartonPt[], fittedAt: string): CartonCoef {
+  const f = fitCartonT(pts); const loo = looCartonT(pts);
+  return {
+    ...DEFAULT_CARTON_COEF,
+    tMmGusseted: f.tMmGusseted, perFactoryTMm: { ...DEFAULT_CARTON_COEF.perFactoryTMm, ...f.perFactoryTMm },
+    areaMin: Math.min(f.areaMin, DEFAULT_CARTON_COEF.areaMin), areaMax: Math.max(f.areaMax, DEFAULT_CARTON_COEF.areaMax),
+    accuracy: { medianPct: Math.round(loo.median * 10) / 10, maxPct: Math.round(loo.max * 10) / 10, n: f.n }, fittedAt,
+  };
+}
+
 const r3 = (n: number) => Math.round(n * 1000) / 1000;
-export function toCoeffs(cat: Pt[], ql: Pt[], loo: LooResult, fittedAt: string): EstimatorCoeffs {
+export function toCoeffs(cat: Pt[], ql: Pt[], loo: LooResult, fittedAt: string, carton?: CartonCoef): EstimatorCoeffs {
   const factories: EstimatorCoeffs["factories"] = {};
   for (const f of FACS) {
     const m = buildModel(cat, ql, f);
@@ -189,5 +258,6 @@ export function toCoeffs(cat: Pt[], ql: Pt[], loo: LooResult, fittedAt: string):
     version: 1, areaFormula: "2HW+2HD+WD", material: "80g", maxQty: MAX_QTY, fittedAt,
     accuracy: loo.stats ? { medianPct: r3(loo.stats.median), maxPct: r3(loo.stats.max), n: loo.stats.n } : null,
     factories,
+    carton: carton ?? DEFAULT_CARTON_COEF,
   };
 }

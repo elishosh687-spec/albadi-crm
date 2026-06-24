@@ -21,6 +21,7 @@
  */
 import { getTenantAccessToken, feishuFetch } from "@/lib/feishu/client";
 import * as XLSX from "xlsx";
+import { catalogCartonPts, fitCartonT, looCartonT, impliedTmm, isGussetedNormal, type CartonPt } from "@/lib/factory/server/estimator-fit";
 
 const CAT = "PBKystZ1dhCsZgtp4qgc2nzxnMf";
 const QLOG = "E727shGUTh0BZ8tA7bZcivRhnsh";
@@ -213,6 +214,9 @@ async function main() {
   if (errs.length) { const s = pct(errs); console.log(`\n  LOO: mean=${s.mean.toFixed(1)}% median|%|=${s.median.toFixed(1)}% p90=${s.p90.toFixed(1)}% max=${s.max.toFixed(1)}% (n=${s.n})`); console.log(`  GATE (median|%| ≤ 6%): ${s.median <= 6 ? "PASS ✅" : "FAIL ❌"}`); }
   if (refused.length) { console.log(`\n  REFUSED → route to factory (${refused.length}):`); for (const r of refused) console.log(`    ${r}`); }
 
+  // ---- CARTON / PACKING report (VERIFIED 2026-06-24) ----
+  await cartonReport();
+
   // ---- COEFFICIENTS (Phase-1 deliverable; Phase-2 writes these to app_config) ----
   const coeffs = {
     version: 1, areaFormula: "2HW+2HD+WD", material: "80g", maxQty: MAX_QTY,
@@ -259,5 +263,47 @@ async function main() {
     console.log("\n✅ committed coefficients → app_config (factory_estimators)");
   }
 }
+/** Pull DB carton points (any status with carton master data, 80g non-woven), if DATABASE_URL is set. */
+async function dbCartonPts(): Promise<CartonPt[]> {
+  try {
+    const { db } = await import("@/lib/db");
+    const { factoryQuoteRequests } = await import("@/drizzle/schema");
+    type Resp = { supplier?: string; cartonQty?: number; cartonCbm?: number; cartonLengthCm?: number; cartonWidthCm?: number; cartonHeightCm?: number };
+    type Spec = { material?: string; heightCm?: number; widthCm?: number; depthCm?: number };
+    const rows = await db.select().from(factoryQuoteRequests);
+    const out: CartonPt[] = []; const seen = new Set<string>();
+    for (const row of rows) {
+      const resp = row.factoryResponse as Resp | null; const spec = row.productSpec as Spec | null;
+      if (!resp || !spec) continue;
+      const ok80 = /80\s*(g|克|gsm)/i.test(spec.material ?? "") && !/kraft|牛皮|card|食品|food|140|110|250/i.test(spec.material ?? "");
+      const h = spec.heightCm ?? 0, w = spec.widthCm ?? 0, d = spec.depthCm ?? 0;
+      if (!ok80 || !h || !w) continue;
+      const cq = resp.cartonQty ?? 0;
+      const cbm = resp.cartonCbm ?? (resp.cartonLengthCm && resp.cartonWidthCm && resp.cartonHeightCm ? (resp.cartonLengthCm * resp.cartonWidthCm * resp.cartonHeightCm) / 1e6 : 0);
+      if (cq <= 0 || cbm <= 0) continue;
+      const a = area(h, d, w); const cbmPerUnit = cbm / cq; const t = (cbmPerUnit / a) * 1e7;
+      const key = `${h}|${d}|${w}|${cbmPerUnit.toFixed(6)}`;
+      if (t >= 0.3 && t <= 1.4 && !seen.has(key)) { seen.add(key); out.push({ factory: normSupplier(resp.supplier ?? ""), area: a, depth: d, height: h, cbmPerUnit, src: "db" }); }
+    }
+    return out;
+  } catch (e) { console.log(`  (DB carton points unavailable: ${e instanceof Error ? e.message : e})`); return []; }
+}
+
+async function cartonReport() {
+  console.log("\n================ CARTON / PACKING MODEL (CBM/unit = area × T mm) ================");
+  const cat = catalogCartonPts();
+  const dbp = await dbCartonPts();
+  const all = [...cat, ...dbp];
+  const g = all.filter((p) => isGussetedNormal(p));
+  console.log(`  points: catalog ${cat.length} + DB ${dbp.length} = ${all.length}  → gusseted in-envelope (D>2, H≥10, area∈[1500,5400]) = ${g.length}`);
+  const fit = fitCartonT(all); const loo = looCartonT(all);
+  console.log(`  fitted T (gusseted) = ${fit.tMmGusseted.toFixed(3)} mm   per-factory: ${Object.entries(fit.perFactoryTMm).map(([k, v]) => `${k} ${v.toFixed(2)}`).join(" · ") || "—"}`);
+  console.log(`  LOO CBM/unit: median=${loo.median.toFixed(1)}% p90=${loo.p90.toFixed(1)}% max=${loo.max.toFixed(1)}% (n=${g.length})`);
+  console.log(`  GATE (median ≤ 10%): ${loo.median <= 10 ? "PASS ✅" : "FAIL ❌"}`);
+  // flat/tray excluded → reported separately (manual-only)
+  const flat = all.filter((p) => !isGussetedNormal(p));
+  if (flat.length) console.log(`  manual-only (flat/tray/out-of-envelope, not formula-quotable): ${flat.length} — e.g. ${flat.slice(0, 4).map((p) => `H${p.height}D${p.depth} t=${impliedTmm(p).toFixed(2)}mm`).join(", ")}`);
+}
+
 function r3(n: number) { return Math.round(n * 1000) / 1000; }
 main().then(() => process.exit(0)).catch((e) => { console.error(e); process.exit(1); });

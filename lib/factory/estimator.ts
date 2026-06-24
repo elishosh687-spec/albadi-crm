@@ -9,8 +9,7 @@
  * (margin + shipping) — no margin/shipping logic is duplicated here.
  */
 
-import { getEstimatorCoeffs, type EstimatorCoeffs, type FactoryCoef } from "./estimator-config";
-import { DEFAULT_CONFIG } from "./calculator/constants";
+import { getEstimatorCoeffs, DEFAULT_CARTON_COEF, type EstimatorCoeffs, type FactoryCoef, type CartonCoef } from "./estimator-config";
 
 const TIERS = [3000, 5000, 10000] as const;
 
@@ -33,6 +32,9 @@ export interface EstimateBreakdown {
 
 export interface CartonEstimate {
   qty: number; weightKg: number; lengthCm: number; widthCm: number; heightCm: number;
+  cbmPerUnit: number;                  // m³/bag — the load-bearing, data-verified number
+  confidence: "high" | "low";          // low ⇒ flat/tray/out-of-envelope → verify with factory
+  weightApprox: boolean;               // true: rough fabric estimate (not factory-measured) — air only
 }
 
 export interface EstimateResult {
@@ -58,20 +60,37 @@ export function bagAreaCm2(h: number, d: number, w: number): number {
 }
 function snapTier(q: number): number { let t = TIERS[0] as number; for (const x of TIERS) if (x <= q) t = x; return t; }
 
-/** Nearest catalog product by surface area → its carton (physical packing data,
- *  used only for shipping CBM/weight; not a price). */
-function nearestCarton(area: number, hasHandles: boolean): CartonEstimate | null {
-  let best: { area: number; carton: CartonEstimate } | null = null;
-  for (const p of DEFAULT_CONFIG.products) {
-    const m = p.dimensions.replace(/×/g, "*").match(/H(\d+)(?:\*D(\d+))?\*W(\d+)/i);
-    if (!m) continue;
-    const a = bagAreaCm2(+m[1], m[2] ? +m[2] : 0, +m[3]);
-    const v = hasHandles ? p.withHandles : p.withoutHandles;
-    const c = v.carton;
-    const carton: CartonEstimate = { qty: c.qty, weightKg: c.weight, lengthCm: c.length, widthCm: c.width, heightCm: c.height };
-    if (!best || Math.abs(a - area) < Math.abs(best.area - area)) best = { area: a, carton };
-  }
-  return best?.carton ?? null;
+/**
+ * Predict the packing for an arbitrary 80g bag (VERIFIED 2026-06-24).
+ * Physics: a flat-stacked folded bag occupies `area × T` → CBM_per_unit(m³) = T_mm · area · 1e-7.
+ * Units/carton + carton dims are derived from a standard export carton (the carton choice
+ * cancels out of CBM/unit). Confidence is LOW for flat (D≤2) / tray (H<10) / out-of-envelope
+ * geometries — there the area→thickness relation breaks (verified up to ~60% error), so the UI
+ * flags "verify with factory". Weight is a ROUGH fabric estimate (air only) — never factory-grade.
+ */
+function predictCarton(area: number, spec: EstimateSpec, factory: string, cc: CartonCoef): CartonEstimate {
+  const tMm = cc.perFactoryTMm?.[factory] ?? cc.tMmGusseted;
+  const flat = spec.depthCm <= 2;
+  const tray = spec.heightCm < 10;
+  const outOfRange = area < cc.areaMin || area > cc.areaMax;
+  const confidence: "high" | "low" = flat || tray || outOfRange ? "low" : "high";
+
+  const cbmPerUnit = tMm * area * 1e-7;                       // m³/bag
+  const innerCm3 = cc.stdCartonCbm * cc.innerFactor * 1e6;    // usable carton volume, cm³
+  const foldedCm3 = cbmPerUnit * 1e6;                         // one bag's packed volume, cm³
+  const rawQty = foldedCm3 > 0 ? innerCm3 / foldedCm3 : cc.bundleSnap;
+  const qty = Math.max(cc.bundleSnap, Math.round(rawQty / cc.bundleSnap) * cc.bundleSnap);
+
+  const cartonCbm = cbmPerUnit * qty;                         // m³ — encodes cbmPerUnit exactly
+  const f = Math.cbrt(cartonCbm / cc.stdCartonCbm);           // scale the 60×40×40 reference
+  const r1 = (n: number) => Math.round(n * 10) / 10;
+  const lengthCm = r1(60 * f), widthCm = r1(40 * f), heightCm = r1(40 * f);
+
+  // Rough weight (fabric area × 80gsm × seam overhead + handles) + carton tare. AIR only; flagged.
+  const fabricKgPerBag = (area / 10000) * 0.08 * 1.1 + (spec.hasHandles ? 0.006 : 0);
+  const weightKg = Math.round((fabricKgPerBag * qty + 0.7) * 10) / 10;
+
+  return { qty, weightKg, lengthCm, widthCm, heightCm, cbmPerUnit, confidence, weightApprox: true };
 }
 
 /** Max of an add-on across a factory's tiers — used as a fallback when a tier's
@@ -134,7 +153,7 @@ export async function estimateFactoryCny(spec: EstimateSpec, coeffsArg?: Estimat
 
   const platePer = winner.fc.plateFeePerColor ? Math.max(0, winner.fc.plateFeePerColor.makeFee + winner.fc.plateFeePerColor.perCm2 * area) : 0;
   const plateOneTime = spec.hasLamination ? r2(platePer * Math.max(1, spec.logoColors)) : 0;
-  const carton = nearestCarton(area, spec.hasHandles);
+  const carton = predictCarton(area, spec, winner.factory, coeffs.carton ?? DEFAULT_CARTON_COEF);
 
   const reasoning: string[] = [
     `שטח השקית = 2·H·W + 2·H·D + W·D = 2·${spec.heightCm}·${spec.widthCm} + 2·${spec.heightCm}·${spec.depthCm} + ${spec.widthCm}·${spec.depthCm} = ${Math.round(area)} ס״מ²`,
@@ -148,6 +167,14 @@ export async function estimateFactoryCny(spec: EstimateSpec, coeffsArg?: Estimat
   reasoning.push(`= עלות יחידה מהמפעל ¥${r2(winner.unitCny).toFixed(2)}`);
   if (plateOneTime > 0) reasoning.push(`版费 (${spec.logoColors} צבעים) = ¥${plateOneTime.toFixed(0)} — עלות חד‑פעמית בנפרד`);
   reasoning.push(`→ המרה לשקל + מרווח + שילוח מחושבים על בסיס עלות זו`);
+  // Carton / packing reasoning (the shipping-volume driver).
+  const cbmL = (carton.cbmPerUnit * 1000).toFixed(2); // litres/bag for readability
+  if (carton.confidence === "high") {
+    reasoning.push(`אריזה: שקית מקופלת ≈ שטח × ${(coeffs.carton ?? DEFAULT_CARTON_COEF).tMmGusseted} מ״מ → ${cbmL} ליטר/יח׳ (CBM ${carton.cbmPerUnit.toFixed(5)})`);
+    reasoning.push(`→ קרטון ≈ ${carton.lengthCm}×${carton.widthCm}×${carton.heightCm} ס״מ, ${carton.qty} יח׳/קרטון (אומדן; דיוק ~±10%)`);
+  } else {
+    reasoning.push(`⚠️ אריזה: צורה שטוחה/חריגה — אומדן הנפח לא אמין (עד ~60% סטייה). מומלץ לאמת את הקרטון מול המפעל`);
+  }
 
   return {
     ok: true,

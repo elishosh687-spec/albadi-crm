@@ -665,6 +665,7 @@ interface EstimateApiResponse {
     confidence?: "high" | "medium" | "low";
     reasoning?: string[];
     areaCm2?: number;
+    carton?: { qty: number; weightKg: number; lengthCm: number; widthCm: number; heightCm: number; cbmPerUnit: number; confidence: "high" | "low"; weightApprox: boolean };
     candidates?: { factory: string; unitCny: number; inRange: boolean }[];
   };
   result?: QuoteResult;
@@ -781,6 +782,31 @@ function EstimateTab({ apiToken, shippingOptions, sid, leadName }: { apiToken?: 
               <ul className="flex flex-col gap-1 text-xs tabular-nums">
                 {est.reasoning.map((step, i) => (<li key={i} className="text-foreground/90">• {step}</li>))}
               </ul>
+            </section>
+          )}
+
+          {est.carton && (
+            <section className={cn("rounded-xl border p-4", est.carton.confidence === "low" ? "border-amber-500/50 bg-amber-500/10" : "border-border bg-background/40")}>
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="text-xs uppercase tracking-wider text-muted-foreground">מידות אריזה (אומדן)</h3>
+                {est.carton.confidence === "low"
+                  ? <span className="rounded-full bg-amber-500/20 text-amber-700 dark:text-amber-400 px-2.5 py-0.5 text-[11px] font-semibold">לאמת מול מפעל</span>
+                  : <span className="rounded-full bg-success/15 text-success px-2.5 py-0.5 text-[11px] font-semibold">±10%</span>}
+              </div>
+              {est.carton.confidence === "low" && (
+                <div className="text-[11px] text-amber-700 dark:text-amber-400 mb-2">צורה שטוחה/חריגה — אומדן הנפח לא אמין. הקרטון להלן בערך בלבד; מומלץ לאמת מול המפעל.</div>
+              )}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs tabular-nums">
+                <Stat label="קרטון (ס״מ)" value={`${est.carton.lengthCm}×${est.carton.widthCm}×${est.carton.heightCm} ≈`} />
+                <Stat label="יח׳ לקרטון" value={`${est.carton.qty}`} />
+                <Stat label="CBM ליחידה" value={est.carton.cbmPerUnit.toFixed(5)} />
+                <Stat label={`סה״כ CBM (${r.quantity.toLocaleString("he-IL")} יח׳)`} value={r.totalCbm.toFixed(3)} />
+                <Stat label="קרטונים" value={`${r.totalCartons}`} />
+                <Stat label="משקל (ק״ג)" value={`${r.totalWeightKg.toLocaleString("he-IL")} ≈`} />
+              </div>
+              <div className="text-[10px] text-muted-foreground mt-2">
+                ה‑CBM הוא המספר הקובע לשילוח ימי (≈90% מההזמנות). המשקל אומדן-בד גס — רלוונטי לאוויר בלבד, לא נתון מפעל.
+              </div>
             </section>
           )}
 

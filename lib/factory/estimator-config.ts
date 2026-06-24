@@ -38,6 +38,26 @@ export interface FactoryCoef {
   plateFeePerColor: AffineCoef | null;
   tiers: Record<string, TierCoef>; // "3000"|"5000"|"10000"
 }
+/**
+ * Carton / packing model (VERIFIED 2026-06-24, adversarial workflow wf_699152fc-834).
+ * A flat-stacked folded bag occupies `area × T`, so CBM_per_unit (m³) = T_mm · area · 1e-7
+ * (area = 2HW+2HD+WD cm²). Verified LOO on gusseted 80g bags: median ~6.8%, max ~12%.
+ * WEIGHT is NOT modelled here — recorded carton weight is GROSS (box+handles, ~1.67× fabric)
+ * and was not predictable from dimensions; the estimator shows a rough fabric weight only,
+ * flagged, since SEA (≈90% of orders) is CBM-priced and weight only drives AIR.
+ */
+export interface CartonCoef {
+  tMmGusseted: number;                       // 0.85 mm — stacked thickness per bag, gusseted
+  tMmFlat: number | null;                    // flat (D≤2) bags scatter 0.52–1.6 mm → not formula-quotable
+  perFactoryTMm?: Record<string, number>;    // 亚森 packs ~10% denser than Mandy/鼎驰
+  stdCartonCbm: number;                       // 0.096 m³ (standard 60×40×40 export carton)
+  innerFactor: number;                        // usable fraction of carton volume (~0.85)
+  bundleSnap: number;                         // round units/carton to this multiple (25)
+  areaMin: number;                            // fitted gusseted envelope (cm²)
+  areaMax: number;
+  accuracy?: { medianPct: number; maxPct: number; n: number } | null;
+  fittedAt?: string;
+}
 export interface EstimatorCoeffs {
   version: number;
   areaFormula: string;
@@ -46,7 +66,23 @@ export interface EstimatorCoeffs {
   fittedAt?: string;
   accuracy?: { medianPct: number; maxPct: number; n: number } | null;
   factories: Record<string, FactoryCoef>;
+  carton?: CartonCoef;
 }
+
+/** Verified carton default (workflow wf_699152fc-834): T=0.85mm gusseted; per-factory
+ *  T from the ~10% inter-factory spread; flat bags route to manual (tMmFlat=null). */
+export const DEFAULT_CARTON_COEF: CartonCoef = {
+  tMmGusseted: 0.85,
+  tMmFlat: null,
+  perFactoryTMm: { "亚森": 0.78, Mandy: 0.84, "鼎驰": 0.83 },
+  stdCartonCbm: 0.096,
+  innerFactor: 0.85,
+  bundleSnap: 25,
+  areaMin: 1500,
+  areaMax: 5400,
+  accuracy: { medianPct: 6.8, maxPct: 12.0, n: 11 },
+  fittedAt: "2026-06-24",
+};
 
 /** 2026-06-24 fit. 亚森 lamination is intentionally null (亚森 only laminates by
  *  sewing → route to factory; heat-press lamination ⇒ Mandy). */
@@ -79,6 +115,7 @@ export const DEFAULT_ESTIMATOR_COEFFS: EstimatorCoeffs = {
       },
     },
   },
+  carton: DEFAULT_CARTON_COEF,
 };
 
 interface CacheEntry { value: EstimatorCoeffs; expiresAt: number }
