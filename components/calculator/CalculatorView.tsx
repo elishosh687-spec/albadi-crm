@@ -60,6 +60,9 @@ export function CalculatorView({ products, quantityTiers, shippingOptions, initi
   const [preview, setPreview]     = useState<PreviewResult | null>(null);
   const [loading, setLoading]     = useState(false);
   const [error, setError]         = useState<string | null>(null);
+  // Top-level tab: the regular operator calculator vs the "estimated" calculator
+  // (price an arbitrary 80g size from the per-factory model, no factory round-trip).
+  const [tab, setTab] = useState<"operator" | "estimate">("operator");
 
   // Manual product mode — user enters dims + CNY + carton, no catalog match.
   const [manualMode, setManualMode] = useState(false);
@@ -184,6 +187,29 @@ export function CalculatorView({ products, quantityTiers, shippingOptions, initi
 
   return (
     <div className="flex flex-col gap-6" dir="rtl">
+      {/* Top-level tab: regular vs estimated calculator */}
+      <div className="inline-flex self-start rounded-lg border border-border bg-background/40 p-0.5 text-sm">
+        <button
+          type="button"
+          onClick={() => setTab("operator")}
+          className={cn("px-4 py-1.5 rounded-md", tab === "operator" ? "bg-primary text-primary-foreground" : "text-muted-foreground")}
+        >
+          מחשבון
+        </button>
+        <button
+          type="button"
+          onClick={() => setTab("estimate")}
+          className={cn("px-4 py-1.5 rounded-md", tab === "estimate" ? "bg-primary text-primary-foreground" : "text-muted-foreground")}
+        >
+          מחשבון משוער ✨
+        </button>
+      </div>
+
+      {tab === "estimate" && (
+        <EstimateTab apiToken={apiToken} shippingOptions={shippingOptions} sid={sid} leadName={leadName} />
+      )}
+
+      {tab === "operator" && (<>
       {/* Form */}
       <section className="rounded-xl border border-border bg-card p-5 flex flex-col gap-4">
         {/* Mode toggle */}
@@ -622,6 +648,188 @@ export function CalculatorView({ products, quantityTiers, shippingOptions, initi
             השוואה למרג'ין הנוכחי בהגדרות: {currentMargin}%. צבע ירוק = ≥ ההגדרה.
           </p>
         </section>
+      )}
+      </>)}
+    </div>
+  );
+}
+
+interface EstimateApiResponse {
+  ok: boolean;
+  estimate: {
+    ok: boolean;
+    refused?: string;
+    factoryName?: string;
+    factoryUnitCostCny?: number;
+    plateFeeOneTimeCny?: number;
+    confidence?: "high" | "medium" | "low";
+    reasoning?: string[];
+    areaCm2?: number;
+    candidates?: { factory: string; unitCny: number; inRange: boolean }[];
+  };
+  result?: QuoteResult;
+  altResult?: QuoteResult | null;
+  computed?: { productionPerUnitIls: number; shippingPerUnitIls: number; usdToIls: number; usdToCny: number; commissionPct?: number };
+}
+
+const SELECT_CLS = "bg-background/50 border border-border rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring/30";
+
+function ConfidenceBadge({ confidence }: { confidence?: string }) {
+  const map: Record<string, [string, string]> = {
+    high: ["bg-success/15 text-success", "ביטחון גבוה"],
+    medium: ["bg-amber-500/15 text-amber-600", "ביטחון בינוני"],
+    low: ["bg-destructive/15 text-destructive", "ביטחון נמוך"],
+  };
+  const [cls, label] = map[confidence ?? "medium"] ?? map.medium;
+  return <span className={cn("rounded-full px-2.5 py-0.5 text-[11px] font-semibold", cls)}>{label}</span>;
+}
+
+function EstimateTab({ apiToken, shippingOptions, sid, leadName }: { apiToken?: string; shippingOptions: ShippingOption[]; sid?: string; leadName?: string | null }) {
+  const [h, setH] = useState(""); const [d, setD] = useState(""); const [w, setW] = useState("");
+  const [qty, setQty] = useState("5000");
+  const [colors, setColors] = useState(1);
+  const [handles, setHandles] = useState(true);
+  const [lam, setLam] = useState(false);
+  const [shippingId, setShippingId] = useState(shippingOptions.find((s) => s.type === "sea")?.id ?? shippingOptions[0]?.id ?? "s2");
+  const [data, setData] = useState<EstimateApiResponse | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  const hN = parseFloat(h), wN = parseFloat(w);
+  const valid = Number.isFinite(hN) && hN > 0 && Number.isFinite(wN) && wN > 0;
+
+  const run = useCallback(async () => {
+    if (!valid) { setData(null); return; }
+    setLoading(true); setErr(null);
+    try {
+      const p = new URLSearchParams({ heightCm: h, depthCm: d || "0", widthCm: w, qty, colors: String(colors), handles: String(handles), lamination: String(lam), shipping: shippingId });
+      if (apiToken) p.set("widget_token", apiToken);
+      const res = await fetch(`/api/factory/estimate?${p}`, { cache: "no-store" });
+      const j = await res.json();
+      if (!res.ok || !j.ok) { setErr(j.error ?? `HTTP ${res.status}`); setData(null); return; }
+      setData(j);
+    } catch (e) { setErr(e instanceof Error ? e.message : String(e)); setData(null); } finally { setLoading(false); }
+  }, [valid, h, d, w, qty, colors, handles, lam, shippingId, apiToken]);
+
+  useEffect(() => { run(); }, [run]);
+
+  const est = data?.estimate;
+  const r = data?.result; const c = data?.computed;
+
+  return (
+    <div className="flex flex-col gap-6">
+      <section className="rounded-xl border border-border bg-card p-5 flex flex-col gap-4">
+        <div className="text-[11px] text-muted-foreground">
+          הזן מידות וכמות → המערכת תחזה את המחיר לפי המחירונים האמיתיים של המפעלים (80g, עד 10,000 יח׳), תבחר את המפעל הזול שמייצר, ותראה את ההיגיון. מחוץ לטווח → &quot;שלח למפעל&quot;.
+        </div>
+        <div className="grid grid-cols-3 gap-3">
+          <NumField label="גובה H (ס״מ)" value={h} onChange={setH} placeholder="30" />
+          <NumField label="עומק D (ס״מ)" value={d} onChange={setD} placeholder="10" />
+          <NumField label="רוחב W (ס״מ)" value={w} onChange={setW} placeholder="40" />
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+          <div className="flex flex-col gap-1">
+            <label className="text-sm font-medium">כמות</label>
+            <select value={qty} onChange={(e) => setQty(e.target.value)} className={SELECT_CLS}>
+              <option value="3000">3,000</option><option value="5000">5,000</option><option value="10000">10,000</option>
+            </select>
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-sm font-medium">צבעי לוגו</label>
+            <select value={colors} onChange={(e) => setColors(Number(e.target.value))} className={SELECT_CLS}>
+              <option value={1}>1 צבע</option><option value={2}>2 צבעים</option><option value={3}>3 צבעים</option>
+            </select>
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-sm font-medium">שילוח</label>
+            <select value={shippingId} onChange={(e) => setShippingId(e.target.value)} className={SELECT_CLS}>
+              {shippingOptions.map((s) => (<option key={s.id} value={s.id}>{s.name}</option>))}
+            </select>
+          </div>
+        </div>
+        <div className="flex gap-6">
+          <Toggle label="ידיות" value={handles} onChange={setHandles} />
+          <Toggle label="למינציה" value={lam} onChange={setLam} />
+        </div>
+      </section>
+
+      {loading && (<div className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="size-4 animate-spin" />מחשב…</div>)}
+      {err && (<div className="rounded-lg border border-destructive/40 bg-destructive/10 p-4 text-sm text-destructive">{err}</div>)}
+
+      {!loading && est && !est.ok && (
+        <div className="rounded-xl border border-amber-500/50 bg-amber-500/10 p-5 text-sm">
+          <div className="font-bold text-amber-700 dark:text-amber-400 mb-1">⚠️ לא ניתן לאמוד — שלח למפעל</div>
+          <div className="text-muted-foreground">{est.refused}</div>
+          {est.candidates && est.candidates.length > 0 && (
+            <div className="text-[11px] text-muted-foreground mt-2">מחירים שנבדקו: {est.candidates.map((x) => `${x.factory} ¥${x.unitCny}${x.inRange ? "" : " (מחוץ לטווח)"}`).join(" · ")}</div>
+          )}
+        </div>
+      )}
+
+      {!loading && est && est.ok && r && c && (
+        <>
+          <div className="rounded-xl border border-border bg-card p-4 flex flex-wrap items-center gap-3">
+            <span className="text-sm font-medium">מפעל מומלץ:</span>
+            <span className="rounded-full bg-primary/10 text-primary px-3 py-1 text-sm font-bold">{est.factoryName}</span>
+            <ConfidenceBadge confidence={est.confidence} />
+            <span className="text-xs text-muted-foreground tabular-nums">שטח {Math.round(est.areaCm2 ?? 0)} ס״מ² · עלות מפעל ¥{est.factoryUnitCostCny}{est.plateFeeOneTimeCny ? ` · 版费 ¥${est.plateFeeOneTimeCny} חד‑פעמי` : ""}</span>
+          </div>
+
+          {est.reasoning && (
+            <section className="rounded-xl border border-border bg-background/40 p-4">
+              <h3 className="text-xs uppercase tracking-wider text-muted-foreground mb-2">ההיגיון מאחורי המחיר</h3>
+              <ul className="flex flex-col gap-1 text-xs tabular-nums">
+                {est.reasoning.map((step, i) => (<li key={i} className="text-foreground/90">• {step}</li>))}
+              </ul>
+            </section>
+          )}
+
+          <BreakdownCard result={r} computed={c} />
+          <DetailedBreakdown
+            unitCost={c.productionPerUnitIls}
+            unitShipping={c.shippingPerUnitIls}
+            unitProfit={r.profitPerUnitIls}
+            unitSellingPrice={r.sellingPricePerUnitIls}
+            totalCost={c.productionPerUnitIls * r.quantity}
+            totalShipping={c.shippingPerUnitIls * r.quantity}
+            totalProfit={r.totalProfitIls}
+            totalSellingPrice={r.totalOrderPriceIls}
+            quantity={r.quantity}
+            profitMarginPct={r.profitMargin}
+            commissionPct={c.commissionPct}
+            totalCartons={r.totalCartons}
+            totalWeightKg={r.totalWeightKg}
+            totalCbm={r.totalCbm}
+            shippingType={r.shippingOption?.type === "sea" || r.shippingOption?.type === "air" ? r.shippingOption.type : null}
+            factoryUnitCostCny={r.unitProductionCny}
+            usdToIls={c.usdToIls}
+            usdToCny={c.usdToCny}
+            seaRate={r.shippingOption?.type === "sea" ? shippingOptions.find((s) => s.id === r.shippingOption?.id)?.seaRate : undefined}
+            rawCbm={r.totalCbm}
+            seaMinCbm={1}
+            plateFeeCnyPerUnit={r.plateFeeCny}
+            components={{ baseBagCny: r.baseBagCny, handlesAddonCny: r.handlesAddonCny, laminationAddonCny: r.laminationAddonCny, plateFeeCny: r.plateFeeCny, logoAddonCny: r.logoAddonCny, moldsPerUnitCny: r.moldsPerUnitCny }}
+            alt={data?.altResult ? { shippingType: data.altResult.shippingOption?.type === "air" ? "air" : "sea", unitSellingPrice: data.altResult.sellingPricePerUnitIls, totalSellingPrice: data.altResult.totalOrderPriceIls, shippingName: data.altResult.shippingOption?.name ?? null } : null}
+          />
+          <QuoteShareCard
+            apiToken={apiToken}
+            sid={sid}
+            leadName={leadName}
+            quoteText={buildQuoteText({
+              leadName: leadName ?? null,
+              product: null,
+              manualDescription: `${`H${h}${d ? `*D${d}` : ""}*W${w}`} — אומדן ${est.factoryName}`,
+              quantity: r.quantity,
+              shippingName: r.shippingOption?.name ?? null,
+              shippingType: r.shippingOption?.type === "sea" || r.shippingOption?.type === "air" ? r.shippingOption.type : null,
+              unitSellingPriceIls: r.sellingPricePerUnitIls,
+              totalSellingPriceIls: r.totalOrderPriceIls,
+              shippingPerUnitIls: c.shippingPerUnitIls,
+              totalShippingIls: c.shippingPerUnitIls * r.quantity,
+              result: r,
+            })}
+          />
+        </>
       )}
     </div>
   );
