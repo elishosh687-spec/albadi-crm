@@ -819,7 +819,7 @@ function EstimateTab({ apiToken, shippingOptions, sid, leadName }: { apiToken?: 
                 <Stat label="משקל (ק״ג)" value={`${r.totalWeightKg.toLocaleString("he-IL")} ≈`} />
               </div>
               <div className="text-[10px] text-muted-foreground mt-2">
-                ה‑CBM הוא המספר הקובע לשילוח ימי (≈90% מההזמנות). המשקל אומדן-בד גס — רלוונטי לאוויר בלבד, לא נתון מפעל.
+                ה‑CBM הוא המספר הקובע לשילוח. המשקל הוא אומדן-בד גס (לא נתון מפעל) — להתמצאות בלבד.
               </div>
             </section>
           )}
