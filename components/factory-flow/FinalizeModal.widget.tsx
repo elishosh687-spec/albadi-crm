@@ -27,6 +27,19 @@ function formatIls(n: number): string {
   return `₪${n.toLocaleString("he-IL", { maximumFractionDigits: 2 })}`;
 }
 
+type FieldDiff = { field: string; label: string; stored: string | number | null; live: string | number | null };
+type VerifyResult = {
+  ok: true;
+  verifiable: boolean;
+  found: boolean;
+  rowIndex: string | null;
+  stored: FactoryResponse | null;
+  live: FactoryResponse | null;
+  diffs: FieldDiff[];
+  match: boolean;
+  reason?: string;
+};
+
 export function FinalizeModalWidget({
   apiToken,
   row,
@@ -54,6 +67,16 @@ export function FinalizeModalWidget({
   const [error, setError] = useState<string | null>(null);
   const [reverseMode, setReverseMode] = useState<"profit" | "total" | "unit">("profit");
   const [reverseInput, setReverseInput] = useState<string>("");
+
+  // Live Feishu verification of the factory response (carton/cost). `liveResponse`
+  // is a local override applied after a "pull from table" so the price updates
+  // in place without reopening the modal.
+  const [liveResponse, setLiveResponse] = useState<FactoryResponse | null>(null);
+  const [factoryDataOpen, setFactoryDataOpen] = useState(false);
+  const [verify, setVerify] = useState<VerifyResult | null>(null);
+  const [verifying, setVerifying] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const effFr: FactoryResponse | null = liveResponse ?? row.factoryResponse;
 
   // Editable product details that flow into the customer PDF. Pre-filled from
   // the stored spec (kept in sync with the Feishu table by the refresh), and
@@ -149,26 +172,69 @@ export function FinalizeModalWidget({
   }, []);
 
   const livePricing = useMemo(() => {
-    if (!config || !row.factoryResponse) return null;
+    if (!config || !effFr) return null;
     return priceFactoryQuote(
       {
-        factoryUnitCostCny: row.factoryResponse.unitCostCny,
+        factoryUnitCostCny: effFr.unitCostCny,
         quantity: qtyNum,
         shippingOptionId: shippingOptionId || null,
         cartonSpec: {
-          qty: row.factoryResponse.cartonQty,
-          weightKg: row.factoryResponse.weightKg,
-          cbm: row.factoryResponse.cartonCbm,
-          lengthCm: row.factoryResponse.cartonLengthCm,
-          widthCm: row.factoryResponse.cartonWidthCm,
-          heightCm: row.factoryResponse.cartonHeightCm,
+          qty: effFr.cartonQty,
+          weightKg: effFr.weightKg,
+          cbm: effFr.cartonCbm,
+          lengthCm: effFr.cartonLengthCm,
+          widthCm: effFr.cartonWidthCm,
+          heightCm: effFr.cartonHeightCm,
         },
         profitMarginOverride: margin,
         moldsCostCny: moldsValid ? moldsParsed : 0,
       },
       config
     );
-  }, [config, row, shippingOptionId, margin, moldsValid, moldsParsed, qtyNum]);
+  }, [config, effFr, shippingOptionId, margin, moldsValid, moldsParsed, qtyNum]);
+
+  // Live verify against the Feishu row (read-only). Triggered when the operator
+  // opens the factory-data section.
+  async function runVerify() {
+    setVerifying(true);
+    try {
+      const res = await fetch(widgetUrl(`/api/widget/factory/${row.id}/verify-feishu`, apiToken));
+      const data = (await res.json()) as VerifyResult;
+      if (data && data.ok) setVerify(data);
+    } catch {
+      /* non-fatal — leave verify null */
+    } finally {
+      setVerifying(false);
+    }
+  }
+
+  // Pull the live Feishu row into the stored response (force, regardless of
+  // status), then apply it locally so the price recomputes immediately.
+  async function pullFromTable() {
+    setRefreshing(true);
+    try {
+      const res = await fetch(widgetUrl(`/api/widget/factory/${row.id}/verify-feishu`, apiToken), {
+        method: "POST",
+      });
+      const data = await res.json();
+      if (data?.ok && data.merged) {
+        setLiveResponse(data.merged as FactoryResponse);
+        await runVerify();
+      }
+    } catch {
+      /* non-fatal */
+    } finally {
+      setRefreshing(false);
+    }
+  }
+
+  const toggleFactoryData = () => {
+    setFactoryDataOpen((open) => {
+      const next = !open;
+      if (next && !verify && !verifying) void runVerify();
+      return next;
+    });
+  };
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -416,14 +482,91 @@ export function FinalizeModalWidget({
                 </div>
                 <div className="flex justify-between text-xs pt-1.5 border-t border-border/40">
                   <span className="text-muted-foreground">עלות מפעל ליחידה:</span>
-                  <span className="tabular-nums">¥{row.factoryResponse?.unitCostCny}</span>
+                  <span className="tabular-nums">¥{effFr?.unitCostCny}</span>
                 </div>
-                {row.factoryResponse?.supplier && (
+                {effFr?.supplier && (
                   <div className="flex justify-between text-xs">
                     <span className="text-muted-foreground">ספק:</span>
-                    <span>{row.factoryResponse.supplier}</span>
+                    <span>{effFr.supplier}</span>
                   </div>
                 )}
+                {/* Collapsible factory carton data + LIVE verify against the Feishu
+                    row. Closed by default; the header chip flags a mismatch even
+                    when collapsed so a stale/wrong CBM is never missed. */}
+                {effFr && (() => {
+                  const L = effFr.cartonLengthCm, W = effFr.cartonWidthCm, H = effFr.cartonHeightCm;
+                  const dimsCbm = (L && W && H) ? (L * W * H) / 1_000_000 : null;
+                  const cbm = effFr.cartonCbm;
+                  const cbmWarn = dimsCbm != null && cbm != null && dimsCbm > 0 && Math.abs(cbm - dimsCbm) / dimsCbm > 0.25;
+                  const tableMismatch = !!(verify && verify.verifiable && !verify.match);
+                  const mismatch = tableMismatch || cbmWarn;
+                  const chip = verifying ? (
+                    <span className="text-muted-foreground flex items-center gap-1"><Loader2 className="w-3 h-3 animate-spin" />בודק…</span>
+                  ) : verify?.match && !cbmWarn ? (
+                    <span className="text-success font-medium">✓ מאומת מול הטבלה</span>
+                  ) : mismatch ? (
+                    <span className="text-amber-600 dark:text-amber-400 font-medium">⚠️ לא תואם לטבלה</span>
+                  ) : (
+                    <span className="text-muted-foreground">בדיקה מול הטבלה ›</span>
+                  );
+                  return (
+                    <div className="rounded-md border border-border/40 bg-background/30 mt-1.5">
+                      <button
+                        type="button"
+                        onClick={toggleFactoryData}
+                        className="w-full flex items-center justify-between px-2.5 py-1.5 text-xs"
+                      >
+                        <span className="flex items-center gap-1.5 text-muted-foreground">
+                          <span>{factoryDataOpen ? "▾" : "▸"}</span>
+                          <span>📦 נתוני מפעל</span>
+                        </span>
+                        {chip}
+                      </button>
+                      {factoryDataOpen && (
+                        <div className="px-2.5 pb-2 pt-0.5 space-y-1 border-t border-border/40">
+                          <div className="flex justify-between text-xs"><span className="text-muted-foreground">יח׳ לקרטון</span><span className="tabular-nums">{effFr.cartonQty ?? "—"}</span></div>
+                          <div className="flex justify-between text-xs"><span className="text-muted-foreground">מידות קרטון</span><span className="tabular-nums">{L && W && H ? `${L}×${W}×${H} ס״מ` : "—"}</span></div>
+                          <div className="flex justify-between text-xs">
+                            <span className="text-muted-foreground">CBM לקרטון</span>
+                            <span className={cbmWarn ? "tabular-nums font-bold text-amber-600 dark:text-amber-400" : "tabular-nums"}>{cbm ?? "—"}{cbmWarn ? " ⚠️" : ""}</span>
+                          </div>
+                          <div className="flex justify-between text-xs"><span className="text-muted-foreground">משקל קרטון (ק״ג)</span><span className="tabular-nums">{effFr.weightKg ?? "—"}</span></div>
+                          {cbmWarn && (
+                            <div className="text-[11px] text-amber-600 dark:text-amber-400 leading-snug">⚠️ ה‑CBM ({cbm}) לא תואם למידות (≈{dimsCbm!.toFixed(3)}). מנפח את השילוח — בדוק.</div>
+                          )}
+                          {tableMismatch && verify!.diffs.length > 0 && (
+                            <div className="rounded border border-amber-500/40 bg-amber-500/10 px-2 py-1.5 space-y-0.5">
+                              <div className="text-[11px] font-medium text-amber-700 dark:text-amber-400">לא תואם לטבלה החיה:</div>
+                              {verify!.diffs.map((d) => (
+                                <div key={d.field} className="flex justify-between text-[11px] gap-2">
+                                  <span className="text-muted-foreground">{d.label}</span>
+                                  <span className="tabular-nums">בטבלה: <b>{String(d.live)}</b> · אצלנו: {String(d.stored ?? "—")}</span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                          {verify && verify.verifiable && verify.match && !cbmWarn && (
+                            <div className="text-[11px] text-success">✓ הנתונים תואמים בדיוק לטבלה ב‑Feishu.</div>
+                          )}
+                          {verify && !verify.verifiable && (
+                            <div className="text-[11px] text-muted-foreground">לא ניתן לאמת מול הטבלה ({verify.reason ?? "אין שורה"}).</div>
+                          )}
+                          {mismatch && (
+                            <button
+                              type="button"
+                              onClick={pullFromTable}
+                              disabled={refreshing}
+                              className="mt-1 inline-flex items-center gap-1 rounded-md bg-amber-600 text-white px-2.5 py-1 text-[11px] font-medium disabled:opacity-60"
+                            >
+                              {refreshing ? <Loader2 className="w-3 h-3 animate-spin" /> : null}
+                              רענן מהטבלה
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
               </div>
 
               <div>
@@ -533,7 +676,7 @@ export function FinalizeModalWidget({
                 </div>
               )}
 
-              {livePricing && config && row.factoryResponse && (
+              {livePricing && config && effFr && (
                 <DetailedBreakdown
                   unitCost={livePricing.unitCost}
                   unitShipping={livePricing.unitShipping}
@@ -552,7 +695,7 @@ export function FinalizeModalWidget({
                   shippingType={
                     config.shippingOptions.find((s) => s.id === livePricing.shippingOptionId)?.type ?? null
                   }
-                  factoryUnitCostCny={row.factoryResponse.unitCostCny}
+                  factoryUnitCostCny={effFr.unitCostCny}
                   usdToIls={config.usdToIls}
                   usdToCny={config.usdToCny}
                   seaRate={
