@@ -5,6 +5,27 @@
 
 ---
 
+## 2026-06-24 — "מחשבון משוער + מודל אריזה (self-quote estimator + carton/CBM model)"
+
+### Added
+
+- **מחשבון משוער (self-quote estimator).** לשונית "מחשבון משוער ✨" ב-`CalculatorView` (widget + v3, operator-only) מתמחרת שקית 80g שרירותית (כל H·D·W, ידיות, למינציה, צבעים, כמות ≤10,000) **בלי לשאול את המפעל**. מודל פר-מפעל פר-tier מ-`app_config` key `factory_estimators`, `area=2HW+2HD+WD`: `base+perCm2·area` + add-ons צבעים/ידיות/למינציה, 版费 כשורה חד-פעמית. בוחר את המפעל הזול שמייצר ומנמק; למינציה ⇒ Mandy בלבד; מעל 10,000 / מחוץ-לטווח → "שלח למפעל". תוצאה → `priceFactoryQuote` (אותו מנוע מרווח/שילוח, ללא כפילות). `lib/factory/estimator.ts` + `estimator-config.ts` + `app/api/factory/estimate/route.ts`. מאומת LOO חציון ~4–7%.
+- **מודל אריזה / CBM (VERIFIED).** `predictCarton` החליף את `nearestCarton`. פיזיקה: שקית מקופלת נערמת ב-`area×עובי` → **CBM/יח׳ = T_mm·area·1e-7**, T=0.85מ״מ (פר-מפעל 亚森 0.78/Mandy 0.84/鼎驰 0.83). `area` ניצח כל מאפיין; בחירת הקרטון הסטנדרטי מתבטלת מ-CBM/יח׳. אומת אדוורסרית (workflow, 5 סוכנים) מול 33 הצעות אמיתיות + קטלוג: **שקיות עם דופן LOO חציון ~5.5–6.8%, מקס ~12%**. פאנל "מידות אריזה" ב-EstimateTab.
+- **refit יומי לאריזה.** `server/refit-estimator.ts` מתאים מחדש גם את מודל האריזה (סינון 80g non-woven, dedupe, השמטת שטוח/מגש, הסגרת שורות חשודות), מפרסם רק אם LOO ≤ הסף, אחרת שומר ישן + DM לאלי.
+
+### Changed
+
+- **תיקון למינציה 3000.** `constants.ts laminationPrices["3000"]` תוקן מ-תפירה ל-הלחמה (heat-press) — סוף הבאג "3000 יקר מ-5000". רק ערך 3000 שונה; 5000/10000 ללא שינוי.
+- **פאנל "ההיגיון מאחורי המחיר" מקופל כברירת מחדל** (native `<details>`) — המסך פחות עמוס; לחיצה חושפת רשימה ממוספרת.
+- **המחשבון המשוער הישן (לקוח) נמחק מהאתר** (`bag-quote-app`): `lib/rough-estimator.ts`, `estimator-bridge.ts`, `step-result-rough.tsx`, וה-UI ב-`quote.tsx` + admin. האומדן היחיד הוא עכשיו ה-CRM בלבד.
+
+### Known limits (honest)
+
+- **משקל לא נחזה מהמידות** (LOO ~19%) — המשקל הרשום הוא קרטון גרוס (≈1.67× בד). מוצג אומדן-בד גס לאוויר בלבד; ים (~90%) מתומחר ב-CBM. אם יש נתון מפעל — קוראים אותו, לא חוזים.
+- **צורות שטוחות/מגש** (D≤2 / H<10) — לא ניתנות לחיזוי CBM אמין (עד ~60%); מסומנות "לאמת מול מפעל" במקום לנחש.
+
+---
+
 ## 2026-06-12 — "Factory quotes: margin unify, editable PDF, product images, combined shipments, Feishu re-import"
 
 ### Added
