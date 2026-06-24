@@ -499,13 +499,14 @@ export function FinalizeModalWidget({
                   const cbm = effFr.cartonCbm;
                   const cbmWarn = dimsCbm != null && cbm != null && dimsCbm > 0 && Math.abs(cbm - dimsCbm) / dimsCbm > 0.25;
                   const tableMismatch = !!(verify && verify.verifiable && !verify.match);
-                  const mismatch = tableMismatch || cbmWarn;
                   const chip = verifying ? (
                     <span className="text-muted-foreground flex items-center gap-1"><Loader2 className="w-3 h-3 animate-spin" />בודק…</span>
-                  ) : verify?.match && !cbmWarn ? (
-                    <span className="text-success font-medium">✓ מאומת מול הטבלה</span>
-                  ) : mismatch ? (
+                  ) : tableMismatch ? (
                     <span className="text-amber-600 dark:text-amber-400 font-medium">⚠️ לא תואם לטבלה</span>
+                  ) : cbmWarn ? (
+                    <span className="text-amber-600 dark:text-amber-400 font-medium">⚠️ CBM לא תואם למידות</span>
+                  ) : verify?.match ? (
+                    <span className="text-success font-medium">✓ מאומת מול הטבלה</span>
                   ) : (
                     <span className="text-muted-foreground">בדיקה מול הטבלה ›</span>
                   );
@@ -551,7 +552,7 @@ export function FinalizeModalWidget({
                           {verify && !verify.verifiable && (
                             <div className="text-[11px] text-muted-foreground">לא ניתן לאמת מול הטבלה ({verify.reason ?? "אין שורה"}).</div>
                           )}
-                          {mismatch && (
+                          {tableMismatch && (
                             <button
                               type="button"
                               onClick={pullFromTable}
@@ -561,6 +562,11 @@ export function FinalizeModalWidget({
                               {refreshing ? <Loader2 className="w-3 h-3 animate-spin" /> : null}
                               רענן מהטבלה
                             </button>
+                          )}
+                          {cbmWarn && !tableMismatch && (
+                            <div className="text-[11px] text-amber-600 dark:text-amber-400 leading-snug">
+                              ה‑CBM שגוי <b>גם בטבלה</b> — רענון לא יעזור. צריך לתקן את תא ה‑CBM ב‑Feishu (המפעל).
+                            </div>
                           )}
                         </div>
                       )}
