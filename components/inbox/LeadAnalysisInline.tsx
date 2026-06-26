@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import type { LeadAnalysis } from "@/lib/analysis/analyze-lead";
-import { getStagePlay } from "@/lib/sales/stage-plays.he";
+import { getStagePlay, type BlockerKey, type StagePlay } from "@/lib/sales/stage-plays.he";
 
 const BLOCKER_HE: Record<string, string> = {
   price: "מחיר",
@@ -37,6 +37,14 @@ export default function LeadAnalysisInline({
   const [error, setError] = useState<string | null>(null);
   const [verdict, setVerdict] = useState<LeadAnalysis | null>(null);
   const [cached, setCached] = useState(false);
+  const [plays, setPlays] = useState<Record<BlockerKey, StagePlay> | null>(null);
+
+  useEffect(() => {
+    fetch(`/api/widget/plays?widget_token=${encodeURIComponent(apiToken)}`)
+      .then((r) => r.json())
+      .then((j) => j.ok && setPlays(j.plays))
+      .catch(() => {});
+  }, [apiToken]);
 
   async function run(force: boolean) {
     setLoading(true);
@@ -103,7 +111,7 @@ export default function LeadAnalysisInline({
       ) : (
         <>
           {(() => {
-            const play = getStagePlay(v.primary_blocker);
+            const play = plays?.[v.primary_blocker as BlockerKey] ?? getStagePlay(v.primary_blocker);
             return (
               <div
                 style={{

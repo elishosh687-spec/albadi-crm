@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/cn";
-import { analyzeBatchAction, loadAnalysisAggregateAction } from "@/app/actions/v2";
+import { analyzeBatchAction, loadAnalysisAggregateAction, loadPlaysAction, savePlaysAction } from "@/app/actions/v2";
+import PlaysEditor from "@/components/analysis/PlaysEditor";
 import type { LeadFilter } from "@/lib/analysis/batch";
 import type { AnalysisAggregate, Pattern } from "@/lib/analysis/aggregate";
 
@@ -33,6 +34,7 @@ export default function AnalysisViewV3() {
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState<string | null>(null);
+  const [showEditor, setShowEditor] = useState(false);
 
   function filter(): LeadFilter {
     return {
@@ -73,6 +75,19 @@ export default function AnalysisViewV3() {
 
   return (
     <div className="space-y-4 text-sm">
+      <div className="flex justify-end">
+        <button
+          onClick={() => setShowEditor((s) => !s)}
+          className="rounded-md border border-border px-3 py-1.5 text-xs"
+        >
+          {showEditor ? "→ חזרה לניתוח" : "✏️ ערוך פליז"}
+        </button>
+      </div>
+
+      {showEditor ? (
+        <PlaysEditor load={loadPlaysAction} save={savePlaysAction} />
+      ) : (
+       <>
       <div className="rounded-lg border border-border p-3 space-y-3">
         <div>
           <div className="text-xs text-muted-foreground mb-1.5">שלב</div>
@@ -169,6 +184,8 @@ export default function AnalysisViewV3() {
             />
           </div>
         ))}
+       </>
+      )}
     </div>
   );
 }

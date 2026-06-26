@@ -32,7 +32,19 @@ export interface StagePlay {
   nextStep: string;
 }
 
-const PLAYS: Record<BlockerKey, StagePlay> = {
+export const BLOCKER_KEYS: BlockerKey[] = [
+  "product_mismatch",
+  "wrong_lead",
+  "price",
+  "moq",
+  "sample_trust",
+  "payment_terms",
+  "spec_open",
+  "followup_drop",
+  "other",
+];
+
+export const DEFAULT_PLAYS: Record<BlockerKey, StagePlay> = {
   product_mismatch: {
     title: "סינון / פסילה מהירה",
     stage: "פתיחה",
@@ -114,5 +126,7 @@ const PLAYS: Record<BlockerKey, StagePlay> = {
 };
 
 export function getStagePlay(blocker: string | null | undefined): StagePlay {
-  return PLAYS[(blocker as BlockerKey) in PLAYS ? (blocker as BlockerKey) : "other"];
+  return DEFAULT_PLAYS[
+    (blocker as BlockerKey) in DEFAULT_PLAYS ? (blocker as BlockerKey) : "other"
+  ];
 }

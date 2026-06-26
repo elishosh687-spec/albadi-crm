@@ -1622,3 +1622,23 @@ export async function loadAnalysisAggregateAction(
     return { ok: false, error: e instanceof Error ? e.message : "aggregate failed" };
   }
 }
+
+/** Editable sales plays for the v3 analysis editor. */
+export async function loadPlaysAction(): Promise<
+  import("@/lib/sales/plays-store").PlaysMap
+> {
+  const { loadPlays } = await import("@/lib/sales/plays-store");
+  return loadPlays();
+}
+
+export async function savePlaysAction(
+  plays: Partial<import("@/lib/sales/plays-store").PlaysMap>
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    const { savePlays } = await import("@/lib/sales/plays-store");
+    await savePlays(plays);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "save failed" };
+  }
+}

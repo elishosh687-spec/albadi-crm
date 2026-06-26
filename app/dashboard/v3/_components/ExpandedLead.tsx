@@ -39,10 +39,11 @@ import {
   rejectDraftAction,
   loadLeadEventsAction,
   analyzeLeadAction,
+  loadPlaysAction,
   type TemplateRow,
 } from "@/app/actions/v2";
 import type { LeadAnalysis } from "@/lib/analysis/analyze-lead";
-import { getStagePlay } from "@/lib/sales/stage-plays.he";
+import { getStagePlay, type BlockerKey, type StagePlay } from "@/lib/sales/stage-plays.he";
 import {
   V2_FLAG_NAMES,
   V2_PIPELINE_STAGES,
@@ -1118,6 +1119,11 @@ function AnalyzeTab({ sid }: { sid: string }) {
   const [error, setError] = useState<string | null>(null);
   const [verdict, setVerdict] = useState<LeadAnalysis | null>(null);
   const [cached, setCached] = useState(false);
+  const [plays, setPlays] = useState<Record<BlockerKey, StagePlay> | null>(null);
+
+  useEffect(() => {
+    loadPlaysAction().then(setPlays).catch(() => {});
+  }, []);
 
   async function run(force: boolean) {
     setLoading(true);
@@ -1174,7 +1180,7 @@ function AnalyzeTab({ sid }: { sid: string }) {
       ) : (
         <>
           {(() => {
-            const play = getStagePlay(v.primary_blocker);
+            const play = plays?.[v.primary_blocker as BlockerKey] ?? getStagePlay(v.primary_blocker);
             return (
               <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-3">
                 <div className="text-xs text-emerald-600 dark:text-emerald-400 mb-1">

@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useState } from "react";
 import type { AnalysisAggregate, Pattern } from "@/lib/analysis/aggregate";
+import PlaysEditor from "./PlaysEditor";
+import type { BlockerKey, StagePlay } from "@/lib/sales/stage-plays.he";
 
 const STAGES: [string, string][] = [
   ["__NULL__", "בשאלון"],
@@ -36,8 +38,29 @@ export default function AnalysisScreen({ token }: { token: string }) {
   const [withCalls, setWithCalls] = useState(false);
   const [batch, setBatch] = useState(20);
 
+  const [showEditor, setShowEditor] = useState(false);
   const [agg, setAgg] = useState<AnalysisAggregate | null>(null);
   const [matched, setMatched] = useState({ total: 0, analyzed: 0 });
+
+  const loadPlays = useCallback(async () => {
+    const r = await fetch(`/api/widget/plays?widget_token=${encodeURIComponent(token)}`);
+    const j = await r.json();
+    if (!j.ok) throw new Error(j.error || "failed");
+    return j.plays as Record<BlockerKey, StagePlay>;
+  }, [token]);
+
+  const savePlays = useCallback(
+    async (plays: Record<BlockerKey, StagePlay>) => {
+      const r = await fetch(`/api/widget/plays?widget_token=${encodeURIComponent(token)}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ plays }),
+      });
+      const j = await r.json();
+      return { ok: !!j.ok, error: j.error as string | undefined };
+    },
+    [token]
+  );
   const [loading, setLoading] = useState(false);
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -106,8 +129,17 @@ export default function AnalysisScreen({ token }: { token: string }) {
 
   return (
     <div dir="rtl" style={{ color: "#e4e4e7", fontSize: 13, padding: 12, lineHeight: 1.5 }}>
-      <h2 style={{ margin: "0 0 10px", fontSize: 16 }}>🔍 ניתוח לידים</h2>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+        <h2 style={{ margin: 0, fontSize: 16 }}>🔍 ניתוח לידים</h2>
+        <button onClick={() => setShowEditor((s) => !s)} style={btn("neutral")}>
+          {showEditor ? "→ חזרה לניתוח" : "✏️ ערוך פליז"}
+        </button>
+      </div>
 
+      {showEditor ? (
+        <PlaysEditor load={loadPlays} save={savePlays} />
+      ) : (
+        <>
       {/* Filters */}
       <div style={card}>
         <div style={{ fontSize: 11, color: "#71717a", marginBottom: 6 }}>שלב</div>
@@ -224,6 +256,8 @@ export default function AnalysisScreen({ token }: { token: string }) {
             </>
           )}
         </div>
+      )}
+        </>
       )}
     </div>
   );
