@@ -128,7 +128,7 @@ export function FactoryFlowView({ apiToken }: { apiToken: string }) {
   );
 
   return (
-    <div className="space-y-4" dir="rtl">
+    <div className="gg-theme space-y-4 rounded-xl p-4" dir="rtl">
       <div className="rounded-lg border border-border bg-card/40 p-3 space-y-3">
         <div className="text-xs text-muted-foreground">
           חפש לקוח כדי לפתוח / לשלוח הצעה חדשה למפעל
