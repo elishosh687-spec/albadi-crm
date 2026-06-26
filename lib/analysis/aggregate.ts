@@ -11,6 +11,7 @@
 import { db } from "@/lib/db";
 import { sql } from "drizzle-orm";
 import { getObjectionPlay } from "@/lib/sales/objection-playbook.he";
+import { matchedSidsSubquery, type LeadFilter } from "./batch";
 import type { LeadAnalysis } from "./analyze-lead";
 
 export interface LeadRef {
@@ -46,12 +47,19 @@ const BLOCKER_HE: Record<string, string> = {
   other: "אחר",
 };
 
-export async function aggregateAnalyses(): Promise<AnalysisAggregate> {
-  // Latest verdict per lead.
+export async function aggregateAnalyses(
+  filter?: LeadFilter
+): Promise<AnalysisAggregate> {
+  // Latest verdict per lead, optionally scoped to leads matching the filter.
+  const scope =
+    filter && (filter.stages?.length || filter.dateFrom || filter.dateTo || filter.withCalls)
+      ? sql`WHERE a.manychat_sub_id IN (${matchedSidsSubquery(filter)})`
+      : sql``;
   const res = await db.execute(sql`
-    SELECT DISTINCT ON (manychat_sub_id) manychat_sub_id, verdict
-    FROM lead_analyses
-    ORDER BY manychat_sub_id, created_at DESC
+    SELECT DISTINCT ON (a.manychat_sub_id) a.manychat_sub_id, a.verdict
+    FROM lead_analyses a
+    ${scope}
+    ORDER BY a.manychat_sub_id, a.created_at DESC
   `);
   const verdicts = (res.rows as { manychat_sub_id: string; verdict: LeadAnalysis }[]).map(
     (r) => r.verdict

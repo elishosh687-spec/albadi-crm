@@ -47,6 +47,11 @@ const TABS: TabDef[] = [
     url: (t, sid) => withSid(`/widget/factory-flow?widget_token=${encodeURIComponent(t)}`, sid),
   },
   {
+    id: "analysis",
+    label: "🔍 ניתוח",
+    url: (t) => `/widget/analysis?widget_token=${encodeURIComponent(t)}`,
+  },
+  {
     id: "calc",
     label: "🧮 מחשבון",
     url: (t, sid) => withSid(`/widget/calculator?widget_token=${encodeURIComponent(t)}`, sid),

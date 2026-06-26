@@ -1572,3 +1572,53 @@ export async function analyzeLeadAction(
     return { ok: false, error: e instanceof Error ? e.message : "analysis failed" };
   }
 }
+
+/**
+ * Filtered batch analysis + aggregate for the v3 "ניתוח" page (mirror of the
+ * widget screen). See lib/analysis/batch.ts + aggregate.ts.
+ */
+export async function analyzeBatchAction(
+  filter: import("@/lib/analysis/batch").LeadFilter,
+  limit: number,
+  force?: boolean
+): Promise<
+  | { ok: true; progress: import("@/lib/analysis/batch").BatchProgress }
+  | { ok: false; error: string }
+> {
+  try {
+    const { analyzeBatch } = await import("@/lib/analysis/batch");
+    const progress = await analyzeBatch(filter ?? {}, limit, !!force);
+    return { ok: true, progress };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "batch failed" };
+  }
+}
+
+export async function loadAnalysisAggregateAction(
+  filter: import("@/lib/analysis/batch").LeadFilter
+): Promise<
+  | {
+      ok: true;
+      aggregate: import("@/lib/analysis/aggregate").AnalysisAggregate;
+      matched_total: number;
+      matched_analyzed: number;
+    }
+  | { ok: false; error: string }
+> {
+  try {
+    const { aggregateAnalyses } = await import("@/lib/analysis/aggregate");
+    const { selectMatched } = await import("@/lib/analysis/batch");
+    const [aggregate, matched] = await Promise.all([
+      aggregateAnalyses(filter ?? {}),
+      selectMatched(filter ?? {}),
+    ]);
+    return {
+      ok: true,
+      aggregate,
+      matched_total: matched.length,
+      matched_analyzed: matched.filter((m) => m.analyzed).length,
+    };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "aggregate failed" };
+  }
+}
