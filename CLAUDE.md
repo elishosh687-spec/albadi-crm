@@ -440,3 +440,81 @@ bind a GHL contact) — expected, only telephony calls sync. (2) Editing the
 agent with `language` in the payload 400s (see above). (3) The recording proxy
 needs `ELEVENLABS_API_KEY` in the **prod** runtime, else it 502s and the audio
 attach silently fails (note still posts).
+
+## Lead analyzer — the "נתח" button (built 2026-06-26)
+
+Per-lead **bottom-up** sales analysis to understand why leads stall, surfaced
+inside GHL. Replaces ad-hoc "read a few calls and guess". Lives in
+[lib/analysis/](lib/analysis/).
+
+**Engine ([lib/analysis/analyze-lead.ts](lib/analysis/analyze-lead.ts)):**
+`analyzeLead(sid, {force})` →
+1. **dossier** ([build-dossier.ts](lib/analysis/build-dossier.ts)) — assembles
+   ONE lead's full data: all call transcripts+analyses (GHL calls join
+   `ghl_contact_id`, ElevenLabs join phone digits), full WhatsApp timeline
+   (`messages`), quote history (`bot_quotes`). Hebrew render + `hashDossier`.
+2. **cache** — `input_hash` (hash of the dossier). If the latest `lead_analyses`
+   row matches → return it (no LLM, no cost). New message/call → hash differs →
+   re-analyze. This is why repeat clicks are instant + free.
+3. **judge** — gpt-4o (`LEAD_ANALYSIS_MODEL` || `OPENAI_ANALYSIS_MODEL` ||
+   "gpt-4o") fills a strict structured verdict (`LeadAnalysis`): root_cause,
+   `primary_blocker` (closed enum), objections w/ verbatim quotes,
+   price_forensics, commitment_scorecard, etc.
+4. **grounding self-check (the anti-cherry-pick guardrail)** — `isGrounded()`
+   drops any objection whose quote isn't actually present in the dossier.
+   DETERMINISTIC, not a second LLM pass.
+5. **persist** `lead_analyses` + **post GHL contact note** (marker
+   `[LEAD-ANALYSIS v1] sid=<sid> h=<hash8>`, dedup via `listContactNotes`).
+
+**Data model:** `lead_analyses` (manychat_sub_id, verdict jsonb, input_hash,
+model, version, created_at) — created via direct DDL, NOT `drizzle-kit push`
+(push hangs on a create-vs-rename TUI prompt re: orphan `configurator_*`
+tables). Latest row per sid is the current verdict.
+
+**Surfaces (both frontends):**
+- **Per-lead:** "🔍 נתח" tile in the widget inbox
+  ([components/inbox/LeadAnalysisInline.tsx](components/inbox/LeadAnalysisInline.tsx))
+  + "ניתוח" tab in v3 `ExpandedLead`. Endpoint
+  [/api/widget/analyze-lead](app/api/widget/analyze-lead/route.ts) +
+  `analyzeLeadAction`.
+- **Filtered bulk + aggregate:** "🔍 ניתוח" hub tab
+  ([components/analysis/AnalysisScreen.tsx](components/analysis/AnalysisScreen.tsx))
+  + `/dashboard/v3/analysis`. Filter by stage/date/has-calls/batch, run+continue
+  with progress, then a **deterministic rollup** of blockers/objections — a pure
+  groupby over stored verdicts ([aggregate.ts](lib/analysis/aggregate.ts)), no
+  second LLM → can't cherry-pick. Lib: [batch.ts](lib/analysis/batch.ts)
+  (`analyzeBatch`, skip-already-analyzed). Endpoints
+  `/api/widget/analyze-batch`, `/api/widget/analysis-aggregate`,
+  `/api/admin/analyze-leads`, `/api/admin/analysis-aggregate`.
+
+**Blocker → play (the salesperson script).** The verdict's `primary_blocker`
+maps to a "play" (what to say now) — driven by the ANALYSIS, not the often-stale
+manual `pipeline_stage`. Plays are **editable from the UI** ("✏️ ערוך פליז" in
+the analysis tab) → stored in `app_config` key `sales.plays`
+([plays-store.ts](lib/sales/plays-store.ts)), merged over `DEFAULT_PLAYS`
+([stage-plays.he.ts](lib/sales/stage-plays.he.ts)). Full 6-stage reference:
+[docs/SALES-PLAYBOOK.he.md](docs/SALES-PLAYBOOK.he.md). Objection→reply taxonomy:
+[lib/sales/objection-playbook.he.ts](lib/sales/objection-playbook.he.ts).
+
+**Core lesson — never let the LLM guess a fact the DB knows.** Two corrections
+proved this:
+- The judge's `followup_verdict` ("promised but didn't deliver") read **92%** —
+  false. It conflated bot messages and missed delivered quotes. Replaced with a
+  DETERMINISTIC rule in [aggregate.ts](lib/analysis/aggregate.ts): a drop = the
+  CUSTOMER sent the last message and it's been >3 days. Real number **~13%**.
+- Same principle as the quote grounding check. If a metric smells wrong, it's
+  probably an LLM read that should be a direct query.
+
+**Footguns:**
+- **Prod-keys-only.** Engine needs OPENAI + GHL keys → only runs in prod.
+  Locally `vercel env pull` masks them to empty, so `analyzeLead` soft-fails
+  (and the soft-fail path does NOT persist → those leads retry next run). Test
+  deterministic parts with `scripts/_test-lead-analysis.ts` (stubbed judge).
+- **OpenAI 30K TPM tier.** Big dossiers (~46k chars) at concurrency 3 hit 429s.
+  `build-dossier` trims render to ~14k chars and keeps summaries+messages first
+  (transcripts are the trimmable tail). Bulk-seed paced: `scripts/_run-analysis-paced.ts`.
+- **No physical samples (business rule).** Albadi does NOT send samples (delays
+  the sale). The `sample_trust` play uses photos/video/social-proof, and the
+  aggregate labels "asked to see product" as a SIGNAL, not a failure.
+- To **seed all leads**: `POST /api/admin/analyze-leads` (BOT_SECRET, in prod)
+  or click "נתח הכל" on the screen. Each gpt-4o call costs money.
