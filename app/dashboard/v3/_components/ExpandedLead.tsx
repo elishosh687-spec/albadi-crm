@@ -42,6 +42,7 @@ import {
   type TemplateRow,
 } from "@/app/actions/v2";
 import type { LeadAnalysis } from "@/lib/analysis/analyze-lead";
+import { getStagePlay } from "@/lib/sales/stage-plays.he";
 import {
   V2_FLAG_NAMES,
   V2_PIPELINE_STAGES,
@@ -1172,6 +1173,23 @@ function AnalyzeTab({ sid }: { sid: string }) {
         <div className="text-amber-600 dark:text-amber-400">⚠️ {v.root_cause}</div>
       ) : (
         <>
+          {(() => {
+            const play = getStagePlay(v.primary_blocker);
+            return (
+              <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-3">
+                <div className="text-xs text-emerald-600 dark:text-emerald-400 mb-1">
+                  ▶ הפליי ({play.stage})
+                </div>
+                <div className="font-semibold mb-1">{play.title}</div>
+                <ul className="list-disc pe-5 space-y-0.5">
+                  {play.lines.map((l, i) => (
+                    <li key={i}>{l}</li>
+                  ))}
+                </ul>
+                <div className="text-xs text-muted-foreground mt-1">שלב הבא: {play.nextStep}</div>
+              </div>
+            );
+          })()}
           <div>
             <span className="text-muted-foreground">שורש התקיעה: </span>
             {v.root_cause}

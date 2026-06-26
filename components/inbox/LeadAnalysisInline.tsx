@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import type { LeadAnalysis } from "@/lib/analysis/analyze-lead";
+import { getStagePlay } from "@/lib/sales/stage-plays.he";
 
 const BLOCKER_HE: Record<string, string> = {
   price: "מחיר",
@@ -101,6 +102,33 @@ export default function LeadAnalysisInline({
         <div style={{ color: "#fbbf24" }}>⚠️ {v.root_cause}</div>
       ) : (
         <>
+          {(() => {
+            const play = getStagePlay(v.primary_blocker);
+            return (
+              <div
+                style={{
+                  background: "#10231a",
+                  border: "1px solid #1f5132",
+                  borderRadius: 8,
+                  padding: 10,
+                  marginBottom: 8,
+                }}
+              >
+                <div style={{ fontSize: 11, color: "#6ee7b7", marginBottom: 4 }}>
+                  ▶ הפליי ({play.stage})
+                </div>
+                <div style={{ fontWeight: 600, marginBottom: 4 }}>{play.title}</div>
+                {play.lines.map((l, i) => (
+                  <div key={i} style={{ marginBottom: 3 }}>
+                    • {l}
+                  </div>
+                ))}
+                <div style={{ fontSize: 12, color: "#a1a1aa", marginTop: 4 }}>
+                  שלב הבא: {play.nextStep}
+                </div>
+              </div>
+            );
+          })()}
           <Section title="שורש התקיעה">{v.root_cause}</Section>
 
           {v.objections.length > 0 && (

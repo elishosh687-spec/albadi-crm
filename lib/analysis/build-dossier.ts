@@ -58,10 +58,14 @@ export interface LeadDossier {
   stats: { callCount: number; messageCount: number; quoteCount: number };
 }
 
-// Keep the LLM payload bounded — a single garrulous lead can have 30k-char
-// transcripts. We trim each transcript and cap the whole render.
-const MAX_TRANSCRIPT_CHARS = 8000;
-const MAX_RENDER_CHARS = 60000;
+// Keep the LLM payload bounded — both to control cost and to fit the OpenAI
+// account's tokens-per-minute tier (30K TPM as of 2026-06). A single garrulous
+// lead can have 30k-char transcripts; we trim each and cap the whole render so
+// one analysis stays well under the per-minute budget (and several can run per
+// minute). Raising the OpenAI tier later lets these caps grow for richer
+// grounding.
+const MAX_TRANSCRIPT_CHARS = 3000;
+const MAX_RENDER_CHARS = 14000;
 
 export async function buildLeadDossier(sid: string): Promise<LeadDossier | null> {
   const clean = sid.trim();
@@ -218,19 +222,19 @@ export function renderDossierText(d: LeadDossier): string {
     });
   }
 
+  // Call SUMMARIES are compact + high-signal → always in the core.
   if (d.calls.length) {
-    parts.push(`\n## שיחות טלפון (${d.calls.length})`);
+    parts.push(`\n## שיחות טלפון (${d.calls.length}) — סיכומים`);
     d.calls.forEach((c, i) => {
       parts.push(
-        `\n### שיחה ${i + 1} — ${c.startedAt ?? ""} (${c.source}, ${
-          c.durationSec ?? "?"
-        } שׁנ', סנטימנט: ${c.sentiment ?? "?"})`
+        `[${i + 1}] ${c.startedAt ?? ""} (${c.source}, סנטימנט ${c.sentiment ?? "?"}): ${
+          c.summary ?? "—"
+        }`
       );
-      if (c.summary) parts.push(`סיכום: ${c.summary}`);
-      if (c.transcript) parts.push(`תמלול:\n${c.transcript}`);
     });
   }
 
+  // WhatsApp timeline — short, high-signal (objection quotes live here too).
   if (d.messages.length) {
     parts.push(`\n## שרשור וואטסאפ (${d.messages.length} הודעות)`);
     d.messages.forEach((m) => {
@@ -244,10 +248,21 @@ export function renderDossierText(d: LeadDossier): string {
     });
   }
 
-  const text = parts.join("\n");
-  return text.length > MAX_RENDER_CHARS
-    ? text.slice(0, MAX_RENDER_CHARS) + "\n…[נחתך]"
-    : text;
+  // Core (header + quotes + summaries + messages) is never truncated. Raw
+  // transcripts are the trimmable tail — append only what fits the budget so
+  // the high-signal evidence above always survives the TPM cap.
+  let text = parts.join("\n");
+  let budget = MAX_RENDER_CHARS - text.length;
+  if (budget > 500 && d.calls.some((c) => c.transcript)) {
+    const transcripts: string[] = ["\n## תמלולי שיחות (גולמי)"];
+    for (let i = 0; i < d.calls.length; i++) {
+      const t = d.calls[i].transcript;
+      if (t) transcripts.push(`\n### תמלול שיחה ${i + 1}\n${t}`);
+    }
+    const tail = transcripts.join("\n");
+    text += tail.length > budget ? tail.slice(0, budget) + "\n…[נחתך]" : tail;
+  }
+  return text;
 }
 
 /**
