@@ -1,6 +1,7 @@
 "use client";
 
 import { type CSSProperties, useEffect, useMemo, useState, useTransition } from "react";
+import LeadAnalysisInline from "./LeadAnalysisInline";
 
 export interface InboxRow {
   sid: string;
@@ -66,6 +67,8 @@ export default function InboxView({
   const [mobileMenuSid, setMobileMenuSid] = useState<string | null>(null);
   // sid of the row whose inline factory-quotes panel is expanded. null = none.
   const [expandedSid, setExpandedSid] = useState<string | null>(null);
+  // sid of the row whose inline lead-analysis panel is expanded. null = none.
+  const [analyzeSid, setAnalyzeSid] = useState<string | null>(null);
   const [, startTransition] = useTransition();
 
   // Inbox is self-contained — clicking a name opens the lead's contact
@@ -442,6 +445,16 @@ export default function InboxView({
                 label="הצעות"
                 tone={expandedSid === r.sid.trim() ? "warn" : "accent"}
               />
+              <ActionTile
+                onClick={() =>
+                  setAnalyzeSid((cur) => (cur === r.sid.trim() ? null : r.sid.trim()))
+                }
+                disabled={false}
+                title="ניתוח מכירה — למה הליד תקוע + תסריט תשובה"
+                icon="🔍"
+                label="נתח"
+                tone={analyzeSid === r.sid.trim() ? "warn" : "accent"}
+              />
             </div>
             </div>
             {expandedSid === r.sid.trim() && (
@@ -452,6 +465,11 @@ export default function InboxView({
                   name={r.name}
                   phone={r.phone}
                 />
+              </div>
+            )}
+            {analyzeSid === r.sid.trim() && (
+              <div style={{ borderTop: "1px solid #2a2d34", padding: 12 }}>
+                <LeadAnalysisInline apiToken={apiToken} sid={r.sid.trim()} name={r.name} />
               </div>
             )}
           </div>

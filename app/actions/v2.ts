@@ -1548,3 +1548,27 @@ export async function sendConfiguratorLinkAction(
   }
 }
 
+
+/**
+ * Deep lead analysis for the v3 "ניתוח" tab — mirror of the widget endpoint.
+ * Builds the dossier, runs the judge + grounding self-check, persists, posts a
+ * GHL note, returns the verdict. See lib/analysis/analyze-lead.ts.
+ */
+export async function analyzeLeadAction(
+  sid: string,
+  force?: boolean
+): Promise<
+  | { ok: true; verdict: import("@/lib/analysis/analyze-lead").LeadAnalysis; cached: boolean }
+  | { ok: false; error: string }
+> {
+  const cleanSid = (sid ?? "").trim();
+  if (!cleanSid) return { ok: false, error: "missing sid" };
+  try {
+    const { analyzeLead } = await import("@/lib/analysis/analyze-lead");
+    const result = await analyzeLead(cleanSid, { force: !!force });
+    if (!result) return { ok: false, error: "lead not found" };
+    return { ok: true, verdict: result.verdict, cached: result.cached };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "analysis failed" };
+  }
+}

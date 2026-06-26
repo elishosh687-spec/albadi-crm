@@ -647,3 +647,37 @@ export const elevenlabsCallImports = pgTable(
     ),
   })
 );
+
+// Per-lead deep sales analysis ("why is this lead stuck"). One row per analysis
+// run, keyed by lead. The latest row per sid is the current verdict (read with
+// ORDER BY created_at DESC LIMIT 1). `input_hash` is a hash of the dossier
+// (calls + messages + quotes + stage) — if unchanged since the last run we skip
+// the LLM and reuse the stored verdict (cheap re-clicks of the "נתח" button).
+// `verdict` holds the structured LeadAnalysis (see lib/analysis/analyze-lead.ts).
+// Surfaced as a GHL contact note (marker `[LEAD-ANALYSIS v1] sid=<sid>`) and in
+// the widget/v3 analysis panels. The aggregate "why aren't leads closing" report
+// is a deterministic rollup over these rows — no second LLM pass, so it can't
+// cherry-pick.
+export const leadAnalyses = pgTable(
+  "lead_analyses",
+  {
+    id: serial("id").primaryKey(),
+    manychatSubId: text("manychat_sub_id").notNull(),
+    // Structured LeadAnalysis verdict (root_cause, primary_blocker, objections
+    // with grounded quotes, price_forensics, commitment_scorecard, etc.).
+    verdict: jsonb("verdict").notNull(),
+    // Hash of the dossier inputs → cache key for skip-if-unchanged.
+    inputHash: text("input_hash").notNull(),
+    model: text("model"),
+    version: text("version"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (t) => ({
+    subCreatedIdx: index("lead_analyses_sub_created_idx").on(
+      t.manychatSubId,
+      t.createdAt
+    ),
+  })
+);

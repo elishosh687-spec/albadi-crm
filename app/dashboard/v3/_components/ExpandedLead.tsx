@@ -38,8 +38,10 @@ import {
   approveDraftAction,
   rejectDraftAction,
   loadLeadEventsAction,
+  analyzeLeadAction,
   type TemplateRow,
 } from "@/app/actions/v2";
+import type { LeadAnalysis } from "@/lib/analysis/analyze-lead";
 import {
   V2_FLAG_NAMES,
   V2_PIPELINE_STAGES,
@@ -60,7 +62,7 @@ import { Composer } from "../conversations/_components/Composer";
 import { NotesPanel } from "./NotesPanel";
 import { BotDecisionsTab } from "./BotDecisionsTab";
 
-type TabKey = "overview" | "chat" | "summary" | "decisions" | "activity";
+type TabKey = "overview" | "chat" | "summary" | "decisions" | "activity" | "analyze";
 
 export interface PendingDraftInfo {
   id: number;
@@ -252,6 +254,7 @@ export function ExpandedLead({
             { key: "chat", label: `שיחה (${messages.length})`, icon: MessagesSquare },
             { key: "summary", label: "סיכום הזמנה", icon: ClipboardList },
             { key: "decisions", label: "החלטות בוט", icon: Bot },
+            { key: "analyze", label: "ניתוח", icon: Sparkles },
             { key: "activity", label: "לוג פעילות", icon: History },
           ] as { key: TabKey; label: string; icon: typeof LayoutDashboard }[]
         ).map((t) => {
@@ -290,6 +293,9 @@ export function ExpandedLead({
         )}
         {tab === "decisions" && (
           <BotDecisionsTab sid={sid} />
+        )}
+        {tab === "analyze" && (
+          <AnalyzeTab sid={sid} />
         )}
         {tab === "activity" && (
           <ActivityTab sid={sid} />
@@ -1093,6 +1099,155 @@ const EVENT_LABEL: Record<string, string> = {
   bot_paused: "בוט מושעה",
   bot_resumed: "בוט פעיל",
 };
+
+const ANALYZE_BLOCKER_HE: Record<string, string> = {
+  price: "מחיר",
+  moq: "כמות מינימום",
+  sample_trust: "דוגמה/אמון",
+  payment_terms: "תנאי תשלום",
+  product_mismatch: "מוצר לא מתאים",
+  followup_drop: "נפילת מעקב",
+  spec_open: "מפרט פתוח",
+  wrong_lead: "ליד לא רלוונטי",
+  other: "אחר",
+};
+
+function AnalyzeTab({ sid }: { sid: string }) {
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [verdict, setVerdict] = useState<LeadAnalysis | null>(null);
+  const [cached, setCached] = useState(false);
+
+  async function run(force: boolean) {
+    setLoading(true);
+    setError(null);
+    const r = await analyzeLeadAction(sid, force);
+    if (r.ok) {
+      setVerdict(r.verdict);
+      setCached(r.cached);
+    } else {
+      setError(r.error);
+    }
+    setLoading(false);
+  }
+
+  useEffect(() => {
+    run(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sid]);
+
+  if (loading)
+    return <div className="p-4 text-sm text-muted-foreground">⏳ מנתח את הליד… (כמה שניות)</div>;
+  if (error)
+    return (
+      <div className="p-4 text-sm text-destructive">
+        שגיאה: {error}{" "}
+        <button onClick={() => run(true)} className="underline">
+          נסה שוב
+        </button>
+      </div>
+    );
+  if (!verdict) return null;
+  const v = verdict;
+
+  return (
+    <div className="p-4 space-y-3 text-sm max-w-2xl">
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className="rounded-full bg-primary/10 text-primary px-2 py-0.5 text-xs">
+          חסם: {ANALYZE_BLOCKER_HE[v.primary_blocker] ?? v.primary_blocker}
+        </span>
+        <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
+          מחויבות {v.commitment_scorecard.score_1_5}/5
+        </span>
+        <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
+          ביטחון {v.confidence}
+        </span>
+        {cached && <span className="text-xs text-muted-foreground">שמור</span>}
+        <button onClick={() => run(true)} className="ms-auto text-xs text-primary underline">
+          🔄 רענן
+        </button>
+      </div>
+
+      {v.insufficient_data ? (
+        <div className="text-amber-600 dark:text-amber-400">⚠️ {v.root_cause}</div>
+      ) : (
+        <>
+          <div>
+            <span className="text-muted-foreground">שורש התקיעה: </span>
+            {v.root_cause}
+          </div>
+
+          {v.objections.length > 0 && (
+            <div>
+              <div className="text-muted-foreground mb-1">התנגדויות</div>
+              <ul className="list-disc pe-5 space-y-1">
+                {v.objections.map((o, i) => (
+                  <li key={i}>
+                    <span className={o.is_surface_or_root === "root" ? "text-red-500" : ""}>
+                      {o.text}
+                    </span>
+                    {o.quote && <div className="text-muted-foreground italic">«{o.quote}»</div>}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {v.price_forensics && (
+            <div>
+              <span className="text-muted-foreground">פירוק מחיר: </span>
+              שלנו {v.price_forensics.our_unit ?? "?"} מול {v.price_forensics.their_alt_unit ?? "?"}
+              {v.price_forensics.gulpha_issue && " · בעיית גלופה"}
+              {v.price_forensics.branded_vs_unbranded && " · ממותג↔לא-ממותג"}
+            </div>
+          )}
+
+          {v.followup_verdict && (
+            <div>
+              <span className="text-muted-foreground">מעקב: </span>
+              {v.followup_verdict.promised ? "הבטחנו" : "לא הבטחנו"} ·{" "}
+              {v.followup_verdict.delivered ? "מסרנו" : "לא מסרנו"}
+              {v.followup_verdict.gap_days != null && ` · פער ${v.followup_verdict.gap_days} ימים`}
+            </div>
+          )}
+
+          {v.sample && (
+            <div>
+              <span className="text-muted-foreground">דוגמה: </span>
+              {v.sample.asked ? "ביקש" : "לא ביקש"} ·{" "}
+              {v.sample.fulfilled ? "נשלחה" : "לא נשלחה"}
+            </div>
+          )}
+
+          {v.recommended_next_action && (
+            <div className="rounded-lg border border-primary/30 bg-primary/5 px-3 py-2 text-foreground">
+              ▶ {v.recommended_next_action}
+            </div>
+          )}
+
+          <div>
+            <div className="text-xs text-muted-foreground mb-1">💬 תסריט תשובה</div>
+            <div className="rounded-lg border border-border bg-muted/40 px-3 py-2 whitespace-pre-wrap">
+              {v.recommended_reply_script}
+            </div>
+            <button
+              onClick={() => navigator.clipboard?.writeText(v.recommended_reply_script)}
+              className="mt-1 text-xs text-primary underline"
+            >
+              העתק
+            </button>
+          </div>
+
+          {v.grounding.dropped_unverified > 0 && (
+            <div className="text-xs text-muted-foreground">
+              ⓘ נופו {v.grounding.dropped_unverified} ציטוטים לא-מבוססים (בדיקת אמת).
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
 
 function ActivityTab({ sid }: { sid: string }) {
   const [rows, setRows] = useState<Awaited<ReturnType<typeof loadLeadEventsAction>> | null>(null);
