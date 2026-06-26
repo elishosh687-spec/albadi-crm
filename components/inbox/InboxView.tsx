@@ -69,7 +69,11 @@ export default function InboxView({
   const [expandedSid, setExpandedSid] = useState<string | null>(null);
   // sid of the row whose inline lead-analysis panel is expanded. null = none.
   const [analyzeSid, setAnalyzeSid] = useState<string | null>(null);
+  // Open conversation thread (Front-style list | thread). null = list only.
+  const [threadSid, setThreadSid] = useState<string | null>(null);
   const [, startTransition] = useTransition();
+
+  const threadRow = rows.find((r) => r.sid.trim() === threadSid);
 
   // Inbox is self-contained — clicking a name opens the lead's contact
   // card in GHL in a new tab. Cross-origin top-window navigation from an
@@ -174,7 +178,25 @@ export default function InboxView({
         .inbox-actions-mobile { display: flex; }
         .inbox-row-actions-btn { transition: background 0.12s ease, color 0.12s ease; }
         .inbox-row-actions-btn:hover { background: rgba(255,255,255,0.09); color: #f5f6f7; }
+        /* list | thread split (Front 3-pane). Narrow → thread takes over. */
+        .inbox-split { display: grid; grid-template-columns: 1fr 290px; gap: 12px; align-items: start; }
+        @media (max-width: 760px) { .inbox-split { grid-template-columns: 1fr; } .inbox-listcol { display: none; } }
       `}</style>
+      <div className={threadSid ? "inbox-split" : undefined}>
+      {threadSid && threadRow && (
+        <ThreadView
+          apiToken={apiToken}
+          row={threadRow}
+          busy={busy}
+          quickTemplates={quickTemplates}
+          onClose={() => setThreadSid(null)}
+          onToggle={() => toggle(threadRow.sid, threadRow.botPaused)}
+          onSendTemplate={(tpl) =>
+            sendTemplate(threadRow.sid, threadRow.name || threadRow.phone || threadRow.sid, tpl)
+          }
+        />
+      )}
+      <div className={threadSid ? "inbox-listcol" : undefined}>
       <div
         style={{
           display: "flex",
@@ -251,9 +273,8 @@ export default function InboxView({
             >
             <a
               href={r.ghlContactUrl ?? "#"}
-              target="_blank"
-              rel="noopener noreferrer"
-              onClick={(e) => { if (!r.ghlContactUrl) e.preventDefault(); }}
+              onClick={(e) => { e.preventDefault(); setThreadSid(r.sid.trim()); }}
+              title="פתח שיחה"
               style={{
                 flex: 1,
                 minWidth: 0,
@@ -262,7 +283,6 @@ export default function InboxView({
                 textDecoration: "none",
                 display: "block",
               }}
-              title={r.ghlContactUrl ? "פתח ב-GHL (טאב חדש)" : "אין GHL contact מקושר"}
             >
               <div
                 style={{
@@ -470,6 +490,8 @@ export default function InboxView({
           </div>
         ))}
       </div>
+      </div>{/* /inbox-listcol */}
+      </div>{/* /inbox-split */}
 
       {/* Mobile template picker overlay — fires when a row's ☰ tile is
           tapped. Sits at the bottom of the viewport as a sheet so it's
@@ -647,6 +669,310 @@ interface InlineQuote {
  * the user multi-select finalized ones to combine into one PDF — all without
  * leaving the שיחות tab.
  */
+interface ThreadMsg {
+  id: number;
+  direction: string;
+  text: string | null;
+  sender: string | null;
+  receivedAt: string;
+}
+
+/**
+ * In-widget conversation pane (Front pattern). Loads the message thread, lets
+ * Eli reply free-form (via /api/widget/calculator/send-text), and surfaces ALL
+ * the row's functions in the header: pause/resume, quotes, analyze, templates,
+ * open-in-GHL.
+ */
+function ThreadView({
+  apiToken,
+  row,
+  busy,
+  quickTemplates,
+  onClose,
+  onToggle,
+  onSendTemplate,
+}: {
+  apiToken: string;
+  row: InboxRow;
+  busy: string | null;
+  quickTemplates: QuickTemplate[];
+  onClose: () => void;
+  onToggle: () => void;
+  onSendTemplate: (tpl: QuickTemplate) => void;
+}) {
+  const sid = row.sid.trim();
+  const [msgs, setMsgs] = useState<ThreadMsg[] | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [draft, setDraft] = useState("");
+  const [sending, setSending] = useState(false);
+  const [panel, setPanel] = useState<"chat" | "quotes" | "analyze">("chat");
+  const [showTpl, setShowTpl] = useState(false);
+
+  async function load() {
+    try {
+      const res = await fetch(
+        `/api/widget/messages?widget_token=${encodeURIComponent(apiToken)}&sid=${encodeURIComponent(sid)}`
+      );
+      const j = await res.json();
+      if (j.ok) setMsgs(j.messages as ThreadMsg[]);
+    } catch {
+      /* ignore */
+    }
+  }
+
+  useEffect(() => {
+    let alive = true;
+    setPanel("chat");
+    setMsgs(null);
+    setLoading(true);
+    (async () => {
+      try {
+        const res = await fetch(
+          `/api/widget/messages?widget_token=${encodeURIComponent(apiToken)}&sid=${encodeURIComponent(sid)}`
+        );
+        const j = await res.json();
+        if (alive && j.ok) setMsgs(j.messages as ThreadMsg[]);
+      } catch {
+        /* ignore */
+      } finally {
+        if (alive) setLoading(false);
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [sid, apiToken]);
+
+  async function send() {
+    const text = draft.trim();
+    if (!text || sending) return;
+    setSending(true);
+    try {
+      const res = await fetch(
+        `/api/widget/calculator/send-text?widget_token=${encodeURIComponent(apiToken)}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ sid, text }),
+        }
+      );
+      const j = await res.json();
+      if (!j.ok) throw new Error(j.error || "send failed");
+      setDraft("");
+      await load();
+    } catch (e) {
+      alert(`שגיאה: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setSending(false);
+    }
+  }
+
+  const actBtn: CSSProperties = {
+    display: "flex",
+    alignItems: "center",
+    gap: 5,
+    padding: "6px 10px",
+    borderRadius: 8,
+    fontSize: 12,
+    fontFamily: "inherit",
+    cursor: "pointer",
+    background: "rgba(255,255,255,0.045)",
+    border: "1px solid rgba(255,255,255,0.11)",
+    color: "#f5f6f7",
+    whiteSpace: "nowrap",
+  };
+  const champBtn: CSSProperties = {
+    ...actBtn,
+    background: "rgba(205,169,120,0.14)",
+    border: "1px solid rgba(205,169,120,0.30)",
+    color: "#e7cba6",
+  };
+
+  return (
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        minHeight: 520,
+        background: "rgba(255,255,255,0.045)",
+        border: "1px solid rgba(255,255,255,0.11)",
+        borderRadius: 12,
+        overflow: "hidden",
+        backdropFilter: "blur(30px) saturate(1.7)",
+        WebkitBackdropFilter: "blur(30px) saturate(1.7)",
+        boxShadow: "inset 0 1px 0 rgba(255,255,255,0.14), 0 12px 40px rgba(0,0,0,0.4)",
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 10,
+          padding: "10px 12px",
+          borderBottom: "1px solid rgba(255,255,255,0.08)",
+        }}
+      >
+        <button onClick={onClose} title="חזרה לרשימה" style={{ ...actBtn, padding: "5px 10px" }}>
+          →
+        </button>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div
+            style={{
+              fontSize: 14,
+              fontWeight: 600,
+              color: "#f5f6f7",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+            }}
+          >
+            {row.name || row.phone || sid}
+          </div>
+          <div style={{ fontSize: 11, color: "#8f939b" }}>
+            {row.phone || ""}
+            {row.stage ? ` · ${row.stage}` : ""}
+          </div>
+        </div>
+      </div>
+
+      <div
+        style={{
+          display: "flex",
+          flexWrap: "wrap",
+          gap: 6,
+          padding: "8px 12px",
+          borderBottom: "1px solid rgba(255,255,255,0.06)",
+        }}
+      >
+        <button onClick={onToggle} disabled={busy === row.sid} style={actBtn}>
+          <span>{row.botPaused ? "▶" : "⏸"}</span> {row.botPaused ? "הפעל בוט" : "השהה בוט"}
+        </button>
+        <button onClick={() => setPanel(panel === "quotes" ? "chat" : "quotes")} style={panel === "quotes" ? champBtn : actBtn}>
+          💰 הצעות
+        </button>
+        <button onClick={() => setPanel(panel === "analyze" ? "chat" : "analyze")} style={panel === "analyze" ? champBtn : actBtn}>
+          🔍 נתח
+        </button>
+        {quickTemplates.length > 0 && (
+          <button onClick={() => setShowTpl((s) => !s)} style={actBtn}>
+            ⋯ תבניות
+          </button>
+        )}
+        {row.ghlContactUrl && (
+          <a href={row.ghlContactUrl} target="_blank" rel="noopener noreferrer" style={{ ...actBtn, textDecoration: "none" }}>
+            GHL ↗
+          </a>
+        )}
+      </div>
+
+      {showTpl && quickTemplates.length > 0 && (
+        <div
+          style={{
+            display: "flex",
+            flexWrap: "wrap",
+            gap: 6,
+            padding: "8px 12px",
+            borderBottom: "1px solid rgba(255,255,255,0.06)",
+          }}
+        >
+          {quickTemplates.map((tpl) => (
+            <button
+              key={tpl.id}
+              onClick={() => {
+                setShowTpl(false);
+                onSendTemplate(tpl);
+              }}
+              style={{ ...actBtn, fontSize: 11 }}
+            >
+              {tpl.icon} {stripLeadingEmoji(tpl.name) || "תבנית"}
+            </button>
+          ))}
+        </div>
+      )}
+
+      <div
+        style={{
+          flex: 1,
+          overflowY: "auto",
+          padding: 12,
+          display: "flex",
+          flexDirection: "column",
+          gap: 8,
+        }}
+      >
+        {panel === "quotes" ? (
+          <LeadQuotesInline apiToken={apiToken} sid={sid} name={row.name} phone={row.phone} />
+        ) : panel === "analyze" ? (
+          <LeadAnalysisInline apiToken={apiToken} sid={sid} name={row.name} />
+        ) : loading ? (
+          <div style={{ color: "#8f939b", fontSize: 12, textAlign: "center", padding: 24 }}>טוען שיחה…</div>
+        ) : !msgs || msgs.length === 0 ? (
+          <div style={{ color: "#8f939b", fontSize: 12, textAlign: "center", padding: 24 }}>אין הודעות עדיין</div>
+        ) : (
+          msgs.map((m) => {
+            const incoming = m.direction === "in" || m.sender === "lead";
+            return (
+              <div
+                key={m.id}
+                style={{
+                  alignSelf: incoming ? "flex-start" : "flex-end",
+                  maxWidth: "80%",
+                  background: incoming ? "rgba(255,255,255,0.06)" : "rgba(205,169,120,0.16)",
+                  color: incoming ? "#e4e5e8" : "#fdf3e6",
+                  border: incoming ? "1px solid rgba(255,255,255,0.08)" : "1px solid rgba(205,169,120,0.28)",
+                  borderRadius: incoming ? "10px 10px 10px 3px" : "10px 10px 3px 10px",
+                  padding: "8px 11px",
+                  fontSize: 12.5,
+                  lineHeight: 1.5,
+                  whiteSpace: "pre-wrap",
+                  wordBreak: "break-word",
+                }}
+              >
+                {m.text || "—"}
+              </div>
+            );
+          })
+        )}
+      </div>
+
+      {panel === "chat" && (
+        <div style={{ display: "flex", gap: 8, padding: 10, borderTop: "1px solid rgba(255,255,255,0.08)" }}>
+          <textarea
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+                e.preventDefault();
+                send();
+              }
+            }}
+            placeholder="כתוב תשובה… (⌘/Ctrl+Enter לשליחה)"
+            rows={2}
+            style={{
+              flex: 1,
+              resize: "none",
+              background: "rgba(255,255,255,0.05)",
+              color: "#f5f6f7",
+              border: "1px solid rgba(255,255,255,0.13)",
+              borderRadius: 8,
+              padding: "8px 10px",
+              fontSize: 13,
+              fontFamily: "inherit",
+            }}
+          />
+          <button
+            onClick={send}
+            disabled={sending || !draft.trim()}
+            style={{ ...champBtn, padding: "0 16px", opacity: sending || !draft.trim() ? 0.5 : 1 }}
+          >
+            {sending ? "…" : "שלח"}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function LeadQuotesInline({
   apiToken,
   sid,
