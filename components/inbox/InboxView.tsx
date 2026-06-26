@@ -710,6 +710,7 @@ function ThreadView({
   const [sending, setSending] = useState(false);
   const [panel, setPanel] = useState<"chat" | "quotes" | "analyze">("chat");
   const [showTpl, setShowTpl] = useState(false);
+  const [ctx, setCtx] = useState<{ quoteTotal: string | null; stage: string | null } | null>(null);
 
   async function load() {
     try {
@@ -739,6 +740,27 @@ function ThreadView({
         /* ignore */
       } finally {
         if (alive) setLoading(false);
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [sid, apiToken]);
+
+  useEffect(() => {
+    let alive = true;
+    setCtx(null);
+    (async () => {
+      try {
+        const res = await fetch(
+          `/api/widget/leads/${encodeURIComponent(sid)}/factory-context?widget_token=${encodeURIComponent(apiToken)}`
+        );
+        const j = await res.json();
+        if (alive && j?.ok && j.lead) {
+          setCtx({ quoteTotal: j.lead.quoteTotal ?? null, stage: j.lead.stage ?? null });
+        }
+      } catch {
+        /* ignore */
       }
     })();
     return () => {
@@ -791,22 +813,50 @@ function ThreadView({
     color: "#e7cba6",
   };
 
+  const glassCard: CSSProperties = {
+    background: "rgba(255,255,255,0.045)",
+    border: "1px solid rgba(255,255,255,0.11)",
+    borderRadius: 12,
+    backdropFilter: "blur(30px) saturate(1.7)",
+    WebkitBackdropFilter: "blur(30px) saturate(1.7)",
+    boxShadow: "inset 0 1px 0 rgba(255,255,255,0.14), 0 12px 40px rgba(0,0,0,0.4)",
+  };
+  const sideBtn: CSSProperties = {
+    display: "flex",
+    alignItems: "center",
+    gap: 7,
+    width: "100%",
+    padding: "8px 10px",
+    borderRadius: 8,
+    fontSize: 12.5,
+    fontFamily: "inherit",
+    cursor: "pointer",
+    background: "rgba(255,255,255,0.045)",
+    border: "1px solid rgba(255,255,255,0.11)",
+    color: "#f5f6f7",
+    textAlign: "right",
+    textDecoration: "none",
+    whiteSpace: "nowrap",
+  };
+  const sideActive: CSSProperties = {
+    ...sideBtn,
+    background: "rgba(205,169,120,0.14)",
+    border: "1px solid rgba(205,169,120,0.30)",
+    color: "#e7cba6",
+  };
+
   return (
-    <div
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        height: "100%",
-        minHeight: 0,
-        background: "rgba(255,255,255,0.045)",
-        border: "1px solid rgba(255,255,255,0.11)",
-        borderRadius: 12,
-        overflow: "hidden",
-        backdropFilter: "blur(30px) saturate(1.7)",
-        WebkitBackdropFilter: "blur(30px) saturate(1.7)",
-        boxShadow: "inset 0 1px 0 rgba(255,255,255,0.14), 0 12px 40px rgba(0,0,0,0.4)",
-      }}
-    >
+    <div style={{ display: "flex", gap: 12, height: "100%", minHeight: 0 }}>
+      <div
+        style={{
+          ...glassCard,
+          flex: 1,
+          display: "flex",
+          flexDirection: "column",
+          minHeight: 0,
+          overflow: "hidden",
+        }}
+      >
       <div
         style={{
           display: "flex",
@@ -838,61 +888,6 @@ function ThreadView({
           </div>
         </div>
       </div>
-
-      <div
-        style={{
-          display: "flex",
-          flexWrap: "wrap",
-          gap: 6,
-          padding: "8px 12px",
-          borderBottom: "1px solid rgba(255,255,255,0.06)",
-        }}
-      >
-        <button onClick={onToggle} disabled={busy === row.sid} style={actBtn}>
-          <span>{row.botPaused ? "▶" : "⏸"}</span> {row.botPaused ? "הפעל בוט" : "השהה בוט"}
-        </button>
-        <button onClick={() => setPanel(panel === "quotes" ? "chat" : "quotes")} style={panel === "quotes" ? champBtn : actBtn}>
-          💰 הצעות
-        </button>
-        <button onClick={() => setPanel(panel === "analyze" ? "chat" : "analyze")} style={panel === "analyze" ? champBtn : actBtn}>
-          🔍 נתח
-        </button>
-        {quickTemplates.length > 0 && (
-          <button onClick={() => setShowTpl((s) => !s)} style={actBtn}>
-            ⋯ תבניות
-          </button>
-        )}
-        {row.ghlContactUrl && (
-          <a href={row.ghlContactUrl} target="_blank" rel="noopener noreferrer" style={{ ...actBtn, textDecoration: "none" }}>
-            GHL ↗
-          </a>
-        )}
-      </div>
-
-      {showTpl && quickTemplates.length > 0 && (
-        <div
-          style={{
-            display: "flex",
-            flexWrap: "wrap",
-            gap: 6,
-            padding: "8px 12px",
-            borderBottom: "1px solid rgba(255,255,255,0.06)",
-          }}
-        >
-          {quickTemplates.map((tpl) => (
-            <button
-              key={tpl.id}
-              onClick={() => {
-                setShowTpl(false);
-                onSendTemplate(tpl);
-              }}
-              style={{ ...actBtn, fontSize: 11 }}
-            >
-              {tpl.icon} {stripLeadingEmoji(tpl.name) || "תבנית"}
-            </button>
-          ))}
-        </div>
-      )}
 
       <div
         style={{
@@ -974,6 +969,101 @@ function ThreadView({
           </button>
         </div>
       )}
+      </div>{/* /thread column */}
+
+      {/* CONTEXT panel (left) — lead at a glance + actions */}
+      <div
+        style={{
+          ...glassCard,
+          width: 220,
+          flexShrink: 0,
+          padding: 14,
+          display: "flex",
+          flexDirection: "column",
+          gap: 14,
+          overflowY: "auto",
+        }}
+      >
+        <div>
+          <div style={{ fontSize: 10.5, color: "#8f939b", textTransform: "uppercase", letterSpacing: "0.4px", marginBottom: 5 }}>
+            שלב
+          </div>
+          <span
+            style={{
+              fontSize: 11.5,
+              color: "#e7cba6",
+              background: "rgba(205,169,120,0.13)",
+              border: "1px solid rgba(205,169,120,0.28)",
+              padding: "3px 9px",
+              borderRadius: 6,
+              display: "inline-block",
+            }}
+          >
+            {ctx?.stage || row.stage || "—"}
+          </span>
+        </div>
+        <div>
+          <div style={{ fontSize: 10.5, color: "#8f939b", textTransform: "uppercase", letterSpacing: "0.4px", marginBottom: 4 }}>
+            הצעה
+          </div>
+          <div
+            style={{
+              fontSize: 20,
+              fontWeight: 600,
+              letterSpacing: "-0.5px",
+              fontFamily: "ui-monospace, 'JetBrains Mono', monospace",
+              color: "#fdf3e6",
+            }}
+          >
+            {ctx?.quoteTotal ? `₪${ctx.quoteTotal}` : "—"}
+          </div>
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 7, borderTop: "1px solid rgba(255,255,255,0.08)", paddingTop: 12 }}>
+          <button onClick={() => setPanel(panel === "quotes" ? "chat" : "quotes")} style={panel === "quotes" ? sideActive : sideBtn}>
+            💰 הצעות מחיר
+          </button>
+          <button onClick={() => setPanel(panel === "analyze" ? "chat" : "analyze")} style={panel === "analyze" ? sideActive : sideBtn}>
+            🔍 נתח ליד
+          </button>
+          <a
+            href={`/widget/calculator?widget_token=${encodeURIComponent(apiToken)}&sid=${encodeURIComponent(sid)}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={sideBtn}
+          >
+            🧮 פתח מחשבון
+          </a>
+          <button onClick={onToggle} disabled={busy === row.sid} style={sideBtn}>
+            {row.botPaused ? "▶ הפעל בוט" : "⏸ השהה בוט"}
+          </button>
+          {quickTemplates.length > 0 && (
+            <button onClick={() => setShowTpl((s) => !s)} style={sideBtn}>
+              ✉️ תבניות
+            </button>
+          )}
+          {showTpl && quickTemplates.length > 0 && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 5, paddingInlineStart: 4 }}>
+              {quickTemplates.map((tpl) => (
+                <button
+                  key={tpl.id}
+                  onClick={() => {
+                    setShowTpl(false);
+                    onSendTemplate(tpl);
+                  }}
+                  style={{ ...sideBtn, fontSize: 11.5 }}
+                >
+                  {tpl.icon} {stripLeadingEmoji(tpl.name) || "תבנית"}
+                </button>
+              ))}
+            </div>
+          )}
+          {row.ghlContactUrl && (
+            <a href={row.ghlContactUrl} target="_blank" rel="noopener noreferrer" style={sideBtn}>
+              ↗ פתח ב-GHL
+            </a>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
