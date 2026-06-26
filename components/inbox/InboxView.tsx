@@ -169,12 +169,11 @@ export default function InboxView({
           show them inline. Inline styles can't do media queries, so this
           tiny <style> tag carries the breakpoint behavior. */}
       <style>{`
-        .inbox-actions-inline { display: flex; }
-        .inbox-actions-mobile { display: none; }
-        @media (max-width: 640px) {
-          .inbox-actions-inline { display: none; }
-          .inbox-actions-mobile { display: flex; }
-        }
+        /* Front pattern: clean rows, actions behind a single ⋯ at every width */
+        .inbox-actions-inline { display: none; }
+        .inbox-actions-mobile { display: flex; }
+        .inbox-row-actions-btn { transition: background 0.12s ease, color 0.12s ease; }
+        .inbox-row-actions-btn:hover { background: rgba(255,255,255,0.09); color: #f5f6f7; }
       `}</style>
       <div
         style={{
@@ -318,7 +317,7 @@ export default function InboxView({
                 {r.stage && (
                   <span
                     style={{
-                      background: "#1f2937",
+                      background: "rgba(255,255,255,0.06)",
                       padding: "2px 6px",
                       borderRadius: 4,
                     }}
@@ -421,53 +420,36 @@ export default function InboxView({
               />
             </div>
 
-            {/* Mobile-only — pause + hamburger that opens the full picker */}
+            {/* Single ⋯ actions button (Front pattern). Opens a sheet with
+                pause/resume, quote (הצעות), analyze (נתח) and templates. */}
             <div
               className="inbox-actions-mobile"
-              style={{
-                gap: 8,
-                flexShrink: 0,
-                alignSelf: "flex-end",
-              }}
+              style={{ flexShrink: 0, alignSelf: "center" }}
             >
-              <ActionTile
-                onClick={() => toggle(r.sid, r.botPaused)}
-                disabled={busy === r.sid}
-                title={r.botPaused ? "הבוט מושהה — לחץ כדי להפעיל" : "הבוט פעיל — לחץ כדי להשהות"}
-                icon={busy === r.sid ? "…" : r.botPaused ? "▶" : "⏸"}
-                label={r.botPaused ? "הפעל" : "השהה"}
-                tone={r.botPaused ? "warn" : "neutral"}
-              />
-              {quickTemplates.length > 0 && (
-                <ActionTile
-                  onClick={() => setMobileMenuSid(r.sid)}
-                  disabled={busy === r.sid}
-                  title="פתח תבניות לשליחה"
-                  icon="☰"
-                  label="תבניות"
-                  tone="neutral"
-                />
-              )}
-              <ActionTile
-                onClick={() =>
-                  setExpandedSid((cur) => (cur === r.sid.trim() ? null : r.sid.trim()))
-                }
-                disabled={false}
-                title="הצעות מחיר של הלקוח"
-                icon="💰"
-                label="הצעות"
-                tone={expandedSid === r.sid.trim() ? "warn" : "accent"}
-              />
-              <ActionTile
-                onClick={() =>
-                  setAnalyzeSid((cur) => (cur === r.sid.trim() ? null : r.sid.trim()))
-                }
-                disabled={false}
-                title="ניתוח מכירה — למה הליד תקוע + תסריט תשובה"
-                icon="🔍"
-                label="נתח"
-                tone={analyzeSid === r.sid.trim() ? "warn" : "accent"}
-              />
+              <button
+                className="inbox-row-actions-btn"
+                onClick={() => setMobileMenuSid(r.sid)}
+                title="פעולות"
+                aria-label="פעולות"
+                style={{
+                  width: 36,
+                  height: 36,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  background: "transparent",
+                  color: "#8f939b",
+                  border: "1px solid rgba(255,255,255,0.11)",
+                  borderRadius: 8,
+                  fontSize: 20,
+                  lineHeight: 1,
+                  cursor: "pointer",
+                  fontFamily: "inherit",
+                  touchAction: "manipulation",
+                }}
+              >
+                ⋯
+              </button>
             </div>
             </div>
             {expandedSid === r.sid.trim() && (
@@ -516,8 +498,8 @@ export default function InboxView({
               style={{
                 width: "100%",
                 maxWidth: 480,
-                background: "#10131a",
-                border: "1px solid #2d3548",
+                background: "#0c0d10",
+                border: "1px solid rgba(255,255,255,0.11)",
                 borderRadius: "16px 16px 8px 8px",
                 padding: 16,
                 boxShadow: "0 -10px 30px rgba(0,0,0,0.6)",
@@ -525,12 +507,60 @@ export default function InboxView({
             >
               <div style={{ marginBottom: 12 }}>
                 <div style={{ fontSize: 11, color: "#8f939b", textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                  תבניות לשליחה
+                  פעולות
                 </div>
                 <div style={{ fontSize: 14, color: "#f5f6f7", fontWeight: 600, marginTop: 2 }}>
                   {leadName}
                 </div>
               </div>
+              {(() => {
+                const sheetBtn: CSSProperties = {
+                  flex: 1,
+                  minWidth: 0,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 6,
+                  padding: "10px 8px",
+                  borderRadius: 9,
+                  fontSize: 13,
+                  fontWeight: 500,
+                  fontFamily: "inherit",
+                  cursor: "pointer",
+                  background: "rgba(255,255,255,0.045)",
+                  border: "1px solid rgba(255,255,255,0.11)",
+                  color: "#f5f6f7",
+                  touchAction: "manipulation",
+                };
+                return (
+                  <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
+                    <button
+                      style={sheetBtn}
+                      onClick={() => { setMobileMenuSid(null); toggle(r.sid, r.botPaused); }}
+                    >
+                      <span>{r.botPaused ? "▶" : "⏸"}</span>
+                      {r.botPaused ? "הפעל בוט" : "השהה בוט"}
+                    </button>
+                    <button
+                      style={{ ...sheetBtn, background: "rgba(205,169,120,0.13)", border: "1px solid rgba(205,169,120,0.30)", color: "#e7cba6" }}
+                      onClick={() => { setMobileMenuSid(null); setExpandedSid(r.sid.trim()); }}
+                    >
+                      <span>💰</span> הצעות
+                    </button>
+                    <button
+                      style={{ ...sheetBtn, background: "rgba(205,169,120,0.13)", border: "1px solid rgba(205,169,120,0.30)", color: "#e7cba6" }}
+                      onClick={() => { setMobileMenuSid(null); setAnalyzeSid(r.sid.trim()); }}
+                    >
+                      <span>🔍</span> נתח
+                    </button>
+                  </div>
+                );
+              })()}
+              {quickTemplates.length > 0 && (
+                <div style={{ fontSize: 11, color: "#8f939b", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8 }}>
+                  תבניות לשליחה
+                </div>
+              )}
               <div
                 style={{
                   display: "grid",
@@ -564,7 +594,7 @@ export default function InboxView({
                   padding: "10px 16px",
                   background: "transparent",
                   color: "#8f939b",
-                  border: "1px solid #2d3548",
+                  border: "1px solid rgba(255,255,255,0.11)",
                   borderRadius: 8,
                   fontSize: 14,
                   fontFamily: "inherit",
@@ -825,9 +855,9 @@ function ActionTile({
   tone: "neutral" | "warn" | "accent";
 }) {
   const palette = {
-    neutral: { bg: "#1a2030", border: "#2d3548", hover: "#252e44", text: "#f5f6f7" },
-    warn: { bg: "#3a1d1a", border: "#7c2d12", hover: "#5a2a20", text: "#fecaca" },
-    accent: { bg: "#1a2638", border: "#2f4a6e", hover: "#23344e", text: "#dbeafe" },
+    neutral: { bg: "rgba(255,255,255,0.045)", border: "rgba(255,255,255,0.11)", hover: "rgba(255,255,255,0.09)", text: "#f5f6f7" },
+    warn: { bg: "rgba(220,130,95,0.12)", border: "rgba(220,130,95,0.28)", hover: "rgba(220,130,95,0.18)", text: "#f0cdbe" },
+    accent: { bg: "rgba(205,169,120,0.13)", border: "rgba(205,169,120,0.30)", hover: "rgba(205,169,120,0.19)", text: "#e7cba6" },
   }[tone];
   return (
     <button
@@ -844,6 +874,9 @@ function ActionTile({
         color: palette.text,
         border: `1px solid ${palette.border}`,
         borderRadius: 10,
+        backdropFilter: "blur(16px) saturate(1.5)",
+        WebkitBackdropFilter: "blur(16px) saturate(1.5)",
+        boxShadow: "inset 0 1px 0 rgba(255,255,255,0.12)",
         cursor: disabled ? "wait" : "pointer",
         touchAction: "manipulation",
         padding: "6px 4px",
