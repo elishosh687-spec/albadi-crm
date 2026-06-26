@@ -178,11 +178,36 @@ export default function InboxView({
         .inbox-actions-mobile { display: flex; }
         .inbox-row-actions-btn { transition: background 0.12s ease, color 0.12s ease; }
         .inbox-row-actions-btn:hover { background: rgba(255,255,255,0.09); color: #f5f6f7; }
-        /* list | thread split (Front 3-pane). RTL: list on the RIGHT (first
-           column), thread on the LEFT. Full-height so the composer is always
-           visible and each column scrolls on its own. */
-        .inbox-split { display: grid; grid-template-columns: 290px 1fr; gap: 12px; height: calc(100dvh - 96px); align-items: stretch; }
-        .inbox-split .inbox-listcol { overflow-y: auto; min-height: 0; }
+        /* list | thread | context — ONE seamless glass surface (Front 3-pane).
+           RTL: list on the RIGHT (first column), thread+context fill the LEFT.
+           No gaps between panes — the outer surface IS the card; panes are
+           transparent and separated by hairline dividers only. */
+        .inbox-split {
+          display: grid;
+          grid-template-columns: 290px 1fr;
+          gap: 0;
+          height: calc(100dvh - 96px);
+          align-items: stretch;
+          background: rgba(255,255,255,0.045);
+          border: 1px solid rgba(255,255,255,0.11);
+          border-radius: 16px;
+          overflow: hidden;
+          backdrop-filter: blur(30px) saturate(1.7);
+          -webkit-backdrop-filter: blur(30px) saturate(1.7);
+          box-shadow: inset 0 1px 0 rgba(255,255,255,0.14), 0 18px 50px rgba(0,0,0,0.45);
+        }
+        .inbox-split .inbox-listcol {
+          overflow-y: auto;
+          min-height: 0;
+          padding: 12px;
+          border-inline-end: 1px solid rgba(255,255,255,0.08);
+        }
+        /* graphite scrollbars inside the surface */
+        .inbox-split ::-webkit-scrollbar { width: 8px; height: 8px; }
+        .inbox-split ::-webkit-scrollbar-track { background: transparent; }
+        .inbox-split ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.10); border-radius: 8px; }
+        .inbox-split ::-webkit-scrollbar-thumb:hover { background: rgba(205,169,120,0.35); }
+        .inbox-split { scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.14) transparent; }
         @media (max-width: 760px) { .inbox-split { grid-template-columns: 1fr; height: calc(100dvh - 96px); } .inbox-listcol { display: none; } }
       `}</style>
       <div className={threadSid ? "inbox-split" : undefined}>
@@ -195,7 +220,9 @@ export default function InboxView({
           marginBottom: 12,
           position: "sticky",
           top: 0,
-          background: "#050506",
+          background: "rgba(14,14,16,0.82)",
+          backdropFilter: "blur(20px) saturate(1.6)",
+          WebkitBackdropFilter: "blur(20px) saturate(1.6)",
           padding: "8px 0",
           zIndex: 10,
         }}
@@ -231,26 +258,41 @@ export default function InboxView({
         </button>
       </div>
 
-      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: threadSid ? 0 : 6 }}>
         {visible.length === 0 && (
           <div style={{ padding: 24, textAlign: "center", color: "#8f939b" }}>
             אין שיחות
           </div>
         )}
-        {visible.map((r) => (
-          <div
-            key={r.sid}
-            style={{
-              background: r.botPaused ? "rgba(220,150,90,0.10)" : "rgba(255,255,255,0.05)",
-              border: `1px solid ${selectedSid === r.sid.trim() ? "#cda978" : "rgba(255,255,255,0.11)"}`,
-              borderRadius: 10,
-              display: "flex",
-              flexDirection: "column",
-              backdropFilter: "blur(24px) saturate(1.6)",
-              WebkitBackdropFilter: "blur(24px) saturate(1.6)",
-              boxShadow: "inset 0 1px 0 rgba(255,255,255,0.12)",
-            }}
-          >
+        {visible.map((r) => {
+          const isSel = selectedSid === r.sid.trim();
+          // Rail mode (a thread is open): flat Front-style rows — no per-row
+          // card, just a hairline divider + selected accent. Full-list mode:
+          // floating glass cards.
+          const rowStyle: CSSProperties = threadSid
+            ? {
+                background: isSel
+                  ? "rgba(205,169,120,0.12)"
+                  : r.botPaused
+                  ? "rgba(220,150,90,0.08)"
+                  : "transparent",
+                borderInlineStart: `2px solid ${isSel ? "#cda978" : "transparent"}`,
+                borderBottom: "1px solid rgba(255,255,255,0.07)",
+                display: "flex",
+                flexDirection: "column",
+              }
+            : {
+                background: r.botPaused ? "rgba(220,150,90,0.10)" : "rgba(255,255,255,0.05)",
+                border: `1px solid ${isSel ? "#cda978" : "rgba(255,255,255,0.11)"}`,
+                borderRadius: 10,
+                display: "flex",
+                flexDirection: "column",
+                backdropFilter: "blur(24px) saturate(1.6)",
+                WebkitBackdropFilter: "blur(24px) saturate(1.6)",
+                boxShadow: "inset 0 1px 0 rgba(255,255,255,0.12)",
+              };
+          return (
+          <div key={r.sid} style={rowStyle}>
             <div
               style={{
                 padding: 12,
@@ -478,7 +520,8 @@ export default function InboxView({
               </div>
             )}
           </div>
-        ))}
+          );
+        })}
       </div>
       </div>{/* /inbox-listcol */}
       {threadSid && threadRow && (
@@ -813,14 +856,6 @@ function ThreadView({
     color: "#e7cba6",
   };
 
-  const glassCard: CSSProperties = {
-    background: "rgba(255,255,255,0.045)",
-    border: "1px solid rgba(255,255,255,0.11)",
-    borderRadius: 12,
-    backdropFilter: "blur(30px) saturate(1.7)",
-    WebkitBackdropFilter: "blur(30px) saturate(1.7)",
-    boxShadow: "inset 0 1px 0 rgba(255,255,255,0.14), 0 12px 40px rgba(0,0,0,0.4)",
-  };
   const sideBtn: CSSProperties = {
     display: "flex",
     alignItems: "center",
@@ -846,10 +881,9 @@ function ThreadView({
   };
 
   return (
-    <div style={{ display: "flex", gap: 12, height: "100%", minHeight: 0 }}>
+    <div style={{ display: "flex", gap: 0, height: "100%", minHeight: 0 }}>
       <div
         style={{
-          ...glassCard,
           flex: 1,
           display: "flex",
           flexDirection: "column",
@@ -974,7 +1008,6 @@ function ThreadView({
       {/* CONTEXT panel (left) — lead at a glance + actions */}
       <div
         style={{
-          ...glassCard,
           width: 220,
           flexShrink: 0,
           padding: 14,
@@ -982,6 +1015,7 @@ function ThreadView({
           flexDirection: "column",
           gap: 14,
           overflowY: "auto",
+          borderInlineStart: "1px solid rgba(255,255,255,0.08)",
         }}
       >
         <div>
