@@ -25,10 +25,9 @@ export default function WidgetLayout({
 }) {
   return (
     <div
+      className="gg-theme"
       style={{
         minHeight: "100vh",
-        background: "#050506",
-        color: "#f5f6f7",
         padding: "16px",
       }}
     >
