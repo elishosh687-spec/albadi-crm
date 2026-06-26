@@ -25,7 +25,7 @@ export default async function V3Layout({
   ]);
 
   return (
-    <div className="dark min-h-dvh bg-background text-foreground" dir="rtl">
+    <div className="gg-theme dark min-h-dvh bg-background text-foreground" dir="rtl">
       <div className="flex min-h-dvh">
         <Sidebar
           pendingDrafts={pendingDraftsRows.length}
