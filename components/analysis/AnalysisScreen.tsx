@@ -245,51 +245,118 @@ function PatternList({
   prefix: string;
 }) {
   if (!patterns.length) return null;
+  const max = Math.max(...patterns.map((p) => p.count), 1);
   return (
-    <div style={{ ...card, marginBottom: 10 }}>
-      <div style={{ fontSize: 11, color: "#71717a", marginBottom: 6 }}>{title}</div>
-      {patterns.map((p) => {
-        const id = `${prefix}:${p.key}`;
-        const isOpen = open === id;
-        const w = denom ? Math.round((p.count / denom) * 100) : 0;
-        return (
-          <div key={id} style={{ marginBottom: 6 }}>
-            <button
-              onClick={() => setOpen(isOpen ? null : id)}
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                width: "100%",
-                background: "transparent",
-                border: "none",
-                color: "#e4e4e7",
-                cursor: "pointer",
-                fontFamily: "inherit",
-                fontSize: 13,
-                padding: 0,
-              }}
-            >
-              <span>
-                {isOpen ? "▾" : "▸"} {p.label}
-              </span>
-              <span style={{ color: "#a1a1aa" }}>
-                {p.count}/{denom} ({w}%)
-              </span>
-            </button>
-            <div style={{ height: 4, background: "#17191f", borderRadius: 99, marginTop: 4, overflow: "hidden" }}>
-              <div style={{ height: "100%", width: `${w}%`, background: "#2f4a6e" }} />
-            </div>
-            {isOpen && (
-              <div style={{ marginTop: 4, color: "#a1a1aa", fontSize: 12 }}>
-                {p.leads.map((l) => l.name || l.sid).join(" · ")}
+    <div style={{ ...card, marginBottom: 12 }}>
+      <div
+        style={{
+          fontSize: 11,
+          color: "#71717a",
+          textTransform: "uppercase",
+          letterSpacing: "0.04em",
+          marginBottom: 10,
+        }}
+      >
+        {title}
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        {patterns.map((p) => {
+          const id = `${prefix}:${p.key}`;
+          const isOpen = open === id;
+          const pct = denom ? Math.round((p.count / denom) * 100) : 0;
+          const barW = Math.round((p.count / max) * 100);
+          return (
+            <div key={id}>
+              <button
+                onClick={() => setOpen(isOpen ? null : id)}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  width: "100%",
+                  minHeight: 32,
+                  background: "transparent",
+                  border: "none",
+                  color: "#e4e4e7",
+                  cursor: "pointer",
+                  fontFamily: "inherit",
+                  fontSize: 13,
+                  padding: 0,
+                  textAlign: "right",
+                }}
+              >
+                <span style={{ color: "#52525b", fontSize: 11, width: 12 }}>
+                  {isOpen ? "▾" : "▸"}
+                </span>
+                <span style={{ flex: 1, minWidth: 0 }}>{p.label}</span>
+                <span
+                  style={{
+                    fontSize: 12,
+                    fontWeight: 600,
+                    color: "#dbeafe",
+                    background: "#1a2638",
+                    border: "1px solid #2f4a6e",
+                    borderRadius: 6,
+                    padding: "1px 7px",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {p.count} · {pct}%
+                </span>
+              </button>
+              {/* proportional bar (relative to the biggest pattern in the group) */}
+              <div
+                style={{
+                  height: 5,
+                  background: "#15171d",
+                  borderRadius: 99,
+                  marginTop: 6,
+                  marginInlineStart: 20,
+                  overflow: "hidden",
+                }}
+              >
+                <div style={{ height: "100%", width: `${barW}%`, background: "#3b82f6" }} />
               </div>
-            )}
-          </div>
-        );
-      })}
+              {isOpen && (
+                <div
+                  style={{
+                    display: "flex",
+                    flexWrap: "wrap",
+                    gap: 5,
+                    marginTop: 8,
+                    marginInlineStart: 20,
+                  }}
+                >
+                  {p.leads.map((l) => (
+                    <span key={l.sid} style={chipLead}>
+                      {leadLabel(l)}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
+
+function leadLabel(l: { name: string | null; sid: string }): string {
+  if (l.name && l.name.trim()) return l.name.trim();
+  const at = l.sid.indexOf("@");
+  return at > 0 ? l.sid.slice(0, at) : l.sid;
+}
+
+const chipLead: React.CSSProperties = {
+  fontSize: 12,
+  padding: "3px 9px",
+  background: "#17191f",
+  border: "1px solid #2a2d34",
+  borderRadius: 6,
+  color: "#c4c4c8",
+  whiteSpace: "nowrap",
+};
 
 const card: React.CSSProperties = {
   background: "#0d0f14",

@@ -189,29 +189,37 @@ function PatternList({
   prefix: string;
 }) {
   if (!patterns.length) return null;
+  const max = Math.max(...patterns.map((p) => p.count), 1);
   return (
-    <div className="rounded-lg border border-border p-3 space-y-2">
-      <div className="text-xs text-muted-foreground">{title}</div>
+    <div className="rounded-lg border border-border p-3 space-y-3">
+      <div className="text-xs uppercase tracking-wide text-muted-foreground">{title}</div>
       {patterns.map((p) => {
         const id = `${prefix}:${p.key}`;
         const isOpen = open === id;
-        const w = denom ? Math.round((p.count / denom) * 100) : 0;
+        const pct = denom ? Math.round((p.count / denom) * 100) : 0;
+        const barW = Math.round((p.count / max) * 100);
         return (
           <div key={id}>
-            <button onClick={() => setOpen(isOpen ? null : id)} className="flex justify-between w-full text-sm">
-              <span>
-                {isOpen ? "▾" : "▸"} {p.label}
-              </span>
-              <span className="text-muted-foreground">
-                {p.count}/{denom} ({w}%)
+            <button
+              onClick={() => setOpen(isOpen ? null : id)}
+              className="flex items-center gap-2 w-full text-sm min-h-8 text-right"
+            >
+              <span className="text-muted-foreground/60 text-xs w-3">{isOpen ? "▾" : "▸"}</span>
+              <span className="flex-1 min-w-0 truncate">{p.label}</span>
+              <span className="shrink-0 rounded-md bg-primary/10 border border-primary/30 text-primary text-xs font-semibold px-2 py-0.5">
+                {p.count} · {pct}%
               </span>
             </button>
-            <div className="h-1 bg-muted rounded-full mt-1 overflow-hidden">
-              <div className="h-full bg-primary/50" style={{ width: `${w}%` }} />
+            <div className="h-1.5 bg-muted rounded-full mt-1.5 ms-5 overflow-hidden">
+              <div className="h-full bg-primary" style={{ width: `${barW}%` }} />
             </div>
             {isOpen && (
-              <div className="mt-1 text-xs text-muted-foreground">
-                {p.leads.map((l) => l.name || l.sid).join(" · ")}
+              <div className="mt-2 ms-5 flex flex-wrap gap-1.5">
+                {p.leads.map((l) => (
+                  <span key={l.sid} className="rounded-md border border-border bg-muted/40 px-2 py-0.5 text-xs whitespace-nowrap">
+                    {l.name?.trim() || (l.sid.includes("@") ? l.sid.slice(0, l.sid.indexOf("@")) : l.sid)}
+                  </span>
+                ))}
               </div>
             )}
           </div>
