@@ -128,7 +128,7 @@ export default function AnalysisScreen({ token }: { token: string }) {
   const pct = matched.total ? Math.round((matched.analyzed / matched.total) * 100) : 0;
 
   return (
-    <div dir="rtl" style={{ color: "#e4e4e7", fontSize: 13, padding: 12, lineHeight: 1.5 }}>
+    <div className="gg-theme" dir="rtl" style={{ color: "#f5f6f7", fontSize: 13, padding: 14, lineHeight: 1.5, borderRadius: 12 }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
         <h2 style={{ margin: 0, fontSize: 16 }}>🔍 ניתוח לידים</h2>
         <button onClick={() => setShowEditor((s) => !s)} style={btn("neutral")}>
@@ -142,7 +142,7 @@ export default function AnalysisScreen({ token }: { token: string }) {
         <>
       {/* Filters */}
       <div style={card}>
-        <div style={{ fontSize: 11, color: "#71717a", marginBottom: 6 }}>שלב</div>
+        <div style={{ fontSize: 11, color: "#8f939b", marginBottom: 6 }}>שלב</div>
         <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
           {STAGES.map(([key, label]) => {
             const on = stages.includes(key);
@@ -201,10 +201,10 @@ export default function AnalysisScreen({ token }: { token: string }) {
       <div style={{ ...card, marginTop: 10 }}>
         <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12 }}>
           <span>נותחו {matched.analyzed} מתוך {matched.total} בסינון</span>
-          <span style={{ color: "#71717a" }}>{pct}%</span>
+          <span style={{ color: "#8f939b" }}>{pct}%</span>
         </div>
-        <div style={{ height: 6, background: "#17191f", borderRadius: 99, marginTop: 6, overflow: "hidden" }}>
-          <div style={{ height: "100%", width: `${pct}%`, background: "#3b82f6" }} />
+        <div style={{ height: 6, background: "rgba(255,255,255,0.05)", borderRadius: 99, marginTop: 6, overflow: "hidden" }}>
+          <div style={{ height: "100%", width: `${pct}%`, background: "#cda978" }} />
         </div>
         {remaining > 0 && !running && (
           <button onClick={runBatch} style={{ ...btn("accent"), marginTop: 8 }}>
@@ -213,20 +213,30 @@ export default function AnalysisScreen({ token }: { token: string }) {
         )}
       </div>
 
-      {error && <div style={{ color: "#fecaca", marginTop: 10 }}>שגיאה: {error}</div>}
+      {error && <div style={{ color: "#f0b4b4", marginTop: 10 }}>שגיאה: {error}</div>}
 
       {/* Aggregate */}
       {agg && (
         <div style={{ marginTop: 12 }}>
           {agg.conclusive === 0 ? (
-            <div style={{ color: "#71717a" }}>
+            <div style={{ color: "#8f939b" }}>
               עוד לא נותחו לידים בסינון הזה — לחץ "נתח" כדי להתחיל.
             </div>
           ) : (
             <>
-              <div style={{ fontSize: 12, color: "#71717a", marginBottom: 8 }}>
-                מבוסס על {agg.conclusive} ניתוחים · מחויבות ממוצעת {agg.avg_commitment}/5
-                {agg.insufficient > 0 && ` · ${agg.insufficient} ללא מספיק דאטה`}
+              {/* Stripe-style KPI cards — promoted from the old summary line */}
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fit, minmax(108px, 1fr))",
+                  gap: 8,
+                  marginBottom: 12,
+                }}
+              >
+                <Kpi label="נותחו" value={`${agg.conclusive}`} />
+                <Kpi label="מחויבות ממוצעת" value={`${agg.avg_commitment}/5`} />
+                <Kpi label="נשירת פולואפ" value={`${agg.followup_failures.count}`} tone="warn" />
+                <Kpi label="ללא מספיק דאטה" value={`${agg.insufficient}`} />
               </div>
 
               <PatternList
@@ -285,7 +295,7 @@ function PatternList({
       <div
         style={{
           fontSize: 11,
-          color: "#71717a",
+          color: "#8f939b",
           textTransform: "uppercase",
           letterSpacing: "0.04em",
           marginBottom: 10,
@@ -311,7 +321,7 @@ function PatternList({
                   minHeight: 32,
                   background: "transparent",
                   border: "none",
-                  color: "#e4e4e7",
+                  color: "#f5f6f7",
                   cursor: "pointer",
                   fontFamily: "inherit",
                   fontSize: 13,
@@ -319,7 +329,7 @@ function PatternList({
                   textAlign: "right",
                 }}
               >
-                <span style={{ color: "#52525b", fontSize: 11, width: 12 }}>
+                <span style={{ color: "#6b7079", fontSize: 11, width: 12 }}>
                   {isOpen ? "▾" : "▸"}
                 </span>
                 <span style={{ flex: 1, minWidth: 0 }}>{p.label}</span>
@@ -327,9 +337,9 @@ function PatternList({
                   style={{
                     fontSize: 12,
                     fontWeight: 600,
-                    color: "#dbeafe",
-                    background: "#1a2638",
-                    border: "1px solid #2f4a6e",
+                    color: "#e7cba6",
+                    background: "rgba(205,169,120,0.14)",
+                    border: "1px solid rgba(205,169,120,0.30)",
                     borderRadius: 6,
                     padding: "1px 7px",
                     whiteSpace: "nowrap",
@@ -342,14 +352,14 @@ function PatternList({
               <div
                 style={{
                   height: 5,
-                  background: "#15171d",
+                  background: "rgba(255,255,255,0.06)",
                   borderRadius: 99,
                   marginTop: 6,
                   marginInlineStart: 20,
                   overflow: "hidden",
                 }}
               >
-                <div style={{ height: "100%", width: `${barW}%`, background: "#3b82f6" }} />
+                <div style={{ height: "100%", width: `${barW}%`, background: "#cda978" }} />
               </div>
               {isOpen && (
                 <div
@@ -382,34 +392,63 @@ function leadLabel(l: { name: string | null; sid: string }): string {
   return at > 0 ? l.sid.slice(0, at) : l.sid;
 }
 
+function Kpi({ label, value, tone }: { label: string; value: string; tone?: "warn" }) {
+  return (
+    <div
+      style={{
+        background: "rgba(255,255,255,0.04)",
+        border: "1px solid rgba(255,255,255,0.09)",
+        borderRadius: 9,
+        padding: "10px 12px",
+      }}
+    >
+      <div style={{ fontSize: 10.5, color: "#8f939b", marginBottom: 3 }}>{label}</div>
+      <div
+        style={{
+          fontSize: 19,
+          fontWeight: 600,
+          letterSpacing: "-0.5px",
+          fontFamily: "ui-monospace, 'JetBrains Mono', monospace",
+          color: tone === "warn" ? "#e0a96d" : "#f5f6f7",
+        }}
+      >
+        {value}
+      </div>
+    </div>
+  );
+}
+
 const chipLead: React.CSSProperties = {
   fontSize: 12,
   padding: "3px 9px",
-  background: "#17191f",
-  border: "1px solid #2a2d34",
+  background: "rgba(255,255,255,0.05)",
+  border: "1px solid rgba(255,255,255,0.11)",
   borderRadius: 6,
-  color: "#c4c4c8",
+  color: "#d4d6da",
   whiteSpace: "nowrap",
 };
 
 const card: React.CSSProperties = {
-  background: "#0d0f14",
-  border: "1px solid #2a2d34",
-  borderRadius: 8,
-  padding: 10,
+  background: "rgba(255,255,255,0.05)",
+  border: "1px solid rgba(255,255,255,0.11)",
+  borderRadius: 10,
+  padding: 12,
+  backdropFilter: "blur(30px) saturate(1.7)",
+  WebkitBackdropFilter: "blur(30px) saturate(1.7)",
+  boxShadow: "inset 0 1px 0 rgba(255,255,255,0.14), 0 12px 40px rgba(0,0,0,0.4)",
 };
 const lbl: React.CSSProperties = {
   display: "flex",
   flexDirection: "column",
   gap: 3,
   fontSize: 11,
-  color: "#71717a",
+  color: "#8f939b",
 };
 const inp: React.CSSProperties = {
-  background: "#17191f",
-  border: "1px solid #2a2d34",
+  background: "rgba(255,255,255,0.05)",
+  border: "1px solid rgba(255,255,255,0.11)",
   borderRadius: 6,
-  color: "#e4e4e7",
+  color: "#f5f6f7",
   padding: "4px 6px",
   fontFamily: "inherit",
   fontSize: 13,
@@ -421,9 +460,9 @@ function chip(on: boolean): React.CSSProperties {
     borderRadius: 99,
     cursor: "pointer",
     fontFamily: "inherit",
-    background: on ? "#1a2638" : "transparent",
-    border: `1px solid ${on ? "#2f4a6e" : "#2a2d34"}`,
-    color: on ? "#dbeafe" : "#a1a1aa",
+    background: on ? "rgba(205,169,120,0.14)" : "transparent",
+    border: `1px solid ${on ? "rgba(205,169,120,0.30)" : "rgba(255,255,255,0.11)"}`,
+    color: on ? "#e7cba6" : "#8f939b",
   };
 }
 function btn(tone: "accent" | "neutral"): React.CSSProperties {
@@ -433,8 +472,8 @@ function btn(tone: "accent" | "neutral"): React.CSSProperties {
     cursor: "pointer",
     fontFamily: "inherit",
     fontSize: 13,
-    border: `1px solid ${tone === "accent" ? "#2f4a6e" : "#2a2d34"}`,
-    background: tone === "accent" ? "#1a2638" : "transparent",
-    color: tone === "accent" ? "#dbeafe" : "#a1a1aa",
+    border: `1px solid ${tone === "accent" ? "rgba(205,169,120,0.30)" : "rgba(255,255,255,0.11)"}`,
+    background: tone === "accent" ? "rgba(205,169,120,0.14)" : "transparent",
+    color: tone === "accent" ? "#e7cba6" : "#8f939b",
   };
 }
