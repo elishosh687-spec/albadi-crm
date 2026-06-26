@@ -27,8 +27,8 @@ export default function WidgetLayout({
     <div
       style={{
         minHeight: "100vh",
-        background: "#0d0f14",
-        color: "#e4e4e7",
+        background: "#050506",
+        color: "#f5f6f7",
         padding: "16px",
       }}
     >

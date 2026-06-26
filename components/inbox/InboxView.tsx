@@ -163,7 +163,7 @@ export default function InboxView({
   }
 
   return (
-    <div dir="rtl" style={{ maxWidth: 720, margin: "0 auto" }}>
+    <div className="gg-theme" dir="rtl" style={{ maxWidth: 720, margin: "0 auto", padding: "0 4px", borderRadius: 12 }}>
       {/* Responsive CSS — at ≤640px (mobile), collapse the inline template
           tiles into a ☰ hamburger that opens an overlay; on tablet/desktop
           show them inline. Inline styles can't do media queries, so this
@@ -184,7 +184,7 @@ export default function InboxView({
           marginBottom: 12,
           position: "sticky",
           top: 0,
-          background: "#0d0f14",
+          background: "#050506",
           padding: "8px 0",
           zIndex: 10,
         }}
@@ -196,9 +196,9 @@ export default function InboxView({
           onChange={(e) => setFilter(e.target.value)}
           style={{
             flex: 1,
-            background: "#1a1d24",
-            color: "#e4e4e7",
-            border: "1px solid #2a2d34",
+            background: "rgba(255,255,255,0.05)",
+            color: "#f5f6f7",
+            border: "1px solid rgba(255,255,255,0.11)",
             borderRadius: 6,
             padding: "10px 12px",
             fontSize: 15,
@@ -207,9 +207,9 @@ export default function InboxView({
         <button
           onClick={refresh}
           style={{
-            background: "#2a2d34",
-            color: "#e4e4e7",
-            border: "1px solid #3a3d44",
+            background: "rgba(255,255,255,0.11)",
+            color: "#f5f6f7",
+            border: "1px solid rgba(255,255,255,0.14)",
             borderRadius: 6,
             padding: "10px 14px",
             fontSize: 15,
@@ -222,7 +222,7 @@ export default function InboxView({
 
       <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
         {visible.length === 0 && (
-          <div style={{ padding: 24, textAlign: "center", color: "#71717a" }}>
+          <div style={{ padding: 24, textAlign: "center", color: "#8f939b" }}>
             אין שיחות
           </div>
         )}
@@ -230,11 +230,14 @@ export default function InboxView({
           <div
             key={r.sid}
             style={{
-              background: r.botPaused ? "#2a1d24" : "#1a1d24",
-              border: `1px solid ${selectedSid === r.sid.trim() ? "#3b82f6" : "#2a2d34"}`,
-              borderRadius: 8,
+              background: r.botPaused ? "rgba(220,150,90,0.10)" : "rgba(255,255,255,0.05)",
+              border: `1px solid ${selectedSid === r.sid.trim() ? "#cda978" : "rgba(255,255,255,0.11)"}`,
+              borderRadius: 10,
               display: "flex",
               flexDirection: "column",
+              backdropFilter: "blur(24px) saturate(1.6)",
+              WebkitBackdropFilter: "blur(24px) saturate(1.6)",
+              boxShadow: "inset 0 1px 0 rgba(255,255,255,0.12)",
             }}
           >
             <div
@@ -274,7 +277,7 @@ export default function InboxView({
                   style={{
                     fontWeight: 600,
                     fontSize: 15,
-                    color: "#e4e4e7",
+                    color: "#f5f6f7",
                     overflow: "hidden",
                     textOverflow: "ellipsis",
                     whiteSpace: "nowrap",
@@ -282,7 +285,7 @@ export default function InboxView({
                 >
                   {r.name || r.phone || r.sid}
                 </div>
-                <div style={{ fontSize: 12, color: "#71717a", flexShrink: 0 }}>
+                <div style={{ fontSize: 12, color: "#8f939b", flexShrink: 0 }}>
                   {timeAgo(r.lastAt)}
                 </div>
               </div>
@@ -291,7 +294,7 @@ export default function InboxView({
                 style={{
                   marginTop: 4,
                   fontSize: 13,
-                  color: r.lastSender === "lead" ? "#a5f3fc" : "#a1a1aa",
+                  color: r.lastSender === "lead" ? "#a5f3fc" : "#8f939b",
                   overflow: "hidden",
                   textOverflow: "ellipsis",
                   whiteSpace: "nowrap",
@@ -299,7 +302,7 @@ export default function InboxView({
                 }}
               >
                 <span style={{ marginLeft: 6 }}>{senderLabel(r.lastSender)}</span>
-                {r.lastText?.slice(0, 100) || <span style={{ color: "#52525b" }}>—</span>}
+                {r.lastText?.slice(0, 100) || <span style={{ color: "#6b7079" }}>—</span>}
               </div>
 
               <div
@@ -308,7 +311,7 @@ export default function InboxView({
                   display: "flex",
                   gap: 6,
                   fontSize: 11,
-                  color: "#71717a",
+                  color: "#8f939b",
                   flexWrap: "wrap",
                 }}
               >
@@ -348,7 +351,7 @@ export default function InboxView({
                   </span>
                 )}
                 {r.phone && (
-                  <span style={{ color: "#52525b" }}>{r.phone}</span>
+                  <span style={{ color: "#6b7079" }}>{r.phone}</span>
                 )}
               </div>
             </a>
@@ -468,7 +471,7 @@ export default function InboxView({
             </div>
             </div>
             {expandedSid === r.sid.trim() && (
-              <div style={{ borderTop: "1px solid #2a2d34", padding: 12 }}>
+              <div style={{ borderTop: "1px solid rgba(255,255,255,0.11)", padding: 12 }}>
                 <LeadQuotesInline
                   apiToken={apiToken}
                   sid={r.sid.trim()}
@@ -478,7 +481,7 @@ export default function InboxView({
               </div>
             )}
             {analyzeSid === r.sid.trim() && (
-              <div style={{ borderTop: "1px solid #2a2d34", padding: 12 }}>
+              <div style={{ borderTop: "1px solid rgba(255,255,255,0.11)", padding: 12 }}>
                 <LeadAnalysisInline apiToken={apiToken} sid={r.sid.trim()} name={r.name} />
               </div>
             )}
@@ -521,10 +524,10 @@ export default function InboxView({
               }}
             >
               <div style={{ marginBottom: 12 }}>
-                <div style={{ fontSize: 11, color: "#71717a", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                <div style={{ fontSize: 11, color: "#8f939b", textTransform: "uppercase", letterSpacing: "0.05em" }}>
                   תבניות לשליחה
                 </div>
-                <div style={{ fontSize: 14, color: "#e4e4e7", fontWeight: 600, marginTop: 2 }}>
+                <div style={{ fontSize: 14, color: "#f5f6f7", fontWeight: 600, marginTop: 2 }}>
                   {leadName}
                 </div>
               </div>
@@ -560,7 +563,7 @@ export default function InboxView({
                   width: "100%",
                   padding: "10px 16px",
                   background: "transparent",
-                  color: "#a1a1aa",
+                  color: "#8f939b",
                   border: "1px solid #2d3548",
                   borderRadius: 8,
                   fontSize: 14,
@@ -671,9 +674,9 @@ function LeadQuotesInline({
     padding: "4px 8px",
     borderRadius: 6,
     textDecoration: "none",
-    border: "1px solid #3a3d44",
-    color: "#e4e4e7",
-    background: "#2a2d34",
+    border: "1px solid rgba(255,255,255,0.14)",
+    color: "#f5f6f7",
+    background: "rgba(255,255,255,0.11)",
     whiteSpace: "nowrap",
     cursor: "pointer",
   };
@@ -684,10 +687,10 @@ function LeadQuotesInline({
     color: "#fff",
   };
 
-  if (loading) return <div style={{ fontSize: 12, color: "#a1a1aa" }}>טוען הצעות…</div>;
+  if (loading) return <div style={{ fontSize: 12, color: "#8f939b" }}>טוען הצעות…</div>;
   if (err) return <div style={{ fontSize: 12, color: "#f87171" }}>שגיאה: {err}</div>;
   if (!quotes || quotes.length === 0)
-    return <div style={{ fontSize: 12, color: "#71717a" }}>אין הצעות מחיר ללקוח הזה.</div>;
+    return <div style={{ fontSize: 12, color: "#8f939b" }}>אין הצעות מחיר ללקוח הזה.</div>;
 
   const ids = [...selected].join(",");
   const combinedWa =
@@ -705,7 +708,7 @@ function LeadQuotesInline({
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-      <div style={{ fontSize: 11, color: "#71717a" }}>
+      <div style={{ fontSize: 11, color: "#8f939b" }}>
         הצעות מחיר ({quotes.length}) · סמן 2+ סופיות לאיחוד ל-PDF אחד
       </div>
       {selected.size >= 2 && (
@@ -718,7 +721,7 @@ function LeadQuotesInline({
             padding: "2px 0",
           }}
         >
-          <span style={{ fontSize: 11, color: "#a78bfa" }}>{selected.size} נבחרו</span>
+          <span style={{ fontSize: 11, color: "#cda978" }}>{selected.size} נבחרו</span>
           <button onClick={() => setSelected(new Set())} style={linkStyle}>
             נקה
           </button>
@@ -755,7 +758,7 @@ function LeadQuotesInline({
               flexWrap: "wrap",
               padding: "6px 8px",
               borderRadius: 6,
-              border: "1px solid #2a2d34",
+              border: "1px solid rgba(255,255,255,0.11)",
               background: "#15171c",
             }}
           >
@@ -764,13 +767,13 @@ function LeadQuotesInline({
                 type="checkbox"
                 checked={selected.has(q.id)}
                 onChange={() => toggle(q.id)}
-                style={{ accentColor: "#7c5cff" }}
+                style={{ accentColor: "#cda978" }}
               />
             )}
-            <span style={{ fontSize: 11, color: "#71717a", fontFamily: "monospace" }}>
+            <span style={{ fontSize: 11, color: "#8f939b", fontFamily: "monospace" }}>
               {q.quotationNo ?? q.id.slice(-6)}
             </span>
-            <span style={{ fontSize: 11, color: "#71717a" }}>
+            <span style={{ fontSize: 11, color: "#8f939b" }}>
               {new Date(q.createdAt).toLocaleDateString("he-IL")}
             </span>
             <span
@@ -778,8 +781,8 @@ function LeadQuotesInline({
                 fontSize: 10,
                 padding: "1px 6px",
                 borderRadius: 99,
-                border: "1px solid #2a2d34",
-                color: isFinal ? "#34d399" : "#a1a1aa",
+                border: "1px solid rgba(255,255,255,0.11)",
+                color: isFinal ? "#34d399" : "#8f939b",
               }}
             >
               {STATUS_HE[q.factoryStatus] ?? q.factoryStatus}
@@ -822,7 +825,7 @@ function ActionTile({
   tone: "neutral" | "warn" | "accent";
 }) {
   const palette = {
-    neutral: { bg: "#1a2030", border: "#2d3548", hover: "#252e44", text: "#e4e4e7" },
+    neutral: { bg: "#1a2030", border: "#2d3548", hover: "#252e44", text: "#f5f6f7" },
     warn: { bg: "#3a1d1a", border: "#7c2d12", hover: "#5a2a20", text: "#fecaca" },
     accent: { bg: "#1a2638", border: "#2f4a6e", hover: "#23344e", text: "#dbeafe" },
   }[tone];
