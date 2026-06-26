@@ -178,24 +178,14 @@ export default function InboxView({
         .inbox-actions-mobile { display: flex; }
         .inbox-row-actions-btn { transition: background 0.12s ease, color 0.12s ease; }
         .inbox-row-actions-btn:hover { background: rgba(255,255,255,0.09); color: #f5f6f7; }
-        /* list | thread split (Front 3-pane). Narrow → thread takes over. */
-        .inbox-split { display: grid; grid-template-columns: 1fr 290px; gap: 12px; align-items: start; }
-        @media (max-width: 760px) { .inbox-split { grid-template-columns: 1fr; } .inbox-listcol { display: none; } }
+        /* list | thread split (Front 3-pane). RTL: list on the RIGHT (first
+           column), thread on the LEFT. Full-height so the composer is always
+           visible and each column scrolls on its own. */
+        .inbox-split { display: grid; grid-template-columns: 290px 1fr; gap: 12px; height: calc(100dvh - 96px); align-items: stretch; }
+        .inbox-split .inbox-listcol { overflow-y: auto; min-height: 0; }
+        @media (max-width: 760px) { .inbox-split { grid-template-columns: 1fr; height: calc(100dvh - 96px); } .inbox-listcol { display: none; } }
       `}</style>
       <div className={threadSid ? "inbox-split" : undefined}>
-      {threadSid && threadRow && (
-        <ThreadView
-          apiToken={apiToken}
-          row={threadRow}
-          busy={busy}
-          quickTemplates={quickTemplates}
-          onClose={() => setThreadSid(null)}
-          onToggle={() => toggle(threadRow.sid, threadRow.botPaused)}
-          onSendTemplate={(tpl) =>
-            sendTemplate(threadRow.sid, threadRow.name || threadRow.phone || threadRow.sid, tpl)
-          }
-        />
-      )}
       <div className={threadSid ? "inbox-listcol" : undefined}>
       <div
         style={{
@@ -491,6 +481,19 @@ export default function InboxView({
         ))}
       </div>
       </div>{/* /inbox-listcol */}
+      {threadSid && threadRow && (
+        <ThreadView
+          apiToken={apiToken}
+          row={threadRow}
+          busy={busy}
+          quickTemplates={quickTemplates}
+          onClose={() => setThreadSid(null)}
+          onToggle={() => toggle(threadRow.sid, threadRow.botPaused)}
+          onSendTemplate={(tpl) =>
+            sendTemplate(threadRow.sid, threadRow.name || threadRow.phone || threadRow.sid, tpl)
+          }
+        />
+      )}
       </div>{/* /inbox-split */}
 
       {/* Mobile template picker overlay — fires when a row's ☰ tile is
@@ -793,7 +796,8 @@ function ThreadView({
       style={{
         display: "flex",
         flexDirection: "column",
-        minHeight: 520,
+        height: "100%",
+        minHeight: 0,
         background: "rgba(255,255,255,0.045)",
         border: "1px solid rgba(255,255,255,0.11)",
         borderRadius: 12,
@@ -893,11 +897,12 @@ function ThreadView({
       <div
         style={{
           flex: 1,
+          minHeight: 0,
           overflowY: "auto",
-          padding: 12,
+          padding: 14,
           display: "flex",
           flexDirection: "column",
-          gap: 8,
+          gap: 9,
         }}
       >
         {panel === "quotes" ? (
@@ -920,10 +925,10 @@ function ThreadView({
                   background: incoming ? "rgba(255,255,255,0.06)" : "rgba(205,169,120,0.16)",
                   color: incoming ? "#e4e5e8" : "#fdf3e6",
                   border: incoming ? "1px solid rgba(255,255,255,0.08)" : "1px solid rgba(205,169,120,0.28)",
-                  borderRadius: incoming ? "10px 10px 10px 3px" : "10px 10px 3px 10px",
-                  padding: "8px 11px",
-                  fontSize: 12.5,
-                  lineHeight: 1.5,
+                  borderRadius: incoming ? "12px 12px 12px 4px" : "12px 12px 4px 12px",
+                  padding: "9px 13px",
+                  fontSize: 13.5,
+                  lineHeight: 1.55,
                   whiteSpace: "pre-wrap",
                   wordBreak: "break-word",
                 }}
