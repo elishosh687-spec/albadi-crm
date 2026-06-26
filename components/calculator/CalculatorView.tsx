@@ -186,7 +186,7 @@ export function CalculatorView({ products, quantityTiers, shippingOptions, initi
   }, [r, c, reverseInput, reverseMode]);
 
   return (
-    <div className="flex flex-col gap-6" dir="rtl">
+    <div className="gg-theme flex flex-col gap-6 rounded-xl p-4" dir="rtl">
       {/* Top-level tab: regular vs estimated calculator */}
       <div className="inline-flex self-start rounded-lg border border-border bg-background/40 p-0.5 text-sm">
         <button

@@ -100,6 +100,62 @@
   --color-input: oklch(0.9 0.01 270);
 }
 
+/* ──────────────────────────────────────────────────────────────────────────
+   Graphite-glass SCOPE. Add class="gg-theme" to a subtree to opt it into the
+   redesign. It re-points the semantic --color-* tokens to graphite-glass, so
+   every existing utility class (bg-card, border-border, bg-primary, …) re-skins
+   with ZERO markup churn. Rolled out one screen at a time.
+   ────────────────────────────────────────────────────────────────────────── */
+.gg-theme {
+  --color-background: #050506;
+  --color-foreground: #f5f6f7;
+  --color-card: rgba(255, 255, 255, 0.05);
+  --color-card-foreground: #f5f6f7;
+  --color-popover: #111316;
+  --color-popover-foreground: #f5f6f7;
+  --color-secondary: rgba(255, 255, 255, 0.06);
+  --color-secondary-foreground: #f5f6f7;
+  --color-muted: rgba(255, 255, 255, 0.05);
+  --color-muted-foreground: #8f939b;
+  --color-border: rgba(255, 255, 255, 0.11);
+  --color-input: rgba(255, 255, 255, 0.13);
+  --color-ring: rgba(230, 195, 150, 0.55);
+  /* warm champagne accent — replaces the generic purple primary */
+  --color-primary: #cda978;
+  --color-primary-foreground: #1b1407;
+  --color-accent: #cda978;
+  --color-accent-foreground: #1b1407;
+
+  color: var(--gg-text);
+  /* ambient glows so the glass has something to refract */
+  background:
+    radial-gradient(640px 440px at 84% -10%, rgba(120, 170, 200, 0.16), transparent 60%),
+    radial-gradient(580px 440px at 6% 114%, rgba(220, 180, 140, 0.14), transparent 62%),
+    radial-gradient(420px 360px at 50% 60%, rgba(200, 150, 170, 0.07), transparent 66%),
+    var(--gg-bg);
+}
+
+/* frosted glass on panel containers (bg-card = panels only) */
+.gg-theme .bg-card {
+  position: relative;
+  background-color: rgba(255, 255, 255, 0.055);
+  border-color: rgba(255, 255, 255, 0.12);
+  -webkit-backdrop-filter: blur(30px) saturate(1.7);
+  backdrop-filter: blur(30px) saturate(1.7);
+  box-shadow: var(--gg-glass-rim), var(--gg-glass-float);
+}
+
+/* iridescent specular top-edge — the signature Liquid Glass touch */
+.gg-theme .bg-card::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 1px;
+  background: var(--gg-edge);
+  border-radius: inherit;
+  pointer-events: none;
+}
+
 @layer base {
   *,
   *::before,
