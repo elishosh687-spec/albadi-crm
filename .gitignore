@@ -20,3 +20,4 @@ scripts/tone-samples.json
 backups/
 .env*.local
 test-output.pdf
+_stitch/

@@ -1,8 +1,58 @@
 @import "tailwindcss";
+@plugin "liquidglass-tailwind";
 
 /* Tailwind v4 CSS-first theme. The v3 dashboard runs in dark mode by
    default; its layout adds `.dark` so the variables below flip. v2 was
    removed on 2026-05-14 — no special handling needed.                      */
+
+/* ──────────────────────────────────────────────────────────────────────────
+   Graphite Liquid Glass redesign tokens (added 2026-06-26, branch
+   redesign/graphite-glass). NAMESPACED `--gg-*` so they are ADDITIVE — they do
+   NOT touch the existing --color-* theme above, so no existing screen changes
+   until a component opts in. Source of truth: _stitch/DESIGN.md.
+   ────────────────────────────────────────────────────────────────────────── */
+:root {
+  --gg-bg: #050506;
+  --gg-text: #f5f6f7;
+  --gg-text-muted: #8f939b;
+  --gg-text-faint: #6b7079;
+
+  --gg-glass-bg: rgba(255, 255, 255, 0.045);
+  --gg-glass-border: rgba(255, 255, 255, 0.11);
+  --gg-glass-blur: blur(30px) saturate(1.7);
+  --gg-glass-rim: inset 0 1px 0 rgba(255, 255, 255, 0.16);
+  --gg-glass-float: 0 12px 40px rgba(0, 0, 0, 0.45);
+  --gg-field-bg: rgba(255, 255, 255, 0.035);
+  --gg-field-border: rgba(255, 255, 255, 0.13);
+
+  /* iridescent top-edge line for panels */
+  --gg-edge: linear-gradient(
+    90deg,
+    transparent,
+    rgba(160, 200, 255, 0.5),
+    rgba(255, 210, 170, 0.4),
+    transparent
+  );
+
+  /* warm champagne accent — money / primary moments ONLY (no purple) */
+  --gg-accent-fill: linear-gradient(
+    90deg,
+    rgba(220, 180, 140, 0.16),
+    rgba(220, 180, 140, 0.07)
+  );
+  --gg-accent-border: rgba(230, 195, 150, 0.32);
+  --gg-accent-text: #e7cba6;
+  --gg-accent-strong: #fdf3e6;
+
+  /* primary action = frosted near-white glass (monochrome) */
+  --gg-btn-bg: rgba(255, 255, 255, 0.16);
+  --gg-btn-border: rgba(255, 255, 255, 0.28);
+
+  /* semantic status tints (small pills only) */
+  --gg-success: #7dd3a8;
+  --gg-warn: #cbb079;
+  --gg-alert: #d98a8a;
+}
 
 @theme {
   --font-display: var(--font-display, "Frank Ruhl Libre", ui-serif, serif);
