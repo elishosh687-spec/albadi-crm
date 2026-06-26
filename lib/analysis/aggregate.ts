@@ -71,21 +71,28 @@ export async function aggregateAnalyses(
 
   const blockerMap = new Map<string, LeadRef[]>();
   const objMap = new Map<string, LeadRef[]>();
-  const followupLeads: LeadRef[] = [];
   const sampleLeads: LeadRef[] = [];
   let commitmentSum = 0;
+  const nameBySid = new Map<string, string | null>();
 
   for (const v of conclusiveVerdicts) {
     const ref: LeadRef = { sid: v.sid, name: v.name };
+    nameBySid.set(v.sid, v.name);
     push(blockerMap, v.primary_blocker, ref);
     // one lead counts once per distinct objection taxonomy key
     const keys = new Set((v.objections ?? []).map((o) => o.taxonomy_key));
     for (const k of keys) push(objMap, k, ref);
-    if (v.followup_verdict?.promised && !v.followup_verdict?.delivered)
-      followupLeads.push(ref);
-    if (v.sample?.asked && !v.sample?.fulfilled) sampleLeads.push(ref);
+    // "asked to see the product" — a signal, NOT a failure. Albadi does not
+    // send physical samples by policy; counted regardless of "fulfilled".
+    if (v.sample?.asked) sampleLeads.push(ref);
     commitmentSum += v.commitment_scorecard?.score_1_5 ?? 0;
   }
+
+  // Follow-up DROPS — computed DETERMINISTICALLY from the message timeline, not
+  // the LLM (which conflated bot messages, missed delivered quotes, and counted
+  // "ball in customer's court" as our failure → ~92% false). A real drop = the
+  // CUSTOMER sent the last message and it's been >3 days with no reply.
+  const followupLeads = await deterministicFollowupDrops([...nameBySid.keys()], nameBySid);
 
   const by_blocker = toPatterns(blockerMap, (k) => BLOCKER_HE[k] ?? k);
   const by_objection = toPatterns(objMap, (k) => getObjectionPlay(k).label);
@@ -101,17 +108,44 @@ export async function aggregateAnalyses(
     by_objection,
     followup_failures: {
       key: "followup_failures",
-      label: "הבטחנו ולא מסרנו",
+      label: "נפלנו — לקוח כתב אחרון, 3+ ימים ללא מענה",
       count: followupLeads.length,
       leads: followupLeads,
     },
     sample_gaps: {
       key: "sample_gaps",
-      label: "ביקש דוגמה ולא קיבל",
+      label: "ביקשו לראות מוצר (לטפל בהוכחה ויזואלית)",
       count: sampleLeads.length,
       leads: sampleLeads,
     },
   };
+}
+
+const FOLLOWUP_DROP_DAYS = 3;
+
+/** A drop = the customer's message is the latest one and it's been >N days. */
+async function deterministicFollowupDrops(
+  sids: string[],
+  nameBySid: Map<string, string | null>
+): Promise<LeadRef[]> {
+  if (!sids.length) return [];
+  const rows = await db.execute(sql`
+    SELECT DISTINCT ON (manychat_sub_id) manychat_sub_id, direction, received_at
+    FROM messages
+    WHERE manychat_sub_id IN (${sql.join(sids.map((s) => sql`${s}`), sql`, `)})
+    ORDER BY manychat_sub_id, received_at DESC
+  `);
+  const cutoffMs = FOLLOWUP_DROP_DAYS * 86400000;
+  const drops: LeadRef[] = [];
+  for (const r of rows.rows as { manychat_sub_id: string; direction: string; received_at: unknown }[]) {
+    if (
+      r.direction === "in" &&
+      Date.now() - new Date(r.received_at as string).getTime() > cutoffMs
+    ) {
+      drops.push({ sid: r.manychat_sub_id, name: nameBySid.get(r.manychat_sub_id) ?? null });
+    }
+  }
+  return drops;
 }
 
 function push(m: Map<string, LeadRef[]>, key: string, ref: LeadRef): void {

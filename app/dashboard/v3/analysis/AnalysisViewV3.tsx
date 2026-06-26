@@ -160,7 +160,7 @@ export default function AnalysisViewV3() {
             <PatternList title="חסם מרכזי" patterns={agg.by_blocker} denom={agg.conclusive} open={open} setOpen={setOpen} prefix="b" />
             <PatternList title="התנגדויות" patterns={agg.by_objection} denom={agg.conclusive} open={open} setOpen={setOpen} prefix="o" />
             <PatternList
-              title="כשלי מעקב ודוגמאות"
+              title="מעקב ובקשות לראות מוצר"
               patterns={[agg.followup_failures, agg.sample_gaps].filter((p) => p.count > 0)}
               denom={agg.conclusive}
               open={open}

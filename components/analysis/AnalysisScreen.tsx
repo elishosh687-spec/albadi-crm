@@ -214,7 +214,7 @@ export default function AnalysisScreen({ token }: { token: string }) {
                 prefix="o"
               />
               <PatternList
-                title="כשלי מעקב ודוגמאות"
+                title="מעקב ובקשות לראות מוצר"
                 patterns={[agg.followup_failures, agg.sample_gaps].filter((p) => p.count > 0)}
                 denom={agg.conclusive}
                 open={openPattern}
