@@ -406,6 +406,16 @@ export default function InboxView({
                 label="הצעות"
                 tone={expandedSid === r.sid.trim() ? "warn" : "accent"}
               />
+              <ActionTile
+                onClick={() =>
+                  setAnalyzeSid((cur) => (cur === r.sid.trim() ? null : r.sid.trim()))
+                }
+                disabled={false}
+                title="ניתוח מכירה — למה הליד תקוע + תסריט תשובה"
+                icon="🔍"
+                label="נתח"
+                tone={analyzeSid === r.sid.trim() ? "warn" : "accent"}
+              />
             </div>
 
             {/* Mobile-only — pause + hamburger that opens the full picker */}
