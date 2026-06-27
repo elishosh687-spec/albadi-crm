@@ -167,7 +167,7 @@ export default function InboxView({
   }
 
   return (
-    <div className="gg-theme" dir="rtl" style={{ maxWidth: 720, margin: "0 auto", padding: "0 4px", borderRadius: 12 }}>
+    <div className="gg-theme" dir="rtl" style={{ maxWidth: threadSid ? "100%" : 720, margin: "0 auto", padding: "0 4px", borderRadius: 12 }}>
       {/* Responsive CSS — at ≤640px (mobile), collapse the inline template
           tiles into a ☰ hamburger that opens an overlay; on tablet/desktop
           show them inline. Inline styles can't do media queries, so this
@@ -186,7 +186,7 @@ export default function InboxView({
           display: grid;
           grid-template-columns: 290px 1fr;
           gap: 0;
-          height: calc(100dvh - 96px);
+          height: calc(100dvh - 148px);
           align-items: stretch;
           background: rgba(255,255,255,0.045);
           border: 1px solid rgba(255,255,255,0.11);
@@ -208,7 +208,7 @@ export default function InboxView({
         .inbox-split ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.10); border-radius: 8px; }
         .inbox-split ::-webkit-scrollbar-thumb:hover { background: rgba(205,169,120,0.35); }
         .inbox-split { scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.14) transparent; }
-        @media (max-width: 760px) { .inbox-split { grid-template-columns: 1fr; height: calc(100dvh - 96px); } .inbox-listcol { display: none; } }
+        @media (max-width: 760px) { .inbox-split { grid-template-columns: 1fr; height: calc(100dvh - 148px); } .inbox-listcol { display: none; } }
       `}</style>
       <div className={threadSid ? "inbox-split" : undefined}>
       <div className={threadSid ? "inbox-listcol" : undefined}>
@@ -295,7 +295,7 @@ export default function InboxView({
           <div key={r.sid} style={rowStyle}>
             <div
               style={{
-                padding: 12,
+                padding: threadSid ? "9px 12px" : 12,
                 display: "flex",
                 gap: 10,
                 // Buttons live at the bottom-left of the row (alignSelf below),
@@ -476,7 +476,7 @@ export default function InboxView({
                 pause/resume, quote (הצעות), analyze (נתח) and templates. */}
             <div
               className="inbox-actions-mobile"
-              style={{ flexShrink: 0, alignSelf: "center" }}
+              style={{ flexShrink: 0, alignSelf: "center", display: threadSid ? "none" : "flex" }}
             >
               <button
                 className="inbox-row-actions-btn"
@@ -1052,7 +1052,7 @@ function ThreadView({
             {ctx?.quoteTotal ? `₪${ctx.quoteTotal}` : "—"}
           </div>
         </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: 7, borderTop: "1px solid rgba(255,255,255,0.08)", paddingTop: 12 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: "auto", borderTop: "1px solid rgba(255,255,255,0.08)", paddingTop: 12 }}>
           <button onClick={() => setPanel(panel === "quotes" ? "chat" : "quotes")} style={panel === "quotes" ? sideActive : sideBtn}>
             💰 הצעות מחיר
           </button>

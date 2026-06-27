@@ -205,25 +205,12 @@ export default async function InboxWidgetPage({
   });
 
   return (
-    <div style={{ padding: 8 }}>
-      <div
-        style={{
-          background: "#1a1d24",
-          border: "1px solid #2a2d34",
-          borderRadius: 8,
-          padding: "8px 12px",
-          marginBottom: 10,
-        }}
-      >
-        <strong style={{ fontSize: 14 }}>📥 שיחות ({rows.length})</strong>
-      </div>
-      <InboxView
-        apiToken={token}
-        initialRows={rows}
-        selectedSid={selectedSid}
-        quickTemplates={quickTemplates}
-      />
-    </div>
+    <InboxView
+      apiToken={token}
+      initialRows={rows}
+      selectedSid={selectedSid}
+      quickTemplates={quickTemplates}
+    />
   );
 }
 
