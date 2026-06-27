@@ -96,22 +96,28 @@ export default async function HubWidgetPage({
 
   return (
     <div
+      className="gg-theme"
       dir="rtl"
       style={{
         display: "flex",
         flexDirection: "column",
         height: "100vh",
-        margin: "-16px",
+        margin: "-12px",
+        background: "#050506",
       }}
     >
       <nav
         style={{
           display: "flex",
           flexWrap: "nowrap",
+          alignItems: "center",
           gap: 4,
-          padding: "8px 8px 0 8px",
-          background: "#0d0f14",
-          borderBottom: "1px solid #2a2d34",
+          padding: "10px 14px",
+          background: "rgba(255,255,255,0.045)",
+          borderBottom: "1px solid rgba(255,255,255,0.08)",
+          backdropFilter: "blur(30px) saturate(1.7)",
+          WebkitBackdropFilter: "blur(30px) saturate(1.7)",
+          boxShadow: "inset 0 1px 0 rgba(255,255,255,0.12)",
           position: "sticky",
           top: 0,
           zIndex: 10,
@@ -121,6 +127,35 @@ export default async function HubWidgetPage({
           WebkitOverflowScrolling: "touch",
         }}
       >
+        {/* brand */}
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 7,
+            paddingInlineEnd: 12,
+            marginInlineEnd: 4,
+            borderInlineEnd: "1px solid rgba(255,255,255,0.10)",
+            fontWeight: 700,
+            fontSize: 15,
+            color: "#fdf3e6",
+            whiteSpace: "nowrap",
+            flexShrink: 0,
+          }}
+        >
+          <span
+            style={{
+              width: 22,
+              height: 22,
+              borderRadius: 7,
+              background: "linear-gradient(135deg, #e7cba6, #cda978)",
+              display: "inline-block",
+              flexShrink: 0,
+            }}
+          />
+          אלבדי
+        </div>
+
         {TABS.map((t) => {
           const isActive = t.id === activeId;
           const sidSuffix = sid ? `&sid=${encodeURIComponent(sid)}` : "";
@@ -130,16 +165,16 @@ export default async function HubWidgetPage({
               key={t.id}
               href={href}
               style={{
-                padding: "10px 14px",
-                fontSize: 14,
-                minHeight: 44,
+                padding: "8px 14px",
+                fontSize: 13.5,
+                fontWeight: isActive ? 600 : 500,
+                minHeight: 38,
                 display: "flex",
                 alignItems: "center",
-                background: isActive ? "#2a2d34" : "transparent",
-                color: isActive ? "#e4e4e7" : "#a1a1aa",
-                border: "1px solid #2a2d34",
-                borderBottom: isActive ? "1px solid #2a2d34" : "1px solid transparent",
-                borderRadius: "6px 6px 0 0",
+                background: isActive ? "rgba(205,169,120,0.16)" : "transparent",
+                color: isActive ? "#e7cba6" : "#9a9ea6",
+                border: `1px solid ${isActive ? "rgba(205,169,120,0.34)" : "transparent"}`,
+                borderRadius: 9,
                 textDecoration: "none",
                 whiteSpace: "nowrap",
                 touchAction: "manipulation",
@@ -159,7 +194,7 @@ export default async function HubWidgetPage({
           flex: 1,
           width: "100%",
           border: "none",
-          background: "#0d0f14",
+          background: "#050506",
         }}
         allow="clipboard-write"
       />

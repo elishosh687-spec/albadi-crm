@@ -8,7 +8,6 @@
 //   - Hebrew RTL preserved (calculator components depend on it).
 
 import type { Metadata } from "next";
-import { WidgetNav } from "@/components/widget/WidgetNav";
 
 // Nested layout — root <html>/<body> + globals.css already provided by
 // app/layout.tsx. This wrapper only sets metadata + a container with the
@@ -32,10 +31,7 @@ export default function WidgetLayout({
         padding: "12px",
       }}
     >
-      <div style={{ maxWidth: 1180, margin: "0 auto" }}>
-        <WidgetNav />
-        {children}
-      </div>
+      {children}
     </div>
   );
 }

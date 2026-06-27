@@ -186,7 +186,7 @@ export default function InboxView({
           display: grid;
           grid-template-columns: 290px 1fr;
           gap: 0;
-          height: calc(100dvh - 148px);
+          height: calc(100dvh - 40px);
           align-items: stretch;
           background: rgba(255,255,255,0.045);
           border: 1px solid rgba(255,255,255,0.11);
@@ -208,7 +208,7 @@ export default function InboxView({
         .inbox-split ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.10); border-radius: 8px; }
         .inbox-split ::-webkit-scrollbar-thumb:hover { background: rgba(205,169,120,0.35); }
         .inbox-split { scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.14) transparent; }
-        @media (max-width: 760px) { .inbox-split { grid-template-columns: 1fr; height: calc(100dvh - 148px); } .inbox-listcol { display: none; } }
+        @media (max-width: 760px) { .inbox-split { grid-template-columns: 1fr; height: calc(100dvh - 40px); } .inbox-listcol { display: none; } }
       `}</style>
       <div className={threadSid ? "inbox-split" : undefined}>
       <div className={threadSid ? "inbox-listcol" : undefined}>
