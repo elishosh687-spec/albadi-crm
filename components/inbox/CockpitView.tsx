@@ -97,6 +97,7 @@ export default function CockpitView({ leads, onOpenChat, onSnooze }: Props) {
         fontFamily: "Inter, Heebo, system-ui, sans-serif",
       }}
     >
+      <style>{`.cockpit-row{cursor:pointer;transition:background .12s ease}.cockpit-row:hover{background:rgba(255,255,255,0.03)}.cockpit-hero-id{cursor:pointer}`}</style>
       {/* header */}
       <div
         style={{
@@ -173,6 +174,8 @@ export default function CockpitView({ leads, onOpenChat, onSnooze }: Props) {
           </div>
 
           <div
+            className="cockpit-hero-id"
+            onClick={() => onOpenChat(hero.sid)}
             style={{
               display: "flex",
               alignItems: "center",
@@ -292,6 +295,8 @@ function SlimRow({
 
   return (
     <div
+      className="cockpit-row"
+      onClick={() => onOpenChat(lead.sid)}
       style={{
         display: "flex",
         alignItems: "center",
@@ -335,7 +340,7 @@ function SlimRow({
       {isSnoozeRow ? (
         <button
           style={{ ...btnGhost, flexShrink: 0 }}
-          onClick={() => onSnooze(lead.sid)}
+          onClick={(e) => { e.stopPropagation(); onSnooze(lead.sid); }}
         >
           <Clock size={14} strokeWidth={2} />
           תזכיר לי מחר
@@ -343,7 +348,7 @@ function SlimRow({
       ) : (
         <button
           style={{ ...btnChamp, flexShrink: 0 }}
-          onClick={() => onOpenChat(lead.sid)}
+          onClick={(e) => { e.stopPropagation(); onOpenChat(lead.sid); }}
         >
           {lead.actionLabel}
         </button>
