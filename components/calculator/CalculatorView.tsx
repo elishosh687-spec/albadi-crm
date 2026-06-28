@@ -446,40 +446,10 @@ export function CalculatorView({ products, quantityTiers, shippingOptions, initi
               </div>
             </div>
           </Section>
-        </>}
-        quote={<>
-          {/* Min-profit warning (Wave 6: #19) */}
-          {r && minProfitValid && r.totalProfitIls < minProfitParsed && (
-            <div className="rounded-lg border border-warning/40 bg-warning/10 p-3 text-sm text-warning flex items-center gap-2">
-              ⚠️ הרווח הכולל ₪{ils(r.totalProfitIls)} נמוך מהמינימום שהוגדר ₪{ils(minProfitParsed)}.
-              {(() => {
-                const totalCost = r.totalCostPerUnitIls * r.quantity;
-                // MARGIN-on-price: profit ÷ (cost + profit) at the target.
-                const requiredMarginPct =
-                  minProfitParsed > 0 ? ((minProfitParsed / (totalCost + minProfitParsed)) * 100) : 0;
-                return ` רווח נדרש כדי להגיע ליעד: ${r2(requiredMarginPct)}%.`;
-              })()}
-            </div>
-          )}
 
-          {/* Result */}
-          {loading && (
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <Loader2 className="size-4 animate-spin" />
-              מחשב…
-            </div>
-          )}
-          {error && (
-            <div className="rounded-lg border border-destructive/40 bg-destructive/10 p-4 text-sm text-destructive">
-              {error}
-            </div>
-          )}
-          {r && c && !loading && (
-            <BreakdownCard result={r} computed={c} />
-          )}
-
-          {/* Quote → WhatsApp / Copy. Only when widget is loaded with a lead
-              context (sid present) and the calculator has a fresh result. */}
+          {/* Full breakdown + share flow in the MAIN column so it fills the
+              height; the compact summary sits sticky in the quote column. */}
+          {r && c && !loading && <BreakdownCard result={r} computed={c} />}
           {r && c && !loading && (
             <QuoteShareCard
               apiToken={apiToken}
@@ -516,6 +486,35 @@ export function CalculatorView({ products, quantityTiers, shippingOptions, initi
               })}
             />
           )}
+        </>}
+        quote={<>
+          {/* Min-profit warning (Wave 6: #19) */}
+          {r && minProfitValid && r.totalProfitIls < minProfitParsed && (
+            <div className="rounded-lg border border-warning/40 bg-warning/10 p-3 text-sm text-warning flex items-center gap-2">
+              ⚠️ הרווח הכולל ₪{ils(r.totalProfitIls)} נמוך מהמינימום שהוגדר ₪{ils(minProfitParsed)}.
+              {(() => {
+                const totalCost = r.totalCostPerUnitIls * r.quantity;
+                // MARGIN-on-price: profit ÷ (cost + profit) at the target.
+                const requiredMarginPct =
+                  minProfitParsed > 0 ? ((minProfitParsed / (totalCost + minProfitParsed)) * 100) : 0;
+                return ` רווח נדרש כדי להגיע ליעד: ${r2(requiredMarginPct)}%.`;
+              })()}
+            </div>
+          )}
+
+          {/* Result */}
+          {loading && (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Loader2 className="size-4 animate-spin" />
+              מחשב…
+            </div>
+          )}
+          {error && (
+            <div className="rounded-lg border border-destructive/40 bg-destructive/10 p-4 text-sm text-destructive">
+              {error}
+            </div>
+          )}
+          {r && c && !loading && <CompactQuote r={r} c={c} />}
         </>}
       />
 
@@ -880,40 +879,7 @@ function EstimateTab({ apiToken, shippingOptions, sid, leadName, initialMargins 
                   ⚠️ הרווח הכולל ₪{ils(r.totalProfitIls)} נמוך מהמינימום שהוגדר ₪{ils(minProfitParsed)}.
                 </div>
               )}
-              <BreakdownCard result={r} computed={c} />
-              <QuoteShareCard
-                apiToken={apiToken}
-                sid={sid}
-                leadName={leadName}
-                quoteText={buildQuoteText({
-                  leadName: leadName ?? null,
-                  product: null,
-                  // Customer-facing: dimensions only — no internal "אומדן <factory>"
-                  // (the Chinese factory name has no meaning for the customer).
-                  manualDescription: `H${h}${d ? `*D${d}` : ""}*W${w}`,
-                  quantity: r.quantity,
-                  shippingName: r.shippingOption?.name ?? null,
-                  shippingType: r.shippingOption?.type === "sea" || r.shippingOption?.type === "air" ? r.shippingOption.type : null,
-                  unitSellingPriceIls: r.sellingPricePerUnitIls,
-                  totalSellingPriceIls: r.totalOrderPriceIls,
-                  shippingPerUnitIls: c.shippingPerUnitIls,
-                  totalShippingIls: c.shippingPerUnitIls * r.quantity,
-                  oneTimeMoldsIls: r.moldsTotalSellingPriceIls,
-                  result: r,
-                })}
-                estimate={{
-                  heightCm: parseFloat(h) || 0,
-                  depthCm: parseFloat(d) || 0,
-                  widthCm: parseFloat(w) || 0,
-                  qty: r.quantity,
-                  colors,
-                  handles,
-                  lamination: lam,
-                  shipping: shippingId,
-                  cartonConfidence: est.carton?.confidence,
-                  totalIls: r.totalOrderPriceIls,
-                }}
-              />
+              <CompactQuote r={r} c={c} />
             </>
           )}
         </>}
@@ -924,6 +890,40 @@ function EstimateTab({ apiToken, shippingOptions, sid, leadName, initialMargins 
           to fit the sticky column. */}
       {!loading && est && est.ok && r && c && (
         <>
+          {/* Full breakdown + share flow full-width below the sticky compact
+              summary (same fix as the operator tab — avoids the side void). */}
+          <BreakdownCard result={r} computed={c} />
+          <QuoteShareCard
+            apiToken={apiToken}
+            sid={sid}
+            leadName={leadName}
+            quoteText={buildQuoteText({
+              leadName: leadName ?? null,
+              product: null,
+              manualDescription: `H${h}${d ? `*D${d}` : ""}*W${w}`,
+              quantity: r.quantity,
+              shippingName: r.shippingOption?.name ?? null,
+              shippingType: r.shippingOption?.type === "sea" || r.shippingOption?.type === "air" ? r.shippingOption.type : null,
+              unitSellingPriceIls: r.sellingPricePerUnitIls,
+              totalSellingPriceIls: r.totalOrderPriceIls,
+              shippingPerUnitIls: c.shippingPerUnitIls,
+              totalShippingIls: c.shippingPerUnitIls * r.quantity,
+              oneTimeMoldsIls: r.moldsTotalSellingPriceIls,
+              result: r,
+            })}
+            estimate={{
+              heightCm: parseFloat(h) || 0,
+              depthCm: parseFloat(d) || 0,
+              widthCm: parseFloat(w) || 0,
+              qty: r.quantity,
+              colors,
+              handles,
+              lamination: lam,
+              shipping: shippingId,
+              cartonConfidence: est.carton?.confidence,
+              totalIls: r.totalOrderPriceIls,
+            }}
+          />
           <div className="rounded-xl border border-border bg-card p-4 flex flex-wrap items-center gap-3">
             <span className="text-sm font-medium">מפעל מומלץ:</span>
             <span className="rounded-full bg-primary/10 text-primary px-3 py-1 text-sm font-bold">{est.factoryName}</span>
@@ -1023,6 +1023,54 @@ function Stat({ label, value, tone }: { label: string; value: string; tone?: "po
         {value}
       </span>
     </div>
+  );
+}
+
+// Compact, sticky at-a-glance quote for the builder's side column. Reads the
+// SAME computed result as BreakdownCard — presentation only, no math here.
+function CompactQuote({
+  r,
+  c,
+}: {
+  r: QuoteResult;
+  c: { productionPerUnitIls: number; shippingPerUnitIls: number };
+}) {
+  return (
+    <section className="rounded-xl border border-border bg-card overflow-hidden">
+      <div className="text-center py-5 border-b border-border bg-background/30">
+        <div className="text-3xl font-bold tabular-nums" style={{ color: "#e7cba6" }}>
+          ₪{ils(r.sellingPricePerUnitIls)}
+        </div>
+        <div className="text-xs text-muted-foreground mt-1">מחיר ללקוח · ליחידה</div>
+      </div>
+      <div className="p-4 flex flex-col gap-2 text-sm">
+        <div className="flex justify-between">
+          <span className="text-muted-foreground">עלות ייצור</span>
+          <span className="tabular-nums">₪{ils(c.productionPerUnitIls)}</span>
+        </div>
+        <div className="flex justify-between">
+          <span className="text-muted-foreground">משלוח</span>
+          <span className="tabular-nums">₪{ils(c.shippingPerUnitIls)}</span>
+        </div>
+        <div className="flex justify-between">
+          <span className="text-muted-foreground">רווח / יחידה</span>
+          <span className="tabular-nums text-success">₪{ils(r.profitPerUnitIls)}</span>
+        </div>
+        <div className="flex justify-between border-t border-border pt-2 mt-1 font-medium">
+          <span>סה״כ הזמנה ({r.quantity.toLocaleString("he-IL")})</span>
+          <span className="tabular-nums" style={{ color: "#e7cba6" }}>
+            ₪{ils(r.totalOrderPriceIls)}
+          </span>
+        </div>
+        <div className="flex justify-between text-xs text-muted-foreground">
+          <span>רווח כולל</span>
+          <span className="tabular-nums">₪{ils(r.totalProfitIls)}</span>
+        </div>
+      </div>
+      <div className="px-4 pb-4 text-center text-xs text-muted-foreground">
+        הפירוט המלא והשליחה למטה ↓
+      </div>
+    </section>
   );
 }
 
