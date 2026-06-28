@@ -110,7 +110,17 @@ export async function dispatchSupervisor(
   // questionnaire-owned. Step 10 is the terminal done state.
   const questionnaireActive =
     !!q && typeof q.step === "number" && q.step <= 9 && !q.doneAt && !q.bailed;
-  if (questionnaireActive) {
+  // Cold-start bypass: a brand-new pre-quote lead (no pipeline_stage AND no
+  // qState step yet) must always go to the questionnaire cold-start. Without
+  // this, the supervisor LLM can `override_with_text` on the very first
+  // inbound — it consistently mis-reads the Meta lead-ad prefilled opener
+  // ("הי! השלמתי את הטופס שלך, וברצוני לדעת יותר על העסק שלך") as
+  // `question_company` and sends a generic chat reply, so handleInbound never
+  // fires and the questionnaire never starts. Starting the questionnaire is
+  // deterministic; the LLM has no useful judgment to add here.
+  const questionnaireNotStarted =
+    !stage && (!q || typeof q.step !== "number");
+  if (questionnaireActive || questionnaireNotStarted) {
     return { shouldRunLegacy: true };
   }
 
