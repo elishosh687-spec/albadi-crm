@@ -553,6 +553,7 @@ export function CalculatorView({ products, quantityTiers, shippingOptions, initi
             totalSellingPriceIls: r.totalOrderPriceIls,
             shippingPerUnitIls: c.shippingPerUnitIls,
             totalShippingIls: c.shippingPerUnitIls * r.quantity,
+            oneTimeMoldsIls: r.moldsTotalSellingPriceIls,
             result: r,
           })}
         />
@@ -938,7 +939,9 @@ function EstimateTab({ apiToken, shippingOptions, sid, leadName, initialMargins 
             quoteText={buildQuoteText({
               leadName: leadName ?? null,
               product: null,
-              manualDescription: `${`H${h}${d ? `*D${d}` : ""}*W${w}`} — אומדן ${est.factoryName}`,
+              // Customer-facing: dimensions only — no internal "אומדן <factory>"
+              // (the Chinese factory name has no meaning for the customer).
+              manualDescription: `H${h}${d ? `*D${d}` : ""}*W${w}`,
               quantity: r.quantity,
               shippingName: r.shippingOption?.name ?? null,
               shippingType: r.shippingOption?.type === "sea" || r.shippingOption?.type === "air" ? r.shippingOption.type : null,
@@ -946,6 +949,7 @@ function EstimateTab({ apiToken, shippingOptions, sid, leadName, initialMargins 
               totalSellingPriceIls: r.totalOrderPriceIls,
               shippingPerUnitIls: c.shippingPerUnitIls,
               totalShippingIls: c.shippingPerUnitIls * r.quantity,
+              oneTimeMoldsIls: r.moldsTotalSellingPriceIls,
               result: r,
             })}
             estimate={{
@@ -1146,6 +1150,9 @@ function buildQuoteText(opts: {
   totalSellingPriceIls: number;
   shippingPerUnitIls: number;
   totalShippingIls: number;
+  /** One-time molds/templates fee in ILS (版费 + Eli's molds). Shown as its own
+   *  customer-facing line when > 0; already folded into totalSellingPriceIls. */
+  oneTimeMoldsIls?: number;
   /** Full quote result — drives the customer-safe itemised breakdown. */
   result: QuoteResult;
 }): string {
@@ -1192,6 +1199,9 @@ function buildQuoteText(opts: {
   ];
   if (shippingMethod) {
     lines.push(`🚚 שיטת שילוח: ${shippingMethod}`);
+  }
+  if (opts.oneTimeMoldsIls && opts.oneTimeMoldsIls > 0) {
+    lines.push(`🧩 תבניות / מולדים (חד פעמי): +${ilsFmt(opts.oneTimeMoldsIls)}`);
   }
   lines.push(
     `*💵 סה״כ: ${ilsFmt(opts.totalSellingPriceIls)}*`,
