@@ -210,261 +210,314 @@ export function CalculatorView({ products, quantityTiers, shippingOptions, initi
       )}
 
       {tab === "operator" && (<>
-      {/* Form */}
-      <section className="rounded-xl border border-border bg-card p-5 flex flex-col gap-4">
-        {/* Mode toggle */}
-        <div className="inline-flex self-start rounded-md border border-border bg-background/40 p-0.5 text-xs">
-          <button
-            type="button"
-            onClick={() => setManualMode(false)}
-            className={cn(
-              "px-3 py-1 rounded",
-              !manualMode ? "bg-primary text-primary-foreground" : "text-muted-foreground"
-            )}
-          >
-            מוצר מקטלוג
-          </button>
-          <button
-            type="button"
-            onClick={() => setManualMode(true)}
-            className={cn(
-              "px-3 py-1 rounded",
-              manualMode ? "bg-primary text-primary-foreground" : "text-muted-foreground"
-            )}
-          >
-            מוצר ידני
-          </button>
-        </div>
+      <BuilderGrid
+        inputs={<>
+          {/* ① מוצר */}
+          <Section n={1} title="מוצר">
+            {/* Mode toggle */}
+            <div className="inline-flex self-start rounded-md border border-border bg-background/40 p-0.5 text-xs">
+              <button
+                type="button"
+                onClick={() => setManualMode(false)}
+                className={cn(
+                  "px-3 py-1 rounded",
+                  !manualMode ? "bg-primary text-primary-foreground" : "text-muted-foreground"
+                )}
+              >
+                מוצר מקטלוג
+              </button>
+              <button
+                type="button"
+                onClick={() => setManualMode(true)}
+                className={cn(
+                  "px-3 py-1 rounded",
+                  manualMode ? "bg-primary text-primary-foreground" : "text-muted-foreground"
+                )}
+              >
+                מוצר ידני
+              </button>
+            </div>
 
-        {!manualMode ? (
-          /* Product */
-          <div className="flex flex-col gap-1">
-            <label className="text-sm font-medium">מוצר</label>
-            <select
-              value={productId}
-              onChange={(e) => setProductId(e.target.value)}
-              className="bg-background/50 border border-border rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring/30"
-            >
-              {products.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.dimensions} — {p.description}
-                </option>
-              ))}
-            </select>
-          </div>
-        ) : (
-          /* Manual product spec */
-          <div className="flex flex-col gap-3 rounded-lg border border-primary/30 bg-primary/5 p-3">
-            <div className="text-[11px] text-muted-foreground">
-              מוצר מותאם אישית — הזן עלות סינית, מידות, ופרטי קרטון. הרווח/שילוח מחושב לפי הגדרות המערכת.
+            {!manualMode ? (
+              /* Product */
+              <div className="flex flex-col gap-1">
+                <label className="text-sm font-medium">מוצר</label>
+                <select
+                  value={productId}
+                  onChange={(e) => setProductId(e.target.value)}
+                  className="bg-background/50 border border-border rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring/30"
+                >
+                  {products.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.dimensions} — {p.description}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ) : (
+              /* Manual product spec */
+              <div className="flex flex-col gap-3 rounded-lg border border-primary/30 bg-primary/5 p-3">
+                <div className="text-[11px] text-muted-foreground">
+                  מוצר מותאם אישית — הזן עלות סינית, מידות, ופרטי קרטון. הרווח/שילוח מחושב לפי הגדרות המערכת.
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs font-medium">תיאור המוצר</label>
+                  <input
+                    type="text"
+                    placeholder="למשל: שקית פוליאסטר עם רוכסן"
+                    value={manualDesc}
+                    onChange={(e) => setManualDesc(e.target.value)}
+                    className="bg-background/50 border border-border rounded-md px-3 py-1.5 text-sm text-right focus:outline-none focus:ring-2 focus:ring-ring/30"
+                  />
+                </div>
+                <div className="grid grid-cols-3 gap-3">
+                  <NumField label="גובה (ס״מ)" value={manualH} onChange={setManualH} placeholder="30" />
+                  <NumField label="עומק (ס״מ)" value={manualD} onChange={setManualD} placeholder="10" />
+                  <NumField label="רוחב (ס״מ)" value={manualW} onChange={setManualW} placeholder="40" />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs font-medium">עלות סינית ליחידה (¥ CNY)</label>
+                  <input
+                    type="number"
+                    min={0}
+                    step={0.01}
+                    placeholder="למשל 1.20"
+                    value={manualCny}
+                    onChange={(e) => setManualCny(e.target.value)}
+                    className="bg-background/50 border border-border rounded-md px-3 py-1.5 text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-ring/30"
+                  />
+                  {!manualValid && (
+                    <span className="text-[11px] text-warning">חובה להזין עלות סינית גדולה מ-0</span>
+                  )}
+                </div>
+                <div className="pt-2 border-t border-primary/20 flex flex-col gap-2">
+                  <div className="text-[11px] uppercase tracking-wider text-muted-foreground">קרטון מאסטר</div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <NumField label="יחידות לקרטון" value={manualCartonQty} onChange={setManualCartonQty} placeholder="250" />
+                    <NumField label="משקל קרטון (ק״ג)" value={manualCartonWeight} onChange={setManualCartonWeight} placeholder="5" step={0.1} />
+                  </div>
+                  <div className="grid grid-cols-3 gap-3">
+                    <NumField label="אורך (ס״מ)" value={manualCartonL} onChange={setManualCartonL} placeholder="40" />
+                    <NumField label="רוחב (ס״מ)" value={manualCartonW} onChange={setManualCartonW} placeholder="30" />
+                    <NumField label="גובה (ס״מ)" value={manualCartonH} onChange={setManualCartonH} placeholder="40" />
+                  </div>
+                </div>
+              </div>
+            )}
+          </Section>
+
+          {/* ② כמות ומשלוח */}
+          <Section n={2} title="כמות ומשלוח">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+              {/* Quantity */}
+              <div className="flex flex-col gap-1">
+                <label className="text-sm font-medium">כמות</label>
+                <select
+                  value={qtyId}
+                  onChange={(e) => setQtyId(e.target.value)}
+                  disabled={overrideValid}
+                  className="bg-background/50 border border-border rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring/30 disabled:opacity-50"
+                >
+                  {quantityTiers.map((t) => (
+                    <option key={t.id} value={t.id}>{t.label}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Custom quantity override */}
+              <div className="flex flex-col gap-1">
+                <label className="text-sm font-medium">כמות מותאמת (אופציונלי)</label>
+                <input
+                  type="number"
+                  min={1}
+                  step={100}
+                  placeholder="למשל 2500"
+                  value={qtyOverride}
+                  onChange={(e) => setQtyOverride(e.target.value)}
+                  className="bg-background/50 border border-border rounded-md px-3 py-1.5 text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-ring/30"
+                />
+                <span className="text-[11px] text-muted-foreground">
+                  {overrideValid
+                    ? `מתומחר לפי טיר ${snappedTierQty.toLocaleString("he-IL")}`
+                    : "ריק → משתמש בבחירה למעלה"}
+                </span>
+              </div>
+
+              {/* Shipping */}
+              <div className="flex flex-col gap-1">
+                <label className="text-sm font-medium">שילוח</label>
+                <select
+                  value={shippingId}
+                  onChange={(e) => setShippingId(e.target.value)}
+                  className="bg-background/50 border border-border rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring/30"
+                >
+                  {shippingOptions.map((s) => (
+                    <option key={s.id} value={s.id}>{s.name}</option>
+                  ))}
+                </select>
+              </div>
             </div>
+          </Section>
+
+          {/* ③ תוספות */}
+          <Section n={3} title="תוספות">
+            {/* Colors — catalog only */}
+            {!manualMode && (
+              <div className="flex flex-col gap-1">
+                <label className="text-sm font-medium">צבעי לוגו</label>
+                <select
+                  value={colors}
+                  onChange={(e) => setColors(Number(e.target.value))}
+                  className="bg-background/50 border border-border rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring/30"
+                >
+                  <option value={1}>1 צבע</option>
+                  <option value={2}>2 צבעים</option>
+                  <option value={3}>3 צבעים</option>
+                </select>
+              </div>
+            )}
+
+            {/* Toggles — catalog only */}
+            {!manualMode && (
+              <div className="flex gap-6">
+                <Toggle label="ידיות" value={handles} onChange={setHandles} />
+                <Toggle label="למינציה" value={lamination} onChange={setLamination} />
+              </div>
+            )}
+
+            {/* One-time mold/tooling fee (¥ CNY) — amortized across the order */}
             <div className="flex flex-col gap-1">
-              <label className="text-xs font-medium">תיאור המוצר</label>
-              <input
-                type="text"
-                placeholder="למשל: שקית פוליאסטר עם רוכסן"
-                value={manualDesc}
-                onChange={(e) => setManualDesc(e.target.value)}
-                className="bg-background/50 border border-border rounded-md px-3 py-1.5 text-sm text-right focus:outline-none focus:ring-2 focus:ring-ring/30"
-              />
-            </div>
-            <div className="grid grid-cols-3 gap-3">
-              <NumField label="גובה (ס״מ)" value={manualH} onChange={setManualH} placeholder="30" />
-              <NumField label="עומק (ס״מ)" value={manualD} onChange={setManualD} placeholder="10" />
-              <NumField label="רוחב (ס״מ)" value={manualW} onChange={setManualW} placeholder="40" />
-            </div>
-            <div className="flex flex-col gap-1">
-              <label className="text-xs font-medium">עלות סינית ליחידה (¥ CNY)</label>
+              <label className="text-sm font-medium">מולדים / תבניות (¥ CNY) — חד פעמי</label>
               <input
                 type="number"
                 min={0}
-                step={0.01}
-                placeholder="למשל 1.20"
-                value={manualCny}
-                onChange={(e) => setManualCny(e.target.value)}
+                step={50}
+                placeholder="למשל 2000"
+                value={moldsCost}
+                onChange={(e) => setMoldsCost(e.target.value)}
                 className="bg-background/50 border border-border rounded-md px-3 py-1.5 text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-ring/30"
               />
-              {!manualValid && (
-                <span className="text-[11px] text-warning">חובה להזין עלות סינית גדולה מ-0</span>
-              )}
+              <span className="text-[11px] text-muted-foreground">
+                {moldsValid
+                  ? `מתחלק על ${effectiveQty.toLocaleString("he-IL")} יח׳ = ¥${(moldsParsed / effectiveQty).toFixed(3)} ליחידה (נכלל בעלות מפעל וברווח)`
+                  : "ריק → ללא עלות מולדים"}
+              </span>
             </div>
-            <div className="pt-2 border-t border-primary/20 flex flex-col gap-2">
-              <div className="text-[11px] uppercase tracking-wider text-muted-foreground">קרטון מאסטר</div>
-              <div className="grid grid-cols-2 gap-3">
-                <NumField label="יחידות לקרטון" value={manualCartonQty} onChange={setManualCartonQty} placeholder="250" />
-                <NumField label="משקל קרטון (ק״ג)" value={manualCartonWeight} onChange={setManualCartonWeight} placeholder="5" step={0.1} />
+          </Section>
+
+          {/* ④ תמחור */}
+          <Section n={4} title="תמחור">
+            {/* Margin override + min profit (Wave 6: #4, #19) */}
+            <div className="grid grid-cols-2 gap-4">
+              <div className="flex flex-col gap-1">
+                <label className="text-sm font-medium">% רווח יעד (override)</label>
+                <input
+                  type="number"
+                  min={0}
+                  max={300}
+                  step={1}
+                  placeholder={`ברירת מחדל: ${defaultMargin}%`}
+                  value={marginOverride}
+                  onChange={(e) => setMarginOverride(e.target.value)}
+                  className="bg-background/50 border border-border rounded-md px-3 py-1.5 text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-ring/30"
+                />
+                <span className="text-[11px] text-muted-foreground">
+                  {marginOverrideValid
+                    ? `דורס את הגלובלי לחישוב הזה (${marginOverrideParsed}%)`
+                    : "ריק → לפי הגדרות מערכת"}
+                </span>
               </div>
-              <div className="grid grid-cols-3 gap-3">
-                <NumField label="אורך (ס״מ)" value={manualCartonL} onChange={setManualCartonL} placeholder="40" />
-                <NumField label="רוחב (ס״מ)" value={manualCartonW} onChange={setManualCartonW} placeholder="30" />
-                <NumField label="גובה (ס״מ)" value={manualCartonH} onChange={setManualCartonH} placeholder="40" />
+              <div className="flex flex-col gap-1">
+                <label className="text-sm font-medium">רווח מינימלי ₪ (אזהרה)</label>
+                <input
+                  type="number"
+                  min={0}
+                  step={100}
+                  placeholder="למשל 1000"
+                  value={minProfit}
+                  onChange={(e) => setMinProfit(e.target.value)}
+                  className="bg-background/50 border border-border rounded-md px-3 py-1.5 text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-ring/30"
+                />
+                <span className="text-[11px] text-muted-foreground">
+                  {minProfitValid
+                    ? `מציג אזהרה אם רווח כולל < ₪${ils(minProfitParsed)}`
+                    : "ריק → ללא בדיקה"}
+                </span>
               </div>
             </div>
-          </div>
-        )}
-
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-          {/* Quantity */}
-          <div className="flex flex-col gap-1">
-            <label className="text-sm font-medium">כמות</label>
-            <select
-              value={qtyId}
-              onChange={(e) => setQtyId(e.target.value)}
-              disabled={overrideValid}
-              className="bg-background/50 border border-border rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring/30 disabled:opacity-50"
-            >
-              {quantityTiers.map((t) => (
-                <option key={t.id} value={t.id}>{t.label}</option>
-              ))}
-            </select>
-          </div>
-
-          {/* Custom quantity override */}
-          <div className="flex flex-col gap-1">
-            <label className="text-sm font-medium">כמות מותאמת (אופציונלי)</label>
-            <input
-              type="number"
-              min={1}
-              step={100}
-              placeholder="למשל 2500"
-              value={qtyOverride}
-              onChange={(e) => setQtyOverride(e.target.value)}
-              className="bg-background/50 border border-border rounded-md px-3 py-1.5 text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-ring/30"
-            />
-            <span className="text-[11px] text-muted-foreground">
-              {overrideValid
-                ? `מתומחר לפי טיר ${snappedTierQty.toLocaleString("he-IL")}`
-                : "ריק → משתמש בבחירה למעלה"}
-            </span>
-          </div>
-
-          {/* Shipping */}
-          <div className="flex flex-col gap-1">
-            <label className="text-sm font-medium">שילוח</label>
-            <select
-              value={shippingId}
-              onChange={(e) => setShippingId(e.target.value)}
-              className="bg-background/50 border border-border rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring/30"
-            >
-              {shippingOptions.map((s) => (
-                <option key={s.id} value={s.id}>{s.name}</option>
-              ))}
-            </select>
-          </div>
-
-          {/* Colors — catalog only */}
-          {!manualMode && (
-            <div className="flex flex-col gap-1">
-              <label className="text-sm font-medium">צבעי לוגו</label>
-              <select
-                value={colors}
-                onChange={(e) => setColors(Number(e.target.value))}
-                className="bg-background/50 border border-border rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring/30"
-              >
-                <option value={1}>1 צבע</option>
-                <option value={2}>2 צבעים</option>
-                <option value={3}>3 צבעים</option>
-              </select>
+          </Section>
+        </>}
+        quote={<>
+          {/* Min-profit warning (Wave 6: #19) */}
+          {r && minProfitValid && r.totalProfitIls < minProfitParsed && (
+            <div className="rounded-lg border border-warning/40 bg-warning/10 p-3 text-sm text-warning flex items-center gap-2">
+              ⚠️ הרווח הכולל ₪{ils(r.totalProfitIls)} נמוך מהמינימום שהוגדר ₪{ils(minProfitParsed)}.
+              {(() => {
+                const totalCost = r.totalCostPerUnitIls * r.quantity;
+                // MARGIN-on-price: profit ÷ (cost + profit) at the target.
+                const requiredMarginPct =
+                  minProfitParsed > 0 ? ((minProfitParsed / (totalCost + minProfitParsed)) * 100) : 0;
+                return ` רווח נדרש כדי להגיע ליעד: ${r2(requiredMarginPct)}%.`;
+              })()}
             </div>
           )}
-        </div>
 
-        {/* Toggles — catalog only */}
-        {!manualMode && (
-          <div className="flex gap-6">
-            <Toggle label="ידיות" value={handles} onChange={setHandles} />
-            <Toggle label="למינציה" value={lamination} onChange={setLamination} />
-          </div>
-        )}
+          {/* Result */}
+          {loading && (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Loader2 className="size-4 animate-spin" />
+              מחשב…
+            </div>
+          )}
+          {error && (
+            <div className="rounded-lg border border-destructive/40 bg-destructive/10 p-4 text-sm text-destructive">
+              {error}
+            </div>
+          )}
+          {r && c && !loading && (
+            <BreakdownCard result={r} computed={c} />
+          )}
 
-        {/* One-time mold/tooling fee (¥ CNY) — amortized across the order */}
-        <div className="pt-2 border-t border-border/50 flex flex-col gap-1">
-          <label className="text-sm font-medium">מולדים / תבניות (¥ CNY) — חד פעמי</label>
-          <input
-            type="number"
-            min={0}
-            step={50}
-            placeholder="למשל 2000"
-            value={moldsCost}
-            onChange={(e) => setMoldsCost(e.target.value)}
-            className="bg-background/50 border border-border rounded-md px-3 py-1.5 text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-ring/30"
-          />
-          <span className="text-[11px] text-muted-foreground">
-            {moldsValid
-              ? `מתחלק על ${effectiveQty.toLocaleString("he-IL")} יח׳ = ¥${(moldsParsed / effectiveQty).toFixed(3)} ליחידה (נכלל בעלות מפעל וברווח)`
-              : "ריק → ללא עלות מולדים"}
-          </span>
-        </div>
-
-        {/* Margin override + min profit (Wave 6: #4, #19) */}
-        <div className="grid grid-cols-2 gap-4 pt-2 border-t border-border/50">
-          <div className="flex flex-col gap-1">
-            <label className="text-sm font-medium">% רווח יעד (override)</label>
-            <input
-              type="number"
-              min={0}
-              max={300}
-              step={1}
-              placeholder={`ברירת מחדל: ${defaultMargin}%`}
-              value={marginOverride}
-              onChange={(e) => setMarginOverride(e.target.value)}
-              className="bg-background/50 border border-border rounded-md px-3 py-1.5 text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-ring/30"
+          {/* Quote → WhatsApp / Copy. Only when widget is loaded with a lead
+              context (sid present) and the calculator has a fresh result. */}
+          {r && c && !loading && (
+            <QuoteShareCard
+              apiToken={apiToken}
+              sid={sid}
+              leadName={leadName}
+              quoteText={buildQuoteText({
+                leadName: leadName ?? null,
+                product: manualMode
+                  ? null
+                  : products.find((p) => p.id === productId) ?? null,
+                manualDescription: manualMode
+                  ? (() => {
+                      const dimsParts: string[] = [];
+                      if (manualH) dimsParts.push(`H${manualH}`);
+                      if (manualD) dimsParts.push(`D${manualD}`);
+                      if (manualW) dimsParts.push(`W${manualW}`);
+                      const dims = dimsParts.join("*");
+                      const desc = manualDesc.trim() || "מוצר מותאם";
+                      return dims ? `${dims} — ${desc}` : desc;
+                    })()
+                  : null,
+                quantity: r.quantity,
+                shippingName: r.shippingOption?.name ?? null,
+                shippingType:
+                  r.shippingOption?.type === "sea" || r.shippingOption?.type === "air"
+                    ? r.shippingOption.type
+                    : null,
+                unitSellingPriceIls: r.sellingPricePerUnitIls,
+                totalSellingPriceIls: r.totalOrderPriceIls,
+                shippingPerUnitIls: c.shippingPerUnitIls,
+                totalShippingIls: c.shippingPerUnitIls * r.quantity,
+                oneTimeMoldsIls: r.moldsTotalSellingPriceIls,
+                result: r,
+              })}
             />
-            <span className="text-[11px] text-muted-foreground">
-              {marginOverrideValid
-                ? `דורס את הגלובלי לחישוב הזה (${marginOverrideParsed}%)`
-                : "ריק → לפי הגדרות מערכת"}
-            </span>
-          </div>
-          <div className="flex flex-col gap-1">
-            <label className="text-sm font-medium">רווח מינימלי ₪ (אזהרה)</label>
-            <input
-              type="number"
-              min={0}
-              step={100}
-              placeholder="למשל 1000"
-              value={minProfit}
-              onChange={(e) => setMinProfit(e.target.value)}
-              className="bg-background/50 border border-border rounded-md px-3 py-1.5 text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-ring/30"
-            />
-            <span className="text-[11px] text-muted-foreground">
-              {minProfitValid
-                ? `מציג אזהרה אם רווח כולל < ₪${ils(minProfitParsed)}`
-                : "ריק → ללא בדיקה"}
-            </span>
-          </div>
-        </div>
-      </section>
-
-      {/* Min-profit warning (Wave 6: #19) */}
-      {r && minProfitValid && r.totalProfitIls < minProfitParsed && (
-        <div className="rounded-lg border border-warning/40 bg-warning/10 p-3 text-sm text-warning flex items-center gap-2">
-          ⚠️ הרווח הכולל ₪{ils(r.totalProfitIls)} נמוך מהמינימום שהוגדר ₪{ils(minProfitParsed)}.
-          {(() => {
-            const totalCost = r.totalCostPerUnitIls * r.quantity;
-            // MARGIN-on-price: profit ÷ (cost + profit) at the target.
-            const requiredMarginPct =
-              minProfitParsed > 0 ? ((minProfitParsed / (totalCost + minProfitParsed)) * 100) : 0;
-            return ` רווח נדרש כדי להגיע ליעד: ${r2(requiredMarginPct)}%.`;
-          })()}
-        </div>
-      )}
-
-      {/* Result */}
-      {loading && (
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <Loader2 className="size-4 animate-spin" />
-          מחשב…
-        </div>
-      )}
-      {error && (
-        <div className="rounded-lg border border-destructive/40 bg-destructive/10 p-4 text-sm text-destructive">
-          {error}
-        </div>
-      )}
-      {r && c && !loading && (
-        <BreakdownCard result={r} computed={c} />
-      )}
+          )}
+        </>}
+      />
 
       {r && c && !loading && (
         <DetailedBreakdown
@@ -517,45 +570,6 @@ export function CalculatorView({ products, quantityTiers, shippingOptions, initi
                 }
               : null
           }
-        />
-      )}
-
-      {/* Quote → WhatsApp / Copy. Only when widget is loaded with a lead
-          context (sid present) and the calculator has a fresh result. */}
-      {r && c && !loading && (
-        <QuoteShareCard
-          apiToken={apiToken}
-          sid={sid}
-          leadName={leadName}
-          quoteText={buildQuoteText({
-            leadName: leadName ?? null,
-            product: manualMode
-              ? null
-              : products.find((p) => p.id === productId) ?? null,
-            manualDescription: manualMode
-              ? (() => {
-                  const dimsParts: string[] = [];
-                  if (manualH) dimsParts.push(`H${manualH}`);
-                  if (manualD) dimsParts.push(`D${manualD}`);
-                  if (manualW) dimsParts.push(`W${manualW}`);
-                  const dims = dimsParts.join("*");
-                  const desc = manualDesc.trim() || "מוצר מותאם";
-                  return dims ? `${dims} — ${desc}` : desc;
-                })()
-              : null,
-            quantity: r.quantity,
-            shippingName: r.shippingOption?.name ?? null,
-            shippingType:
-              r.shippingOption?.type === "sea" || r.shippingOption?.type === "air"
-                ? r.shippingOption.type
-                : null,
-            unitSellingPriceIls: r.sellingPricePerUnitIls,
-            totalSellingPriceIls: r.totalOrderPriceIls,
-            shippingPerUnitIls: c.shippingPerUnitIls,
-            totalShippingIls: c.shippingPerUnitIls * r.quantity,
-            oneTimeMoldsIls: r.moldsTotalSellingPriceIls,
-            result: r,
-          })}
         />
       )}
 
@@ -736,120 +750,180 @@ function EstimateTab({ apiToken, shippingOptions, sid, leadName, initialMargins 
 
   return (
     <div className="flex flex-col gap-6">
-      <section className="rounded-xl border border-border bg-card p-5 flex flex-col gap-4">
-        <div className="text-[11px] text-muted-foreground">
-          הזן מידות וכמות → המערכת תחזה את המחיר לפי המחירונים האמיתיים של המפעלים (80g, עד 10,000 יח׳), תבחר את המפעל הזול שמייצר, ותראה את ההיגיון. מחוץ לטווח → &quot;שלח למפעל&quot;.
-        </div>
-        <div className="grid grid-cols-3 gap-3">
-          <NumField label="גובה H (ס״מ)" value={h} onChange={setH} placeholder="30" />
-          <NumField label="עומק D (ס״מ)" value={d} onChange={setD} placeholder="10" />
-          <NumField label="רוחב W (ס״מ)" value={w} onChange={setW} placeholder="40" />
-        </div>
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-          <div className="flex flex-col gap-1">
-            <label className="text-sm font-medium">כמות</label>
-            <select value={qty} onChange={(e) => setQty(e.target.value)} className={SELECT_CLS}>
-              <option value="3000">3,000</option><option value="5000">5,000</option><option value="10000">10,000</option>
-            </select>
-          </div>
-          <div className="flex flex-col gap-1">
-            <label className="text-sm font-medium">צבעי לוגו</label>
-            <select value={colors} onChange={(e) => setColors(Number(e.target.value))} className={SELECT_CLS}>
-              <option value={1}>1 צבע</option><option value={2}>2 צבעים</option><option value={3}>3 צבעים</option>
-            </select>
-          </div>
-          <div className="flex flex-col gap-1">
-            <label className="text-sm font-medium">שילוח</label>
-            <select value={shippingId} onChange={(e) => setShippingId(e.target.value)} className={SELECT_CLS}>
-              {shippingOptions.map((s) => (<option key={s.id} value={s.id}>{s.name}</option>))}
-            </select>
-          </div>
-        </div>
-        <div className="flex gap-6">
-          <Toggle label="ידיות" value={handles} onChange={setHandles} />
-          <Toggle label="למינציה" value={lam} onChange={setLam} />
-        </div>
+      <div className="text-[11px] text-muted-foreground">
+        הזן מידות וכמות → המערכת תחזה את המחיר לפי המחירונים האמיתיים של המפעלים (80g, עד 10,000 יח׳), תבחר את המפעל הזול שמייצר, ותראה את ההיגיון. מחוץ לטווח → &quot;שלח למפעל&quot;.
+      </div>
 
-        {/* One-time mold/tooling fee (¥ CNY) — added on top of the auto plate fee, amortized across the order */}
-        <div className="pt-2 border-t border-border/50 flex flex-col gap-1">
-          <label className="text-sm font-medium">מולדים / תבניות (¥ CNY) — חד פעמי</label>
-          <input
-            type="number"
-            min={0}
-            step={50}
-            placeholder="למשל 2000"
-            value={moldsCost}
-            onChange={(e) => setMoldsCost(e.target.value)}
-            className="bg-background/50 border border-border rounded-md px-3 py-1.5 text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-ring/30"
-          />
-          <span className="text-[11px] text-muted-foreground">
-            {moldsValid
-              ? `נוסף על ה‑版费 ומתחלק על ${effectiveQty.toLocaleString("he-IL")} יח׳ = ¥${(moldsParsed / effectiveQty).toFixed(3)} ליחידה (נכלל בעלות מפעל וברווח)`
-              : "ריק → רק ה‑版费 האוטומטי (אם יש)"}
-          </span>
-        </div>
+      <BuilderGrid
+        inputs={<>
+          {/* ① מוצר */}
+          <Section n={1} title="מוצר">
+            <div className="grid grid-cols-3 gap-3">
+              <NumField label="גובה H (ס״מ)" value={h} onChange={setH} placeholder="30" />
+              <NumField label="עומק D (ס״מ)" value={d} onChange={setD} placeholder="10" />
+              <NumField label="רוחב W (ס״מ)" value={w} onChange={setW} placeholder="40" />
+            </div>
+          </Section>
 
-        {/* Margin override + min profit — mirror the regular calculator */}
-        <div className="grid grid-cols-2 gap-4 pt-2 border-t border-border/50">
-          <div className="flex flex-col gap-1">
-            <label className="text-sm font-medium">% רווח יעד (override)</label>
-            <input
-              type="number"
-              min={0}
-              max={300}
-              step={1}
-              placeholder={`ברירת מחדל: ${defaultMargin}%`}
-              value={marginOverride}
-              onChange={(e) => setMarginOverride(e.target.value)}
-              className="bg-background/50 border border-border rounded-md px-3 py-1.5 text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-ring/30"
-            />
-            <span className="text-[11px] text-muted-foreground">
-              {marginOverrideValid
-                ? `דורס את הגלובלי לחישוב הזה (${marginOverrideParsed}%)`
-                : "ריק → לפי הגדרות מערכת"}
-            </span>
-          </div>
-          <div className="flex flex-col gap-1">
-            <label className="text-sm font-medium">רווח מינימלי ₪ (אזהרה)</label>
-            <input
-              type="number"
-              min={0}
-              step={100}
-              placeholder="למשל 1000"
-              value={minProfit}
-              onChange={(e) => setMinProfit(e.target.value)}
-              className="bg-background/50 border border-border rounded-md px-3 py-1.5 text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-ring/30"
-            />
-            <span className="text-[11px] text-muted-foreground">
-              {minProfitValid
-                ? `מציג אזהרה אם רווח כולל < ₪${ils(minProfitParsed)}`
-                : "ריק → ללא בדיקה"}
-            </span>
-          </div>
-        </div>
-      </section>
+          {/* ② כמות ומשלוח */}
+          <Section n={2} title="כמות ומשלוח">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+              <div className="flex flex-col gap-1">
+                <label className="text-sm font-medium">כמות</label>
+                <select value={qty} onChange={(e) => setQty(e.target.value)} className={SELECT_CLS}>
+                  <option value="3000">3,000</option><option value="5000">5,000</option><option value="10000">10,000</option>
+                </select>
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-sm font-medium">שילוח</label>
+                <select value={shippingId} onChange={(e) => setShippingId(e.target.value)} className={SELECT_CLS}>
+                  {shippingOptions.map((s) => (<option key={s.id} value={s.id}>{s.name}</option>))}
+                </select>
+              </div>
+            </div>
+          </Section>
 
-      {loading && (<div className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="size-4 animate-spin" />מחשב…</div>)}
-      {err && (<div className="rounded-lg border border-destructive/40 bg-destructive/10 p-4 text-sm text-destructive">{err}</div>)}
+          {/* ③ תוספות */}
+          <Section n={3} title="תוספות">
+            <div className="flex flex-col gap-1">
+              <label className="text-sm font-medium">צבעי לוגו</label>
+              <select value={colors} onChange={(e) => setColors(Number(e.target.value))} className={SELECT_CLS}>
+                <option value={1}>1 צבע</option><option value={2}>2 צבעים</option><option value={3}>3 צבעים</option>
+              </select>
+            </div>
+            <div className="flex gap-6">
+              <Toggle label="ידיות" value={handles} onChange={setHandles} />
+              <Toggle label="למינציה" value={lam} onChange={setLam} />
+            </div>
 
-      {!loading && est && !est.ok && (
-        <div className="rounded-xl border border-amber-500/50 bg-amber-500/10 p-5 text-sm">
-          <div className="font-bold text-amber-700 dark:text-amber-400 mb-1">⚠️ לא ניתן לאמוד — שלח למפעל</div>
-          <div className="text-muted-foreground">{est.refused}</div>
-          {est.candidates && est.candidates.length > 0 && (
-            <div className="text-[11px] text-muted-foreground mt-2">מחירים שנבדקו: {est.candidates.map((x) => `${x.factory} ¥${x.unitCny}${x.inRange ? "" : " (מחוץ לטווח)"}`).join(" · ")}</div>
-          )}
-        </div>
-      )}
+            {/* One-time mold/tooling fee (¥ CNY) — added on top of the auto plate fee, amortized across the order */}
+            <div className="flex flex-col gap-1">
+              <label className="text-sm font-medium">מולדים / תבניות (¥ CNY) — חד פעמי</label>
+              <input
+                type="number"
+                min={0}
+                step={50}
+                placeholder="למשל 2000"
+                value={moldsCost}
+                onChange={(e) => setMoldsCost(e.target.value)}
+                className="bg-background/50 border border-border rounded-md px-3 py-1.5 text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-ring/30"
+              />
+              <span className="text-[11px] text-muted-foreground">
+                {moldsValid
+                  ? `נוסף על ה‑版费 ומתחלק על ${effectiveQty.toLocaleString("he-IL")} יח׳ = ¥${(moldsParsed / effectiveQty).toFixed(3)} ליחידה (נכלל בעלות מפעל וברווח)`
+                  : "ריק → רק ה‑版费 האוטומטי (אם יש)"}
+              </span>
+            </div>
+          </Section>
 
-      {!loading && est && est.ok && r && c && (
-        <>
-          {/* Min-profit warning — mirror the regular calculator */}
-          {minProfitValid && r.totalProfitIls < minProfitParsed && (
-            <div className="rounded-lg border border-warning/40 bg-warning/10 p-3 text-sm text-warning flex items-center gap-2">
-              ⚠️ הרווח הכולל ₪{ils(r.totalProfitIls)} נמוך מהמינימום שהוגדר ₪{ils(minProfitParsed)}.
+          {/* ④ תמחור */}
+          <Section n={4} title="תמחור">
+            {/* Margin override + min profit — mirror the regular calculator */}
+            <div className="grid grid-cols-2 gap-4">
+              <div className="flex flex-col gap-1">
+                <label className="text-sm font-medium">% רווח יעד (override)</label>
+                <input
+                  type="number"
+                  min={0}
+                  max={300}
+                  step={1}
+                  placeholder={`ברירת מחדל: ${defaultMargin}%`}
+                  value={marginOverride}
+                  onChange={(e) => setMarginOverride(e.target.value)}
+                  className="bg-background/50 border border-border rounded-md px-3 py-1.5 text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-ring/30"
+                />
+                <span className="text-[11px] text-muted-foreground">
+                  {marginOverrideValid
+                    ? `דורס את הגלובלי לחישוב הזה (${marginOverrideParsed}%)`
+                    : "ריק → לפי הגדרות מערכת"}
+                </span>
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-sm font-medium">רווח מינימלי ₪ (אזהרה)</label>
+                <input
+                  type="number"
+                  min={0}
+                  step={100}
+                  placeholder="למשל 1000"
+                  value={minProfit}
+                  onChange={(e) => setMinProfit(e.target.value)}
+                  className="bg-background/50 border border-border rounded-md px-3 py-1.5 text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-ring/30"
+                />
+                <span className="text-[11px] text-muted-foreground">
+                  {minProfitValid
+                    ? `מציג אזהרה אם רווח כולל < ₪${ils(minProfitParsed)}`
+                    : "ריק → ללא בדיקה"}
+                </span>
+              </div>
+            </div>
+          </Section>
+        </>}
+        quote={<>
+          {loading && (<div className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="size-4 animate-spin" />מחשב…</div>)}
+          {err && (<div className="rounded-lg border border-destructive/40 bg-destructive/10 p-4 text-sm text-destructive">{err}</div>)}
+
+          {!loading && est && !est.ok && (
+            <div className="rounded-xl border border-amber-500/50 bg-amber-500/10 p-5 text-sm">
+              <div className="font-bold text-amber-700 dark:text-amber-400 mb-1">⚠️ לא ניתן לאמוד — שלח למפעל</div>
+              <div className="text-muted-foreground">{est.refused}</div>
+              {est.candidates && est.candidates.length > 0 && (
+                <div className="text-[11px] text-muted-foreground mt-2">מחירים שנבדקו: {est.candidates.map((x) => `${x.factory} ¥${x.unitCny}${x.inRange ? "" : " (מחוץ לטווח)"}`).join(" · ")}</div>
+              )}
             </div>
           )}
+
+          {!loading && est && est.ok && r && c && (
+            <>
+              {/* Min-profit warning — mirror the regular calculator */}
+              {minProfitValid && r.totalProfitIls < minProfitParsed && (
+                <div className="rounded-lg border border-warning/40 bg-warning/10 p-3 text-sm text-warning flex items-center gap-2">
+                  ⚠️ הרווח הכולל ₪{ils(r.totalProfitIls)} נמוך מהמינימום שהוגדר ₪{ils(minProfitParsed)}.
+                </div>
+              )}
+              <BreakdownCard result={r} computed={c} />
+              <QuoteShareCard
+                apiToken={apiToken}
+                sid={sid}
+                leadName={leadName}
+                quoteText={buildQuoteText({
+                  leadName: leadName ?? null,
+                  product: null,
+                  // Customer-facing: dimensions only — no internal "אומדן <factory>"
+                  // (the Chinese factory name has no meaning for the customer).
+                  manualDescription: `H${h}${d ? `*D${d}` : ""}*W${w}`,
+                  quantity: r.quantity,
+                  shippingName: r.shippingOption?.name ?? null,
+                  shippingType: r.shippingOption?.type === "sea" || r.shippingOption?.type === "air" ? r.shippingOption.type : null,
+                  unitSellingPriceIls: r.sellingPricePerUnitIls,
+                  totalSellingPriceIls: r.totalOrderPriceIls,
+                  shippingPerUnitIls: c.shippingPerUnitIls,
+                  totalShippingIls: c.shippingPerUnitIls * r.quantity,
+                  oneTimeMoldsIls: r.moldsTotalSellingPriceIls,
+                  result: r,
+                })}
+                estimate={{
+                  heightCm: parseFloat(h) || 0,
+                  depthCm: parseFloat(d) || 0,
+                  widthCm: parseFloat(w) || 0,
+                  qty: r.quantity,
+                  colors,
+                  handles,
+                  lamination: lam,
+                  shipping: shippingId,
+                  cartonConfidence: est.carton?.confidence,
+                  totalIls: r.totalOrderPriceIls,
+                }}
+              />
+            </>
+          )}
+        </>}
+      />
+
+      {/* Estimate-only result detail (factory pick, reasoning, carton, full
+          breakdown) stays full-width below the quote panel — too tall/complex
+          to fit the sticky column. */}
+      {!loading && est && est.ok && r && c && (
+        <>
           <div className="rounded-xl border border-border bg-card p-4 flex flex-wrap items-center gap-3">
             <span className="text-sm font-medium">מפעל מומלץ:</span>
             <span className="rounded-full bg-primary/10 text-primary px-3 py-1 text-sm font-bold">{est.factoryName}</span>
@@ -905,7 +979,6 @@ function EstimateTab({ apiToken, shippingOptions, sid, leadName, initialMargins 
             </section>
           )}
 
-          <BreakdownCard result={r} computed={c} />
           <DetailedBreakdown
             unitCost={c.productionPerUnitIls}
             unitShipping={c.shippingPerUnitIls}
@@ -931,39 +1004,6 @@ function EstimateTab({ apiToken, shippingOptions, sid, leadName, initialMargins 
             plateFeeCnyPerUnit={r.plateFeeCny}
             components={{ baseBagCny: r.baseBagCny, handlesAddonCny: r.handlesAddonCny, laminationAddonCny: r.laminationAddonCny, plateFeeCny: r.plateFeeCny, logoAddonCny: r.logoAddonCny, moldsPerUnitCny: r.moldsPerUnitCny }}
             alt={data?.altResult ? { shippingType: data.altResult.shippingOption?.type === "air" ? "air" : "sea", unitSellingPrice: data.altResult.sellingPricePerUnitIls, totalSellingPrice: data.altResult.totalOrderPriceIls, shippingName: data.altResult.shippingOption?.name ?? null } : null}
-          />
-          <QuoteShareCard
-            apiToken={apiToken}
-            sid={sid}
-            leadName={leadName}
-            quoteText={buildQuoteText({
-              leadName: leadName ?? null,
-              product: null,
-              // Customer-facing: dimensions only — no internal "אומדן <factory>"
-              // (the Chinese factory name has no meaning for the customer).
-              manualDescription: `H${h}${d ? `*D${d}` : ""}*W${w}`,
-              quantity: r.quantity,
-              shippingName: r.shippingOption?.name ?? null,
-              shippingType: r.shippingOption?.type === "sea" || r.shippingOption?.type === "air" ? r.shippingOption.type : null,
-              unitSellingPriceIls: r.sellingPricePerUnitIls,
-              totalSellingPriceIls: r.totalOrderPriceIls,
-              shippingPerUnitIls: c.shippingPerUnitIls,
-              totalShippingIls: c.shippingPerUnitIls * r.quantity,
-              oneTimeMoldsIls: r.moldsTotalSellingPriceIls,
-              result: r,
-            })}
-            estimate={{
-              heightCm: parseFloat(h) || 0,
-              depthCm: parseFloat(d) || 0,
-              widthCm: parseFloat(w) || 0,
-              qty: r.quantity,
-              colors,
-              handles,
-              lamination: lam,
-              shipping: shippingId,
-              cartonConfidence: est.carton?.confidence,
-              totalIls: r.totalOrderPriceIls,
-            }}
           />
         </>
       )}
@@ -1575,6 +1615,68 @@ function NumField({
         onChange={(e) => onChange(e.target.value)}
         className="bg-background/50 border border-border rounded-md px-3 py-1.5 text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-ring/30"
       />
+    </div>
+  );
+}
+
+// -----------------------------------------------------------------------------
+// Layout primitives for the PandaDoc-style quote builder. Pure presentation —
+// no state, no logic. `Section` = a numbered input card; `BuilderGrid` = the
+// two-column (inputs RIGHT / quote LEFT) shell that collapses under ~720px.
+// -----------------------------------------------------------------------------
+
+function Section({ n, title, children }: { n: number; title: string; children: React.ReactNode }) {
+  return (
+    <div
+      className="flex flex-col gap-3"
+      style={{
+        background: "rgba(255,255,255,0.04)",
+        border: "1px solid rgba(255,255,255,0.08)",
+        borderRadius: 10,
+        padding: 13,
+      }}
+    >
+      <div className="flex items-center gap-2">
+        <span
+          className="grid place-items-center shrink-0 tabular-nums"
+          style={{
+            width: 19,
+            height: 19,
+            borderRadius: 6,
+            fontSize: 11,
+            fontWeight: 600,
+            background: "rgba(205,169,120,0.14)",
+            border: "1px solid rgba(205,169,120,0.34)",
+            color: "#e7cba6",
+          }}
+        >
+          {n}
+        </span>
+        <span style={{ fontSize: 12.5, fontWeight: 500 }}>{title}</span>
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function BuilderGrid({ inputs, quote }: { inputs: React.ReactNode; quote: React.ReactNode }) {
+  return (
+    <div
+      style={{
+        display: "grid",
+        gap: 16,
+        gridTemplateColumns: "minmax(0, 1fr) minmax(0, 320px)",
+        alignItems: "start",
+      }}
+      className="cv-builder-grid"
+    >
+      {/* Inline responsive rule: collapse to a single column under 720px so the
+          inputs stack above the quote panel. */}
+      <style>{`@media (max-width: 720px){.cv-builder-grid{grid-template-columns:1fr !important;}.cv-quote-col{position:static !important;}}`}</style>
+      <div className="flex flex-col gap-3">{inputs}</div>
+      <div className="cv-quote-col flex flex-col gap-3" style={{ position: "sticky", top: 12 }}>
+        {quote}
+      </div>
     </div>
   );
 }
