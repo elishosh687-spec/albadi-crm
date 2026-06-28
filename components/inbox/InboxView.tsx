@@ -43,6 +43,12 @@ interface Props {
   initialRows: InboxRow[];
   selectedSid?: string;
   quickTemplates?: QuickTemplate[];
+  /**
+   * Additive: when the parent (cockpit shell) wants the thread open on mount,
+   * it passes the lead sid here. Initializes `threadSid` only — every other
+   * InboxView behavior is unchanged.
+   */
+  openSid?: string;
 }
 
 function timeAgo(iso: string | null): string {
@@ -128,6 +134,7 @@ export default function InboxView({
   initialRows,
   selectedSid,
   quickTemplates = [],
+  openSid,
 }: Props) {
   const [rows, setRows] = useState<InboxRow[]>(initialRows);
   const [busy, setBusy] = useState<string | null>(null);
@@ -137,7 +144,8 @@ export default function InboxView({
   // sid of the row whose inline lead-analysis panel is expanded. null = none.
   const [analyzeSid, setAnalyzeSid] = useState<string | null>(null);
   // Open conversation thread (Front-style list | thread). null = list only.
-  const [threadSid, setThreadSid] = useState<string | null>(null);
+  // Additive: `openSid` (from the cockpit shell) seeds the thread on mount.
+  const [threadSid, setThreadSid] = useState<string | null>(openSid?.trim() || null);
   const [, startTransition] = useTransition();
 
   const threadRow = rows.find((r) => r.sid.trim() === threadSid);
