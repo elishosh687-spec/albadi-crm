@@ -10,6 +10,18 @@
  */
 
 import Link from "next/link";
+import {
+  MessagesSquare,
+  Bot,
+  Receipt,
+  BarChart3,
+  Calculator,
+  Box,
+  Package,
+  Settings,
+  Search,
+  type LucideIcon,
+} from "lucide-react";
 import { verifyWidgetToken } from "@/integrations/ghl/widget-auth";
 
 export const dynamic = "force-dynamic";
@@ -23,6 +35,7 @@ interface SearchParams {
 interface TabDef {
   id: string;
   label: string;
+  icon: LucideIcon;
   url: (token: string, sid: string) => string;
 }
 
@@ -33,42 +46,50 @@ function withSid(base: string, sid: string): string {
 const TABS: TabDef[] = [
   {
     id: "inbox",
-    label: "📥 שיחות",
+    label: "שיחות",
+    icon: MessagesSquare,
     url: (t, sid) => withSid(`/widget/inbox?widget_token=${encodeURIComponent(t)}`, sid),
   },
   {
     id: "bot",
-    label: "🤖 בוט",
+    label: "בוט",
+    icon: Bot,
     url: (t, sid) => withSid(`/widget/bot-decisions?widget_token=${encodeURIComponent(t)}`, sid),
   },
   {
     id: "factory",
-    label: "💰 הצעות מחיר",
+    label: "הצעות מחיר",
+    icon: Receipt,
     url: (t, sid) => withSid(`/widget/factory-flow?widget_token=${encodeURIComponent(t)}`, sid),
   },
   {
     id: "analysis",
-    label: "🔍 ניתוח",
+    label: "ניתוח",
+    icon: BarChart3,
     url: (t) => `/widget/analysis?widget_token=${encodeURIComponent(t)}`,
   },
   {
     id: "calc",
-    label: "🧮 מחשבון",
+    label: "מחשבון",
+    icon: Calculator,
     url: (t, sid) => withSid(`/widget/calculator?widget_token=${encodeURIComponent(t)}`, sid),
   },
   {
     id: "designer",
-    label: "🎨 מעצב 3D",
+    label: "מעצב 3D",
+    icon: Box,
     url: (t) => `/configurator?widget_token=${encodeURIComponent(t)}`,
   },
   {
     id: "shipping",
-    label: "📦 צירוף משלוחים",
+    label: "צירוף משלוחים",
+    icon: Package,
     url: (t) => `/widget/shipping?widget_token=${encodeURIComponent(t)}`,
   },
   {
     id: "settings",
-    label: "⚙️ הגדרות",
+    label: "הגדרות",
+    icon: Settings,
     url: (t) => `/widget/settings?widget_token=${encodeURIComponent(t)}`,
   },
 ];
@@ -112,7 +133,7 @@ export default async function HubWidgetPage({
           flexWrap: "nowrap",
           alignItems: "center",
           gap: 4,
-          padding: "10px 14px",
+          padding: "8px 14px",
           background: "rgba(255,255,255,0.045)",
           borderBottom: "1px solid rgba(255,255,255,0.08)",
           backdropFilter: "blur(30px) saturate(1.7)",
@@ -132,7 +153,7 @@ export default async function HubWidgetPage({
           style={{
             display: "flex",
             alignItems: "center",
-            gap: 7,
+            gap: 8,
             paddingInlineEnd: 12,
             marginInlineEnd: 4,
             borderInlineEnd: "1px solid rgba(255,255,255,0.10)",
@@ -145,9 +166,9 @@ export default async function HubWidgetPage({
         >
           <span
             style={{
-              width: 22,
-              height: 22,
-              borderRadius: 7,
+              width: 20,
+              height: 20,
+              borderRadius: 6,
               background: "linear-gradient(135deg, #e7cba6, #cda978)",
               display: "inline-block",
               flexShrink: 0,
@@ -160,31 +181,72 @@ export default async function HubWidgetPage({
           const isActive = t.id === activeId;
           const sidSuffix = sid ? `&sid=${encodeURIComponent(sid)}` : "";
           const href = `/widget/hub?widget_token=${encodeURIComponent(token)}&tab=${t.id}${sidSuffix}`;
+          const Icon = t.icon;
           return (
             <Link
               key={t.id}
               href={href}
               style={{
-                padding: "8px 14px",
-                fontSize: 13.5,
+                gap: 6,
+                padding: "0 11px",
+                fontSize: 13,
                 fontWeight: isActive ? 600 : 500,
-                minHeight: 38,
+                height: 32,
                 display: "flex",
                 alignItems: "center",
                 background: isActive ? "rgba(205,169,120,0.16)" : "transparent",
-                color: isActive ? "#e7cba6" : "#9a9ea6",
+                color: isActive ? "#e7cba6" : "#8f939b",
                 border: `1px solid ${isActive ? "rgba(205,169,120,0.34)" : "transparent"}`,
-                borderRadius: 9,
+                borderRadius: 6,
                 textDecoration: "none",
                 whiteSpace: "nowrap",
                 touchAction: "manipulation",
                 flexShrink: 0,
               }}
             >
+              <Icon size={15} strokeWidth={1.75} style={{ flexShrink: 0 }} />
               {t.label}
             </Link>
           );
         })}
+
+        {/* search affordance — visual only this phase */}
+        <div
+          aria-hidden
+          style={{
+            marginInlineStart: "auto",
+            display: "flex",
+            alignItems: "center",
+            gap: 7,
+            height: 32,
+            padding: "0 10px",
+            borderRadius: 6,
+            border: "1px solid rgba(255,255,255,0.07)",
+            color: "#8f939b",
+            fontSize: 12.5,
+            whiteSpace: "nowrap",
+            flexShrink: 0,
+            userSelect: "none",
+          }}
+        >
+          <Search size={14} strokeWidth={1.75} style={{ flexShrink: 0 }} />
+          חיפוש
+          <span
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 1,
+              padding: "1px 5px",
+              borderRadius: 4,
+              border: "1px solid rgba(255,255,255,0.07)",
+              background: "rgba(255,255,255,0.03)",
+              color: "#6b7079",
+              fontSize: 11,
+            }}
+          >
+            ⌘K
+          </span>
+        </div>
       </nav>
 
       <iframe
