@@ -1003,8 +1003,8 @@ function BreakdownCard({
   const totalCostTotal  = r2(r.totalCostPerUnitIls * r.quantity);
 
   // Salesperson commission — boss-only, display-only (does not change the
-  // customer price). On the total order, out of profit.
-  const comm = computeCommission(r.totalOrderPriceIls, r.totalProfitIls, c.commissionPct);
+  // customer price). Base = deal EXCLUDING shipping (shipping has no margin).
+  const comm = computeCommission(r.totalOrderPriceIls, r.totalProfitIls, c.commissionPct, shippingTotal);
 
   return (
     <section className="rounded-xl border border-border bg-card overflow-hidden">
@@ -1039,7 +1039,7 @@ function BreakdownCard({
               { label: "עלות שילוח", value: `₪${ils(shippingTotal)}` },
               { label: "סה״כ עלות", value: `₪${ils(totalCostTotal)}`, bold: true },
               { label: `רווח ${r.profitMargin}%`, value: `₪${ils(r.totalProfitIls)}`, bold: true, green: true },
-              { label: `עמלת מכירות (${comm.pct}% · ${Math.round(comm.ofProfitPct)}% מהרווח)`, value: `−₪${ils(comm.commission)}` },
+              { label: `עמלת מכירות (${comm.pct}% מהעסקה ללא שילוח · ${Math.round(comm.ofProfitPct)}% מהרווח)`, value: `−₪${ils(comm.commission)}` },
               { label: "רווח נטו (אחרי עמלה)", value: `₪${ils(comm.netProfit)}`, bold: true, green: true },
               { label: "מחיר ללקוח", value: `₪${ils(r.totalOrderPriceIls)}`, hero: true },
             ]}

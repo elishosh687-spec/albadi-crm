@@ -200,11 +200,11 @@ export function QuoteHtmlPreviewWidget({ apiToken, row }: { apiToken: string; ro
                     />
                   )}
                   {(() => {
-                    const c = computeCommission(p.totalSellingPrice, p.totalProfit, p.commissionPct);
+                    const c = computeCommission(p.totalSellingPrice, p.totalProfit, p.commissionPct, p.totalShipping);
                     return (
                       <>
                         <PriceRow
-                          label={`עמלת מכירות (${c.pct}% מהעסקה · ${Math.round(c.ofProfitPct)}% מהרווח)`}
+                          label={`עמלת מכירות (${c.pct}% מהעסקה ללא שילוח · ${Math.round(c.ofProfitPct)}% מהרווח)`}
                           value={`−${fmtIls(c.commission)}`}
                         />
                         <PriceRow label="רווח נטו (אחרי עמלה)" value={fmtIls(c.netProfit)} bold primary />

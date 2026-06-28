@@ -200,7 +200,7 @@ export function buildBreakdownView(input: BreakdownInput): BreakdownView {
       formula: `₪${r2(input.unitCost).toFixed(2)} עלות → ${input.profitMarginPct}% מהמחיר = ₪${r2(input.unitProfit).toFixed(2)}/יח׳ רווח`,
     },
     commission: (() => {
-      const c = computeCommission(input.totalSellingPrice, input.totalProfit, input.commissionPct);
+      const c = computeCommission(input.totalSellingPrice, input.totalProfit, input.commissionPct, input.totalShipping);
       return {
         pct: c.pct,
         ils: r2(c.commission),

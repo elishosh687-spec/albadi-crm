@@ -568,12 +568,13 @@ export function FinalizeModal({
                     const c = computeCommission(
                       livePricing.totalSellingPrice,
                       livePricing.totalProfit,
-                      livePricing.commissionPct
+                      livePricing.commissionPct,
+                      livePricing.totalShipping
                     );
                     return (
                       <>
                         <PriceRow
-                          label={`עמלת מכירות (${c.pct}% מהעסקה · ${Math.round(c.ofProfitPct)}% מהרווח)`}
+                          label={`עמלת מכירות (${c.pct}% מהעסקה ללא שילוח · ${Math.round(c.ofProfitPct)}% מהרווח)`}
                           value={`−${formatIls(c.commission)}`}
                         />
                         <PriceRow
