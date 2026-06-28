@@ -122,26 +122,28 @@ export default async function CalculatorWidgetPage({
           display: "flex",
           justifyContent: "space-between",
           alignItems: "center",
-          background: "#1a1d24",
-          border: "1px solid #2a2d34",
+          background: "#141312",
+          border: "1px solid rgba(230,225,224,0.08)",
           borderRadius: 8,
           padding: "10px 16px",
           marginBottom: 16,
           fontSize: 14,
+          color: "#e6e1e0",
         }}
       >
         <div>
           <strong style={{ fontSize: 16 }}>🧮 מחשבון מחיר</strong>
           {lead && (
-            <span style={{ marginRight: 12, color: "#a1a1aa" }}>
+            <span style={{ marginRight: 12, color: "#8a7f74" }}>
               · ליד: {lead.name || lead.phone || lead.sid}
               {lead.stage && (
                 <span
                   style={{
                     marginRight: 8,
                     padding: "2px 8px",
-                    background: "#2563eb",
-                    borderRadius: 4,
+                    background: "rgba(190,198,224,0.16)",
+                    color: "#bec6e0",
+                    borderRadius: 9999,
                     fontSize: 12,
                   }}
                 >

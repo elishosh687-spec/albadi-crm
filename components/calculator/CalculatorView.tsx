@@ -162,6 +162,13 @@ export function CalculatorView({ products, quantityTiers, shippingOptions, initi
   const r = preview?.result;
   const c = preview?.computed;
 
+  // Editorial quote title (display-only — derived from existing product /
+  // manual-desc state; no logic change). Falls back gracefully.
+  const selectedProduct = products.find((p) => p.id === productId);
+  const quoteTitle = manualMode
+    ? (manualDesc.trim() || "מוצר מותאם")
+    : (selectedProduct?.description || "שקית מותאמת");
+
   const reverseResult = useMemo(() => {
     if (!r || !c) return null;
     const n = parseFloat(reverseInput);
@@ -186,23 +193,82 @@ export function CalculatorView({ products, quantityTiers, shippingOptions, initi
   }, [r, c, reverseInput, reverseMode]);
 
   return (
-    <div className="gg-theme flex flex-col gap-6 rounded-xl p-4" dir="rtl">
-      {/* Top-level tab: regular vs estimated calculator */}
-      <div className="inline-flex self-start rounded-lg border border-border bg-background/40 p-0.5 text-sm">
-        <button
-          type="button"
-          onClick={() => setTab("operator")}
-          className={cn("px-4 py-1.5 rounded-md", tab === "operator" ? "bg-primary text-primary-foreground" : "text-muted-foreground")}
+    <div className="calc-lux gg-theme flex flex-col gap-6 rounded-xl p-5" dir="rtl">
+      {/* Editorial header — quote title + live FX strip + tabs */}
+      <div className="flex flex-col gap-4">
+        {/* Top strip: live pill + FX rates */}
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <span
+            className="lux-label inline-flex items-center gap-1.5"
+            style={{ color: "var(--lux-muted)" }}
+          >
+            <span
+              aria-hidden
+              style={{
+                width: 6,
+                height: 6,
+                borderRadius: 9999,
+                background: "var(--lux-cool)",
+                boxShadow: "0 0 8px var(--lux-cool)",
+                display: "inline-block",
+              }}
+            />
+            חישוב חי
+          </span>
+          {c && (
+            <div
+              className="lux-sans flex items-center gap-2 tabular-nums"
+              style={{ fontSize: 11, color: "var(--lux-muted)", letterSpacing: "0.04em" }}
+            >
+              <span>USD→ILS {r2(c.usdToIls)}</span>
+              <span style={{ opacity: 0.5 }}>·</span>
+              <span>USD→CNY {r2(c.usdToCny)}</span>
+            </div>
+          )}
+        </div>
+
+        {/* Quote title */}
+        <h1
+          className="lux-serif"
+          style={{
+            fontSize: 30,
+            fontWeight: 300,
+            lineHeight: 1.05,
+            letterSpacing: "-0.01em",
+            color: "var(--lux-ink)",
+            margin: 0,
+          }}
         >
-          מחשבון
-        </button>
-        <button
-          type="button"
-          onClick={() => setTab("estimate")}
-          className={cn("px-4 py-1.5 rounded-md", tab === "estimate" ? "bg-primary text-primary-foreground" : "text-muted-foreground")}
+          {quoteTitle}
+          <span style={{ color: "var(--lux-champagne)" }}>.</span>
+        </h1>
+
+        {/* Top-level tab: regular vs estimated calculator */}
+        <div
+          className="inline-flex self-start p-0.5 text-sm"
+          style={{
+            borderRadius: 9999,
+            border: "1px solid var(--lux-line)",
+            background: "var(--lux-inset)",
+          }}
         >
-          מחשבון משוער ✨
-        </button>
+          <button
+            type="button"
+            onClick={() => setTab("operator")}
+            className={cn("px-4 py-1.5", tab === "operator" ? "bg-primary text-primary-foreground" : "text-muted-foreground")}
+            style={{ borderRadius: 9999 }}
+          >
+            מחשבון
+          </button>
+          <button
+            type="button"
+            onClick={() => setTab("estimate")}
+            className={cn("px-4 py-1.5", tab === "estimate" ? "bg-primary text-primary-foreground" : "text-muted-foreground")}
+            style={{ borderRadius: 9999 }}
+          >
+            מחשבון משוער ✨
+          </button>
+        </div>
       </div>
 
       {tab === "estimate" && (
@@ -1035,39 +1101,88 @@ function CompactQuote({
   r: QuoteResult;
   c: { productionPerUnitIls: number; shippingPerUnitIls: number };
 }) {
+  const hasMolds = r.moldsTotalSellingPriceIls > 0;
   return (
-    <section className="rounded-xl border border-border bg-card overflow-hidden">
-      <div className="text-center py-5 border-b border-border bg-background/30">
-        <div className="text-3xl font-bold tabular-nums" style={{ color: "#e7cba6" }}>
+    <section className="bg-card overflow-hidden" style={{ borderRadius: 8 }}>
+      {/* SUMMARY label + price hero (cool blue, thin) */}
+      <div
+        className="text-center py-6"
+        style={{
+          borderBottom: "1px solid var(--lux-line)",
+          background: "var(--lux-inset)",
+        }}
+      >
+        <div className="lux-label" style={{ marginBottom: 8 }}>Summary</div>
+        <div
+          className="lux-serif tabular-nums"
+          style={{ fontSize: 50, fontWeight: 200, lineHeight: 1, color: "var(--lux-cool)" }}
+        >
           ₪{ils(r.sellingPricePerUnitIls)}
         </div>
-        <div className="text-xs text-muted-foreground mt-1">מחיר ללקוח · ליחידה</div>
+        <div style={{ fontSize: 11, color: "var(--lux-muted)", marginTop: 6 }}>
+          מחיר ללקוח · ליחידה
+        </div>
       </div>
-      <div className="p-4 flex flex-col gap-2 text-sm">
+
+      <div className="p-4 flex flex-col gap-2.5 text-sm">
         <div className="flex justify-between">
-          <span className="text-muted-foreground">עלות ייצור</span>
+          <span style={{ color: "var(--lux-muted)" }}>עלות</span>
           <span className="tabular-nums">₪{ils(c.productionPerUnitIls)}</span>
         </div>
         <div className="flex justify-between">
-          <span className="text-muted-foreground">משלוח</span>
+          <span style={{ color: "var(--lux-muted)" }}>משלוח (pass-through)</span>
           <span className="tabular-nums">₪{ils(c.shippingPerUnitIls)}</span>
         </div>
         <div className="flex justify-between">
-          <span className="text-muted-foreground">רווח / יחידה</span>
-          <span className="tabular-nums text-success">₪{ils(r.profitPerUnitIls)}</span>
+          <span style={{ color: "var(--lux-muted)" }}>רווח / יחידה</span>
+          <span className="tabular-nums" style={{ color: "var(--lux-champagne)" }}>
+            ₪{ils(r.profitPerUnitIls)}
+          </span>
         </div>
-        <div className="flex justify-between border-t border-border pt-2 mt-1 font-medium">
-          <span>סה״כ הזמנה ({r.quantity.toLocaleString("he-IL")})</span>
-          <span className="tabular-nums" style={{ color: "#e7cba6" }}>
+
+        {/* Molds — one-time, boxed (display only; appears when present) */}
+        {hasMolds && (
+          <div
+            className="flex justify-between items-center text-xs"
+            style={{
+              marginTop: 2,
+              padding: "7px 10px",
+              borderRadius: 6,
+              background: "var(--lux-inset-deep)",
+              border: "1px solid var(--lux-line)",
+            }}
+          >
+            <span style={{ color: "var(--lux-muted)" }}>מולדים / תבניות · חד פעמי</span>
+            <span className="tabular-nums" style={{ color: "var(--lux-ink)" }}>
+              ₪{ils(r.moldsTotalSellingPriceIls)}
+            </span>
+          </div>
+        )}
+
+        <div
+          className="flex justify-between items-baseline"
+          style={{ borderTop: "1px solid var(--lux-line)", paddingTop: 10, marginTop: 4 }}
+        >
+          <span style={{ fontWeight: 500 }}>סה״כ הזמנה ({r.quantity.toLocaleString("he-IL")})</span>
+          <span
+            className="lux-serif tabular-nums"
+            style={{ fontSize: 22, fontWeight: 300, color: "var(--lux-cool)" }}
+          >
             ₪{ils(r.totalOrderPriceIls)}
           </span>
         </div>
-        <div className="flex justify-between text-xs text-muted-foreground">
-          <span>רווח כולל</span>
-          <span className="tabular-nums">₪{ils(r.totalProfitIls)}</span>
+        <div className="flex justify-between text-xs">
+          <span style={{ color: "var(--lux-muted)" }}>רווח כולל</span>
+          <span className="tabular-nums" style={{ color: "var(--lux-champagne)" }}>
+            ₪{ils(r.totalProfitIls)}
+          </span>
         </div>
       </div>
-      <div className="px-4 pb-4 text-center text-xs text-muted-foreground">
+
+      <div
+        className="px-4 pb-4 text-center text-xs"
+        style={{ color: "var(--lux-faint)" }}
+      >
         הפירוט המלא והשליחה למטה ↓
       </div>
     </section>
@@ -1097,9 +1212,19 @@ function BreakdownCard({
   return (
     <section className="rounded-xl border border-border bg-card overflow-hidden">
       {/* Hero */}
-      <div className="text-center py-8 border-b border-border bg-background/30">
-        <div className="text-4xl font-bold tabular-nums">₪{ils(r.sellingPricePerUnitIls)}</div>
-        <div className="text-sm text-muted-foreground mt-1">מחיר ליחידה (כולל רווח)</div>
+      <div
+        className="text-center py-8"
+        style={{ borderBottom: "1px solid var(--lux-line)", background: "var(--lux-inset)" }}
+      >
+        <div
+          className="lux-serif tabular-nums"
+          style={{ fontSize: 48, fontWeight: 200, lineHeight: 1, color: "var(--lux-cool)" }}
+        >
+          ₪{ils(r.sellingPricePerUnitIls)}
+        </div>
+        <div style={{ fontSize: 13, color: "var(--lux-muted)", marginTop: 6 }}>
+          מחיר ליחידה (כולל רווח)
+        </div>
       </div>
 
       <div className="grid sm:grid-cols-2 divide-y sm:divide-y-0 sm:divide-x sm:divide-x-reverse divide-border">
@@ -1673,36 +1798,45 @@ function NumField({
 // two-column (inputs RIGHT / quote LEFT) shell that collapses under ~720px.
 // -----------------------------------------------------------------------------
 
+const ROMAN = ["", "I", "II", "III", "IV", "V", "VI"];
+
 function Section({ n, title, children }: { n: number; title: string; children: React.ReactNode }) {
   return (
     <div
       className="flex flex-col gap-3"
       style={{
-        background: "rgba(255,255,255,0.04)",
-        border: "1px solid rgba(255,255,255,0.08)",
-        borderRadius: 10,
-        padding: 13,
+        position: "relative",
+        overflow: "hidden",
+        background: "var(--lux-card)",
+        border: "1px solid var(--lux-line)",
+        borderRadius: 8,
+        padding: 14,
       }}
     >
-      <div className="flex items-center gap-2">
+      {/* Giant faint serif numeral — editorial accent (presentation only) */}
+      <span
+        aria-hidden
+        className="lux-numeral"
+        style={{
+          position: "absolute",
+          top: -14,
+          left: 10,
+          fontSize: 84,
+        }}
+      >
+        {ROMAN[n] ?? n}
+      </span>
+
+      <div className="flex items-center gap-2" style={{ position: "relative" }}>
         <span
-          className="grid place-items-center shrink-0 tabular-nums"
-          style={{
-            width: 19,
-            height: 19,
-            borderRadius: 6,
-            fontSize: 11,
-            fontWeight: 600,
-            background: "rgba(205,169,120,0.14)",
-            border: "1px solid rgba(205,169,120,0.34)",
-            color: "#e7cba6",
-          }}
+          className="lux-label"
+          style={{ color: "var(--lux-champagne)", opacity: 0.85 }}
         >
-          {n}
+          {ROMAN[n] ?? n}
         </span>
-        <span style={{ fontSize: 12.5, fontWeight: 500 }}>{title}</span>
+        <span style={{ fontSize: 13, fontWeight: 500, color: "var(--lux-ink)" }}>{title}</span>
       </div>
-      {children}
+      <div className="flex flex-col gap-3" style={{ position: "relative" }}>{children}</div>
     </div>
   );
 }

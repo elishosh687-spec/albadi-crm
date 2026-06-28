@@ -188,3 +188,138 @@
   --gg-radius-card: 8px;
   --gg-radius-pill: 999px;
 }
+
+/* ──────────────────────────────────────────────────────────────────────────
+   "Silent Luxury" warm-dark editorial SCOPE — calculator widget ONLY.
+   Mirrors the .gg-theme mechanism: re-points the semantic --color-* + --gg-*
+   tokens under `.calc-lux` so every utility class (bg-card, border-border,
+   text-muted-foreground, bg-primary, …) re-skins with ZERO markup churn. The
+   wrapper class lives ONLY on the CalculatorView root, so no other screen is
+   affected. Tokens extracted from public/_ref-calc.html.
+   ────────────────────────────────────────────────────────────────────────── */
+.calc-lux {
+  /* warm-dark surfaces */
+  --color-background: #1d1b1a;
+  --color-foreground: #e6e1e0;
+  --color-card: rgba(255, 255, 255, 0.03);
+  --color-card-foreground: #e6e1e0;
+  --color-popover: #161514;
+  --color-popover-foreground: #e6e1e0;
+  --color-secondary: rgba(255, 255, 255, 0.05);
+  --color-secondary-foreground: #e6e1e0;
+  --color-muted: rgba(255, 255, 255, 0.03);
+  --color-muted-foreground: #8a7f74;
+  --color-border: rgba(230, 225, 224, 0.08);
+  --color-input: rgba(230, 225, 224, 0.1);
+  --color-ring: rgba(190, 198, 224, 0.45);
+  /* champagne accent — small accents + the giant faint serif numerals */
+  --color-primary: #1a2038;
+  --color-primary-foreground: #e6e1e0;
+  --color-accent: #d6c4ac;
+  --color-accent-foreground: #1d1b1a;
+
+  /* warm-dark overrides of the additive --gg-* tokens used inline */
+  --gg-bg: #1d1b1a;
+  --gg-text: #e6e1e0;
+  --gg-text-muted: #8a7f74;
+  --gg-text-faint: rgba(138, 127, 116, 0.6);
+  --gg-glass-rim: inset 0 1px 0 rgba(230, 225, 224, 0.06);
+  --gg-glass-float: 0 18px 50px rgba(0, 0, 0, 0.5);
+  --gg-edge: linear-gradient(
+    90deg,
+    transparent,
+    rgba(214, 196, 172, 0.35),
+    rgba(190, 198, 224, 0.3),
+    transparent
+  );
+  --gg-accent-text: #d6c4ac;
+  --gg-success: #a8c0a0;
+
+  /* calculator-local palette tokens (consumed by inline styles in the JSX) */
+  --lux-ink: #e6e1e0;
+  --lux-muted: #8a7f74;
+  --lux-faint: rgba(138, 127, 116, 0.6);
+  --lux-champagne: #d6c4ac;
+  --lux-cool: #bec6e0;
+  --lux-inset: #141312;
+  --lux-inset-deep: #0f0e0d;
+  --lux-line: rgba(230, 225, 224, 0.08);
+  --lux-line-soft: rgba(230, 225, 224, 0.05);
+  --lux-card: rgba(255, 255, 255, 0.03);
+  --lux-card-raised: rgba(255, 255, 255, 0.05);
+  --lux-navy-from: #1a2038;
+  --lux-navy-to: #3a425a;
+
+  color: var(--lux-ink);
+  font-family: var(--font-body), "Heebo", ui-sans-serif, system-ui, sans-serif;
+  background:
+    radial-gradient(620px 420px at 88% -12%, rgba(190, 198, 224, 0.07), transparent 62%),
+    radial-gradient(560px 420px at 4% 116%, rgba(214, 196, 172, 0.06), transparent 64%),
+    var(--lux-bg, #1d1b1a);
+}
+
+/* small radii — no big blobby corners */
+.calc-lux {
+  --gg-radius-chip: 3px;
+  --gg-radius: 3px;
+  --gg-radius-card: 8px;
+  --gg-radius-pill: 9999px;
+}
+
+/* warm translucent card surface (over the warm bg) — replaces the cool glass */
+.calc-lux .bg-card {
+  position: relative;
+  background-color: var(--lux-card);
+  border-color: var(--lux-line);
+  -webkit-backdrop-filter: blur(20px) saturate(1.2);
+  backdrop-filter: blur(20px) saturate(1.2);
+  box-shadow: var(--gg-glass-rim), var(--gg-glass-float);
+  border-radius: 8px;
+}
+.calc-lux .bg-card::before {
+  background: var(--gg-edge);
+}
+
+/* the navy/indigo PRIMARY action — the user explicitly kept the CTA blue */
+.calc-lux .bg-primary {
+  background: linear-gradient(135deg, var(--lux-navy-from), var(--lux-navy-to)) !important;
+  color: var(--lux-ink) !important;
+  border: 1px solid rgba(190, 198, 224, 0.22);
+}
+.calc-lux .text-primary-foreground {
+  color: var(--lux-ink) !important;
+}
+
+/* thin figures — big numbers use a light Heebo weight */
+.calc-lux .text-3xl,
+.calc-lux .text-4xl {
+  font-weight: 300;
+  letter-spacing: -0.01em;
+}
+
+/* editorial helpers (consumed by classNames in the calculator JSX) */
+.calc-lux .lux-serif {
+  font-family: var(--font-editorial-serif), "Newsreader", ui-serif, Georgia, serif;
+}
+.calc-lux .lux-sans {
+  font-family: var(--font-editorial-sans), "Manrope", ui-sans-serif, system-ui, sans-serif;
+}
+/* small-caps Manrope label, e.g. "SUMMARY" / "USD→ILS" */
+.calc-lux .lux-label {
+  font-family: var(--font-editorial-sans), "Manrope", ui-sans-serif, system-ui, sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--lux-muted);
+}
+/* giant faint serif section numeral (I / II / III / IV) */
+.calc-lux .lux-numeral {
+  font-family: var(--font-editorial-serif), "Newsreader", ui-serif, Georgia, serif;
+  font-weight: 300;
+  color: var(--lux-champagne);
+  opacity: 0.12;
+  line-height: 0.8;
+  pointer-events: none;
+  user-select: none;
+}

@@ -1,5 +1,5 @@
 import type { Viewport } from "next";
-import { Frank_Ruhl_Libre, Heebo } from "next/font/google";
+import { Frank_Ruhl_Libre, Heebo, Newsreader, Manrope } from "next/font/google";
 import { colors, fontStack } from "@/lib/ui/tokens";
 import "./globals.css";
 
@@ -17,8 +17,26 @@ const display = Frank_Ruhl_Libre({
 
 const body = Heebo({
   subsets: ["latin", "hebrew"],
-  weight: ["400", "500", "700"],
+  weight: ["200", "300", "400", "500", "700"],
   variable: "--font-body",
+  display: "swap",
+});
+
+// Editorial serif for the calculator's giant section numerals (I/II/III/IV)
+// and quote title. Scoped to the calculator via the `.calc-lux` wrapper.
+const editorialSerif = Newsreader({
+  subsets: ["latin"],
+  weight: ["200", "300", "400"],
+  style: ["normal", "italic"],
+  variable: "--font-editorial-serif",
+  display: "swap",
+});
+
+// Latin small-caps labels ("SUMMARY", "USD→ILS") in the calculator re-skin.
+const editorialSans = Manrope({
+  subsets: ["latin"],
+  weight: ["400", "500", "600"],
+  variable: "--font-editorial-sans",
   display: "swap",
 });
 
@@ -56,7 +74,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="he" dir="rtl" className={`${display.variable} ${body.variable}`}>
+    <html lang="he" dir="rtl" className={`${display.variable} ${body.variable} ${editorialSerif.variable} ${editorialSans.variable}`}>
       <head>
         <style dangerouslySetInnerHTML={{ __html: globalCss }} />
       </head>
