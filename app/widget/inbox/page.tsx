@@ -10,13 +10,15 @@
  */
 
 import { db } from "@/lib/db";
-import { leads, messages, messageTemplates } from "@/drizzle/schema";
+import { leads, messages, messageTemplates, leadAnalyses } from "@/drizzle/schema";
 import { asc, desc, eq, sql } from "drizzle-orm";
 import { verifyWidgetToken } from "@/integrations/ghl/widget-auth";
-import InboxView, {
-  type InboxRow,
-  type QuickTemplate,
-} from "@/components/inbox/InboxView";
+import { type InboxRow, type QuickTemplate } from "@/components/inbox/InboxView";
+import CockpitShell from "@/components/inbox/CockpitShell";
+import { type CockpitLead } from "@/components/inbox/CockpitView";
+import { loadFollowupQueue } from "@/lib/dashboard/followup-queue";
+import { getStagePlay } from "@/lib/sales/stage-plays.he";
+import { normalizeStage, V2_STAGE_LABELS } from "@/lib/manychat/stages";
 
 // How many quick-send buttons to show next to each lead row. Top N active
 // templates by sortOrder. Above this, the user opens a full lead/composer.
@@ -56,6 +58,56 @@ function pickFallbackIcon(name: string, id: number): string {
   return palette[id % palette.length];
 }
 
+// ─── Cockpit presentation helpers (pure display formatting — no logic) ───
+
+// Format an already-computed nextEligibleAt timestamp into a calm Hebrew
+// relative label. This is DISPLAY of an existing cadence result (from
+// loadFollowupQueue), NOT a re-computation of cadence.
+function urgencyLabel(nextEligibleAt: Date | null, now: number): string | null {
+  if (!nextEligibleAt) return null;
+  const diff = nextEligibleAt.getTime() - now;
+  const DAY = 86_400_000;
+  const HOUR = 3_600_000;
+  if (diff <= 0) {
+    const lateDays = Math.floor(-diff / DAY);
+    if (lateDays >= 2) return `באיחור ${lateDays} ימים`;
+    if (lateDays === 1) return "באיחור יום";
+    const lateHours = Math.floor(-diff / HOUR);
+    if (lateHours >= 1) return `באיחור ${lateHours} שע׳`;
+    return "עכשיו";
+  }
+  if (diff < HOUR) return "בקרוב";
+  if (diff < DAY) return `בעוד ${Math.round(diff / HOUR)} שע׳`;
+  const days = Math.round(diff / DAY);
+  return days <= 1 ? "מחר" : `בעוד ${days} ימים`;
+}
+
+// quote_total is free text. Show as-is; prefix ₪ only when it's a bare number
+// (with optional separators), so "₪18,400" / "סוכם" survive unchanged.
+function valueDisplay(raw: string | null): string | null {
+  if (!raw) return null;
+  const t = raw.trim();
+  if (!t) return null;
+  if (/^[\d.,\s]+$/.test(t)) return `₪${t}`;
+  return t;
+}
+
+// Primary-button label by stage. UI affordance default — NOT a transition.
+function actionLabelForStage(stage: string | null): string {
+  switch ((stage ?? "").toUpperCase()) {
+    case "INTAKE":
+      return "שלח הצעה";
+    case "DISCAVERY":
+      return "שלח תשובה";
+    case "FACTORY_WAIT":
+      return "תזכיר לי מחר";
+    case "CONSIDERATION":
+      return "שלח הצעה משופרת";
+    default:
+      return "פתח שיחה";
+  }
+}
+
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 export const maxDuration = 30;
@@ -92,6 +144,10 @@ export default async function InboxWidgetPage({
       botPaused: leads.botPaused,
       ghlContactId: leads.ghlContactId,
       updatedAt: leads.updatedAt,
+      // Additive reads for the cockpit assembly below (presentation only).
+      botSummary: leads.botSummary,
+      quoteTotal: leads.quoteTotal,
+      qState: leads.qState,
     })
     .from(leads)
     .where(eq(leads.active, true))
@@ -204,12 +260,92 @@ export default async function InboxWidgetPage({
     return { id: t.id, name: trimmed, icon };
   });
 
+  // ─── Cockpit assembly (all READS; existing helpers reused) ───
+  // Urgency: existing computed nextEligibleAt from loadFollowupQueue, indexed
+  // by sid. Recommended action+script: latest lead_analyses verdict's
+  // primary_blocker → getStagePlay. Both indexed once, no per-lead queries.
+  const now = Date.now();
+  const queue = await loadFollowupQueue();
+  const nextBySid = new Map<string, Date>();
+  for (const q of queue) nextBySid.set(q.sid.trim(), q.nextEligibleAt);
+
+  const analysisRows = sids.length
+    ? await db
+        .select({
+          sid: leadAnalyses.manychatSubId,
+          verdict: leadAnalyses.verdict,
+        })
+        .from(leadAnalyses)
+        .where(
+          sql`trim(${leadAnalyses.manychatSubId}) IN (${sql.join(
+            sids.map((s) => sql`${s}`),
+            sql`, `
+          )})`
+        )
+        .orderBy(desc(leadAnalyses.createdAt))
+    : [];
+  // First row per sid = latest verdict (rows are createdAt DESC).
+  const blockerBySid = new Map<string, string | null>();
+  for (const a of analysisRows) {
+    const s = a.sid.trim();
+    if (blockerBySid.has(s)) continue;
+    const v = a.verdict as { primary_blocker?: string } | null;
+    blockerBySid.set(s, v?.primary_blocker ?? null);
+  }
+
+  const lastTextBySid = new Map<string, InboxRow>();
+  for (const r of rows) lastTextBySid.set(r.sid.trim(), r);
+
+  const cockpitLeads: CockpitLead[] = leadList
+    // WON/LOST are not a "who needs you now" concern.
+    .filter((l) => {
+      const s = normalizeStage(l.stage);
+      return s !== "WON" && s !== "LOST";
+    })
+    .map((l) => {
+      const sid = l.sid.trim();
+      const row = lastTextBySid.get(sid);
+      const blocker = blockerBySid.get(sid) ?? null;
+      const play = getStagePlay(blocker);
+      const normalized = normalizeStage(l.stage);
+      const stageLabel = normalized ? V2_STAGE_LABELS[normalized] : null;
+      const nextAt = nextBySid.get(sid) ?? null;
+      // what they want: bot_summary, else last inbound text (trimmed).
+      const lastInbound =
+        row && row.lastSender === "lead" ? (row.lastText ?? null) : null;
+      const want =
+        (l.botSummary && l.botSummary.trim()) ||
+        (lastInbound ? lastInbound.trim() : null);
+      return {
+        sid: l.sid,
+        name: l.name,
+        phone: l.phone,
+        stage: l.stage,
+        stageLabel,
+        want: want || null,
+        value: valueDisplay(l.quoteTotal),
+        lastInbound,
+        urgencyLabel: urgencyLabel(nextAt, now),
+        overdue: nextAt ? nextAt.getTime() <= now : false,
+        script: play.lines[0] ?? null,
+        actionLabel: actionLabelForStage(l.stage),
+      };
+    })
+    // Sort by nextEligibleAt asc (overdue first); leads with no queue entry
+    // sink to the bottom.
+    .sort((a, b) => {
+      const ta = nextBySid.get(a.sid.trim())?.getTime() ?? Number.MAX_SAFE_INTEGER;
+      const tb = nextBySid.get(b.sid.trim())?.getTime() ?? Number.MAX_SAFE_INTEGER;
+      return ta - tb;
+    });
+
   return (
-    <InboxView
+    <CockpitShell
       apiToken={token}
-      initialRows={rows}
-      selectedSid={selectedSid}
+      cockpitLeads={cockpitLeads}
+      inboxRows={rows}
       quickTemplates={quickTemplates}
+      selectedSid={selectedSid}
     />
   );
 }

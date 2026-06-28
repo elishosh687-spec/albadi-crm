@@ -1,7 +1,22 @@
 "use client";
 
 import { type CSSProperties, useEffect, useMemo, useState, useTransition } from "react";
+import {
+  Search,
+  RefreshCw,
+  Pause,
+  Play,
+  Send,
+  Wallet,
+  BarChart3,
+  Calculator,
+  Mail,
+  ArrowRight,
+  ExternalLink,
+} from "lucide-react";
 import LeadAnalysisInline from "./LeadAnalysisInline";
+import { Avatar, StatusPill, RowActions, T, type Tone, type RowActionItem } from "@/components/widget-ui";
+import { normalizeStage, V2_STAGE_LABELS } from "@/lib/manychat/stages";
 
 export interface InboxRow {
   sid: string;
@@ -28,6 +43,12 @@ interface Props {
   initialRows: InboxRow[];
   selectedSid?: string;
   quickTemplates?: QuickTemplate[];
+  /**
+   * Additive: when the parent (cockpit shell) wants the thread open on mount,
+   * it passes the lead sid here. Initializes `threadSid` only — every other
+   * InboxView behavior is unchanged.
+   */
+  openSid?: string;
 }
 
 function timeAgo(iso: string | null): string {
@@ -41,10 +62,35 @@ function timeAgo(iso: string | null): string {
   return new Date(iso).toLocaleDateString("he-IL");
 }
 
-function senderLabel(s: "lead" | "bot" | "eli"): string {
-  if (s === "lead") return "👤";
-  if (s === "eli") return "🧑‍💼";
-  return "🤖";
+// Map a (possibly legacy / null) pipeline stage code to a Hebrew label +
+// tone for StatusPill. Pure presentation — reuses the client-safe stage maps
+// (normalizeStage + V2_STAGE_LABELS) so we never hardcode a parallel map.
+function stageMeta(raw: string | null): { label: string; tone: Tone } | null {
+  const s = normalizeStage(raw);
+  if (!s) return null;
+  // Champagne is reserved for money (quote totals), NOT stages. Stages use
+  // calm low-sat semantic tints; LOST stays neutral (a wall of red dead-leads
+  // is noise, not signal).
+  const tone: Tone =
+    s === "WON"
+      ? "success"
+      : s === "LOST"
+      ? "neutral"
+      : s === "CONSIDERATION"
+      ? "info"
+      : s === "DISCAVERY"
+      ? "engaged"
+      : s === "FACTORY_WAIT"
+      ? "warn"
+      : "neutral";
+  return { label: V2_STAGE_LABELS[s], tone };
+}
+
+// Short label for the message sender — clean text, no emoji.
+function senderTag(s: "lead" | "bot" | "eli"): string {
+  if (s === "lead") return "לקוח";
+  if (s === "eli") return "אלי";
+  return "בוט";
 }
 
 // Strip a leading pictographic char + whitespace so the visible label under
@@ -54,23 +100,52 @@ function stripLeadingEmoji(name: string): string {
   return name.trim().replace(/^\p{Extended_Pictographic}\s*/u, "").trim();
 }
 
+// Build the items for a row's ⋯ RowActions menu. Pure relocation of the old
+// always-visible tile triggers — every onClick calls the SAME unchanged
+// handler it did before. No new behavior.
+function buildRowActions(
+  r: InboxRow,
+  h: {
+    toggle: (sid: string, current: boolean) => void;
+    sendTemplate: (sid: string, leadName: string, tpl: QuickTemplate) => void;
+    quickTemplates: QuickTemplate[];
+    openQuotes: () => void;
+    openAnalyze: () => void;
+  }
+): RowActionItem[] {
+  const leadName = r.name || r.phone || r.sid;
+  return [
+    {
+      label: r.botPaused ? "הפעל בוט" : "השהה בוט",
+      tone: r.botPaused ? "warn" : "neutral",
+      onClick: () => h.toggle(r.sid, r.botPaused),
+    },
+    { label: "הצעות מחיר", tone: "champagne", onClick: h.openQuotes },
+    { label: "נתח ליד", tone: "neutral", onClick: h.openAnalyze },
+    ...h.quickTemplates.map((tpl) => ({
+      label: stripLeadingEmoji(tpl.name) || "תבנית",
+      onClick: () => h.sendTemplate(r.sid, leadName, tpl),
+    })),
+  ];
+}
+
 export default function InboxView({
   apiToken,
   initialRows,
   selectedSid,
   quickTemplates = [],
+  openSid,
 }: Props) {
   const [rows, setRows] = useState<InboxRow[]>(initialRows);
   const [busy, setBusy] = useState<string | null>(null);
   const [filter, setFilter] = useState("");
-  // sid of the row whose mobile template overlay is open. null = closed.
-  const [mobileMenuSid, setMobileMenuSid] = useState<string | null>(null);
   // sid of the row whose inline factory-quotes panel is expanded. null = none.
   const [expandedSid, setExpandedSid] = useState<string | null>(null);
   // sid of the row whose inline lead-analysis panel is expanded. null = none.
   const [analyzeSid, setAnalyzeSid] = useState<string | null>(null);
   // Open conversation thread (Front-style list | thread). null = list only.
-  const [threadSid, setThreadSid] = useState<string | null>(null);
+  // Additive: `openSid` (from the cockpit shell) seeds the thread on mount.
+  const [threadSid, setThreadSid] = useState<string | null>(openSid?.trim() || null);
   const [, startTransition] = useTransition();
 
   const threadRow = rows.find((r) => r.sid.trim() === threadSid);
@@ -173,10 +248,14 @@ export default function InboxView({
           show them inline. Inline styles can't do media queries, so this
           tiny <style> tag carries the breakpoint behavior. */}
       <style>{`
-        /* Front pattern: clean rows, actions behind a single ⋯ at every width */
-        .inbox-actions-inline { display: none; }
-        .inbox-actions-mobile { display: flex; }
-        .inbox-row-actions-btn { transition: background 0.12s ease, color 0.12s ease; }
+        /* Dense list rows — hover bg + the ⋯ trigger reveals on hover (and is
+           always visible on touch, where :hover doesn't apply). */
+        .inbox-row:hover { background: rgba(255,255,255,0.025); }
+        .inbox-row .inbox-row-actions-btn { opacity: 0; transition: opacity 0.12s ease, background 0.12s ease, color 0.12s ease; }
+        .inbox-row:hover .inbox-row-actions-btn { opacity: 1; }
+        .inbox-row .inbox-row-actions-btn:focus-visible,
+        .inbox-row .inbox-row-actions-btn[aria-expanded="true"] { opacity: 1; }
+        @media (hover: none) { .inbox-row .inbox-row-actions-btn { opacity: 1; } }
         .inbox-row-actions-btn:hover { background: rgba(255,255,255,0.09); color: #f5f6f7; }
         /* list | thread | context — ONE seamless glass surface (Front 3-pane).
            RTL: list on the RIGHT (first column), thread+context fill the LEFT.
@@ -227,285 +306,226 @@ export default function InboxView({
           zIndex: 10,
         }}
       >
-        <input
-          type="text"
-          placeholder="חפש שם / טלפון / טקסט"
-          value={filter}
-          onChange={(e) => setFilter(e.target.value)}
-          style={{
-            flex: 1,
-            background: "rgba(255,255,255,0.05)",
-            color: "#f5f6f7",
-            border: "1px solid rgba(255,255,255,0.11)",
-            borderRadius: 6,
-            padding: "10px 12px",
-            fontSize: 15,
-          }}
-        />
+        <div style={{ flex: 1, position: "relative", display: "flex", alignItems: "center" }}>
+          <Search
+            size={15}
+            style={{ position: "absolute", insetInlineStart: 10, color: T.faint, pointerEvents: "none" }}
+          />
+          <input
+            type="text"
+            placeholder="חפש שם / טלפון / טקסט"
+            value={filter}
+            onChange={(e) => setFilter(e.target.value)}
+            style={{
+              flex: 1,
+              width: "100%",
+              height: 32,
+              background: T.glassBg,
+              color: T.text,
+              border: `1px solid ${T.glassBorder}`,
+              borderRadius: 6,
+              padding: "0 12px 0 32px",
+              fontSize: 13,
+              fontFamily: "inherit",
+            }}
+          />
+        </div>
         <button
           onClick={refresh}
+          title="רענן"
+          aria-label="רענן"
           style={{
-            background: "rgba(255,255,255,0.11)",
-            color: "#f5f6f7",
-            border: "1px solid rgba(255,255,255,0.14)",
+            width: 32,
+            height: 32,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            background: T.glassBg,
+            color: T.muted,
+            border: `1px solid ${T.glassBorder}`,
             borderRadius: 6,
-            padding: "10px 14px",
-            fontSize: 15,
             cursor: "pointer",
           }}
         >
-          🔄
+          <RefreshCw size={15} />
         </button>
       </div>
 
-      <div style={{ display: "flex", flexDirection: "column", gap: threadSid ? 0 : 6 }}>
+      {/* Dense flat list (Attio/Stripe): rows separated by hairline
+          border-top dividers; the container owns the 6px radii, rows are
+          flat. Hover reveals a single ⋯ RowActions menu holding every action
+          (pause/resume, templates, quotes, analyze) — handlers unchanged. */}
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          border: threadSid ? "none" : `1px solid ${T.glassBorder}`,
+          borderRadius: threadSid ? 0 : 6,
+          overflow: "hidden",
+          background: threadSid ? "transparent" : T.glassBg,
+        }}
+      >
         {visible.length === 0 && (
-          <div style={{ padding: 24, textAlign: "center", color: "#8f939b" }}>
+          <div style={{ padding: 24, textAlign: "center", color: T.muted }}>
             אין שיחות
           </div>
         )}
-        {visible.map((r) => {
-          const isSel = selectedSid === r.sid.trim();
-          // Rail mode (a thread is open): flat Front-style rows — no per-row
-          // card, just a hairline divider + selected accent. Full-list mode:
-          // floating glass cards.
-          const rowStyle: CSSProperties = threadSid
-            ? {
-                background: isSel
-                  ? "rgba(205,169,120,0.12)"
-                  : r.botPaused
-                  ? "rgba(220,150,90,0.08)"
-                  : "transparent",
-                borderInlineStart: `2px solid ${isSel ? "#cda978" : "transparent"}`,
-                borderBottom: "1px solid rgba(255,255,255,0.07)",
-                display: "flex",
-                flexDirection: "column",
-              }
-            : {
-                background: r.botPaused ? "rgba(220,150,90,0.10)" : "rgba(255,255,255,0.05)",
-                border: `1px solid ${isSel ? "#cda978" : "rgba(255,255,255,0.11)"}`,
-                borderRadius: 10,
-                display: "flex",
-                flexDirection: "column",
-                backdropFilter: "blur(24px) saturate(1.6)",
-                WebkitBackdropFilter: "blur(24px) saturate(1.6)",
-                boxShadow: "inset 0 1px 0 rgba(255,255,255,0.12)",
-              };
+        {visible.map((r, idx) => {
+          const isSel = (selectedSid === r.sid.trim()) || (threadSid === r.sid.trim());
+          const leadName = r.name || r.phone || r.sid;
+          const stage = stageMeta(r.stage);
+          const actionItems = buildRowActions(r, {
+            toggle,
+            sendTemplate,
+            quickTemplates,
+            openQuotes: () =>
+              setExpandedSid((cur) => (cur === r.sid.trim() ? null : r.sid.trim())),
+            openAnalyze: () =>
+              setAnalyzeSid((cur) => (cur === r.sid.trim() ? null : r.sid.trim())),
+          });
           return (
-          <div key={r.sid} style={rowStyle}>
+          <div
+            key={r.sid}
+            className="inbox-row"
+            style={{
+              borderTop: idx === 0 ? "none" : `1px solid ${T.hairline}`,
+              borderInlineStart: `2px solid ${isSel ? T.champBorder : "transparent"}`,
+              background: isSel ? "rgba(205,169,120,0.07)" : "transparent",
+            }}
+          >
             <div
               style={{
-                padding: threadSid ? "9px 12px" : 12,
+                minHeight: 48,
+                padding: "7px 12px",
                 display: "flex",
                 gap: 10,
-                // Buttons live at the bottom-left of the row (alignSelf below),
-                // so the row height is driven by the info area on the right.
-                alignItems: "stretch",
+                alignItems: "center",
               }}
             >
-            <a
-              href={r.ghlContactUrl ?? "#"}
-              onClick={(e) => { e.preventDefault(); setThreadSid(r.sid.trim()); }}
-              title="פתח שיחה"
-              style={{
-                flex: 1,
-                minWidth: 0,
-                cursor: r.ghlContactUrl ? "pointer" : "default",
-                color: "inherit",
-                textDecoration: "none",
-                display: "block",
-              }}
-            >
-              <div
+              <a
+                href={r.ghlContactUrl ?? "#"}
+                onClick={(e) => { e.preventDefault(); setThreadSid(r.sid.trim()); }}
+                title="פתח שיחה"
                 style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  gap: 8,
-                  alignItems: "baseline",
-                }}
-              >
-                <div
-                  style={{
-                    fontWeight: 600,
-                    fontSize: 15,
-                    color: "#f5f6f7",
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                    whiteSpace: "nowrap",
-                  }}
-                >
-                  {r.name || r.phone || r.sid}
-                </div>
-                <div style={{ fontSize: 12, color: "#8f939b", flexShrink: 0 }}>
-                  {timeAgo(r.lastAt)}
-                </div>
-              </div>
-
-              <div
-                style={{
-                  marginTop: 4,
-                  fontSize: 13,
-                  color: r.lastSender === "lead" ? "#a5f3fc" : "#8f939b",
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
-                  whiteSpace: "nowrap",
-                  direction: "rtl",
-                }}
-              >
-                <span style={{ marginLeft: 6 }}>{senderLabel(r.lastSender)}</span>
-                {r.lastText?.slice(0, 100) || <span style={{ color: "#6b7079" }}>—</span>}
-              </div>
-
-              <div
-                style={{
-                  marginTop: 4,
-                  display: "flex",
-                  gap: 6,
-                  fontSize: 11,
-                  color: "#8f939b",
-                  flexWrap: "wrap",
-                }}
-              >
-                {r.stage && (
-                  <span
-                    style={{
-                      background: "rgba(255,255,255,0.06)",
-                      padding: "2px 6px",
-                      borderRadius: 4,
-                    }}
-                  >
-                    {r.stage}
-                  </span>
-                )}
-                {r.inboundLast24h > 0 && (
-                  <span
-                    style={{
-                      background: "#1e3a8a",
-                      color: "#bfdbfe",
-                      padding: "2px 6px",
-                      borderRadius: 4,
-                    }}
-                  >
-                    {r.inboundLast24h} חדשות 24ש
-                  </span>
-                )}
-                {r.botPaused && (
-                  <span
-                    style={{
-                      background: "#7c2d12",
-                      color: "#fed7aa",
-                      padding: "2px 6px",
-                      borderRadius: 4,
-                    }}
-                  >
-                    בוט מושהה
-                  </span>
-                )}
-                {r.phone && (
-                  <span style={{ color: "#6b7079" }}>{r.phone}</span>
-                )}
-              </div>
-            </a>
-
-            {/* Action area — bottom-left of the row.
-                Desktop (≥641px): all tiles inline (pause + every template).
-                Mobile (≤640px): only pause + a ☰ hamburger that opens an
-                overlay containing the same tiles in a 2-column grid.
-                The hamburger keeps the row compact on narrow screens so
-                the lead name + last message stay legible. */}
-
-            {/* Inline tiles — desktop only */}
-            <div
-              className="inbox-actions-inline"
-              style={{
-                flexWrap: "wrap",
-                gap: 8,
-                flexShrink: 0,
-                alignSelf: "flex-end",
-                justifyContent: "flex-start",
-                maxWidth: "100%",
-              }}
-            >
-              <ActionTile
-                onClick={() => toggle(r.sid, r.botPaused)}
-                disabled={busy === r.sid}
-                title={r.botPaused ? "הבוט מושהה — לחץ כדי להפעיל" : "הבוט פעיל — לחץ כדי להשהות"}
-                icon={busy === r.sid ? "…" : r.botPaused ? "▶" : "⏸"}
-                label={r.botPaused ? "הפעל" : "השהה"}
-                tone={r.botPaused ? "warn" : "neutral"}
-              />
-              {quickTemplates.map((tpl) => {
-                const labelText = stripLeadingEmoji(tpl.name);
-                return (
-                  <ActionTile
-                    key={tpl.id}
-                    onClick={() =>
-                      sendTemplate(r.sid, r.name || r.phone || r.sid, tpl)
-                    }
-                    disabled={busy === r.sid}
-                    title={`שלח: ${tpl.name}`}
-                    icon={tpl.icon}
-                    label={labelText || "תבנית"}
-                    tone="accent"
-                  />
-                );
-              })}
-              <ActionTile
-                onClick={() =>
-                  setExpandedSid((cur) => (cur === r.sid.trim() ? null : r.sid.trim()))
-                }
-                disabled={false}
-                title="הצעות מחיר של הלקוח"
-                icon="💰"
-                label="הצעות"
-                tone={expandedSid === r.sid.trim() ? "warn" : "accent"}
-              />
-              <ActionTile
-                onClick={() =>
-                  setAnalyzeSid((cur) => (cur === r.sid.trim() ? null : r.sid.trim()))
-                }
-                disabled={false}
-                title="ניתוח מכירה — למה הליד תקוע + תסריט תשובה"
-                icon="🔍"
-                label="נתח"
-                tone={analyzeSid === r.sid.trim() ? "warn" : "accent"}
-              />
-            </div>
-
-            {/* Single ⋯ actions button (Front pattern). Opens a sheet with
-                pause/resume, quote (הצעות), analyze (נתח) and templates. */}
-            <div
-              className="inbox-actions-mobile"
-              style={{ flexShrink: 0, alignSelf: "center", display: threadSid ? "none" : "flex" }}
-            >
-              <button
-                className="inbox-row-actions-btn"
-                onClick={() => setMobileMenuSid(r.sid)}
-                title="פעולות"
-                aria-label="פעולות"
-                style={{
-                  width: 36,
-                  height: 36,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  background: "transparent",
-                  color: "#8f939b",
-                  border: "1px solid rgba(255,255,255,0.11)",
-                  borderRadius: 8,
-                  fontSize: 20,
-                  lineHeight: 1,
+                  flex: 1,
+                  minWidth: 0,
                   cursor: "pointer",
-                  fontFamily: "inherit",
-                  touchAction: "manipulation",
+                  color: "inherit",
+                  textDecoration: "none",
+                  display: "flex",
+                  gap: 10,
+                  alignItems: "center",
                 }}
               >
-                ⋯
-              </button>
-            </div>
+                {!threadSid && <Avatar name={r.name || undefined} size={28} />}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  {/* line 1: name + phone + stage pill + time
+                      In rail mode (a conversation is open) rows go slim —
+                      just name + time + snippet, like the Front list rail. */}
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <span
+                      style={{
+                        fontWeight: 700,
+                        fontSize: 13,
+                        color: T.text,
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                        maxWidth: "55%",
+                      }}
+                    >
+                      {leadName}
+                    </span>
+                    {!threadSid && r.phone && (
+                      <span
+                        style={{
+                          fontSize: 11,
+                          color: T.faint,
+                          fontVariantNumeric: "tabular-nums",
+                          whiteSpace: "nowrap",
+                          flexShrink: 0,
+                        }}
+                      >
+                        {r.phone}
+                      </span>
+                    )}
+                    <span style={{ marginInlineStart: "auto", display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+                      {!threadSid && stage && <StatusPill label={stage.label} tone={stage.tone} />}
+                      <span style={{ fontSize: 11, color: T.muted, fontVariantNumeric: "tabular-nums" }}>
+                        {timeAgo(r.lastAt)}
+                      </span>
+                    </span>
+                  </div>
+                  {/* line 2: snippet + signals */}
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 2 }}>
+                    <span
+                      style={{
+                        flex: 1,
+                        minWidth: 0,
+                        fontSize: 12,
+                        color: T.muted,
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {!threadSid && <span style={{ color: T.faint, marginInlineEnd: 5 }}>{senderTag(r.lastSender)}:</span>}
+                      {r.lastText?.slice(0, 100) || <span style={{ color: T.faint }}>—</span>}
+                    </span>
+                    {!threadSid && r.inboundLast24h > 0 && (
+                      <span
+                        title={`${r.inboundLast24h} הודעות חדשות ב-24ש`}
+                        style={{
+                          flexShrink: 0,
+                          minWidth: 16,
+                          height: 16,
+                          padding: "0 5px",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          fontSize: 10,
+                          fontWeight: 700,
+                          borderRadius: 999,
+                          background: T.champFill,
+                          border: `1px solid ${T.champBorder}`,
+                          color: T.champ,
+                          fontVariantNumeric: "tabular-nums",
+                        }}
+                      >
+                        {r.inboundLast24h}
+                      </span>
+                    )}
+                    {!threadSid && r.botPaused && (
+                      <span
+                        style={{
+                          flexShrink: 0,
+                          fontSize: 10,
+                          fontWeight: 600,
+                          color: T.warn,
+                          padding: "1px 6px",
+                          borderRadius: 4,
+                          background: "rgba(203,176,121,0.10)",
+                          border: "1px solid rgba(203,176,121,0.26)",
+                        }}
+                      >
+                        מושהה
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </a>
+
+              {/* single ⋯ menu, revealed on row hover (or always on touch).
+                  Hidden in rail mode — open-conversation actions live in the
+                  thread header + context panel, not on the rail rows. */}
+              {!threadSid && (
+                <div style={{ flexShrink: 0 }}>
+                  <RowActions items={actionItems} triggerClassName="inbox-row-actions-btn" />
+                </div>
+              )}
             </div>
             {expandedSid === r.sid.trim() && (
-              <div style={{ borderTop: "1px solid rgba(255,255,255,0.11)", padding: 12 }}>
+              <div style={{ borderTop: `1px solid ${T.hairline}`, padding: 12 }}>
                 <LeadQuotesInline
                   apiToken={apiToken}
                   sid={r.sid.trim()}
@@ -515,7 +535,7 @@ export default function InboxView({
               </div>
             )}
             {analyzeSid === r.sid.trim() && (
-              <div style={{ borderTop: "1px solid rgba(255,255,255,0.11)", padding: 12 }}>
+              <div style={{ borderTop: `1px solid ${T.hairline}`, padding: 12 }}>
                 <LeadAnalysisInline apiToken={apiToken} sid={r.sid.trim()} name={r.name} />
               </div>
             )}
@@ -539,160 +559,11 @@ export default function InboxView({
       )}
       </div>{/* /inbox-split */}
 
-      {/* Mobile template picker overlay — fires when a row's ☰ tile is
-          tapped. Sits at the bottom of the viewport as a sheet so it's
-          thumb-reachable. Outside-tap closes it. */}
-      {mobileMenuSid && (() => {
-        const r = rows.find((x) => x.sid === mobileMenuSid);
-        if (!r) return null;
-        const leadName = r.name || r.phone || r.sid;
-        return (
-          <div
-            onClick={() => setMobileMenuSid(null)}
-            style={{
-              position: "fixed",
-              inset: 0,
-              background: "rgba(0,0,0,0.6)",
-              zIndex: 100,
-              display: "flex",
-              alignItems: "flex-end",
-              justifyContent: "center",
-              padding: 16,
-            }}
-          >
-            <div
-              dir="rtl"
-              onClick={(e) => e.stopPropagation()}
-              style={{
-                width: "100%",
-                maxWidth: 480,
-                background: "#0c0d10",
-                border: "1px solid rgba(255,255,255,0.11)",
-                borderRadius: "16px 16px 8px 8px",
-                padding: 16,
-                boxShadow: "0 -10px 30px rgba(0,0,0,0.6)",
-              }}
-            >
-              <div style={{ marginBottom: 12 }}>
-                <div style={{ fontSize: 11, color: "#8f939b", textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                  פעולות
-                </div>
-                <div style={{ fontSize: 14, color: "#f5f6f7", fontWeight: 600, marginTop: 2 }}>
-                  {leadName}
-                </div>
-              </div>
-              {(() => {
-                const sheetBtn: CSSProperties = {
-                  flex: 1,
-                  minWidth: 0,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  gap: 6,
-                  padding: "10px 8px",
-                  borderRadius: 9,
-                  fontSize: 13,
-                  fontWeight: 500,
-                  fontFamily: "inherit",
-                  cursor: "pointer",
-                  background: "rgba(255,255,255,0.045)",
-                  border: "1px solid rgba(255,255,255,0.11)",
-                  color: "#f5f6f7",
-                  touchAction: "manipulation",
-                };
-                return (
-                  <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
-                    <button
-                      style={sheetBtn}
-                      onClick={() => { setMobileMenuSid(null); toggle(r.sid, r.botPaused); }}
-                    >
-                      <span>{r.botPaused ? "▶" : "⏸"}</span>
-                      {r.botPaused ? "הפעל בוט" : "השהה בוט"}
-                    </button>
-                    <button
-                      style={{ ...sheetBtn, background: "rgba(205,169,120,0.13)", border: "1px solid rgba(205,169,120,0.30)", color: "#e7cba6" }}
-                      onClick={() => { setMobileMenuSid(null); setExpandedSid(r.sid.trim()); }}
-                    >
-                      <span>💰</span> הצעות
-                    </button>
-                    <button
-                      style={{ ...sheetBtn, background: "rgba(205,169,120,0.13)", border: "1px solid rgba(205,169,120,0.30)", color: "#e7cba6" }}
-                      onClick={() => { setMobileMenuSid(null); setAnalyzeSid(r.sid.trim()); }}
-                    >
-                      <span>🔍</span> נתח
-                    </button>
-                  </div>
-                );
-              })()}
-              {quickTemplates.length > 0 && (
-                <div style={{ fontSize: 11, color: "#8f939b", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8 }}>
-                  תבניות לשליחה
-                </div>
-              )}
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "repeat(auto-fill, minmax(80px, 1fr))",
-                  gap: 10,
-                }}
-              >
-                {quickTemplates.map((tpl) => {
-                  const labelText = stripLeadingEmoji(tpl.name);
-                  return (
-                    <ActionTile
-                      key={tpl.id}
-                      onClick={() => {
-                        setMobileMenuSid(null);
-                        sendTemplate(r.sid, leadName, tpl);
-                      }}
-                      disabled={busy === r.sid}
-                      title={`שלח: ${tpl.name}`}
-                      icon={tpl.icon}
-                      label={labelText || "תבנית"}
-                      tone="accent"
-                    />
-                  );
-                })}
-              </div>
-              <button
-                onClick={() => setMobileMenuSid(null)}
-                style={{
-                  marginTop: 14,
-                  width: "100%",
-                  padding: "10px 16px",
-                  background: "transparent",
-                  color: "#8f939b",
-                  border: "1px solid rgba(255,255,255,0.11)",
-                  borderRadius: 8,
-                  fontSize: 14,
-                  fontFamily: "inherit",
-                  cursor: "pointer",
-                  touchAction: "manipulation",
-                }}
-              >
-                ביטול
-              </button>
-            </div>
-          </div>
-        );
-      })()}
     </div>
   );
 }
 
-// Vertical action tile — icon on top, short Hebrew label below. Tooltip
-// (`title`) gives the full description on hover/long-press.
-//
-// Sizing follows ui-ux-pro-max guidelines: touch target ≥44×44 (we use
-// 56×60 to accommodate the label), 8px gap between tiles (set by the
-// parent container), and dynamic text scaling-safe (label wraps to 2
-// lines and clamps if longer).
-//
-// Three tones:
-//   • neutral — default slate (e.g. pause when bot active)
-//   • warn    — muted red (pause button when bot IS paused — state cue)
-//   • accent  — subtle blue (template buttons — distinguishes them
-//               from system actions like pause)
+// Hebrew labels for factory-quote statuses (used by LeadQuotesInline).
 const STATUS_HE: Record<string, string> = {
   draft: "טיוטה",
   pending: "ממתין",
@@ -710,8 +581,8 @@ interface InlineQuote {
 }
 
 /**
- * Inline factory-quotes panel shown under a conversation row when its 💰 tile
- * is tapped. Lists the lead's quotes (open PDF / send on finalized) and lets
+ * Inline factory-quotes panel shown under a conversation row when "הצעות מחיר"
+ * is chosen from the row's ⋯ menu. Lists the lead's quotes (open PDF / send on finalized) and lets
  * the user multi-select finalized ones to combine into one PDF — all without
  * leaving the שיחות tab.
  */
@@ -849,13 +720,6 @@ function ThreadView({
     color: "#f5f6f7",
     whiteSpace: "nowrap",
   };
-  const champBtn: CSSProperties = {
-    ...actBtn,
-    background: "rgba(205,169,120,0.14)",
-    border: "1px solid rgba(205,169,120,0.30)",
-    color: "#e7cba6",
-  };
-
   const sideBtn: CSSProperties = {
     display: "flex",
     alignItems: "center",
@@ -880,6 +744,32 @@ function ThreadView({
     color: "#e7cba6",
   };
 
+  // Hebrew stage pill for the header — reuses the same client-safe map as the
+  // list rows; prefers the freshly-loaded context stage, falls back to the row.
+  const headerStage = stageMeta(ctx?.stage ?? row.stage);
+
+  // Secondary actions behind the header ⋯ — relocated, same handlers/links.
+  const headerActions: RowActionItem[] = [
+    { label: "הצעות מחיר", tone: "champagne", onClick: () => setPanel(panel === "quotes" ? "chat" : "quotes") },
+    { label: "נתח ליד", tone: "neutral", onClick: () => setPanel(panel === "analyze" ? "chat" : "analyze") },
+    {
+      label: "פתח מחשבון",
+      onClick: () =>
+        window.open(
+          `/widget/calculator?widget_token=${encodeURIComponent(apiToken)}&sid=${encodeURIComponent(sid)}`,
+          "_blank",
+          "noopener,noreferrer"
+        ),
+    },
+    ...quickTemplates.map((tpl) => ({
+      label: stripLeadingEmoji(tpl.name) || "תבנית",
+      onClick: () => onSendTemplate(tpl),
+    })),
+    ...(row.ghlContactUrl
+      ? [{ label: "פתח ב-GHL", onClick: () => window.open(row.ghlContactUrl!, "_blank", "noopener,noreferrer") }]
+      : []),
+  ];
+
   return (
     <div style={{ display: "flex", gap: 0, height: "100%", minHeight: 0 }}>
       <div
@@ -900,15 +790,21 @@ function ThreadView({
           borderBottom: "1px solid rgba(255,255,255,0.08)",
         }}
       >
-        <button onClick={onClose} title="חזרה לרשימה" style={{ ...actBtn, padding: "5px 10px" }}>
-          →
+        <button
+          onClick={onClose}
+          title="חזרה לרשימה"
+          aria-label="חזרה לרשימה"
+          style={{ ...actBtn, padding: "6px 9px" }}
+        >
+          <ArrowRight size={15} />
         </button>
+        <Avatar name={row.name || undefined} size={30} />
         <div style={{ flex: 1, minWidth: 0 }}>
           <div
             style={{
               fontSize: 14,
-              fontWeight: 600,
-              color: "#f5f6f7",
+              fontWeight: 700,
+              color: T.text,
               overflow: "hidden",
               textOverflow: "ellipsis",
               whiteSpace: "nowrap",
@@ -916,11 +812,29 @@ function ThreadView({
           >
             {row.name || row.phone || sid}
           </div>
-          <div style={{ fontSize: 11, color: "#8f939b" }}>
+          <div style={{ fontSize: 11, color: T.muted, fontVariantNumeric: "tabular-nums" }}>
             {row.phone || ""}
-            {row.stage ? ` · ${row.stage}` : ""}
           </div>
         </div>
+        {headerStage && <StatusPill label={headerStage.label} tone={headerStage.tone} />}
+        {/* pause/resume — primary action, kept visible in the header */}
+        <button
+          onClick={onToggle}
+          disabled={busy === row.sid}
+          title={row.botPaused ? "הפעל בוט" : "השהה בוט"}
+          aria-label={row.botPaused ? "הפעל בוט" : "השהה בוט"}
+          style={{
+            ...actBtn,
+            padding: "6px 9px",
+            ...(row.botPaused
+              ? { background: "rgba(203,176,121,0.12)", border: "1px solid rgba(203,176,121,0.30)", color: T.warn }
+              : {}),
+          }}
+        >
+          {row.botPaused ? <Play size={15} /> : <Pause size={15} />}
+        </button>
+        {/* the rest behind a single ⋯ */}
+        <RowActions items={headerActions} />
       </div>
 
       <div
@@ -943,7 +857,10 @@ function ThreadView({
         ) : !msgs || msgs.length === 0 ? (
           <div style={{ color: "#8f939b", fontSize: 12, textAlign: "center", padding: 24 }}>אין הודעות עדיין</div>
         ) : (
-          msgs.map((m) => {
+          // Center the conversation in a comfortable reading column so short
+          // bubbles don't fling to opposite screen edges on a wide thread.
+          <div style={{ width: "100%", maxWidth: 680, margin: "0 auto", display: "flex", flexDirection: "column", gap: 9 }}>
+          {msgs.filter((m) => m.text && m.text.trim()).map((m) => {
             const incoming = m.direction === "in" || m.sender === "lead";
             return (
               <div
@@ -953,8 +870,8 @@ function ThreadView({
                   maxWidth: "80%",
                   background: incoming ? "rgba(255,255,255,0.06)" : "rgba(205,169,120,0.16)",
                   color: incoming ? "#e4e5e8" : "#fdf3e6",
-                  border: incoming ? "1px solid rgba(255,255,255,0.08)" : "1px solid rgba(205,169,120,0.28)",
-                  borderRadius: incoming ? "12px 12px 12px 4px" : "12px 12px 4px 12px",
+                  border: incoming ? "1px solid rgba(255,255,255,0.08)" : "1px solid rgba(205,169,120,0.34)",
+                  borderRadius: incoming ? "10px 10px 10px 3px" : "10px 10px 3px 10px",
                   padding: "9px 13px",
                   fontSize: 13.5,
                   lineHeight: 1.55,
@@ -962,15 +879,16 @@ function ThreadView({
                   wordBreak: "break-word",
                 }}
               >
-                {m.text || "—"}
+                {m.text}
               </div>
             );
-          })
+          })}
+          </div>
         )}
       </div>
 
       {panel === "chat" && (
-        <div style={{ display: "flex", gap: 8, padding: 10, borderTop: "1px solid rgba(255,255,255,0.08)" }}>
+        <div style={{ display: "flex", gap: 8, padding: 10, borderTop: "1px solid rgba(255,255,255,0.08)", maxWidth: 680, margin: "0 auto", width: "100%" }}>
           <textarea
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
@@ -997,9 +915,28 @@ function ThreadView({
           <button
             onClick={send}
             disabled={sending || !draft.trim()}
-            style={{ ...champBtn, padding: "0 16px", opacity: sending || !draft.trim() ? 0.5 : 1 }}
+            title="שלח"
+            aria-label="שלח"
+            style={{
+              flexShrink: 0,
+              alignSelf: "stretch",
+              minWidth: 44,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              padding: "0 16px",
+              borderRadius: 8,
+              border: "1px solid rgba(255,255,255,0.22)",
+              background: "linear-gradient(180deg, rgba(255,255,255,0.96), rgba(235,237,240,0.88))",
+              color: "#15171c",
+              cursor: sending || !draft.trim() ? "default" : "pointer",
+              fontFamily: "inherit",
+              opacity: sending || !draft.trim() ? 0.5 : 1,
+              backdropFilter: "blur(30px) saturate(1.7)",
+              WebkitBackdropFilter: "blur(30px) saturate(1.7)",
+            }}
           >
-            {sending ? "…" : "שלח"}
+            {sending ? "…" : <Send size={16} />}
           </button>
         </div>
       )}
@@ -1019,45 +956,38 @@ function ThreadView({
         }}
       >
         <div>
-          <div style={{ fontSize: 10.5, color: "#8f939b", textTransform: "uppercase", letterSpacing: "0.4px", marginBottom: 5 }}>
-            שלב
-          </div>
-          <span
-            style={{
-              fontSize: 11.5,
-              color: "#e7cba6",
-              background: "rgba(205,169,120,0.13)",
-              border: "1px solid rgba(205,169,120,0.28)",
-              padding: "3px 9px",
-              borderRadius: 6,
-              display: "inline-block",
-            }}
-          >
-            {ctx?.stage || row.stage || "—"}
-          </span>
-        </div>
-        <div>
-          <div style={{ fontSize: 10.5, color: "#8f939b", textTransform: "uppercase", letterSpacing: "0.4px", marginBottom: 4 }}>
+          <div style={{ fontSize: 10.5, color: T.muted, textTransform: "uppercase", letterSpacing: "0.4px", marginBottom: 4 }}>
             הצעה
           </div>
           <div
             style={{
-              fontSize: 20,
-              fontWeight: 600,
+              fontSize: 26,
+              fontWeight: 700,
               letterSpacing: "-0.5px",
+              fontVariantNumeric: "tabular-nums",
               fontFamily: "ui-monospace, 'JetBrains Mono', monospace",
-              color: "#fdf3e6",
+              color: T.champStrong,
             }}
           >
             {ctx?.quoteTotal ? `₪${ctx.quoteTotal}` : "—"}
           </div>
         </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: "auto", borderTop: "1px solid rgba(255,255,255,0.08)", paddingTop: 12 }}>
+        <div>
+          <div style={{ fontSize: 10.5, color: T.muted, textTransform: "uppercase", letterSpacing: "0.4px", marginBottom: 5 }}>
+            שלב
+          </div>
+          {headerStage ? (
+            <StatusPill label={headerStage.label} tone={headerStage.tone} />
+          ) : (
+            <span style={{ color: T.faint }}>—</span>
+          )}
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 6, borderTop: `1px solid ${T.hairline}`, paddingTop: 12 }}>
           <button onClick={() => setPanel(panel === "quotes" ? "chat" : "quotes")} style={panel === "quotes" ? sideActive : sideBtn}>
-            💰 הצעות מחיר
+            <Wallet size={14} /> הצעות מחיר
           </button>
           <button onClick={() => setPanel(panel === "analyze" ? "chat" : "analyze")} style={panel === "analyze" ? sideActive : sideBtn}>
-            🔍 נתח ליד
+            <BarChart3 size={14} /> נתח ליד
           </button>
           <a
             href={`/widget/calculator?widget_token=${encodeURIComponent(apiToken)}&sid=${encodeURIComponent(sid)}`}
@@ -1065,14 +995,15 @@ function ThreadView({
             rel="noopener noreferrer"
             style={sideBtn}
           >
-            🧮 פתח מחשבון
+            <Calculator size={14} /> פתח מחשבון
           </a>
           <button onClick={onToggle} disabled={busy === row.sid} style={sideBtn}>
-            {row.botPaused ? "▶ הפעל בוט" : "⏸ השהה בוט"}
+            {row.botPaused ? <Play size={14} /> : <Pause size={14} />}
+            {row.botPaused ? "הפעל בוט" : "השהה בוט"}
           </button>
           {quickTemplates.length > 0 && (
             <button onClick={() => setShowTpl((s) => !s)} style={sideBtn}>
-              ✉️ תבניות
+              <Mail size={14} /> תבניות
             </button>
           )}
           {showTpl && quickTemplates.length > 0 && (
@@ -1086,14 +1017,14 @@ function ThreadView({
                   }}
                   style={{ ...sideBtn, fontSize: 11.5 }}
                 >
-                  {tpl.icon} {stripLeadingEmoji(tpl.name) || "תבנית"}
+                  {stripLeadingEmoji(tpl.name) || "תבנית"}
                 </button>
               ))}
             </div>
           )}
           {row.ghlContactUrl && (
             <a href={row.ghlContactUrl} target="_blank" rel="noopener noreferrer" style={sideBtn}>
-              ↗ פתח ב-GHL
+              <ExternalLink size={14} /> פתח ב-GHL
             </a>
           )}
         </div>
@@ -1293,90 +1224,3 @@ function LeadQuotesInline({
     </div>
   );
 }
-
-function ActionTile({
-  onClick,
-  disabled,
-  title,
-  icon,
-  label,
-  tone,
-}: {
-  onClick: () => void;
-  disabled: boolean;
-  title: string;
-  icon: string;
-  label: string;
-  tone: "neutral" | "warn" | "accent";
-}) {
-  const palette = {
-    neutral: { bg: "rgba(255,255,255,0.045)", border: "rgba(255,255,255,0.11)", hover: "rgba(255,255,255,0.09)", text: "#f5f6f7" },
-    warn: { bg: "rgba(220,130,95,0.12)", border: "rgba(220,130,95,0.28)", hover: "rgba(220,130,95,0.18)", text: "#f0cdbe" },
-    accent: { bg: "rgba(205,169,120,0.13)", border: "rgba(205,169,120,0.30)", hover: "rgba(205,169,120,0.19)", text: "#e7cba6" },
-  }[tone];
-  return (
-    <button
-      onClick={onClick}
-      disabled={disabled}
-      title={title}
-      style={{
-        // 56 wide × 60 tall fits 18px icon + 11px two-line label cleanly.
-        // Width gives Hebrew labels room to breathe without truncation.
-        width: 56,
-        minWidth: 56,
-        height: 60,
-        background: palette.bg,
-        color: palette.text,
-        border: `1px solid ${palette.border}`,
-        borderRadius: 10,
-        backdropFilter: "blur(16px) saturate(1.5)",
-        WebkitBackdropFilter: "blur(16px) saturate(1.5)",
-        boxShadow: "inset 0 1px 0 rgba(255,255,255,0.12)",
-        cursor: disabled ? "wait" : "pointer",
-        touchAction: "manipulation",
-        padding: "6px 4px",
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        justifyContent: "center",
-        gap: 3,
-        fontFamily: "inherit",
-        opacity: disabled ? 0.55 : 1,
-        transition: "background 0.12s ease, transform 0.06s ease",
-      }}
-      onMouseEnter={(e) => {
-        if (!disabled) e.currentTarget.style.background = palette.hover;
-      }}
-      onMouseLeave={(e) => {
-        e.currentTarget.style.background = palette.bg;
-      }}
-      onMouseDown={(e) => {
-        if (!disabled) e.currentTarget.style.transform = "scale(0.96)";
-      }}
-      onMouseUp={(e) => {
-        e.currentTarget.style.transform = "scale(1)";
-      }}
-    >
-      <span style={{ fontSize: 18, lineHeight: 1, height: 18 }}>{icon}</span>
-      <span
-        style={{
-          fontSize: 10.5,
-          lineHeight: 1.15,
-          fontWeight: 500,
-          textAlign: "center",
-          width: "100%",
-          maxHeight: 24,
-          display: "-webkit-box",
-          WebkitBoxOrient: "vertical" as const,
-          WebkitLineClamp: 2,
-          overflow: "hidden",
-          wordBreak: "break-word",
-          opacity: 0.92,
-        }}
-      >
-        {label}
-      </span>
-    </button>
-  );
-}
-

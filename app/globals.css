@@ -163,3 +163,28 @@
     box-sizing: border-box;
   }
 }
+
+/* ──────────────────────────────────────────────────────────────────────────
+   Graphite-glass typographic polish. ADDITIVE + scoped to .gg-theme so
+   nothing outside the redesign subtree is affected. Color tokens unchanged.
+   ────────────────────────────────────────────────────────────────────────── */
+
+/* tighter heading tracking — the Linear/graphite look */
+.gg-theme h1,
+.gg-theme h2,
+.gg-theme h3 {
+  letter-spacing: -0.025em;
+}
+
+/* tabular figures helper — apply to any numeric cell/value */
+.gg-theme .tnum {
+  font-variant-numeric: tabular-nums;
+}
+
+/* small radii scale (matches the primitives: 4px chips / 6px default / 8px cards) */
+.gg-theme {
+  --gg-radius-chip: 4px;
+  --gg-radius: 6px;
+  --gg-radius-card: 8px;
+  --gg-radius-pill: 999px;
+}
