@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
-import { Loader2, Send, Copy, Check, Search, X, ChevronDown, Calculator } from "lucide-react";
+import { Loader2, Send, Copy, Check, Search, X, ChevronDown, Calculator, Pencil, Ship, Plane } from "lucide-react";
 import { cn } from "@/lib/cn";
 import type { Product, QuantityTier, ShippingOption, QuoteResult } from "@/lib/factory/calculator/types";
 import { computeCommission } from "@/lib/factory/commission";
@@ -192,6 +192,40 @@ export function CalculatorView({ products, quantityTiers, shippingOptions, initi
     return { marginPct, profitPerUnit, totalProfit, perUnit, totalPrice };
   }, [r, c, reverseInput, reverseMode]);
 
+  // Customer-facing quote text — hoisted out of the JSX so BOTH the sticky
+  // proposal-summary CTAs and the full QuoteShareCard share one string + one
+  // share-flow instance (same picked lead, same send/PDF/factory endpoints).
+  const operatorQuoteText = (r && c)
+    ? buildQuoteText({
+        leadName: leadName ?? null,
+        product: manualMode ? null : products.find((p) => p.id === productId) ?? null,
+        manualDescription: manualMode
+          ? (() => {
+              const dimsParts: string[] = [];
+              if (manualH) dimsParts.push(`H${manualH}`);
+              if (manualD) dimsParts.push(`D${manualD}`);
+              if (manualW) dimsParts.push(`W${manualW}`);
+              const dims = dimsParts.join("*");
+              const desc = manualDesc.trim() || "מוצר מותאם";
+              return dims ? `${dims} — ${desc}` : desc;
+            })()
+          : null,
+        quantity: r.quantity,
+        shippingName: r.shippingOption?.name ?? null,
+        shippingType:
+          r.shippingOption?.type === "sea" || r.shippingOption?.type === "air"
+            ? r.shippingOption.type
+            : null,
+        unitSellingPriceIls: r.sellingPricePerUnitIls,
+        totalSellingPriceIls: r.totalOrderPriceIls,
+        shippingPerUnitIls: c.shippingPerUnitIls,
+        totalShippingIls: c.shippingPerUnitIls * r.quantity,
+        oneTimeMoldsIls: r.moldsTotalSellingPriceIls,
+        result: r,
+      })
+    : "";
+  const share = useQuoteShare({ apiToken, sid, leadName, quoteText: operatorQuoteText });
+
   return (
     <div className="calc-lux gg-theme flex flex-col gap-6 rounded-xl p-5" dir="rtl">
       {/* Editorial header — quote title + live FX strip + tabs */}
@@ -227,21 +261,31 @@ export function CalculatorView({ products, quantityTiers, shippingOptions, initi
           )}
         </div>
 
-        {/* Quote title */}
-        <h1
-          className="lux-serif"
-          style={{
-            fontSize: 30,
-            fontWeight: 300,
-            lineHeight: 1.05,
-            letterSpacing: "-0.01em",
-            color: "var(--lux-ink)",
-            margin: 0,
-          }}
-        >
-          {quoteTitle}
-          <span style={{ color: "var(--lux-champagne)" }}>.</span>
-        </h1>
+        {/* NEW QUOTE eyebrow + large thin serif quote title */}
+        <div className="flex flex-col gap-2.5">
+          <span
+            className="lux-label"
+            style={{ color: "var(--lux-muted)", letterSpacing: "0.34em" }}
+          >
+            — New quote
+          </span>
+          <h1
+            className="lux-sans"
+            style={{
+              fontSize: 38,
+              fontWeight: 200,
+              lineHeight: 1.02,
+              letterSpacing: "-0.02em",
+              color: "var(--lux-ink)",
+              margin: 0,
+            }}
+          >
+            הצעת מחיר{" "}
+            <span className="lux-serif" style={{ fontWeight: 300, color: "var(--lux-champagne)" }}>
+              — {quoteTitle}.
+            </span>
+          </h1>
+        </div>
 
         {/* Top-level tab: regular vs estimated calculator */}
         <div
@@ -305,20 +349,54 @@ export function CalculatorView({ products, quantityTiers, shippingOptions, initi
             </div>
 
             {!manualMode ? (
-              /* Product */
-              <div className="flex flex-col gap-1">
-                <label className="text-sm font-medium">מוצר</label>
-                <select
-                  value={productId}
-                  onChange={(e) => setProductId(e.target.value)}
-                  className="bg-background/50 border border-border rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring/30"
-                >
-                  {products.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.dimensions} — {p.description}
-                    </option>
-                  ))}
-                </select>
+              /* Product — catalog select + read-only dims + carton readout */
+              <div className="flex flex-col gap-4">
+                <div className="flex flex-col gap-2">
+                  <span className="lux-label" style={{ color: "var(--lux-muted)", letterSpacing: "0.14em" }}>בחירת מוצר</span>
+                  <select
+                    value={productId}
+                    onChange={(e) => setProductId(e.target.value)}
+                    className="bg-background/50 border border-border rounded-md px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring/30"
+                  >
+                    {products.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.dimensions} — {p.description}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* dimensions + unit cost (read-only, derived from selection/result) */}
+                {(() => {
+                  const dims = parseDims(selectedProduct?.dimensions);
+                  return (
+                    <div className="grid grid-cols-4 gap-3">
+                      <ReadField label="גובה H" value={dims.H} suffix="cm" />
+                      <ReadField label="רוחב W" value={dims.W} suffix="cm" />
+                      <ReadField label="עומק D" value={dims.D} suffix="cm" />
+                      <ReadField label="עלות יח׳" prefix="¥" value={r ? r.unitProductionCny.toFixed(2) : "—"} />
+                    </div>
+                  );
+                })()}
+
+                {/* master-carton readout */}
+                {(() => {
+                  const variant = handles ? selectedProduct?.withHandles : selectedProduct?.withoutHandles;
+                  const ct = variant?.carton;
+                  return (
+                    <div style={{ background: "var(--lux-inset)", borderRadius: 4, border: "1px solid var(--lux-line)", padding: "14px 16px" }}>
+                      <div className="lux-label" style={{ color: "var(--lux-muted)", letterSpacing: "0.16em", marginBottom: 12 }}>
+                        נתוני קרטון אב
+                      </div>
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 tabular-nums">
+                        <ReadStat label="יח׳/קרטון" value={ct ? `${ct.qty}` : "—"} />
+                        <ReadStat label="משקל" value={ct ? `${ct.weight} ק״ג` : "—"} />
+                        <ReadStat label="CBM/קרטון" value={ct ? ((ct.length * ct.width * ct.height) / 1_000_000).toFixed(3) : "—"} />
+                        <ReadStat label="מידות L×W×H" value={ct ? `${ct.length}×${ct.width}×${ct.height}` : "—"} />
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
             ) : (
               /* Manual product spec */
@@ -374,53 +452,68 @@ export function CalculatorView({ products, quantityTiers, shippingOptions, initi
 
           {/* ② כמות ומשלוח */}
           <Section n={2} title="כמות ומשלוח">
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-              {/* Quantity */}
-              <div className="flex flex-col gap-1">
-                <label className="text-sm font-medium">כמות</label>
-                <select
-                  value={qtyId}
-                  onChange={(e) => setQtyId(e.target.value)}
-                  disabled={overrideValid}
-                  className="bg-background/50 border border-border rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring/30 disabled:opacity-50"
+            {/* Quantity — pill row per tier + "מותאם" pill revealing the override */}
+            <div className="flex flex-col gap-3">
+              <span className="lux-label" style={{ color: "var(--lux-muted)", letterSpacing: "0.14em" }}>כמות</span>
+              <div className="flex flex-wrap gap-2">
+                {quantityTiers.map((t) => {
+                  const active = !overrideValid && qtyId === t.id;
+                  return (
+                    <button
+                      key={t.id}
+                      type="button"
+                      onClick={() => { setQtyId(t.id); setQtyOverride(""); }}
+                      className={cn("lux-pill tabular-nums", active && "lux-pill-active")}
+                    >
+                      {t.label}
+                    </button>
+                  );
+                })}
+                <button
+                  type="button"
+                  onClick={() => setQtyOverride((v) => (v === "" ? " " : v))}
+                  className={cn("lux-pill", overrideValid && "lux-pill-active")}
+                  title="כמות מותאמת"
                 >
-                  {quantityTiers.map((t) => (
-                    <option key={t.id} value={t.id}>{t.label}</option>
-                  ))}
-                </select>
+                  <Pencil className="size-3.5" />
+                  מותאם
+                </button>
               </div>
 
-              {/* Custom quantity override */}
-              <div className="flex flex-col gap-1">
-                <label className="text-sm font-medium">כמות מותאמת (אופציונלי)</label>
-                <input
-                  type="number"
-                  min={1}
-                  step={100}
-                  placeholder="למשל 2500"
-                  value={qtyOverride}
-                  onChange={(e) => setQtyOverride(e.target.value)}
-                  className="bg-background/50 border border-border rounded-md px-3 py-1.5 text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-ring/30"
-                />
-                <span className="text-[11px] text-muted-foreground">
-                  {overrideValid
-                    ? `מתומחר לפי טיר ${snappedTierQty.toLocaleString("he-IL")}`
-                    : "ריק → משתמש בבחירה למעלה"}
-                </span>
-              </div>
+              {/* Custom override — revealed once "מותאם" is engaged */}
+              {(qtyOverride !== "" ) && (
+                <div className="flex flex-col gap-1">
+                  <input
+                    type="number"
+                    min={1}
+                    step={100}
+                    placeholder="למשל 2500"
+                    value={qtyOverride.trim()}
+                    onChange={(e) => setQtyOverride(e.target.value)}
+                    autoFocus
+                    className="bg-background/50 border border-border rounded-md px-3 py-2 text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-ring/30"
+                  />
+                  <span className="text-[11px] text-muted-foreground">
+                    {overrideValid
+                      ? `מתומחר לפי טיר ${snappedTierQty.toLocaleString("he-IL")}`
+                      : "הזן כמות מותאמת או בחר טיר למעלה"}
+                  </span>
+                </div>
+              )}
+            </div>
 
-              {/* Shipping */}
-              <div className="flex flex-col gap-1">
-                <label className="text-sm font-medium">שילוח</label>
-                <select
-                  value={shippingId}
-                  onChange={(e) => setShippingId(e.target.value)}
-                  className="bg-background/50 border border-border rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring/30"
-                >
-                  {shippingOptions.map((s) => (
-                    <option key={s.id} value={s.id}>{s.name}</option>
-                  ))}
-                </select>
+            {/* Shipping — selectable cards per enabled option */}
+            <div className="flex flex-col gap-3">
+              <span className="lux-label" style={{ color: "var(--lux-muted)", letterSpacing: "0.14em" }}>שיטת שילוח</span>
+              <div className="grid grid-cols-2 gap-2.5">
+                {shippingOptions.map((s) => (
+                  <ShippingCard
+                    key={s.id}
+                    option={s}
+                    active={shippingId === s.id}
+                    onSelect={() => setShippingId(s.id)}
+                  />
+                ))}
               </div>
             </div>
           </Section>
@@ -521,35 +614,8 @@ export function CalculatorView({ products, quantityTiers, shippingOptions, initi
               apiToken={apiToken}
               sid={sid}
               leadName={leadName}
-              quoteText={buildQuoteText({
-                leadName: leadName ?? null,
-                product: manualMode
-                  ? null
-                  : products.find((p) => p.id === productId) ?? null,
-                manualDescription: manualMode
-                  ? (() => {
-                      const dimsParts: string[] = [];
-                      if (manualH) dimsParts.push(`H${manualH}`);
-                      if (manualD) dimsParts.push(`D${manualD}`);
-                      if (manualW) dimsParts.push(`W${manualW}`);
-                      const dims = dimsParts.join("*");
-                      const desc = manualDesc.trim() || "מוצר מותאם";
-                      return dims ? `${dims} — ${desc}` : desc;
-                    })()
-                  : null,
-                quantity: r.quantity,
-                shippingName: r.shippingOption?.name ?? null,
-                shippingType:
-                  r.shippingOption?.type === "sea" || r.shippingOption?.type === "air"
-                    ? r.shippingOption.type
-                    : null,
-                unitSellingPriceIls: r.sellingPricePerUnitIls,
-                totalSellingPriceIls: r.totalOrderPriceIls,
-                shippingPerUnitIls: c.shippingPerUnitIls,
-                totalShippingIls: c.shippingPerUnitIls * r.quantity,
-                oneTimeMoldsIls: r.moldsTotalSellingPriceIls,
-                result: r,
-              })}
+              quoteText={operatorQuoteText}
+              share={share}
             />
           )}
         </>}
@@ -580,7 +646,7 @@ export function CalculatorView({ products, quantityTiers, shippingOptions, initi
               {error}
             </div>
           )}
-          {r && c && !loading && <CompactQuote r={r} c={c} />}
+          {r && c && !loading && <ProposalSummary r={r} c={c} share={share} />}
         </>}
       />
 
@@ -813,6 +879,40 @@ function EstimateTab({ apiToken, shippingOptions, sid, leadName, initialMargins 
   const est = data?.estimate;
   const r = data?.result; const c = data?.computed;
 
+  // Hoisted quote text + estimate context + one share instance, shared between
+  // the sticky proposal-summary CTAs and the full QuoteShareCard below.
+  const estimateQuoteText = (est && est.ok && r && c)
+    ? buildQuoteText({
+        leadName: leadName ?? null,
+        product: null,
+        manualDescription: `H${h}${d ? `*D${d}` : ""}*W${w}`,
+        quantity: r.quantity,
+        shippingName: r.shippingOption?.name ?? null,
+        shippingType: r.shippingOption?.type === "sea" || r.shippingOption?.type === "air" ? r.shippingOption.type : null,
+        unitSellingPriceIls: r.sellingPricePerUnitIls,
+        totalSellingPriceIls: r.totalOrderPriceIls,
+        shippingPerUnitIls: c.shippingPerUnitIls,
+        totalShippingIls: c.shippingPerUnitIls * r.quantity,
+        oneTimeMoldsIls: r.moldsTotalSellingPriceIls,
+        result: r,
+      })
+    : "";
+  const estimateCtx: EstimateSendContext | undefined = (est && est.ok && r)
+    ? {
+        heightCm: parseFloat(h) || 0,
+        depthCm: parseFloat(d) || 0,
+        widthCm: parseFloat(w) || 0,
+        qty: r.quantity,
+        colors,
+        handles,
+        lamination: lam,
+        shipping: shippingId,
+        cartonConfidence: est.carton?.confidence,
+        totalIls: r.totalOrderPriceIls,
+      }
+    : undefined;
+  const share = useQuoteShare({ apiToken, sid, leadName, quoteText: estimateQuoteText, estimate: estimateCtx });
+
   return (
     <div className="flex flex-col gap-6">
       <div className="text-[11px] text-muted-foreground">
@@ -832,18 +932,30 @@ function EstimateTab({ apiToken, shippingOptions, sid, leadName, initialMargins 
 
           {/* ② כמות ומשלוח */}
           <Section n={2} title="כמות ומשלוח">
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-              <div className="flex flex-col gap-1">
-                <label className="text-sm font-medium">כמות</label>
-                <select value={qty} onChange={(e) => setQty(e.target.value)} className={SELECT_CLS}>
-                  <option value="3000">3,000</option><option value="5000">5,000</option><option value="10000">10,000</option>
-                </select>
+            {/* Quantity — pill row (same setQty state) */}
+            <div className="flex flex-col gap-3">
+              <span className="lux-label" style={{ color: "var(--lux-muted)", letterSpacing: "0.14em" }}>כמות</span>
+              <div className="flex flex-wrap gap-2">
+                {["3000", "5000", "10000"].map((q) => (
+                  <button
+                    key={q}
+                    type="button"
+                    onClick={() => setQty(q)}
+                    className={cn("lux-pill tabular-nums", qty === q && "lux-pill-active")}
+                  >
+                    {Number(q).toLocaleString("he-IL")}
+                  </button>
+                ))}
               </div>
-              <div className="flex flex-col gap-1">
-                <label className="text-sm font-medium">שילוח</label>
-                <select value={shippingId} onChange={(e) => setShippingId(e.target.value)} className={SELECT_CLS}>
-                  {shippingOptions.map((s) => (<option key={s.id} value={s.id}>{s.name}</option>))}
-                </select>
+            </div>
+
+            {/* Shipping — selectable cards (same setShippingId state) */}
+            <div className="flex flex-col gap-3">
+              <span className="lux-label" style={{ color: "var(--lux-muted)", letterSpacing: "0.14em" }}>שיטת שילוח</span>
+              <div className="grid grid-cols-2 gap-2.5">
+                {shippingOptions.map((s) => (
+                  <ShippingCard key={s.id} option={s} active={shippingId === s.id} onSelect={() => setShippingId(s.id)} />
+                ))}
               </div>
             </div>
           </Section>
@@ -945,7 +1057,7 @@ function EstimateTab({ apiToken, shippingOptions, sid, leadName, initialMargins 
                   ⚠️ הרווח הכולל ₪{ils(r.totalProfitIls)} נמוך מהמינימום שהוגדר ₪{ils(minProfitParsed)}.
                 </div>
               )}
-              <CompactQuote r={r} c={c} />
+              <ProposalSummary r={r} c={c} share={share} hasEstimate />
             </>
           )}
         </>}
@@ -963,32 +1075,9 @@ function EstimateTab({ apiToken, shippingOptions, sid, leadName, initialMargins 
             apiToken={apiToken}
             sid={sid}
             leadName={leadName}
-            quoteText={buildQuoteText({
-              leadName: leadName ?? null,
-              product: null,
-              manualDescription: `H${h}${d ? `*D${d}` : ""}*W${w}`,
-              quantity: r.quantity,
-              shippingName: r.shippingOption?.name ?? null,
-              shippingType: r.shippingOption?.type === "sea" || r.shippingOption?.type === "air" ? r.shippingOption.type : null,
-              unitSellingPriceIls: r.sellingPricePerUnitIls,
-              totalSellingPriceIls: r.totalOrderPriceIls,
-              shippingPerUnitIls: c.shippingPerUnitIls,
-              totalShippingIls: c.shippingPerUnitIls * r.quantity,
-              oneTimeMoldsIls: r.moldsTotalSellingPriceIls,
-              result: r,
-            })}
-            estimate={{
-              heightCm: parseFloat(h) || 0,
-              depthCm: parseFloat(d) || 0,
-              widthCm: parseFloat(w) || 0,
-              qty: r.quantity,
-              colors,
-              handles,
-              lamination: lam,
-              shipping: shippingId,
-              cartonConfidence: est.carton?.confidence,
-              totalIls: r.totalOrderPriceIls,
-            }}
+            quoteText={estimateQuoteText}
+            estimate={estimateCtx}
+            share={share}
           />
           <div className="rounded-xl border border-border bg-card p-4 flex flex-wrap items-center gap-3">
             <span className="text-sm font-medium">מפעל מומלץ:</span>
@@ -1092,100 +1181,194 @@ function Stat({ label, value, tone }: { label: string; value: string; tone?: "po
   );
 }
 
-// Compact, sticky at-a-glance quote for the builder's side column. Reads the
-// SAME computed result as BreakdownCard — presentation only, no math here.
-function CompactQuote({
+// Full "proposal card" — the reference's sticky summary. Reads the SAME computed
+// result as BreakdownCard (presentation only, no math) and drives the SAME share
+// actions as QuoteShareCard via the shared `share` instance. The detailed share
+// UI (lead picker + text preview) still lives in QuoteShareCard below.
+function ProposalSummary({
   r,
   c,
+  share,
+  hasEstimate,
 }: {
   r: QuoteResult;
   c: { productionPerUnitIls: number; shippingPerUnitIls: number };
+  share: QuoteShareApi;
+  /** estimate tab → secondaries become real PDF + factory-request actions. */
+  hasEstimate?: boolean;
 }) {
   const hasMolds = r.moldsTotalSellingPriceIls > 0;
+  const netProfit = r.totalProfitIls; // display-only; matches summary semantics
+  const shippingName = r.shippingOption?.name ?? "—";
   return (
-    <section className="bg-card overflow-hidden" style={{ borderRadius: 8 }}>
-      {/* SUMMARY label + price hero (cool blue, thin) */}
-      <div
-        className="text-center py-6"
+    <div className="flex flex-col gap-3.5">
+      <section
+        className="overflow-hidden"
         style={{
-          borderBottom: "1px solid var(--lux-line)",
-          background: "var(--lux-inset)",
+          position: "relative",
+          background: "var(--lux-inset-deep)",
+          borderRadius: 8,
+          border: "1px solid var(--lux-line)",
+          padding: "24px 24px 20px",
         }}
       >
-        <div className="lux-label" style={{ marginBottom: 8 }}>Summary</div>
-        <div
-          className="lux-serif tabular-nums"
-          style={{ fontSize: 50, fontWeight: 200, lineHeight: 1, color: "var(--lux-cool)" }}
-        >
-          ₪{ils(r.sellingPricePerUnitIls)}
-        </div>
-        <div style={{ fontSize: 11, color: "var(--lux-muted)", marginTop: 6 }}>
-          מחיר ללקוח · ליחידה
-        </div>
-      </div>
-
-      <div className="p-4 flex flex-col gap-2.5 text-sm">
-        <div className="flex justify-between">
-          <span style={{ color: "var(--lux-muted)" }}>עלות</span>
-          <span className="tabular-nums">₪{ils(c.productionPerUnitIls)}</span>
-        </div>
-        <div className="flex justify-between">
-          <span style={{ color: "var(--lux-muted)" }}>משלוח (pass-through)</span>
-          <span className="tabular-nums">₪{ils(c.shippingPerUnitIls)}</span>
-        </div>
-        <div className="flex justify-between">
-          <span style={{ color: "var(--lux-muted)" }}>רווח / יחידה</span>
-          <span className="tabular-nums" style={{ color: "var(--lux-champagne)" }}>
-            ₪{ils(r.profitPerUnitIls)}
+        {/* SUMMARY label + context line */}
+        <div className="flex items-center justify-between" style={{ marginBottom: 16 }}>
+          <span className="lux-label" style={{ color: "var(--lux-champagne)", letterSpacing: "0.3em" }}>
+            Summary
+          </span>
+          <span
+            className="lux-sans tabular-nums"
+            style={{ fontSize: 10, letterSpacing: "0.12em", color: "var(--lux-muted)" }}
+          >
+            {r.quantity.toLocaleString("he-IL")} יח׳ · {shippingName}
           </span>
         </div>
 
-        {/* Molds — one-time, boxed (display only; appears when present) */}
+        {/* HERO price / unit */}
+        <div className="lux-label" style={{ color: "var(--lux-muted)", marginBottom: 4 }}>
+          מחיר ללקוח · ליחידה
+        </div>
+        <div className="flex items-baseline gap-1.5" style={{ marginBottom: 3 }}>
+          <span className="lux-serif" style={{ fontSize: 16, fontWeight: 300, color: "var(--lux-cool)" }}>₪</span>
+          <span
+            className="lux-serif tabular-nums"
+            style={{ fontSize: 50, fontWeight: 200, lineHeight: 1, color: "var(--lux-cool)", letterSpacing: "-0.02em" }}
+          >
+            {ils(r.sellingPricePerUnitIls)}
+          </span>
+        </div>
+        <div className="lux-serif" style={{ fontStyle: "italic", fontSize: 13, color: "var(--lux-muted)", marginBottom: 20 }}>
+          — כולל שילוח, מוכן ללקוח
+        </div>
+
+        {/* line items */}
+        <div
+          className="flex flex-col"
+          style={{ gap: 1, background: "var(--lux-line-soft)", borderRadius: 4, overflow: "hidden" }}
+        >
+          <SummaryRow label="עלות יח׳" value={`₪${ils(c.productionPerUnitIls)}`} />
+          <SummaryRow
+            label={<>משלוח יח׳ <span style={{ fontSize: 10, opacity: 0.7 }}>· pass-through</span></>}
+            value={`₪${ils(c.shippingPerUnitIls)}`}
+          />
+          <SummaryRow
+            label="רווח יח׳"
+            value={`₪${ils(r.profitPerUnitIls)} · ${r.profitMargin}%`}
+            valueColor="var(--lux-cool)"
+          />
+        </div>
+
+        {/* molds — boxed, one-time, only when present */}
         {hasMolds && (
           <div
-            className="flex justify-between items-center text-xs"
-            style={{
-              marginTop: 2,
-              padding: "7px 10px",
-              borderRadius: 6,
-              background: "var(--lux-inset-deep)",
-              border: "1px solid var(--lux-line)",
-            }}
+            className="flex justify-between items-center"
+            style={{ padding: "12px 14px", marginTop: 10, borderRadius: 4, background: "var(--lux-inset)" }}
           >
-            <span style={{ color: "var(--lux-muted)" }}>מולדים / תבניות · חד פעמי</span>
-            <span className="tabular-nums" style={{ color: "var(--lux-ink)" }}>
+            <span style={{ fontSize: 13, color: "var(--lux-ink)" }}>
+              תבניות / מולדים <span style={{ fontSize: 10, color: "var(--lux-muted)" }}>· חד-פעמי</span>
+            </span>
+            <span className="tabular-nums" style={{ fontSize: 14, color: "var(--lux-ink)" }}>
               ₪{ils(r.moldsTotalSellingPriceIls)}
             </span>
           </div>
         )}
 
-        <div
-          className="flex justify-between items-baseline"
-          style={{ borderTop: "1px solid var(--lux-line)", paddingTop: 10, marginTop: 4 }}
-        >
-          <span style={{ fontWeight: 500 }}>סה״כ הזמנה ({r.quantity.toLocaleString("he-IL")})</span>
-          <span
-            className="lux-serif tabular-nums"
-            style={{ fontSize: 22, fontWeight: 300, color: "var(--lux-cool)" }}
-          >
-            ₪{ils(r.totalOrderPriceIls)}
-          </span>
+        {/* total */}
+        <div style={{ marginTop: 14, paddingTop: 16, borderTop: "1px solid var(--lux-line)" }}>
+          <div className="flex justify-between items-baseline">
+            <span className="lux-sans" style={{ fontSize: 16, fontWeight: 300, color: "var(--lux-ink)" }}>סה״כ הזמנה</span>
+            <span className="lux-sans tabular-nums" style={{ fontSize: 30, fontWeight: 300, color: "var(--lux-ink)" }}>
+              ₪{ils(r.totalOrderPriceIls)}
+            </span>
+          </div>
+          <div className="flex justify-between" style={{ marginTop: 6 }}>
+            <span style={{ fontSize: 12, color: "var(--lux-muted)" }}>רווח כולל</span>
+            <span className="tabular-nums" style={{ fontSize: 13, color: "var(--lux-champagne)" }}>
+              ₪{ils(r.totalProfitIls)} · נטו ₪{ils(netProfit)}
+            </span>
+          </div>
         </div>
-        <div className="flex justify-between text-xs">
-          <span style={{ color: "var(--lux-muted)" }}>רווח כולל</span>
-          <span className="tabular-nums" style={{ color: "var(--lux-champagne)" }}>
-            ₪{ils(r.totalProfitIls)}
-          </span>
-        </div>
-      </div>
 
-      <div
-        className="px-4 pb-4 text-center text-xs"
-        style={{ color: "var(--lux-faint)" }}
-      >
-        הפירוט המלא והשליחה למטה ↓
+        {/* CTAs — reuse the SAME share actions (send / PDF / factory) */}
+        <button
+          type="button"
+          onClick={share.send}
+          disabled={!share.pickedSid || share.sending}
+          title={!share.pickedSid ? "בחר ליד למטה כדי לאפשר שליחה" : undefined}
+          className="lux-cta-primary"
+          style={{ marginTop: 20 }}
+        >
+          {share.sending ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
+          {share.sending ? "שולח…" : "שלח הצעה בוואטסאפ"}
+        </button>
+        <div className="flex gap-2.5" style={{ marginTop: 10 }}>
+          {hasEstimate ? (
+            <>
+              <button
+                type="button"
+                onClick={share.sendEstimatePdf}
+                disabled={!share.pickedSid || share.busy !== null}
+                className="lux-cta-ghost"
+              >
+                {share.busy === "pdf" ? <Loader2 className="size-3.5 animate-spin" /> : <Send className="size-3.5" />}
+                הורד PDF
+              </button>
+              <button
+                type="button"
+                onClick={share.sendToFactory}
+                disabled={!share.pickedSid || share.busy !== null}
+                className="lux-cta-ghost"
+              >
+                {share.busy === "factory" ? <Loader2 className="size-3.5 animate-spin" /> : <Send className="size-3.5" />}
+                בקשה למפעל
+              </button>
+            </>
+          ) : (
+            <button type="button" onClick={share.copy} className="lux-cta-ghost" style={{ flex: 1 }}>
+              {share.copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
+              {share.copied ? "הועתק" : "העתק טקסט"}
+            </button>
+          )}
+        </div>
+
+        {share.status && <p className="text-[11px]" style={{ color: "var(--lux-cool)", marginTop: 10 }}>{share.status}</p>}
+        {share.error && <p className="text-[11px] text-destructive" style={{ marginTop: 10 }}>⚠️ {share.error}</p>}
+      </section>
+
+      {/* logistics stat tiles */}
+      <div className="grid grid-cols-3 gap-2">
+        <LogiTile value={`${r.totalCartons}`} label="קרטונים" />
+        <LogiTile value={r.totalCbm.toFixed(2)} label="CBM" />
+        <LogiTile value={r.totalWeightKg.toLocaleString("he-IL")} label="ק״ג" />
       </div>
-    </section>
+    </div>
+  );
+}
+
+function SummaryRow({ label, value, valueColor }: { label: React.ReactNode; value: string; valueColor?: string }) {
+  return (
+    <div className="flex justify-between items-center" style={{ padding: "11px 14px", background: "var(--lux-inset-deep)" }}>
+      <span style={{ fontSize: 13, color: "var(--lux-muted)" }}>{label}</span>
+      <span className="tabular-nums" style={{ fontSize: 14, color: valueColor ?? "var(--lux-ink)" }}>{value}</span>
+    </div>
+  );
+}
+
+function LogiTile({ value, label }: { value: string; label: string }) {
+  return (
+    <div
+      style={{
+        background: "var(--lux-card)",
+        borderRadius: 6,
+        padding: "13px 10px",
+        textAlign: "center",
+        border: "1px solid var(--lux-line)",
+      }}
+    >
+      <div className="tabular-nums" style={{ fontSize: 18, color: "var(--lux-ink)" }}>{value}</div>
+      <div style={{ fontSize: 10, color: "var(--lux-muted)", marginTop: 3, letterSpacing: "0.04em" }}>{label}</div>
+    </div>
   );
 }
 
@@ -1441,7 +1624,12 @@ interface EstimateSendContext {
   cartonConfidence?: "high" | "low";
   totalIls?: number;
 }
-function QuoteShareCard({
+// Shared share-flow state + actions. Extracted verbatim from QuoteShareCard so
+// BOTH the sticky summary-card CTAs and the full share card can fire the SAME
+// send / PDF / factory-request actions against the SAME picked lead. The handler
+// bodies (endpoints, payloads, confirm dialogs) are unchanged — only their
+// lexical home moved up so two surfaces can consume one instance.
+function useQuoteShare({
   apiToken,
   sid,
   leadName,
@@ -1452,8 +1640,6 @@ function QuoteShareCard({
   sid: string | undefined;
   leadName: string | null | undefined;
   quoteText: string;
-  /** When present (estimate tab), also render "send preliminary PDF to customer"
-   *  + "request real quote from factory" buttons, both using the picked lead. */
   estimate?: EstimateSendContext;
 }) {
   const [sending, setSending] = useState(false);
@@ -1621,6 +1807,39 @@ function QuoteShareCard({
     } catch (e) { setError(e instanceof Error ? e.message : String(e)); } finally { setBusy(null); }
   };
 
+  return {
+    sending, copied, status, error,
+    pickedSid, pickedName, query, setQuery, open, setOpen,
+    results, loadingResults, containerRef, runSearch,
+    pickLead, clearLead, copy, send,
+    busy, sendEstimatePdf, sendToFactory,
+  };
+}
+
+type QuoteShareApi = ReturnType<typeof useQuoteShare>;
+
+function QuoteShareCard(props: {
+  apiToken: string | undefined;
+  sid: string | undefined;
+  leadName: string | null | undefined;
+  quoteText: string;
+  /** When present (estimate tab), also render "send preliminary PDF to customer"
+   *  + "request real quote from factory" buttons, both using the picked lead. */
+  estimate?: EstimateSendContext;
+  /** Pre-made share instance so the sticky summary CTAs and this card drive the
+   *  SAME picked lead + send/PDF/factory actions. Omit to self-own. */
+  share?: QuoteShareApi;
+}) {
+  const { apiToken, quoteText, estimate } = props;
+  const ownShare = useQuoteShare(props);
+  const {
+    sending, copied, status, error,
+    pickedSid, pickedName, query, setQuery, open, setOpen,
+    results, loadingResults, containerRef, runSearch,
+    pickLead, clearLead, copy, send,
+    busy, sendEstimatePdf, sendToFactory,
+  } = props.share ?? ownShare;
+
   return (
     <section className="rounded-xl border border-border bg-card p-4 flex flex-col gap-3" dir="rtl">
       <div className="flex items-center justify-between gap-2 flex-wrap">
@@ -1763,6 +1982,43 @@ function QuoteShareCard({
   );
 }
 
+// Display-only: pull H / W / D out of a catalog dimensions string like
+// "H30*D10*W40" (D optional). No state, no pricing — read-only render helper.
+function parseDims(s?: string): { H: string; W: string; D: string } {
+  const grab = (k: string) => {
+    const m = s?.match(new RegExp(`${k}\\s*([0-9.]+)`, "i"));
+    return m ? m[1] : "—";
+  };
+  return { H: grab("H"), W: grab("W"), D: grab("D") };
+}
+
+// Read-only labelled field (catalog dims / unit cost). Mirrors the reference's
+// boxed value tiles — presentation only.
+function ReadField({ label, value, prefix, suffix }: { label: string; value: string; prefix?: string; suffix?: string }) {
+  return (
+    <div className="flex flex-col gap-2">
+      <span className="lux-label" style={{ color: "var(--lux-muted)", letterSpacing: "0.12em" }}>{label}</span>
+      <div
+        className="tabular-nums"
+        style={{ background: "var(--lux-inset)", borderRadius: 3, border: "1px solid var(--lux-line)", padding: "11px 13px" }}
+      >
+        {prefix && <span style={{ fontSize: 12, color: "var(--lux-muted)" }}>{prefix} </span>}
+        <span style={{ fontSize: 16, color: "var(--lux-ink)" }}>{value}</span>
+        {suffix && <span style={{ fontSize: 12, color: "var(--lux-muted)" }}> {suffix}</span>}
+      </div>
+    </div>
+  );
+}
+
+function ReadStat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex flex-col">
+      <span style={{ fontSize: 11, color: "var(--lux-muted)", marginBottom: 6 }}>{label}</span>
+      <span style={{ fontSize: 15, color: "var(--lux-ink)" }}>{value}</span>
+    </div>
+  );
+}
+
 function NumField({
   label,
   value,
@@ -1860,6 +2116,31 @@ function BuilderGrid({ inputs, quote }: { inputs: React.ReactNode; quote: React.
         {quote}
       </div>
     </div>
+  );
+}
+
+// Selectable shipping card (replaces the dropdown). Binds to the SAME
+// shippingId state via onSelect — presentation only.
+function ShippingCard({ option, active, onSelect }: { option: ShippingOption; active: boolean; onSelect: () => void }) {
+  const isAir = option.type === "air";
+  const Icon = isAir ? Plane : Ship;
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      className={cn("lux-ship-card", active && "lux-ship-card-active")}
+    >
+      <span className="flex items-center gap-3 min-w-0">
+        <Icon className="size-5 shrink-0" style={{ color: active ? "var(--lux-cool)" : "var(--lux-muted)" }} />
+        <span className="flex flex-col items-start min-w-0">
+          <span style={{ fontSize: 14, color: "var(--lux-ink)" }} className="truncate">{option.name}</span>
+          {option.description && (
+            <span style={{ fontSize: 11, color: "var(--lux-muted)" }} className="truncate">{option.description}</span>
+          )}
+        </span>
+      </span>
+      {active && <Check className="size-4 shrink-0" style={{ color: "var(--lux-cool)" }} />}
+    </button>
   );
 }
 
