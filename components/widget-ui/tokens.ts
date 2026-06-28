@@ -28,7 +28,34 @@ export const T = {
   rowHover: "rgba(255,255,255,0.025)",
 } as const;
 
-export type Tone = "success" | "warn" | "alert" | "champagne" | "neutral";
+export type Tone =
+  | "success"
+  | "warn"
+  | "alert"
+  | "champagne"
+  | "info"
+  | "engaged"
+  | "neutral";
+
+/**
+ * Low-sat avatar tints — champagne is just ONE of several so identity circles
+ * stay scannable (Attio-style) instead of a wall of gold. Champagne the ACCENT
+ * is reserved for money; champagne the avatar tint is incidental.
+ */
+export const AVATAR_TINTS = [
+  { bg: "linear-gradient(135deg,#e7cba6,#cda978)", ink: "#1b1407" },
+  { bg: "linear-gradient(135deg,#9fb6c9,#6f8a9f)", ink: "#0e1822" },
+  { bg: "linear-gradient(135deg,#a0c9b3,#6f9f86)", ink: "#0e1d15" },
+  { bg: "linear-gradient(135deg,#c9a0be,#9f6f93)", ink: "#1d0e1a" },
+  { bg: "linear-gradient(135deg,#b6b2a9,#86837c)", ink: "#1a1813" },
+] as const;
+
+/** Deterministic tint pick (same key → same color, identical server/client). */
+export function pickAvatarTint(key: string): { bg: string; ink: string } {
+  let h = 0;
+  for (let i = 0; i < key.length; i++) h = (h * 31 + key.charCodeAt(i)) >>> 0;
+  return AVATAR_TINTS[h % AVATAR_TINTS.length];
+}
 
 /** tint pill colors per tone — low-sat fill + border + text */
 export function toneStyle(tone: Tone): {
@@ -60,6 +87,18 @@ export function toneStyle(tone: Tone): {
         bg: T.champFill,
         border: T.champBorder,
         color: T.champ,
+      };
+    case "info":
+      return {
+        bg: "rgba(159,182,201,0.12)",
+        border: "rgba(159,182,201,0.30)",
+        color: "#b9c6d4",
+      };
+    case "engaged":
+      return {
+        bg: "rgba(125,200,205,0.12)",
+        border: "rgba(125,200,205,0.30)",
+        color: "#8fcdd3",
       };
     case "neutral":
     default:

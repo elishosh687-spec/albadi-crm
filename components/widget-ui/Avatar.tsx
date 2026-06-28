@@ -5,7 +5,7 @@
  * Presentation-only.
  */
 
-import { T } from "./tokens";
+import { pickAvatarTint } from "./tokens";
 
 export interface AvatarProps {
   /** full name or any string to derive initials from */
@@ -19,12 +19,16 @@ export interface AvatarProps {
   color?: string;
 }
 
+// Code-point safe: Array.from splits by full code points so astral-plane
+// names (emoji / fancy unicode WhatsApp display names) never leave a lone
+// surrogate half — which otherwise serialized differently server vs client
+// and caused a hydration mismatch.
 function deriveInitials(name?: string): string {
   if (!name) return "?";
   const parts = name.trim().split(/\s+/).filter(Boolean);
   if (parts.length === 0) return "?";
-  if (parts.length === 1) return parts[0].slice(0, 2);
-  return (parts[0][0] ?? "") + (parts[1][0] ?? "");
+  if (parts.length === 1) return Array.from(parts[0]).slice(0, 2).join("");
+  return (Array.from(parts[0])[0] ?? "") + (Array.from(parts[1])[0] ?? "");
 }
 
 export default function Avatar({
@@ -35,6 +39,7 @@ export default function Avatar({
   color,
 }: AvatarProps) {
   const text = (initials ?? deriveInitials(name)).toUpperCase();
+  const tint = pickAvatarTint(name || initials || "?");
   return (
     <span
       aria-hidden={!name && !initials}
@@ -47,11 +52,11 @@ export default function Avatar({
         alignItems: "center",
         justifyContent: "center",
         fontSize: Math.round(size * 0.42),
-        fontWeight: 700,
+        fontWeight: 600,
         lineHeight: 1,
         letterSpacing: "-0.02em",
-        background: background ?? T.champGradient,
-        color: color ?? T.champInk,
+        background: background ?? tint.bg,
+        color: color ?? tint.ink,
         userSelect: "none",
       }}
     >
