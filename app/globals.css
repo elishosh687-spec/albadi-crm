@@ -423,3 +423,34 @@
   pointer-events: none;
   user-select: none;
 }
+
+/* margin slider (reference §IV) — warm cool-gradient track + champagne thumb */
+.calc-lux .lux-range {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 6px;
+  border-radius: 9999px;
+  background: linear-gradient(270deg, var(--lux-cool), #565e74);
+  box-shadow: inset 0 0 0 1px rgba(69, 70, 77, 0.2);
+  outline: none;
+  cursor: pointer;
+}
+.calc-lux .lux-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #dae2fd;
+  border: 0;
+  box-shadow: 0 0 0 4px rgba(190, 198, 224, 0.18), 0 2px 6px rgba(0, 0, 0, 0.5);
+}
+.calc-lux .lux-range::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #dae2fd;
+  border: 0;
+  box-shadow: 0 0 0 4px rgba(190, 198, 224, 0.18), 0 2px 6px rgba(0, 0, 0, 0.5);
+}

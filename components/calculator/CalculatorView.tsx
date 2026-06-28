@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
-import { Loader2, Send, Copy, Check, Search, X, ChevronDown, Calculator, Pencil, Ship, Plane } from "lucide-react";
+import { Loader2, Send, Copy, Check, Search, X, ChevronDown, Calculator, Pencil, Ship, Plane, Repeat, Minus, Plus } from "lucide-react";
 import { cn } from "@/lib/cn";
 import type { Product, QuantityTier, ShippingOption, QuoteResult } from "@/lib/factory/calculator/types";
 import { computeCommission } from "@/lib/factory/commission";
@@ -57,6 +57,8 @@ export function CalculatorView({ products, quantityTiers, shippingOptions, initi
   const [moldsCost, setMoldsCost] = useState<string>("");
   const [reverseMode, setReverseMode] = useState<"total" | "unit" | "profit">("profit");
   const [reverseInput, setReverseInput] = useState<string>("");
+  // UI-only: reveal the reverse-margin calculator inline (reference §IV toggle).
+  const [showReverse, setShowReverse] = useState(false);
   const [preview, setPreview]     = useState<PreviewResult | null>(null);
   const [loading, setLoading]     = useState(false);
   const [error, setError]         = useState<string | null>(null);
@@ -519,105 +521,167 @@ export function CalculatorView({ products, quantityTiers, shippingOptions, initi
           </Section>
 
           {/* ③ תוספות */}
-          <Section n={3} title="תוספות">
-            {/* Colors — catalog only */}
-            {!manualMode && (
-              <div className="flex flex-col gap-1">
-                <label className="text-sm font-medium">צבעי לוגו</label>
-                <select
-                  value={colors}
-                  onChange={(e) => setColors(Number(e.target.value))}
-                  className="bg-background/50 border border-border rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring/30"
+          <Section n={3} title="תוספות" eyebrow="Add-ons">
+            {/* 2-column add-ons grid (reference §III). Each control binds the
+                SAME existing state/setters — presentation only. */}
+            <div className="grid grid-cols-2 gap-3.5">
+              {/* logo colors — STEPPER (binds `colors`, clamped to the catalog
+                  1..3 range present in colorAddons; catalog mode only) */}
+              {!manualMode && (
+                <AddonField label="צבעי לוגו">
+                  <Stepper
+                    value={colors}
+                    min={1}
+                    max={3}
+                    onChange={setColors}
+                  />
+                </AddonField>
+              )}
+
+              {/* one-time mold / tooling fee (¥ CNY) — binds `moldsCost` */}
+              <AddonField label="עלות תבניות / מולדים">
+                <div
+                  className="tabular-nums flex items-center"
+                  style={{ background: "var(--lux-inset)", borderRadius: 3, border: "1px solid var(--lux-line)", padding: "9px 12px" }}
                 >
-                  <option value={1}>1 צבע</option>
-                  <option value={2}>2 צבעים</option>
-                  <option value={3}>3 צבעים</option>
-                </select>
-              </div>
-            )}
+                  <span style={{ fontSize: 12, color: "var(--lux-muted)" }}>¥</span>
+                  <input
+                    type="number"
+                    min={0}
+                    step={50}
+                    placeholder="0"
+                    value={moldsCost}
+                    onChange={(e) => setMoldsCost(e.target.value)}
+                    className="w-full bg-transparent border-0 px-1.5 text-right tabular-nums focus:outline-none"
+                    style={{ fontSize: 16, color: "var(--lux-ink)" }}
+                  />
+                  <span style={{ fontSize: 11, color: "var(--lux-muted)", whiteSpace: "nowrap" }}>· חד-פעמי</span>
+                </div>
+                <span className="text-[10px]" style={{ color: "var(--lux-muted)" }}>
+                  {moldsValid
+                    ? `¥${(moldsParsed / effectiveQty).toFixed(3)}/יח׳ · ${effectiveQty.toLocaleString("he-IL")} יח׳`
+                    : "ריק → ללא עלות מולדים"}
+                </span>
+              </AddonField>
 
-            {/* Toggles — catalog only */}
-            {!manualMode && (
-              <div className="flex gap-6">
-                <Toggle label="ידיות" value={handles} onChange={setHandles} />
-                <Toggle label="למינציה" value={lamination} onChange={setLamination} />
-              </div>
-            )}
+              {/* handles — OPTION ROW toggling `handles` (catalog only) */}
+              {!manualMode && (
+                <AddonField label="ידיות">
+                  <OptionRow
+                    label="חבל מפותל"
+                    delta={r ? `+₪${ils(customerBreakdownIls(r).handlesIls)}` : "+₪—"}
+                    active={handles}
+                    onToggle={() => setHandles(!handles)}
+                  />
+                </AddonField>
+              )}
 
-            {/* One-time mold/tooling fee (¥ CNY) — amortized across the order */}
-            <div className="flex flex-col gap-1">
-              <label className="text-sm font-medium">מולדים / תבניות (¥ CNY) — חד פעמי</label>
-              <input
-                type="number"
-                min={0}
-                step={50}
-                placeholder="למשל 2000"
-                value={moldsCost}
-                onChange={(e) => setMoldsCost(e.target.value)}
-                className="bg-background/50 border border-border rounded-md px-3 py-1.5 text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-ring/30"
-              />
-              <span className="text-[11px] text-muted-foreground">
-                {moldsValid
-                  ? `מתחלק על ${effectiveQty.toLocaleString("he-IL")} יח׳ = ¥${(moldsParsed / effectiveQty).toFixed(3)} ליחידה (נכלל בעלות מפעל וברווח)`
-                  : "ריק → ללא עלות מולדים"}
-              </span>
+              {/* lamination — OPTION ROW toggling `lamination` (catalog only) */}
+              {!manualMode && (
+                <AddonField label="למינציה">
+                  <OptionRow
+                    label="מאט (F1)"
+                    delta={r && r.laminationAddonCny > 0 ? `+¥${r2(r.laminationAddonCny).toFixed(2)}` : "+¥0.45"}
+                    active={lamination}
+                    onToggle={() => setLamination(!lamination)}
+                  />
+                </AddonField>
+              )}
             </div>
           </Section>
 
           {/* ④ תמחור */}
-          <Section n={4} title="תמחור">
-            {/* Margin override + min profit (Wave 6: #4, #19) */}
-            <div className="grid grid-cols-2 gap-4">
-              <div className="flex flex-col gap-1">
-                <label className="text-sm font-medium">% רווח יעד (override)</label>
-                <input
-                  type="number"
-                  min={0}
-                  max={300}
-                  step={1}
-                  placeholder={`ברירת מחדל: ${defaultMargin}%`}
-                  value={marginOverride}
-                  onChange={(e) => setMarginOverride(e.target.value)}
-                  className="bg-background/50 border border-border rounded-md px-3 py-1.5 text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-ring/30"
-                />
-                <span className="text-[11px] text-muted-foreground">
-                  {marginOverrideValid
-                    ? `דורס את הגלובלי לחישוב הזה (${marginOverrideParsed}%)`
-                    : "ריק → לפי הגדרות מערכת"}
+          <Section n={4} title="תמחור" eyebrow="Pricing">
+            {/* margin slider — large % readout + full-width range, binds the
+                SAME marginOverride state (reference §IV). */}
+            <div className="flex flex-col" style={{ gap: 12 }}>
+              <div className="flex items-baseline justify-between">
+                <span className="lux-label" style={{ color: "var(--lux-muted)", letterSpacing: "0.14em" }}>
+                  מרווח רווח{" "}
+                  <span style={{ fontSize: 9, opacity: 0.7 }}>(margin-on-price)</span>
+                </span>
+                <span
+                  className="lux-sans tabular-nums"
+                  style={{ fontSize: 24, fontWeight: 300, color: "var(--lux-cool)" }}
+                >
+                  {Math.round(currentMargin)}
+                  <span style={{ fontSize: 14 }}>%</span>
                 </span>
               </div>
-              <div className="flex flex-col gap-1">
-                <label className="text-sm font-medium">רווח מינימלי ₪ (אזהרה)</label>
-                <input
-                  type="number"
-                  min={0}
-                  step={100}
-                  placeholder="למשל 1000"
-                  value={minProfit}
-                  onChange={(e) => setMinProfit(e.target.value)}
-                  className="bg-background/50 border border-border rounded-md px-3 py-1.5 text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-ring/30"
-                />
-                <span className="text-[11px] text-muted-foreground">
-                  {minProfitValid
-                    ? `מציג אזהרה אם רווח כולל < ₪${ils(minProfitParsed)}`
-                    : "ריק → ללא בדיקה"}
-                </span>
-              </div>
+              <input
+                type="range"
+                min={0}
+                max={80}
+                step={1}
+                value={marginOverride === "" ? Math.round(defaultMargin) : marginOverrideParsed}
+                onChange={(e) => setMarginOverride(e.target.value)}
+                className="lux-range"
+                aria-label="מרווח רווח"
+              />
+              <span className="text-[10px]" style={{ color: "var(--lux-muted)" }}>
+                {marginOverrideValid
+                  ? `דורס את הגלובלי לחישוב הזה (${marginOverrideParsed}%)`
+                  : `ברירת מחדל מהמערכת: ${Math.round(defaultMargin)}%`}
+              </span>
             </div>
+
+            {/* commission readout | min-profit input */}
+            <div className="grid grid-cols-2 gap-3.5">
+              <AddonField label="עמלת מכירות">
+                <div
+                  className="tabular-nums"
+                  style={{ background: "var(--lux-inset)", borderRadius: 3, border: "1px solid var(--lux-line)", padding: "11px 14px" }}
+                >
+                  <span style={{ fontSize: 16, color: "var(--lux-ink)" }}>{c?.commissionPct ?? "—"}</span>
+                  <span style={{ fontSize: 12, color: "var(--lux-muted)" }}>% · ללא שילוח</span>
+                </div>
+              </AddonField>
+              <AddonField label="רווח מינימלי / יח׳">
+                <div
+                  className="tabular-nums flex items-center"
+                  style={{ background: "var(--lux-inset)", borderRadius: 3, border: "1px solid var(--lux-line)", padding: "9px 14px" }}
+                >
+                  <span style={{ fontSize: 12, color: "var(--lux-muted)" }}>₪</span>
+                  <input
+                    type="number"
+                    min={0}
+                    step={100}
+                    placeholder="0"
+                    value={minProfit}
+                    onChange={(e) => setMinProfit(e.target.value)}
+                    className="w-full bg-transparent border-0 px-1.5 text-right tabular-nums focus:outline-none"
+                    style={{ fontSize: 16, color: "var(--lux-ink)" }}
+                  />
+                </div>
+                <span className="text-[10px]" style={{ color: "var(--lux-muted)" }}>
+                  {minProfitValid ? `אזהרה אם רווח כולל < ₪${ils(minProfitParsed)}` : "ריק → ללא בדיקה"}
+                </span>
+              </AddonField>
+            </div>
+
+            {/* reverse-calc reveal toggle (reference §IV) — UI-only boolean
+                that shows/hides the EXISTING reverse-margin block below. */}
+            <button
+              type="button"
+              onClick={() => setShowReverse((v) => !v)}
+              className="flex items-center justify-between w-full text-right"
+              style={{ padding: "13px 16px", borderRadius: 4, background: "var(--lux-inset-deep)", boxShadow: "inset 0 0 0 1px rgba(190,198,224,.14)" }}
+            >
+              <span className="flex items-center gap-2.5">
+                <Repeat className="size-4" style={{ color: "var(--lux-cool)" }} />
+                <span style={{ fontSize: 13, color: "#c6c6cd" }}>חישוב הפוך — ממחיר יעד אחורה למרווח</span>
+              </span>
+              <span
+                aria-hidden
+                style={{ position: "relative", width: 40, height: 22, borderRadius: 9999, background: showReverse ? "var(--lux-navy-to)" : "#2b2a29", boxShadow: "inset 0 0 0 1px rgba(69,70,77,.3)", transition: "background .15s" }}
+              >
+                <span style={{ position: "absolute", top: 3, right: showReverse ? 21 : 3, width: 16, height: 16, borderRadius: "50%", background: showReverse ? "var(--lux-cool)" : "var(--lux-muted)", transition: "right .15s" }} />
+              </span>
+            </button>
           </Section>
 
-          {/* Full breakdown + share flow in the MAIN column so it fills the
-              height; the compact summary sits sticky in the quote column. */}
-          {r && c && !loading && <BreakdownCard result={r} computed={c} />}
-          {r && c && !loading && (
-            <QuoteShareCard
-              apiToken={apiToken}
-              sid={sid}
-              leadName={leadName}
-              quoteText={operatorQuoteText}
-              share={share}
-            />
-          )}
+          {/* Full breakdown + share flow moved to the full-width row below the
+              builder grid (reference's FULL-BREAKDOWN section). */}
         </>}
         quote={<>
           {/* Min-profit warning (Wave 6: #19) */}
@@ -650,62 +714,87 @@ export function CalculatorView({ products, quantityTiers, shippingOptions, initi
         </>}
       />
 
+      {/* ===== FULL-WIDTH BREAKDOWN ROW (reference) =====
+          Divider, then a 2-column boss layout: right = clean per-unit/order
+          table re-presenting BreakdownCard's data; left = WhatsApp preview
+          (QuoteShareCard) + the ¥-component/FX/alt-shipping DetailedBreakdown. */}
       {r && c && !loading && (
-        <DetailedBreakdown
-          unitCost={c.productionPerUnitIls}
-          unitShipping={c.shippingPerUnitIls}
-          unitProfit={r.profitPerUnitIls}
-          unitSellingPrice={r.sellingPricePerUnitIls}
-          totalCost={c.productionPerUnitIls * r.quantity}
-          totalShipping={c.shippingPerUnitIls * r.quantity}
-          totalProfit={r.totalProfitIls}
-          totalSellingPrice={r.totalOrderPriceIls}
-          quantity={r.quantity}
-          profitMarginPct={r.profitMargin}
-          commissionPct={c.commissionPct}
-          totalCartons={r.totalCartons}
-          totalWeightKg={r.totalWeightKg}
-          totalCbm={r.totalCbm}
-          shippingType={
-            r.shippingOption?.type === "sea" || r.shippingOption?.type === "air"
-              ? r.shippingOption.type
-              : null
-          }
-          factoryUnitCostCny={r.unitProductionCny}
-          usdToIls={c.usdToIls}
-          usdToCny={c.usdToCny}
-          seaRate={
-            r.shippingOption?.type === "sea"
-              ? shippingOptions.find((s) => s.id === r.shippingOption?.id)?.seaRate
-              : undefined
-          }
-          rawCbm={r.totalCbm}
-          seaMinCbm={1}
-          plateFeeCnyPerUnit={r.plateFeeCny}
-          components={{
-            baseBagCny: r.baseBagCny,
-            handlesAddonCny: r.handlesAddonCny,
-            laminationAddonCny: r.laminationAddonCny,
-            plateFeeCny: r.plateFeeCny,
-            logoAddonCny: r.logoAddonCny,
-            moldsPerUnitCny: r.moldsPerUnitCny,
-          }}
-          alt={
-            preview?.altResult
-              ? {
-                  shippingType:
-                    preview.altResult.shippingOption?.type === "air" ? "air" : "sea",
-                  unitSellingPrice: preview.altResult.sellingPricePerUnitIls,
-                  totalSellingPrice: preview.altResult.totalOrderPriceIls,
-                  shippingName: preview.altResult.shippingOption?.name ?? null,
+        <>
+          <LuxDivider />
+          <div className="cv-breakdown-row" style={{ display: "grid", gap: 24, gridTemplateColumns: "1.35fr 1fr", alignItems: "start" }}>
+            <style>{`@media (max-width: 720px){.cv-breakdown-row{grid-template-columns:1fr !important;}}`}</style>
+
+            {/* RIGHT (visually first in RTL): boss breakdown table */}
+            <BossBreakdownTable result={r} computed={c} />
+
+            {/* LEFT: WhatsApp preview + ¥ components / FX / alt shipping */}
+            <div className="flex flex-col gap-4">
+              <QuoteShareCard
+                apiToken={apiToken}
+                sid={sid}
+                leadName={leadName}
+                quoteText={operatorQuoteText}
+                share={share}
+              />
+              <DetailedBreakdown
+                unitCost={c.productionPerUnitIls}
+                unitShipping={c.shippingPerUnitIls}
+                unitProfit={r.profitPerUnitIls}
+                unitSellingPrice={r.sellingPricePerUnitIls}
+                totalCost={c.productionPerUnitIls * r.quantity}
+                totalShipping={c.shippingPerUnitIls * r.quantity}
+                totalProfit={r.totalProfitIls}
+                totalSellingPrice={r.totalOrderPriceIls}
+                quantity={r.quantity}
+                profitMarginPct={r.profitMargin}
+                commissionPct={c.commissionPct}
+                totalCartons={r.totalCartons}
+                totalWeightKg={r.totalWeightKg}
+                totalCbm={r.totalCbm}
+                shippingType={
+                  r.shippingOption?.type === "sea" || r.shippingOption?.type === "air"
+                    ? r.shippingOption.type
+                    : null
                 }
-              : null
-          }
-        />
+                factoryUnitCostCny={r.unitProductionCny}
+                usdToIls={c.usdToIls}
+                usdToCny={c.usdToCny}
+                seaRate={
+                  r.shippingOption?.type === "sea"
+                    ? shippingOptions.find((s) => s.id === r.shippingOption?.id)?.seaRate
+                    : undefined
+                }
+                rawCbm={r.totalCbm}
+                seaMinCbm={1}
+                plateFeeCnyPerUnit={r.plateFeeCny}
+                components={{
+                  baseBagCny: r.baseBagCny,
+                  handlesAddonCny: r.handlesAddonCny,
+                  laminationAddonCny: r.laminationAddonCny,
+                  plateFeeCny: r.plateFeeCny,
+                  logoAddonCny: r.logoAddonCny,
+                  moldsPerUnitCny: r.moldsPerUnitCny,
+                }}
+                alt={
+                  preview?.altResult
+                    ? {
+                        shippingType:
+                          preview.altResult.shippingOption?.type === "air" ? "air" : "sea",
+                        unitSellingPrice: preview.altResult.sellingPricePerUnitIls,
+                        totalSellingPrice: preview.altResult.totalOrderPriceIls,
+                        shippingName: preview.altResult.shippingOption?.name ?? null,
+                      }
+                    : null
+                }
+              />
+            </div>
+          </div>
+        </>
       )}
 
-      {/* Reverse margin: given a price, what % is the implied profit? */}
-      {r && c && (
+      {/* Reverse margin: given a price, what % is the implied profit?
+          Revealed by the §IV "חישוב הפוך" toggle (UI-only showReverse). */}
+      {r && c && showReverse && (
         <section className="rounded-xl border border-border bg-card p-5 flex flex-col gap-3">
           <div className="flex items-center justify-between flex-wrap gap-2">
             <h2 className="text-sm font-medium">תמחור לפי יעד</h2>
@@ -1368,6 +1457,122 @@ function LogiTile({ value, label }: { value: string; label: string }) {
     >
       <div className="tabular-nums" style={{ fontSize: 18, color: "var(--lux-ink)" }}>{value}</div>
       <div style={{ fontSize: 10, color: "var(--lux-muted)", marginTop: 3, letterSpacing: "0.04em" }}>{label}</div>
+    </div>
+  );
+}
+
+// Editorial divider with a centred ❖ glyph (reference). Presentation only.
+function LuxDivider() {
+  return (
+    <div style={{ position: "relative", height: 1, background: "rgba(214,196,172,.14)", margin: "26px 8px 4px" }}>
+      <span
+        className="lux-serif"
+        style={{
+          position: "absolute", left: "50%", top: "50%", transform: "translate(-50%,-50%)",
+          background: "var(--lux-bg, #1d1b1a)", padding: "0 14px", fontStyle: "italic",
+          color: "var(--lux-champagne)", fontSize: 13,
+        }}
+      >
+        ❖
+      </span>
+    </div>
+  );
+}
+
+// "FULL BREAKDOWN" boss table — re-presents the SAME computed result as
+// BreakdownCard (per-unit + order columns) in the reference's clean two-column
+// table. Presentation only; reuses computeCommission like BreakdownCard.
+function BossBreakdownTable({
+  result: r,
+  computed: c,
+}: {
+  result: QuoteResult;
+  computed: { productionPerUnitIls: number; shippingPerUnitIls: number; commissionPct?: number };
+}) {
+  const productionUnit = r2(c.productionPerUnitIls);
+  const shippingUnit = r2(c.shippingPerUnitIls);
+  const handlesUnit = r2(customerBreakdownIls(r).handlesIls);
+  const totalCostUnit = r2(r.totalCostPerUnitIls);
+  const shippingTotal = r2(shippingUnit * r.quantity);
+  const comm = computeCommission(r.totalOrderPriceIls, r.totalProfitIls, c.commissionPct, shippingTotal);
+  const shipLabel = r.shippingOption?.type === "air" ? "אוויר" : "ים";
+
+  return (
+    <section style={{ background: "var(--lux-card)", borderRadius: 8, border: "1px solid var(--lux-line)", padding: "26px 28px" }}>
+      {/* header — eyebrow + title + boss-only tag */}
+      <div className="flex items-center justify-between" style={{ marginBottom: 22 }}>
+        <div>
+          <div className="lux-label" style={{ color: "var(--lux-champagne)", letterSpacing: "0.3em", marginBottom: 5 }}>Full breakdown</div>
+          <div className="lux-sans" style={{ fontSize: 20, fontWeight: 300, color: "var(--lux-ink)" }}>פירוט מלא — יחידה והזמנה</div>
+        </div>
+        <span
+          className="lux-label"
+          style={{ color: "var(--lux-muted)", letterSpacing: "0.14em", background: "var(--lux-inset)", padding: "6px 12px", borderRadius: 9999, whiteSpace: "nowrap" }}
+        >
+          לעיני הבוס בלבד
+        </span>
+      </div>
+
+      <div className="grid grid-cols-2" style={{ gap: 26 }}>
+        {/* per unit */}
+        <div>
+          <div className="lux-label" style={{ color: "var(--lux-muted)", letterSpacing: "0.18em", marginBottom: 12 }}>ליחידה (₪)</div>
+          <div className="flex flex-col" style={{ gap: 9 }}>
+            <BossRow label="ייצור" value={ils(productionUnit)} />
+            <BossRow label={`משלוח (${shipLabel})`} value={ils(shippingUnit)} />
+            {r.hasHandles && handlesUnit > 0 && <BossRow label="תוספות (ידית)" value={ils(handlesUnit)} />}
+            <BossRow label="סה״כ עלות" value={ils(totalCostUnit)} divider strong />
+            <BossRow label="מחיר מכירה" value={ils(r.sellingPricePerUnitIls)} cool />
+            <BossRow label="רווח" value={`${ils(r.profitPerUnitIls)} · ${r.profitMargin}%`} cool />
+          </div>
+        </div>
+
+        {/* order */}
+        <div>
+          <div className="lux-label" style={{ color: "var(--lux-muted)", letterSpacing: "0.18em", marginBottom: 12 }}>הזמנה (₪)</div>
+          <div className="flex flex-col" style={{ gap: 9 }}>
+            <BossRow label={`מכירה (${r.quantity.toLocaleString("he-IL")} יח׳)`} value={ils(r2(r.sellingPricePerUnitIls * r.quantity))} />
+            {r.moldsTotalSellingPriceIls > 0 && (
+              <BossRow label="מולדים (pass-through)" value={ils(r.moldsTotalSellingPriceIls)} />
+            )}
+            <BossRow label="סה״כ הזמנה" value={ils(r.totalOrderPriceIls)} divider strong />
+            <BossRow label="רווח גולמי" value={ils(r.totalProfitIls)} champagne />
+            <BossRow label={`עמלת מכירות (${comm.pct}%)`} value={`−${ils(comm.commission)}`} />
+            <BossRow label="רווח נטו" value={ils(comm.netProfit)} divider cool />
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function BossRow({
+  label,
+  value,
+  divider,
+  strong,
+  cool,
+  champagne,
+}: {
+  label: string;
+  value: string;
+  divider?: boolean;
+  strong?: boolean;
+  cool?: boolean;
+  champagne?: boolean;
+}) {
+  const valueColor = cool ? "var(--lux-cool)" : champagne ? "var(--lux-champagne)" : strong ? "var(--lux-ink)" : "#c6c6cd";
+  return (
+    <div
+      className="flex justify-between"
+      style={{
+        fontSize: 13,
+        paddingTop: divider ? 9 : 0,
+        borderTop: divider ? "1px solid var(--lux-line)" : undefined,
+      }}
+    >
+      <span style={{ color: strong || cool || champagne ? "#c6c6cd" : "var(--lux-muted)" }}>{label}</span>
+      <span className="tabular-nums" style={{ color: valueColor }}>{value}</span>
     </div>
   );
 }
@@ -2056,7 +2261,7 @@ function NumField({
 
 const ROMAN = ["", "I", "II", "III", "IV", "V", "VI"];
 
-function Section({ n, title, children }: { n: number; title: string; children: React.ReactNode }) {
+function Section({ n, title, eyebrow, children }: { n: number; title: string; eyebrow?: string; children: React.ReactNode }) {
   return (
     <div
       className="flex flex-col gap-3"
@@ -2083,15 +2288,25 @@ function Section({ n, title, children }: { n: number; title: string; children: R
         {ROMAN[n] ?? n}
       </span>
 
-      <div className="flex items-center gap-2" style={{ position: "relative" }}>
-        <span
-          className="lux-label"
-          style={{ color: "var(--lux-champagne)", opacity: 0.85 }}
-        >
-          {ROMAN[n] ?? n}
-        </span>
-        <span style={{ fontSize: 13, fontWeight: 500, color: "var(--lux-ink)" }}>{title}</span>
-      </div>
+      {eyebrow ? (
+        /* reference §III/§IV header — small-caps eyebrow over the Hebrew title */
+        <div style={{ position: "relative" }}>
+          <div className="lux-label" style={{ color: "var(--lux-champagne)", letterSpacing: "0.3em", marginBottom: 5 }}>
+            {eyebrow}
+          </div>
+          <div className="lux-sans" style={{ fontSize: 21, fontWeight: 300, color: "var(--lux-ink)" }}>{title}</div>
+        </div>
+      ) : (
+        <div className="flex items-center gap-2" style={{ position: "relative" }}>
+          <span
+            className="lux-label"
+            style={{ color: "var(--lux-champagne)", opacity: 0.85 }}
+          >
+            {ROMAN[n] ?? n}
+          </span>
+          <span style={{ fontSize: 13, fontWeight: 500, color: "var(--lux-ink)" }}>{title}</span>
+        </div>
+      )}
       <div className="flex flex-col gap-3" style={{ position: "relative" }}>{children}</div>
     </div>
   );
@@ -2140,6 +2355,76 @@ function ShippingCard({ option, active, onSelect }: { option: ShippingOption; ac
         </span>
       </span>
       {active && <Check className="size-4 shrink-0" style={{ color: "var(--lux-cool)" }} />}
+    </button>
+  );
+}
+
+// Add-on field wrapper — small-caps uppercase label over its control. Matches
+// the reference §III/§IV 2-column tiles. Presentation only.
+function AddonField({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="flex flex-col gap-2">
+      <span className="lux-label" style={{ color: "var(--lux-muted)", letterSpacing: "0.12em" }}>{label}</span>
+      {children}
+    </div>
+  );
+}
+
+// −/value/+ stepper. Binds an existing numeric state via onChange, clamped to
+// [min,max] (the already-valid range). No new business logic — same setter.
+function Stepper({ value, min, max, onChange }: { value: number; min: number; max: number; onChange: (v: number) => void }) {
+  const clamp = (n: number) => Math.max(min, Math.min(max, n));
+  return (
+    <div
+      className="flex items-center justify-between"
+      style={{ background: "var(--lux-inset)", borderRadius: 3, border: "1px solid var(--lux-line)", padding: "8px 12px" }}
+    >
+      <button
+        type="button"
+        aria-label="הפחת"
+        disabled={value <= min}
+        onClick={() => onChange(clamp(value - 1))}
+        className="grid place-items-center disabled:opacity-30"
+        style={{ color: "var(--lux-muted)" }}
+      >
+        <Minus className="size-4" />
+      </button>
+      <span className="tabular-nums" style={{ fontSize: 16, color: "var(--lux-ink)" }}>{value}</span>
+      <button
+        type="button"
+        aria-label="הוסף"
+        disabled={value >= max}
+        onClick={() => onChange(clamp(value + 1))}
+        className="grid place-items-center disabled:opacity-30"
+        style={{ color: "var(--lux-champagne)" }}
+      >
+        <Plus className="size-4" />
+      </button>
+    </div>
+  );
+}
+
+// Selectable option row — label + price delta. Toggles an existing boolean via
+// onToggle. Presentation only (reference §III handles/lamination rows).
+function OptionRow({ label, delta, active, onToggle }: { label: string; delta: string; active: boolean; onToggle: () => void }) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={active}
+      onClick={onToggle}
+      className="flex items-center justify-between w-full text-right transition-shadow"
+      style={{
+        background: "var(--lux-inset)",
+        borderRadius: 3,
+        padding: "13px 14px",
+        boxShadow: active
+          ? "inset 0 0 0 1px var(--lux-champagne)"
+          : "inset 0 0 0 1px var(--lux-line)",
+      }}
+    >
+      <span style={{ fontSize: 14, color: "var(--lux-ink)", opacity: active ? 1 : 0.6 }}>{label}</span>
+      <span className="tabular-nums" style={{ fontSize: 12, color: active ? "var(--lux-cool)" : "var(--lux-muted)" }}>{delta}</span>
     </button>
   );
 }
