@@ -206,7 +206,7 @@ export function CalculatorView({ products, quantityTiers, shippingOptions, initi
       </div>
 
       {tab === "estimate" && (
-        <EstimateTab apiToken={apiToken} shippingOptions={shippingOptions} sid={sid} leadName={leadName} />
+        <EstimateTab apiToken={apiToken} shippingOptions={shippingOptions} sid={sid} leadName={leadName} initialMargins={initialMargins} />
       )}
 
       {tab === "operator" && (<>
@@ -685,13 +685,18 @@ function ConfidenceBadge({ confidence }: { confidence?: string }) {
   return <span className={cn("rounded-full px-2.5 py-0.5 text-[11px] font-semibold", cls)}>{label}</span>;
 }
 
-function EstimateTab({ apiToken, shippingOptions, sid, leadName }: { apiToken?: string; shippingOptions: ShippingOption[]; sid?: string; leadName?: string | null }) {
+function EstimateTab({ apiToken, shippingOptions, sid, leadName, initialMargins }: { apiToken?: string; shippingOptions: ShippingOption[]; sid?: string; leadName?: string | null; initialMargins: Record<string, number> }) {
   const [h, setH] = useState(""); const [d, setD] = useState(""); const [w, setW] = useState("");
   const [qty, setQty] = useState("5000");
   const [colors, setColors] = useState(1);
   const [handles, setHandles] = useState(true);
   const [lam, setLam] = useState(false);
   const [shippingId, setShippingId] = useState(shippingOptions.find((s) => s.type === "sea")?.id ?? shippingOptions[0]?.id ?? "s2");
+  // Operator overrides — mirror the regular calculator (molds/templates one-time
+  // CNY, target-margin override, min-profit warning).
+  const [moldsCost, setMoldsCost] = useState("");
+  const [marginOverride, setMarginOverride] = useState("");
+  const [minProfit, setMinProfit] = useState("");
   const [data, setData] = useState<EstimateApiResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -699,18 +704,29 @@ function EstimateTab({ apiToken, shippingOptions, sid, leadName }: { apiToken?: 
   const hN = parseFloat(h), wN = parseFloat(w);
   const valid = Number.isFinite(hN) && hN > 0 && Number.isFinite(wN) && wN > 0;
 
+  const effectiveQty = Math.max(1, Math.round(parseFloat(qty) || 0));
+  const defaultMargin = initialMargins[qty] ?? 40;
+  const moldsParsed = moldsCost !== "" ? parseFloat(moldsCost) : NaN;
+  const moldsValid = Number.isFinite(moldsParsed) && moldsParsed > 0;
+  const marginOverrideParsed = marginOverride !== "" ? parseFloat(marginOverride) : NaN;
+  const marginOverrideValid = Number.isFinite(marginOverrideParsed) && marginOverrideParsed >= 0 && marginOverrideParsed < 300;
+  const minProfitParsed = minProfit !== "" ? parseFloat(minProfit) : NaN;
+  const minProfitValid = Number.isFinite(minProfitParsed) && minProfitParsed > 0;
+
   const run = useCallback(async () => {
     if (!valid) { setData(null); return; }
     setLoading(true); setErr(null);
     try {
       const p = new URLSearchParams({ heightCm: h, depthCm: d || "0", widthCm: w, qty, colors: String(colors), handles: String(handles), lamination: String(lam), shipping: shippingId });
+      if (moldsValid) p.set("moldsCostCny", String(moldsParsed));
+      if (marginOverrideValid) p.set("margin", String(marginOverrideParsed));
       if (apiToken) p.set("widget_token", apiToken);
       const res = await fetch(`/api/factory/estimate?${p}`, { cache: "no-store" });
       const j = await res.json();
       if (!res.ok || !j.ok) { setErr(j.error ?? `HTTP ${res.status}`); setData(null); return; }
       setData(j);
     } catch (e) { setErr(e instanceof Error ? e.message : String(e)); setData(null); } finally { setLoading(false); }
-  }, [valid, h, d, w, qty, colors, handles, lam, shippingId, apiToken]);
+  }, [valid, h, d, w, qty, colors, handles, lam, shippingId, apiToken, moldsValid, moldsParsed, marginOverrideValid, marginOverrideParsed]);
 
   useEffect(() => { run(); }, [run]);
 
@@ -752,6 +768,64 @@ function EstimateTab({ apiToken, shippingOptions, sid, leadName }: { apiToken?: 
           <Toggle label="ידיות" value={handles} onChange={setHandles} />
           <Toggle label="למינציה" value={lam} onChange={setLam} />
         </div>
+
+        {/* One-time mold/tooling fee (¥ CNY) — added on top of the auto plate fee, amortized across the order */}
+        <div className="pt-2 border-t border-border/50 flex flex-col gap-1">
+          <label className="text-sm font-medium">מולדים / תבניות (¥ CNY) — חד פעמי</label>
+          <input
+            type="number"
+            min={0}
+            step={50}
+            placeholder="למשל 2000"
+            value={moldsCost}
+            onChange={(e) => setMoldsCost(e.target.value)}
+            className="bg-background/50 border border-border rounded-md px-3 py-1.5 text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-ring/30"
+          />
+          <span className="text-[11px] text-muted-foreground">
+            {moldsValid
+              ? `נוסף על ה‑版费 ומתחלק על ${effectiveQty.toLocaleString("he-IL")} יח׳ = ¥${(moldsParsed / effectiveQty).toFixed(3)} ליחידה (נכלל בעלות מפעל וברווח)`
+              : "ריק → רק ה‑版费 האוטומטי (אם יש)"}
+          </span>
+        </div>
+
+        {/* Margin override + min profit — mirror the regular calculator */}
+        <div className="grid grid-cols-2 gap-4 pt-2 border-t border-border/50">
+          <div className="flex flex-col gap-1">
+            <label className="text-sm font-medium">% רווח יעד (override)</label>
+            <input
+              type="number"
+              min={0}
+              max={300}
+              step={1}
+              placeholder={`ברירת מחדל: ${defaultMargin}%`}
+              value={marginOverride}
+              onChange={(e) => setMarginOverride(e.target.value)}
+              className="bg-background/50 border border-border rounded-md px-3 py-1.5 text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-ring/30"
+            />
+            <span className="text-[11px] text-muted-foreground">
+              {marginOverrideValid
+                ? `דורס את הגלובלי לחישוב הזה (${marginOverrideParsed}%)`
+                : "ריק → לפי הגדרות מערכת"}
+            </span>
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-sm font-medium">רווח מינימלי ₪ (אזהרה)</label>
+            <input
+              type="number"
+              min={0}
+              step={100}
+              placeholder="למשל 1000"
+              value={minProfit}
+              onChange={(e) => setMinProfit(e.target.value)}
+              className="bg-background/50 border border-border rounded-md px-3 py-1.5 text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-ring/30"
+            />
+            <span className="text-[11px] text-muted-foreground">
+              {minProfitValid
+                ? `מציג אזהרה אם רווח כולל < ₪${ils(minProfitParsed)}`
+                : "ריק → ללא בדיקה"}
+            </span>
+          </div>
+        </div>
       </section>
 
       {loading && (<div className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="size-4 animate-spin" />מחשב…</div>)}
@@ -769,6 +843,12 @@ function EstimateTab({ apiToken, shippingOptions, sid, leadName }: { apiToken?: 
 
       {!loading && est && est.ok && r && c && (
         <>
+          {/* Min-profit warning — mirror the regular calculator */}
+          {minProfitValid && r.totalProfitIls < minProfitParsed && (
+            <div className="rounded-lg border border-warning/40 bg-warning/10 p-3 text-sm text-warning flex items-center gap-2">
+              ⚠️ הרווח הכולל ₪{ils(r.totalProfitIls)} נמוך מהמינימום שהוגדר ₪{ils(minProfitParsed)}.
+            </div>
+          )}
           <div className="rounded-xl border border-border bg-card p-4 flex flex-wrap items-center gap-3">
             <span className="text-sm font-medium">מפעל מומלץ:</span>
             <span className="rounded-full bg-primary/10 text-primary px-3 py-1 text-sm font-bold">{est.factoryName}</span>
