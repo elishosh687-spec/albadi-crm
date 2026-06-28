@@ -857,7 +857,10 @@ function ThreadView({
         ) : !msgs || msgs.length === 0 ? (
           <div style={{ color: "#8f939b", fontSize: 12, textAlign: "center", padding: 24 }}>אין הודעות עדיין</div>
         ) : (
-          msgs.filter((m) => m.text && m.text.trim()).map((m) => {
+          // Center the conversation in a comfortable reading column so short
+          // bubbles don't fling to opposite screen edges on a wide thread.
+          <div style={{ width: "100%", maxWidth: 680, margin: "0 auto", display: "flex", flexDirection: "column", gap: 9 }}>
+          {msgs.filter((m) => m.text && m.text.trim()).map((m) => {
             const incoming = m.direction === "in" || m.sender === "lead";
             return (
               <div
@@ -879,12 +882,13 @@ function ThreadView({
                 {m.text}
               </div>
             );
-          })
+          })}
+          </div>
         )}
       </div>
 
       {panel === "chat" && (
-        <div style={{ display: "flex", gap: 8, padding: 10, borderTop: "1px solid rgba(255,255,255,0.08)" }}>
+        <div style={{ display: "flex", gap: 8, padding: 10, borderTop: "1px solid rgba(255,255,255,0.08)", maxWidth: 680, margin: "0 auto", width: "100%" }}>
           <textarea
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
@@ -978,7 +982,7 @@ function ThreadView({
             <span style={{ color: T.faint }}>—</span>
           )}
         </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: "auto", borderTop: `1px solid ${T.hairline}`, paddingTop: 12 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 6, borderTop: `1px solid ${T.hairline}`, paddingTop: 12 }}>
           <button onClick={() => setPanel(panel === "quotes" ? "chat" : "quotes")} style={panel === "quotes" ? sideActive : sideBtn}>
             <Wallet size={14} /> הצעות מחיר
           </button>
