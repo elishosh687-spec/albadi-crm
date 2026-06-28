@@ -409,9 +409,11 @@ export default function InboxView({
                   alignItems: "center",
                 }}
               >
-                <Avatar name={r.name || undefined} size={28} />
+                {!threadSid && <Avatar name={r.name || undefined} size={28} />}
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  {/* line 1: name + phone + stage pill + time */}
+                  {/* line 1: name + phone + stage pill + time
+                      In rail mode (a conversation is open) rows go slim —
+                      just name + time + snippet, like the Front list rail. */}
                   <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                     <span
                       style={{
@@ -426,7 +428,7 @@ export default function InboxView({
                     >
                       {leadName}
                     </span>
-                    {r.phone && (
+                    {!threadSid && r.phone && (
                       <span
                         style={{
                           fontSize: 11,
@@ -440,7 +442,7 @@ export default function InboxView({
                       </span>
                     )}
                     <span style={{ marginInlineStart: "auto", display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
-                      {stage && <StatusPill label={stage.label} tone={stage.tone} />}
+                      {!threadSid && stage && <StatusPill label={stage.label} tone={stage.tone} />}
                       <span style={{ fontSize: 11, color: T.muted, fontVariantNumeric: "tabular-nums" }}>
                         {timeAgo(r.lastAt)}
                       </span>
@@ -459,10 +461,10 @@ export default function InboxView({
                         whiteSpace: "nowrap",
                       }}
                     >
-                      <span style={{ color: T.faint, marginInlineEnd: 5 }}>{senderTag(r.lastSender)}:</span>
+                      {!threadSid && <span style={{ color: T.faint, marginInlineEnd: 5 }}>{senderTag(r.lastSender)}:</span>}
                       {r.lastText?.slice(0, 100) || <span style={{ color: T.faint }}>—</span>}
                     </span>
-                    {r.inboundLast24h > 0 && (
+                    {!threadSid && r.inboundLast24h > 0 && (
                       <span
                         title={`${r.inboundLast24h} הודעות חדשות ב-24ש`}
                         style={{
@@ -485,7 +487,7 @@ export default function InboxView({
                         {r.inboundLast24h}
                       </span>
                     )}
-                    {r.botPaused && (
+                    {!threadSid && r.botPaused && (
                       <span
                         style={{
                           flexShrink: 0,
@@ -505,10 +507,14 @@ export default function InboxView({
                 </div>
               </a>
 
-              {/* single ⋯ menu, revealed on row hover (or always on touch) */}
-              <div style={{ flexShrink: 0 }}>
-                <RowActions items={actionItems} triggerClassName="inbox-row-actions-btn" />
-              </div>
+              {/* single ⋯ menu, revealed on row hover (or always on touch).
+                  Hidden in rail mode — open-conversation actions live in the
+                  thread header + context panel, not on the rail rows. */}
+              {!threadSid && (
+                <div style={{ flexShrink: 0 }}>
+                  <RowActions items={actionItems} triggerClassName="inbox-row-actions-btn" />
+                </div>
+              )}
             </div>
             {expandedSid === r.sid.trim() && (
               <div style={{ borderTop: `1px solid ${T.hairline}`, padding: 12 }}>
@@ -843,7 +849,7 @@ function ThreadView({
         ) : !msgs || msgs.length === 0 ? (
           <div style={{ color: "#8f939b", fontSize: 12, textAlign: "center", padding: 24 }}>אין הודעות עדיין</div>
         ) : (
-          msgs.map((m) => {
+          msgs.filter((m) => m.text && m.text.trim()).map((m) => {
             const incoming = m.direction === "in" || m.sender === "lead";
             return (
               <div
@@ -862,7 +868,7 @@ function ThreadView({
                   wordBreak: "break-word",
                 }}
               >
-                {m.text || "—"}
+                {m.text}
               </div>
             );
           })
