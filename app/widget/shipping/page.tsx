@@ -44,13 +44,11 @@ export default async function ShippingWidgetPage({
     : undefined;
 
   return (
-    <div style={{ maxWidth: 900, margin: "0 auto", padding: 16 }}>
-      <ConsolidationView
-        candidates={candidates}
-        carrier={carrier}
-        usdToIls={config.usdToIls}
-        ghlContactBase={ghlContactBase}
-      />
-    </div>
+    <ConsolidationView
+      candidates={candidates}
+      carrier={carrier}
+      usdToIls={config.usdToIls}
+      ghlContactBase={ghlContactBase}
+    />
   );
 }

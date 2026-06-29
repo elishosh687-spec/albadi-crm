@@ -7,15 +7,19 @@
  * shipping them separately (each at its TRUE solo cost) vs merged, the saving,
  * and which band edge to aim for. Uses the active sea carrier profile.
  *
+ * Silent-Luxury skin: editorial title, lead checklist on the left, sticky
+ * live-comparison rail on the right (combined CBM + separate vs combined ₪
+ * + green savings + recommendation hint).
+ *
  * Client-safe: imports only the pure engine (sea-carriers.ts) + types.
  */
 
 import { useMemo, useState } from "react";
-import { Ship, ExternalLink, PackageCheck } from "lucide-react";
-import { cn } from "@/lib/cn";
+import { ExternalLink, PackageCheck, Check } from "lucide-react";
 import type { SeaCarrierProfile } from "@/lib/factory/types";
 import type { ConsolidationCandidate } from "@/lib/factory/consolidation";
 import { consolidateShipment, seaShipmentCost } from "@/lib/factory/sea-carriers";
+import { LuxShell, LuxTitle, LuxAccent } from "@/components/widget-ui/lux";
 
 const STAGE_LABEL: Record<string, string> = {
   WON: "נסגר ✓",
@@ -69,120 +73,322 @@ export function ConsolidationView({
 
   if (!carrier) {
     return (
-      <div className="rounded-lg border border-destructive/40 bg-destructive/5 p-4 text-sm text-destructive" dir="rtl">
-        ⚠️ אין ספק שילוח ים פעיל. הגדר ספק פעיל בטאב ההגדרות לפני שימוש בכלי הצירוף.
-      </div>
+      <LuxShell>
+        <LuxTitle overline="— Consolidation planner">
+          צירוף <LuxAccent>משלוחים.</LuxAccent>
+        </LuxTitle>
+        <div
+          style={{
+            background: "rgba(232,180,180,0.06)",
+            borderRadius: 10,
+            padding: "14px 18px",
+            color: "#e8b4b4",
+            fontSize: 14,
+            boxShadow: "inset 0 0 0 1px rgba(232,180,180,0.2)",
+          }}
+        >
+          ⚠️ אין ספק שילוח ים פעיל. הגדר ספק פעיל בטאב ההגדרות לפני שימוש בכלי הצירוף.
+        </div>
+      </LuxShell>
     );
   }
 
   return (
-    <section className="rounded-xl border border-border bg-card p-5 space-y-4" dir="rtl">
-      <header className="space-y-1">
-        <h2 className="text-base font-medium flex items-center gap-2">
-          <Ship className="size-4 text-primary" />
-          צירוף משלוחים — תכנון
-        </h2>
-        <p className="text-xs text-muted-foreground">
-          סמן הזמנות ים מאותו זמן כדי לראות כמה תחסוך אם תשלח אותן יחד במקום כל
-          אחת בנפרד. כלי תכנון בלבד — לא משנה מחירים ללקוחות. ספק: {carrier.name}.
-        </p>
-      </header>
+    <LuxShell>
+      <LuxTitle
+        overline="— Consolidation planner"
+        subtitle={`סמן הזמנות ים מאותו זמן כדי לראות כמה תחסוך אם תשלח אותן יחד במקום כל אחת בנפרד. כלי תכנון בלבד — לא משנה מחירים ללקוחות. ספק: ${carrier.name}.`}
+      >
+        צירוף משלוחים — <LuxAccent>תכנון.</LuxAccent>
+      </LuxTitle>
 
-      {/* Candidate list */}
       {candidates.length === 0 ? (
-        <p className="text-xs text-muted-foreground py-6 text-center border border-dashed border-border rounded-md">
+        <div
+          style={{
+            background: "var(--lux-card)",
+            borderRadius: 10,
+            padding: "32px 18px",
+            textAlign: "center",
+            color: "#8a7f74",
+            fontSize: 14,
+            boxShadow: "inset 0 0 0 1px var(--lux-line)",
+          }}
+        >
           אין הזמנות ים סופיות לצירוף כרגע.
-        </p>
+        </div>
       ) : (
-        <div className="flex flex-col gap-1.5">
-          {candidates.map((c) => {
-            const isSel = selected.has(c.id);
-            const solo = soloUsdById.get(c.id) ?? 0;
-            return (
-              <label
-                key={c.id}
-                className={cn(
-                  "flex items-center gap-3 rounded-lg border p-2.5 cursor-pointer transition-colors",
-                  isSel ? "border-primary bg-primary/5" : "border-border bg-background/40 hover:bg-secondary/40"
-                )}
-              >
-                <input type="checkbox" checked={isSel} onChange={() => toggle(c.id)} className="size-4 shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-medium truncate">{c.customerName ?? "לקוח ללא שם"}</span>
-                    {c.stage && (
-                      <span className="text-[10px] rounded bg-muted/50 px-1.5 py-0.5 text-muted-foreground shrink-0">
-                        {STAGE_LABEL[c.stage] ?? c.stage}
-                      </span>
-                    )}
-                    {ghlContactBase && c.ghlContactId && (
-                      <a
-                        href={`${ghlContactBase}${c.ghlContactId}`}
-                        target="_blank"
-                        rel="noreferrer"
-                        onClick={(e) => e.stopPropagation()}
-                        className="text-muted-foreground hover:text-primary shrink-0"
-                        title="כרטיס לקוח ב-GHL"
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "1fr 320px",
+            gap: 18,
+            alignItems: "start",
+          }}
+        >
+          {/* candidate list */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>
+            <div className="lux-label" style={{ marginBottom: 2 }}>
+              הזמנות ים סופיות · בחר לצירוף
+            </div>
+            {candidates.map((c) => {
+              const isSel = selected.has(c.id);
+              const solo = soloUsdById.get(c.id) ?? 0;
+              return (
+                <label
+                  key={c.id}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 14,
+                    background: isSel ? "#1d1b1a" : "#161514",
+                    borderRadius: 8,
+                    padding: "14px 18px",
+                    cursor: "pointer",
+                    boxShadow: isSel
+                      ? "inset 0 0 0 1px rgba(190,198,224,0.3)"
+                      : "inset 0 0 0 1px rgba(69,70,77,0.16)",
+                    transition: "box-shadow .12s ease, background .12s ease",
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={isSel}
+                    onChange={() => toggle(c.id)}
+                    style={{ position: "absolute", opacity: 0, pointerEvents: "none" }}
+                    aria-hidden
+                  />
+                  <span
+                    style={{
+                      width: 20,
+                      height: 20,
+                      borderRadius: 5,
+                      background: isSel ? "rgba(190,198,224,0.2)" : "#211f1e",
+                      boxShadow: isSel
+                        ? "inset 0 0 0 1px rgba(190,198,224,0.5)"
+                        : "inset 0 0 0 1px rgba(69,70,77,0.3)",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      flexShrink: 0,
+                    }}
+                  >
+                    {isSel ? <Check size={13} strokeWidth={2.5} color="#bec6e0" /> : null}
+                  </span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <span
+                        style={{ fontSize: 15, color: "#e6e1e0", fontWeight: 500 }}
+                        className="truncate"
                       >
-                        <ExternalLink className="size-3" />
-                      </a>
-                    )}
+                        {c.customerName ?? "לקוח ללא שם"}
+                      </span>
+                      {c.stage && (
+                        <span
+                          style={{
+                            fontSize: 10,
+                            color: "#8a7f74",
+                            background: "#211f1e",
+                            padding: "2px 8px",
+                            borderRadius: 4,
+                            flexShrink: 0,
+                          }}
+                        >
+                          {STAGE_LABEL[c.stage] ?? c.stage}
+                        </span>
+                      )}
+                      {ghlContactBase && c.ghlContactId && (
+                        <a
+                          href={`${ghlContactBase}${c.ghlContactId}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          title="כרטיס לקוח ב-GHL"
+                          style={{ color: "#8a7f74", flexShrink: 0, display: "inline-flex" }}
+                        >
+                          <ExternalLink size={13} />
+                        </a>
+                      )}
+                    </div>
+                    <div
+                      style={{ fontSize: 11, color: "#8a7f74", marginTop: 2 }}
+                      className="truncate"
+                    >
+                      {c.productName ?? "—"}
+                      {c.quantity ? ` · ${c.quantity.toLocaleString()} יח'` : ""}
+                    </div>
                   </div>
-                  <div className="text-[11px] text-muted-foreground truncate">
-                    {c.productName ?? "—"}
-                    {c.quantity ? ` · ${c.quantity.toLocaleString()} יח'` : ""}
+                  <div style={{ textAlign: "left", flexShrink: 0 }}>
+                    <div
+                      style={{
+                        fontSize: 15,
+                        color: "#e6e1e0",
+                        fontVariantNumeric: "tabular-nums",
+                      }}
+                    >
+                      {c.cbm} קוב
+                    </div>
+                    <div
+                      style={{
+                        fontSize: 11,
+                        color: "#8a7f74",
+                        fontVariantNumeric: "tabular-nums",
+                      }}
+                    >
+                      לבד ₪{ils(solo)}
+                    </div>
                   </div>
-                </div>
-                <div className="text-left shrink-0 tabular-nums">
-                  <div className="text-sm font-medium">{c.cbm} קוב</div>
-                  <div className="text-[11px] text-muted-foreground">לבד ₪{ils(solo)}</div>
-                </div>
-              </label>
-            );
-          })}
-        </div>
-      )}
+                </label>
+              );
+            })}
+          </div>
 
-      {/* Result */}
-      {result && (
-        <div className="rounded-lg border border-primary/30 bg-primary/5 p-4 space-y-3">
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
-            <Stat label="נפח מאוחד" value={`${result.combinedCbm} קוב`} />
-            <Stat label="בנפרד" value={`₪${ils(result.soloTotalUsd)}`} sub={`$${result.soloTotalUsd.toFixed(0)}`} />
-            <Stat label="מאוחד" value={`₪${ils(result.combinedUsd)}`} sub={`$${result.combinedUsd.toFixed(0)} · $${result.combinedPerCbmUsd.toFixed(0)}/קוב`} />
-            <Stat
-              label="חיסכון"
-              value={`₪${ils(result.savingUsd)}`}
-              sub={`$${result.savingUsd.toFixed(0)}`}
-              highlight
-            />
-          </div>
-          <div className="flex items-start gap-2 text-xs rounded-md bg-background/50 border border-border p-2.5">
-            <PackageCheck className="size-4 text-primary shrink-0 mt-0.5" />
-            <span>{result.recommendation.text}</span>
-          </div>
+          {/* live comparison rail */}
+          <SummaryRail
+            count={selected.size}
+            combinedCbm={result?.combinedCbm}
+            soloIls={result ? ils(result.soloTotalUsd) : null}
+            combinedIls={result ? ils(result.combinedUsd) : null}
+            savingIls={result ? ils(result.savingUsd) : null}
+            recommendation={result?.recommendation.text ?? null}
+          />
         </div>
       )}
-    </section>
+    </LuxShell>
   );
 }
 
-function Stat({
-  label,
-  value,
-  sub,
-  highlight,
+function SummaryRail({
+  count,
+  combinedCbm,
+  soloIls,
+  combinedIls,
+  savingIls,
+  recommendation,
 }: {
-  label: string;
-  value: string;
-  sub?: string;
-  highlight?: boolean;
+  count: number;
+  combinedCbm: number | undefined;
+  soloIls: string | null;
+  combinedIls: string | null;
+  savingIls: string | null;
+  recommendation: string | null;
 }) {
   return (
-    <div className="flex flex-col">
-      <span className="text-[11px] text-muted-foreground">{label}</span>
-      <span className={cn("text-lg font-semibold tabular-nums", highlight && "text-success")}>{value}</span>
-      {sub && <span className="text-[10px] text-muted-foreground tabular-nums">{sub}</span>}
+    <div
+      style={{
+        position: "sticky",
+        top: 12,
+        background: "#1d1b1a",
+        borderRadius: 8,
+        padding: "22px 22px",
+        boxShadow: `inset 0 0 0 1px ${
+          count > 0 ? "rgba(190,198,224,0.22)" : "rgba(69,70,77,0.16)"
+        }`,
+      }}
+    >
+      <div
+        className="lux-label"
+        style={{ color: count > 0 ? "#bec6e0" : "#8a7f74", marginBottom: 18 }}
+      >
+        {count === 0 ? "בחר כדי להתחיל" : `${count} נבחרו · השוואה חיה`}
+      </div>
+
+      {count === 0 ? (
+        <div style={{ fontSize: 12.5, color: "#8a7f74", lineHeight: 1.55 }}>
+          סמן הזמנות מהרשימה כדי לראות חיסכון במשלוח מאוחד.
+        </div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          <div>
+            <div style={{ fontSize: 12, color: "#8a7f74", marginBottom: 3 }}>נפח מאוחד</div>
+            <div
+              style={{
+                fontFamily: "var(--font-body), Heebo, system-ui",
+                fontWeight: 300,
+                fontSize: 22,
+                color: "#e6e1e0",
+                fontVariantNumeric: "tabular-nums",
+              }}
+            >
+              {combinedCbm} קוב
+            </div>
+          </div>
+
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "baseline",
+            }}
+          >
+            <div>
+              <div style={{ fontSize: 12, color: "#8a7f74", marginBottom: 3 }}>בנפרד</div>
+              <div
+                style={{
+                  fontSize: 18,
+                  color: "#c6c6cd",
+                  fontVariantNumeric: "tabular-nums",
+                }}
+              >
+                ₪{soloIls}
+              </div>
+            </div>
+            <div style={{ textAlign: "left" }}>
+              <div style={{ fontSize: 12, color: "#8a7f74", marginBottom: 3 }}>מאוחד</div>
+              <div
+                style={{
+                  fontSize: 18,
+                  color: "#c6c6cd",
+                  fontVariantNumeric: "tabular-nums",
+                }}
+              >
+                ₪{combinedIls}
+              </div>
+            </div>
+          </div>
+
+          <div
+            style={{
+              padding: "14px 16px",
+              borderRadius: 8,
+              background: "rgba(127,211,168,0.08)",
+              boxShadow: "inset 0 0 0 1px rgba(127,211,168,0.25)",
+            }}
+          >
+            <div style={{ fontSize: 12, color: "#8a7f74", marginBottom: 3 }}>חיסכון</div>
+            <div
+              style={{
+                fontFamily: "var(--font-body), Heebo, system-ui",
+                fontWeight: 300,
+                fontSize: 30,
+                color: "#7fd3a8",
+                fontVariantNumeric: "tabular-nums",
+                lineHeight: 1.05,
+              }}
+            >
+              ₪{savingIls}
+            </div>
+          </div>
+
+          {recommendation && (
+            <div
+              style={{
+                display: "flex",
+                alignItems: "flex-start",
+                gap: 9,
+                padding: "13px 14px",
+                borderRadius: 8,
+                background: "#161514",
+                boxShadow: "inset 0 0 0 1px rgba(69,70,77,0.16)",
+              }}
+            >
+              <PackageCheck size={17} color="#bec6e0" style={{ flexShrink: 0 }} />
+              <span style={{ fontSize: 12.5, lineHeight: 1.55, color: "#c6c6cd" }}>
+                {recommendation}
+              </span>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
