@@ -38,24 +38,5 @@ export default async function FactoryFlowWidgetPage({
     );
   }
 
-  return (
-    <div style={{ maxWidth: 960, margin: "0 auto", padding: 16 }}>
-      <div
-        style={{
-          background: "#1a1d24",
-          border: "1px solid #2a2d34",
-          borderRadius: 8,
-          padding: "10px 16px",
-          marginBottom: 16,
-        }}
-      >
-        <strong style={{ fontSize: 16 }}>🏭 הצעות מפעל</strong>
-        <span style={{ marginRight: 12, color: "#a1a1aa", fontSize: 13 }}>
-          · בחר ליד למטה כדי להתחיל
-        </span>
-      </div>
-
-      <FactoryFlowView apiToken={token} />
-    </div>
-  );
+  return <FactoryFlowView apiToken={token} />;
 }
