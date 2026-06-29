@@ -1076,8 +1076,8 @@ function EstimateTab({ apiToken, shippingOptions, sid, leadName, initialMargins 
               />
               <span className="text-[11px] text-muted-foreground">
                 {moldsValid
-                  ? `נוסף על ה‑版费 ומתחלק על ${effectiveQty.toLocaleString("he-IL")} יח׳ = ¥${(moldsParsed / effectiveQty).toFixed(3)} ליחידה (נכלל בעלות מפעל וברווח)`
-                  : "ריק → רק ה‑版费 האוטומטי (אם יש)"}
+                  ? `מולדים ידני — מתחלק על ${effectiveQty.toLocaleString("he-IL")} יח׳ = ¥${(moldsParsed / effectiveQty).toFixed(3)} ליחידה · pass-through בנפרד מהגלופה האוטומטית`
+                  : "ריק → רק הגלופה האוטומטית (אם יש למינציה)"}
               </span>
             </div>
           </Section>

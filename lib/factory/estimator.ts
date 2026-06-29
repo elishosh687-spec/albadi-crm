@@ -42,7 +42,12 @@ export interface EstimateResult {
   refused?: string;            // reason → route to factory
   factoryName?: string;
   factoryUnitCostCny?: number; // base + colors + handle + lam (per unit; NO plate fee)
-  plateFeeOneTimeCny?: number; // 版费, separate one-time line (× colors)
+  plateFeeOneTimeCny?: number; // 版费, total one-time = platePerColorCny × colors
+  platePerColorCny?: number;   // 版费 per single colour (BEFORE × colors). The
+                               // route wires this into the engine's
+                               // laminationColorPlateFee so the engine handles
+                               // plate fee on the same pass-through path used
+                               // for catalog products.
   breakdown?: EstimateBreakdown;
   carton?: CartonEstimate;
   confidence?: "high" | "medium" | "low";
@@ -189,6 +194,7 @@ export async function estimateFactoryCny(spec: EstimateSpec, coeffsArg?: Estimat
     factoryName: winner.factory,
     factoryUnitCostCny: r2(winner.unitCny),
     plateFeeOneTimeCny: plateOneTime,
+    platePerColorCny: spec.hasLamination ? r2(platePer) : 0,
     breakdown: winner.bd,
     carton: carton ?? undefined,
     confidence,

@@ -72,19 +72,36 @@ export async function GET(req: NextRequest) {
   const cny = est.factoryUnitCostCny!;
   const c = est.carton ?? { qty: 250, weightKg: 5, lengthCm: 40, widthCm: 30, heightCm: 40 };
   const flat = { "1000": cny, "3000": cny, "5000": cny, "10000": cny };
+  // Wire the auto plate fee through the engine's laminationColorPlateFee path
+  // (with selectedFeatureIds: ["f1"] + logoColors). The engine treats plate fee
+  // as pass-through (no margin), same as shipping. The base bag price is
+  // already baked into the flat prices below, so passing hasHandles/colors
+  // here does NOT double-count — colorAddons is empty for the lamination
+  // path (engine.ts line 92), and we set hasHandles:false so the handles
+  // addon is skipped (already baked into factoryUnitCostCny).
+  // userMoldsCny remains a separate pass-through one-time line.
+  const lamFlat: Record<string, number> = spec.hasLamination ? { ...flat } : {};
   const custom: Product = {
     id: "estimate", dimensions: `H${spec.heightCm}${spec.depthCm ? `*D${spec.depthCm}` : ""}*W${spec.widthCm}`,
-    description: `אומדן ${est.factoryName}`, sortOrder: 9999, laminationColorPlateFee: 0,
-    withHandles: { prices: flat, carton: { qty: c.qty, weight: c.weightKg, length: c.lengthCm, width: c.widthCm, height: c.heightCm } },
-    withoutHandles: { prices: flat, carton: { qty: c.qty, weight: c.weightKg, length: c.lengthCm, width: c.widthCm, height: c.heightCm } },
+    description: `אומדן ${est.factoryName}`, sortOrder: 9999,
+    laminationColorPlateFee: est.platePerColorCny ?? 0,
+    withHandles: { prices: flat, carton: { qty: c.qty, weight: c.weightKg, length: c.lengthCm, width: c.widthCm, height: c.heightCm }, laminationPrices: lamFlat },
+    withoutHandles: { prices: flat, carton: { qty: c.qty, weight: c.weightKg, length: c.lengthCm, width: c.widthCm, height: c.heightCm }, laminationPrices: lamFlat },
   };
   const cfg = buildConfig(dbConfig, custom, marginOverride);
   const form: QuoteFormData = {
     productId: "estimate", quantityTierId: "", quantityOverride: spec.quantity,
-    hasHandles: false, logoColors: 1, shippingOptionId: shipping, selectedFeatureIds: [],
-    // 版费 (auto plate fee) + Eli's own one-time mold/template fee, as the single
-    // one-time line amortized across the order by the engine.
-    moldsCostCny: (est.plateFeeOneTimeCny ?? 0) + userMoldsCny,
+    hasHandles: false,
+    // Colors are ALREADY baked into factoryUnitCostCny by the estimator for
+    // non-lamination quotes (predictFactory adds the per-unit color addon).
+    // When laminated, the per-unit lam price doesn't include colours — the
+    // engine multiplies plate fee × logoColors via laminationColorPlateFee.
+    // So pass real colours ONLY when laminated; otherwise force 1 to avoid
+    // double-counting via the engine's colorAddons table.
+    logoColors: spec.hasLamination ? spec.logoColors : 1,
+    shippingOptionId: shipping,
+    selectedFeatureIds: spec.hasLamination ? ["f1"] : [],
+    moldsCostCny: userMoldsCny,
   };
   const result = calculateQuote(form, cfg);
   if (!result) return NextResponse.json({ ok: true, estimate: { ...est, ok: false, refused: "החישוב נכשל — שלח למפעל" } });

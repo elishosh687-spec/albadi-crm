@@ -120,14 +120,18 @@ export function DetailedBreakdown(props: BreakdownInput & { defaultOpen?: boolea
                   <ComponentRow label="תוספת למינציה" cny={v.components.laminationAddonCny} cnyToIls={v.fx.cnyToIls} />
                 )}
                 {v.components.plateFeeCny > 0 && (
-                  <ComponentRow label="plate fee (אמורטיזציה)" cny={v.components.plateFeeCny} cnyToIls={v.fx.cnyToIls} />
+                  <ComponentRow
+                    label="גלופה (אוטומטי, מהקטלוג) — pass-through"
+                    cny={v.components.plateFeeCny}
+                    cnyToIls={v.fx.cnyToIls}
+                  />
                 )}
                 {v.components.logoAddonCny > 0 && (
                   <ComponentRow label="צבעי הדפסה" cny={v.components.logoAddonCny} cnyToIls={v.fx.cnyToIls} />
                 )}
                 {v.components.moldsPerUnitCny !== undefined && v.components.moldsPerUnitCny > 0 && (
                   <ComponentRow
-                    label={`מולדים — חד-פעמי (≈ ${v.components.moldsPerUnitCny.toFixed(3)}¥/יח׳ אם היו מתחלקים על ${input.quantity.toLocaleString("he-IL")})`}
+                    label={`מולדים (ידני) — חד-פעמי (≈ ${v.components.moldsPerUnitCny.toFixed(3)}¥/יח׳ על ${input.quantity.toLocaleString("he-IL")})`}
                     cny={v.components.moldsPerUnitCny}
                     cnyToIls={v.fx.cnyToIls}
                   />
