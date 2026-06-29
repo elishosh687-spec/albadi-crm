@@ -115,60 +115,59 @@ export default async function CalculatorWidgetPage({
     .filter((s) => s.enabled);
 
   return (
-    <div style={{ maxWidth: 900, margin: "0 auto" }}>
-      {/* Lead context banner */}
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          background: "#141312",
-          border: "1px solid rgba(230,225,224,0.08)",
-          borderRadius: 8,
-          padding: "10px 16px",
-          marginBottom: 16,
-          fontSize: 14,
-          color: "#e6e1e0",
-        }}
-      >
-        <div>
-          <strong style={{ fontSize: 16 }}>🧮 מחשבון מחיר</strong>
-          {lead && (
-            <span style={{ marginRight: 12, color: "#8a7f74" }}>
-              · ליד: {lead.name || lead.phone || lead.sid}
-              {lead.stage && (
-                <span
-                  style={{
-                    marginRight: 8,
-                    padding: "2px 8px",
-                    background: "rgba(190,198,224,0.16)",
-                    color: "#bec6e0",
-                    borderRadius: 9999,
-                    fontSize: 12,
-                  }}
-                >
-                  {lead.stage}
-                </span>
-              )}
-            </span>
+    <div className="lux-theme" dir="rtl" style={{ background: "#1d1b1a", minHeight: "100vh" }}>
+      {/* Lead context strip — slim, no emoji; the calculator's own LuxTitle is the page header */}
+      {(lead || leadError || (!contactId && !sid)) && (
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            background: "rgba(255,255,255,0.025)",
+            borderBottom: "1px solid rgba(230,225,224,0.08)",
+            padding: "10px 26px",
+            fontSize: 13,
+            color: "#c6c6cd",
+            gap: 12,
+            flexWrap: "wrap",
+          }}
+        >
+          <div>
+            {lead ? (
+              <span>
+                <span style={{ color: "#8a7f74" }}>ליד · </span>
+                {lead.name || lead.phone || lead.sid}
+                {lead.stage && (
+                  <span
+                    style={{
+                      marginRight: 8,
+                      padding: "2px 8px",
+                      background: "rgba(190,198,224,0.12)",
+                      color: "#bec6e0",
+                      borderRadius: 9999,
+                      fontSize: 11,
+                    }}
+                  >
+                    {lead.stage}
+                  </span>
+                )}
+              </span>
+            ) : (!contactId && !sid) ? (
+              <span style={{ color: "#8a7f74" }}>ללא ליד — מצב standalone</span>
+            ) : null}
+          </div>
+          {leadError && (
+            <span style={{ color: "#e0a96d", fontSize: 12 }}>⚠️ {leadError}</span>
+          )}
+          {lead?.sid && (
+            <SendCompanyIntroButton
+              sid={lead.sid}
+              apiToken={token}
+              leadName={lead.name}
+            />
           )}
         </div>
-        {leadError && (
-          <span style={{ color: "#f59e0b", fontSize: 13 }}>⚠️ {leadError}</span>
-        )}
-        {!contactId && !sid && (
-          <span style={{ color: "#71717a", fontSize: 13 }}>
-            ⚠️ ללא ליד — מצב standalone
-          </span>
-        )}
-        {lead?.sid && (
-          <SendCompanyIntroButton
-            sid={lead.sid}
-            apiToken={token}
-            leadName={lead.name}
-          />
-        )}
-      </div>
+      )}
 
       <CalculatorWithSettings
         products={DEFAULT_CONFIG.products}
