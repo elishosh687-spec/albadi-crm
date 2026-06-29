@@ -173,21 +173,21 @@ export function calculateQuote(
       ? findClosestPrice(marginMatrix, quantityKey)
       : adminSettings.globalProfitMargin;
   const shippingPerUnitIls = shippingPerUnitUsd * targetRate;
-  // Plate fee (laminationColorCostCny) is PASS-THROUGH like shipping: the
-  // factory charges us a fixed plate-making cost per colour with lamination
-  // (¥290/colour on p2). We charge the customer the exact same cost, no
-  // margin on top. Per-unit it's amortised across the order. Eli confirmed
-  // 2026-06-29: this is external factory cost, not our value-add.
-  const platePerUnitIls = (laminationColorCostCny / exchangeRates.usdToCny) * targetRate;
-  const marginableBaseIls = totalCostPerUnitIls - shippingPerUnitIls - platePerUnitIls;
+  const marginableBaseIls = totalCostPerUnitIls - shippingPerUnitIls;
   // profitMargin is MARGIN-on-price (profit ÷ product price), not markup-on-cost.
-  // product price = cost / (1 - margin); shipping + plate fee added after, pass-through.
+  // product price = cost / (1 - margin); shipping is added after, pass-through.
+  // Plate fee stays inside marginableBaseIls so it gets the margin treatment —
+  // consistent with the non-lamination colorAddon path (both represent the
+  // factory's multi-colour printing cost, just structured differently in the
+  // Feishu catalog). Eli chose 2026-06-29 to keep this symmetry rather than
+  // make plate fee pass-through (which would have made lamination quotes
+  // cheaper than non-lamination ones at high colour counts).
   // Clamp to <100% so a misconfigured value can never divide-by-zero / go negative.
   const marginFrac = Math.min(Math.max(profitMargin, 0), 99.9) / 100;
   // Keep exact (unrounded) for profit and total-order calculations so that
   // changing shipping method does not shift profit via rounding boundaries.
   const sellingPricePerUnitIlsExact =
-    marginableBaseIls / (1 - marginFrac) + shippingPerUnitIls + platePerUnitIls;
+    marginableBaseIls / (1 - marginFrac) + shippingPerUnitIls;
   const sellingPricePerUnitIls = r2(sellingPricePerUnitIlsExact);
 
   // Step 11: One-time mold/tooling, priced as its own line. PASS-THROUGH — we

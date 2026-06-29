@@ -121,7 +121,7 @@ export function DetailedBreakdown(props: BreakdownInput & { defaultOpen?: boolea
                 )}
                 {v.components.plateFeeCny > 0 && (
                   <ComponentRow
-                    label="גלופה (אוטומטי, מהקטלוג) — pass-through"
+                    label="גלופה (אוטומטי, מהקטלוג)"
                     cny={v.components.plateFeeCny}
                     cnyToIls={v.fx.cnyToIls}
                   />
