@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import type { AnalysisAggregate, Pattern } from "@/lib/analysis/aggregate";
 import PlaysEditor from "./PlaysEditor";
 import type { BlockerKey, StagePlay } from "@/lib/sales/stage-plays.he";
+import { LuxShell, LuxTitle, LuxAccent } from "@/components/widget-ui/lux";
 
 const STAGES: [string, string][] = [
   ["__NULL__", "בשאלון"],
@@ -128,13 +129,18 @@ export default function AnalysisScreen({ token }: { token: string }) {
   const pct = matched.total ? Math.round((matched.analyzed / matched.total) * 100) : 0;
 
   return (
-    <div className="gg-theme" dir="rtl" style={{ color: "#f5f6f7", fontSize: 13, padding: 14, lineHeight: 1.5, borderRadius: 12 }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
-        <h2 style={{ margin: 0, fontSize: 16 }}>🔍 ניתוח לידים</h2>
-        <button onClick={() => setShowEditor((s) => !s)} style={btn("neutral")}>
-          {showEditor ? "→ חזרה לניתוח" : "✏️ ערוך פליז"}
-        </button>
-      </div>
+    <LuxShell>
+      <LuxTitle
+        overline="— Lead analysis"
+        subtitle="מה חוסם, מה מתנגד, ומי לא חזר אחרי פולואפ — מבוסס נתוחי ליד."
+        aside={
+          <button onClick={() => setShowEditor((s) => !s)} style={btn("neutral")}>
+            {showEditor ? "→ חזרה לניתוח" : "✏️ ערוך פליז"}
+          </button>
+        }
+      >
+        למה לידים <LuxAccent>לא נסגרים.</LuxAccent>
+      </LuxTitle>
 
       {showEditor ? (
         <PlaysEditor load={loadPlays} save={savePlays} />
@@ -239,37 +245,48 @@ export default function AnalysisScreen({ token }: { token: string }) {
                 <Kpi label="ללא מספיק דאטה" value={`${agg.insufficient}`} />
               </div>
 
-              <PatternList
-                title="חסם מרכזי"
-                patterns={agg.by_blocker}
-                denom={agg.conclusive}
-                open={openPattern}
-                setOpen={setOpenPattern}
-                prefix="b"
-              />
-              <PatternList
-                title="התנגדויות"
-                patterns={agg.by_objection}
-                denom={agg.conclusive}
-                open={openPattern}
-                setOpen={setOpenPattern}
-                prefix="o"
-              />
-              <PatternList
-                title="מעקב ובקשות לראות מוצר"
-                patterns={[agg.followup_failures, agg.sample_gaps].filter((p) => p.count > 0)}
-                denom={agg.conclusive}
-                open={openPattern}
-                setOpen={setOpenPattern}
-                prefix="x"
-              />
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "1.2fr 1fr",
+                  gap: 14,
+                  alignItems: "start",
+                }}
+              >
+                <PatternList
+                  title="חסם מרכזי"
+                  patterns={agg.by_blocker}
+                  denom={agg.conclusive}
+                  open={openPattern}
+                  setOpen={setOpenPattern}
+                  prefix="b"
+                />
+                <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                  <PatternList
+                    title="התנגדויות"
+                    patterns={agg.by_objection}
+                    denom={agg.conclusive}
+                    open={openPattern}
+                    setOpen={setOpenPattern}
+                    prefix="o"
+                  />
+                  <PatternList
+                    title="מעקב ובקשות לראות מוצר"
+                    patterns={[agg.followup_failures, agg.sample_gaps].filter((p) => p.count > 0)}
+                    denom={agg.conclusive}
+                    open={openPattern}
+                    setOpen={setOpenPattern}
+                    prefix="x"
+                  />
+                </div>
+              </div>
             </>
           )}
         </div>
       )}
         </>
       )}
-    </div>
+    </LuxShell>
   );
 }
 
@@ -291,14 +308,12 @@ function PatternList({
   if (!patterns.length) return null;
   const max = Math.max(...patterns.map((p) => p.count), 1);
   return (
-    <div style={{ ...card, marginBottom: 12 }}>
+    <div style={{ ...card }}>
       <div
+        className="lux-label"
         style={{
-          fontSize: 11,
-          color: "#8f939b",
-          textTransform: "uppercase",
-          letterSpacing: "0.04em",
-          marginBottom: 10,
+          marginBottom: 16,
+          letterSpacing: "0.16em",
         }}
       >
         {title}
@@ -339,10 +354,11 @@ function PatternList({
                     fontWeight: 600,
                     color: "#e7cba6",
                     background: "rgba(205,169,120,0.14)",
-                    border: "1px solid rgba(205,169,120,0.30)",
+                    boxShadow: "inset 0 0 0 1px rgba(205,169,120,0.30)",
                     borderRadius: 6,
-                    padding: "1px 7px",
+                    padding: "1px 8px",
                     whiteSpace: "nowrap",
+                    fontVariantNumeric: "tabular-nums",
                   }}
                 >
                   {p.count} · {pct}%
@@ -396,20 +412,23 @@ function Kpi({ label, value, tone }: { label: string; value: string; tone?: "war
   return (
     <div
       style={{
-        background: "rgba(255,255,255,0.04)",
-        border: "1px solid rgba(255,255,255,0.09)",
+        background: "#1d1b1a",
         borderRadius: 9,
-        padding: "10px 12px",
+        padding: "13px 15px",
+        boxShadow: tone === "warn"
+          ? "inset 0 0 0 1px rgba(224,169,109,0.2)"
+          : "inset 0 0 0 1px rgba(69,70,77,0.16)",
       }}
     >
-      <div style={{ fontSize: 10.5, color: "#8f939b", marginBottom: 3 }}>{label}</div>
+      <div style={{ fontSize: 10.5, color: "#8a7f74", marginBottom: 4 }}>{label}</div>
       <div
         style={{
-          fontSize: 19,
-          fontWeight: 600,
-          letterSpacing: "-0.5px",
-          fontFamily: "ui-monospace, 'JetBrains Mono', monospace",
-          color: tone === "warn" ? "#e0a96d" : "#f5f6f7",
+          fontFamily: "var(--font-body), Heebo, system-ui",
+          fontWeight: 300,
+          fontSize: 24,
+          color: tone === "warn" ? "#e0a96d" : "#e6e1e0",
+          fontVariantNumeric: "tabular-nums",
+          lineHeight: 1.1,
         }}
       >
         {value}
@@ -419,61 +438,61 @@ function Kpi({ label, value, tone }: { label: string; value: string; tone?: "war
 }
 
 const chipLead: React.CSSProperties = {
-  fontSize: 12,
+  fontSize: 11.5,
   padding: "3px 9px",
   background: "rgba(255,255,255,0.05)",
-  border: "1px solid rgba(255,255,255,0.11)",
+  border: "1px solid rgba(255,255,255,0.10)",
   borderRadius: 6,
   color: "#d4d6da",
   whiteSpace: "nowrap",
 };
 
 const card: React.CSSProperties = {
-  background: "rgba(255,255,255,0.05)",
-  border: "1px solid rgba(255,255,255,0.11)",
-  borderRadius: 10,
-  padding: 12,
-  backdropFilter: "blur(30px) saturate(1.7)",
-  WebkitBackdropFilter: "blur(30px) saturate(1.7)",
-  boxShadow: "inset 0 1px 0 rgba(255,255,255,0.14), 0 12px 40px rgba(0,0,0,0.4)",
+  background: "#1d1b1a",
+  borderRadius: 8,
+  padding: "18px 20px",
+  boxShadow: "inset 0 0 0 1px rgba(69,70,77,0.16)",
 };
 const lbl: React.CSSProperties = {
   display: "flex",
   flexDirection: "column",
-  gap: 3,
+  gap: 5,
   fontSize: 11,
-  color: "#8f939b",
+  color: "#8a7f74",
 };
 const inp: React.CSSProperties = {
-  background: "rgba(255,255,255,0.05)",
-  border: "1px solid rgba(255,255,255,0.11)",
-  borderRadius: 6,
-  color: "#f5f6f7",
-  padding: "4px 6px",
+  background: "#211f1e",
+  border: 0,
+  boxShadow: "inset 0 0 0 1px rgba(69,70,77,0.18)",
+  borderRadius: 4,
+  color: "#c6c6cd",
+  padding: "8px 12px",
   fontFamily: "inherit",
-  fontSize: 13,
+  fontSize: 12,
 };
 function chip(on: boolean): React.CSSProperties {
   return {
     fontSize: 12,
-    padding: "4px 10px",
+    padding: "5px 12px",
     borderRadius: 99,
     cursor: "pointer",
     fontFamily: "inherit",
     background: on ? "rgba(205,169,120,0.14)" : "transparent",
-    border: `1px solid ${on ? "rgba(205,169,120,0.30)" : "rgba(255,255,255,0.11)"}`,
-    color: on ? "#e7cba6" : "#8f939b",
+    border: 0,
+    boxShadow: `inset 0 0 0 1px ${on ? "rgba(205,169,120,0.30)" : "rgba(69,70,77,0.22)"}`,
+    color: on ? "#e7cba6" : "#8a7f74",
   };
 }
 function btn(tone: "accent" | "neutral"): React.CSSProperties {
   return {
-    padding: "8px 14px",
+    padding: "9px 15px",
     borderRadius: 8,
     cursor: "pointer",
     fontFamily: "inherit",
-    fontSize: 13,
-    border: `1px solid ${tone === "accent" ? "rgba(205,169,120,0.30)" : "rgba(255,255,255,0.11)"}`,
+    fontSize: 12,
+    border: 0,
+    boxShadow: `inset 0 0 0 1px ${tone === "accent" ? "rgba(205,169,120,0.30)" : "rgba(69,70,77,0.22)"}`,
     background: tone === "accent" ? "rgba(205,169,120,0.14)" : "transparent",
-    color: tone === "accent" ? "#e7cba6" : "#8f939b",
+    color: tone === "accent" ? "#e7cba6" : "#8a7f74",
   };
 }
