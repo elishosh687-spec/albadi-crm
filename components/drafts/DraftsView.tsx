@@ -82,31 +82,28 @@ export function DraftsView({ apiToken }: { apiToken: string }) {
 
   return (
     <div className="flex flex-col gap-4" dir="rtl">
-      <header className="flex items-end justify-between gap-4 flex-wrap">
-        <div>
-          <h1
-            className="text-2xl font-medium tracking-tight"
-            style={{ fontFamily: "var(--font-display)" }}
-          >
-            תור אישורים
-          </h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            {drafts.length} טיוטות ממתינות. הבוט מציע — אתה מאשר, עורך, או דוחה.
-            <span className="mr-2 text-[11px] text-muted-foreground/70">
-              · עודכן {timeAgoHe(refreshedAt.toISOString())}
-            </span>
-          </p>
-        </div>
+      <div className="flex items-center justify-between text-xs" style={{ color: "#8a7f74" }}>
+        <span>
+          {drafts.length} טיוטות ממתינות · עודכן {timeAgoHe(refreshedAt.toISOString())}
+        </span>
         <button
           type="button"
           onClick={() => load(true)}
           disabled={loading}
-          className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background/40 px-3 py-1.5 text-xs hover:bg-secondary disabled:opacity-60"
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs disabled:opacity-60"
+          style={{
+            background: "transparent",
+            border: 0,
+            borderRadius: 9999,
+            boxShadow: "inset 0 0 0 1px rgba(69,70,77,0.2)",
+            color: "#8a7f74",
+            cursor: "pointer",
+          }}
         >
           {loading ? <Loader2 className="size-3.5 animate-spin" /> : <RefreshCw className="size-3.5" />}
           רענן
         </button>
-      </header>
+      </div>
 
       {error && (
         <div className="rounded-lg border border-destructive/40 bg-destructive/5 p-3 text-sm text-destructive">
@@ -172,16 +169,29 @@ function DraftRowButton({
     <button
       type="button"
       onClick={onSelect}
-      className={cn(
-        "text-right rounded-xl border bg-card p-3 transition-colors flex flex-col gap-2",
-        selected ? "border-primary/60 bg-primary/10" : "border-border hover:bg-card/70"
-      )}
+      className="text-right flex flex-col gap-2 p-3.5"
+      style={{
+        background: "#1d1b1a",
+        borderRadius: 10,
+        boxShadow: selected
+          ? "inset 0 0 0 1px rgba(190,198,224,0.3)"
+          : "inset 0 0 0 1px rgba(69,70,77,0.16)",
+        cursor: "pointer",
+        transition: "box-shadow .12s ease",
+      }}
     >
       <div className="flex items-center justify-between gap-2">
-        <span className="font-medium text-sm truncate">
+        <span style={{ fontSize: 14, fontWeight: 500, color: "#e6e1e0" }} className="truncate">
           {draft.leadName || draft.leadPhone || draft.manychatSubId}
         </span>
-        <span className="text-[10px] text-muted-foreground tabular-nums shrink-0">
+        <span
+          className="tabular-nums shrink-0"
+          style={{
+            fontFamily: "var(--font-editorial-sans), Manrope, system-ui",
+            fontSize: 10,
+            color: "#8a7f74",
+          }}
+        >
           {timeAgoHe(draft.generatedAt)}
         </span>
       </div>
@@ -192,17 +202,28 @@ function DraftRowButton({
           </span>
         )}
         {draft.moneyReason && (
-          <span className="text-[10px] rounded-full border border-border bg-background/40 px-2 py-0.5 text-muted-foreground">
+          <span
+            className="text-[10px] rounded-full px-2 py-0.5"
+            style={{ background: "#211f1e", color: "#8a7f74" }}
+          >
             {draft.moneyReason}
           </span>
         )}
         {draft.leadBotPaused && (
-          <span className="text-[10px] rounded-full border border-warning/40 bg-warning/10 px-2 py-0.5 text-warning">
+          <span
+            className="text-[10px] rounded-full px-2 py-0.5"
+            style={{ background: "rgba(224,169,109,0.12)", color: "#e0a96d" }}
+          >
             בוט מושהה
           </span>
         )}
       </div>
-      <div className="text-xs text-muted-foreground line-clamp-2">{draft.draftText}</div>
+      <div
+        className="line-clamp-2"
+        style={{ fontSize: 12, color: "#8a7f74", lineHeight: 1.5 }}
+      >
+        {draft.draftText}
+      </div>
     </button>
   );
 }
@@ -277,32 +298,58 @@ function DraftDetail({
     STAGE_TONE[(draft.leadStage ?? "UNCLASSIFIED").toUpperCase()] ?? STAGE_TONE.UNCLASSIFIED;
 
   return (
-    <div className="rounded-xl border border-border bg-card p-5 flex flex-col gap-5 max-h-[70vh] overflow-auto">
-      <div>
-        <div className="flex items-start gap-3">
-          <div className="flex-1 min-w-0">
-            <div className="text-xl font-medium" style={{ fontFamily: "var(--font-display)" }}>
-              {draft.leadName || "(ללא שם)"}
-            </div>
-            <div className="text-xs text-muted-foreground mt-0.5 truncate">
-              {draft.leadPhone || draft.manychatSubId}
-              {draft.lastInboundAt && ` · ${timeAgoHe(draft.lastInboundAt)}`}
-            </div>
+    <div
+      className="flex flex-col gap-5 max-h-[70vh] overflow-auto"
+      style={{
+        background: "#1d1b1a",
+        borderRadius: 10,
+        padding: "22px 24px",
+        boxShadow: "inset 0 0 0 1px rgba(69,70,77,0.16)",
+      }}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex-1 min-w-0">
+          <div style={{ fontWeight: 500, fontSize: 18, color: "#e6e1e0" }}>
+            {draft.leadName || "(ללא שם)"}
           </div>
-          {draft.leadStage && (
-            <span className={cn("text-xs rounded-full px-2.5 py-1 shrink-0", tone.pill)}>
-              {STAGE_LABEL[draft.leadStage] ?? draft.leadStage}
-            </span>
-          )}
+          <div
+            className="truncate"
+            style={{
+              fontFamily: "var(--font-editorial-sans), Manrope, system-ui",
+              fontSize: 11,
+              color: "#8a7f74",
+              marginTop: 2,
+              fontVariantNumeric: "tabular-nums",
+            }}
+          >
+            {draft.leadPhone || draft.manychatSubId}
+            {draft.lastInboundAt && ` · לפני ${timeAgoHe(draft.lastInboundAt)}`}
+          </div>
         </div>
+        {draft.leadStage && (
+          <span className={cn("text-xs rounded-full px-2.5 py-1 shrink-0", tone.pill)}>
+            {STAGE_LABEL[draft.leadStage] ?? draft.leadStage}
+          </span>
+        )}
       </div>
 
       {draft.leadBotSummary && (
         <div>
-          <div className="text-xs uppercase tracking-wider text-muted-foreground mb-1.5">
+          <div className="lux-label" style={{ marginBottom: 6 }}>
             סיכום הבוט
           </div>
-          <div className="text-sm bg-background/50 border border-border rounded-lg p-3 whitespace-pre-wrap">
+          <div
+            className="whitespace-pre-wrap"
+            style={{
+              background: "#161514",
+              borderRadius: 8,
+              padding: "13px 15px",
+              fontSize: 13,
+              lineHeight: 1.6,
+              color: "#c6c6cd",
+              boxShadow: "inset 0 0 0 1px rgba(69,70,77,0.14)",
+            }}
+          >
             {draft.leadBotSummary}
           </div>
         </div>
@@ -310,18 +357,29 @@ function DraftDetail({
 
       {draft.lastInboundText && (
         <div>
-          <div className="text-xs uppercase tracking-wider text-muted-foreground mb-1.5 flex items-center gap-1.5">
+          <div className="lux-label flex items-center gap-1.5" style={{ marginBottom: 6 }}>
             <MessageSquare className="size-3" />
             הודעה אחרונה מהלקוח
           </div>
-          <div className="text-sm bg-background/50 border border-border rounded-lg p-3 whitespace-pre-wrap">
+          <div
+            className="whitespace-pre-wrap"
+            style={{
+              background: "#161514",
+              borderRadius: 8,
+              padding: "13px 15px",
+              fontSize: 13,
+              lineHeight: 1.6,
+              color: "#e6e1e0",
+              boxShadow: "inset 0 0 0 1px rgba(69,70,77,0.14)",
+            }}
+          >
             {draft.lastInboundText}
           </div>
         </div>
       )}
 
       <div>
-        <div className="text-xs uppercase tracking-wider text-muted-foreground mb-1.5">
+        <div className="lux-label" style={{ marginBottom: 6 }}>
           טיוטה לאישור — אפשר לערוך
         </div>
         <textarea
@@ -329,28 +387,52 @@ function DraftDetail({
           onChange={(e) => setText(e.target.value)}
           rows={5}
           dir="rtl"
-          className="w-full bg-background/50 border border-border rounded-lg p-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring/30"
+          className="w-full focus:outline-none"
           disabled={pending}
+          style={{
+            background: "#211f1e",
+            borderRadius: 8,
+            padding: "14px 15px",
+            fontSize: 14,
+            lineHeight: 1.7,
+            color: "#e6e1e0",
+            boxShadow: "inset 0 0 0 1px rgba(190,198,224,0.2)",
+            border: 0,
+            minHeight: 110,
+            fontFamily: "inherit",
+          }}
         />
       </div>
 
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2.5">
         <button
           type="button"
           onClick={approve}
           disabled={pending || !text.trim()}
-          className="inline-flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
+          className="lux-cta-champagne"
+          style={{ minHeight: 44, padding: "0 20px", fontSize: 14 }}
         >
-          {pending ? <Loader2 className="size-3.5 animate-spin" /> : <Send className="size-3.5" />}
+          {pending ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
           {pending ? "שולח…" : "אשר ושלח"}
         </button>
         <button
           type="button"
           onClick={() => setShowReject((v) => !v)}
           disabled={pending}
-          className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background/40 px-4 py-2 text-sm font-medium hover:bg-secondary"
+          className="inline-flex items-center gap-1.5"
+          style={{
+            height: 44,
+            padding: "0 18px",
+            border: 0,
+            borderRadius: 9999,
+            cursor: "pointer",
+            fontSize: 13,
+            color: "#e6e1e0",
+            background: "transparent",
+            boxShadow: "inset 0 0 0 1px rgba(69,70,77,0.2)",
+          }}
         >
-          <X className="size-3.5" />
+          <X className="size-4" style={{ color: "#e8b4b4" }} />
           דחה
         </button>
         {waLink && (
@@ -358,9 +440,19 @@ function DraftDetail({
             href={waLink}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background/40 px-4 py-2 text-sm font-medium hover:bg-secondary"
+            className="inline-flex items-center gap-1.5"
+            style={{
+              height: 44,
+              padding: "0 18px",
+              borderRadius: 9999,
+              fontSize: 13,
+              color: "#e6e1e0",
+              background: "transparent",
+              boxShadow: "inset 0 0 0 1px rgba(69,70,77,0.2)",
+              textDecoration: "none",
+            }}
           >
-            <ExternalLink className="size-3.5" />
+            <ExternalLink className="size-4" style={{ color: "#7fd3a8" }} />
             WhatsApp
           </a>
         )}

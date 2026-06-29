@@ -37,24 +37,5 @@ export default async function BotDecisionsWidgetPage({
     );
   }
 
-  return (
-    <div style={{ maxWidth: 1100, margin: "0 auto", padding: 16 }}>
-      <div
-        style={{
-          background: "#1a1d24",
-          border: "1px solid #2a2d34",
-          borderRadius: 8,
-          padding: "10px 16px",
-          marginBottom: 16,
-        }}
-      >
-        <strong style={{ fontSize: 16 }}>🤖 פיקוח על הבוט</strong>
-        <span style={{ marginRight: 12, color: "#a1a1aa", fontSize: 13 }}>
-          · תור אישורים + היסטוריית החלטות
-        </span>
-      </div>
-
-      <DraftsWithDecisions apiToken={token} />
-    </div>
-  );
+  return <DraftsWithDecisions apiToken={token} />;
 }
