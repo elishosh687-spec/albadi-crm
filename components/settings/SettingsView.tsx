@@ -397,7 +397,14 @@ function FormSection({
               open ? "" : "-rotate-90"
             )}
           />
-          <span className="grid place-items-center size-7 rounded-lg bg-primary/10 text-primary shrink-0">
+          <span
+            className="grid place-items-center size-7 rounded-lg shrink-0"
+            style={{
+              background: "rgba(190,198,224,0.12)",
+              color: "#bec6e0",
+              boxShadow: "inset 0 0 0 1px rgba(190,198,224,0.22)",
+            }}
+          >
             <Icon className="size-4" />
           </span>
           <div className="min-w-0">

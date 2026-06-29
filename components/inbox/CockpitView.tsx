@@ -14,15 +14,14 @@
  * WON/LOST leads are excluded upstream.
  */
 
-import { type CSSProperties, type ReactNode } from "react";
+import { useState, type CSSProperties, type ReactNode } from "react";
 import {
   Send,
   Phone,
   Clock,
   MessageSquare,
   Sparkles,
-  Reply,
-  TrendingUp,
+  ChevronDown,
 } from "lucide-react";
 import { Avatar } from "@/components/widget-ui";
 import { LuxStat } from "@/components/widget-ui/lux";
@@ -346,19 +345,42 @@ export default function CockpitView({
         </div>
       )}
 
-      {/* slim rows */}
+      {/* slim rows — click anywhere to expand inline with full action panel */}
       {rest.length > 0 && (
-        <div style={{ display: "flex", flexDirection: "column" }}>
-          {rest.map((lead) => (
-            <SlimRow
-              key={lead.sid}
-              lead={lead}
-              onOpenChat={onOpenChat}
-              onSnooze={onSnooze}
-            />
-          ))}
-        </div>
+        <SlimRowList
+          rows={rest}
+          onOpenChat={onOpenChat}
+          onSnooze={onSnooze}
+        />
       )}
+    </div>
+  );
+}
+
+function SlimRowList({
+  rows,
+  onOpenChat,
+  onSnooze,
+}: {
+  rows: CockpitLead[];
+  onOpenChat: (sid: string) => void;
+  onSnooze: (sid: string) => void;
+}) {
+  const [expandedSid, setExpandedSid] = useState<string | null>(null);
+  return (
+    <div style={{ display: "flex", flexDirection: "column" }}>
+      {rows.map((lead) => (
+        <SlimRow
+          key={lead.sid}
+          lead={lead}
+          expanded={expandedSid === lead.sid}
+          onToggle={() =>
+            setExpandedSid((cur) => (cur === lead.sid ? null : lead.sid))
+          }
+          onOpenChat={onOpenChat}
+          onSnooze={onSnooze}
+        />
+      ))}
     </div>
   );
 }
@@ -401,107 +423,206 @@ function TemplateChip({
 
 function SlimRow({
   lead,
+  expanded,
+  onToggle,
   onOpenChat,
   onSnooze,
 }: {
   lead: CockpitLead;
+  expanded: boolean;
+  onToggle: () => void;
   onOpenChat: (sid: string) => void;
   onSnooze: (sid: string) => void;
 }) {
   // FACTORY_WAIT leads get the muted "תזכיר לי מחר" (reversible snooze write);
-  // everyone else gets the champagne primary action. This is a UI affordance
-  // default — NOT a pipeline transition.
+  // everyone else opens to the standard send-offer/full-chat action set.
   const isSnoozeRow = lead.stage === "FACTORY_WAIT";
   const isNegotiation = lead.stage === "CONSIDERATION";
 
   return (
     <div
-      className="cockpit-row"
-      onClick={() => onOpenChat(lead.sid)}
       style={{
-        display: "flex",
-        alignItems: "center",
-        gap: 14,
-        padding: "15px 6px",
         borderTop: "1px solid rgba(69,70,77,0.18)",
+        background: expanded ? "rgba(255,255,255,0.022)" : "transparent",
+        transition: "background .12s ease",
       }}
     >
-      <Avatar name={lead.name || undefined} size={36} />
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontWeight: 500, fontSize: 15 }}>
-          {lead.name || lead.phone || lead.sid}
-        </div>
-        <div
-          style={{
-            fontSize: 12,
-            color: MUTED,
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            whiteSpace: "nowrap",
-          }}
-        >
-          {lead.want || "—"}
-          {lead.value ? (
-            <span style={{ color: CHAMP, fontVariantNumeric: "tabular-nums" }}>
-              {" · "}
-              {lead.value}
-            </span>
-          ) : null}
-        </div>
-      </div>
-
-      <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
-        {lead.stageLabel && (
-          <span
+      {/* row strip */}
+      <div
+        className="cockpit-row"
+        onClick={onToggle}
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 14,
+          padding: "15px 6px",
+        }}
+      >
+        <Avatar name={lead.name || undefined} size={36} />
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontWeight: 500, fontSize: 15 }}>
+            {lead.name || lead.phone || lead.sid}
+          </div>
+          <div
             style={{
-              fontSize: 11.5,
-              color: isNegotiation ? CHAMP : MUTED,
-              marginInlineEnd: 4,
+              fontSize: 12,
+              color: MUTED,
+              overflow: "hidden",
+              textOverflow: "ellipsis",
               whiteSpace: "nowrap",
             }}
           >
-            {lead.stageLabel}
-          </span>
-        )}
-        <span
-          style={insightSquare}
-          onClick={(e) => { e.stopPropagation(); onOpenChat(lead.sid); }}
-          title="ניתוח ליד"
-        >
-          <Sparkles size={16} strokeWidth={2} />
-        </span>
-        {lead.phone ? (
-          <a
-            href={`tel:${lead.phone}`}
-            style={iconSquare}
-            onClick={(e) => e.stopPropagation()}
-            title="התקשר"
+            {lead.want || "—"}
+            {lead.value ? (
+              <span style={{ color: CHAMP, fontVariantNumeric: "tabular-nums" }}>
+                {" · "}
+                {lead.value}
+              </span>
+            ) : null}
+          </div>
+        </div>
+
+        <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+          {lead.stageLabel && (
+            <span
+              style={{
+                fontSize: 11.5,
+                color: isNegotiation ? CHAMP : MUTED,
+                marginInlineEnd: 4,
+                whiteSpace: "nowrap",
+              }}
+            >
+              {lead.stageLabel}
+            </span>
+          )}
+          {/* chevron — visual cue that the row expands */}
+          <span
+            style={{
+              ...iconSquare,
+              transform: expanded ? "rotate(180deg)" : "none",
+              transition: "transform .15s ease",
+            }}
+            aria-hidden
           >
-            <Phone size={16} strokeWidth={1.9} />
-          </a>
-        ) : null}
+            <ChevronDown size={16} strokeWidth={2} />
+          </span>
+        </div>
+      </div>
+
+      {/* expanded action panel — same affordances the HERO has */}
+      {expanded && (
+        <ExpandedActions
+          lead={lead}
+          isSnoozeRow={isSnoozeRow}
+          onOpenChat={onOpenChat}
+          onSnooze={onSnooze}
+        />
+      )}
+    </div>
+  );
+}
+
+function ExpandedActions({
+  lead,
+  isSnoozeRow,
+  onOpenChat,
+  onSnooze,
+}: {
+  lead: CockpitLead;
+  isSnoozeRow: boolean;
+  onOpenChat: (sid: string) => void;
+  onSnooze: (sid: string) => void;
+}) {
+  return (
+    <div
+      style={{
+        background: "#161514",
+        borderRadius: 9,
+        padding: "13px 14px",
+        margin: "0 6px 14px",
+        boxShadow: `inset 0 0 0 1px ${RING}`,
+      }}
+    >
+      {/* script line — the same play surface as the HERO */}
+      {lead.script && (
+        <>
+          <div style={{ fontSize: 11, color: MUTED, marginBottom: 5 }}>
+            מה כדאי לענות
+          </div>
+          <div
+            className="lux-serif"
+            style={{
+              fontStyle: "italic",
+              fontSize: 13.5,
+              lineHeight: 1.55,
+              color: CHAMP,
+              marginBottom: 14,
+            }}
+          >
+            — {lead.script}
+          </div>
+        </>
+      )}
+
+      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
         {isSnoozeRow ? (
           <button
-            style={{ ...ghostPill, height: 34, fontSize: 12 }}
-            onClick={(e) => { e.stopPropagation(); onSnooze(lead.sid); }}
+            className="lux-cta-champagne"
+            style={{ minHeight: 38, padding: "0 16px", fontSize: 13 }}
+            onClick={() => onSnooze(lead.sid)}
           >
-            <Clock size={14} strokeWidth={2} color={MUTED} />
+            <Clock size={14} strokeWidth={2} />
             תזכיר לי מחר
           </button>
         ) : (
           <button
             className="lux-cta-champagne"
-            style={{ minHeight: 34, height: 34, padding: "0 14px", fontSize: 12 }}
-            onClick={(e) => { e.stopPropagation(); onOpenChat(lead.sid); }}
+            style={{ minHeight: 38, padding: "0 16px", fontSize: 13 }}
+            onClick={() => onOpenChat(lead.sid)}
           >
-            {isNegotiation ? (
-              <TrendingUp size={15} strokeWidth={2} />
-            ) : (
-              <Reply size={15} strokeWidth={2} />
-            )}
+            <Send size={14} strokeWidth={2} />
             {lead.actionLabel}
           </button>
         )}
+        <button
+          style={{ ...ghostPill, height: 38, fontSize: 12.5 }}
+          onClick={() => onOpenChat(lead.sid)}
+        >
+          <MessageSquare size={14} strokeWidth={1.9} color={MUTED} />
+          פתח שיחה מלאה
+        </button>
+        {lead.phone && (
+          <a href={`tel:${lead.phone}`} style={{ textDecoration: "none" }}>
+            <button style={{ ...ghostPill, height: 38, fontSize: 12.5 }}>
+              <Phone size={14} strokeWidth={1.9} color={MUTED} />
+              התקשר
+            </button>
+          </a>
+        )}
+        <span style={{ width: 1, height: 22, background: "rgba(69,70,77,0.35)", margin: "0 4px" }} />
+        <span style={{ fontSize: 11, color: MUTED }}>שלח תבנית:</span>
+        <TemplateChip emoji="📐" label="מידות" onClick={() => onOpenChat(lead.sid)} />
+        <TemplateChip emoji="💰" label="מחיר" onClick={() => onOpenChat(lead.sid)} />
+        <TemplateChip emoji="📚" label="קטלוג" onClick={() => onOpenChat(lead.sid)} />
+        <span
+          onClick={() => onOpenChat(lead.sid)}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 6,
+            height: 32,
+            padding: "0 12px",
+            borderRadius: 9999,
+            background: "rgba(190,198,224,0.08)",
+            boxShadow: "inset 0 0 0 1px rgba(190,198,224,0.22)",
+            fontSize: 12,
+            color: COOL,
+            cursor: "pointer",
+          }}
+        >
+          <Sparkles size={13} strokeWidth={2} />
+          ניתוח ליד
+        </span>
       </div>
     </div>
   );
