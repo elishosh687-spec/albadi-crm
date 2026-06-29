@@ -61,7 +61,7 @@ export default function CockpitShell({
 
   if (openSid !== null) {
     return (
-      <div className="gg-theme" dir="rtl">
+      <div className="lux-theme" dir="rtl">
         <button
           onClick={() => setOpenSid(null)}
           style={{
@@ -96,6 +96,7 @@ export default function CockpitShell({
   return (
     <CockpitView
       leads={visible}
+      activeCount={inboxRows.length}
       onOpenChat={(sid) => setOpenSid(sid)}
       onSnooze={handleSnooze}
     />

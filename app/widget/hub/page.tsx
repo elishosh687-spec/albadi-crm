@@ -117,14 +117,14 @@ export default async function HubWidgetPage({
 
   return (
     <div
-      className="gg-theme"
+      className="lux-theme"
       dir="rtl"
       style={{
         display: "flex",
         flexDirection: "column",
         height: "100vh",
         margin: "-12px",
-        background: "#050506",
+        background: "#0d0c0b",
       }}
     >
       <nav
@@ -135,10 +135,10 @@ export default async function HubWidgetPage({
           gap: 4,
           padding: "8px 14px",
           background: "rgba(255,255,255,0.045)",
-          borderBottom: "1px solid rgba(255,255,255,0.08)",
-          backdropFilter: "blur(30px) saturate(1.7)",
-          WebkitBackdropFilter: "blur(30px) saturate(1.7)",
-          boxShadow: "inset 0 1px 0 rgba(255,255,255,0.12)",
+          borderBottom: "1px solid rgba(230,225,224,0.08)",
+          backdropFilter: "blur(30px) saturate(1.4)",
+          WebkitBackdropFilter: "blur(30px) saturate(1.4)",
+          boxShadow: "inset 0 1px 0 rgba(230,225,224,0.06)",
           position: "sticky",
           top: 0,
           zIndex: 10,
@@ -156,10 +156,11 @@ export default async function HubWidgetPage({
             gap: 8,
             paddingInlineEnd: 12,
             marginInlineEnd: 4,
-            borderInlineEnd: "1px solid rgba(255,255,255,0.10)",
-            fontWeight: 700,
+            borderInlineEnd: "1px solid rgba(230,225,224,0.10)",
+            fontWeight: 600,
             fontSize: 15,
-            color: "#fdf3e6",
+            letterSpacing: "-0.01em",
+            color: "#e6e1e0",
             whiteSpace: "nowrap",
             flexShrink: 0,
           }}
@@ -194,10 +195,10 @@ export default async function HubWidgetPage({
                 height: 32,
                 display: "flex",
                 alignItems: "center",
-                background: isActive ? "rgba(205,169,120,0.16)" : "transparent",
-                color: isActive ? "#e7cba6" : "#8f939b",
-                border: `1px solid ${isActive ? "rgba(205,169,120,0.34)" : "transparent"}`,
-                borderRadius: 6,
+                background: isActive ? "rgba(214,196,172,0.14)" : "transparent",
+                color: isActive ? "#e6e1e0" : "#8a7f74",
+                border: `1px solid ${isActive ? "rgba(214,196,172,0.30)" : "transparent"}`,
+                borderRadius: 7,
                 textDecoration: "none",
                 whiteSpace: "nowrap",
                 touchAction: "manipulation",
@@ -221,8 +222,8 @@ export default async function HubWidgetPage({
             height: 32,
             padding: "0 10px",
             borderRadius: 6,
-            border: "1px solid rgba(255,255,255,0.07)",
-            color: "#8f939b",
+            border: "1px solid rgba(230,225,224,0.08)",
+            color: "#8a7f74",
             fontSize: 12.5,
             whiteSpace: "nowrap",
             flexShrink: 0,
@@ -238,9 +239,9 @@ export default async function HubWidgetPage({
               gap: 1,
               padding: "1px 5px",
               borderRadius: 4,
-              border: "1px solid rgba(255,255,255,0.07)",
-              background: "rgba(255,255,255,0.03)",
-              color: "#6b7079",
+              border: "1px solid rgba(230,225,224,0.08)",
+              background: "rgba(230,225,224,0.03)",
+              color: "#8a7f74",
               fontSize: 11,
             }}
           >
@@ -256,7 +257,7 @@ export default async function HubWidgetPage({
           flex: 1,
           width: "100%",
           border: "none",
-          background: "#050506",
+          background: "#1d1b1a",
         }}
         allow="clipboard-write"
       />

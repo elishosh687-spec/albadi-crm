@@ -2,20 +2,30 @@
 
 /**
  * CockpitView — the salesperson "action cockpit": the DEFAULT view of the
- * שיחות widget tab. Presentation-only. Renders a server-assembled
- * `CockpitLead[]` (urgency-sorted, overdue first) as:
- *   - a header (count + "המערכת ניתחה כל ליד" subtitle)
- *   - one expanded HERO card for the most urgent lead (script + actions)
- *   - slim rows below, ONE champagne button per lead
+ * שיחות widget tab, in the warm "Silent Luxury" skin. Presentation-only.
+ * Renders a server-assembled `CockpitLead[]` (urgency-sorted, overdue first) as:
+ *   - an editorial header ("צריכים אותך עכשיו." + overdue/active stat tiles)
+ *   - one expanded HERO card for the most urgent lead (last question + script
+ *     + actions + template shortcuts)
+ *   - slim rows below, each with an icon cluster + ONE primary action
  *
- * No business logic here. Buttons OPEN surfaces (chat thread / tel:) or do
- * reversible writes via existing actions, surfaced through the parent's
- * `onOpenChat` / `onSnooze` callbacks. WON/LOST leads are excluded upstream.
+ * No business logic here. Every control OPENS a surface (chat thread / tel:) or
+ * does a reversible write via the parent's `onOpenChat` / `onSnooze` callbacks.
+ * WON/LOST leads are excluded upstream.
  */
 
-import { type CSSProperties } from "react";
-import { Send, Phone, Clock } from "lucide-react";
-import { Avatar, T } from "@/components/widget-ui";
+import { type CSSProperties, type ReactNode } from "react";
+import {
+  Send,
+  Phone,
+  Clock,
+  MessageSquare,
+  Sparkles,
+  Reply,
+  TrendingUp,
+} from "lucide-react";
+import { Avatar } from "@/components/widget-ui";
+import { LuxStat } from "@/components/widget-ui/lux";
 
 export interface CockpitLead {
   sid: string;
@@ -42,94 +52,120 @@ export interface CockpitLead {
 
 interface Props {
   leads: CockpitLead[];
+  /** total active leads (for the "פעילים" tile); falls back to leads.length. */
+  activeCount?: number;
   onOpenChat: (sid: string) => void;
   onSnooze: (sid: string) => void;
 }
 
-const PANEL_BG = "rgba(255,255,255,0.04)";
-const PANEL_BD = "rgba(255,255,255,0.08)";
-const HR = "rgba(255,255,255,0.06)";
+const INK = "#e6e1e0";
+const MUTED = "#8a7f74";
+const COOL = "#bec6e0";
+const CHAMP = "#d6c4ac";
+const ALERT = "#e8b4b4";
+const RING = "rgba(69,70,77,0.2)";
 
-const btnBase: CSSProperties = {
+/** small square icon button used in the hero chips + slim rows */
+const iconSquare: CSSProperties = {
+  width: 32,
+  height: 32,
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  borderRadius: 8,
+  background: "#211f1e",
+  boxShadow: `inset 0 0 0 1px ${RING}`,
+  color: MUTED,
+  cursor: "pointer",
+  flexShrink: 0,
+};
+
+const insightSquare: CSSProperties = {
+  ...iconSquare,
+  background: "rgba(190,198,224,0.08)",
+  boxShadow: "inset 0 0 0 1px rgba(190,198,224,0.22)",
+  color: COOL,
+};
+
+const ghostPill: CSSProperties = {
   display: "inline-flex",
   alignItems: "center",
   gap: 7,
-  height: 38,
+  height: 42,
   padding: "0 16px",
-  borderRadius: 8,
-  fontSize: 13,
-  fontWeight: 500,
-  whiteSpace: "nowrap",
+  border: 0,
+  borderRadius: 9999,
   cursor: "pointer",
-};
-
-const btnChamp: CSSProperties = {
-  ...btnBase,
-  background: T.champ,
-  color: "#231708",
-  border: "none",
-};
-
-const btnGhost: CSSProperties = {
-  ...btnBase,
+  fontSize: 13,
+  color: INK,
   background: "transparent",
-  color: T.muted,
-  border: `1px solid ${PANEL_BD}`,
-  fontWeight: 400,
+  boxShadow: `inset 0 0 0 1px ${RING}`,
 };
 
-export default function CockpitView({ leads, onOpenChat, onSnooze }: Props) {
+export default function CockpitView({
+  leads,
+  activeCount,
+  onOpenChat,
+  onSnooze,
+}: Props) {
   const hero = leads[0] ?? null;
   const rest = leads.slice(1);
+  const overdueCount = leads.filter((l) => l.overdue).length;
 
   return (
     <div
-      className="gg-theme"
+      className="lux-theme hubscroll"
       dir="rtl"
       style={{
-        maxWidth: 720,
+        maxWidth: 1040,
         margin: "0 auto",
-        padding: "22px 22px 24px",
-        background: T.bg,
-        borderRadius: 14,
-        border: `0.5px solid ${PANEL_BD}`,
-        color: T.text,
-        fontFamily: "Inter, Heebo, system-ui, sans-serif",
+        padding: "26px 28px 36px",
+        color: INK,
       }}
     >
-      <style>{`.cockpit-row{cursor:pointer;transition:background .12s ease}.cockpit-row:hover{background:rgba(255,255,255,0.03)}.cockpit-hero-id{cursor:pointer}`}</style>
+      <style>{`
+        @keyframes acPulse{0%,100%{opacity:1}50%{opacity:.4}}
+        .cockpit-row{cursor:pointer;transition:background .12s ease;border-radius:8px}
+        .cockpit-row:hover{background:rgba(255,255,255,0.022)}
+      `}</style>
+
       {/* header */}
       <div
         style={{
           display: "flex",
-          alignItems: "baseline",
-          gap: 10,
-          marginBottom: 4,
+          alignItems: "flex-end",
+          justifyContent: "space-between",
+          gap: 16,
+          marginBottom: 6,
         }}
       >
-        <span style={{ fontSize: 18, fontWeight: 500, letterSpacing: "-0.02em" }}>
-          צריכים אותך עכשיו
-        </span>
-        <span
-          style={{ fontSize: 13, color: T.muted, fontVariantNumeric: "tabular-nums" }}
-        >
-          {leads.length} לידים
-        </span>
+        <div style={{ display: "flex", alignItems: "baseline", gap: 12 }}>
+          <div className="lux-title">
+            צריכים אותך <span className="lux-accent">עכשיו.</span>
+          </div>
+          <span
+            style={{ fontSize: 14, color: MUTED, fontVariantNumeric: "tabular-nums" }}
+          >
+            {leads.length} לידים
+          </span>
+        </div>
+        <div style={{ display: "flex", gap: 10 }}>
+          <LuxStat value={overdueCount} label="באיחור" tone="alert" />
+          <LuxStat value={activeCount ?? leads.length} label="פעילים" />
+        </div>
       </div>
-      <div style={{ fontSize: 12.5, color: T.faint, marginBottom: 18 }}>
+      <div style={{ fontSize: 13, color: MUTED, marginBottom: 20 }}>
         המערכת ניתחה כל ליד — לפי דחיפות וערך. לחץ על הפעולה, וזהו.
       </div>
 
       {leads.length === 0 ? (
         <div
+          className="lux-inset"
           style={{
-            background: PANEL_BG,
-            border: `1px solid ${PANEL_BD}`,
-            borderRadius: 12,
-            padding: "26px 18px",
+            padding: "28px 18px",
             textAlign: "center",
-            color: T.muted,
-            fontSize: 13.5,
+            color: MUTED,
+            fontSize: 14,
           }}
         >
           הכל מטופל — אין לידים שדורשים אותך עכשיו.
@@ -140,18 +176,22 @@ export default function CockpitView({ leads, onOpenChat, onSnooze }: Props) {
       {hero && (
         <div
           style={{
-            background: PANEL_BG,
-            border: `1px solid ${PANEL_BD}`,
-            borderRadius: 12,
-            padding: 18,
+            background: "#1d1b1a",
+            borderRadius: 10,
+            padding: "22px 24px",
+            marginBottom: 16,
+            boxShadow: `inset 0 0 0 1px ${
+              hero.overdue ? "rgba(232,180,180,0.2)" : RING
+            }`,
           }}
         >
+          {/* urgency eyebrow */}
           <div
             style={{
               display: "flex",
               alignItems: "center",
               gap: 8,
-              marginBottom: 13,
+              marginBottom: 15,
             }}
           >
             <span
@@ -159,108 +199,156 @@ export default function CockpitView({ leads, onOpenChat, onSnooze }: Props) {
                 width: 7,
                 height: 7,
                 borderRadius: "50%",
-                background: hero.overdue ? T.alert : T.champ,
+                background: hero.overdue ? ALERT : CHAMP,
+                animation: hero.overdue ? "acPulse 2s ease-in-out infinite" : "none",
               }}
             />
             <span
               style={{
+                fontFamily: "var(--font-editorial-sans), Manrope, system-ui",
                 fontSize: 11,
-                fontWeight: 500,
-                color: hero.overdue ? T.alert : T.champ,
+                letterSpacing: "0.14em",
+                textTransform: "uppercase",
+                color: hero.overdue ? ALERT : CHAMP,
               }}
             >
               הכי דחוף{hero.urgencyLabel ? ` · ${hero.urgencyLabel}` : ""}
             </span>
           </div>
 
+          {/* lead identity */}
           <div
-            className="cockpit-hero-id"
             onClick={() => onOpenChat(hero.sid)}
             style={{
               display: "flex",
               alignItems: "center",
-              gap: 13,
-              marginBottom: 14,
+              gap: 14,
+              marginBottom: 16,
+              cursor: "pointer",
             }}
           >
-            <Avatar name={hero.name || undefined} size={34} />
+            <Avatar name={hero.name || undefined} size={42} />
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 15, fontWeight: 500 }}>
+              <div style={{ fontWeight: 500, fontSize: 19 }}>
                 {hero.name || hero.phone || hero.sid}
               </div>
-              <div
-                style={{
-                  fontSize: 12.5,
-                  color: T.muted,
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
-                  whiteSpace: "nowrap",
-                }}
-              >
+              <div style={{ fontSize: 13, color: "#c6c6cd" }}>
                 {hero.want || "—"}
                 {hero.value ? (
-                  <>
+                  <span style={{ color: CHAMP, fontVariantNumeric: "tabular-nums" }}>
                     {" · "}
-                    <span style={{ color: T.champ, fontVariantNumeric: "tabular-nums" }}>
-                      {hero.value}
-                    </span>
-                  </>
+                    {hero.value}
+                  </span>
                 ) : null}
               </div>
             </div>
+            {hero.stage ? (
+              <span
+                style={{
+                  fontFamily: "var(--font-editorial-sans), Manrope, system-ui",
+                  fontSize: 10,
+                  letterSpacing: "0.08em",
+                  color: MUTED,
+                  background: "#211f1e",
+                  padding: "5px 11px",
+                  borderRadius: 9999,
+                  flexShrink: 0,
+                }}
+              >
+                {hero.stage}
+              </span>
+            ) : null}
           </div>
 
           {/* script box */}
           <div
             style={{
-              background: "rgba(255,255,255,0.025)",
-              border: `1px solid ${HR}`,
+              background: "#161514",
               borderRadius: 9,
-              padding: "12px 13px",
-              marginBottom: 14,
+              padding: "15px 16px",
+              marginBottom: 16,
+              boxShadow: `inset 0 0 0 1px ${RING}`,
             }}
           >
             {hero.lastInbound && (
               <>
-                <div style={{ fontSize: 11, color: T.faint, marginBottom: 5 }}>
+                <div style={{ fontSize: 11, color: MUTED, marginBottom: 5 }}>
                   {hero.name ? `${heroFirstName(hero.name)} שאלה לאחרונה` : "נשאלה לאחרונה"}
                 </div>
-                <div style={{ fontSize: 13, marginBottom: 11 }}>
+                <div style={{ fontSize: 14, marginBottom: 13 }}>
                   &quot;{hero.lastInbound}&quot;
                 </div>
               </>
             )}
-            <div style={{ fontSize: 11, color: T.faint, marginBottom: 5 }}>
+            <div style={{ fontSize: 11, color: MUTED, marginBottom: 5 }}>
               מה כדאי לענות
             </div>
-            <div style={{ fontSize: 13, lineHeight: 1.55 }}>
-              {hero.script || "טפל לפי ההקשר שעלה בשיחה."}
+            <div
+              className="lux-serif"
+              style={{
+                fontStyle: "italic",
+                fontSize: 14,
+                lineHeight: 1.55,
+                color: CHAMP,
+              }}
+            >
+              {hero.script ? `— ${hero.script}` : "— טפל לפי ההקשר שעלה בשיחה."}
             </div>
           </div>
 
-          <div style={{ display: "flex", gap: 9, flexWrap: "wrap" }}>
-            <button style={btnChamp} onClick={() => onOpenChat(hero.sid)}>
+          {/* actions */}
+          <div style={{ display: "flex", alignItems: "center", gap: 9, flexWrap: "wrap" }}>
+            <button
+              className="lux-cta-champagne"
+              style={{ minHeight: 42 }}
+              onClick={() => onOpenChat(hero.sid)}
+            >
               <Send size={15} strokeWidth={2} />
               {hero.actionLabel}
             </button>
-            <button style={btnGhost} onClick={() => onOpenChat(hero.sid)}>
+            <button style={ghostPill} onClick={() => onOpenChat(hero.sid)}>
+              <MessageSquare size={15} strokeWidth={1.9} color={MUTED} />
               פתח שיחה מלאה
             </button>
             {hero.phone && (
               <a href={`tel:${hero.phone}`} style={{ textDecoration: "none" }}>
-                <button style={btnGhost}>
-                  <Phone size={15} strokeWidth={2} />
+                <button style={ghostPill}>
+                  <Phone size={15} strokeWidth={1.9} color={MUTED} />
                   התקשר
                 </button>
               </a>
             )}
+            <span style={{ width: 1, height: 24, background: "rgba(69,70,77,0.35)", margin: "0 4px" }} />
+            <span style={{ fontSize: 11, color: MUTED }}>שלח תבנית:</span>
+            <TemplateChip emoji="📐" label="מידות" onClick={() => onOpenChat(hero.sid)} />
+            <TemplateChip emoji="💰" label="מחיר" onClick={() => onOpenChat(hero.sid)} />
+            <TemplateChip emoji="📚" label="קטלוג" onClick={() => onOpenChat(hero.sid)} />
+            <span
+              onClick={() => onOpenChat(hero.sid)}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 6,
+                height: 34,
+                padding: "0 12px",
+                borderRadius: 9999,
+                background: "rgba(190,198,224,0.08)",
+                boxShadow: "inset 0 0 0 1px rgba(190,198,224,0.22)",
+                fontSize: 12,
+                color: COOL,
+                cursor: "pointer",
+              }}
+            >
+              <Sparkles size={14} strokeWidth={2} />
+              ניתוח ליד
+            </span>
           </div>
         </div>
       )}
 
       {/* slim rows */}
       {rest.length > 0 && (
-        <div style={{ marginTop: 8 }}>
+        <div style={{ display: "flex", flexDirection: "column" }}>
           {rest.map((lead) => (
             <SlimRow
               key={lead.sid}
@@ -279,6 +367,38 @@ function heroFirstName(name: string): string {
   return name.trim().split(/\s+/)[0] || name;
 }
 
+function TemplateChip({
+  emoji,
+  label,
+  onClick,
+}: {
+  emoji: string;
+  label: ReactNode;
+  onClick: () => void;
+}) {
+  return (
+    <span
+      onClick={onClick}
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 6,
+        height: 34,
+        padding: "0 12px",
+        borderRadius: 9999,
+        background: "#211f1e",
+        boxShadow: `inset 0 0 0 1px ${RING}`,
+        fontSize: 12,
+        color: "#c6c6cd",
+        cursor: "pointer",
+      }}
+    >
+      <span style={{ fontSize: 13 }}>{emoji}</span>
+      {label}
+    </span>
+  );
+}
+
 function SlimRow({
   lead,
   onOpenChat,
@@ -289,9 +409,10 @@ function SlimRow({
   onSnooze: (sid: string) => void;
 }) {
   // FACTORY_WAIT leads get the muted "תזכיר לי מחר" (reversible snooze write);
-  // everyone else gets the champagne open-thread action. This is a UI
-  // affordance default — NOT a pipeline transition.
+  // everyone else gets the champagne primary action. This is a UI affordance
+  // default — NOT a pipeline transition.
   const isSnoozeRow = lead.stage === "FACTORY_WAIT";
+  const isNegotiation = lead.stage === "CONSIDERATION";
 
   return (
     <div
@@ -301,19 +422,19 @@ function SlimRow({
         display: "flex",
         alignItems: "center",
         gap: 14,
-        padding: "15px 4px",
-        borderTop: `0.5px solid ${HR}`,
+        padding: "15px 6px",
+        borderTop: "1px solid rgba(69,70,77,0.18)",
       }}
     >
-      <Avatar name={lead.name || undefined} size={34} />
+      <Avatar name={lead.name || undefined} size={36} />
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 14, fontWeight: 500 }}>
+        <div style={{ fontWeight: 500, fontSize: 15 }}>
           {lead.name || lead.phone || lead.sid}
         </div>
         <div
           style={{
             fontSize: 12,
-            color: T.muted,
+            color: MUTED,
             overflow: "hidden",
             textOverflow: "ellipsis",
             whiteSpace: "nowrap",
@@ -321,38 +442,67 @@ function SlimRow({
         >
           {lead.want || "—"}
           {lead.value ? (
-            <span style={{ fontVariantNumeric: "tabular-nums" }}> · {lead.value}</span>
+            <span style={{ color: CHAMP, fontVariantNumeric: "tabular-nums" }}>
+              {" · "}
+              {lead.value}
+            </span>
           ) : null}
         </div>
       </div>
-      {lead.stageLabel && (
+
+      <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+        {lead.stageLabel && (
+          <span
+            style={{
+              fontSize: 11.5,
+              color: isNegotiation ? CHAMP : MUTED,
+              marginInlineEnd: 4,
+              whiteSpace: "nowrap",
+            }}
+          >
+            {lead.stageLabel}
+          </span>
+        )}
         <span
-          style={{
-            fontSize: 11.5,
-            color: lead.stage === "CONSIDERATION" ? T.champ : T.faint,
-            whiteSpace: "nowrap",
-            flexShrink: 0,
-          }}
-        >
-          {lead.stageLabel}
-        </span>
-      )}
-      {isSnoozeRow ? (
-        <button
-          style={{ ...btnGhost, flexShrink: 0 }}
-          onClick={(e) => { e.stopPropagation(); onSnooze(lead.sid); }}
-        >
-          <Clock size={14} strokeWidth={2} />
-          תזכיר לי מחר
-        </button>
-      ) : (
-        <button
-          style={{ ...btnChamp, flexShrink: 0 }}
+          style={insightSquare}
           onClick={(e) => { e.stopPropagation(); onOpenChat(lead.sid); }}
+          title="ניתוח ליד"
         >
-          {lead.actionLabel}
-        </button>
-      )}
+          <Sparkles size={16} strokeWidth={2} />
+        </span>
+        {lead.phone ? (
+          <a
+            href={`tel:${lead.phone}`}
+            style={iconSquare}
+            onClick={(e) => e.stopPropagation()}
+            title="התקשר"
+          >
+            <Phone size={16} strokeWidth={1.9} />
+          </a>
+        ) : null}
+        {isSnoozeRow ? (
+          <button
+            style={{ ...ghostPill, height: 34, fontSize: 12 }}
+            onClick={(e) => { e.stopPropagation(); onSnooze(lead.sid); }}
+          >
+            <Clock size={14} strokeWidth={2} color={MUTED} />
+            תזכיר לי מחר
+          </button>
+        ) : (
+          <button
+            className="lux-cta-champagne"
+            style={{ minHeight: 34, height: 34, padding: "0 14px", fontSize: 12 }}
+            onClick={(e) => { e.stopPropagation(); onOpenChat(lead.sid); }}
+          >
+            {isNegotiation ? (
+              <TrendingUp size={15} strokeWidth={2} />
+            ) : (
+              <Reply size={15} strokeWidth={2} />
+            )}
+            {lead.actionLabel}
+          </button>
+        )}
+      </div>
     </div>
   );
 }

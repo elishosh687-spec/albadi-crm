@@ -190,14 +190,15 @@
 }
 
 /* ──────────────────────────────────────────────────────────────────────────
-   "Silent Luxury" warm-dark editorial SCOPE — calculator widget ONLY.
+   "Silent Luxury" warm-dark editorial SCOPE — the widget hub theme.
    Mirrors the .gg-theme mechanism: re-points the semantic --color-* + --gg-*
-   tokens under `.calc-lux` so every utility class (bg-card, border-border,
-   text-muted-foreground, bg-primary, …) re-skins with ZERO markup churn. The
-   wrapper class lives ONLY on the CalculatorView root, so no other screen is
-   affected. Tokens extracted from public/_ref-calc.html.
+   tokens so every utility class (bg-card, border-border, text-muted-foreground,
+   bg-primary, …) re-skins with ZERO markup churn.
+   Two equivalent opt-in classes: `.calc-lux` (historical — the calculator root)
+   and `.lux-theme` (the hub-wide alias used by every other tab). Both resolve to
+   the same tokens via :is(). Tokens extracted from the Silent-Luxury Hub mockup.
    ────────────────────────────────────────────────────────────────────────── */
-.calc-lux {
+:is(.calc-lux, .lux-theme) {
   /* warm-dark surfaces */
   --color-background: #1d1b1a;
   --color-foreground: #e6e1e0;
@@ -259,7 +260,7 @@
 }
 
 /* small radii — no big blobby corners */
-.calc-lux {
+:is(.calc-lux, .lux-theme) {
   --gg-radius-chip: 3px;
   --gg-radius: 3px;
   --gg-radius-card: 8px;
@@ -267,7 +268,7 @@
 }
 
 /* warm translucent card surface (over the warm bg) — replaces the cool glass */
-.calc-lux .bg-card {
+:is(.calc-lux, .lux-theme) .bg-card {
   position: relative;
   background-color: var(--lux-card);
   border-color: var(--lux-line);
@@ -276,36 +277,36 @@
   box-shadow: var(--gg-glass-rim), var(--gg-glass-float);
   border-radius: 8px;
 }
-.calc-lux .bg-card::before {
+:is(.calc-lux, .lux-theme) .bg-card::before {
   background: var(--gg-edge);
 }
 
 /* the navy/indigo PRIMARY action — the user explicitly kept the CTA blue */
-.calc-lux .bg-primary {
+:is(.calc-lux, .lux-theme) .bg-primary {
   background: linear-gradient(135deg, var(--lux-navy-from), var(--lux-navy-to)) !important;
   color: var(--lux-ink) !important;
   border: 1px solid rgba(190, 198, 224, 0.22);
 }
-.calc-lux .text-primary-foreground {
+:is(.calc-lux, .lux-theme) .text-primary-foreground {
   color: var(--lux-ink) !important;
 }
 
 /* thin figures — big numbers use a light Heebo weight */
-.calc-lux .text-3xl,
-.calc-lux .text-4xl {
+:is(.calc-lux, .lux-theme) .text-3xl,
+:is(.calc-lux, .lux-theme) .text-4xl {
   font-weight: 300;
   letter-spacing: -0.01em;
 }
 
 /* editorial helpers (consumed by classNames in the calculator JSX) */
-.calc-lux .lux-serif {
+:is(.calc-lux, .lux-theme) .lux-serif {
   font-family: var(--font-editorial-serif), "Newsreader", ui-serif, Georgia, serif;
 }
-.calc-lux .lux-sans {
+:is(.calc-lux, .lux-theme) .lux-sans {
   font-family: var(--font-editorial-sans), "Manrope", ui-sans-serif, system-ui, sans-serif;
 }
 /* small-caps Manrope label, e.g. "SUMMARY" / "USD→ILS" */
-.calc-lux .lux-label {
+:is(.calc-lux, .lux-theme) .lux-label {
   font-family: var(--font-editorial-sans), "Manrope", ui-sans-serif, system-ui, sans-serif;
   text-transform: uppercase;
   letter-spacing: 0.18em;
@@ -314,7 +315,7 @@
   color: var(--lux-muted);
 }
 /* proposal-card CTAs — navy gradient primary + line ghost secondary */
-.calc-lux .lux-cta-primary {
+:is(.calc-lux, .lux-theme) .lux-cta-primary {
   position: relative;
   width: 100%;
   display: flex;
@@ -335,14 +336,14 @@
     0 0 36px -6px rgba(190, 198, 224, 0.25);
   transition: filter 0.15s ease, opacity 0.15s ease;
 }
-.calc-lux .lux-cta-primary:hover:not(:disabled) {
+:is(.calc-lux, .lux-theme) .lux-cta-primary:hover:not(:disabled) {
   filter: brightness(1.08);
 }
-.calc-lux .lux-cta-primary:disabled {
+:is(.calc-lux, .lux-theme) .lux-cta-primary:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
-.calc-lux .lux-cta-ghost {
+:is(.calc-lux, .lux-theme) .lux-cta-ghost {
   flex: 1;
   display: flex;
   align-items: center;
@@ -359,16 +360,16 @@
   box-shadow: inset 0 0 0 1px var(--lux-line);
   transition: background 0.15s ease, opacity 0.15s ease;
 }
-.calc-lux .lux-cta-ghost:hover:not(:disabled) {
+:is(.calc-lux, .lux-theme) .lux-cta-ghost:hover:not(:disabled) {
   background: var(--lux-card);
 }
-.calc-lux .lux-cta-ghost:disabled {
+:is(.calc-lux, .lux-theme) .lux-cta-ghost:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
 
 /* quantity tier pills */
-.calc-lux .lux-pill {
+:is(.calc-lux, .lux-theme) .lux-pill {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -381,17 +382,17 @@
   border: 1px solid var(--lux-line);
   transition: color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
 }
-.calc-lux .lux-pill:hover {
+:is(.calc-lux, .lux-theme) .lux-pill:hover {
   color: var(--lux-ink);
 }
-.calc-lux .lux-pill-active {
+:is(.calc-lux, .lux-theme) .lux-pill-active {
   color: var(--lux-ink);
   background: var(--lux-card-raised);
   box-shadow: inset 0 0 0 1px var(--lux-champagne);
 }
 
 /* shipping method cards */
-.calc-lux .lux-ship-card {
+:is(.calc-lux, .lux-theme) .lux-ship-card {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -405,16 +406,16 @@
   border: 1px solid var(--lux-line);
   transition: box-shadow 0.15s ease, background 0.15s ease;
 }
-.calc-lux .lux-ship-card:hover {
+:is(.calc-lux, .lux-theme) .lux-ship-card:hover {
   background: var(--lux-card);
 }
-.calc-lux .lux-ship-card-active {
+:is(.calc-lux, .lux-theme) .lux-ship-card-active {
   background: var(--lux-card-raised);
   box-shadow: inset 0 0 0 1px var(--lux-champagne);
 }
 
 /* giant faint serif section numeral (I / II / III / IV) */
-.calc-lux .lux-numeral {
+:is(.calc-lux, .lux-theme) .lux-numeral {
   font-family: var(--font-editorial-serif), "Newsreader", ui-serif, Georgia, serif;
   font-weight: 300;
   color: var(--lux-champagne);
@@ -425,7 +426,7 @@
 }
 
 /* margin slider (reference §IV) — warm cool-gradient track + champagne thumb */
-.calc-lux .lux-range {
+:is(.calc-lux, .lux-theme) .lux-range {
   -webkit-appearance: none;
   appearance: none;
   width: 100%;
@@ -436,7 +437,7 @@
   outline: none;
   cursor: pointer;
 }
-.calc-lux .lux-range::-webkit-slider-thumb {
+:is(.calc-lux, .lux-theme) .lux-range::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
   width: 18px;
@@ -446,11 +447,132 @@
   border: 0;
   box-shadow: 0 0 0 4px rgba(190, 198, 224, 0.18), 0 2px 6px rgba(0, 0, 0, 0.5);
 }
-.calc-lux .lux-range::-moz-range-thumb {
+:is(.calc-lux, .lux-theme) .lux-range::-moz-range-thumb {
   width: 18px;
   height: 18px;
   border-radius: 50%;
   background: #dae2fd;
   border: 0;
   box-shadow: 0 0 0 4px rgba(190, 198, 224, 0.18), 0 2px 6px rgba(0, 0, 0, 0.5);
+}
+
+/* ── Shared hub editorial primitives (used by every tab via widget-ui/lux) ── */
+
+/* ALL-CAPS Manrope overline, e.g. "— Factory quotes" */
+:is(.calc-lux, .lux-theme) .lux-overline {
+  font-family: var(--font-editorial-sans), "Manrope", ui-sans-serif, system-ui, sans-serif;
+  font-size: 10px;
+  letter-spacing: 0.34em;
+  text-transform: uppercase;
+  color: var(--lux-champagne);
+}
+/* thin Heebo editorial title, e.g. "הצעות מהמפעל." */
+:is(.calc-lux, .lux-theme) .lux-title {
+  font-family: var(--font-body), "Heebo", ui-sans-serif, system-ui, sans-serif;
+  font-weight: 200;
+  font-size: 32px;
+  letter-spacing: -0.02em;
+  color: var(--lux-ink);
+  line-height: 1.05;
+}
+/* the italic serif accent word inside a title */
+:is(.calc-lux, .lux-theme) .lux-accent {
+  font-family: var(--font-editorial-serif), "Newsreader", ui-serif, Georgia, serif;
+  font-style: italic;
+  font-weight: 300;
+  color: var(--lux-champagne);
+}
+
+/* champagne PRIMARY pill — the dominant CTA (send/save/approve) */
+:is(.calc-lux, .lux-theme) .lux-cta-champagne {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 48px;
+  padding: 0 20px;
+  border: 0;
+  border-radius: 9999px;
+  cursor: pointer;
+  font-family: var(--font-body), "Heebo", ui-sans-serif, system-ui, sans-serif;
+  font-weight: 500;
+  font-size: 14px;
+  color: #231708;
+  background: linear-gradient(180deg, #e7cba6, #cda978);
+  box-shadow: 0 8px 22px -8px rgba(205, 169, 120, 0.5);
+  transition: filter 0.15s ease, opacity 0.15s ease;
+}
+:is(.calc-lux, .lux-theme) .lux-cta-champagne:hover:not(:disabled) {
+  filter: brightness(1.05);
+}
+:is(.calc-lux, .lux-theme) .lux-cta-champagne:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* green success pill — WhatsApp / confirm-send */
+:is(.calc-lux, .lux-theme) .lux-cta-success {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 46px;
+  padding: 0 18px;
+  border: 0;
+  border-radius: 9999px;
+  cursor: pointer;
+  font-family: var(--font-body), "Heebo", ui-sans-serif, system-ui, sans-serif;
+  font-weight: 500;
+  font-size: 14px;
+  color: #0e1d15;
+  background: linear-gradient(180deg, #8fd3ad, #5fae84);
+  box-shadow: 0 8px 22px -8px rgba(95, 174, 132, 0.45);
+  transition: filter 0.15s ease, opacity 0.15s ease;
+}
+:is(.calc-lux, .lux-theme) .lux-cta-success:hover:not(:disabled) {
+  filter: brightness(1.05);
+}
+:is(.calc-lux, .lux-theme) .lux-cta-success:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* inset warm panel — the rail/section surface used across tabs */
+:is(.calc-lux, .lux-theme) .lux-panel {
+  background: var(--lux-card);
+  border-radius: 8px;
+  box-shadow: inset 0 0 0 1px var(--lux-line);
+}
+:is(.calc-lux, .lux-theme) .lux-inset {
+  background: var(--lux-inset);
+  border-radius: 8px;
+  box-shadow: inset 0 0 0 1px var(--lux-line);
+}
+
+/* small stat tile — number over a tiny caption */
+:is(.calc-lux, .lux-theme) .lux-stat {
+  text-align: center;
+  background: var(--lux-bg, #1d1b1a);
+  border-radius: 8px;
+  padding: 9px 16px;
+  box-shadow: inset 0 0 0 1px rgba(69, 70, 77, 0.16);
+}
+:is(.calc-lux, .lux-theme) .lux-stat-num {
+  font-size: 20px;
+  color: var(--lux-ink);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+:is(.calc-lux, .lux-theme) .lux-stat-label {
+  font-size: 10px;
+  color: var(--lux-muted);
+  letter-spacing: 0.06em;
+}
+
+/* hide the warm scroll container's scrollbar (mockup uses .hubscroll) */
+:is(.calc-lux, .lux-theme) .hubscroll::-webkit-scrollbar {
+  display: none;
+}
+:is(.calc-lux, .lux-theme) .hubscroll {
+  scrollbar-width: none;
 }
