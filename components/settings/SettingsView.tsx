@@ -22,6 +22,7 @@ import type {
   ShippingOption,
 } from "@/lib/factory/types";
 import { SeaCarriersSection } from "@/components/settings/SeaCarriersSection";
+import { LuxShell, LuxTitle, LuxAccent } from "@/components/widget-ui/lux";
 
 function widgetUrl(path: string, token: string): string {
   const u = new URL(path, "http://placeholder.local");
@@ -187,39 +188,74 @@ export function SettingsView({ apiToken }: { apiToken: string }) {
 
   if (loading) {
     return (
-      <div className="rounded-xl border border-border bg-card/30 p-12 text-center text-sm text-muted-foreground" dir="rtl">
-        <Loader2 className="size-5 mx-auto mb-2 animate-spin opacity-70" />
-        טוען הגדרות…
-      </div>
+      <LuxShell>
+        <div
+          style={{
+            background: "var(--lux-card)",
+            borderRadius: 10,
+            padding: "48px 18px",
+            textAlign: "center",
+            color: "#8a7f74",
+            fontSize: 14,
+            boxShadow: "inset 0 0 0 1px var(--lux-line)",
+          }}
+        >
+          <Loader2 className="size-5 mx-auto mb-2 animate-spin opacity-70" />
+          טוען הגדרות…
+        </div>
+      </LuxShell>
     );
   }
 
   if (loadError) {
     return (
-      <div className="rounded-lg border border-destructive/40 bg-destructive/5 p-4 text-sm text-destructive flex items-center justify-between gap-3" dir="rtl">
-        <span>⚠️ {loadError}</span>
-        <button
-          type="button"
-          onClick={load}
-          className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background/40 px-3 py-1.5 text-xs hover:bg-secondary"
+      <LuxShell>
+        <div
+          className="flex items-center justify-between gap-3"
+          style={{
+            background: "rgba(232,180,180,0.06)",
+            borderRadius: 10,
+            padding: "14px 18px",
+            color: "#e8b4b4",
+            fontSize: 14,
+            boxShadow: "inset 0 0 0 1px rgba(232,180,180,0.2)",
+          }}
         >
-          <RefreshCw className="size-3.5" />
-          נסה שוב
-        </button>
-      </div>
+          <span>⚠️ {loadError}</span>
+          <button
+            type="button"
+            onClick={load}
+            className="inline-flex items-center gap-1.5"
+            style={{
+              padding: "7px 13px",
+              borderRadius: 9999,
+              fontSize: 12,
+              color: "#8a7f74",
+              background: "transparent",
+              border: 0,
+              boxShadow: "inset 0 0 0 1px rgba(69,70,77,0.22)",
+              cursor: "pointer",
+            }}
+          >
+            <RefreshCw className="size-3.5" />
+            נסה שוב
+          </button>
+        </div>
+      </LuxShell>
     );
   }
 
   if (!state) return null;
 
   return (
-    <section className="rounded-xl border border-border bg-card p-5 sm:p-6 space-y-6" dir="rtl">
-      <header className="space-y-1">
-        <h2 className="text-lg font-semibold tracking-tight">הגדרות תמחור מפעל</h2>
-        <p className="text-xs text-muted-foreground">
-          שערי המרה, רווחיות ועלויות שילוח לכל הצעה סופית. שינויים נכנסים מיידית (cache מתאפס בשמירה).
-        </p>
-      </header>
+    <LuxShell>
+      <LuxTitle
+        overline="— Pricing settings"
+        subtitle="שערי המרה, רווחיות ועלויות שילוח לכל הצעה סופית. שינויים נכנסים מיידית."
+      >
+        הגדרות תמחור <LuxAccent>מפעל.</LuxAccent>
+      </LuxTitle>
+      <section className="space-y-6" dir="rtl">
 
       <FormSection icon={ArrowLeftRight} title="שערי המרה" desc="המרות מטבע לחישוב עלות והצעה">
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -302,18 +338,19 @@ export function SettingsView({ apiToken }: { apiToken: string }) {
         </div>
       </FormSection>
 
-      <div className="mt-6 flex items-center gap-3 border-t border-border pt-4">
+      <div className="mt-6 flex items-center gap-3 pt-4" style={{ borderTop: "1px solid var(--lux-line)" }}>
         <button
           type="button"
           onClick={save}
           disabled={saving || !dirty || hasErrors}
-          className="inline-flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
+          className="lux-cta-champagne"
+          style={{ minHeight: 44, padding: "0 20px", fontSize: 14 }}
         >
-          {saving ? <Loader2 className="size-3.5 animate-spin" /> : <Save className="size-3.5" />}
+          {saving ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
           {saving ? "שומר…" : dirty ? "שמור הגדרות תמחור" : "נשמר"}
         </button>
         {hasErrors && (
-          <span className="text-xs text-destructive">
+          <span className="text-xs" style={{ color: "#e8b4b4" }}>
             יש שדות לא תקינים — תקן לפני שמירה
           </span>
         )}
@@ -323,7 +360,8 @@ export function SettingsView({ apiToken }: { apiToken: string }) {
           </span>
         )}
       </div>
-    </section>
+      </section>
+    </LuxShell>
   );
 }
 

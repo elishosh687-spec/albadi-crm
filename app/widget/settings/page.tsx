@@ -37,24 +37,5 @@ export default async function SettingsWidgetPage({
     );
   }
 
-  return (
-    <div style={{ maxWidth: 900, margin: "0 auto", padding: 16 }}>
-      <div
-        style={{
-          background: "#1a1d24",
-          border: "1px solid #2a2d34",
-          borderRadius: 8,
-          padding: "10px 16px",
-          marginBottom: 16,
-        }}
-      >
-        <strong style={{ fontSize: 16 }}>⚙️ הגדרות תמחור</strong>
-        <span style={{ marginRight: 12, color: "#a1a1aa", fontSize: 13 }}>
-          · שערי FX, רווח ברירת מחדל, שילוח
-        </span>
-      </div>
-
-      <SettingsView apiToken={token} />
-    </div>
-  );
+  return <SettingsView apiToken={token} />;
 }
