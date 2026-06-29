@@ -92,7 +92,7 @@ const REPLY_COMPETITOR_AMBIGUOUS_ACK =
 // Stage 2 / 3 / 4 canned answers (values from BOT-COPY.md §2.6 / 3.4 / 4.4)
 const REPLY_DELIVERY = "אקספרס 25 יום, רגיל 90 יום (מהאישור).";
 const REPLY_INCLUSIVE =
-  "הכל כלול — שקיות, הדפסה, גלופה, משלוח.";
+  "הכל כלול — שקיות, הדפסה, משלוח. (הגלופה היא עלות חד-פעמית בנפרד.)";
 const REPLY_PAYMENT =
   "50% בעת ההזמנה, 50% לפני שהסחורה יוצאת מהמפעל. רוצים לסגור?";
 const REPLY_LOGO_FORMAT = "כל פורמט בסדר. שלחו מה שיש.";
