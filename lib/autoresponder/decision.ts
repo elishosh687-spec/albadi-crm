@@ -59,7 +59,7 @@ const ESCALATION_KIND_TO_MONEY_REASON: Partial<
   spec_change: "price_question",
 };
 
-const CATALOG_URL = "https://bag-quote-app.vercel.app/catalog";
+const CATALOG_URL = "https://albadi.ecobrotherss.com/catalog";
 
 // --- Bot reply copies (Hebrew). Voice: first-person singular Eli, plural
 // neutral "you" (אתם/לכם), 0-1 emoji. Source: docs/BOT-COPY.md.
