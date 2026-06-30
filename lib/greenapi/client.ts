@@ -356,7 +356,11 @@ async function mirrorOutboundToGHL(input: {
  */
 export const COMPANY_VIDEO_URL =
   process.env.GREEN_COMPANY_VIDEO_URL ||
-  "https://albadi.ecobrotherss.com/company-intro.mp4";
+  // Uploaded 2026-06-30 to Vercel Blob from Eli's Drive link
+  // (drive.google.com/file/d/19WPRNItBNN_heOSIpvxqppEfe9o8mDAN). Direct MP4
+  // URL works with GreenAPI's sendFileByUrl; the previous
+  // albadi.ecobrotherss.com host is no longer used.
+  "https://e7nckfcqbgdjwish.public.blob.vercel-storage.com/company-intro-v2.mp4";
 
 const COMPANY_VIDEO_CAPTION =
   "👋 *קצת עלינו — אלבדי*\n\n" +
