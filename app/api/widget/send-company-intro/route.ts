@@ -21,8 +21,13 @@ export const runtime = "nodejs";
 export const maxDuration = 30;
 
 export async function POST(req: NextRequest) {
+  // Two auth paths: widget_token (from the GHL iframe), or
+  // Authorization: Bearer $CRON_SECRET (from CLI / admin scripts).
   const token = req.nextUrl.searchParams.get("widget_token") ?? "";
-  if (!verifyWidgetToken(token)) {
+  const bearer = req.headers.get("authorization") ?? "";
+  const cronBearer =
+    process.env.CRON_SECRET && bearer === `Bearer ${process.env.CRON_SECRET}`;
+  if (!verifyWidgetToken(token) && !cronBearer) {
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
 
