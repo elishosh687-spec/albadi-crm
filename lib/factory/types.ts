@@ -45,6 +45,11 @@ export interface FactoryResponse {
   weightKg?: number;
   supplier?: string;
   notes?: string;
+  /** Plate ("plant") fee per print colour in CNY, extracted from column T of
+   *  the factory-quote sheet. When present + laminated + logoColors > 0,
+   *  the pricing engine treats platePerColorCny × logoColors as a
+   *  pass-through cost distributed across the order (no margin). */
+  platePerColorCny?: number;
 }
 
 export interface ShippingOption {
@@ -158,6 +163,17 @@ export interface FactoryPricingInput {
    *  it shows up as its own row in the PDF and as its own "סה״כ מולדים"
    *  total — the per-unit bag price stays mold-free. */
   moldsCostCny?: number;
+  /** Plate ("plant") fee per print colour in CNY (from factory sheet
+   *  column T). Together with logoColors, it produces a pass-through
+   *  cost distributed across the whole order: the customer pays the
+   *  exact factory cost per unit, no margin. Same treatment as shipping —
+   *  added after margin, visible as a separate per-unit component in
+   *  the internal breakdown. */
+  platePerColorCny?: number;
+  /** Number of print colours (1..N) — needed to compute the plate fee
+   *  total. If undefined but platePerColorCny is set, the engine assumes
+   *  1 colour. */
+  logoColors?: number;
 }
 
 export interface FactoryPricingResult {
@@ -206,4 +222,21 @@ export interface FactoryPricingResult {
   moldsTotalCostIls: number;
   moldsTotalSellingPriceIls: number;
   moldsTotalProfitIls: number;
+
+  // Plate ("plant") fee, pulled from column T of the factory-quote sheet.
+  // Pass-through, no margin — the customer pays the exact factory cost,
+  // spread per unit like shipping. Present only when the factory quoted a
+  // plate fee AND colors > 0.
+  //   platePerColorCny:    what the factory quoted per colour (echo)
+  //   plateFeeTotalCny:    platePerColorCny × logoColors (grand plate total)
+  //   platePerUnitCny:     plateFeeTotalCny ÷ quantity (per unit, ¥)
+  //   platePerUnitIls:     platePerUnitCny converted to ILS at FX (no margin)
+  //   plateFeeTotalCostIls:plateFeeTotalCny converted to ILS at FX (no margin)
+  //   plateFeeLogoColors:  colours used to compute the total (echo)
+  platePerColorCny?: number;
+  plateFeeTotalCny?: number;
+  platePerUnitCny?: number;
+  platePerUnitIls?: number;
+  plateFeeTotalCostIls?: number;
+  plateFeeLogoColors?: number;
 }

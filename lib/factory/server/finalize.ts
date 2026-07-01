@@ -216,6 +216,13 @@ export async function finalizeQuote(
     config.shippingOptions.find((s) => s.enabled)?.id ??
     null;
 
+  // Extract colour count from spec.printing ("3 color(s)", "2 colors" etc).
+  // Falls back to 1 when unparseable — matches the factory's default for
+  // a single-colour print. Only used when the factory also quoted a plate
+  // fee in column T (resp.platePerColorCny).
+  const printingMatch = /(\d+)/.exec(spec.printing ?? "");
+  const logoColors = printingMatch ? Math.max(1, parseInt(printingMatch[1], 10)) : 1;
+
   const pricing = priceFactoryQuote(
     {
       factoryUnitCostCny: resp.unitCostCny,
@@ -231,6 +238,8 @@ export async function finalizeQuote(
       },
       profitMarginOverride: body.profitMarginOverride,
       moldsCostCny: body.moldsCostCny,
+      platePerColorCny: resp.platePerColorCny,
+      logoColors,
     },
     config
   );

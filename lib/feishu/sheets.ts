@@ -187,12 +187,15 @@ export async function setRowHeight(
 }
 
 /**
- * Reads a single row across A..R. Returns the raw cell values (18 cells).
+ * Reads a single row across A..T. Returns the raw cell values (20 cells).
+ * Column T carries the factory-supplied plate fee ("plant fee" / 版费) —
+ * factory writes free-text like `printing cost: RMB505/COL` which
+ * parseFactoryResponseRow extracts to platePerColorCny.
  */
 export async function readRow(rowIndex: string | number): Promise<(string | number | null)[]> {
   const token = getSpreadsheetToken();
   const sheetId = await getSheetId();
-  const range = `${sheetId}!A${rowIndex}:R${rowIndex}`;
+  const range = `${sheetId}!A${rowIndex}:T${rowIndex}`;
   type ReadResp = {
     data: {
       valueRange: {
@@ -338,6 +341,11 @@ export interface ParsedFactoryResponse {
   weightKg?: number;
   supplier?: string;
   notes?: string;
+  /** Plate ("plant") fee per print colour in CNY. Extracted from column T of
+   *  the quote sheet, where the factory writes free-text like
+   *  `printing cost: RMB505/COL`. Undefined = factory didn't quote a plate
+   *  fee for this row (typical for non-laminated printing). */
+  platePerColorCny?: number;
   hasResponse: boolean;
 }
 
@@ -384,11 +392,10 @@ export function parseFactoryResponseRow(
   // Sheet layout (current): the Feishu sheet auto-fills column C with the
   // creation date, shifting every other column one slot to the right vs the
   // original assumption. Outgoing columns are now A,B,(C=date),D..J — see
-  // appendRow comment. Incoming (factory's) columns are K..R:
+  // appendRow comment. Incoming (factory's) columns are K..T:
   //   K(10) unitCost CNY, L(11) cartonQty, M(12) length, N(13) width,
-  //   O(14) height, P(15) cbm, Q(16) weight, R(17) supplier.
-  // There's no dedicated `notes` column in the active layout; supplier text
-  // sometimes carries trailing notes. Leave `notes` undefined for now.
+  //   O(14) height, P(15) cbm, Q(16) weight, R(17) supplier,
+  //   S(18) remark, T(19) plant fee (per-colour, e.g. "printing cost: RMB505/COL").
   const unitCost = toNum(row[10]);
   const cartonQty = toNum(row[11]);
   const cartonLen = toNum(row[12]);
@@ -397,7 +404,18 @@ export function parseFactoryResponseRow(
   let cartonCbm = toNum(row[15]);
   const weight = toNum(row[16]);
   const supplier = toStr(row[17]);
-  const notes: string | undefined = undefined;
+  const notes: string | undefined = toStr(row[18]);
+  // Column T = plate fee per colour. Factory writes free-text; parse the
+  // first RMB<number>/COL match. Also accepts "¥<n>/color" as a fallback.
+  const plateRaw = toStr(row[19]);
+  let platePerColorCny: number | undefined;
+  if (plateRaw) {
+    const m = plateRaw.match(/(?:RMB|¥|￥)\s*([\d.]+)\s*\/\s*(?:COL|COLOR|צבע)/i);
+    if (m) {
+      const n = parseFloat(m[1]);
+      if (Number.isFinite(n) && n > 0) platePerColorCny = n;
+    }
+  }
 
   // If CBM not provided but dims are, derive: (L*W*H) cm / 1,000,000 = m³
   if (
@@ -419,6 +437,7 @@ export function parseFactoryResponseRow(
     weightKg: weight,
     supplier,
     notes,
+    platePerColorCny,
     hasResponse: unitCost !== undefined && unitCost > 0,
   };
 }

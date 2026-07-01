@@ -136,6 +136,17 @@ export function priceFactoryQuote(
   const moldsTotalCny = Math.max(input.moldsCostCny ?? 0, 0);
   const moldsPerUnitCny = moldsTotalCny > 0 ? moldsTotalCny / quantity : 0;
 
+  // Plate ("plant") fee — factory-quoted per colour, spread per unit like
+  // shipping. PASS-THROUGH, no margin: the customer pays exactly what the
+  // factory charged per unit. Same subtract-then-add-back pattern as
+  // shipping so the margin fraction only bites into the bag portion.
+  const platePerColorCnyIn = Math.max(input.platePerColorCny ?? 0, 0);
+  const logoColorsIn = Math.max(1, Math.floor(input.logoColors ?? 1));
+  const plateFeeTotalCny =
+    platePerColorCnyIn > 0 ? platePerColorCnyIn * logoColorsIn : 0;
+  const platePerUnitCny =
+    plateFeeTotalCny > 0 ? plateFeeTotalCny / quantity : 0;
+
   const unitProductionCny = input.factoryUnitCostCny;
   const unitCostUsd = unitProductionCny * cnyToUsd;
   const unitShippingUsd = computeShippingPerUnitUsd(
@@ -149,6 +160,7 @@ export function priceFactoryQuote(
 
   const unitCost = unitCostUsd * usdToTarget;
   const unitShipping = unitShippingUsd * usdToTarget;
+  const platePerUnitIls = platePerUnitCny * cnyToUsd * usdToTarget;
 
   const marginPct =
     input.profitMarginOverride !== undefined
@@ -156,7 +168,8 @@ export function priceFactoryQuote(
       : config.defaultProfitMargin;
 
   // Margin-on-price, matching the calculator (engine.ts): the margin is the
-  // profit's share of the product price (excluding pass-through shipping).
+  // profit's share of the product price (excluding pass-through shipping AND
+  // pass-through plate fee).
   // Clamp to <100% so a misconfigured value can never divide-by-zero / go negative.
   // Compute selling price exact first, round display only — profit must NOT be derived
   // from the rounded selling price or a per-unit rounding error compounds over quantity
@@ -164,7 +177,8 @@ export function priceFactoryQuote(
   // sea and air for identical factory cost).
   const marginFrac = Math.min(Math.max(marginPct, 0), 99.9) / 100;
   const unitProductPriceExact = unitCost / (1 - marginFrac);
-  const unitSellingPriceExact = unitProductPriceExact + unitShipping;
+  const unitSellingPriceExact =
+    unitProductPriceExact + unitShipping + platePerUnitIls;
   const unitSellingPrice = r2(unitSellingPriceExact);
   const unitProfitExact = unitProductPriceExact - unitCost;
   const unitProfit = r2(unitProfitExact);
@@ -175,14 +189,21 @@ export function priceFactoryQuote(
   const moldsTotalSellingPriceIlsExact = moldsTotalCostIlsExact;
   const moldsTotalProfitIlsExact = 0;
 
+  // Plate fee grand total in ILS — pass-through, no margin.
+  const plateFeeTotalCostIlsExact = plateFeeTotalCny * cnyToUsd * usdToTarget;
+
   const bagsCost = unitCost * quantity;
   const bagsProfit = unitProfitExact * quantity;
   const bagsSellingPrice = unitSellingPriceExact * quantity;
 
-  const totalCost = r2(bagsCost + moldsTotalCostIlsExact);
+  const totalCost = r2(
+    bagsCost + moldsTotalCostIlsExact + plateFeeTotalCostIlsExact
+  );
   const totalShipping = r2(unitShipping * quantity);
   const totalProfit = r2(bagsProfit + moldsTotalProfitIlsExact);
-  const totalSellingPrice = r2(bagsSellingPrice + moldsTotalSellingPriceIlsExact);
+  const totalSellingPrice = r2(
+    bagsSellingPrice + moldsTotalSellingPriceIlsExact
+  );
 
   return {
     quantity,
@@ -207,5 +228,15 @@ export function priceFactoryQuote(
     moldsTotalCostIls: r2(moldsTotalCostIlsExact),
     moldsTotalSellingPriceIls: r2(moldsTotalSellingPriceIlsExact),
     moldsTotalProfitIls: r2(moldsTotalProfitIlsExact),
+    ...(plateFeeTotalCny > 0
+      ? {
+          platePerColorCny: r2(platePerColorCnyIn),
+          plateFeeTotalCny: r2(plateFeeTotalCny),
+          platePerUnitCny: Math.round(platePerUnitCny * 1000) / 1000,
+          platePerUnitIls: r2(platePerUnitIls),
+          plateFeeTotalCostIls: r2(plateFeeTotalCostIlsExact),
+          plateFeeLogoColors: logoColorsIn,
+        }
+      : {}),
   };
 }

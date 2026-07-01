@@ -170,14 +170,30 @@ export function QuoteHtmlPreviewWidget({ apiToken, row }: { apiToken: string; ro
                 <tbody>
                   <PriceRow label="עלות מפעל ליחידה (שקית)" value={fmtIls(p.unitCost)} />
                   <PriceRow label="עלות שילוח ליחידה" value={fmtIls(p.unitShipping)} />
+                  {p.plateFeeTotalCostIls !== undefined && p.plateFeeTotalCostIls > 0 && (
+                    <>
+                      <PriceRow
+                        label={`🔗 גלופה מהמפעל (${p.plateFeeLogoColors ?? "?"} צבעים × ¥${p.platePerColorCny ?? "?"}) — pass-through`}
+                        value={fmtIls(p.plateFeeTotalCostIls)}
+                      />
+                      <PriceRow
+                        label="מזה ¥/יח׳ (מתחלק על כל הכמות)"
+                        value={`¥${(p.platePerUnitCny ?? 0).toFixed(3)}/יח׳ · ${fmtIls(p.platePerUnitIls ?? 0)}/יח׳`}
+                      />
+                    </>
+                  )}
                   {p.moldsTotalCostIls !== undefined && p.moldsTotalCostIls > 0 && (
                     <PriceRow
-                      label={`עלות מולד (חד-פעמי, ¥${p.moldsTotalCny ?? "?"})`}
+                      label={`עלות מולד ידני (חד-פעמי, ¥${p.moldsTotalCny ?? "?"})`}
                       value={fmtIls(p.moldsTotalCostIls)}
                     />
                   )}
                   <PriceRow
-                    label="סה״כ עלות (שקיות + שילוח + מולד)"
+                    label={
+                      p.plateFeeTotalCostIls && p.plateFeeTotalCostIls > 0
+                        ? "סה״כ עלות (שקיות + שילוח + גלופה + מולד)"
+                        : "סה״כ עלות (שקיות + שילוח + מולד)"
+                    }
                     value={fmtIls((p.totalCost ?? 0) + (p.totalShipping ?? 0))}
                     bold
                   />
