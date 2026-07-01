@@ -22,6 +22,7 @@ const STAGE_HINT: Record<string, string> = {
   CONSIDERATION: "PDF רשמי ביד הלקוח — שוקל / מתמקח",
 };
 const NULL_HINT = "הלקוח באמצע השאלון";
+const NULL_LABEL = "באמצע שאלון";
 
 type Target = "DISCAVERY" | "FACTORY_WAIT" | "CONSIDERATION" | "INTAKE";
 
@@ -498,23 +499,26 @@ function LagRow({
         background: "rgba(255,255,255,0.02)",
         boxShadow: "inset 0 0 0 1px rgba(69,70,77,0.14)",
         borderRadius: 6,
+        width: "100%",
+        boxSizing: "border-box",
       }}
     >
-      {/* Half-open summary row — name/chevron on line 1, badges on line 2 */}
-      <div
-        onClick={onToggle}
-        role="button"
-        tabIndex={0}
-        style={{
-          display: "flex",
-          flexDirection: "column",
-          gap: 6,
-          padding: "10px 12px",
-          cursor: "pointer",
-          userSelect: "none",
-        }}
-      >
-        <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+      {/* Summary row — name, both stages, per-row actions, always visible */}
+      <div style={{ padding: "10px 12px", display: "flex", flexDirection: "column", gap: 8, width: "100%", boxSizing: "border-box" }}>
+        {/* Line 1 — chevron + name + commitment */}
+        <div
+          onClick={onToggle}
+          role="button"
+          tabIndex={0}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            minWidth: 0,
+            cursor: "pointer",
+            userSelect: "none",
+          }}
+        >
           <span
             style={{
               color: "var(--lux-muted)",
@@ -538,7 +542,17 @@ function LagRow({
           >
             {leadLabel(row)}
           </span>
+          {row.hasAnalysis && row.commitmentScore != null && (
+            <span
+              style={commitmentBadge(row.commitmentScore)}
+              title="ציון מחויבות מתוך הניתוח"
+            >
+              {row.commitmentScore}/5
+            </span>
+          )}
         </div>
+
+        {/* Line 2 — current → suggested, always visible */}
         <div
           style={{
             display: "flex",
@@ -548,29 +562,67 @@ function LagRow({
             paddingInlineStart: 18,
           }}
         >
+          <span style={arrowLabel}>מ־</span>
           <span style={badgeCurrentSmall}>
             {row.currentStage
               ? STAGE_LABEL[row.currentStage] ?? row.currentStage
-              : "בשאלון"}
+              : NULL_LABEL}
           </span>
-          {row.hasAnalysis && row.commitmentScore != null && (
-            <span style={commitmentBadge(row.commitmentScore)}>
-              מחויבות {row.commitmentScore}/5
-            </span>
-          )}
+          <span style={{ color: "var(--lux-muted)", fontSize: 12 }}>←</span>
+          <span style={arrowLabel}>ל־</span>
+          <span style={badgeSuggestedSmall}>
+            {STAGE_LABEL[row.suggestedStage]}
+          </span>
+        </div>
+
+        {/* Line 3 — per-row actions, always available */}
+        <div
+          style={{
+            display: "flex",
+            gap: 6,
+            flexWrap: "wrap",
+            paddingInlineStart: 18,
+          }}
+        >
+          <button
+            disabled={applying}
+            onClick={onApprove}
+            style={{
+              ...smallBtn("champagne"),
+              opacity: applying ? 0.6 : 1,
+            }}
+          >
+            {applying ? "מעביר…" : "✓ אשר"}
+          </button>
+          <button onClick={onDismiss} style={smallBtn("ghost")}>
+            ✗ דחה
+          </button>
+          <button
+            onClick={onToggle}
+            style={{ ...smallBtn("ghost"), opacity: 0.7 }}
+          >
+            {open ? "סגור" : "פרטים"}
+          </button>
         </div>
       </div>
 
-      {/* Details when open */}
+      {/* Details when open — hints per stage + full reason */}
       {open && (
-        <div style={{ padding: "0 12px 12px", display: "flex", flexDirection: "column", gap: 10 }}>
+        <div
+          style={{
+            padding: "0 12px 12px",
+            display: "flex",
+            flexDirection: "column",
+            gap: 10,
+          }}
+        >
           <div style={arrowRow}>
             <div style={stageBlock}>
-              <div className="lux-label" style={arrowLabel}>עכשיו</div>
+              <div className="lux-label" style={arrowLabel}>מ־</div>
               <div style={badgeCurrent}>
                 {row.currentStage
                   ? STAGE_LABEL[row.currentStage] ?? row.currentStage
-                  : "בשאלון"}
+                  : NULL_LABEL}
               </div>
               <div style={hint}>
                 {row.currentStage
@@ -578,9 +630,9 @@ function LagRow({
                   : NULL_HINT}
               </div>
             </div>
-            <div style={arrowDivider}>▼ מוצע להעביר ל־</div>
+            <div style={arrowDivider}>▼</div>
             <div style={stageBlock}>
-              <div className="lux-label" style={arrowLabel}>מוצע</div>
+              <div className="lux-label" style={arrowLabel}>ל־</div>
               <div style={badgeSuggested}>
                 {STAGE_LABEL[row.suggestedStage]}
               </div>
@@ -600,22 +652,6 @@ function LagRow({
               — למה
             </div>
             {row.reason}
-          </div>
-
-          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-            <button
-              disabled={applying}
-              onClick={onApprove}
-              style={{
-                ...smallBtn("champagne"),
-                opacity: applying ? 0.6 : 1,
-              }}
-            >
-              {applying ? "מעביר…" : "✓ אשר העברה"}
-            </button>
-            <button onClick={onDismiss} style={smallBtn("ghost")}>
-              ✗ דחה
-            </button>
           </div>
         </div>
       )}
@@ -685,6 +721,16 @@ const badgeSuggested: React.CSSProperties = {
   boxShadow: "inset 0 0 0 1px rgba(214,196,172,0.40)",
   whiteSpace: "nowrap",
   fontWeight: 500,
+};
+
+const badgeSuggestedSmall: React.CSSProperties = {
+  ...badgeSuggested,
+  fontSize: 11,
+  padding: "3px 9px",
+  whiteSpace: "normal",
+  wordBreak: "keep-all",
+  maxWidth: "100%",
+  display: "inline-block",
 };
 
 const arrowRow: React.CSSProperties = {
