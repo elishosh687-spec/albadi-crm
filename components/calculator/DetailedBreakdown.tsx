@@ -140,50 +140,48 @@ export function DetailedBreakdown(props: BreakdownInput & { defaultOpen?: boolea
             )}
 
             {v.plateFee && (
-              <div className="mt-2 pt-2 border-t border-border/50 text-[11px]">
-                <Row
-                  label={`plate fee מתחלק על ${v.plateFee.quantity.toLocaleString("he-IL")} יח׳`}
-                  value={
-                    <>
-                      {fmtCny(v.plateFee.cnyPerUnit)} = <strong>{fmtIls(v.plateFee.ilsPerUnit, 3)}</strong>/יח׳
-                      <span className="text-muted-foreground"> · סה״כ {fmtIls(v.plateFee.ilsTotal)}</span>
-                    </>
-                  }
-                />
+              <div className="mt-2 pt-2 border-t border-border/50 text-[11px] space-y-1">
+                {v.plateFee.colors !== undefined && v.plateFee.perColorCny !== undefined ? (
+                  /* Factory-quoted plate fee (from Feishu column T) — richer
+                     display with colours × per-colour breakdown and
+                     pass-through label. Same section as production so it
+                     lives next to the bag cost, but visually flagged as
+                     no-margin so Eli sees it's not part of the marginable
+                     base. */
+                  <>
+                    <div className="flex justify-between gap-2 items-baseline">
+                      <span className="text-muted-foreground">
+                        🔗 גלופה מהמפעל (עמודה T · {v.plateFee.colors} צבעים × {fmtCny(v.plateFee.perColorCny, 0)}) — <span className="text-warning">pass-through, ללא רווח</span>
+                      </span>
+                      <span className="text-right">
+                        <strong>{fmtCny(v.plateFee.totalCny ?? 0, 0)}</strong>
+                        <span className="text-muted-foreground"> = {fmtIls(v.plateFee.ilsTotal)}</span>
+                      </span>
+                    </div>
+                    <div className="flex justify-between gap-2 items-baseline">
+                      <span className="text-muted-foreground">
+                        מתחלק על {v.plateFee.quantity.toLocaleString("he-IL")} יח׳
+                      </span>
+                      <span className="text-right">
+                        {fmtCny(v.plateFee.cnyPerUnit)}/יח׳ = <strong>{fmtIls(v.plateFee.ilsPerUnit, 3)}/יח׳</strong>
+                      </span>
+                    </div>
+                  </>
+                ) : (
+                  /* Calculator/customer path — compact single-row fallback. */
+                  <Row
+                    label={`plate fee מתחלק על ${v.plateFee.quantity.toLocaleString("he-IL")} יח׳`}
+                    value={
+                      <>
+                        {fmtCny(v.plateFee.cnyPerUnit)} = <strong>{fmtIls(v.plateFee.ilsPerUnit, 3)}</strong>/יח׳
+                        <span className="text-muted-foreground"> · סה״כ {fmtIls(v.plateFee.ilsTotal)}</span>
+                      </>
+                    }
+                  />
+                )}
               </div>
             )}
           </Section>
-
-          {/* Factory-quoted plate fee (from Feishu column T). Only shown when
-              we have the richer factory-quote metadata (colours + per-colour).
-              Same pass-through treatment as shipping — no margin — so the
-              customer pays the exact factory cost per unit. */}
-          {v.plateFee && v.plateFee.colors !== undefined && v.plateFee.perColorCny !== undefined && (
-            <Section icon={Receipt} title="🔗 גלופה מהמפעל (pass-through — ללא רווח)">
-              <div className="space-y-1">
-                <Row
-                  label="נמשך מגיליון Feishu (עמודה T)"
-                  value={
-                    <span className="text-muted-foreground">
-                      {v.plateFee.colors} צבעים × {fmtCny(v.plateFee.perColorCny, 0)} = <strong className="text-foreground">{fmtCny(v.plateFee.totalCny ?? 0, 0)}</strong> חד-פעמי
-                    </span>
-                  }
-                />
-                <Row
-                  label="חישוב"
-                  value={
-                    <span className="text-muted-foreground">
-                      {fmtCny(v.plateFee.totalCny ?? 0, 0)} ÷ {v.plateFee.quantity.toLocaleString("he-IL")} יח׳ × {v.fx.cnyToIls} = <strong className="text-foreground">{fmtIls(v.plateFee.ilsPerUnit, 3)}/יח׳</strong>
-                    </span>
-                  }
-                />
-                <Row
-                  label="עלות גלופה כוללת (מה ששילמנו למפעל)"
-                  value={<strong>{fmtIls(v.plateFee.ilsTotal)}</strong>}
-                />
-              </div>
-            </Section>
-          )}
 
           {/* Shipping */}
           <Section
