@@ -13,6 +13,7 @@ import { db } from "@/lib/db";
 import { crmTasks, leads } from "@/drizzle/schema";
 import { GHL_SALESPERSON_USER_ID } from "@/integrations/ghl/config";
 import { updateContactTask } from "@/integrations/ghl/client";
+import { verifyWidgetToken } from "@/integrations/ghl/widget-auth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -20,7 +21,11 @@ export const maxDuration = 60;
 
 function authorized(req: NextRequest): boolean {
   const header = req.headers.get("authorization") ?? "";
-  return header === `Bearer ${process.env.BOT_SECRET}`;
+  if (header === `Bearer ${process.env.BOT_SECRET}`) return true;
+  // Widget-token path so Eli can trigger it from the audit UI (no secret to
+  // copy-paste). Same access model as the rest of /api/widget/*.
+  const token = req.nextUrl.searchParams.get("widget_token");
+  return verifyWidgetToken(token);
 }
 
 export async function POST(req: NextRequest) {

@@ -210,9 +210,12 @@ export default function PipelineAuditSection({ token }: { token: string }) {
           בודקים שאף ליד לא נשכח, ושהשלבים בפייפליין מסונכרנים עם מה שהניתוח
           מוצא בשיחות ובהתכתבויות של הליד.
         </div>
-        <LuxCTA variant="champagne" onClick={load} disabled={loading}>
-          {loading ? "בודק…" : notLoaded ? "🕳️ בדיקת יישור" : "רענן"}
-        </LuxCTA>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <BackfillOwnersButton token={token} />
+          <LuxCTA variant="champagne" onClick={load} disabled={loading}>
+            {loading ? "בודק…" : notLoaded ? "🕳️ בדיקת יישור" : "רענן"}
+          </LuxCTA>
+        </div>
       </div>
 
       {!notLoaded && (
@@ -715,6 +718,83 @@ function LagRow({
             {row.reason}
           </div>
 
+        </div>
+      )}
+    </div>
+  );
+}
+
+function BackfillOwnersButton({ token }: { token: string }) {
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+  const run = async () => {
+    setBusy(true);
+    setMsg(null);
+    try {
+      const r = await fetch(
+        `/api/admin/backfill-task-owners?widget_token=${encodeURIComponent(token)}`,
+        { method: "POST" }
+      );
+      const j = await r.json();
+      if (!j.ok) {
+        setMsg(`שגיאה: ${j.error ?? "unknown"}`);
+      } else {
+        const list = (j.unassigned ?? [])
+          .slice(0, 10)
+          .map(
+            (u: { name: string | null; sid: string; title: string }) =>
+              `• ${u.name ?? u.sid} — ${u.title}`
+          )
+          .join("\n");
+        const more =
+          j.listed > 10 ? `\n…ועוד ${j.listed - 10}` : "";
+        setMsg(
+          `שויכו ${j.updated} משימות ל-איתי (${j.ghlPushed} נדחפו גם ל-GHL).\n\n${
+            list ? "לפני התיקון היו יתומות:\n" + list + more : ""
+          }`
+        );
+      }
+    } catch (e) {
+      setMsg(`שגיאה: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 6, alignItems: "flex-end" }}>
+      <button
+        onClick={run}
+        disabled={busy}
+        style={{
+          padding: "9px 14px",
+          borderRadius: 8,
+          border: 0,
+          background: "transparent",
+          boxShadow: "inset 0 0 0 1px rgba(69,70,77,0.22)",
+          color: "var(--lux-muted)",
+          fontSize: 12,
+          cursor: "pointer",
+          fontFamily: "inherit",
+        }}
+      >
+        {busy ? "מריץ…" : "🔧 שייך משימות יתומות ל-איתי"}
+      </button>
+      {msg && (
+        <div
+          style={{
+            fontSize: 11.5,
+            color: "var(--lux-muted)",
+            whiteSpace: "pre-wrap",
+            maxWidth: 320,
+            textAlign: "right",
+            lineHeight: 1.5,
+            padding: "8px 10px",
+            background: "rgba(0,0,0,0.15)",
+            borderRadius: 6,
+            boxShadow: "inset 0 0 0 1px rgba(69,70,77,0.14)",
+          }}
+        >
+          {msg}
         </div>
       )}
     </div>
