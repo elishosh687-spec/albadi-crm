@@ -805,12 +805,16 @@ async function routeToFactory(
     .update(leads)
     .set({
       qState: { ...(done as any), subFlow: "awaiting_factory_estimate" },
-      pipelineStage: "FACTORY_WAIT",
+      // Per Eli 2026-07-01: bot NEVER auto-advances stage. Custom-spec /
+      // factory routing lives on qState.subFlow + NEEDS_ELI flag; pipeline
+      // stage stays at INTAKE (קליטה) until Eli moves it himself.
+      pipelineStage: "INTAKE",
       pipelineFlag: "NEEDS_ELI",
       botSummary: "questionnaire complete, custom spec → factory quote needed",
       updatedAt: new Date(),
     })
     .where(sql`trim(${leads.manychatSubId}) = ${ctx.sid.trim()}`);
+  await ensureAutoTaskForStage(ctx.sid.trim(), "INTAKE").catch(() => {});
   await sendBridgeMessage(ctx.jid, FACTORY_HOLD_MSG);
   await sendEliDM(summarizeForFactory(state, ctx.name, ctx.phone));
 }
@@ -869,12 +873,14 @@ async function routeToQuoted(
       .update(leads)
       .set({
         qState: { ...(bailed as any), subFlow: "awaiting_factory_estimate" },
-        pipelineStage: "FACTORY_WAIT",
+        // Per Eli 2026-07-01: no auto-stage-transitions on the bot side.
+        pipelineStage: "INTAKE",
         pipelineFlag: "NEEDS_ELI",
         botSummary: `calc API failed: ${(e as Error).message}`,
         updatedAt: new Date(),
       })
       .where(sql`trim(${leads.manychatSubId}) = ${ctx.sid.trim()}`);
+    await ensureAutoTaskForStage(ctx.sid.trim(), "INTAKE").catch(() => {});
     await sendBridgeMessage(ctx.jid, FACTORY_HOLD_MSG);
     await sendEliDM(
       `⚠️ calc API נכשל ל-${ctx.name ?? ctx.phone ?? "ליד"} (${(e as Error).message}). השאלון הסתיים — צריך מחיר ידני.`

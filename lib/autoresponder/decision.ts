@@ -708,7 +708,10 @@ async function handleDecisionStage(
       await db
         .update(leads)
         .set({
-          pipelineStage: "FACTORY_WAIT",
+          // Per Eli 2026-07-01: acceptance on WhatsApp is not enough to
+          // advance the stage — sub-flow tracks "awaiting_logo" internally,
+          // but pipeline stays at קליטה until Eli confirms.
+          pipelineStage: "INTAKE",
           followUpCount: 0,
           lastFollowUpAt: new Date(),
           botSummary: "customer accepted quote — awaiting logo",
@@ -917,7 +920,9 @@ async function handleLogoStage(
       .update(leads)
       .set({
         qState: next as any,
-        pipelineStage: "FACTORY_WAIT",
+        // Per Eli 2026-07-01: bot never advances stage on WA signals alone;
+        // stage stays קליטה, Eli moves it manually after reviewing the DM.
+        pipelineStage: "INTAKE",
         pipelineFlag: "NEEDS_ELI",
         botPaused: true,
         botSummary: "logo received — Eli to send final price within 24h",
@@ -953,7 +958,8 @@ async function handleLogoStage(
       .update(leads)
       .set({
         qState: next as any,
-        pipelineStage: "FACTORY_WAIT",
+        // Per Eli 2026-07-01: keep stage at קליטה, Eli decides.
+        pipelineStage: "INTAKE",
         pipelineFlag: "NEEDS_ELI",
         botPaused: true,
         botSummary: "logo link received — Eli to send final price within 24h",
