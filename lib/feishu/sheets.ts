@@ -405,15 +405,24 @@ export function parseFactoryResponseRow(
   const weight = toNum(row[16]);
   const supplier = toStr(row[17]);
   const notes: string | undefined = toStr(row[18]);
-  // Column T = plate fee per colour. Factory writes free-text; parse the
-  // first RMB<number>/COL match. Also accepts "¥<n>/color" as a fallback.
-  const plateRaw = toStr(row[19]);
+  // Plate fee per colour. Dedicated column is T ("plant fee") but several
+  // suppliers still write it into S ("Remark") — convention isn't uniform
+  // across factories. Parse `RMB<number>/COL` (also accepts "¥<n>/color") in
+  // T first (authoritative), fall back to S if T is empty. Whichever we
+  // read here does NOT survive into `notes` — notes is only the leftover
+  // text after any plate-fee token.
+  const platePattern = /(?:RMB|¥|￥)\s*([\d.]+)\s*\/\s*(?:COL|COLOR|צבע)/i;
+  const cellS = toStr(row[18]) ?? "";
+  const cellT = toStr(row[19]) ?? "";
   let platePerColorCny: number | undefined;
-  if (plateRaw) {
-    const m = plateRaw.match(/(?:RMB|¥|￥)\s*([\d.]+)\s*\/\s*(?:COL|COLOR|צבע)/i);
+  for (const src of [cellT, cellS]) {
+    const m = src.match(platePattern);
     if (m) {
       const n = parseFloat(m[1]);
-      if (Number.isFinite(n) && n > 0) platePerColorCny = n;
+      if (Number.isFinite(n) && n > 0) {
+        platePerColorCny = n;
+        break;
+      }
     }
   }
 
