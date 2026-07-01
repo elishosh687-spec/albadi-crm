@@ -4,13 +4,22 @@ import { useCallback, useState } from "react";
 import type { V2PipelineStage } from "@/lib/manychat/stages";
 
 const STAGE_LABEL: Record<string, string> = {
-  INTAKE: "שאלון+הצעה",
+  INTAKE: "שאלון + הצעה אוטומטית",
   DISCAVERY: "שיחת בירור",
   FACTORY_WAIT: "בדיקת מפעל",
-  CONSIDERATION: "שוקל/מו״מ",
+  CONSIDERATION: "שוקל הצעה / מו״מ",
   WON: "נסגר",
   LOST: "אבוד",
 };
+
+/** Short one-line "what does this stage MEAN" — shown under the badge. */
+const STAGE_HINT: Record<string, string> = {
+  INTAKE: "השאלון הסתיים, הבוט שלח הצעה משוערת, מחכים לתגובה",
+  DISCAVERY: "הייתה התכתבות/שיחה של ממש, מבינים צרכים",
+  FACTORY_WAIT: "נשלחה בקשה למפעל, מחכים למחיר מהפאברי",
+  CONSIDERATION: "PDF רשמי ביד הלקוח — שוקל / מתמקח",
+};
+const NULL_HINT = "הלקוח באמצע השאלון או בשלב פתיחה";
 
 interface NoTaskRow {
   sid: string;
@@ -252,20 +261,32 @@ export default function PipelineAuditSection({ token }: { token: string }) {
 
                     {/* Row 2 — current → suggested (the "מ→ל" clarity fix) */}
                     <div style={arrowRow}>
-                      <div style={arrowStepRow}>
-                        <span style={arrowLabel}>עכשיו</span>
-                        <span style={badgeCurrent}>
+                      <div>
+                        <div style={arrowStepRow}>
+                          <span style={arrowLabel}>עכשיו</span>
+                          <span style={badgeCurrent}>
+                            {r.currentStage
+                              ? STAGE_LABEL[r.currentStage] ?? r.currentStage
+                              : "בשאלון"}
+                          </span>
+                        </div>
+                        <div style={hint}>
                           {r.currentStage
-                            ? STAGE_LABEL[r.currentStage] ?? r.currentStage
-                            : "בשאלון"}
-                        </span>
+                            ? STAGE_HINT[r.currentStage] ?? ""
+                            : NULL_HINT}
+                        </div>
                       </div>
                       <div style={arrowDivider}>▼ מוצע להעביר ל־</div>
-                      <div style={arrowStepRow}>
-                        <span style={arrowLabel}>מוצע</span>
-                        <span style={badgeSuggested}>
-                          {STAGE_LABEL[r.suggestedStage]}
-                        </span>
+                      <div>
+                        <div style={arrowStepRow}>
+                          <span style={arrowLabel}>מוצע</span>
+                          <span style={badgeSuggested}>
+                            {STAGE_LABEL[r.suggestedStage]}
+                          </span>
+                        </div>
+                        <div style={hint}>
+                          {STAGE_HINT[r.suggestedStage] ?? ""}
+                        </div>
                       </div>
                     </div>
 
@@ -390,6 +411,14 @@ const arrowDivider: React.CSSProperties = {
   letterSpacing: "0.14em",
   padding: "0 0 0 42px",
   marginTop: 2,
+};
+
+const hint: React.CSSProperties = {
+  fontSize: 11,
+  color: "#a8a29a",
+  lineHeight: 1.45,
+  marginTop: 5,
+  paddingInlineStart: 50,
 };
 
 function commitmentBadge(score: number): React.CSSProperties {
