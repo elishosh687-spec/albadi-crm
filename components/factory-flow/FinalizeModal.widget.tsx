@@ -171,6 +171,14 @@ export function FinalizeModalWidget({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Extract colour count from productSpec.printing ("3 color(s)", "2 colors"…)
+  // Mirrors finalize.ts on the server so the live preview and the finalized
+  // save produce identical plate-fee numbers.
+  const logoColors = useMemo(() => {
+    const m = /(\d+)/.exec(row.productSpec?.printing ?? "");
+    return m ? Math.max(1, parseInt(m[1], 10)) : 1;
+  }, [row.productSpec?.printing]);
+
   const livePricing = useMemo(() => {
     if (!config || !effFr) return null;
     return priceFactoryQuote(
@@ -188,10 +196,12 @@ export function FinalizeModalWidget({
         },
         profitMarginOverride: margin,
         moldsCostCny: moldsValid ? moldsParsed : 0,
+        platePerColorCny: effFr.platePerColorCny,
+        logoColors,
       },
       config
     );
-  }, [config, effFr, shippingOptionId, margin, moldsValid, moldsParsed, qtyNum]);
+  }, [config, effFr, shippingOptionId, margin, moldsValid, moldsParsed, qtyNum, logoColors]);
 
   // Live verify against the Feishu row (read-only). Triggered when the operator
   // opens the factory-data section.
@@ -709,6 +719,12 @@ export function FinalizeModalWidget({
                   }
                   rawCbm={livePricing.totalCbm}
                   seaMinCbm={1}
+                  platePerColorCny={livePricing.platePerColorCny}
+                  plateFeeLogoColors={livePricing.plateFeeLogoColors}
+                  plateFeeTotalCny={livePricing.plateFeeTotalCny}
+                  plateFeeTotalCostIls={livePricing.plateFeeTotalCostIls}
+                  platePerUnitCny={livePricing.platePerUnitCny}
+                  platePerUnitIls={livePricing.platePerUnitIls}
                 />
               )}
 
