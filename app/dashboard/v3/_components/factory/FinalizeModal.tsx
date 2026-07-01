@@ -165,6 +165,15 @@ export function FinalizeModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Extract colour count from productSpec.printing ("3 color(s)", "2 colors"…)
+  // Mirrors finalize.ts on the server: fallback to 1 when unparseable. Used
+  // together with row.factoryResponse.platePerColorCny to price the plate
+  // fee as a pass-through per-unit cost — matching the finalize save.
+  const logoColors = useMemo(() => {
+    const m = /(\d+)/.exec(row.productSpec?.printing ?? "");
+    return m ? Math.max(1, parseInt(m[1], 10)) : 1;
+  }, [row.productSpec?.printing]);
+
   const livePricing = useMemo(() => {
     if (!config || !row.factoryResponse) return null;
     return priceFactoryQuote(
@@ -182,10 +191,12 @@ export function FinalizeModal({
         },
         profitMarginOverride: margin,
         moldsCostCny: moldsValid ? moldsParsed : 0,
+        platePerColorCny: row.factoryResponse.platePerColorCny,
+        logoColors,
       },
       config
     );
-  }, [config, row, shippingOptionId, margin, moldsValid, moldsParsed, qtyNum]);
+  }, [config, row, shippingOptionId, margin, moldsValid, moldsParsed, qtyNum, logoColors]);
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -620,6 +631,12 @@ export function FinalizeModal({
                   }
                   rawCbm={livePricing.totalCbm}
                   seaMinCbm={1}
+                  platePerColorCny={livePricing.platePerColorCny}
+                  plateFeeLogoColors={livePricing.plateFeeLogoColors}
+                  plateFeeTotalCny={livePricing.plateFeeTotalCny}
+                  plateFeeTotalCostIls={livePricing.plateFeeTotalCostIls}
+                  platePerUnitCny={livePricing.platePerUnitCny}
+                  platePerUnitIls={livePricing.platePerUnitIls}
                 />
               )}
 

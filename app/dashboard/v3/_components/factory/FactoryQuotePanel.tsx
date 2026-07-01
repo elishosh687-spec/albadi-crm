@@ -843,6 +843,12 @@ function FinalizedState({
           }
           rawCbm={p.totalCbm}
           seaMinCbm={1}
+          platePerColorCny={p.platePerColorCny}
+          plateFeeLogoColors={p.plateFeeLogoColors}
+          plateFeeTotalCny={p.plateFeeTotalCny}
+          plateFeeTotalCostIls={p.plateFeeTotalCostIls}
+          platePerUnitCny={p.platePerUnitCny}
+          platePerUnitIls={p.platePerUnitIls}
         />
       )}
 
