@@ -24,13 +24,17 @@ export const V2_PIPELINE_STAGES = [
 
 export type V2PipelineStage = (typeof V2_PIPELINE_STAGES)[number];
 
+// Display labels per Eli's working vocabulary (2026-07-01).
+// The INTERNAL stage keys stay the same (INTAKE/DISCAVERY/FACTORY_WAIT/...) —
+// only the Hebrew shown in UI changes. Keeps all DB rows, logs, and legacy
+// mappings working; just what Eli reads in the widget/dashboard is updated.
 export const V2_STAGE_LABELS: Record<V2PipelineStage, string> = {
-  INTAKE: "שאלון + הצעה אוטומטית",
-  DISCAVERY: "שיחת בירור",
-  FACTORY_WAIT: "בדיקת מפעל",
-  CONSIDERATION: "שוקל הצעה / מו״מ",
+  INTAKE: "קליטה",
+  DISCAVERY: "אפיון",
+  FACTORY_WAIT: "מחכה למפעל",
+  CONSIDERATION: "שוקל / משא ומתן",
   WON: "נסגר",
-  LOST: "לא נסגר",
+  LOST: "אבוד",
 };
 
 // Legacy -> new mapping. Consumed by:

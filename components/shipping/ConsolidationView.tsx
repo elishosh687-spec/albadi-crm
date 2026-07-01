@@ -23,10 +23,10 @@ import { LuxShell, LuxTitle, LuxAccent } from "@/components/widget-ui/lux";
 
 const STAGE_LABEL: Record<string, string> = {
   WON: "נסגר ✓",
-  CONSIDERATION: "שוקל הצעה",
-  DISCAVERY: "שיחת בירור",
-  FACTORY_WAIT: "בדיקת מפעל",
-  INTAKE: "שאלון",
+  CONSIDERATION: "שוקל / משא ומתן",
+  DISCAVERY: "אפיון",
+  FACTORY_WAIT: "מחכה למפעל",
+  INTAKE: "קליטה",
 };
 
 export function ConsolidationView({

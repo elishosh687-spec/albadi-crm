@@ -9,10 +9,10 @@ import { LuxShell, LuxTitle, LuxAccent } from "@/components/widget-ui/lux";
 
 const STAGES: [string, string][] = [
   ["__NULL__", "בשאלון"],
-  ["INTAKE", "שאלון+הצעה"],
-  ["DISCAVERY", "שיחת בירור"],
-  ["FACTORY_WAIT", "בדיקת מפעל"],
-  ["CONSIDERATION", "שוקל/מו״מ"],
+  ["INTAKE", "קליטה"],
+  ["DISCAVERY", "אפיון"],
+  ["FACTORY_WAIT", "מחכה למפעל"],
+  ["CONSIDERATION", "שוקל / משא ומתן"],
   ["WON", "נסגר"],
   ["LOST", "אבוד"],
   ["FUTURE_FOLLOW_UP", "מעקב עתידי"],

@@ -4,22 +4,24 @@ import { useCallback, useMemo, useState } from "react";
 import type { V2PipelineStage } from "@/lib/manychat/stages";
 import { Section, LuxCTA, LuxStat } from "@/components/widget-ui/lux";
 
+// Kept in sync with V2_STAGE_LABELS (lib/manychat/stages.ts) so the audit
+// speaks the same vocabulary as the rest of the app.
 const STAGE_LABEL: Record<string, string> = {
-  INTAKE: "שאלון + הצעה אוטומטית",
-  DISCAVERY: "שיחת בירור",
-  FACTORY_WAIT: "בדיקת מפעל",
-  CONSIDERATION: "שוקל הצעה / מו״מ",
+  INTAKE: "קליטה",
+  DISCAVERY: "אפיון",
+  FACTORY_WAIT: "מחכה למפעל",
+  CONSIDERATION: "שוקל / משא ומתן",
   WON: "נסגר",
   LOST: "אבוד",
 };
 
 const STAGE_HINT: Record<string, string> = {
-  INTAKE: "השאלון הסתיים, הבוט שלח הצעה משוערת, מחכים לתגובה",
-  DISCAVERY: "הייתה התכתבות/שיחה של ממש, מבינים צרכים",
-  FACTORY_WAIT: "נשלחה בקשה למפעל, מחכים למחיר מהפאברי",
+  INTAKE: "הלקוח נכנס, השאלון הסתיים, נשלחה הצעה משוערת",
+  DISCAVERY: "היה קשר של ממש עם איש המכירות (שיחה/התכתבות)",
+  FACTORY_WAIT: "נשלחה בקשה למפעל, מחכים למחיר",
   CONSIDERATION: "PDF רשמי ביד הלקוח — שוקל / מתמקח",
 };
-const NULL_HINT = "הלקוח באמצע השאלון או בשלב פתיחה";
+const NULL_HINT = "הלקוח באמצע השאלון";
 
 type Target = "DISCAVERY" | "FACTORY_WAIT" | "CONSIDERATION" | "INTAKE";
 
