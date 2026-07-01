@@ -31,8 +31,16 @@ import type { LeadAnalysis } from "./analyze-lead";
 
 // Stages considered "active" — a lead here should have a next action lined up.
 // NULL is included because pre-quote leads legitimately sit at pipeline_stage
-// = NULL while the questionnaire is running.
-const ACTIVE_STAGES = ["INTAKE", "DISCAVERY", "FACTORY_WAIT"] as const;
+// = NULL while the questionnaire is running. CONSIDERATION (משא ומתן) is also
+// included per Eli 2026-07-01: as long as the lead isn't WON/LOST it counts as
+// active and must have an open task; ghosted negotiations are exactly the
+// leads we don't want to lose track of.
+const ACTIVE_STAGES = [
+  "INTAKE",
+  "DISCAVERY",
+  "FACTORY_WAIT",
+  "CONSIDERATION",
+] as const;
 
 export type SuggestedStage = "INTAKE" | "DISCAVERY" | "FACTORY_WAIT" | "CONSIDERATION";
 
