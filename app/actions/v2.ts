@@ -1162,12 +1162,14 @@ export async function createCrmTaskAction(input: {
     if (!cleanSid) return { ok: false, error: "missing subscriberId" };
     if (!title) return { ok: false, error: "missing title" };
     const due = input.dueAt ? new Date(input.dueAt) : null;
+    const { GHL_SALESPERSON_USER_ID } = await import("@/integrations/ghl/config");
     await db.insert(crmTasks).values({
       manychatSubId: cleanSid,
       title,
       taskType: input.taskType?.trim() || "follow_up",
       dueAt: due && Number.isFinite(due.getTime()) ? due : null,
-      assignedTo: input.assignedTo?.trim() || null,
+      // Default owner = Itay when caller didn't specify. Per Eli 2026-07-01.
+      assignedTo: input.assignedTo?.trim() || GHL_SALESPERSON_USER_ID || null,
     });
     safeRevalidate("/dashboard/v3", "layout");
     return { ok: true, message: "משימה נוצרה" };

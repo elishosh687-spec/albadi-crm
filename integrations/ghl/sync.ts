@@ -15,6 +15,7 @@ import {
   ENABLE_GHL_SYNC,
   GHL_CONVERSATION_PROVIDER_ID,
   GHL_PIPELINE_ID,
+  GHL_SALESPERSON_USER_ID,
   requireGHLLocationId,
 } from "./config";
 import {
@@ -408,11 +409,13 @@ export async function syncTaskToGHL(taskId: number): Promise<void> {
     const completed = task.status === "completed";
 
     if (!task.ghlTaskId) {
-      // First push — create.
+      // First push — create. Default owner is Itay (GHL_SALESPERSON_USER_ID)
+      // so tasks land on his GHL board, not unassigned. Per Eli 2026-07-01.
       const created = await createContactTask(contactId, {
         title: task.title,
         dueDate: dueIso,
         completed,
+        assignedTo: GHL_SALESPERSON_USER_ID || undefined,
       });
       await db
         .update(crmTasks)
@@ -421,11 +424,13 @@ export async function syncTaskToGHL(taskId: number): Promise<void> {
       return;
     }
 
-    // Already in GHL — patch.
+    // Already in GHL — patch. Also (re-)assign to Itay so any task that
+    // was created before this fix gets a real owner on its next sync.
     await updateContactTask(contactId, task.ghlTaskId, {
       title: task.title,
       dueDate: dueIso,
       completed,
+      assignedTo: GHL_SALESPERSON_USER_ID || undefined,
     });
   } catch (err) {
     console.error("[ghl.sync] syncTaskToGHL failed", taskId, err);
