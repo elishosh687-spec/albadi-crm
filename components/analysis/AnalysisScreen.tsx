@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import type { AnalysisAggregate, Pattern } from "@/lib/analysis/aggregate";
 import PlaysEditor from "./PlaysEditor";
+import PipelineAuditSection from "./PipelineAuditSection";
 import type { BlockerKey, StagePlay } from "@/lib/sales/stage-plays.he";
 import { LuxShell, LuxTitle, LuxAccent } from "@/components/widget-ui/lux";
 
@@ -146,6 +147,7 @@ export default function AnalysisScreen({ token }: { token: string }) {
         <PlaysEditor load={loadPlays} save={savePlays} />
       ) : (
         <>
+      <PipelineAuditSection token={token} />
       {/* Filters */}
       <div style={card}>
         <div style={{ fontSize: 11, color: "#8f939b", marginBottom: 6 }}>שלב</div>
