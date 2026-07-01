@@ -6,6 +6,7 @@
 import { db } from "@/lib/db";
 import { leads } from "@/drizzle/schema";
 import { eq, or, sql } from "drizzle-orm";
+import { ensureAutoTaskForStage } from "@/lib/crm-tasks/auto-task";
 import { phoneToJid } from "@/lib/bridge/jid";
 import {
   israeliPhoneLookupVariants,
@@ -96,6 +97,7 @@ export async function upsertLeadFromConfigurator(
       })
       .where(sql`trim(${leads.manychatSubId}) = ${sid}`);
 
+    await ensureAutoTaskForStage(sid, "INTAKE").catch(() => {});
     return { manychatSubId: sid, created: false };
   }
 
@@ -113,5 +115,6 @@ export async function upsertLeadFromConfigurator(
     active: true,
   });
 
+  await ensureAutoTaskForStage(jid, "INTAKE").catch(() => {});
   return { manychatSubId: jid, created: true };
 }

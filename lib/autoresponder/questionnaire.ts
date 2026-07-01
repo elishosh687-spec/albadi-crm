@@ -24,6 +24,7 @@
 import { db } from "../db";
 import { leads } from "../../drizzle/schema";
 import { sql } from "drizzle-orm";
+import { ensureAutoTaskForStage } from "../crm-tasks/auto-task";
 import { sendBridgeMessage, sendCompanyTemplate } from "../bridge/client";
 import { sendEliDM } from "../notify/eli";
 import { calculateQuoteByCodes } from "../factory/calculator";
@@ -841,6 +842,9 @@ async function routeToQuoted(
         updatedAt: new Date(),
       })
       .where(sql`trim(${leads.manychatSubId}) = ${ctx.sid.trim()}`);
+    // Ensure the INTAKE follow-up task exists — this path bypasses
+    // setLeadStage, so the task auto-create doesn't fire otherwise.
+    await ensureAutoTaskForStage(ctx.sid.trim(), "INTAKE").catch(() => {});
     await logBotQuote({
       leadSid: ctx.sid,
       source: "initial",
@@ -915,6 +919,7 @@ export async function requoteWithUpdatedSpec(input: {
         updatedAt: new Date(),
       })
       .where(sql`trim(${leads.manychatSubId}) = ${input.sid.trim()}`);
+    await ensureAutoTaskForStage(input.sid.trim(), "INTAKE").catch(() => {});
     await logBotQuote({
       leadSid: input.sid,
       source: "requote",

@@ -198,38 +198,15 @@ export async function setLeadStage(
   }
 }
 
-// Map of stage -> auto-task spec. null = no task created.
-// Post-2026-06-07 funnel: INTAKE and CONSIDERATION each absorbed two old
-// stages (INITIAL_QUOTE_SENT+AWAITING_FIRST_RESPONSE → INTAKE; FINAL+
-// NEGOTIATING → CONSIDERATION). We kept the more urgent / objection-
-// handling task for CONSIDERATION because that's where money objections
-// surface and a 4h SLA matters more than the 24h followup nudge.
-const AUTO_TASK_BY_STAGE: Partial<
-  Record<V2PipelineStage, { title: string; hoursUntilDue: number }>
-> = {
-  INTAKE: { title: "פולואפ אחרי הצעה ראשונית", hoursUntilDue: 24 },
-  DISCAVERY: { title: "להחליט אם לשלוח למפעל / לאלי", hoursUntilDue: 2 },
-  FACTORY_WAIT: { title: "לעקוב אחר תשובת מפעל", hoursUntilDue: 24 },
-  CONSIDERATION: { title: "פולואפ / לטפל בהתנגדות", hoursUntilDue: 4 },
-  WON: { title: "ביצוע / גבייה / אישור קובץ", hoursUntilDue: 24 },
-};
-
+// Auto-task on stage entry moved to lib/crm-tasks/auto-task.ts so that the
+// questionnaire + configurator paths (which set pipelineStage directly on
+// leads) can also fire it. See ensureAutoTaskForStage.
 async function createAutoTaskForStage(
   sid: string,
   stage: V2PipelineStage
 ): Promise<void> {
-  const spec = AUTO_TASK_BY_STAGE[stage];
-  if (!spec) return;
-  const dueAt = new Date(Date.now() + spec.hoursUntilDue * 60 * 60 * 1000);
-  await db.insert(crmTasks).values({
-    manychatSubId: sid,
-    taskType: "follow_up",
-    title: spec.title,
-    status: "open",
-    dueAt,
-  });
-  // crm_tasks is dashboard-only — no GHL mirror. GHL Tasks tab is driven by
-  // signal-derived reconciler (lib/ghl-tasks/reconcile.ts) instead.
+  const { ensureAutoTaskForStage } = await import("@/lib/crm-tasks/auto-task");
+  await ensureAutoTaskForStage(sid, stage);
 }
 
 export async function updateLeadNotes(
