@@ -21,8 +21,11 @@ const STAGE_HINT: Record<string, string> = {
   FACTORY_WAIT: "נשלחה בקשה למפעל, מחכים למחיר",
   CONSIDERATION: "PDF רשמי ביד הלקוח — שוקל / מתמקח",
 };
-const NULL_HINT = "הלקוח באמצע השאלון";
-const NULL_LABEL = "באמצע שאלון";
+// NULL and INTAKE both render as "קליטה" — Eli treats them as one stage.
+// The internal distinction ("still in questionnaire" vs "questionnaire done +
+// auto-quote sent") is invisible in the UI.
+const NULL_HINT = STAGE_HINT.INTAKE;
+const NULL_LABEL = STAGE_LABEL.INTAKE;
 
 type Target = "DISCAVERY" | "FACTORY_WAIT" | "CONSIDERATION" | "INTAKE";
 
