@@ -586,13 +586,14 @@ function LagRow({
           </span>
         </div>
 
-        {/* Line 3 — per-row actions, always available */}
+        {/* Line 3 — approve/dismiss + manual override, always visible */}
         <div
           style={{
             display: "flex",
             gap: 6,
             flexWrap: "wrap",
             paddingInlineStart: 18,
+            alignItems: "center",
           }}
         >
           <button
@@ -608,9 +609,41 @@ function LagRow({
           <button onClick={onDismiss} style={smallBtn("ghost")}>
             ✗ דחה
           </button>
+        </div>
+
+        {/* Line 4 — manual override on every row (no need to expand) */}
+        <div
+          style={{
+            display: "flex",
+            gap: 6,
+            flexWrap: "wrap",
+            paddingInlineStart: 18,
+            alignItems: "center",
+          }}
+        >
+          <span style={arrowLabel}>או ל־</span>
+          <select
+            value={manualTarget}
+            onChange={(e) => setManualTarget(e.target.value as Target)}
+            onClick={(e) => e.stopPropagation()}
+            style={selectStyle}
+          >
+            {ALL_STAGE_OPTIONS.map((s) => (
+              <option key={s} value={s}>
+                {STAGE_LABEL[s]}
+              </option>
+            ))}
+          </select>
+          <button
+            disabled={applying}
+            onClick={() => onApplyManual(manualTarget)}
+            style={smallBtn("ghost")}
+          >
+            → העבר
+          </button>
           <button
             onClick={onToggle}
-            style={{ ...smallBtn("ghost"), opacity: 0.7 }}
+            style={{ ...smallBtn("ghost"), opacity: 0.6 }}
           >
             {open ? "סגור" : "פרטים"}
           </button>
@@ -665,46 +698,6 @@ function LagRow({
             {row.reason}
           </div>
 
-          {/* Manual override — pick any stage instead of the suggestion */}
-          <div
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              gap: 6,
-              paddingTop: 6,
-              borderTop: "1px solid rgba(69,70,77,0.14)",
-            }}
-          >
-            <div
-              className="lux-label"
-              style={{
-                fontSize: 9.5,
-                letterSpacing: "0.14em",
-              }}
-            >
-              — או העבר ידנית ל־
-            </div>
-            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-              <select
-                value={manualTarget}
-                onChange={(e) => setManualTarget(e.target.value as Target)}
-                style={selectStyle}
-              >
-                {ALL_STAGE_OPTIONS.map((s) => (
-                  <option key={s} value={s}>
-                    {STAGE_LABEL[s]}
-                  </option>
-                ))}
-              </select>
-              <button
-                disabled={applying}
-                onClick={() => onApplyManual(manualTarget)}
-                style={smallBtn("ghost")}
-              >
-                → העבר
-              </button>
-            </div>
-          </div>
         </div>
       )}
     </div>
