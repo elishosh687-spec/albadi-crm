@@ -13,6 +13,8 @@ const STAGE_LABEL: Record<string, string> = {
   CONSIDERATION: "שוקל / משא ומתן",
   WON: "נסגר",
   LOST: "אבוד",
+  FUTURE_FOLLOW_UP: "מעקב עתידי",
+  NO_RESPONSE_REENGAGE: "ללא מענה",
 };
 
 const STAGE_HINT: Record<string, string> = {
@@ -27,7 +29,16 @@ const STAGE_HINT: Record<string, string> = {
 const NULL_HINT = STAGE_HINT.INTAKE;
 const NULL_LABEL = STAGE_LABEL.INTAKE;
 
-type Target = "DISCAVERY" | "FACTORY_WAIT" | "CONSIDERATION" | "INTAKE";
+// The 6 canonical stages that setLeadStage accepts. FUTURE_FOLLOW_UP /
+// NO_RESPONSE_REENGAGE are side stages the operator drags manually in GHL
+// (see CLAUDE.md pipeline table) and would be rejected by the API.
+type Target =
+  | "INTAKE"
+  | "DISCAVERY"
+  | "FACTORY_WAIT"
+  | "CONSIDERATION"
+  | "WON"
+  | "LOST";
 
 interface NoTaskRow {
   sid: string;
@@ -482,11 +493,14 @@ function GroupCard({
   );
 }
 
+// Every stage the API accepts, including terminal WON/LOST.
 const ALL_STAGE_OPTIONS: Target[] = [
   "INTAKE",
   "DISCAVERY",
   "FACTORY_WAIT",
   "CONSIDERATION",
+  "WON",
+  "LOST",
 ];
 
 function LagRow({
