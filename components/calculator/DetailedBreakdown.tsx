@@ -154,6 +154,37 @@ export function DetailedBreakdown(props: BreakdownInput & { defaultOpen?: boolea
             )}
           </Section>
 
+          {/* Factory-quoted plate fee (from Feishu column T). Only shown when
+              we have the richer factory-quote metadata (colours + per-colour).
+              Same pass-through treatment as shipping — no margin — so the
+              customer pays the exact factory cost per unit. */}
+          {v.plateFee && v.plateFee.colors !== undefined && v.plateFee.perColorCny !== undefined && (
+            <Section icon={Receipt} title="🔗 גלופה מהמפעל (pass-through — ללא רווח)">
+              <div className="space-y-1">
+                <Row
+                  label="נמשך מגיליון Feishu (עמודה T)"
+                  value={
+                    <span className="text-muted-foreground">
+                      {v.plateFee.colors} צבעים × {fmtCny(v.plateFee.perColorCny, 0)} = <strong className="text-foreground">{fmtCny(v.plateFee.totalCny ?? 0, 0)}</strong> חד-פעמי
+                    </span>
+                  }
+                />
+                <Row
+                  label="חישוב"
+                  value={
+                    <span className="text-muted-foreground">
+                      {fmtCny(v.plateFee.totalCny ?? 0, 0)} ÷ {v.plateFee.quantity.toLocaleString("he-IL")} יח׳ × {v.fx.cnyToIls} = <strong className="text-foreground">{fmtIls(v.plateFee.ilsPerUnit, 3)}/יח׳</strong>
+                    </span>
+                  }
+                />
+                <Row
+                  label="עלות גלופה כוללת (מה ששילמנו למפעל)"
+                  value={<strong>{fmtIls(v.plateFee.ilsTotal)}</strong>}
+                />
+              </div>
+            </Section>
+          )}
+
           {/* Shipping */}
           <Section
             icon={ShipIcon}

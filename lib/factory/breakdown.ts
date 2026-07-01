@@ -49,6 +49,22 @@ export interface BreakdownInput {
   // For plate fee amortization (optional, customer-side QuoteResult exposes it)
   plateFeeCnyPerUnit?: number;
 
+  // Factory-side plate ("plant") fee — pulled from Feishu column T of the
+  // factory-quote sheet. Populated on the factory-quote path only. Rendered
+  // as a dedicated "pass-through" section in the breakdown when > 0.
+  //   platePerColorCny:      factory-quoted ¥ per colour
+  //   plateFeeLogoColors:    colours used for the total
+  //   plateFeeTotalCny:      platePerColorCny × plateFeeLogoColors
+  //   plateFeeTotalCostIls:  above converted to ILS at FX (no margin)
+  //   platePerUnitCny:       plateFeeTotalCny ÷ quantity
+  //   platePerUnitIls:       platePerUnitCny converted to ILS at FX
+  platePerColorCny?: number;
+  plateFeeLogoColors?: number;
+  plateFeeTotalCny?: number;
+  plateFeeTotalCostIls?: number;
+  platePerUnitCny?: number;
+  platePerUnitIls?: number;
+
   // Components, only when caller has them (calculator path)
   components?: {
     baseBagCny: number;
@@ -122,6 +138,13 @@ export interface BreakdownView {
     ilsPerUnit: number;
     ilsTotal: number;
     quantity: number;
+    /** Optional metadata used by the boss breakdown when the plate fee comes
+     *  from the factory-quote sheet (column T). Undefined on the older
+     *  customer/calculator path — the UI falls back to the simple per-unit
+     *  row in that case. */
+    perColorCny?: number;
+    colors?: number;
+    totalCny?: number;
   } | null;
   alt: BreakdownInput["alt"];
   logistics: {
@@ -214,15 +237,35 @@ export function buildBreakdownView(input: BreakdownInput): BreakdownView {
       profitShareOfPriceLabel: `${input.profitMarginPct}% רווח`,
     },
     components: input.components ?? null,
-    plateFee:
-      input.plateFeeCnyPerUnit && input.plateFeeCnyPerUnit > 0
-        ? {
-            cnyPerUnit: r3(input.plateFeeCnyPerUnit),
-            ilsPerUnit: r3(input.plateFeeCnyPerUnit * cnyToIls),
-            ilsTotal: r2(input.plateFeeCnyPerUnit * cnyToIls * input.quantity),
-            quantity: input.quantity,
-          }
-        : null,
+    plateFee: (() => {
+      // Prefer the richer factory-quote fields (colours + per-colour + total)
+      // when present — falls back to the simpler plateFeeCnyPerUnit shape
+      // used by the customer/calculator path.
+      if (input.platePerUnitCny && input.platePerUnitCny > 0) {
+        const perUnitCny = input.platePerUnitCny;
+        const perUnitIls = input.platePerUnitIls ?? perUnitCny * cnyToIls;
+        const totalCny = input.plateFeeTotalCny ?? perUnitCny * input.quantity;
+        const totalIls = input.plateFeeTotalCostIls ?? totalCny * cnyToIls;
+        return {
+          cnyPerUnit: r3(perUnitCny),
+          ilsPerUnit: r3(perUnitIls),
+          ilsTotal: r2(totalIls),
+          quantity: input.quantity,
+          perColorCny: input.platePerColorCny,
+          colors: input.plateFeeLogoColors,
+          totalCny: r2(totalCny),
+        };
+      }
+      if (input.plateFeeCnyPerUnit && input.plateFeeCnyPerUnit > 0) {
+        return {
+          cnyPerUnit: r3(input.plateFeeCnyPerUnit),
+          ilsPerUnit: r3(input.plateFeeCnyPerUnit * cnyToIls),
+          ilsTotal: r2(input.plateFeeCnyPerUnit * cnyToIls * input.quantity),
+          quantity: input.quantity,
+        };
+      }
+      return null;
+    })(),
     alt: input.alt ?? null,
     logistics: {
       cartons: input.totalCartons,
