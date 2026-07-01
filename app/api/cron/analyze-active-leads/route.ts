@@ -27,8 +27,13 @@ const MAX_PER_TICK = 40;
 const CONCURRENCY = 3;
 
 function authorized(req: NextRequest): boolean {
-  const accepted = [process.env.BOT_SECRET, process.env.CALL_TRIGGER_SECRET]
-    .filter((s): s is string => Boolean(s));
+  // Vercel Cron sends `Bearer $CRON_SECRET`; manual/local triggers use
+  // BOT_SECRET or CALL_TRIGGER_SECRET.
+  const accepted = [
+    process.env.BOT_SECRET,
+    process.env.CALL_TRIGGER_SECRET,
+    process.env.CRON_SECRET,
+  ].filter((s): s is string => Boolean(s));
   if (accepted.length === 0) return false;
   const header = req.headers.get("authorization") ?? "";
   return accepted.some((s) => header === `Bearer ${s}`);
@@ -93,4 +98,9 @@ export async function POST(req: NextRequest) {
     remaining_estimate: queue.length === MAX_PER_TICK ? "unknown_more" : 0,
     results,
   });
+}
+
+// Vercel Cron pings GET. Alias to POST so a single implementation drives both.
+export async function GET(req: NextRequest) {
+  return POST(req);
 }
