@@ -23,9 +23,11 @@ import {
   crmTasks,
   elevenlabsCallImports,
   factoryQuoteRequests,
+  leadAnalyses,
   leads,
 } from "@/drizzle/schema";
 import { normalizeStage, type V2PipelineStage } from "@/lib/manychat/stages";
+import type { LeadAnalysis } from "./analyze-lead";
 
 // Stages considered "active" — a lead here should have a next action lined up.
 // NULL is included because pre-quote leads legitimately sit at pipeline_stage
@@ -47,6 +49,9 @@ export interface StageLagRow {
   currentStage: V2PipelineStage | null;
   suggestedStage: SuggestedStage;
   reason: string; // Hebrew, human-readable
+  /** Verdict-backed signals shown in the UI so Eli can judge the suggestion. */
+  commitmentScore?: number | null; // 1..5, from lead_analyses verdict
+  hasAnalysis?: boolean;
 }
 
 export interface PipelineAudit {
@@ -217,6 +222,30 @@ async function findStageLag(): Promise<StageLagRow[]> {
     }
   }
 
+  // ── Signal: LLM verdict (lead_analyses) — the tie-breaker on soft cases ──
+  // A DB signal (call ringing, factory row) doesn't prove the customer is
+  // actually engaged. The verdict does: gpt-4o read every message + transcript
+  // and scored commitment 1-5. We use it to gate suggestions on soft evidence.
+  const verdictBySid = new Map<
+    string,
+    { verdict: LeadAnalysis; createdAt: Date }
+  >();
+  const verdictRows = await db
+    .select({
+      sid: leadAnalyses.manychatSubId,
+      verdict: leadAnalyses.verdict,
+      createdAt: leadAnalyses.createdAt,
+    })
+    .from(leadAnalyses);
+  for (const r of verdictRows) {
+    const v = r.verdict as LeadAnalysis | null;
+    if (!v || !r.createdAt) continue;
+    const prev = verdictBySid.get(r.sid);
+    if (!prev || prev.createdAt < r.createdAt) {
+      verdictBySid.set(r.sid, { verdict: v, createdAt: r.createdAt });
+    }
+  }
+
   // ── Merge per-lead ────────────────────────────────────────────────────
   const out: StageLagRow[] = [];
   for (const l of baseLeads) {
@@ -224,25 +253,70 @@ async function findStageLag(): Promise<StageLagRow[]> {
     // Skip terminal + side stages — Eli owns those manually.
     if (current === "WON" || current === "LOST") continue;
 
+    const vRow = verdictBySid.get(l.sid);
+    const verdict = vRow?.verdict;
+    const commitment = verdict?.commitment_scorecard?.score_1_5 ?? null;
+    // "Cold" leads (insufficient data or commitment ≤ 1) — customer isn't
+    // really engaged. Keep them in INTAKE regardless of DB signals — a call
+    // that didn't reach the customer, or a PDF that got no reply, isn't a
+    // reason to move the stage.
+    const isCold =
+      !verdict ||
+      verdict.insufficient_data === true ||
+      (commitment !== null && commitment <= 1);
+
     let suggested: SuggestedStage | null = null;
     let reason = "";
 
     const factory = factorySignals.get(l.sid);
+    const call = callSignals.get(l.sid);
+
     if (factory?.sentToCustomerAt) {
-      suggested = "CONSIDERATION";
-      reason = `PDF רשמי נשלח ללקוח (${factory.sentToCustomerAt.toISOString().slice(0, 10)})`;
+      // CONSIDERATION requires: PDF sent + verdict shows the customer is
+      // actually weighing it (commitment ≥ 3, or a money/timing objection).
+      const blocker = verdict?.primary_blocker ?? null;
+      const weighingBlocker =
+        blocker === "price" ||
+        blocker === "payment_terms" ||
+        blocker === "moq" ||
+        blocker === "spec_open";
+      if ((commitment ?? 0) >= 3 || weighingBlocker) {
+        suggested = "CONSIDERATION";
+        reason = `PDF ללקוח (${factory.sentToCustomerAt
+          .toISOString()
+          .slice(0, 10)}) + הלקוח שוקל${
+          blocker ? ` (${blockerLabel(blocker)})` : ""
+        }`;
+      } else if (!isCold) {
+        // Have the PDF but no clear weighing signal → still worth moving to
+        // FACTORY_WAIT so the operator sees it isn't stuck at INTAKE.
+        suggested = "FACTORY_WAIT";
+        reason = `PDF נשלח (${factory.sentToCustomerAt
+          .toISOString()
+          .slice(0, 10)}) — עדיין לא עוד ברור אם הלקוח שוקל`;
+      }
     } else if (factory) {
-      suggested = "FACTORY_WAIT";
-      reason = factory.createdAt
-        ? `נשלחה בקשה למפעל (${factory.createdAt.toISOString().slice(0, 10)})`
-        : "נשלחה בקשה למפעל";
-    } else if (callSignals.get(l.sid)) {
-      const at = callSignals.get(l.sid)!.at;
-      suggested = "DISCAVERY";
-      reason = `היתה שיחת טלפון (${at.toISOString().slice(0, 10)})`;
+      // FACTORY_WAIT — factory request exists. Need at least basic engagement
+      // otherwise we're routing dead leads through the factory queue.
+      if (!isCold) {
+        suggested = "FACTORY_WAIT";
+        reason = factory.createdAt
+          ? `נשלחה בקשה למפעל (${factory.createdAt
+              .toISOString()
+              .slice(0, 10)})`
+          : "נשלחה בקשה למפעל";
+      }
+    } else if (call) {
+      // DISCAVERY — a call happened. Only suggest it if the analyst confirms
+      // real engagement in that call (or in later messages).
+      if (!isCold && (commitment ?? 0) >= 2) {
+        suggested = "DISCAVERY";
+        reason = `שיחת טלפון (${call.at
+          .toISOString()
+          .slice(0, 10)}) + הלקוח בשיחה של ממש`;
+      }
     }
-    // INTAKE deliberately NOT auto-suggested — Eli said קליטה is the default
-    // landing, moving out only happens on real evidence of engagement.
+    // INTAKE never auto-suggested — see spec.
 
     if (!suggested) continue;
     // No lag if the current stage is already at or beyond the suggestion.
@@ -257,9 +331,26 @@ async function findStageLag(): Promise<StageLagRow[]> {
       currentStage: current,
       suggestedStage: suggested,
       reason,
+      commitmentScore: commitment,
+      hasAnalysis: !!verdict,
     });
   }
   return out;
+}
+
+function blockerLabel(b: string): string {
+  const map: Record<string, string> = {
+    price: "מחיר",
+    moq: "כמות מינימלית",
+    sample_trust: "רוצה לראות דוגמה",
+    payment_terms: "תנאי תשלום",
+    product_mismatch: "מוצר לא מתאים",
+    followup_drop: "לא חזר אחרי פולואפ",
+    spec_open: "מפרט פתוח",
+    wrong_lead: "לא רלוונטי",
+    other: "אחר",
+  };
+  return map[b] ?? b;
 }
 
 export async function runPipelineAudit(): Promise<PipelineAudit> {

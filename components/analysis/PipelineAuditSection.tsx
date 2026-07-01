@@ -24,6 +24,8 @@ interface StageLagRow {
   currentStage: V2PipelineStage | null;
   suggestedStage: "INTAKE" | "DISCAVERY" | "FACTORY_WAIT" | "CONSIDERATION";
   reason: string;
+  commitmentScore?: number | null;
+  hasAnalysis?: boolean;
 }
 interface AuditResp {
   ok: boolean;
@@ -133,7 +135,7 @@ export default function PipelineAuditSection({ token }: { token: string }) {
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "1fr 1fr",
+            gridTemplateColumns: "repeat(auto-fit, minmax(360px, 1fr))",
             gap: 14,
             marginTop: 12,
             alignItems: "start",
@@ -207,26 +209,78 @@ export default function PipelineAuditSection({ token }: { token: string }) {
                 כל ההצעות טופלו.
               </div>
             ) : (
-              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                 {visibleLag.map((r) => (
-                  <div key={r.sid} style={{ ...row, alignItems: "flex-start", flexDirection: "column", gap: 6, padding: 10 }}>
-                    <div style={{ display: "flex", gap: 8, alignItems: "center", width: "100%" }}>
-                      <span style={{ flex: 1, minWidth: 0, fontSize: 12.5 }}>
+                  <div
+                    key={r.sid}
+                    style={{
+                      ...row,
+                      alignItems: "stretch",
+                      flexDirection: "column",
+                      gap: 10,
+                      padding: 12,
+                    }}
+                  >
+                    {/* Row 1 — name + commitment score */}
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        gap: 8,
+                      }}
+                    >
+                      <span
+                        style={{
+                          flex: 1,
+                          minWidth: 0,
+                          fontSize: 13.5,
+                          color: "#e6e1e0",
+                        }}
+                      >
                         {leadLabel(r)}
                       </span>
-                      <span style={badgeCurrent}>
-                        {r.currentStage
-                          ? STAGE_LABEL[r.currentStage] ?? r.currentStage
-                          : "בשאלון"}
-                      </span>
-                      <span style={{ color: "#8a7f74", fontSize: 11 }}>→</span>
-                      <span style={badgeSuggested}>
-                        {STAGE_LABEL[r.suggestedStage]}
-                      </span>
+                      {r.hasAnalysis && r.commitmentScore != null && (
+                        <span
+                          title="ציון מחויבות מתוך הניתוח"
+                          style={commitmentBadge(r.commitmentScore)}
+                        >
+                          מחויבות {r.commitmentScore}/5
+                        </span>
+                      )}
                     </div>
-                    <div style={{ fontSize: 11.5, color: "#8a7f74" }}>
+
+                    {/* Row 2 — current → suggested (the "מ→ל" clarity fix) */}
+                    <div style={arrowRow}>
+                      <div style={arrowStepRow}>
+                        <span style={arrowLabel}>עכשיו</span>
+                        <span style={badgeCurrent}>
+                          {r.currentStage
+                            ? STAGE_LABEL[r.currentStage] ?? r.currentStage
+                            : "בשאלון"}
+                        </span>
+                      </div>
+                      <div style={arrowDivider}>▼ מוצע להעביר ל־</div>
+                      <div style={arrowStepRow}>
+                        <span style={arrowLabel}>מוצע</span>
+                        <span style={badgeSuggested}>
+                          {STAGE_LABEL[r.suggestedStage]}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Row 3 — reason */}
+                    <div
+                      style={{
+                        fontSize: 12,
+                        color: "#a8a29a",
+                        lineHeight: 1.5,
+                      }}
+                    >
                       {r.reason}
                     </div>
+
+                    {/* Row 4 — actions */}
                     <div style={{ display: "flex", gap: 6 }}>
                       <button
                         disabled={applying.has(r.sid)}
@@ -295,14 +349,68 @@ const badgeCurrent: React.CSSProperties = {
 };
 
 const badgeSuggested: React.CSSProperties = {
-  fontSize: 11,
-  padding: "2px 8px",
+  fontSize: 12,
+  padding: "5px 12px",
   borderRadius: 6,
   color: "#e7cba6",
-  background: "rgba(205,169,120,0.14)",
-  boxShadow: "inset 0 0 0 1px rgba(205,169,120,0.30)",
+  background: "rgba(205,169,120,0.18)",
+  boxShadow: "inset 0 0 0 1px rgba(205,169,120,0.40)",
   whiteSpace: "nowrap",
+  fontWeight: 500,
 };
+
+const arrowRow: React.CSSProperties = {
+  display: "flex",
+  flexDirection: "column",
+  gap: 8,
+  padding: "12px",
+  background: "rgba(0,0,0,0.15)",
+  borderRadius: 6,
+  boxShadow: "inset 0 0 0 1px rgba(69,70,77,0.12)",
+};
+
+const arrowStepRow: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 8,
+  flexWrap: "wrap",
+};
+
+const arrowLabel: React.CSSProperties = {
+  fontSize: 10,
+  color: "#8a7f74",
+  letterSpacing: "0.14em",
+  textTransform: "uppercase",
+  minWidth: 42,
+};
+
+const arrowDivider: React.CSSProperties = {
+  fontSize: 10,
+  color: "#8a7f74",
+  letterSpacing: "0.14em",
+  padding: "0 0 0 42px",
+  marginTop: 2,
+};
+
+function commitmentBadge(score: number): React.CSSProperties {
+  const tone =
+    score >= 4
+      ? { color: "#a8c0a0", bg: "rgba(168,192,160,0.14)", edge: "rgba(168,192,160,0.30)" }
+      : score >= 2
+      ? { color: "#e0a96d", bg: "rgba(224,169,109,0.14)", edge: "rgba(224,169,109,0.30)" }
+      : { color: "#8a7f74", bg: "rgba(255,255,255,0.04)", edge: "rgba(69,70,77,0.20)" };
+  return {
+    fontSize: 10.5,
+    padding: "2px 8px",
+    borderRadius: 99,
+    color: tone.color,
+    background: tone.bg,
+    boxShadow: `inset 0 0 0 1px ${tone.edge}`,
+    whiteSpace: "nowrap",
+    fontFamily: "var(--font-body), Heebo, system-ui",
+    fontVariantNumeric: "tabular-nums",
+  };
+}
 
 function btn(tone: "accent" | "neutral"): React.CSSProperties {
   return {
