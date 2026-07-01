@@ -39,7 +39,7 @@ function fmtMoney(v: unknown): string {
 const STATUS_LABEL: Record<string, { text: string; cls: string }> = {
   draft: { text: "טיוטה", cls: "bg-muted/40 text-muted-foreground border-border" },
   pending: { text: "ממתין", cls: "bg-amber-500/15 text-amber-400 border-amber-500/30" },
-  received: { text: "התקבל", cls: "bg-blue-500/15 text-blue-400 border-blue-500/30" },
+  received: { text: "התקבל", cls: "bg-accent/15 text-accent border-accent/40" },
   finalized: { text: "סופי", cls: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30" },
 };
 

@@ -213,9 +213,13 @@
   --color-border: rgba(230, 225, 224, 0.08);
   --color-input: rgba(230, 225, 224, 0.1);
   --color-ring: rgba(190, 198, 224, 0.45);
-  /* champagne accent — small accents + the giant faint serif numerals */
-  --color-primary: #1a2038;
-  --color-primary-foreground: #e6e1e0;
+  /* champagne primary — the widget uses text-primary / bg-primary for icons
+     and CTAs; the previous navy #1a2038 disappeared into the warm-dark
+     background. Champagne stays visible everywhere. The calculator's own
+     SEND button uses .lux-cta-primary (defined below) so it keeps its
+     navy gradient — nothing on that path touches --color-primary. */
+  --color-primary: #d6c4ac;
+  --color-primary-foreground: #1d1b1a;
   --color-accent: #d6c4ac;
   --color-accent-foreground: #1d1b1a;
 

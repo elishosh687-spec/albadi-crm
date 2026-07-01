@@ -775,7 +775,7 @@ function ProductCalcSection({
               ? "border-amber-500/30 bg-amber-500/10 text-amber-400"
               : finalized
                 ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400"
-                : "border-blue-500/30 bg-blue-500/10 text-blue-400"
+                : "border-accent/40 bg-accent/10 text-accent"
           }`}
         >
           {stale ? "שונה" : finalized ? "סופי" : "חדש"}
