@@ -342,6 +342,7 @@ export default function PipelineAuditSection({ token }: { token: string }) {
                       open={openRows.has(r.sid)}
                       onToggle={() => toggleRow(r.sid)}
                       onApprove={() => applyOne(r.sid, r.suggestedStage)}
+                      onApplyManual={(t) => applyOne(r.sid, t)}
                       onDismiss={() => dismiss(r.sid)}
                       applying={applying.has(r.sid)}
                     />
@@ -478,11 +479,19 @@ function GroupCard({
   );
 }
 
+const ALL_STAGE_OPTIONS: Target[] = [
+  "INTAKE",
+  "DISCAVERY",
+  "FACTORY_WAIT",
+  "CONSIDERATION",
+];
+
 function LagRow({
   row,
   open,
   onToggle,
   onApprove,
+  onApplyManual,
   onDismiss,
   applying,
 }: {
@@ -490,9 +499,11 @@ function LagRow({
   open: boolean;
   onToggle: () => void;
   onApprove: () => void;
+  onApplyManual: (target: Target) => void;
   onDismiss: () => void;
   applying: boolean;
 }) {
+  const [manualTarget, setManualTarget] = useState<Target>(row.suggestedStage);
   return (
     <div
       style={{
@@ -653,6 +664,47 @@ function LagRow({
             </div>
             {row.reason}
           </div>
+
+          {/* Manual override — pick any stage instead of the suggestion */}
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: 6,
+              paddingTop: 6,
+              borderTop: "1px solid rgba(69,70,77,0.14)",
+            }}
+          >
+            <div
+              className="lux-label"
+              style={{
+                fontSize: 9.5,
+                letterSpacing: "0.14em",
+              }}
+            >
+              — או העבר ידנית ל־
+            </div>
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+              <select
+                value={manualTarget}
+                onChange={(e) => setManualTarget(e.target.value as Target)}
+                style={selectStyle}
+              >
+                {ALL_STAGE_OPTIONS.map((s) => (
+                  <option key={s} value={s}>
+                    {STAGE_LABEL[s]}
+                  </option>
+                ))}
+              </select>
+              <button
+                disabled={applying}
+                onClick={() => onApplyManual(manualTarget)}
+                style={smallBtn("ghost")}
+              >
+                → העבר
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
@@ -769,6 +821,20 @@ const hint: React.CSSProperties = {
   color: "#a8a29a",
   lineHeight: 1.45,
   marginTop: 2,
+};
+
+const selectStyle: React.CSSProperties = {
+  background: "#211f1e",
+  color: "var(--lux-ink)",
+  border: 0,
+  boxShadow: "inset 0 0 0 1px rgba(69,70,77,0.30)",
+  borderRadius: 6,
+  padding: "6px 10px",
+  fontSize: 12,
+  fontFamily: "inherit",
+  cursor: "pointer",
+  flex: 1,
+  minWidth: 0,
 };
 
 function smallBtn(tone: "champagne" | "ghost"): React.CSSProperties {
