@@ -48,6 +48,7 @@ function mergeFactoryResponse(
     weightKg: pickNum(fresh.weightKg, s.weightKg),
     supplier: pickStr(fresh.supplier, s.supplier),
     notes: pickStr(fresh.notes, s.notes),
+    platePerColorCny: pickNum(fresh.platePerColorCny, s.platePerColorCny),
   };
   const changed = JSON.stringify(merged) !== JSON.stringify(s);
   return { merged, changed };

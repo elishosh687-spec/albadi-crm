@@ -160,6 +160,7 @@ export async function forceRefreshSingleQuote(
     weightKg: pick(live.weightKg, stored.weightKg),
     supplier: pick(live.supplier, stored.supplier),
     notes: pick(live.notes, stored.notes),
+    platePerColorCny: pick(live.platePerColorCny, stored.platePerColorCny),
   };
   await db
     .update(factoryQuoteRequests)

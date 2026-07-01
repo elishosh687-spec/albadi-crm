@@ -55,6 +55,7 @@ function mergeFactoryResponse(
     weightKg: pickNum(fresh.weightKg, stored.weightKg),
     supplier: pickStr(fresh.supplier, stored.supplier),
     notes: pickStr(fresh.notes, stored.notes),
+    platePerColorCny: pickNum(fresh.platePerColorCny, stored.platePerColorCny),
   };
   // Compare scalar fields only — JSON.stringify is good enough here.
   const changed = JSON.stringify(merged) !== JSON.stringify(stored);
