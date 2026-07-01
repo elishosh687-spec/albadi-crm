@@ -441,6 +441,81 @@ agent with `language` in the payload 400s (see above). (3) The recording proxy
 needs `ELEVENLABS_API_KEY` in the **prod** runtime, else it 502s and the audio
 attach silently fails (note still posts).
 
+## Pipeline audit — "יישור הלידים" (built 2026-07-01)
+
+Two panels on the ניתוח tab (widget), both auto-load on mount. Deterministic
+SQL + LLM verdict, no separate LLM for the audit itself.
+
+**"נפלו בין הכיסאות"** — every lead in an ACTIVE stage (NULL / INTAKE /
+DISCAVERY / FACTORY_WAIT / CONSIDERATION — anything except WON/LOST) with
+zero open `crm_tasks`. Eli opens each in GHL, adds a task by hand.
+
+**"שלב לא תואם"** — leads whose `pipeline_stage` lags behind the [lead-analyzer]
+verdict, gated on `commitment_scorecard.score_1_5`. Rules in
+[lib/analysis/pipeline-audit.ts](lib/analysis/pipeline-audit.ts):
+- **DISCAVERY**: call analyzed + commitment ≥ 2
+- **FACTORY_WAIT**: `factory_quote_requests` row exists + not cold
+- **CONSIDERATION**: `sent_to_customer_at` set + commitment ≥ 3 OR blocker
+  ∈ {price, payment_terms, moq, spec_open}
+- Cold verdict (insufficient_data / commitment ≤ 1) → no suggestion
+
+Per-row ✓ אשר / ✗ דחה + a dropdown to override to any of the 6 canonical
+stages (קליטה / אפיון / מחכה למפעל / שוקל / משא ומתן / נסגר / אבוד). Apply
+goes through `setLeadStage` — DB + GHL + `ensureAutoTaskForStage`.
+
+**Cron ([/api/cron/analyze-active-leads](app/api/cron/analyze-active-leads/route.ts))**:
+daily 03:30 UTC (06:30 IL). Runs `analyzeLead` on every active lead with a
+stale/missing verdict (cap 40/tick, concurrency 3), then a `sweepOrphanTasks`
+pass that finds every open `crm_tasks` row without an assignedTo, sets it
+to Itay in DB, and PATCHes GHL for rows that carry a `ghl_task_id`.
+
+## Bot never auto-advances pipeline stage (2026-07-01 rule)
+
+The bot USED to write `pipelineStage: "FACTORY_WAIT"` from five sites in the
+autoresponder — questionnaire routing to factory, calc-API fallback, customer
+"accept" intent, logo-image inbound, logo-URL inbound. **All five now write
+`INTAKE`.** `qState.subFlow` still tracks `awaiting_logo` /
+`awaiting_factory_estimate` so the autoresponder knows what to do next;
+`NEEDS_ELI` flag and Eli DM still fire so nothing gets lost. **Only the
+pipeline stage stays put** — Eli moves it himself via the audit UI or GHL.
+
+`ensureAutoTaskForStage` in [lib/crm-tasks/auto-task.ts](lib/crm-tasks/auto-task.ts)
+is now called from every stage-write site (setLeadStage, questionnaire
+completion, configurator upsert), so the "נפלו בין הכיסאות" list stays at
+zero for future leads.
+
+## Task ownership — every task defaults to Itay (2026-07-01 rule)
+
+Every `crm_tasks` row defaults to `assignedTo = GHL_SALESPERSON_USER_ID`
+(Itay's GHL user id). Four sites enforce this:
+
+| Path | File |
+|---|---|
+| Auto-task on stage entry | [lib/crm-tasks/auto-task.ts](lib/crm-tasks/auto-task.ts) |
+| Push to GHL (create + update) | [integrations/ghl/sync.ts](integrations/ghl/sync.ts) |
+| Manual UI create | [app/actions/v2.ts](app/actions/v2.ts) `createCrmTaskAction` |
+| Pull from GHL (resync) | [lib/ghl/resync-helper.ts](lib/ghl/resync-helper.ts) |
+
+The nightly cron sweep (above) catches any row that slipped through. No
+manual "reassign" button in the UI — the fix is automatic.
+
+## Display labels: use Eli's working vocabulary
+
+Only stage labels changed 2026-07-01 — the internal keys (`INTAKE` /
+`DISCAVERY` / `FACTORY_WAIT` / `CONSIDERATION` / `WON` / `LOST`) are
+untouched. Every UI surface reads:
+
+  INTAKE        → **קליטה**              (was: שאלון + הצעה אוטומטית)
+  DISCAVERY     → **אפיון**              (was: שיחת בירור)
+  FACTORY_WAIT  → **מחכה למפעל**          (was: בדיקת מפעל)
+  CONSIDERATION → **שוקל / משא ומתן**    (was: שוקל הצעה / מו״מ)
+  LOST          → **אבוד**               (was: לא נסגר)
+
+Source of truth: `V2_STAGE_LABELS` in
+[lib/manychat/stages.ts](lib/manychat/stages.ts). NULL and INTAKE both
+render as "קליטה" in the audit — Eli doesn't distinguish "still in
+questionnaire" from "questionnaire done + auto-quote".
+
 ## Lead analyzer — the "נתח" button (built 2026-06-26)
 
 Per-lead **bottom-up** sales analysis to understand why leads stall, surfaced
