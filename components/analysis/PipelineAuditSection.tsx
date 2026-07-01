@@ -1,7 +1,8 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import type { V2PipelineStage } from "@/lib/manychat/stages";
+import { Section, LuxCTA, LuxStat } from "@/components/widget-ui/lux";
 
 const STAGE_LABEL: Record<string, string> = {
   INTAKE: "שאלון + הצעה אוטומטית",
@@ -12,7 +13,6 @@ const STAGE_LABEL: Record<string, string> = {
   LOST: "אבוד",
 };
 
-/** Short one-line "what does this stage MEAN" — shown under the badge. */
 const STAGE_HINT: Record<string, string> = {
   INTAKE: "השאלון הסתיים, הבוט שלח הצעה משוערת, מחכים לתגובה",
   DISCAVERY: "הייתה התכתבות/שיחה של ממש, מבינים צרכים",
@@ -20,6 +20,8 @@ const STAGE_HINT: Record<string, string> = {
   CONSIDERATION: "PDF רשמי ביד הלקוח — שוקל / מתמקח",
 };
 const NULL_HINT = "הלקוח באמצע השאלון או בשלב פתיחה";
+
+type Target = "DISCAVERY" | "FACTORY_WAIT" | "CONSIDERATION" | "INTAKE";
 
 interface NoTaskRow {
   sid: string;
@@ -31,7 +33,7 @@ interface StageLagRow {
   sid: string;
   name: string | null;
   currentStage: V2PipelineStage | null;
-  suggestedStage: "INTAKE" | "DISCAVERY" | "FACTORY_WAIT" | "CONSIDERATION";
+  suggestedStage: Target;
   reason: string;
   commitmentScore?: number | null;
   hasAnalysis?: boolean;
@@ -43,6 +45,8 @@ interface AuditResp {
   error?: string;
 }
 
+const TARGET_ORDER: Target[] = ["CONSIDERATION", "FACTORY_WAIT", "DISCAVERY", "INTAKE"];
+
 export default function PipelineAuditSection({ token }: { token: string }) {
   const [loading, setLoading] = useState(false);
   const [noTask, setNoTask] = useState<NoTaskRow[] | null>(null);
@@ -50,6 +54,11 @@ export default function PipelineAuditSection({ token }: { token: string }) {
   const [dismissed, setDismissed] = useState<Set<string>>(new Set());
   const [applying, setApplying] = useState<Set<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
+  // Which groups + rows are expanded.
+  const [openGroups, setOpenGroups] = useState<Set<string>>(
+    new Set(["noTask", "CONSIDERATION"])
+  );
+  const [openRows, setOpenRows] = useState<Set<string>>(new Set());
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -63,6 +72,7 @@ export default function PipelineAuditSection({ token }: { token: string }) {
       setNoTask(j.noTask ?? []);
       setStageLag(j.stageLag ?? []);
       setDismissed(new Set());
+      setOpenRows(new Set());
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -84,7 +94,6 @@ export default function PipelineAuditSection({ token }: { token: string }) {
         );
         const j = await r.json();
         if (!j.ok) throw new Error(j.error || "apply failed");
-        // Drop applied row from the visible list.
         setStageLag((prev) => prev?.filter((r) => r.sid !== sid) ?? null);
       } catch (e) {
         setError(e instanceof Error ? e.message : String(e));
@@ -99,231 +108,530 @@ export default function PipelineAuditSection({ token }: { token: string }) {
     [token]
   );
 
-  const applyAll = useCallback(async () => {
-    if (!stageLag) return;
-    const remaining = stageLag.filter((r) => !dismissed.has(r.sid));
-    if (!remaining.length) return;
-    if (!confirm(`להעביר ${remaining.length} לידים לשלבים המוצעים?`)) return;
-    for (const row of remaining) {
-      await applyOne(row.sid, row.suggestedStage);
+  const applyGroup = useCallback(
+    async (target: Target) => {
+      const list = (stageLag ?? []).filter(
+        (r) => r.suggestedStage === target && !dismissed.has(r.sid)
+      );
+      if (!list.length) return;
+      if (
+        !confirm(
+          `להעביר ${list.length} לידים ל"${STAGE_LABEL[target]}"?`
+        )
+      )
+        return;
+      for (const row of list) {
+        await applyOne(row.sid, row.suggestedStage);
+      }
+    },
+    [stageLag, dismissed, applyOne]
+  );
+
+  const dismiss = (sid: string) => setDismissed((s) => new Set(s).add(sid));
+
+  const toggleGroup = (k: string) =>
+    setOpenGroups((s) => {
+      const n = new Set(s);
+      if (n.has(k)) n.delete(k);
+      else n.add(k);
+      return n;
+    });
+  const toggleRow = (sid: string) =>
+    setOpenRows((s) => {
+      const n = new Set(s);
+      if (n.has(sid)) n.delete(sid);
+      else n.add(sid);
+      return n;
+    });
+
+  const visibleLag = useMemo(
+    () => stageLag?.filter((r) => !dismissed.has(r.sid)) ?? [],
+    [stageLag, dismissed]
+  );
+
+  const byTarget = useMemo(() => {
+    const m = new Map<Target, StageLagRow[]>();
+    for (const t of TARGET_ORDER) m.set(t, []);
+    for (const r of visibleLag) {
+      const list = m.get(r.suggestedStage);
+      if (list) list.push(r);
     }
-  }, [stageLag, dismissed, applyOne]);
+    return m;
+  }, [visibleLag]);
 
-  const dismiss = (sid: string) =>
-    setDismissed((s) => new Set(s).add(sid));
+  const avgCommitment = useMemo(() => {
+    const withScore = visibleLag.filter((r) => r.commitmentScore != null);
+    if (!withScore.length) return null;
+    const sum = withScore.reduce((s, r) => s + (r.commitmentScore ?? 0), 0);
+    return (sum / withScore.length).toFixed(1);
+  }, [visibleLag]);
 
-  const visibleLag = stageLag?.filter((r) => !dismissed.has(r.sid)) ?? [];
+  const notLoaded = noTask === null && stageLag === null;
 
   return (
-    <div style={{ marginTop: 22 }}>
-      <div style={header}>
-        <div>
-          <div className="lux-label" style={{ letterSpacing: "0.16em" }}>
-            — Pipeline audit
-          </div>
-          <div style={{ fontSize: 12.5, color: "#e6e1e0", marginTop: 6 }}>
-            בודק שאף ליד לא נפל בין הכיסאות ושהשלבים מסונכרנים עם מה שקרה בפועל.
-          </div>
+    <Section
+      eyebrow="— Pipeline audit"
+      title={
+        <span>
+          יישור <span className="lux-accent">הלידים</span>.
+        </span>
+      }
+      style={{ marginTop: 22 }}
+    >
+      {/* KPI + refresh */}
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "flex-start",
+          gap: 14,
+          flexWrap: "wrap",
+          marginBottom: 14,
+        }}
+      >
+        <div style={{ fontSize: 12.5, color: "var(--lux-muted)", maxWidth: 420 }}>
+          בודקים שאף ליד לא נשכח, ושהשלבים בפייפליין מסונכרנים עם מה שהניתוח
+          מוצא בשיחות ובהתכתבויות של הליד.
         </div>
-        <button onClick={load} disabled={loading} style={btn("accent")}>
-          {loading
-            ? "בודק…"
-            : noTask === null && stageLag === null
-            ? "🕳️ בדיקת יישור"
-            : "רענן"}
-        </button>
+        <LuxCTA variant="champagne" onClick={load} disabled={loading}>
+          {loading ? "בודק…" : notLoaded ? "🕳️ בדיקת יישור" : "רענן"}
+        </LuxCTA>
       </div>
 
+      {!notLoaded && (
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(110px, 1fr))",
+            gap: 8,
+            marginBottom: 16,
+          }}
+        >
+          <LuxStat
+            value={noTask?.length ?? 0}
+            label="בלי משימה"
+            tone={noTask?.length ? "alert" : "default"}
+          />
+          <LuxStat
+            value={visibleLag.length}
+            label="שלב לא תואם"
+            tone={visibleLag.length ? "champagne" : "default"}
+          />
+          <LuxStat
+            value={avgCommitment ?? "—"}
+            label="מחויבות ממוצעת"
+            tone={
+              avgCommitment && parseFloat(avgCommitment) >= 3
+                ? "success"
+                : "default"
+            }
+          />
+          <LuxStat value={dismissed.size} label="נדחו" />
+        </div>
+      )}
+
       {error && (
-        <div style={{ color: "#f0b4b4", marginTop: 10, fontSize: 12 }}>
+        <div
+          style={{
+            color: "#e8b4b4",
+            fontSize: 12,
+            marginBottom: 10,
+            padding: "8px 12px",
+            background: "rgba(232,180,180,0.08)",
+            borderRadius: 6,
+          }}
+        >
           שגיאה: {error}
         </div>
       )}
 
-      {(noTask !== null || stageLag !== null) && (
+      {notLoaded ? (
         <div
           style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(360px, 1fr))",
-            gap: 14,
-            marginTop: 12,
-            alignItems: "start",
+            padding: "40px 20px",
+            textAlign: "center",
+            color: "var(--lux-muted)",
+            fontSize: 13,
           }}
         >
-          {/* No-task list — informational only, no action. */}
-          <div style={card}>
-            <div className="lux-label" style={{ marginBottom: 10, letterSpacing: "0.16em" }}>
-              נפלו בין הכיסאות
-            </div>
-            <div style={{ fontSize: 11.5, color: "#8a7f74", marginBottom: 10 }}>
-              לידים בשלב פעיל שאין להם שום משימה פתוחה. פתח ב-widget והוסף
-              משימה ידנית ב-GHL.
-            </div>
+          לחץ "בדיקת יישור" למעלה כדי לנתח את המצב.
+        </div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          {/* Group 1 — no-task list */}
+          <GroupCard
+            open={openGroups.has("noTask")}
+            onToggle={() => toggleGroup("noTask")}
+            title="נפלו בין הכיסאות"
+            count={noTask?.length ?? 0}
+            tone="alert"
+            subtitle="לידים בשלב פעיל שאין להם שום משימה פתוחה — פתח בווידג'ט והוסף משימה ב-GHL."
+            action={null}
+          >
             {noTask && noTask.length === 0 ? (
-              <div style={{ color: "#8a7f74", fontSize: 12 }}>
-                אין לידים נטושים ✓
-              </div>
+              <EmptyRow text="אין לידים נטושים ✓" />
             ) : (
               <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                {noTask?.slice(0, 100).map((r) => (
-                  <div key={r.sid} style={row}>
-                    <span style={{ flex: 1, minWidth: 0, fontSize: 12.5 }}>
+                {noTask?.map((r) => (
+                  <div
+                    key={r.sid}
+                    style={{
+                      ...noTaskRow,
+                      flexDirection: "column",
+                      alignItems: "flex-start",
+                      gap: 6,
+                    }}
+                  >
+                    <span
+                      style={{
+                        fontSize: 13,
+                        color: "var(--lux-ink)",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                        maxWidth: "100%",
+                      }}
+                    >
                       {leadLabel(r)}
                     </span>
-                    <span style={badgeCurrent}>
+                    <span style={badgeCurrentSmall}>
                       {r.currentStage
                         ? STAGE_LABEL[r.currentStage] ?? r.currentStage
                         : "בשאלון"}
                     </span>
                   </div>
                 ))}
-                {noTask && noTask.length > 100 && (
-                  <div style={{ color: "#8a7f74", fontSize: 11, marginTop: 6 }}>
-                    …ועוד {noTask.length - 100} לידים
-                  </div>
-                )}
               </div>
             )}
+          </GroupCard>
+
+          {/* Groups 2..N — one per target stage */}
+          {TARGET_ORDER.map((target) => {
+            const rows = byTarget.get(target) ?? [];
+            if (!rows.length) return null;
+            return (
+              <GroupCard
+                key={target}
+                open={openGroups.has(target)}
+                onToggle={() => toggleGroup(target)}
+                title={STAGE_LABEL[target]}
+                count={rows.length}
+                tone="champagne"
+                subtitle={STAGE_HINT[target]}
+                action={
+                  <LuxCTA
+                    variant="champagne"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      applyGroup(target);
+                    }}
+                    style={{ fontSize: 11.5, padding: "7px 14px" }}
+                  >
+                    ✓ אשר את כל {rows.length} הלידים
+                  </LuxCTA>
+                }
+              >
+                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                  {rows.map((r) => (
+                    <LagRow
+                      key={r.sid}
+                      row={r}
+                      open={openRows.has(r.sid)}
+                      onToggle={() => toggleRow(r.sid)}
+                      onApprove={() => applyOne(r.sid, r.suggestedStage)}
+                      onDismiss={() => dismiss(r.sid)}
+                      applying={applying.has(r.sid)}
+                    />
+                  ))}
+                </div>
+              </GroupCard>
+            );
+          })}
+
+          {visibleLag.length === 0 && (
+            <EmptyRow text="כל השלבים מסונכרנים ✓" />
+          )}
+        </div>
+      )}
+    </Section>
+  );
+}
+
+// ── sub-components ─────────────────────────────────────────────────────────
+
+function GroupCard({
+  open,
+  onToggle,
+  title,
+  count,
+  tone,
+  subtitle,
+  action,
+  children,
+}: {
+  open: boolean;
+  onToggle: () => void;
+  title: string;
+  count: number;
+  tone: "alert" | "champagne";
+  subtitle?: string;
+  action?: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  const chip =
+    tone === "alert"
+      ? {
+          color: "#e8b4b4",
+          bg: "rgba(232,180,180,0.12)",
+          edge: "rgba(232,180,180,0.30)",
+        }
+      : {
+          color: "var(--lux-champagne)",
+          bg: "rgba(214,196,172,0.12)",
+          edge: "rgba(214,196,172,0.30)",
+        };
+  return (
+    <div
+      style={{
+        background: "var(--lux-card)",
+        borderRadius: 8,
+        boxShadow: "inset 0 0 0 1px var(--lux-line)",
+        overflow: "hidden",
+      }}
+    >
+      {/* Header — always compact: chevron + title + count. No action inline. */}
+      <div
+        onClick={onToggle}
+        role="button"
+        tabIndex={0}
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 10,
+          padding: "14px 16px",
+          cursor: "pointer",
+          userSelect: "none",
+          minWidth: 0,
+        }}
+      >
+        <span style={{ color: "var(--lux-muted)", fontSize: 13, width: 14, flexShrink: 0 }}>
+          {open ? "▾" : "▸"}
+        </span>
+        <span
+          className="lux-serif"
+          style={{
+            fontSize: 15,
+            color: "var(--lux-ink)",
+            flex: "1 1 auto",
+            minWidth: 0,
+            wordBreak: "keep-all",
+            lineHeight: 1.3,
+          }}
+        >
+          {title}
+        </span>
+        <span
+          style={{
+            fontSize: 11,
+            padding: "2px 8px",
+            borderRadius: 99,
+            color: chip.color,
+            background: chip.bg,
+            boxShadow: `inset 0 0 0 1px ${chip.edge}`,
+            fontVariantNumeric: "tabular-nums",
+            flexShrink: 0,
+          }}
+        >
+          {count}
+        </span>
+      </div>
+
+      {subtitle && (
+        <div
+          style={{
+            padding: "0 16px 12px",
+            fontSize: 11.5,
+            color: "var(--lux-muted)",
+            marginTop: -8,
+            paddingInlineStart: 40,
+            lineHeight: 1.45,
+          }}
+        >
+          {subtitle}
+        </div>
+      )}
+
+      {open && (
+        <div style={{ padding: "0 12px 12px", display: "flex", flexDirection: "column", gap: 10 }}>
+          {children}
+          {action && (
+            <div style={{ paddingTop: 4, display: "flex", justifyContent: "flex-end" }}>
+              {action}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function LagRow({
+  row,
+  open,
+  onToggle,
+  onApprove,
+  onDismiss,
+  applying,
+}: {
+  row: StageLagRow;
+  open: boolean;
+  onToggle: () => void;
+  onApprove: () => void;
+  onDismiss: () => void;
+  applying: boolean;
+}) {
+  return (
+    <div
+      style={{
+        background: "rgba(255,255,255,0.02)",
+        boxShadow: "inset 0 0 0 1px rgba(69,70,77,0.14)",
+        borderRadius: 6,
+      }}
+    >
+      {/* Half-open summary row — name/chevron on line 1, badges on line 2 */}
+      <div
+        onClick={onToggle}
+        role="button"
+        tabIndex={0}
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          gap: 6,
+          padding: "10px 12px",
+          cursor: "pointer",
+          userSelect: "none",
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+          <span
+            style={{
+              color: "var(--lux-muted)",
+              fontSize: 11,
+              width: 10,
+              flexShrink: 0,
+            }}
+          >
+            {open ? "▾" : "▸"}
+          </span>
+          <span
+            style={{
+              flex: 1,
+              minWidth: 0,
+              fontSize: 13,
+              color: "var(--lux-ink)",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+            }}
+          >
+            {leadLabel(row)}
+          </span>
+        </div>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 6,
+            flexWrap: "wrap",
+            paddingInlineStart: 18,
+          }}
+        >
+          <span style={badgeCurrentSmall}>
+            {row.currentStage
+              ? STAGE_LABEL[row.currentStage] ?? row.currentStage
+              : "בשאלון"}
+          </span>
+          {row.hasAnalysis && row.commitmentScore != null && (
+            <span style={commitmentBadge(row.commitmentScore)}>
+              מחויבות {row.commitmentScore}/5
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* Details when open */}
+      {open && (
+        <div style={{ padding: "0 12px 12px", display: "flex", flexDirection: "column", gap: 10 }}>
+          <div style={arrowRow}>
+            <div style={stageBlock}>
+              <div className="lux-label" style={arrowLabel}>עכשיו</div>
+              <div style={badgeCurrent}>
+                {row.currentStage
+                  ? STAGE_LABEL[row.currentStage] ?? row.currentStage
+                  : "בשאלון"}
+              </div>
+              <div style={hint}>
+                {row.currentStage
+                  ? STAGE_HINT[row.currentStage] ?? ""
+                  : NULL_HINT}
+              </div>
+            </div>
+            <div style={arrowDivider}>▼ מוצע להעביר ל־</div>
+            <div style={stageBlock}>
+              <div className="lux-label" style={arrowLabel}>מוצע</div>
+              <div style={badgeSuggested}>
+                {STAGE_LABEL[row.suggestedStage]}
+              </div>
+              <div style={hint}>{STAGE_HINT[row.suggestedStage] ?? ""}</div>
+            </div>
           </div>
 
-          {/* Stage-lag list — action per row + "אשר הכל". */}
-          <div style={card}>
+          <div style={{ fontSize: 12, color: "var(--lux-muted)", lineHeight: 1.5 }}>
             <div
+              className="lux-label"
               style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                marginBottom: 10,
+                fontSize: 9.5,
+                marginBottom: 4,
+                letterSpacing: "0.14em",
               }}
             >
-              <div className="lux-label" style={{ letterSpacing: "0.16em" }}>
-                שלב לא תואם
-              </div>
-              {visibleLag.length > 0 && (
-                <button onClick={applyAll} style={btn("accent")}>
-                  ✓ אשר הכל ({visibleLag.length})
-                </button>
-              )}
+              — למה
             </div>
-            <div style={{ fontSize: 11.5, color: "#8a7f74", marginBottom: 10 }}>
-              לידים שהשלב שלהם מיושן לפי מה שקרה בפועל — שיחה שקרתה, בקשה
-              למפעל, או PDF שנשלח.
-            </div>
-            {stageLag && stageLag.length === 0 ? (
-              <div style={{ color: "#8a7f74", fontSize: 12 }}>
-                כל השלבים מסונכרנים ✓
-              </div>
-            ) : visibleLag.length === 0 ? (
-              <div style={{ color: "#8a7f74", fontSize: 12 }}>
-                כל ההצעות טופלו.
-              </div>
-            ) : (
-              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                {visibleLag.map((r) => (
-                  <div
-                    key={r.sid}
-                    style={{
-                      ...row,
-                      alignItems: "stretch",
-                      flexDirection: "column",
-                      gap: 10,
-                      padding: 12,
-                    }}
-                  >
-                    {/* Row 1 — name + commitment score */}
-                    <div
-                      style={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        alignItems: "center",
-                        gap: 8,
-                      }}
-                    >
-                      <span
-                        style={{
-                          flex: 1,
-                          minWidth: 0,
-                          fontSize: 13.5,
-                          color: "#e6e1e0",
-                        }}
-                      >
-                        {leadLabel(r)}
-                      </span>
-                      {r.hasAnalysis && r.commitmentScore != null && (
-                        <span
-                          title="ציון מחויבות מתוך הניתוח"
-                          style={commitmentBadge(r.commitmentScore)}
-                        >
-                          מחויבות {r.commitmentScore}/5
-                        </span>
-                      )}
-                    </div>
+            {row.reason}
+          </div>
 
-                    {/* Row 2 — current → suggested (the "מ→ל" clarity fix) */}
-                    <div style={arrowRow}>
-                      <div>
-                        <div style={arrowStepRow}>
-                          <span style={arrowLabel}>עכשיו</span>
-                          <span style={badgeCurrent}>
-                            {r.currentStage
-                              ? STAGE_LABEL[r.currentStage] ?? r.currentStage
-                              : "בשאלון"}
-                          </span>
-                        </div>
-                        <div style={hint}>
-                          {r.currentStage
-                            ? STAGE_HINT[r.currentStage] ?? ""
-                            : NULL_HINT}
-                        </div>
-                      </div>
-                      <div style={arrowDivider}>▼ מוצע להעביר ל־</div>
-                      <div>
-                        <div style={arrowStepRow}>
-                          <span style={arrowLabel}>מוצע</span>
-                          <span style={badgeSuggested}>
-                            {STAGE_LABEL[r.suggestedStage]}
-                          </span>
-                        </div>
-                        <div style={hint}>
-                          {STAGE_HINT[r.suggestedStage] ?? ""}
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Row 3 — reason */}
-                    <div
-                      style={{
-                        fontSize: 12,
-                        color: "#a8a29a",
-                        lineHeight: 1.5,
-                      }}
-                    >
-                      {r.reason}
-                    </div>
-
-                    {/* Row 4 — actions */}
-                    <div style={{ display: "flex", gap: 6 }}>
-                      <button
-                        disabled={applying.has(r.sid)}
-                        onClick={() => applyOne(r.sid, r.suggestedStage)}
-                        style={btn("accent")}
-                      >
-                        {applying.has(r.sid) ? "מעביר…" : "✓ אשר"}
-                      </button>
-                      <button
-                        onClick={() => dismiss(r.sid)}
-                        style={btn("neutral")}
-                      >
-                        ✗ דחה
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+            <button
+              disabled={applying}
+              onClick={onApprove}
+              style={{
+                ...smallBtn("champagne"),
+                opacity: applying ? 0.6 : 1,
+              }}
+            >
+              {applying ? "מעביר…" : "✓ אשר העברה"}
+            </button>
+            <button onClick={onDismiss} style={smallBtn("ghost")}>
+              ✗ דחה
+            </button>
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function EmptyRow({ text }: { text: string }) {
+  return (
+    <div
+      style={{
+        padding: "20px 12px",
+        textAlign: "center",
+        color: "var(--lux-muted)",
+        fontSize: 12.5,
+      }}
+    >
+      {text}
     </div>
   );
 }
@@ -334,48 +642,45 @@ function leadLabel(l: { name: string | null; sid: string }): string {
   return at > 0 ? l.sid.slice(0, at) : l.sid;
 }
 
-const card: React.CSSProperties = {
-  background: "#1d1b1a",
-  borderRadius: 8,
-  padding: "18px 20px",
-  boxShadow: "inset 0 0 0 1px rgba(69,70,77,0.16)",
-};
+// ── styles ─────────────────────────────────────────────────────────────────
 
-const header: React.CSSProperties = {
-  display: "flex",
-  justifyContent: "space-between",
-  alignItems: "flex-start",
-  gap: 12,
-  padding: "6px 4px",
-};
-
-const row: React.CSSProperties = {
+const noTaskRow: React.CSSProperties = {
   display: "flex",
   alignItems: "center",
   gap: 8,
-  padding: "8px 10px",
+  padding: "9px 12px",
   background: "rgba(255,255,255,0.02)",
   borderRadius: 6,
   boxShadow: "inset 0 0 0 1px rgba(69,70,77,0.14)",
 };
 
 const badgeCurrent: React.CSSProperties = {
-  fontSize: 11,
-  padding: "2px 8px",
+  fontSize: 12,
+  padding: "5px 12px",
   borderRadius: 6,
-  color: "#8a7f74",
+  color: "var(--lux-muted)",
   background: "rgba(255,255,255,0.04)",
-  boxShadow: "inset 0 0 0 1px rgba(69,70,77,0.20)",
+  boxShadow: "inset 0 0 0 1px rgba(69,70,77,0.22)",
   whiteSpace: "nowrap",
+};
+
+const badgeCurrentSmall: React.CSSProperties = {
+  ...badgeCurrent,
+  fontSize: 11,
+  padding: "3px 9px",
+  whiteSpace: "normal",
+  wordBreak: "keep-all",
+  maxWidth: "100%",
+  display: "inline-block",
 };
 
 const badgeSuggested: React.CSSProperties = {
   fontSize: 12,
   padding: "5px 12px",
   borderRadius: 6,
-  color: "#e7cba6",
-  background: "rgba(205,169,120,0.18)",
-  boxShadow: "inset 0 0 0 1px rgba(205,169,120,0.40)",
+  color: "var(--lux-champagne)",
+  background: "rgba(214,196,172,0.18)",
+  boxShadow: "inset 0 0 0 1px rgba(214,196,172,0.40)",
   whiteSpace: "nowrap",
   fontWeight: 500,
 };
@@ -383,43 +688,57 @@ const badgeSuggested: React.CSSProperties = {
 const arrowRow: React.CSSProperties = {
   display: "flex",
   flexDirection: "column",
-  gap: 8,
+  gap: 10,
   padding: "12px",
   background: "rgba(0,0,0,0.15)",
   borderRadius: 6,
   boxShadow: "inset 0 0 0 1px rgba(69,70,77,0.12)",
 };
 
-const arrowStepRow: React.CSSProperties = {
+const stageBlock: React.CSSProperties = {
   display: "flex",
-  alignItems: "center",
-  gap: 8,
-  flexWrap: "wrap",
+  flexDirection: "column",
+  gap: 5,
+  alignItems: "flex-start",
 };
 
 const arrowLabel: React.CSSProperties = {
-  fontSize: 10,
-  color: "#8a7f74",
+  fontSize: 9.5,
+  color: "var(--lux-muted)",
   letterSpacing: "0.14em",
-  textTransform: "uppercase",
-  minWidth: 42,
 };
 
 const arrowDivider: React.CSSProperties = {
   fontSize: 10,
-  color: "#8a7f74",
+  color: "var(--lux-muted)",
   letterSpacing: "0.14em",
-  padding: "0 0 0 42px",
-  marginTop: 2,
+  textAlign: "center",
+  padding: "2px 0",
 };
 
 const hint: React.CSSProperties = {
   fontSize: 11,
   color: "#a8a29a",
   lineHeight: 1.45,
-  marginTop: 5,
-  paddingInlineStart: 50,
+  marginTop: 2,
 };
+
+function smallBtn(tone: "champagne" | "ghost"): React.CSSProperties {
+  return {
+    fontSize: 12,
+    padding: "7px 14px",
+    borderRadius: 6,
+    cursor: "pointer",
+    fontFamily: "inherit",
+    border: 0,
+    boxShadow: `inset 0 0 0 1px ${
+      tone === "champagne" ? "rgba(214,196,172,0.40)" : "rgba(69,70,77,0.22)"
+    }`,
+    background: tone === "champagne" ? "rgba(214,196,172,0.18)" : "transparent",
+    color: tone === "champagne" ? "var(--lux-champagne)" : "var(--lux-muted)",
+    fontWeight: tone === "champagne" ? 500 : 400,
+  };
+}
 
 function commitmentBadge(score: number): React.CSSProperties {
   const tone =
@@ -427,7 +746,7 @@ function commitmentBadge(score: number): React.CSSProperties {
       ? { color: "#a8c0a0", bg: "rgba(168,192,160,0.14)", edge: "rgba(168,192,160,0.30)" }
       : score >= 2
       ? { color: "#e0a96d", bg: "rgba(224,169,109,0.14)", edge: "rgba(224,169,109,0.30)" }
-      : { color: "#8a7f74", bg: "rgba(255,255,255,0.04)", edge: "rgba(69,70,77,0.20)" };
+      : { color: "var(--lux-muted)", bg: "rgba(255,255,255,0.04)", edge: "rgba(69,70,77,0.20)" };
   return {
     fontSize: 10.5,
     padding: "2px 8px",
@@ -438,21 +757,5 @@ function commitmentBadge(score: number): React.CSSProperties {
     whiteSpace: "nowrap",
     fontFamily: "var(--font-body), Heebo, system-ui",
     fontVariantNumeric: "tabular-nums",
-  };
-}
-
-function btn(tone: "accent" | "neutral"): React.CSSProperties {
-  return {
-    padding: "7px 13px",
-    borderRadius: 8,
-    cursor: "pointer",
-    fontFamily: "inherit",
-    fontSize: 12,
-    border: 0,
-    boxShadow: `inset 0 0 0 1px ${
-      tone === "accent" ? "rgba(205,169,120,0.30)" : "rgba(69,70,77,0.22)"
-    }`,
-    background: tone === "accent" ? "rgba(205,169,120,0.14)" : "transparent",
-    color: tone === "accent" ? "#e7cba6" : "#8a7f74",
   };
 }
