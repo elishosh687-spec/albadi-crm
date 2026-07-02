@@ -480,7 +480,10 @@ export function hasCartonMasterData(r: {
 }
 
 // ------------------------------------------------------------
-// Request (operator/product side, A..J = indices 0..9, C=date at index 2)
+// Request (operator/product side). Layout after the 数量-at-K shift, matching
+// the header row 5: D(3) 图片 pic · E(4) 描述 description · F(5) 类型 type
+// (no spec field — skipped) · G(6) 材质及克重 material · H(7) 尺寸 size ·
+// I(8) logo印刷 printing · J(9) 表面处理 finishing · K(10) 数量 quantity.
 // ------------------------------------------------------------
 
 /** Parse the "H{h}*D{d}*W{w}" size label written by buildFactoryRow back into
@@ -512,21 +515,22 @@ export interface ParsedFactoryRequest {
   quantity?: number;
 }
 
-/** Parse the operator/product side of a Feishu row (A..J, indices 0..9 with
- *  C=date at index 2). Only returns fields that are actually present, so a
- *  caller can safely merge non-empty values over an existing spec without
- *  clobbering it with blanks. */
+/** Parse the operator/product side of a Feishu row (A..K, indices 0..10 with
+ *  C=date at index 2 and the 数量 quantity now at K=10 after the column shift).
+ *  Only returns fields that are actually present, so a caller can safely merge
+ *  non-empty values over an existing spec without clobbering it with blanks. */
 export function parseFactoryRequestRow(
   row: (string | number | null)[]
 ): ParsedFactoryRequest {
   const out: ParsedFactoryRequest = {};
-  const picUrl = toStr(row[3]);
-  const description = toStr(row[4]);
-  const material = toStr(row[5]);
-  const size = toStr(row[6]);
-  const printing = toStr(row[7]);
-  const finishing = toStr(row[8]);
-  const quantity = toNum(row[9]);
+  const picUrl = toStr(row[3]);   // D 图片
+  const description = toStr(row[4]); // E 描述
+  // row[5] = F 类型 (bag type) — no spec field, intentionally skipped.
+  const material = toStr(row[6]); // G 材质及克重
+  const size = toStr(row[7]);     // H 尺寸
+  const printing = toStr(row[8]); // I logo印刷
+  const finishing = toStr(row[9]); // J 表面处理
+  const quantity = toNum(row[10]); // K 数量
   // Only a real URL — embedded-image cells come back as an object (handled
   // separately by the media downloader), not a usable string here.
   if (picUrl && /^https?:\/\//i.test(picUrl)) out.picUrl = picUrl;
