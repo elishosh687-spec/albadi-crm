@@ -111,7 +111,9 @@ bare number. Panel's own `cbmWarn` check (`|cbm−dims|/dims > 0.25`) catches it
 E 描述 · F 类型 · G 材质及克重 · H 尺寸 · I logo印刷 · J 表面处理 ·
 K(10) 数量 (IGNORED — echoes our qty) · L(11) 人民币价格 unitCost · M(12) 装箱数量
 cartonQty · N(13) 长 · O(14) 宽 · P(15) 高 · Q(16) 体积 cbm · R(17) 重量KG ·
-S(18) 供应商 · T(19) 备注 + plate fee`.
+S(18) 供应商 · T(19) 备注 remark · U(20) UNLABELED — plate fee
+"printing cost: RMB350/COL" lives here` (it shifted T→U with the same K
+insertion — `readRow`/`readAllRows` read through **U**, parser scans U then T).
 
 **Fix recipe when it shifts again:**
 1. Dump raw rows incl. row 5 (`readRow` + print each cell with its column
