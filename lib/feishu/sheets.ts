@@ -389,40 +389,37 @@ function toStr(v: unknown): string | undefined {
 export function parseFactoryResponseRow(
   row: (string | number | null)[]
 ): ParsedFactoryResponse {
-  // Sheet layout (current): the Feishu sheet auto-fills column C with the
-  // creation date, shifting every other column one slot to the right vs the
-  // original assumption. Outgoing columns are now A,B,(C=date),D..J — see
-  // appendRow comment. Incoming (factory's) columns are K..T:
-  //   K(10) unitCost CNY, L(11) cartonQty, M(12) length, N(13) width,
-  //   O(14) height, P(15) cbm, Q(16) weight, R(17) supplier,
-  //   S(18) remark, T(19) plant fee (per-colour, e.g. "printing cost: RMB505/COL").
-  const unitCost = toNum(row[10]);
-  const cartonQty = toNum(row[11]);
-  const cartonLen = toNum(row[12]);
-  const cartonWid = toNum(row[13]);
-  const cartonHei = toNum(row[14]);
-  let cartonCbm = toNum(row[15]);
-  const weight = toNum(row[16]);
-  const supplier = toStr(row[17]);
-  const notes: string | undefined = toStr(row[18]);
-  // Plate fee per colour. Dedicated column is T ("plant fee") but several
-  // suppliers still write it into S ("Remark") — convention isn't uniform
-  // across factories. Parse `RMB<number>/COL` (also accepts "¥<n>/color") in
-  // T first (authoritative), fall back to S if T is empty. Whichever we
-  // read here does NOT survive into `notes` — notes is only the leftover
-  // text after any plate-fee token.
+  // Sheet layout (current): the factory added a "数量" (quantity) formula at
+  // column K around late 2026-06 which mirrors our request quantity, shifting
+  // every factory-fill cell one slot right. Row 5 in the sheet is the header:
+  //   A 联系人 | B 报价单号 | C date | D 图片 | E 描述 | F 类型 |
+  //   G 材质及克重 | H 尺寸 | I logo印刷 | J 表面处理 |
+  //   K(10) 数量 (quantity — echoed from our request, ignored here) |
+  //   L(11) 人民币价格 unitCost CNY | M(12) 装箱数量 cartonQty |
+  //   N(13) 长 length | O(14) 宽 width | P(15) 高 height |
+  //   Q(16) 体积 cbm | R(17) 重量(KG) weight | S(18) 供应商 supplier |
+  //   T(19) 备注 remark + plate fee ("printing cost: RMB505/COL").
+  const unitCost = toNum(row[11]);
+  const cartonQty = toNum(row[12]);
+  const cartonLen = toNum(row[13]);
+  const cartonWid = toNum(row[14]);
+  const cartonHei = toNum(row[15]);
+  let cartonCbm = toNum(row[16]);
+  const weight = toNum(row[17]);
+  const supplier = toStr(row[18]);
+  const notes: string | undefined = toStr(row[19]);
+  // Plate fee per colour. Lives in T ("备注" / remark) as free-text like
+  // `printing cost: RMB505/COL`. Parse `RMB<number>/COL` (also accepts
+  // "¥<n>/color"). The extracted number does NOT survive into `notes` —
+  // that's just the raw cell for reference.
   const platePattern = /(?:RMB|¥|￥)\s*([\d.]+)\s*\/\s*(?:COL|COLOR|צבע)/i;
-  const cellS = toStr(row[18]) ?? "";
   const cellT = toStr(row[19]) ?? "";
   let platePerColorCny: number | undefined;
-  for (const src of [cellT, cellS]) {
-    const m = src.match(platePattern);
-    if (m) {
-      const n = parseFloat(m[1]);
-      if (Number.isFinite(n) && n > 0) {
-        platePerColorCny = n;
-        break;
-      }
+  const m = cellT.match(platePattern);
+  if (m) {
+    const n = parseFloat(m[1]);
+    if (Number.isFinite(n) && n > 0) {
+      platePerColorCny = n;
     }
   }
 
