@@ -187,15 +187,16 @@ export async function setRowHeight(
 }
 
 /**
- * Reads a single row across A..T. Returns the raw cell values (20 cells).
- * Column T carries the factory-supplied plate fee ("plant fee" / 版费) —
- * factory writes free-text like `printing cost: RMB505/COL` which
- * parseFactoryResponseRow extracts to platePerColorCny.
+ * Reads a single row across A..U. Returns the raw cell values (21 cells).
+ * T (19) is the labeled 备注/remark; U (20) is an UNLABELED trailing column
+ * where the factory writes the plate fee free-text (`printing cost: RMB350/COL`).
+ * Both columns can carry the plate-fee token — parseFactoryResponseRow scans
+ * U first, then T. Read one column past 备注 so the plate fee is never missed.
  */
 export async function readRow(rowIndex: string | number): Promise<(string | number | null)[]> {
   const token = getSpreadsheetToken();
   const sheetId = await getSheetId();
-  const range = `${sheetId}!A${rowIndex}:T${rowIndex}`;
+  const range = `${sheetId}!A${rowIndex}:U${rowIndex}`;
   type ReadResp = {
     data: {
       valueRange: {
@@ -257,17 +258,19 @@ export async function findRowByQuotationNo(
 }
 
 /**
- * Read the full A..R grid (all columns, up to `maxRows`). Used by the
+ * Read the full A..U grid (all columns, up to `maxRows`). Used by the
  * "import from Feishu" flow to re-create quotes that were deleted from the DB
- * but still exist in the sheet. Index in the returned array maps to 0-based
- * row; the 1-based Feishu row index is `i + 1`.
+ * but still exist in the sheet. Reads through U so supplier (S/18) and the
+ * plate fee (U/20) survive the import — parseFactoryResponseRow needs both.
+ * Index in the returned array maps to 0-based row; the 1-based Feishu row
+ * index is `i + 1`.
  */
 export async function readAllRows(
   maxRows = 300
 ): Promise<(string | number | null)[][]> {
   const token = getSpreadsheetToken();
   const sheetId = await getSheetId();
-  const range = `${sheetId}!A1:R${maxRows}`;
+  const range = `${sheetId}!A1:U${maxRows}`;
   type ReadResp = {
     data: { valueRange: { values: (string | number | null)[][] } };
   };
@@ -398,7 +401,9 @@ export function parseFactoryResponseRow(
   //   L(11) 人民币价格 unitCost CNY | M(12) 装箱数量 cartonQty |
   //   N(13) 长 length | O(14) 宽 width | P(15) 高 height |
   //   Q(16) 体积 cbm | R(17) 重量(KG) weight | S(18) 供应商 supplier |
-  //   T(19) 备注 remark + plate fee ("printing cost: RMB505/COL").
+  //   T(19) 备注 remark | U(20) UNLABELED trailing column — the plate fee
+  //   ("printing cost: RMB350/COL") now lives here after the K shift; the
+  //   factory sometimes still drops it in T (备注) instead.
   const unitCost = toNum(row[11]);
   const cartonQty = toNum(row[12]);
   const cartonLen = toNum(row[13]);
@@ -408,18 +413,22 @@ export function parseFactoryResponseRow(
   const weight = toNum(row[17]);
   const supplier = toStr(row[18]);
   const notes: string | undefined = toStr(row[19]);
-  // Plate fee per colour. Lives in T ("备注" / remark) as free-text like
-  // `printing cost: RMB505/COL`. Parse `RMB<number>/COL` (also accepts
-  // "¥<n>/color"). The extracted number does NOT survive into `notes` —
-  // that's just the raw cell for reference.
+  // Plate fee per colour. Primary cell is U (20, unlabeled trailing column);
+  // fall back to T (19, 备注) for factories that still write it there. Parse
+  // `RMB<number>/COL` (also accepts "¥<n>/color"). The extracted number does
+  // NOT survive into `notes` — that stays the raw 备注 (T) cell for reference.
   const platePattern = /(?:RMB|¥|￥)\s*([\d.]+)\s*\/\s*(?:COL|COLOR|צבע)/i;
+  const cellU = toStr(row[20]) ?? "";
   const cellT = toStr(row[19]) ?? "";
   let platePerColorCny: number | undefined;
-  const m = cellT.match(platePattern);
-  if (m) {
-    const n = parseFloat(m[1]);
-    if (Number.isFinite(n) && n > 0) {
-      platePerColorCny = n;
+  for (const src of [cellU, cellT]) {
+    const m = src.match(platePattern);
+    if (m) {
+      const n = parseFloat(m[1]);
+      if (Number.isFinite(n) && n > 0) {
+        platePerColorCny = n;
+        break;
+      }
     }
   }
 
