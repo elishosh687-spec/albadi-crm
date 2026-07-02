@@ -87,7 +87,7 @@ export function DetailedBreakdown(props: BreakdownInput & { defaultOpen?: boolea
             {v.factory.cnyPerUnit !== null && v.factory.usdPerUnit !== null ? (
               <div className="space-y-1">
                 <Row
-                  label="¥ → $ → ₪ ליחידה"
+                  label={v.plateFee ? "בסיס ייצור — ¥ → $ → ₪ ליחידה" : "¥ → $ → ₪ ליחידה"}
                   value={
                     <>
                       {fmtCny(v.factory.cnyPerUnit)}
@@ -98,12 +98,18 @@ export function DetailedBreakdown(props: BreakdownInput & { defaultOpen?: boolea
                     </>
                   }
                 />
-                <Row label="סה״כ עלות מפעל" value={<strong>{fmtIls(v.factory.ilsTotal)}</strong>} />
+                <Row
+                  label={v.plateFee ? "סה״כ בסיס ייצור" : "סה״כ עלות מפעל"}
+                  value={<strong>{fmtIls(v.plateFee ? v.factory.baseIlsTotal : v.factory.ilsTotal)}</strong>}
+                />
               </div>
             ) : (
               <div className="space-y-1">
                 <Row label="עלות יחידה (ILS)" value={<strong>{fmtIls(v.factory.ilsPerUnit)}</strong>} />
-                <Row label="סה״כ עלות מפעל" value={fmtIls(v.factory.ilsTotal)} />
+                <Row
+                  label={v.plateFee ? "סה״כ בסיס ייצור" : "סה״כ עלות מפעל"}
+                  value={fmtIls(v.plateFee ? v.factory.baseIlsTotal : v.factory.ilsTotal)}
+                />
               </div>
             )}
 
@@ -184,22 +190,23 @@ export function DetailedBreakdown(props: BreakdownInput & { defaultOpen?: boolea
 
             {/* Combined factory total — base production + plate fee together,
                 so Eli sees the full "what the factory costs me" number while
-                the base/plate split above stays visible. Only shown when a
-                plate fee exists (otherwise the base total already IS the
-                factory total). */}
+                the base/plate split above stays visible. v.factory.ilsTotal is
+                ALREADY all-in (base + plate + molds), so show it directly — do
+                NOT re-add the plate fee (that double-counts). The base and plate
+                lines here are just the split that sums to it. */}
             {v.plateFee && v.plateFee.ilsTotal > 0 && (
               <div className="mt-2 pt-2 border-t border-border space-y-0.5">
                 <div className="flex justify-between gap-2 items-baseline text-[11px] text-muted-foreground">
                   <span>בסיס ייצור</span>
-                  <span>{fmtIls(v.factory.ilsTotal)}</span>
+                  <span>{fmtIls(v.factory.baseIlsTotal)}</span>
                 </div>
                 <div className="flex justify-between gap-2 items-baseline text-[11px] text-muted-foreground">
-                  <span>+ גלופה</span>
+                  <span>+ גלופה (pass-through)</span>
                   <span>{fmtIls(v.plateFee.ilsTotal)}</span>
                 </div>
                 <Row
                   label={<strong>סה״כ עלות מפעל כולל גלופה</strong>}
-                  value={<strong>{fmtIls(v.factory.ilsTotal + v.plateFee.ilsTotal)}</strong>}
+                  value={<strong>{fmtIls(v.factory.ilsTotal)}</strong>}
                 />
               </div>
             )}

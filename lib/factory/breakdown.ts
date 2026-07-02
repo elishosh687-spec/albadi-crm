@@ -93,8 +93,14 @@ export interface BreakdownView {
   factory: {
     cnyPerUnit: number | null;
     usdPerUnit: number | null;
-    ilsPerUnit: number; // = unitCost
-    ilsTotal: number; // = totalCost
+    ilsPerUnit: number; // = unitCost (BASE production per unit, no plate/molds)
+    /** BASE production total only (unitCost × qty) — excludes the pass-through
+     *  plate fee and molds. Use this for the "בסיס ייצור" line. */
+    baseIlsTotal: number;
+    /** ALL-IN factory cost = base + plate + molds (= engine totalCost). This is
+     *  the "סה״כ עלות מפעל כולל גלופה" number. NOTE ilsPerUnit × qty ≠ ilsTotal
+     *  whenever a plate fee / molds exist — ilsPerUnit is base-only by design. */
+    ilsTotal: number; // = totalCost (base + plate + molds)
   };
   shipping: {
     type: "sea" | "air" | null;
@@ -196,6 +202,14 @@ export function buildBreakdownView(input: BreakdownInput): BreakdownView {
       cnyPerUnit: factoryCny !== null ? r3(factoryCny) : null,
       usdPerUnit: factoryUsd !== null ? r4(factoryUsd) : null,
       ilsPerUnit: r2(input.unitCost),
+      // Base = all-in totalCost minus the pass-through plate fee and molds.
+      // Derived from totalCost (not unitCost × qty) to stay exact against the
+      // engine — unitCost is already r2-rounded and would drift over quantity.
+      baseIlsTotal: r2(
+        input.totalCost -
+          (input.plateFeeTotalCostIls ?? 0) -
+          (input.components?.moldsPerUnitCny ?? 0) * input.quantity * cnyToIls
+      ),
       ilsTotal: r2(input.totalCost),
     },
     shipping: {
