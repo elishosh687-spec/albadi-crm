@@ -88,6 +88,48 @@ Source of truth: `V2_PIPELINE_STAGES` in [lib/manychat/stages.ts](lib/manychat/s
 - Business thresholds: `10000` NIS high-value, `5` days no-contact (in `cron/route.ts`)
 - Phone numbers in `legacy/daily_calls.py` — security risk, do not commit
 
+## Feishu factory-quote parser — column-shift footgun (READ BEFORE TOUCHING FACTORY PRICING)
+
+The factory quote sheet is a **live shared Feishu sheet**; the factory (or Eli)
+can insert/rename columns anytime. `parseFactoryResponseRow` in
+[lib/feishu/sheets.ts](lib/feishu/sheets.ts) reads by **fixed integer index**,
+so any inserted column silently shifts every factory field one slot right and
+corrupts the whole parse. This has bitten us **twice**:
+
+- **2026-05** (a9dfd49): sheet auto-filled column C with a creation date.
+- **2026-07-02** (ba1e88f): factory added a `数量` (quantity) formula at column
+  **K** mirroring our request qty → unitCost read 5000 (=qty), cbm read 55
+  (=height), weight read 0.15 (=cbm), supplier read "11" (=weight). 5 quotes
+  flagged in FinalizeModal.
+
+**Diagnostic signature:** FinalizeModal's "נתוני מפעל" panel shows
+`⚠️ CBM לא תואם למידות` — cartonCbm is in the hundreds (actually a cm
+dimension) while L×W×H imply ~0.0X m³; unitCost in the thousands; supplier is a
+bare number. Panel's own `cbmWarn` check (`|cbm−dims|/dims > 0.25`) catches it.
+
+**Current layout (row 5 = header):** `A 联系人 · B 报价单号 · C date · D 图片 ·
+E 描述 · F 类型 · G 材质及克重 · H 尺寸 · I logo印刷 · J 表面处理 ·
+K(10) 数量 (IGNORED — echoes our qty) · L(11) 人民币价格 unitCost · M(12) 装箱数量
+cartonQty · N(13) 长 · O(14) 宽 · P(15) 高 · Q(16) 体积 cbm · R(17) 重量KG ·
+S(18) 供应商 · T(19) 备注 + plate fee`.
+
+**Fix recipe when it shifts again:**
+1. Dump raw rows incl. row 5 (`readRow` + print each cell with its column
+   letter) to see the new layout.
+2. Shift the `row[N]` indices in `parseFactoryResponseRow` + rewrite the layout
+   comment. Commit + **push to prod FIRST** — the refresh crons + widget
+   `/api/*/factory/refresh` run the OLD parser and re-corrupt DB rows the moment
+   anyone opens the tab, so a DB reparse before deploy just gets overwritten.
+3. Reparse DB with a scratch script (model on
+   `scripts/_reparse-after-col-shift.ts`): re-locate each row via
+   `findRowByQuotationNo` (indices drift too), take fresh numerics **wholesale**
+   (do NOT COALESCE — stored numerics are the corrupted ones), keep only
+   `platePerColorCny` from stored. Dry-run, then `--go`.
+4. Verify: 0 rows flagged by a cbm-vs-dims scan; unitCost×qty + total CBM sane.
+
+**Prevention idea (not built):** parse by header-name lookup on row 5 instead
+of hardcoded indices → shift-proof. Deferred; the fix is ~10 min when it recurs.
+
 ## Deploy
 
 Push to `main` → Vercel **usually** auto-deploys via GitHub integration.
