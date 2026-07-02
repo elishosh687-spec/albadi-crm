@@ -151,7 +151,7 @@ export function DetailedBreakdown(props: BreakdownInput & { defaultOpen?: boolea
                   <>
                     <div className="flex justify-between gap-2 items-baseline">
                       <span className="text-muted-foreground">
-                        🔗 גלופה מהמפעל (עמודה T · {v.plateFee.colors} צבעים × {fmtCny(v.plateFee.perColorCny, 0)}) — <span className="text-warning">pass-through, ללא רווח</span>
+                        🔗 גלופה מהמפעל ({v.plateFee.colors} צבעים × {fmtCny(v.plateFee.perColorCny, 0)}) — <span className="text-warning">pass-through, ללא רווח</span>
                       </span>
                       <span className="text-right">
                         <strong>{fmtCny(v.plateFee.totalCny ?? 0, 0)}</strong>
@@ -179,6 +179,28 @@ export function DetailedBreakdown(props: BreakdownInput & { defaultOpen?: boolea
                     }
                   />
                 )}
+              </div>
+            )}
+
+            {/* Combined factory total — base production + plate fee together,
+                so Eli sees the full "what the factory costs me" number while
+                the base/plate split above stays visible. Only shown when a
+                plate fee exists (otherwise the base total already IS the
+                factory total). */}
+            {v.plateFee && v.plateFee.ilsTotal > 0 && (
+              <div className="mt-2 pt-2 border-t border-border space-y-0.5">
+                <div className="flex justify-between gap-2 items-baseline text-[11px] text-muted-foreground">
+                  <span>בסיס ייצור</span>
+                  <span>{fmtIls(v.factory.ilsTotal)}</span>
+                </div>
+                <div className="flex justify-between gap-2 items-baseline text-[11px] text-muted-foreground">
+                  <span>+ גלופה</span>
+                  <span>{fmtIls(v.plateFee.ilsTotal)}</span>
+                </div>
+                <Row
+                  label={<strong>סה״כ עלות מפעל כולל גלופה</strong>}
+                  value={<strong>{fmtIls(v.factory.ilsTotal + v.plateFee.ilsTotal)}</strong>}
+                />
               </div>
             )}
           </Section>
@@ -353,7 +375,7 @@ function Section({
   );
 }
 
-function Row({ label, value }: { label: string; value: React.ReactNode }) {
+function Row({ label, value }: { label: React.ReactNode; value: React.ReactNode }) {
   return (
     <div className="flex justify-between gap-2 items-baseline">
       <span className="text-muted-foreground">{label}</span>
