@@ -1,0 +1,5 @@
+allowBuilds:
+  core-js: true
+  esbuild: true
+  liquidglass-tailwind: true
+  sharp: true

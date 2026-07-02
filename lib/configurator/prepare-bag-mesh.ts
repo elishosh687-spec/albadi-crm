@@ -1,14 +1,23 @@
 import * as THREE from "three";
+import {
+  computeExteriorBagUvRegions,
+  type BagUvRegions,
+} from "@/lib/configurator/bag-uv-regions";
+import { resolveBagUvRegions } from "@/lib/configurator/bag-uv-islands";
 
 export interface PreparedBagMesh {
   geometry: THREE.BufferGeometry;
   normalMap: THREE.Texture | null;
   /** Height after centering (bottom at y = 0). */
   height: number;
-  /** Max of width / depth — for decal sizing. */
+  /** Max of width / depth — for logo sizing. */
   footprint: number;
-  /** Front face Z in local space (decal anchor). */
+  /** Front face Z in local space. */
   frontZ: number;
+  /** Resolved print islands (manual override → debug draft → auto exterior). */
+  uvRegions: BagUvRegions | null;
+  /** Raw auto-detected exterior islands (for UV debug UI). */
+  autoUvRegions: BagUvRegions | null;
 }
 
 function findBagMesh(scene: THREE.Object3D): {
@@ -35,7 +44,11 @@ function findBagMesh(scene: THREE.Object3D): {
  * Clone the first mesh from a GLB scene, bake its transform, then center on X/Z
  * and align the bottom to y = 0 so every size sits on the same floor point.
  */
-export function prepareBagMesh(scene: THREE.Object3D): PreparedBagMesh | null {
+export function prepareBagMesh(
+  scene: THREE.Object3D,
+  modelPath: string,
+  debugUvDraft?: BagUvRegions | null
+): PreparedBagMesh | null {
   const found = findBagMesh(scene);
   if (!found) return null;
 
@@ -60,11 +73,16 @@ export function prepareBagMesh(scene: THREE.Object3D): PreparedBagMesh | null {
   const width = centered.max.x - centered.min.x;
   const depth = centered.max.z - centered.min.z;
 
+  const autoUvRegions = computeExteriorBagUvRegions(geometry);
+  const uvRegions = resolveBagUvRegions(modelPath, autoUvRegions, debugUvDraft);
+
   return {
     geometry,
     normalMap,
     height: Math.max(height, 0.001),
     footprint: Math.max(width, depth, 0.001),
     frontZ: centered.max.z,
+    uvRegions,
+    autoUvRegions,
   };
 }

@@ -7,18 +7,25 @@ import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 import * as THREE from "three";
 import {
   ALL_BAG_GLB_PATHS,
-  getBagGlbPathForProduct,
+  resolveConfiguratorModelPath,
 } from "@/lib/configurator/bag-models";
 import { BAG_REST_Y, getBagViewerFraming, getDefaultFraming } from "@/lib/configurator/bag-framing";
 import { pickVideoMimeType } from "@/lib/configurator/download-mockup";
 import { prepareBagMesh } from "@/lib/configurator/prepare-bag-mesh";
+import {
+  BAG_UV_TEXTURE_SIZE,
+  configureBagAlbedoTexture,
+  LOGO_POSITION_LIMITS,
+  logoPlacementScalars,
+  paintBagUvTexture,
+  uvPointToLogoState,
+} from "@/lib/configurator/bag-uv-texture";
+import type { BagUvRegions } from "@/lib/configurator/bag-uv-regions";
+import { UvIslandDebugOverlay } from "./UvIslandDebugOverlay";
 
 export type LogoPlacementMode = "drag" | "controls";
 
-export const LOGO_POSITION_LIMITS = {
-  x: { min: -0.85, max: 0.85 },
-  y: { min: -0.6, max: 0.75 },
-} as const;
+export { LOGO_POSITION_LIMITS };
 
 export interface RecordVideoOptions {
   seconds?: number;
@@ -29,6 +36,13 @@ export interface ViewerApi {
   screenshot: () => Promise<string>;
   resetView: () => void;
   recordVideo: (options?: RecordVideoOptions) => Promise<Blob>;
+}
+
+export interface UvRegionsResolvedPayload {
+  modelPath: string;
+  autoRegions: BagUvRegions | null;
+  activeRegions: BagUvRegions | null;
+  geometry: THREE.BufferGeometry | null;
 }
 
 interface BagViewer3DProps {
@@ -45,6 +59,12 @@ interface BagViewer3DProps {
   showLogoHint: boolean;
   isCompact?: boolean;
   onApiReady: (api: ViewerApi) => void;
+  uvDebug?: boolean;
+  /** When uvDebug=1, load this GLB instead of the catalog size model. */
+  debugModelPath?: string | null;
+  uvDebugDraft?: BagUvRegions | null;
+  onUvDebugDraftChange?: (regions: BagUvRegions | null) => void;
+  onUvRegionsResolved?: (payload: UvRegionsResolvedPayload) => void;
 }
 
 const BACKDROP_COLOR = "#f0e9dc";
@@ -64,148 +84,135 @@ function easeOutBack(t: number) {
   return 1 + c3 * (t - 1) ** 3 + c1 * (t - 1) ** 2;
 }
 
-function logoStateToDecalPosition(
-  logoPositionX: number,
-  logoPositionY: number,
-  footprint: number,
-  height: number
-) {
-  const xScale = footprint * 0.48;
-  const yScale = height * 0.38;
-  const baseY = height * 0.28;
-  return {
-    x: logoPositionX * xScale,
-    y: baseY + logoPositionY * yScale,
-    xScale,
-    yScale,
-    baseY,
-  };
-}
-
-function decalLocalPointToLogoState(
-  local: THREE.Vector3,
-  xScale: number,
-  yScale: number,
-  baseY: number
-) {
-  return {
-    x: THREE.MathUtils.clamp(
-      local.x / xScale,
-      LOGO_POSITION_LIMITS.x.min,
-      LOGO_POSITION_LIMITS.x.max
-    ),
-    y: THREE.MathUtils.clamp(
-      (local.y - baseY) / yScale,
-      LOGO_POSITION_LIMITS.y.min,
-      LOGO_POSITION_LIMITS.y.max
-    ),
-  };
-}
-
-function configureLogoTexture(texture: THREE.Texture, maxAnisotropy: number) {
-  texture.colorSpace = THREE.SRGBColorSpace;
-  texture.anisotropy = Math.max(1, maxAnisotropy);
-  texture.generateMipmaps = true;
-  texture.minFilter = THREE.LinearMipmapLinearFilter;
-  texture.magFilter = THREE.LinearFilter;
-  texture.wrapS = THREE.ClampToEdgeWrapping;
-  texture.wrapT = THREE.ClampToEdgeWrapping;
-  texture.needsUpdate = true;
-}
-
-function useLogoTexture(logoUrl?: string | null) {
-  const { gl } = useThree();
-  const [texture, setTexture] = useState<THREE.Texture | null>(null);
+function useLogoImage(logoUrl?: string | null) {
+  const [logoImage, setLogoImage] = useState<HTMLImageElement | null>(null);
   const [aspectRatio, setAspectRatio] = useState(1);
-  const textureRef = useRef<THREE.Texture | null>(null);
 
   useEffect(() => {
     let cancelled = false;
-    const maxAnisotropy = gl.capabilities.getMaxAnisotropy();
 
     if (!logoUrl) {
-      setTexture(null);
+      setLogoImage(null);
       setAspectRatio(1);
-      return () => {
-        textureRef.current?.dispose();
-        textureRef.current = null;
-      };
+      return;
     }
 
-    const loader = new THREE.TextureLoader();
-    loader.load(
-      logoUrl,
-      (loadedTexture) => {
-        if (cancelled) {
-          loadedTexture.dispose();
-          return;
-        }
-        configureLogoTexture(loadedTexture, maxAnisotropy);
-        textureRef.current?.dispose();
-        textureRef.current = loadedTexture;
-        setAspectRatio(
-          loadedTexture.image?.width && loadedTexture.image?.height
-            ? loadedTexture.image.width / loadedTexture.image.height
-            : 1
-        );
-        setTexture(loadedTexture);
-      },
-      undefined,
-      () => {
-        if (!cancelled) {
-          setTexture(null);
-          setAspectRatio(1);
-        }
+    const image = new Image();
+    image.decoding = "async";
+    image.crossOrigin = "anonymous";
+    image.onload = () => {
+      if (cancelled) return;
+      setLogoImage(image);
+      setAspectRatio(
+        image.naturalWidth && image.naturalHeight
+          ? image.naturalWidth / image.naturalHeight
+          : 1
+      );
+    };
+    image.onerror = () => {
+      if (!cancelled) {
+        setLogoImage(null);
+        setAspectRatio(1);
       }
-    );
+    };
+    image.src = logoUrl;
 
     return () => {
       cancelled = true;
     };
-  }, [gl, logoUrl]);
+  }, [logoUrl]);
+
+  return { logoImage, aspectRatio };
+}
+
+function useBagUvAlbedoTexture({
+  bagColor,
+  logoImage,
+  aspectRatio,
+  logoScale,
+  logoPositionX,
+  logoPositionY,
+  logoRotation,
+  prepared,
+}: {
+  bagColor: string;
+  logoImage: HTMLImageElement | null;
+  aspectRatio: number;
+  logoScale: number;
+  logoPositionX: number;
+  logoPositionY: number;
+  logoRotation: number;
+  prepared: ReturnType<typeof prepareBagMesh>;
+}) {
+  const { gl } = useThree();
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const textureRef = useRef<THREE.CanvasTexture | null>(null);
+  const [texture, setTexture] = useState<THREE.CanvasTexture | null>(null);
+
+  useEffect(() => {
+    if (!canvasRef.current) {
+      const canvas = document.createElement("canvas");
+      canvas.width = BAG_UV_TEXTURE_SIZE;
+      canvas.height = BAG_UV_TEXTURE_SIZE;
+      canvasRef.current = canvas;
+    }
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    if (!textureRef.current) {
+      const nextTexture = new THREE.CanvasTexture(canvas);
+      configureBagAlbedoTexture(nextTexture, gl.capabilities.getMaxAnisotropy());
+      textureRef.current = nextTexture;
+      setTexture(nextTexture);
+    }
+
+    const activeTexture = textureRef.current;
+    const regions = prepared?.uvRegions;
+
+    if (!logoImage || !prepared || !regions) {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      activeTexture.needsUpdate = true;
+      return;
+    }
+
+    paintBagUvTexture(ctx, {
+      bagColor,
+      logoImage,
+      footprint: prepared.footprint,
+      height: prepared.height,
+      logoScale,
+      logoPositionX,
+      logoPositionY,
+      logoRotation,
+      aspectRatio,
+      frontRegion: regions.front,
+      backRegion: regions.back,
+    });
+    activeTexture.needsUpdate = true;
+  }, [
+    aspectRatio,
+    bagColor,
+    gl,
+    logoImage,
+    logoPositionX,
+    logoPositionY,
+    logoRotation,
+    logoScale,
+    prepared,
+  ]);
 
   useEffect(() => {
     return () => {
       textureRef.current?.dispose();
       textureRef.current = null;
+      canvasRef.current = null;
+      setTexture(null);
     };
   }, []);
 
-  return { texture, aspectRatio };
-}
-
-/** Plane logo on the bag front — avoids drei Decal removeChild races on model swap. */
-function BagLogoPlane({
-  texture,
-  position,
-  rotationZ,
-  rotationY = 0,
-  width,
-  height,
-}: {
-  texture: THREE.Texture;
-  position: [number, number, number];
-  rotationZ: number;
-  /** Y rotation — π for the back face so the logo faces outward and reads correctly. */
-  rotationY?: number;
-  width: number;
-  height: number;
-}) {
-  return (
-    <mesh position={position} rotation={[0, rotationY, rotationZ]} renderOrder={2}>
-      <planeGeometry args={[width, height]} />
-      <meshStandardMaterial
-        map={texture}
-        transparent
-        depthTest
-        depthWrite={false}
-        polygonOffset
-        polygonOffsetFactor={-2}
-        side={THREE.DoubleSide}
-        toneMapped={false}
-      />
-    </mesh>
-  );
+  if (!logoImage || !prepared?.uvRegions) return null;
+  return texture;
 }
 
 type BagModelProps = Pick<
@@ -221,8 +228,11 @@ type BagModelProps = Pick<
   | "onLogoPositionChange"
   | "showLogoHint"
   | "isCompact"
+  | "debugModelPath"
 > & {
   onFramingChange: (framing: ReturnType<typeof getBagViewerFraming>) => void;
+  uvDebugDraft?: BagUvRegions | null;
+  onUvRegionsResolved?: (payload: UvRegionsResolvedPayload) => void;
 };
 
 function BagModel({
@@ -238,14 +248,40 @@ function BagModel({
   showLogoHint,
   isCompact = false,
   onFramingChange,
+  debugModelPath = null,
+  uvDebugDraft = null,
+  onUvRegionsResolved,
 }: BagModelProps) {
-  const modelPath = getBagGlbPathForProduct(productId);
+  const modelPath = resolveConfiguratorModelPath(productId, debugModelPath);
   const gltf = useGLTF(modelPath, true);
-  const { texture, aspectRatio } = useLogoTexture(logoUrl);
+  const { logoImage, aspectRatio } = useLogoImage(logoUrl);
   const meshRef = useRef<THREE.Mesh>(null);
   const materialRef = useRef<THREE.MeshStandardMaterial>(null);
 
-  const prepared = useMemo(() => prepareBagMesh(gltf.scene), [gltf.scene, modelPath]);
+  const prepared = useMemo(
+    () => prepareBagMesh(gltf.scene, modelPath, uvDebugDraft),
+    [gltf.scene, modelPath, uvDebugDraft]
+  );
+  const albedoTexture = useBagUvAlbedoTexture({
+    bagColor,
+    logoImage,
+    aspectRatio,
+    logoScale,
+    logoPositionX,
+    logoPositionY,
+    logoRotation,
+    prepared,
+  });
+
+  useEffect(() => {
+    if (!prepared || !onUvRegionsResolved) return;
+    onUvRegionsResolved({
+      modelPath,
+      autoRegions: prepared.autoUvRegions,
+      activeRegions: prepared.uvRegions,
+      geometry: prepared.geometry,
+    });
+  }, [modelPath, onUvRegionsResolved, prepared]);
 
   const framing = useMemo(() => {
     if (!prepared) return getDefaultFraming(productId, isCompact);
@@ -261,12 +297,13 @@ function BagModel({
   const raycaster = useMemo(() => new THREE.Raycaster(), []);
   const pointer = useMemo(() => new THREE.Vector2(), []);
 
-  const dragEnabled = logoPlacementMode === "drag" && !!texture;
+  const dragEnabled = logoPlacementMode === "drag" && !!logoImage && !!prepared?.uvRegions;
 
   const updatePositionFromClient = useCallback(
     (clientX: number, clientY: number) => {
       const mesh = meshRef.current;
-      if (!mesh || !onLogoPositionChange) return;
+      const regions = prepared?.uvRegions;
+      if (!mesh || !onLogoPositionChange || !regions) return;
 
       const rect = gl.domElement.getBoundingClientRect();
       pointer.x = ((clientX - rect.left) / rect.width) * 2 - 1;
@@ -274,16 +311,19 @@ function BagModel({
       raycaster.setFromCamera(pointer, camera);
 
       const [hit] = raycaster.intersectObject(mesh, false);
-      if (!hit) return;
+      if (!hit?.uv || !hit.face) return;
 
-      const local = mesh.worldToLocal(hit.point.clone());
+      const nz = hit.face.normal.z;
+      if (Math.abs(nz) < 0.55) return;
+
       const footprint = mesh.userData.footprint as number;
       const height = mesh.userData.height as number;
-      const { xScale, yScale, baseY } = logoStateToDecalPosition(0, 0, footprint, height);
-      const next = decalLocalPointToLogoState(local, xScale, yScale, baseY);
+      const region = nz < 0 ? regions.back : regions.front;
+      const scalars = logoPlacementScalars(region, footprint, height);
+      const next = uvPointToLogoState(hit.uv.x, hit.uv.y, scalars);
       onLogoPositionChange(next.x, next.y);
     },
-    [camera, gl, onLogoPositionChange, pointer, raycaster]
+    [camera, gl, onLogoPositionChange, pointer, prepared?.uvRegions, raycaster]
   );
 
   useEffect(() => {
@@ -332,8 +372,15 @@ function BagModel({
   useEffect(() => {
     const mat = materialRef.current;
     if (!mat) return;
-    mat.color.set(bagColor);
-  }, [bagColor]);
+    if (albedoTexture) {
+      mat.map = albedoTexture;
+      mat.color.set("#ffffff");
+    } else {
+      mat.map = null;
+      mat.color.set(bagColor);
+    }
+    mat.needsUpdate = true;
+  }, [albedoTexture, bagColor]);
 
   useEffect(() => {
     const mat = materialRef.current;
@@ -346,16 +393,6 @@ function BagModel({
   if (!prepared) return null;
 
   const { geometry, height, footprint, frontZ } = prepared;
-  const clampedAspect = Math.max(aspectRatio, 0.65);
-  const logoWidth = Math.min(footprint * 0.72, footprint * 0.42 * logoScale * clampedAspect);
-  const logoHeight = Math.min(height * 0.42, (height * 0.42 * logoScale) / clampedAspect);
-  const { x: logoX, y: logoY } = logoStateToDecalPosition(
-    logoPositionX,
-    logoPositionY,
-    footprint,
-    height
-  );
-  const logoZ = frontZ + 0.008;
 
   return (
     <group rotation={[0.02, -0.46, 0]} scale={framing.sizeScale}>
@@ -374,34 +411,11 @@ function BagModel({
           ref={materialRef}
           roughness={0.72}
           metalness={0.04}
-          side={THREE.DoubleSide}
+          side={THREE.FrontSide}
         />
       </mesh>
 
-      {texture ? (
-        <>
-          {/* Front face */}
-          <BagLogoPlane
-            texture={texture}
-            position={[logoX, logoY, logoZ]}
-            rotationZ={-THREE.MathUtils.degToRad(logoRotation)}
-            width={logoWidth}
-            height={logoHeight}
-          />
-          {/* Back face — mirrored X, flipped 180° so the logo faces outward and
-              reads correctly from behind. Same logo appears on both sides. */}
-          <BagLogoPlane
-            texture={texture}
-            position={[-logoX, logoY, -logoZ]}
-            rotationY={Math.PI}
-            rotationZ={THREE.MathUtils.degToRad(logoRotation)}
-            width={logoWidth}
-            height={logoHeight}
-          />
-        </>
-      ) : null}
-
-      {showLogoHint && !texture ? (
+      {showLogoHint && !logoImage ? (
         <mesh position={[0, height * 0.52, frontZ + 0.04]} renderOrder={2}>
           <planeGeometry args={[footprint * 0.78, height * 0.38]} />
           <meshStandardMaterial color="#ffffff" transparent opacity={0.18} depthWrite={false} />
@@ -532,11 +546,14 @@ function ViewerScene({
   showLogoHint,
   isCompact = false,
   onApiReady,
+  uvDebugDraft = null,
+  onUvRegionsResolved,
+  debugModelPath = null,
 }: BagViewer3DProps) {
   const { camera, gl, scene } = useThree();
   const controlsRef = useRef<OrbitControlsImpl | null>(null);
   const lockCamera = logoPlacementMode === "drag" && !!logoUrl;
-  const modelPath = getBagGlbPathForProduct(productId);
+  const modelPath = resolveConfiguratorModelPath(productId, debugModelPath);
 
   const initialFraming = useMemo(
     () => getDefaultFraming(productId, isCompact),
@@ -710,6 +727,9 @@ function ViewerScene({
             showLogoHint={showLogoHint}
             isCompact={isCompact}
             onFramingChange={handleFramingChange}
+            debugModelPath={debugModelPath}
+            uvDebugDraft={uvDebugDraft}
+            onUvRegionsResolved={onUvRegionsResolved}
           />
         </React.Suspense>
       </EntranceRig>
@@ -717,9 +737,26 @@ function ViewerScene({
   );
 }
 
-export const BagViewer3D = (props: BagViewer3DProps) => {
+export const BagViewer3D = ({
+  uvDebug = false,
+  debugModelPath = null,
+  uvDebugDraft = null,
+  onUvDebugDraftChange,
+  onUvRegionsResolved,
+  ...props
+}: BagViewer3DProps) => {
+  const [resolvedUv, setResolvedUv] = useState<UvRegionsResolvedPayload | null>(null);
+
+  const handleUvRegionsResolved = useCallback(
+    (payload: UvRegionsResolvedPayload) => {
+      setResolvedUv(payload);
+      onUvRegionsResolved?.(payload);
+    },
+    [onUvRegionsResolved]
+  );
+
   return (
-    <div className="h-full w-full overflow-hidden">
+    <div className="relative h-full w-full overflow-hidden">
       <Canvas
         dpr={[1, 2.5]}
         gl={{
@@ -730,8 +767,23 @@ export const BagViewer3D = (props: BagViewer3DProps) => {
         }}
         style={{ width: "100%", height: "100%", touchAction: "none" }}
       >
-        <ViewerScene {...props} />
+        <ViewerScene
+          {...props}
+          debugModelPath={debugModelPath}
+          uvDebugDraft={uvDebugDraft}
+          onUvRegionsResolved={handleUvRegionsResolved}
+        />
       </Canvas>
+
+      {uvDebug && resolvedUv ? (
+        <UvIslandDebugOverlay
+          modelPath={resolvedUv.modelPath}
+          autoRegions={resolvedUv.autoRegions}
+          activeRegions={resolvedUv.activeRegions}
+          geometry={resolvedUv.geometry}
+          onDraftChange={onUvDebugDraftChange ?? (() => {})}
+        />
+      ) : null}
     </div>
   );
 };

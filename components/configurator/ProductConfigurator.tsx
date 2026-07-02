@@ -45,7 +45,10 @@ import { getConfiguratorApiBase } from "@/lib/configurator/urls";
 import {
   BAG_SIZE_OPTIONS,
   DEFAULT_BAG_SIZE_OPTION,
+  UV_DEBUG_DEFAULT_MODEL,
+  normalizePublicGlbPath,
 } from "@/lib/configurator/bag-models";
+import type { BagUvRegions } from "@/lib/configurator/bag-uv-regions";
 
 const BagViewer3D = dynamic(() => import("./BagViewer3D"), { ssr: false });
 
@@ -184,6 +187,10 @@ export const ProductConfigurator: React.FC = () => {
   const sessionToken = searchParams.get("t")?.trim() || null;
   const widgetToken = searchParams.get("widget_token")?.trim() || null;
   const agentMode = !!widgetToken;
+  const uvDebug = searchParams.get("uvDebug") === "1";
+  const debugModelPath = uvDebug
+    ? normalizePublicGlbPath(searchParams.get("uvModel") ?? UV_DEBUG_DEFAULT_MODEL)
+    : null;
 
   const [selectedColorHex, setSelectedColorHex] = useState<string>(
     DEFAULT_BAG_COLOR?.hex ?? "#2B2A28"
@@ -205,6 +212,7 @@ export const ProductConfigurator: React.FC = () => {
   const [sizeProductId, setSizeProductId] = useState<string>(
     DEFAULT_BAG_SIZE_OPTION.productId
   );
+  const [uvDebugDraft, setUvDebugDraft] = useState<BagUvRegions | null>(null);
   const [linkedLeadSid, setLinkedLeadSid] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<DockTab>("color");
   const [autoRotate, setAutoRotate] = useState(false);
@@ -1055,6 +1063,10 @@ export const ProductConfigurator: React.FC = () => {
             showLogoHint={activeTab === "logo"}
             isCompact={isCompact}
             onApiReady={handleApiReady}
+            uvDebug={uvDebug}
+            debugModelPath={debugModelPath}
+            uvDebugDraft={uvDebugDraft}
+            onUvDebugDraftChange={setUvDebugDraft}
           />
         </React.Suspense>
       </div>

@@ -4,10 +4,33 @@ import { DEFAULT_CONFIG } from "@/lib/factory/calculator/constants";
 export type BagModelSize = "small" | "medium" | "large";
 
 export const BAG_GLB_BY_SIZE: Record<BagModelSize, string> = {
-  small: "/Reusable_Bag_Small.glb",
-  medium: "/Reusable_Bag_Medium.glb",
-  large: "/Reusable_Bag_Large.glb",
+  small: "/Reusable_Bag_Small_v002.glb",
+  medium: "/Reusable_Bag_Medium_v002.glb",
+  large: "/Reusable_Bag_Large_v002.glb",
 };
+
+/** Default GLB when `/configurator?uvDebug=1` (override with `&uvModel=/other.glb`). */
+export const UV_DEBUG_DEFAULT_MODEL = "/ttt.glb";
+
+/** Extra models preloaded for UV debug (not used in production size routing). */
+export const UV_DEBUG_GLB_PATHS = [UV_DEBUG_DEFAULT_MODEL, "/TEST_LARGE.glb"] as const;
+
+/** Normalize `ttt.glb` → `/ttt.glb` for public/ assets. */
+export function normalizePublicGlbPath(path: string): string {
+  const trimmed = path.trim();
+  if (!trimmed) return UV_DEBUG_DEFAULT_MODEL;
+  const withSlash = trimmed.startsWith("/") ? trimmed : `/${trimmed}`;
+  return withSlash.toLowerCase().endsWith(".glb") ? withSlash : `${withSlash}.glb`;
+}
+
+/** Production path, or debug override when `debugModelPath` is set. */
+export function resolveConfiguratorModelPath(
+  productId: string,
+  debugModelPath?: string | null
+): string {
+  if (debugModelPath) return normalizePublicGlbPath(debugModelPath);
+  return getBagGlbPathForProduct(productId);
+}
 
 /** Legacy single-size model (pre–size-split). */
 export const LEGACY_BAG_GLB = "/Rusable_Bag.glb";
@@ -22,6 +45,7 @@ export const BAG_MODEL_REFERENCE: Record<BagModelSize, { h: number; d: number; w
 export const ALL_BAG_GLB_PATHS = [
   ...Object.values(BAG_GLB_BY_SIZE),
   LEGACY_BAG_GLB,
+  ...UV_DEBUG_GLB_PATHS,
 ] as const;
 
 /** Parse factory size strings: `H20*D8*W25` or flat `H30*W40`. */
