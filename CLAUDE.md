@@ -115,19 +115,38 @@ S(18) 供应商 · T(19) 备注 remark · U(20) UNLABELED — plate fee
 "printing cost: RMB350/COL" lives here` (it shifted T→U with the same K
 insertion — `readRow`/`readAllRows` read through **U**, parser scans U then T).
 
+**THREE parsers read this sheet by index — fix ALL of them together, or a
+re-import silently re-corrupts what you just fixed:**
+1. `parseFactoryResponseRow` — factory numeric fields (L..R) + plate fee (U).
+2. `readRow` / `readAllRows` — the fetch ranges (must reach column **U**/20).
+3. `parseFactoryRequestRow` — operator/product side (material←G(6), size←H(7),
+   printing←I(8), finishing←J(9), quantity←K(10); skip F=类型/type). Used by
+   `import-from-feishu`. Fixing only the response parser leaves this one shifted,
+   so re-importing a quote rebuilds a SHIFTED productSpec (material=bag-type,
+   printing=size-string, finishing=colours, dims/qty=0). Downstream the
+   FinalizeModal derives logoColors from `productSpec.printing` via `/(\d+)/`,
+   so "H35*..." → "35 colours" and the plate fee explodes (¥350 × 35 = ¥12,250).
+
 **Fix recipe when it shifts again:**
 1. Dump raw rows incl. row 5 (`readRow` + print each cell with its column
    letter) to see the new layout.
-2. Shift the `row[N]` indices in `parseFactoryResponseRow` + rewrite the layout
-   comment. Commit + **push to prod FIRST** — the refresh crons + widget
-   `/api/*/factory/refresh` run the OLD parser and re-corrupt DB rows the moment
-   anyone opens the tab, so a DB reparse before deploy just gets overwritten.
-3. Reparse DB with a scratch script (model on
+2. Shift the `row[N]` indices in BOTH `parseFactoryResponseRow` AND
+   `parseFactoryRequestRow` + the fetch ranges + rewrite the layout comments.
+   Commit + **push to prod FIRST** — the refresh crons + widget
+   `/api/*/factory/refresh` + re-imports run the OLD parser and re-corrupt DB
+   rows the moment anyone touches the tab, so a DB reparse before deploy gets
+   overwritten.
+3. Reparse the **response** side with a scratch script (model on
    `scripts/_reparse-after-col-shift.ts`): re-locate each row via
    `findRowByQuotationNo` (indices drift too), take fresh numerics **wholesale**
    (do NOT COALESCE — stored numerics are the corrupted ones), keep only
    `platePerColorCny` from stored. Dry-run, then `--go`.
-4. Verify: 0 rows flagged by a cbm-vs-dims scan; unitCost×qty + total CBM sane.
+4. For **productSpec** (request side): NEVER blanket-rewrite from Feishu — row
+   indices drift and specs get hand-edited, so a blanket re-read corrupts good
+   rows. Repair only rows matching the corruption signature (material is a bag
+   type not a fabric, or printing matches a size pattern, or qty/dims=0).
+5. Verify: 0 rows flagged by a cbm-vs-dims scan; unitCost×qty + total CBM sane;
+   logoColors sane (not pulled from a size string).
 
 **Prevention idea (not built):** parse by header-name lookup on row 5 instead
 of hardcoded indices → shift-proof. Deferred; the fix is ~10 min when it recurs.
