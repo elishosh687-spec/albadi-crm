@@ -7,7 +7,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyWidgetToken } from "@/integrations/ghl/widget-auth";
 import { runPipelineAudit } from "@/lib/analysis/pipeline-audit";
-import { V2_PIPELINE_STAGES, type V2PipelineStage } from "@/lib/manychat/stages";
+import { V2_ASSIGNABLE_STAGES, type V2AssignableStage } from "@/lib/manychat/stages";
 // setLeadStage is imported lazily inside POST — its transitive imports
 // (lib/manychat/config) throw at module-eval when MANYCHAT_TOKEN is missing,
 // which breaks GET even for reads that don't need it. See CLAUDE.md
@@ -59,7 +59,7 @@ export async function POST(req: NextRequest) {
       { status: 400 }
     );
   }
-  if (!(V2_PIPELINE_STAGES as readonly string[]).includes(targetStage)) {
+  if (!(V2_ASSIGNABLE_STAGES as readonly string[]).includes(targetStage)) {
     return NextResponse.json(
       { ok: false, error: `invalid stage: ${targetStage}` },
       { status: 400 }
@@ -68,7 +68,7 @@ export async function POST(req: NextRequest) {
   const { setLeadStage } = await import("@/app/actions/v2");
   const result = await setLeadStage({
     manychatSubId: sid,
-    stage: targetStage as V2PipelineStage,
+    stage: targetStage as V2AssignableStage,
     flags: [],
     reason: "pipeline_audit",
   });

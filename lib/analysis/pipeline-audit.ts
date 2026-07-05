@@ -25,6 +25,7 @@ import {
   factoryQuoteRequests,
   leadAnalyses,
   leads,
+  messages,
 } from "@/drizzle/schema";
 import { normalizeStage, type V2PipelineStage } from "@/lib/manychat/stages";
 import type { LeadAnalysis } from "./analyze-lead";
@@ -48,6 +49,8 @@ export interface NoTaskRow {
   sid: string;
   name: string | null;
   currentStage: V2PipelineStage | null; // null = בשאלון
+  createdAt: string | null; // when the lead entered the system
+  lastContactAt: string | null; // last message either direction (staleness)
   updatedAt: string | null;
 }
 
@@ -86,6 +89,7 @@ async function findLeadsWithoutTasks(): Promise<NoTaskRow[]> {
       sid: leads.manychatSubId,
       name: leads.name,
       stage: leads.pipelineStage,
+      createdAt: leads.createdAt,
       updatedAt: leads.updatedAt,
     })
     .from(leads)
@@ -105,10 +109,34 @@ async function findLeadsWithoutTasks(): Promise<NoTaskRow[]> {
       )
     );
 
+  // Last contact = newest message either direction, so Eli sees how stale each
+  // fallen lead is (a fresh lead in "קליטה" is fine; a 10-day-silent one isn't).
+  const sids = rows.map((r) => r.sid);
+  // Map sid → last-contact ISO string. The driver returns max(received_at) as a
+  // string (not a Date), so normalize through new Date().toISOString().
+  const lastContact = new Map<string, string>();
+  if (sids.length) {
+    const msgRows = await db
+      .select({
+        sid: messages.manychatSubId,
+        at: sql<string | null>`max(${messages.receivedAt})`,
+      })
+      .from(messages)
+      .where(inArray(messages.manychatSubId, sids))
+      .groupBy(messages.manychatSubId);
+    for (const m of msgRows) {
+      if (!m.at) continue;
+      const d = new Date(m.at);
+      if (!isNaN(d.getTime())) lastContact.set(m.sid, d.toISOString());
+    }
+  }
+
   return rows.map((r) => ({
     sid: r.sid,
     name: r.name,
     currentStage: normalizeStage(r.stage),
+    createdAt: r.createdAt ? r.createdAt.toISOString() : null,
+    lastContactAt: lastContact.get(r.sid) ?? null,
     updatedAt: r.updatedAt ? r.updatedAt.toISOString() : null,
   }));
 }

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import type { AnalysisAggregate, Pattern } from "@/lib/analysis/aggregate";
 import PlaysEditor from "./PlaysEditor";
 import PipelineAuditSection from "./PipelineAuditSection";
+import InfoTip from "./InfoTip";
 import type { BlockerKey, StagePlay } from "@/lib/sales/stage-plays.he";
 import { LuxShell, LuxTitle, LuxAccent } from "@/components/widget-ui/lux";
 
@@ -15,8 +16,8 @@ const STAGES: [string, string][] = [
   ["CONSIDERATION", "שוקל / משא ומתן"],
   ["WON", "נסגר"],
   ["LOST", "אבוד"],
-  ["FUTURE_FOLLOW_UP", "מעקב עתידי"],
-  ["NO_RESPONSE_REENGAGE", "ללא מענה"],
+  ["FUTURE_FOLLOW_UP", "להתקשר בעתיד"],
+  ["NO_RESPONSE_REENGAGE", "לא ענו"],
 ];
 
 interface AggResp {
@@ -133,7 +134,21 @@ export default function AnalysisScreen({ token }: { token: string }) {
     <LuxShell>
       <LuxTitle
         overline="— Lead analysis"
-        subtitle="מה חוסם, מה מתנגד, ומי לא חזר אחרי פולואפ — מבוסס נתוחי ליד."
+        subtitle={
+          <InfoTip
+            gap={6}
+            info={
+              <>
+                הטאב מנתח את הלידים מלמטה למעלה כדי להבין <b>למה הם לא נסגרים</b>:
+                למעלה בקרת פייפליין (לידים נשכחים / שלב לא תואם), למטה סינון קבוצת
+                לידים והרצת ניתוח שמפיק סיכום דטרמיניסטי של החסמים וההתנגדויות
+                החוזרים. כל מספר ניתן ללחיצה ומראה את רשימת הלידים שמאחוריו.
+              </>
+            }
+          >
+            <span>מה חוסם, מה מתנגד, ומי לא חזר אחרי פולואפ — מבוסס נתוחי ליד.</span>
+          </InfoTip>
+        }
         aside={
           <button onClick={() => setShowEditor((s) => !s)} style={btn("neutral")}>
             {showEditor ? "→ חזרה לניתוח" : "✏️ ערוך פליז"}
@@ -150,8 +165,19 @@ export default function AnalysisScreen({ token }: { token: string }) {
       <PipelineAuditSection token={token} />
       {/* Filters */}
       <div style={card}>
-        <div style={{ fontSize: 11, color: "#8f939b", marginBottom: 6 }}>שלב</div>
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+        <InfoTip
+          gap={6}
+          info={
+            <>
+              בוחרים קבוצת לידים לניתוח: לפי שלב, לפי טווח תאריכי כניסה, או רק
+              לידים שהיו איתם שיחות. "החל סינון" מרענן את התוצאות; "נתח" מריץ ניתוח
+              LLM על הלידים בסינון שעדיין לא נותחו (בבאצ'ים, עולה כסף לכל ליד).
+            </>
+          }
+        >
+          <span style={{ fontSize: 11, color: "#8f939b" }}>שלב</span>
+        </InfoTip>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 6 }}>
           {STAGES.map(([key, label]) => {
             const on = stages.includes(key);
             return (
@@ -207,10 +233,21 @@ export default function AnalysisScreen({ token }: { token: string }) {
 
       {/* Progress */}
       <div style={{ ...card, marginTop: 10 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12 }}>
-          <span>נותחו {matched.analyzed} מתוך {matched.total} בסינון</span>
-          <span style={{ color: "#8f939b" }}>{pct}%</span>
-        </div>
+        <InfoTip
+          gap={6}
+          info={
+            <>
+              כמה מהלידים בסינון כבר עברו ניתוח. ניתוח שכבר רץ נשמר במטמון — לחיצה
+              חוזרת חינמית ומיידית; רק לידים חדשים או עם הודעה/שיחה חדשה מנותחים
+              מחדש. "המשך לנתח" מריץ את הבאצ' הבא עד שהכל נותח.
+            </>
+          }
+        >
+          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, flex: 1 }}>
+            <span>נותחו {matched.analyzed} מתוך {matched.total} בסינון</span>
+            <span style={{ color: "#8f939b" }}>{pct}%</span>
+          </div>
+        </InfoTip>
         <div style={{ height: 6, background: "rgba(255,255,255,0.05)", borderRadius: 99, marginTop: 6, overflow: "hidden" }}>
           <div style={{ height: "100%", width: `${pct}%`, background: "#cda978" }} />
         </div>
@@ -257,6 +294,13 @@ export default function AnalysisScreen({ token }: { token: string }) {
               >
                 <PatternList
                   title="חסם מרכזי"
+                  info={
+                    <>
+                      הסיבה המרכזית שכל ליד תקוע, לפי הניתוח — חסם אחד דומיננטי לכל
+                      ליד (מחיר / כמות מינימלית / תנאי תשלום / מפרט פתוח וכו'). המספר
+                      = כמה לידים נחסמו מאותה סיבה. לחיצה פותחת את רשימת הלידים.
+                    </>
+                  }
                   patterns={agg.by_blocker}
                   denom={agg.conclusive}
                   open={openPattern}
@@ -266,6 +310,13 @@ export default function AnalysisScreen({ token }: { token: string }) {
                 <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
                   <PatternList
                     title="התנגדויות"
+                    info={
+                      <>
+                        התנגדויות שהלקוחות העלו בפועל (עם ציטוט מילולי מהשיחה/צ'אט,
+                        לא ניחוש). ליד יכול להעלות כמה התנגדויות, אז הסכום כאן יכול
+                        לעלות על מספר הלידים.
+                      </>
+                    }
                     patterns={agg.by_objection}
                     denom={agg.conclusive}
                     open={openPattern}
@@ -274,6 +325,14 @@ export default function AnalysisScreen({ token }: { token: string }) {
                   />
                   <PatternList
                     title="מעקב ובקשות לראות מוצר"
+                    info={
+                      <>
+                        "נשירת פולואפ" = הלקוח שלח הודעה אחרונה ועברו יותר מ-3 ימים
+                        בלי מענה מאיתנו (חישוב דטרמיניסטי מה-DB, לא ניחוש LLM).
+                        "בקשה לראות מוצר" מסומנת כ<b>סיגנל</b> ולא ככישלון — אלבדי
+                        לא שולחת דוגמאות, עונים עם תמונות/וידאו/הוכחה חברתית.
+                      </>
+                    }
                     patterns={[agg.followup_failures, agg.sample_gaps].filter((p) => p.count > 0)}
                     denom={agg.conclusive}
                     open={openPattern}
@@ -294,6 +353,7 @@ export default function AnalysisScreen({ token }: { token: string }) {
 
 function PatternList({
   title,
+  info,
   patterns,
   denom,
   open,
@@ -301,6 +361,7 @@ function PatternList({
   prefix,
 }: {
   title: string;
+  info?: React.ReactNode;
   patterns: Pattern[];
   denom: number;
   open: string | null;
@@ -309,16 +370,26 @@ function PatternList({
 }) {
   if (!patterns.length) return null;
   const max = Math.max(...patterns.map((p) => p.count), 1);
+  const titleEl = (
+    <div
+      className="lux-label"
+      style={{
+        letterSpacing: "0.16em",
+      }}
+    >
+      {title}
+    </div>
+  );
   return (
     <div style={{ ...card }}>
-      <div
-        className="lux-label"
-        style={{
-          marginBottom: 16,
-          letterSpacing: "0.16em",
-        }}
-      >
-        {title}
+      <div style={{ marginBottom: 16 }}>
+        {info ? (
+          <InfoTip gap={6} info={info}>
+            {titleEl}
+          </InfoTip>
+        ) : (
+          titleEl
+        )}
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
         {patterns.map((p) => {

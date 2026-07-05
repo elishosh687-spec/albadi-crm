@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { V2PipelineStage } from "@/lib/manychat/stages";
 import { Section, LuxCTA, LuxStat } from "@/components/widget-ui/lux";
+import InfoTip, { InfoDot, infoLineStyle } from "./InfoTip";
 
 // Kept in sync with V2_STAGE_LABELS (lib/manychat/stages.ts) so the audit
 // speaks the same vocabulary as the rest of the app.
@@ -13,8 +14,8 @@ const STAGE_LABEL: Record<string, string> = {
   CONSIDERATION: "שוקל / משא ומתן",
   WON: "נסגר",
   LOST: "אבוד",
-  FUTURE_FOLLOW_UP: "מעקב עתידי",
-  NO_RESPONSE_REENGAGE: "ללא מענה",
+  FUTURE_FOLLOW_UP: "להתקשר בעתיד",
+  NO_RESPONSE_REENGAGE: "לא ענו",
 };
 
 const STAGE_HINT: Record<string, string> = {
@@ -29,9 +30,52 @@ const STAGE_HINT: Record<string, string> = {
 const NULL_HINT = STAGE_HINT.INTAKE;
 const NULL_LABEL = STAGE_LABEL.INTAKE;
 
-// The 6 canonical stages that setLeadStage accepts. FUTURE_FOLLOW_UP /
-// NO_RESPONSE_REENGAGE are side stages the operator drags manually in GHL
-// (see CLAUDE.md pipeline table) and would be rejected by the API.
+// Order the "נפלו בין הכיסאות" sub-groups by funnel position. NULL folds into
+// INTAKE (both render as קליטה — Eli treats them as one stage).
+const NOTASK_GROUP_ORDER = [
+  "INTAKE",
+  "DISCAVERY",
+  "FACTORY_WAIT",
+  "CONSIDERATION",
+] as const;
+type NoTaskGroupKey = (typeof NOTASK_GROUP_ORDER)[number];
+
+// A fallen lead's stage → which sub-group it belongs to (NULL → INTAKE).
+function groupKeyForStage(s: V2PipelineStage | null): NoTaskGroupKey {
+  if (!s || s === "INTAKE") return "INTAKE";
+  if (s === "DISCAVERY" || s === "FACTORY_WAIT" || s === "CONSIDERATION") return s;
+  return "INTAKE";
+}
+
+// "12/07" — short day/month, locale-independent so it renders the same in the
+// GHL iframe regardless of the host locale.
+function fmtDate(iso: string | null): string | null {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return null;
+  const dd = String(d.getDate()).padStart(2, "0");
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  return `${dd}/${mm}`;
+}
+
+function daysSince(iso: string | null): number | null {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return null;
+  return Math.floor((Date.now() - d.getTime()) / 86_400_000);
+}
+
+// Hebrew "how long ago" — "היום" / "אתמול" / "לפני N ימים".
+function agoLabel(days: number | null): string | null {
+  if (days == null) return null;
+  if (days <= 0) return "היום";
+  if (days === 1) return "אתמול";
+  return `לפני ${days} ימים`;
+}
+
+// The suggested-stage the audit can compute — always one of the 6 canonical
+// funnel stages. The MANUAL override dropdown offers more (see
+// ALL_STAGE_OPTIONS): all 8 GHL columns, incl. the two side stages.
 type Target =
   | "INTAKE"
   | "DISCAVERY"
@@ -40,10 +84,19 @@ type Target =
   | "WON"
   | "LOST";
 
+// Every stage setLeadStage accepts for a MANUAL override = the 8 GHL kanban
+// columns Eli manages by hand. Beyond the 6 canonical funnel stages this adds
+// the two side stages he'd otherwise have to drag inside GHL:
+//   FUTURE_FOLLOW_UP     → להתקשר בעתיד
+//   NO_RESPONSE_REENGAGE → לא ענו
+type ManualTarget = Target | "FUTURE_FOLLOW_UP" | "NO_RESPONSE_REENGAGE";
+
 interface NoTaskRow {
   sid: string;
   name: string | null;
   currentStage: V2PipelineStage | null;
+  createdAt: string | null;
+  lastContactAt: string | null;
   updatedAt: string | null;
 }
 interface StageLagRow {
@@ -182,6 +235,25 @@ export default function PipelineAuditSection({ token }: { token: string }) {
     return m;
   }, [visibleLag]);
 
+  // Split fallen leads into per-stage sub-groups, each sorted oldest-contact
+  // first (the stalest lead in a stage floats to the top — that's the one most
+  // likely truly forgotten).
+  const noTaskByGroup = useMemo(() => {
+    const m = new Map<NoTaskGroupKey, NoTaskRow[]>();
+    for (const k of NOTASK_GROUP_ORDER) m.set(k, []);
+    for (const r of noTask ?? []) {
+      m.get(groupKeyForStage(r.currentStage))!.push(r);
+    }
+    for (const list of m.values()) {
+      list.sort((a, b) => {
+        const ta = a.lastContactAt ? Date.parse(a.lastContactAt) : 0;
+        const tb = b.lastContactAt ? Date.parse(b.lastContactAt) : 0;
+        return ta - tb; // oldest contact first
+      });
+    }
+    return m;
+  }, [noTask]);
+
   const avgCommitment = useMemo(() => {
     const withScore = visibleLag.filter((r) => r.commitmentScore != null);
     if (!withScore.length) return null;
@@ -195,9 +267,20 @@ export default function PipelineAuditSection({ token }: { token: string }) {
     <Section
       eyebrow="— Pipeline audit"
       title={
-        <span>
-          יישור <span className="lux-accent">הלידים</span>.
-        </span>
+        <InfoTip
+          info={
+            <>
+              שני מנגנוני בקרה שרצים אוטומטית: <b>"נפלו בין הכיסאות"</b> — לידים
+              פעילים שאין להם משימה פתוחה (בסכנת שכחה), ו<b>"שלב לא תואם"</b> —
+              לידים שהשלב שלהם ב-GHL מפגר אחרי מה שהניתוח מצא בשיחות. הבוט לא מזיז
+              שלבים לבד — אתה מאשר.
+            </>
+          }
+        >
+          <span>
+            יישור <span className="lux-accent">הלידים</span>.
+          </span>
+        </InfoTip>
       }
       style={{ marginTop: 22 }}
     >
@@ -281,7 +364,7 @@ export default function PipelineAuditSection({ token }: { token: string }) {
         </div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          {/* Group 1 — no-task list */}
+          {/* Group 1 — no-task list, split into per-stage sub-groups */}
           <GroupCard
             open={openGroups.has("noTask")}
             onToggle={() => toggleGroup("noTask")}
@@ -289,41 +372,40 @@ export default function PipelineAuditSection({ token }: { token: string }) {
             count={noTask?.length ?? 0}
             tone="alert"
             subtitle="לידים בשלב פעיל שאין להם שום משימה פתוחה — פתח בווידג'ט והוסף משימה ב-GHL."
+            info={
+              <>
+                כאן כל ליד שנמצא בשלב פעיל (קליטה / אפיון / מחכה למפעל / שוקל)
+                אבל <b>אין לו שום משימה פתוחה</b> — כלומר כלום לא מתוזמן לקרות
+                איתו, והוא עלול להישכח. מפוצל לפי שלב, ובכל ליד רואים <b>מתי
+                נכנס</b> ו<b>מתי היה קשר אחרון</b> כדי לדעת כמה הוא תקוע. לידים
+                שסגורים (נסגר / אבוד) או ב"להתקשר בעתיד" / "לא ענו" לא נספרים כאן.
+              </>
+            }
             action={null}
           >
             {noTask && noTask.length === 0 ? (
               <EmptyRow text="אין לידים נטושים ✓" />
             ) : (
-              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                {noTask?.map((r) => (
-                  <div
-                    key={r.sid}
-                    style={{
-                      ...noTaskRow,
-                      flexDirection: "column",
-                      alignItems: "flex-start",
-                      gap: 6,
-                    }}
-                  >
-                    <span
-                      style={{
-                        fontSize: 13,
-                        color: "var(--lux-ink)",
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                        whiteSpace: "nowrap",
-                        maxWidth: "100%",
-                      }}
-                    >
-                      {leadLabel(r)}
-                    </span>
-                    <span style={badgeCurrentSmall}>
-                      {r.currentStage
-                        ? STAGE_LABEL[r.currentStage] ?? r.currentStage
-                        : "בשאלון"}
-                    </span>
-                  </div>
-                ))}
+              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                {NOTASK_GROUP_ORDER.map((gk) => {
+                  const rows = noTaskByGroup.get(gk) ?? [];
+                  if (!rows.length) return null;
+                  return (
+                    <div key={gk}>
+                      <div style={subGroupHeader}>
+                        <span style={subGroupTitle}>{STAGE_LABEL[gk]}</span>
+                        <span style={subGroupCount}>{rows.length}</span>
+                      </div>
+                      <div
+                        style={{ display: "flex", flexDirection: "column", gap: 6 }}
+                      >
+                        {rows.map((r) => (
+                          <NoTaskLead key={r.sid} row={r} />
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             )}
           </GroupCard>
@@ -341,6 +423,14 @@ export default function PipelineAuditSection({ token }: { token: string }) {
                 count={rows.length}
                 tone="champagne"
                 subtitle={STAGE_HINT[target]}
+                info={
+                  <>
+                    לידים שהניתוח (שיחות + התכתבויות) מצא שהם כבר בפועל בשלב
+                    <b> "{STAGE_LABEL[target]}"</b>, אבל השלב שלהם ב-GHL עדיין
+                    מאחור. לחץ <b>אשר</b> כדי להעביר את הליד לשלב הזה, <b>דחה</b>
+                    כדי להתעלם, או בחר שלב אחר ידנית ב"או ל־".
+                  </>
+                }
                 action={
                   <LuxCTA
                     variant="champagne"
@@ -390,6 +480,7 @@ function GroupCard({
   count,
   tone,
   subtitle,
+  info,
   action,
   children,
 }: {
@@ -399,9 +490,11 @@ function GroupCard({
   count: number;
   tone: "alert" | "champagne";
   subtitle?: string;
+  info?: React.ReactNode;
   action?: React.ReactNode;
   children: React.ReactNode;
 }) {
+  const [infoOpen, setInfoOpen] = useState(false);
   const chip =
     tone === "alert"
       ? {
@@ -468,7 +561,16 @@ function GroupCard({
         >
           {count}
         </span>
+        {info && (
+          <InfoDot open={infoOpen} onToggle={() => setInfoOpen((o) => !o)} />
+        )}
       </div>
+
+      {info && infoOpen && (
+        <div style={{ ...infoLineStyle, margin: "0 16px 12px", marginTop: -4 }}>
+          {info}
+        </div>
+      )}
 
       {subtitle && (
         <div
@@ -499,14 +601,17 @@ function GroupCard({
   );
 }
 
-// Every stage the API accepts, including terminal WON/LOST.
-const ALL_STAGE_OPTIONS: Target[] = [
+// Every stage the API accepts for a manual override — all 8 GHL columns,
+// including terminal WON/LOST and the two side stages.
+const ALL_STAGE_OPTIONS: ManualTarget[] = [
   "INTAKE",
   "DISCAVERY",
   "FACTORY_WAIT",
   "CONSIDERATION",
   "WON",
   "LOST",
+  "FUTURE_FOLLOW_UP",
+  "NO_RESPONSE_REENGAGE",
 ];
 
 function LagRow({
@@ -522,11 +627,11 @@ function LagRow({
   open: boolean;
   onToggle: () => void;
   onApprove: () => void;
-  onApplyManual: (target: Target) => void;
+  onApplyManual: (target: ManualTarget) => void;
   onDismiss: () => void;
   applying: boolean;
 }) {
-  const [manualTarget, setManualTarget] = useState<Target>(row.suggestedStage);
+  const [manualTarget, setManualTarget] = useState<ManualTarget>(row.suggestedStage);
   return (
     <div
       style={{
@@ -647,7 +752,7 @@ function LagRow({
           <span style={arrowLabel}>או ל־</span>
           <select
             value={manualTarget}
-            onChange={(e) => setManualTarget(e.target.value as Target)}
+            onChange={(e) => setManualTarget(e.target.value as ManualTarget)}
             onClick={(e) => e.stopPropagation()}
             style={selectStyle}
           >
@@ -727,6 +832,64 @@ function LagRow({
   );
 }
 
+// One fallen lead — name + when it entered + when last contacted, coloured by
+// how stale the last contact is so the truly-forgotten ones jump out.
+function NoTaskLead({ row }: { row: NoTaskRow }) {
+  const created = fmtDate(row.createdAt);
+  const contact = fmtDate(row.lastContactAt);
+  const staleDays = daysSince(row.lastContactAt);
+  const tone =
+    row.lastContactAt == null
+      ? { c: "#e8b4b4" } // never messaged → treat as most urgent
+      : (staleDays ?? 0) >= 7
+      ? { c: "#e8b4b4" }
+      : (staleDays ?? 0) >= 3
+      ? { c: "#e0a96d" }
+      : { c: "var(--lux-muted)" };
+  return (
+    <div
+      style={{
+        ...noTaskRow,
+        flexDirection: "column",
+        alignItems: "flex-start",
+        gap: 6,
+      }}
+    >
+      <span
+        style={{
+          fontSize: 13,
+          color: "var(--lux-ink)",
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+          whiteSpace: "nowrap",
+          maxWidth: "100%",
+        }}
+      >
+        {leadLabel(row)}
+      </span>
+      <div
+        style={{
+          display: "flex",
+          gap: 10,
+          flexWrap: "wrap",
+          fontSize: 11,
+          fontVariantNumeric: "tabular-nums",
+        }}
+      >
+        <span style={{ color: "var(--lux-muted)" }}>
+          נכנס {created ?? "—"}
+        </span>
+        <span style={{ color: tone.c }}>
+          קשר אחרון{" "}
+          {contact
+            ? `${contact} · ${agoLabel(staleDays)}`
+            : "— אין הודעות"}
+        </span>
+      </div>
+    </div>
+  );
+}
+
 function EmptyRow({ text }: { text: string }) {
   return (
     <div
@@ -758,6 +921,30 @@ const noTaskRow: React.CSSProperties = {
   background: "rgba(255,255,255,0.02)",
   borderRadius: 6,
   boxShadow: "inset 0 0 0 1px rgba(69,70,77,0.14)",
+};
+
+const subGroupHeader: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 8,
+  marginBottom: 6,
+  paddingInlineStart: 2,
+};
+
+const subGroupTitle: React.CSSProperties = {
+  fontSize: 11,
+  letterSpacing: "0.08em",
+  color: "var(--lux-champagne)",
+};
+
+const subGroupCount: React.CSSProperties = {
+  fontSize: 10.5,
+  padding: "1px 7px",
+  borderRadius: 99,
+  color: "var(--lux-muted)",
+  background: "rgba(255,255,255,0.04)",
+  boxShadow: "inset 0 0 0 1px rgba(69,70,77,0.20)",
+  fontVariantNumeric: "tabular-nums",
 };
 
 const badgeCurrent: React.CSSProperties = {

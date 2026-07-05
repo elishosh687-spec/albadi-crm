@@ -24,17 +24,40 @@ export const V2_PIPELINE_STAGES = [
 
 export type V2PipelineStage = (typeof V2_PIPELINE_STAGES)[number];
 
+// Side stages — the operator drags opps into these manually in GHL (the bot
+// never auto-transitions here, see CLAUDE.md pipeline table). They ARE real
+// GHL kanban columns (GHL_STAGE_FUTURE_FOLLOW_UP / GHL_STAGE_NO_RESPONSE_REENGAGE),
+// so Eli must be able to move a lead into them from the widget too — not just
+// by dragging in GHL. Kept SEPARATE from V2_PIPELINE_STAGES so the bot's funnel
+// logic (which only reasons about the 6 canonical stages) stays unaffected.
+export const V2_SIDE_STAGES = ["FUTURE_FOLLOW_UP", "NO_RESPONSE_REENGAGE"] as const;
+export type V2SideStage = (typeof V2_SIDE_STAGES)[number];
+
+// Every stage an operator may assign by hand = the 8 GHL pipeline columns
+// (6 canonical funnel + 2 side). Use THIS for validating a manual stage
+// override; use V2_PIPELINE_STAGES for bot/funnel reasoning.
+export const V2_ASSIGNABLE_STAGES = [
+  ...V2_PIPELINE_STAGES,
+  ...V2_SIDE_STAGES,
+] as const;
+export type V2AssignableStage = (typeof V2_ASSIGNABLE_STAGES)[number];
+
 // Display labels per Eli's working vocabulary (2026-07-01).
 // The INTERNAL stage keys stay the same (INTAKE/DISCAVERY/FACTORY_WAIT/...) —
 // only the Hebrew shown in UI changes. Keeps all DB rows, logs, and legacy
 // mappings working; just what Eli reads in the widget/dashboard is updated.
-export const V2_STAGE_LABELS: Record<V2PipelineStage, string> = {
+// Covers all 8 assignable stages so any manual-override dropdown can label them.
+export const V2_STAGE_LABELS: Record<V2AssignableStage, string> = {
   INTAKE: "קליטה",
   DISCAVERY: "אפיון",
   FACTORY_WAIT: "מחכה למפעל",
   CONSIDERATION: "שוקל / משא ומתן",
   WON: "נסגר",
   LOST: "אבוד",
+  // Side-stage labels match the GHL "albadi" pipeline columns verbatim
+  // (columns 7 & 8) so the widget speaks the same words Eli reads in GHL.
+  FUTURE_FOLLOW_UP: "להתקשר בעתיד",
+  NO_RESPONSE_REENGAGE: "לא ענו",
 };
 
 // Legacy -> new mapping. Consumed by:

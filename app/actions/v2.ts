@@ -39,9 +39,11 @@ import {
   V2_FLAG_NAMES,
   V2_EXTRA_FLAG_NAMES,
   V2_PIPELINE_STAGES,
+  V2_ASSIGNABLE_STAGES,
   flagHasNumericId,
   type V2FlagName,
   type V2PipelineStage,
+  type V2AssignableStage,
 } from "@/lib/manychat/config";
 import {
   addTag,
@@ -66,7 +68,7 @@ export interface SimpleResult {
 
 async function pushStageAndFlags(
   sid: string,
-  stage: V2PipelineStage,
+  stage: V2AssignableStage,
   flags: V2FlagName[]
 ): Promise<void> {
   const cleanSid = sid.trim();
@@ -132,8 +134,11 @@ async function pushStageAndFlags(
 }
 
 interface SetLeadStageInput {
+  // Accepts any of the 8 assignable stages — the 6 canonical funnel stages
+  // plus the 2 manual side stages (FUTURE_FOLLOW_UP / NO_RESPONSE_REENGAGE)
+  // Eli moves leads into by hand. See V2_ASSIGNABLE_STAGES.
   manychatSubId: string;
-  stage: V2PipelineStage;
+  stage: V2AssignableStage;
   flags: V2FlagName[];
   reason?: string;
 }
@@ -144,7 +149,7 @@ export async function setLeadStage(
   try {
     const cleanSid = input.manychatSubId.trim();
     if (!cleanSid) return { ok: false, error: "missing subscriberId" };
-    if (!V2_PIPELINE_STAGES.includes(input.stage)) {
+    if (!(V2_ASSIGNABLE_STAGES as readonly string[]).includes(input.stage)) {
       return { ok: false, error: `invalid stage: ${input.stage}` };
     }
     for (const f of input.flags) {
@@ -203,7 +208,7 @@ export async function setLeadStage(
 // leads) can also fire it. See ensureAutoTaskForStage.
 async function createAutoTaskForStage(
   sid: string,
-  stage: V2PipelineStage
+  stage: V2AssignableStage
 ): Promise<void> {
   const { ensureAutoTaskForStage } = await import("@/lib/crm-tasks/auto-task");
   await ensureAutoTaskForStage(sid, stage);

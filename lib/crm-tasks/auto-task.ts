@@ -13,10 +13,10 @@ import { and, eq, isNull } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { crmTasks } from "@/drizzle/schema";
 import { GHL_SALESPERSON_USER_ID } from "@/integrations/ghl/config";
-import type { V2PipelineStage } from "@/lib/manychat/stages";
+import type { V2AssignableStage } from "@/lib/manychat/stages";
 
 export const AUTO_TASK_BY_STAGE: Partial<
-  Record<V2PipelineStage, { title: string; hoursUntilDue: number }>
+  Record<V2AssignableStage, { title: string; hoursUntilDue: number }>
 > = {
   INTAKE: { title: "פולואפ אחרי הצעה ראשונית", hoursUntilDue: 24 },
   DISCAVERY: { title: "להחליט אם לשלוח למפעל / לאלי", hoursUntilDue: 2 },
@@ -33,7 +33,7 @@ export const AUTO_TASK_BY_STAGE: Partial<
  */
 export async function ensureAutoTaskForStage(
   sid: string,
-  stage: V2PipelineStage | null | undefined
+  stage: V2AssignableStage | null | undefined
 ): Promise<{ created: boolean; reason?: string }> {
   if (!stage) return { created: false, reason: "no stage" };
   const spec = AUTO_TASK_BY_STAGE[stage];
