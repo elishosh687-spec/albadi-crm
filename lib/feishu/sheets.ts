@@ -52,35 +52,53 @@ export async function getSheetId(): Promise<string> {
 }
 
 /**
- * Appends a row of values to the sheet. Returns the 1-based row index.
+ * Index (1-based) of the last row that has ANY data across the full A..U
+ * width. Read-only. Returns 0 if the sheet is empty.
+ *
+ * We scan the full width (not just A..J) because rows can carry data only in
+ * the factory columns (K..U) or have gaps in A/B — so the true bottom of the
+ * table is "the last row where any cell is non-empty", not "the last row where
+ * A..J is filled".
+ */
+export async function findLastDataRow(): Promise<number> {
+  const grid = await readAllRows();
+  let last = 0;
+  for (let i = 0; i < grid.length; i++) {
+    const row = grid[i] ?? [];
+    const hasData = row.some(
+      (c) => c !== null && c !== undefined && String(c).trim() !== ""
+    );
+    if (hasData) last = i + 1; // 1-based row index
+  }
+  return last;
+}
+
+/**
+ * Appends a row of values (A..J) to the sheet. Returns the 1-based row index.
+ *
+ * We do NOT use Feishu's `values_append` here. On this sheet it mis-detects
+ * the table's end and inserts the new row in the MIDDLE (~row 7-8) instead of
+ * after the last quote — and the factory always reads the bottom, so a request
+ * that lands mid-table gets missed. Root cause: `values_append` on a partial
+ * range (A:J) doesn't reliably find the true last row when the sheet has
+ * factory-only rows / gaps in A/B.
+ *
+ * Instead we compute the real last data row ourselves (full-width scan) and
+ * write into the first empty row below it. That row is guaranteed empty, so a
+ * plain values PUT can't overwrite anything — no INSERT_ROWS needed.
  */
 export async function appendRow(values: (string | number)[]): Promise<string> {
   const token = getSpreadsheetToken();
   const sheetId = await getSheetId();
-  const range = `${sheetId}!A:J`;
-  type AppendResp = {
-    data: {
-      updates: {
-        updatedRange: string;
-        updatedRows: number;
-      };
-    };
-  };
-  const resp = await feishuFetch<AppendResp>(
-    `/open-apis/sheets/v2/spreadsheets/${token}/values_append?insertDataOption=INSERT_ROWS`,
-    {
-      method: "POST",
-      body: JSON.stringify({
-        valueRange: {
-          range,
-          values: [values],
-        },
-      }),
-    }
-  );
-  const updated = resp.data?.updates?.updatedRange ?? "";
-  const m = updated.match(/!([A-Z]+)(\d+):/);
-  return m ? m[2] : "";
+
+  const target = (await findLastDataRow()) + 1;
+  const range = `${sheetId}!A${target}:J${target}`;
+
+  await feishuFetch(`/open-apis/sheets/v2/spreadsheets/${token}/values`, {
+    method: "PUT",
+    body: JSON.stringify({ valueRange: { range, values: [values] } }),
+  });
+  return String(target);
 }
 
 /**
