@@ -53,7 +53,9 @@ interface LeadOption {
 }
 
 const EMPTY_SPEC = {
-  description: "",
+  // Most requests are the standard Albadi non-woven bag — pre-fill it so the
+  // salesperson doesn't retype it every time (still editable).
+  description: "שקית אלבדי",
   material: "80g non-woven",
   widthCm: "",
   heightCm: "",
