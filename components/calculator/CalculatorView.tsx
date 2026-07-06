@@ -30,7 +30,6 @@ interface Props {
   // "הצעות מפעל" tab). Optional.
   initialTab?: "operator" | "estimate";
   estimatePrefill?: EstimatePrefill;
-  operatorPrefill?: OperatorPrefill;
 }
 
 export interface EstimatePrefill {
@@ -38,14 +37,6 @@ export interface EstimatePrefill {
   d?: string;
   w?: string;
   qty?: string;
-  colors?: number;
-  handles?: boolean;
-  lam?: boolean;
-}
-
-export interface OperatorPrefill {
-  productId?: string;
-  qty?: string; // quantity override
   colors?: number;
   handles?: boolean;
   lam?: boolean;
@@ -67,14 +58,14 @@ const r2 = (n: number) => Math.round(n * 100) / 100;
 const ils = (n: number) =>
   n.toLocaleString("he-IL", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-export function CalculatorView({ products, quantityTiers, shippingOptions, initialMargins, apiToken, sid, leadName, initialTab, estimatePrefill, operatorPrefill }: Props) {
-  const [productId, setProductId] = useState(operatorPrefill?.productId ?? products[0]?.id ?? "p1");
+export function CalculatorView({ products, quantityTiers, shippingOptions, initialMargins, apiToken, sid, leadName, initialTab, estimatePrefill }: Props) {
+  const [productId, setProductId] = useState(products[0]?.id ?? "p1");
   const [qtyId, setQtyId]         = useState(quantityTiers[0]?.id ?? "q0");
-  const [handles, setHandles]     = useState(operatorPrefill?.handles ?? true);
-  const [lamination, setLamination] = useState(operatorPrefill?.lam ?? false);
-  const [colors, setColors]       = useState(operatorPrefill?.colors ?? 1);
+  const [handles, setHandles]     = useState(true);
+  const [lamination, setLamination] = useState(false);
+  const [colors, setColors]       = useState(1);
   const [shippingId, setShippingId] = useState(shippingOptions.find((s) => s.type === "sea")?.id ?? shippingOptions[0]?.id ?? "s2");
-  const [qtyOverride, setQtyOverride] = useState<string>(operatorPrefill?.qty ?? "");
+  const [qtyOverride, setQtyOverride] = useState<string>("");
   const [marginOverride, setMarginOverride] = useState<string>("");
   const [minProfit, setMinProfit] = useState<string>("");
   // One-time mold/tooling fee from the factory (¥ CNY). Empty = none.
