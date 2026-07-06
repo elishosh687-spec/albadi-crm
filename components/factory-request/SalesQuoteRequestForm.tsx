@@ -52,6 +52,9 @@ interface LeadOption {
   updatedAt: string;
 }
 
+// Business rule: Albadi's minimum order is 3000 units. Below that we don't quote.
+const MOQ = 3000;
+
 const EMPTY_SPEC = {
   // Most requests are the standard Albadi non-woven bag — pre-fill it so the
   // salesperson doesn't retype it every time (still editable).
@@ -146,12 +149,17 @@ export function SalesQuoteRequestForm({ apiToken }: { apiToken: string }) {
     }
   };
 
+  // Every field is mandatory + a hard MOQ of 3000: the salesperson must never
+  // send Eli an incomplete or below-minimum request.
   const validate = (): string | null => {
-    if (!customer) return "בחר קודם לקוח מהרשימה";
-    if (!f.description.trim()) return "חובה תיאור מוצר";
-    if (!f.material.trim()) return "חובה חומר";
-    if (!(parseFloat(f.widthCm) > 0 && parseFloat(f.heightCm) > 0)) return "חובה רוחב וגובה";
-    if ((parseInt(f.quantity, 10) || 0) < 1) return "חובה כמות חיובית";
+    if (!customer) return "בחר לקוח מהרשימה";
+    if (!f.description.trim()) return "חסר תיאור מוצר";
+    if (!f.material.trim()) return "חסר חומר";
+    if (!(parseFloat(f.widthCm) > 0)) return "חסר רוחב";
+    if (!(parseFloat(f.heightCm) > 0)) return "חסר גובה";
+    if (f.depthCm.trim() === "") return "חסר עומק (הקלד 0 לשקית שטוחה)";
+    if (f.quantity.trim() === "") return "חסרה כמות";
+    if ((parseInt(f.quantity, 10) || 0) < MOQ) return `מינימום הזמנה ${MOQ.toLocaleString("he-IL")} יחידות`;
     return null;
   };
 
@@ -196,6 +204,10 @@ export function SalesQuoteRequestForm({ apiToken }: { apiToken: string }) {
       setSubmitting(false);
     }
   };
+
+  // Live validation reason (also gates the submit button so an incomplete /
+  // below-MOQ request can never be sent).
+  const invalid = validate();
 
   const resetAll = () => {
     setCustomer(null);
@@ -405,7 +417,7 @@ export function SalesQuoteRequestForm({ apiToken }: { apiToken: string }) {
             })()}
           </div>
 
-          <Field label="כמות" value={f.quantity} onChange={(v) => set("quantity", v)} type="number" />
+          <Field label={`כמות (מינימום ${MOQ.toLocaleString("he-IL")})`} value={f.quantity} onChange={(v) => set("quantity", v)} type="number" />
 
           <div className="grid grid-cols-3 gap-2">
             <SelectField
@@ -452,8 +464,11 @@ export function SalesQuoteRequestForm({ apiToken }: { apiToken: string }) {
             </p>
           )}
 
-          <div className="flex items-center justify-end pt-2" style={{ borderTop: "1px solid var(--lux-line)" }}>
-            <LuxCTA onClick={handleSubmit} disabled={submitting}>
+          <div className="flex items-center justify-between pt-2" style={{ borderTop: "1px solid var(--lux-line)" }}>
+            <span className="text-[11px]" style={{ color: invalid ? "#e0a96d" : "#7fbf8f" }}>
+              {invalid ?? "מוכן לשליחה ✓"}
+            </span>
+            <LuxCTA onClick={handleSubmit} disabled={submitting || !!invalid}>
               {submitting ? <Loader2 className="size-3.5 animate-spin" /> : <Send className="size-3.5" />}
               {"  "}שלח לאישור אלי
             </LuxCTA>

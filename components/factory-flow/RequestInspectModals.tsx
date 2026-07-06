@@ -210,8 +210,14 @@ export function EstimateModal({
   const [err, setErr] = useState<string | null>(null);
   const s = row.productSpec ?? {};
   const non80g = !!s.material && !/80\s*g/i.test(s.material);
+  // Albadi's minimum order is 3000 units — below that there's no quote at all.
+  const belowMoq = (Number(s.quantity) || 0) < 3000;
 
   useEffect(() => {
+    if (belowMoq) {
+      setLoading(false);
+      return;
+    }
     let alive = true;
     (async () => {
       setLoading(true);
@@ -236,7 +242,7 @@ export function EstimateModal({
       alive = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [row.id, apiToken]);
+  }, [row.id, apiToken, belowMoq]);
 
   const est = data?.estimate;
   const r = data?.result;
@@ -286,7 +292,16 @@ export function EstimateModal({
         </div>
       )}
 
-      {loading && (
+      {belowMoq && (
+        <div className="rounded-xl border border-amber-500/50 bg-amber-500/10 p-4 text-sm">
+          <div className="font-bold text-amber-500 mb-1">מתחת למינימום הזמנה</div>
+          <div className="text-muted-foreground">
+            הכמות ({(Number(s.quantity) || 0).toLocaleString("he-IL")} יח׳) מתחת למינימום של 3,000 יח׳ — אין תמחור. יש לחזור ללקוח על כמות מינימלית.
+          </div>
+        </div>
+      )}
+
+      {!belowMoq && loading && (
         <div className="flex items-center gap-2 text-sm text-muted-foreground py-6 justify-center">
           <Loader2 className="size-4 animate-spin" /> מחשב אומדן…
         </div>
