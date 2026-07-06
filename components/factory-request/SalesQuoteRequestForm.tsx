@@ -239,8 +239,15 @@ export function SalesQuoteRequestForm({ apiToken }: { apiToken: string }) {
         בקשת <LuxAccent>הצעת מחיר.</LuxAccent>
       </LuxTitle>
 
-      {/* ── I. customer picker ── */}
-      <Section numeral="I" title="בחירת לקוח" style={{ marginBottom: 14 }}>
+      {/* ── I. customer picker ──
+          overflow:visible + zIndex lift so the typeahead dropdown escapes the
+          card (Section defaults to overflow:hidden for the numeral) and paints
+          above section II instead of being clipped under it. */}
+      <Section
+        numeral="I"
+        title="בחירת לקוח"
+        style={{ marginBottom: 14, overflow: "visible", position: "relative", zIndex: 40 }}
+      >
         <div ref={pickerRef} className="relative">
           <div
             className="relative"
