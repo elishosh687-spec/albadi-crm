@@ -33,6 +33,12 @@ interface SearchParams {
   estColors?: string;
   estHandles?: string;
   estLam?: string;
+  // Operator-tab (catalog) prefill: a known SKU + qty/features.
+  opProduct?: string;
+  opQty?: string;
+  opColors?: string;
+  opHandles?: string;
+  opLam?: string;
 }
 
 interface LeadSnapshot {
@@ -187,7 +193,18 @@ export default async function CalculatorWidgetPage({
         apiToken={token}
         sid={lead?.sid ?? sid ?? undefined}
         leadName={lead?.name ?? null}
-        initialTab={params.tab === "estimate" ? "estimate" : undefined}
+        initialTab={params.tab === "estimate" ? "estimate" : params.tab === "operator" ? "operator" : undefined}
+        operatorPrefill={
+          params.opProduct
+            ? {
+                productId: params.opProduct,
+                qty: params.opQty,
+                colors: params.opColors ? parseInt(params.opColors, 10) || 1 : undefined,
+                handles: params.opHandles === "true" ? true : params.opHandles === "false" ? false : undefined,
+                lam: params.opLam === "true" ? true : params.opLam === "false" ? false : undefined,
+              }
+            : undefined
+        }
         estimatePrefill={
           params.estH || params.estW
             ? {
