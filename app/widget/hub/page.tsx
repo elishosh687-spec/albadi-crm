@@ -16,6 +16,7 @@ import {
   Receipt,
   BarChart3,
   Calculator,
+  Swords,
   Box,
   Package,
   Settings,
@@ -73,6 +74,12 @@ const TABS: TabDef[] = [
     label: "מחשבון",
     icon: Calculator,
     url: (t, sid) => withSid(`/widget/calculator?widget_token=${encodeURIComponent(t)}`, sid),
+  },
+  {
+    id: "competitors",
+    label: "מחיר מתחרים",
+    icon: Swords,
+    url: (t, sid) => withSid(`/widget/competitors?widget_token=${encodeURIComponent(t)}`, sid),
   },
   {
     id: "designer",

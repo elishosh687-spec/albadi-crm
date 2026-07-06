@@ -681,3 +681,43 @@ export const leadAnalyses = pgTable(
     ),
   })
 );
+
+// Competitor price/lead-time intelligence log ("מחיר מתחרים" hub tab).
+// One row = one head-to-head data point: OUR quote (price + lead time) vs ONE
+// competitor's, for a given product spec. Eli logs these manually each time a
+// competing quote surfaces so he knows exactly where Albadi stands — on price
+// AND on delivery time (a customer may pay more for a faster lead time, so both
+// matter). Grouped by `product` in the UI. Optional `leadSid` ties a data point
+// to a specific CRM lead. DB is the single source of truth; no external sync.
+// Created via raw DDL (scripts/_create-competitor-prices.ts), NOT drizzle-kit
+// push (push hangs on the orphan configurator_* rename prompt — see CLAUDE.md).
+export const competitorPrices = pgTable(
+  "competitor_prices",
+  {
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    // Free-text product/spec description, e.g. "5000 שקיות 80 גרם 30x40 4 צבעים".
+    // Rows sharing the same product string group together in the "where I stand".
+    product: text("product").notNull(),
+    quantity: integer("quantity"),
+    // Our side of the comparison (NIS + business days). Nullable so Eli can log a
+    // competitor sighting before pinning our own number.
+    ourPrice: doublePrecision("our_price"),
+    ourLeadDays: integer("our_lead_days"),
+    // The competitor.
+    competitor: text("competitor").notNull(),
+    competitorPrice: doublePrecision("competitor_price"),
+    competitorLeadDays: integer("competitor_lead_days"),
+    // Optional link to a CRM lead this data point came from.
+    leadSid: text("lead_sid"),
+    notes: text("notes"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (t) => ({
+    productCreatedIdx: index("competitor_prices_product_created_idx").on(
+      t.product,
+      t.createdAt
+    ),
+  })
+);
