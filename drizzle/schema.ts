@@ -695,18 +695,29 @@ export const competitorPrices = pgTable(
   "competitor_prices",
   {
     id: bigserial("id", { mode: "number" }).primaryKey(),
-    // Free-text product/spec description, e.g. "5000 שקיות 80 גרם 30x40 4 צבעים".
-    // Rows sharing the same product string group together in the "where I stand".
+    // Free-text product/spec title, e.g. "תיק אל-בד שחור". Rows sharing the same
+    // product string group together in the "where I stand".
     product: text("product").notNull(),
     quantity: integer("quantity"),
+    // Structured spec — the SAME features we price by, so the comparison is
+    // apples-to-apples (shared across our offer and the competitor's). All
+    // optional. size is free text ("31×37×17"); handles/lamination are short
+    // labels; logoColors drives the plate-fee math (fee × colors).
+    size: text("size"),
+    handles: text("handles"),
+    logoColors: integer("logo_colors"),
+    lamination: text("lamination"),
     // Our side of the comparison (NIS + business days). Nullable so Eli can log a
-    // competitor sighting before pinning our own number.
+    // competitor sighting before pinning our own number. ourPlateFee = one-time
+    // ₪ per colour (part of the real cost even though non-recurring).
     ourPrice: doublePrecision("our_price"),
     ourLeadDays: integer("our_lead_days"),
+    ourPlateFee: doublePrecision("our_plate_fee"),
     // The competitor.
     competitor: text("competitor").notNull(),
     competitorPrice: doublePrecision("competitor_price"),
     competitorLeadDays: integer("competitor_lead_days"),
+    competitorPlateFee: doublePrecision("competitor_plate_fee"),
     // Optional link to a CRM lead this data point came from.
     leadSid: text("lead_sid"),
     notes: text("notes"),
