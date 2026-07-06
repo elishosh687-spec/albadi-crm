@@ -106,6 +106,12 @@ function ils(v: number | undefined | null): string {
   if (v === null || v === undefined || Number.isNaN(Number(v))) return "—";
   return `₪${Math.round(Number(v)).toLocaleString("he-IL")}`;
 }
+// Per-unit / shipping-per-unit are sub-shekel — show 2 decimals so ₪0.69 doesn't
+// round to a misleading ₪1 (matches the calculator's per-unit display).
+function ilsFine(v: number | undefined | null): string {
+  if (v === null || v === undefined || Number.isNaN(Number(v))) return "—";
+  return `₪${Number(v).toFixed(2)}`;
+}
 function sizeLabel(s: RequestSpec): string {
   const parts: string[] = [];
   if (s.heightCm) parts.push(`H${s.heightCm}`);
@@ -368,7 +374,7 @@ export function EstimateModal({
             </div>
           )}
           <div className="grid grid-cols-2 gap-2">
-            <Stat label="מחיר ליחידה" value={ils(r.sellingPricePerUnitIls)} big />
+            <Stat label="מחיר ליחידה" value={ilsFine(r.sellingPricePerUnitIls)} big />
             <Stat label={`סה״כ (${r.quantity.toLocaleString("he-IL")} יח׳)`} value={ils(r.totalOrderPriceIls)} big accent />
           </div>
           <div className="rounded-lg border border-border/60 bg-background/40 p-3 space-y-0.5">
@@ -381,7 +387,7 @@ export function EstimateModal({
               </>
             )}
             <Row label="שילוח" value={r.shippingOption?.name} />
-            {c && <Row label="שילוח ליחידה" value={ils(c.shippingPerUnitIls)} />}
+            {c && <Row label="שילוח ליחידה" value={ilsFine(c.shippingPerUnitIls)} />}
             {r.moldsTotalSellingPriceIls ? <Row label="גלופות/מולדים (חד״פ)" value={ils(r.moldsTotalSellingPriceIls)} /> : null}
           </div>
           {!catalog && est?.reasoning && est.reasoning.length > 0 && (
