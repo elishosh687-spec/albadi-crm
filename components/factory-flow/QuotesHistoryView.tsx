@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useMemo } from "react";
-import { ExternalLink, Search, Loader2, Eye, Download, Trash2, X, MessageCircle, Calculator, Pencil, ChevronDown, Check } from "lucide-react";
+import { ExternalLink, Search, Loader2, Eye, Download, Trash2, X, MessageCircle, Calculator, Pencil, ChevronDown, Check, Send } from "lucide-react";
 import { QuoteHtmlPreview } from "@/app/dashboard/v3/_components/factory/QuoteHtmlPreview";
 import type { FactoryQuoteRow as DashboardFactoryQuoteRow } from "@/app/dashboard/v3/_components/factory/FactoryQuotePanel";
 import { FinalizeModalWidget } from "./FinalizeModal.widget";
@@ -138,6 +138,26 @@ export function QuotesHistoryView({ apiToken }: { apiToken: string }) {
       alert(`כשל: ${e instanceof Error ? e.message : String(e)}`);
     } finally {
       setImporting(false);
+    }
+  }
+
+  // Promote a parked draft (from the standalone sales quote-request form, or
+  // any other draft) to Feishu — appends the row and flips status to pending.
+  async function handlePromote(r: ApiQuoteRow) {
+    setBusyId(r.id);
+    try {
+      const res = await fetch(
+        `/api/widget/factory/${r.id}/send-to-feishu?widget_token=${encodeURIComponent(apiToken)}`,
+        { method: "POST" }
+      );
+      const j = await res.json().catch(() => ({}));
+      if (!j?.ok) {
+        alert(`שגיאה בשליחה למפעל: ${j?.error ?? j?.detail ?? res.status}`);
+        return;
+      }
+      await refresh();
+    } finally {
+      setBusyId(null);
     }
   }
 
@@ -326,9 +346,10 @@ export function QuotesHistoryView({ apiToken }: { apiToken: string }) {
   }, [filtered]);
 
   const counts = useMemo(() => {
-    if (!data) return { all: 0, pending: 0, received: 0, finalized: 0 };
+    if (!data) return { all: 0, draft: 0, pending: 0, received: 0, finalized: 0 };
     return {
       all: data.length,
+      draft: data.filter((r) => r.status === "draft").length,
       pending: data.filter((r) => r.status === "pending").length,
       received: data.filter((r) => r.status === "received").length,
       finalized: data.filter((r) => r.status === "finalized").length,
@@ -398,6 +419,17 @@ export function QuotesHistoryView({ apiToken }: { apiToken: string }) {
             >
               <Download className="size-3.5" />
             </a>
+          )}
+          {r.status === "draft" && (
+            <button
+              type="button"
+              onClick={() => handlePromote(r)}
+              disabled={busyId === r.id}
+              title="אשר ושלח למפעל"
+              className="size-7 rounded grid place-items-center text-primary hover:bg-primary/10 disabled:opacity-50"
+            >
+              {busyId === r.id ? <Loader2 className="size-3.5 animate-spin" /> : <Send className="size-3.5" />}
+            </button>
           )}
           {r.status === "received" && !r.finalPricing && (
             <button
@@ -521,6 +553,7 @@ export function QuotesHistoryView({ apiToken }: { apiToken: string }) {
         <div className="flex gap-2 flex-wrap">
           {([
             { id: "all", label: "הכל", n: counts.all },
+            { id: "draft", label: "טיוטות", n: counts.draft },
             { id: "pending", label: "ממתינים", n: counts.pending },
             { id: "received", label: "התקבלו", n: counts.received },
             { id: "finalized", label: "סופיים", n: counts.finalized },
