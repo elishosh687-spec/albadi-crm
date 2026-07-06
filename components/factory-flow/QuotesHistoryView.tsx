@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useState, useMemo } from "react";
-import { ExternalLink, Search, Loader2, Eye, Download, Trash2, X, MessageCircle, Calculator, Pencil, ChevronDown, Check, Send } from "lucide-react";
+import { ExternalLink, Search, Loader2, Eye, Download, Trash2, X, MessageCircle, Calculator, Pencil, ChevronDown, Check, Send, Sparkles } from "lucide-react";
 import { QuoteHtmlPreview } from "@/app/dashboard/v3/_components/factory/QuoteHtmlPreview";
 import type { FactoryQuoteRow as DashboardFactoryQuoteRow } from "@/app/dashboard/v3/_components/factory/FactoryQuotePanel";
 import { FinalizeModalWidget } from "./FinalizeModal.widget";
 import { CombinedCalcModalWidget } from "./CombinedCalcModal.widget";
+import { SpecModal, EstimateModal, type RequestRow } from "./RequestInspectModals";
 
 interface ApiQuoteRow {
   id: string;
@@ -63,6 +64,19 @@ function toDashboardRow(r: ApiQuoteRow): DashboardFactoryQuoteRow {
   };
 }
 
+// ApiQuoteRow → the lean shape the inspect/estimate modals consume.
+function toRequestRow(r: ApiQuoteRow): RequestRow {
+  return {
+    id: r.id,
+    quotationNo: r.quotationNo,
+    name: r.name,
+    phone: r.phone,
+    status: r.status,
+    createdAt: r.createdAt,
+    productSpec: (r.productSpec ?? null) as RequestRow["productSpec"],
+  };
+}
+
 // One card per customer: all their quotes, newest first, with a status summary.
 interface CustomerGroup {
   leadSid: string;
@@ -80,6 +94,8 @@ export function QuotesHistoryView({ apiToken }: { apiToken: string }) {
   const [q, setQ] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [opened, setOpened] = useState<ApiQuoteRow | null>(null);
+  const [specRow, setSpecRow] = useState<ApiQuoteRow | null>(null);
+  const [estimateRow, setEstimateRow] = useState<ApiQuoteRow | null>(null);
   const [finalizing, setFinalizing] = useState<ApiQuoteRow | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [importing, setImporting] = useState(false);
@@ -402,13 +418,24 @@ export function QuotesHistoryView({ apiToken }: { apiToken: string }) {
         <div className="flex items-center gap-0.5 shrink-0">
           <button
             type="button"
-            onClick={() => setOpened(r)}
-            title="פתח מפרט מלא"
+            onClick={() => (r.finalPricing ? setOpened(r) : setSpecRow(r))}
+            title={r.finalPricing ? "פתח הצעה מלאה" : "צפה בבקשה"}
             disabled={busyId === r.id}
             className="size-7 rounded grid place-items-center text-muted-foreground hover:text-foreground hover:bg-secondary disabled:opacity-50"
           >
             <Eye className="size-3.5" />
           </button>
+          {!r.finalPricing && (
+            <button
+              type="button"
+              onClick={() => setEstimateRow(r)}
+              title="מחשבון משוער — מחיר מיידי"
+              disabled={busyId === r.id}
+              className="size-7 rounded grid place-items-center text-muted-foreground hover:text-accent hover:bg-accent/10 disabled:opacity-50"
+            >
+              <Sparkles className="size-3.5" />
+            </button>
+          )}
           {r.pdfUrl && (
             <a
               href={r.pdfUrl}
@@ -725,6 +752,24 @@ export function QuotesHistoryView({ apiToken }: { apiToken: string }) {
       </div>
 
       {opened && <QuoteModal row={opened} onClose={() => setOpened(null)} widgetToken={apiToken} />}
+      {specRow && <SpecModal row={toRequestRow(specRow)} onClose={() => setSpecRow(null)} />}
+      {estimateRow && (
+        <EstimateModal
+          row={toRequestRow(estimateRow)}
+          apiToken={apiToken}
+          sending={busyId === estimateRow.id}
+          onSendToFactory={
+            estimateRow.status === "draft"
+              ? async () => {
+                  const r = estimateRow;
+                  await handlePromote(r);
+                  setEstimateRow(null);
+                }
+              : undefined
+          }
+          onClose={() => setEstimateRow(null)}
+        />
+      )}
       {finalizing && (
         <FinalizeModalWidget
           apiToken={apiToken}
