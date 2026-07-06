@@ -10,7 +10,7 @@
  */
 
 import { useState, useEffect } from "react";
-import { CalculatorView, type EstimatePrefill } from "./CalculatorView";
+import { CalculatorView, type EstimatePrefill, type OperatorPrefill } from "./CalculatorView";
 import type { Product, QuantityTier, ShippingOption } from "@/lib/factory/calculator/types";
 
 interface Props {
@@ -23,6 +23,7 @@ interface Props {
   leadName?: string | null;
   initialTab?: "operator" | "estimate";
   estimatePrefill?: EstimatePrefill;
+  operatorPrefill?: OperatorPrefill;
 }
 
 export function CalculatorWithSettings(props: Props) {
@@ -58,6 +59,7 @@ export function CalculatorWithSettings(props: Props) {
       leadName={props.leadName}
       initialTab={props.initialTab}
       estimatePrefill={props.estimatePrefill}
+      operatorPrefill={props.operatorPrefill}
     />
   );
 }

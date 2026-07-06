@@ -14,7 +14,8 @@
  */
 
 import { useEffect, useState } from "react";
-import { X, Loader2, Sparkles, Send, ExternalLink } from "lucide-react";
+import { X, Loader2, Sparkles, Send, ExternalLink, BookMarked } from "lucide-react";
+import { matchCatalogProduct, type CatalogDim } from "@/lib/factory/catalog-dims";
 
 export interface RequestSpec {
   description?: string;
@@ -52,26 +53,50 @@ function decodeSpecFeatures(s: RequestSpec): { colors: number; handles: boolean;
   return { colors, handles, lamination };
 }
 
-// Deep-link to the FULL estimator (calculator's estimate tab), pre-filled +
-// wired to the customer (sid) so Eli can adjust margin and send the customer a
-// quote (PDF/text) from the real calculator UI. Shipping is left unset so the
-// tab uses its own default (sea) — identical to a fresh manual entry.
-function fullCalculatorHref(row: RequestRow, token: string): string {
+// Deep-link to the FULL calculator, pre-filled + wired to the customer (sid) so
+// Eli can adjust margin and send the customer a quote (PDF/text) from the real
+// calculator UI. Catalog products open the OPERATOR (exact/catalog) tab on the
+// matched SKU; everything else opens the ESTIMATE tab. Shipping is left unset so
+// the tab uses its own default (sea) — identical to a fresh manual entry.
+function fullCalculatorHref(row: RequestRow, token: string, catalog: CatalogDim | null): string {
   const s = row.productSpec ?? {};
   const { colors, handles, lamination } = decodeSpecFeatures(s);
-  const p = new URLSearchParams({
-    widget_token: token,
-    tab: "estimate",
-    estH: String(s.heightCm ?? ""),
-    estD: String(s.depthCm ?? ""),
-    estW: String(s.widthCm ?? ""),
-    estQty: String(s.quantity ?? ""),
-    estColors: String(colors),
-    estHandles: String(handles),
-    estLam: String(lamination),
-  });
+  const p = new URLSearchParams({ widget_token: token });
+  if (catalog) {
+    p.set("tab", "operator");
+    p.set("opProduct", catalog.id);
+    p.set("opQty", String(s.quantity ?? ""));
+    p.set("opColors", String(colors));
+    p.set("opHandles", String(handles));
+    p.set("opLam", String(lamination));
+  } else {
+    p.set("tab", "estimate");
+    p.set("estH", String(s.heightCm ?? ""));
+    p.set("estD", String(s.depthCm ?? ""));
+    p.set("estW", String(s.widthCm ?? ""));
+    p.set("estQty", String(s.quantity ?? ""));
+    p.set("estColors", String(colors));
+    p.set("estHandles", String(handles));
+    p.set("estLam", String(lamination));
+  }
   if (row.leadSid && !row.leadSid.startsWith("manual_")) p.set("sid", row.leadSid);
   return `/widget/calculator?${p.toString()}`;
+}
+
+// Params for the exact catalog price via /api/factory/quote-preview. Sea (s2)
+// default matches the operator tab, so the modal price equals the full catalog.
+function specToCatalogPreviewParams(s: RequestSpec, catalog: CatalogDim, token: string): string {
+  const { colors, handles, lamination } = decodeSpecFeatures(s);
+  return new URLSearchParams({
+    product: catalog.id,
+    qty: "q1",
+    qtyOverride: String(s.quantity ?? 0),
+    handles: String(handles),
+    lamination: String(lamination),
+    colors: String(colors),
+    shipping: s.shippingOptionId || "s2",
+    widget_token: token,
+  }).toString();
 }
 
 function fmtDate(iso: string): string {
@@ -215,6 +240,9 @@ export function EstimateModal({
   const non80g = !!s.material && !/80\s*g/i.test(s.material);
   // Albadi's minimum order is 3000 units — below that there's no quote at all.
   const belowMoq = (Number(s.quantity) || 0) < 3000;
+  // If the dims match a catalog SKU, price via the exact catalog (authoritative)
+  // instead of the estimator — catalog products get the precise catalog price.
+  const catalog = matchCatalogProduct(Number(s.heightCm) || 0, Number(s.depthCm) || 0, Number(s.widthCm) || 0);
 
   useEffect(() => {
     if (belowMoq) {
@@ -226,7 +254,10 @@ export function EstimateModal({
       setLoading(true);
       setErr(null);
       try {
-        const res = await fetch(`/api/factory/estimate?${specToEstimateParams(s, apiToken)}`, { cache: "no-store" });
+        const url = catalog
+          ? `/api/factory/quote-preview?${specToCatalogPreviewParams(s, catalog, apiToken)}`
+          : `/api/factory/estimate?${specToEstimateParams(s, apiToken)}`;
+        const res = await fetch(url, { cache: "no-store" });
         const j = await res.json();
         if (!alive) return;
         if (!res.ok || !j.ok) {
@@ -251,7 +282,7 @@ export function EstimateModal({
   const r = data?.result;
   const c = data?.computed;
   const refused = est && !est.ok;
-  const calcHref = fullCalculatorHref(row, apiToken);
+  const calcHref = fullCalculatorHref(row, apiToken, catalog);
 
   const factoryBtn = onSendToFactory ? (
     <button
@@ -267,7 +298,7 @@ export function EstimateModal({
 
   return (
     <ModalShell
-      title="מחשבון משוער"
+      title={catalog ? "מחיר מהקטלוג (מדויק)" : "מחשבון משוער"}
       subtitle={`${row.name ?? "בקשה"} · ${sizeLabel(s)} · ${s.quantity ? Number(s.quantity).toLocaleString("he-IL") : "—"} יח׳`}
       onClose={onClose}
       footer={
@@ -280,11 +311,11 @@ export function EstimateModal({
             href={calcHref}
             target="_blank"
             rel="noopener noreferrer"
-            title="פותח את המחשבון המשוער המלא, ממולא מראש — שם אפשר לכוונן מרווח ולשלוח ללקוח PDF"
+            title={catalog ? "פותח את המחשבון בקטלוג על המוצר המדויק — שם אפשר לכוונן מרווח ולשלוח ללקוח PDF" : "פותח את המחשבון המשוער המלא, ממולא מראש — שם אפשר לכוונן מרווח ולשלוח ללקוח PDF"}
             className="inline-flex items-center gap-1.5 rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-accent-foreground hover:bg-accent/90"
           >
             <ExternalLink className="size-3.5" />
-            מחשבון מלא + שלח ללקוח
+            {catalog ? "פתח בקטלוג + שלח ללקוח" : "מחשבון מלא + שלח ללקוח"}
           </a>
         </>
       }
@@ -306,7 +337,7 @@ export function EstimateModal({
 
       {!belowMoq && loading && (
         <div className="flex items-center gap-2 text-sm text-muted-foreground py-6 justify-center">
-          <Loader2 className="size-4 animate-spin" /> מחשב אומדן…
+          <Loader2 className="size-4 animate-spin" /> {catalog ? "טוען מחיר קטלוג…" : "מחשב אומדן…"}
         </div>
       )}
 
@@ -328,20 +359,32 @@ export function EstimateModal({
         </div>
       )}
 
-      {!loading && est?.ok && r && (
+      {!loading && r && (catalog || est?.ok) && (
         <div className="space-y-3">
+          {catalog && (
+            <div className="rounded-md border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-[12px] text-emerald-400 flex items-center gap-1.5">
+              <BookMarked className="size-3.5" />
+              מוצר קטלוגי ({catalog.id}) — {catalog.description}. מחיר מדויק מהקטלוג.
+            </div>
+          )}
           <div className="grid grid-cols-2 gap-2">
             <Stat label="מחיר ליחידה" value={ils(r.sellingPricePerUnitIls)} big />
             <Stat label={`סה״כ (${r.quantity.toLocaleString("he-IL")} יח׳)`} value={ils(r.totalOrderPriceIls)} big accent />
           </div>
           <div className="rounded-lg border border-border/60 bg-background/40 p-3 space-y-0.5">
-            <Row label="מפעל נבחר" value={est?.factoryName} />
-            {est?.confidence !== undefined && <Row label="ביטחון" value={String(est?.confidence)} />}
+            {catalog ? (
+              <Row label="מקור" value="קטלוג (מחיר מדויק)" />
+            ) : (
+              <>
+                <Row label="מפעל נבחר" value={est?.factoryName} />
+                {est?.confidence !== undefined && <Row label="ביטחון" value={String(est?.confidence)} />}
+              </>
+            )}
             <Row label="שילוח" value={r.shippingOption?.name} />
             {c && <Row label="שילוח ליחידה" value={ils(c.shippingPerUnitIls)} />}
             {r.moldsTotalSellingPriceIls ? <Row label="גלופות/מולדים (חד״פ)" value={ils(r.moldsTotalSellingPriceIls)} /> : null}
           </div>
-          {est?.reasoning && est.reasoning.length > 0 && (
+          {!catalog && est?.reasoning && est.reasoning.length > 0 && (
             <div className="rounded-lg border border-border/40 bg-background/30 p-3">
               <div className="text-[11px] font-medium text-muted-foreground mb-1 flex items-center gap-1">
                 <Sparkles className="size-3" /> היגיון האומדן
@@ -354,7 +397,9 @@ export function EstimateModal({
             </div>
           )}
           <div className="text-[11px] text-muted-foreground text-center">
-            אומדן בלבד — לשליחת ההצעה הסופית ללקוח, חשב על בסיס תשובת המפעל האמיתית.
+            {catalog
+              ? "מחיר קטלוג מדויק — לשליחת ההצעה ללקוח, פתח בקטלוג."
+              : "אומדן בלבד — לשליחת ההצעה הסופית ללקוח, חשב על בסיס תשובת המפעל האמיתית."}
           </div>
         </div>
       )}
