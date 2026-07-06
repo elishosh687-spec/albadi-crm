@@ -23,6 +23,16 @@ interface SearchParams {
   contactId?: string;
   sid?: string;
   widget_token?: string;
+  // Deep-link prefill from a factory-quote request (opens the estimate tab
+  // with these inputs already filled). All optional.
+  tab?: string;
+  estH?: string;
+  estD?: string;
+  estW?: string;
+  estQty?: string;
+  estColors?: string;
+  estHandles?: string;
+  estLam?: string;
 }
 
 interface LeadSnapshot {
@@ -177,6 +187,20 @@ export default async function CalculatorWidgetPage({
         apiToken={token}
         sid={lead?.sid ?? sid ?? undefined}
         leadName={lead?.name ?? null}
+        initialTab={params.tab === "estimate" ? "estimate" : undefined}
+        estimatePrefill={
+          params.estH || params.estW
+            ? {
+                h: params.estH,
+                d: params.estD,
+                w: params.estW,
+                qty: params.estQty,
+                colors: params.estColors ? parseInt(params.estColors, 10) || 1 : undefined,
+                handles: params.estHandles === "true" ? true : params.estHandles === "false" ? false : undefined,
+                lam: params.estLam === "true" ? true : params.estLam === "false" ? false : undefined,
+              }
+            : undefined
+        }
       />
     </div>
   );

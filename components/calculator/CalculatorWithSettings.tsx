@@ -10,7 +10,7 @@
  */
 
 import { useState, useEffect } from "react";
-import { CalculatorView } from "./CalculatorView";
+import { CalculatorView, type EstimatePrefill } from "./CalculatorView";
 import type { Product, QuantityTier, ShippingOption } from "@/lib/factory/calculator/types";
 
 interface Props {
@@ -21,6 +21,8 @@ interface Props {
   apiToken: string;
   sid?: string;
   leadName?: string | null;
+  initialTab?: "operator" | "estimate";
+  estimatePrefill?: EstimatePrefill;
 }
 
 export function CalculatorWithSettings(props: Props) {
@@ -54,6 +56,8 @@ export function CalculatorWithSettings(props: Props) {
       apiToken={props.apiToken}
       sid={props.sid}
       leadName={props.leadName}
+      initialTab={props.initialTab}
+      estimatePrefill={props.estimatePrefill}
     />
   );
 }

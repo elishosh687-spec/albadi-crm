@@ -14,7 +14,7 @@
  */
 
 import { useEffect, useState } from "react";
-import { X, Loader2, Sparkles, Send } from "lucide-react";
+import { X, Loader2, Sparkles, Send, ExternalLink } from "lucide-react";
 
 export interface RequestSpec {
   description?: string;
@@ -31,12 +31,46 @@ export interface RequestSpec {
 
 export interface RequestRow {
   id: string;
+  leadSid: string;
   quotationNo: string | null;
   name: string | null;
   phone: string | null;
   status: string;
   createdAt: string;
   productSpec: RequestSpec | null;
+}
+
+// Parse colours / handles / lamination out of the free-text spec strings, the
+// same way FinalizeModal does. Shared by the estimate call and the full-calc
+// deep-link.
+function decodeSpecFeatures(s: RequestSpec): { colors: number; handles: boolean; lamination: boolean } {
+  const m = String(s.printing ?? "").match(/(\d+)/);
+  const colors = m ? Math.max(1, parseInt(m[1], 10)) : 1;
+  const fin = String(s.finishing ?? "");
+  const handles = /handle|ידיות/i.test(fin) && !/no handle|ללא ידיות|לא ידיות/i.test(fin);
+  const lamination = /laminat|למינציה/i.test(fin) && !/not laminat|ללא למינציה|לא מלומ/i.test(fin);
+  return { colors, handles, lamination };
+}
+
+// Deep-link to the FULL calculator, estimate tab, pre-filled from this spec +
+// wired to the customer (sid) so Eli can adjust margin and send the customer a
+// quote (PDF/text) straight from the real calculator UI.
+function fullCalculatorHref(row: RequestRow, token: string): string {
+  const s = row.productSpec ?? {};
+  const { colors, handles, lamination } = decodeSpecFeatures(s);
+  const p = new URLSearchParams({
+    widget_token: token,
+    tab: "estimate",
+    estH: String(s.heightCm ?? ""),
+    estD: String(s.depthCm ?? ""),
+    estW: String(s.widthCm ?? ""),
+    estQty: String(s.quantity ?? ""),
+    estColors: String(colors),
+    estHandles: String(handles),
+    estLam: String(lamination),
+  });
+  if (row.leadSid && !row.leadSid.startsWith("manual_")) p.set("sid", row.leadSid);
+  return `/widget/calculator?${p.toString()}`;
 }
 
 function fmtDate(iso: string): string {
@@ -58,13 +92,7 @@ function sizeLabel(s: RequestSpec): string {
 // the parsing FinalizeModal uses (colors from the printing string; handles /
 // lamination flags from the finishing string).
 function specToEstimateParams(s: RequestSpec, token: string): string {
-  const colors = (() => {
-    const m = String(s.printing ?? "").match(/(\d+)/);
-    return m ? Math.max(1, parseInt(m[1], 10)) : 1;
-  })();
-  const fin = String(s.finishing ?? "");
-  const handles = /handle|ידיות/i.test(fin) && !/no handle|ללא ידיות|לא ידיות/i.test(fin);
-  const lamination = /laminat|למינציה/i.test(fin) && !/not laminat|ללא למינציה|לא מלומ/i.test(fin);
+  const { colors, handles, lamination } = decodeSpecFeatures(s);
   const p = new URLSearchParams({
     widthCm: String(s.widthCm ?? 0),
     heightCm: String(s.heightCm ?? 0),
@@ -214,6 +242,7 @@ export function EstimateModal({
   const r = data?.result;
   const c = data?.computed;
   const refused = est && !est.ok;
+  const calcHref = fullCalculatorHref(row, apiToken);
 
   const factoryBtn = onSendToFactory ? (
     <button
@@ -238,6 +267,16 @@ export function EstimateModal({
             סגור
           </button>
           {factoryBtn}
+          <a
+            href={calcHref}
+            target="_blank"
+            rel="noopener noreferrer"
+            title="פותח את המחשבון המשוער המלא, ממולא מראש — שם אפשר לכוונן מרווח ולשלוח ללקוח PDF"
+            className="inline-flex items-center gap-1.5 rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-accent-foreground hover:bg-accent/90"
+          >
+            <ExternalLink className="size-3.5" />
+            מחשבון מלא + שלח ללקוח
+          </a>
         </>
       }
     >

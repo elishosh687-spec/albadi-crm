@@ -25,6 +25,21 @@ interface Props {
   sid?: string;
   // Lead display name for the WA greeting. Optional.
   leadName?: string | null;
+  // Deep-link prefill: open straight on a given tab with the estimate inputs
+  // pre-populated (used when jumping in from a factory-quote request in the
+  // "הצעות מפעל" tab). Optional.
+  initialTab?: "operator" | "estimate";
+  estimatePrefill?: EstimatePrefill;
+}
+
+export interface EstimatePrefill {
+  h?: string;
+  d?: string;
+  w?: string;
+  qty?: string;
+  colors?: number;
+  handles?: boolean;
+  lam?: boolean;
 }
 
 interface PreviewResult {
@@ -43,7 +58,7 @@ const r2 = (n: number) => Math.round(n * 100) / 100;
 const ils = (n: number) =>
   n.toLocaleString("he-IL", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-export function CalculatorView({ products, quantityTiers, shippingOptions, initialMargins, apiToken, sid, leadName }: Props) {
+export function CalculatorView({ products, quantityTiers, shippingOptions, initialMargins, apiToken, sid, leadName, initialTab, estimatePrefill }: Props) {
   const [productId, setProductId] = useState(products[0]?.id ?? "p1");
   const [qtyId, setQtyId]         = useState(quantityTiers[0]?.id ?? "q0");
   const [handles, setHandles]     = useState(true);
@@ -64,7 +79,7 @@ export function CalculatorView({ products, quantityTiers, shippingOptions, initi
   const [error, setError]         = useState<string | null>(null);
   // Top-level tab: the regular operator calculator vs the "estimated" calculator
   // (price an arbitrary 80g size from the per-factory model, no factory round-trip).
-  const [tab, setTab] = useState<"operator" | "estimate">("operator");
+  const [tab, setTab] = useState<"operator" | "estimate">(initialTab ?? "operator");
 
   // Manual product mode — user enters dims + CNY + carton, no catalog match.
   const [manualMode, setManualMode] = useState(false);
@@ -318,7 +333,7 @@ export function CalculatorView({ products, quantityTiers, shippingOptions, initi
       </div>
 
       {tab === "estimate" && (
-        <EstimateTab apiToken={apiToken} shippingOptions={shippingOptions} sid={sid} leadName={leadName} initialMargins={initialMargins} />
+        <EstimateTab apiToken={apiToken} shippingOptions={shippingOptions} sid={sid} leadName={leadName} initialMargins={initialMargins} prefill={estimatePrefill} />
       )}
 
       {tab === "operator" && (<>
@@ -920,12 +935,12 @@ function ConfidenceBadge({ confidence }: { confidence?: string }) {
   return <span className={cn("rounded-full px-2.5 py-0.5 text-[11px] font-semibold", cls)}>{label}</span>;
 }
 
-function EstimateTab({ apiToken, shippingOptions, sid, leadName, initialMargins }: { apiToken?: string; shippingOptions: ShippingOption[]; sid?: string; leadName?: string | null; initialMargins: Record<string, number> }) {
-  const [h, setH] = useState(""); const [d, setD] = useState(""); const [w, setW] = useState("");
-  const [qty, setQty] = useState("5000");
-  const [colors, setColors] = useState(1);
-  const [handles, setHandles] = useState(true);
-  const [lam, setLam] = useState(false);
+function EstimateTab({ apiToken, shippingOptions, sid, leadName, initialMargins, prefill }: { apiToken?: string; shippingOptions: ShippingOption[]; sid?: string; leadName?: string | null; initialMargins: Record<string, number>; prefill?: EstimatePrefill }) {
+  const [h, setH] = useState(prefill?.h ?? ""); const [d, setD] = useState(prefill?.d ?? ""); const [w, setW] = useState(prefill?.w ?? "");
+  const [qty, setQty] = useState(prefill?.qty ?? "5000");
+  const [colors, setColors] = useState(prefill?.colors ?? 1);
+  const [handles, setHandles] = useState(prefill?.handles ?? true);
+  const [lam, setLam] = useState(prefill?.lam ?? false);
   const [shippingId, setShippingId] = useState(shippingOptions.find((s) => s.type === "sea")?.id ?? shippingOptions[0]?.id ?? "s2");
   // Operator overrides — mirror the regular calculator (molds/templates one-time
   // CNY, target-margin override, min-profit warning).

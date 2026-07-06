@@ -68,6 +68,7 @@ function toDashboardRow(r: ApiQuoteRow): DashboardFactoryQuoteRow {
 function toRequestRow(r: ApiQuoteRow): RequestRow {
   return {
     id: r.id,
+    leadSid: r.leadSid,
     quotationNo: r.quotationNo,
     name: r.name,
     phone: r.phone,
