@@ -6,7 +6,7 @@ import { cn } from "@/lib/cn";
 import type { Product, QuantityTier, ShippingOption, QuoteResult } from "@/lib/factory/calculator/types";
 import { computeCommission } from "@/lib/factory/commission";
 import { isOverCbmConsolidationThreshold, cbmConsolidationAlert } from "@/lib/factory/sea-carriers";
-import { customerBreakdownIls } from "@/lib/factory/calculator/customer-breakdown";
+import { customerBreakdownIls, customerRoundedTotalIls } from "@/lib/factory/calculator/customer-breakdown";
 import { DetailedBreakdown } from "./DetailedBreakdown";
 
 interface Props {
@@ -1829,7 +1829,9 @@ function buildQuoteText(opts: {
     lines.push(`🧩 תבניות / מולדים (חד פעמי): +${ilsFmt(opts.oneTimeMoldsIls)}`);
   }
   lines.push(
-    `*💵 סה״כ: ${ilsFmt(opts.totalSellingPriceIls)}*`,
+    // Total = rounded per-unit × qty (+ molds) so it reconciles with the
+    // ₪0.60/unit shown above — not the precise ₪0.6031 × qty.
+    `*💵 סה״כ: ${ilsFmt(customerRoundedTotalIls(opts.unitSellingPriceIls, opts.result.quantity, opts.oneTimeMoldsIls ?? 0))}*`,
     "_(לא כולל מע״מ)_",
     "",
     "━━━━━━━━━━━━━━",

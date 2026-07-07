@@ -27,6 +27,23 @@ function round2(n: number): number {
   return Math.round(n * 100) / 100;
 }
 
+/**
+ * Customer-facing order total = ROUNDED per-unit × quantity (+ one-time molds).
+ * The precise per-unit (e.g. ₪0.6031) is displayed rounded (₪0.60), so the total
+ * must be derived from the rounded per-unit too — otherwise "₪0.60 × 5000" the
+ * customer computes (₪3,000) won't match a precise total (₪3,015.56).
+ * Business rule (Eli 2026-07-07): the shown rounded per-unit is the source of
+ * truth. Use this for EVERY customer-facing total (WhatsApp caption + PDF).
+ */
+export function customerRoundedTotalIls(
+  unitSellingPriceIls: number,
+  quantity: number,
+  oneTimeMoldsIls = 0
+): number {
+  const molds = oneTimeMoldsIls > 0 ? round2(oneTimeMoldsIls) : 0;
+  return round2(round2(unitSellingPriceIls) * quantity + molds);
+}
+
 export function customerBreakdownIls(result: QuoteResult): CustomerBreakdownIls {
   const unitPrice = result.sellingPricePerUnitIls;
   const usdToIls =

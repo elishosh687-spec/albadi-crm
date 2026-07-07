@@ -16,6 +16,7 @@ import { estimateFactoryCny, type EstimateSpec } from "@/lib/factory/estimator";
 import { priceFactoryQuote } from "@/lib/factory/pricing";
 import { getFactoryConfig } from "@/lib/factory/config";
 import { renderCustomerQuotePdf } from "@/lib/factory/pdf";
+import { customerRoundedTotalIls } from "@/lib/factory/calculator/customer-breakdown";
 import type { FactoryProductSpec, FactoryPricingResult } from "@/lib/factory/types";
 
 const fmtIls = (n: number) => `₪${n.toLocaleString("he-IL", { maximumFractionDigits: 2 })}`;
@@ -35,7 +36,7 @@ function buildEstimateCaption(name: string, spec: FactoryProductSpec, pricing: F
     "💰 *אומדן* _(כולל שילוח)_",
     `📦 ${qty} יחידות × ${fmtIls(pricing.unitSellingPrice)}`,
     pricing.shippingOptionName ? `🚚 שיטת שילוח: ${pricing.shippingOptionName}` : null,
-    `*💵 סה״כ משוער: ${fmtIls(pricing.totalSellingPrice)}*`,
+    `*💵 סה״כ משוער: ${fmtIls(customerRoundedTotalIls(pricing.unitSellingPrice, pricing.quantity, pricing.moldsTotalSellingPriceIls ?? 0))}*`,
     "_(לא כולל מע״מ)_",
     "",
     "━━━━━━━━━━━━━━",

@@ -7,6 +7,8 @@
  * calculator returns the result.
  */
 
+import { customerRoundedTotalIls } from "./customer-breakdown";
+
 const SYMBOLS: Record<string, string> = {
   ILS: "₪",
   EUR: "€",
@@ -50,20 +52,23 @@ export function buildQuoteMessage(params: QuoteMessageParams): string {
     shippingName,
     shippingDays,
     pricePerUnit,
-    totalOrder,
     currency,
     appUrl,
     alt,
   } = params;
 
   const fp = (n: number) => formatPrice(n, currency);
-  const savings = alt && alt.totalOrder < totalOrder ? totalOrder - alt.totalOrder : 0;
+  // Show a total that equals the rounded per-unit × qty (not the precise
+  // per-unit × qty), so the customer's own arithmetic reconciles.
+  const totalShown = customerRoundedTotalIls(pricePerUnit, quantity);
+  const altTotalShown = alt ? customerRoundedTotalIls(alt.pricePerUnit, quantity) : 0;
+  const savings = alt && altTotalShown < totalShown ? totalShown - altTotalShown : 0;
 
   const handlesText = hasHandles ? "עם ידיות" : "ללא ידיות";
   const laminationText = hasLamination ? "עם למינציה" : "ללא למינציה";
   const altBlock = alt
     ? `\n💡 חלופה — משלוח ${alt.shippingName} (~${alt.shippingDays} ימים):\n` +
-      `   ליחידה: ${fp(alt.pricePerUnit)} | סה״כ: ${fp(alt.totalOrder)}\n` +
+      `   ליחידה: ${fp(alt.pricePerUnit)} | סה״כ: ${fp(altTotalShown)}\n` +
       (savings > 0 ? `   חיסכון פוטנציאלי: ${fp(savings)}\n` : "")
     : "";
 
@@ -74,7 +79,7 @@ export function buildQuoteMessage(params: QuoteMessageParams): string {
     `למינציה: ${laminationText}\n` +
     `כמות: ${quantity.toLocaleString()} | ${logoColors} צבעי הדפסה\n` +
     `משלוח: ${shippingName} (~${shippingDays} ימים)\n` +
-    `💰 ליחידה: ${fp(pricePerUnit)} | סה״כ: ${fp(totalOrder)}\n` +
+    `💰 ליחידה: ${fp(pricePerUnit)} | סה״כ: ${fp(totalShown)}\n` +
     altBlock +
     `המחיר לא כולל מעמ\n` +
     `* ההצעה כפופה לאישור הסופי של החברה שלנו\n` +

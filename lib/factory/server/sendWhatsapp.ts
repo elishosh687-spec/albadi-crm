@@ -14,6 +14,7 @@ import type {
   FactoryProductSpec,
   FactoryPricingResult,
 } from "@/lib/factory/types";
+import { customerRoundedTotalIls } from "@/lib/factory/calculator/customer-breakdown";
 
 function formatIls(n: number): string {
   return `₪${n.toLocaleString("he-IL", { maximumFractionDigits: 2 })}`;
@@ -48,7 +49,9 @@ function buildCaption(opts: {
     lines.push(`🚚 שיטת שילוח: ${pricing.shippingOptionName}`);
   }
   lines.push(
-    `*💵 סה״כ: ${formatIls(pricing.totalSellingPrice)}*`,
+    // Total from the rounded per-unit shown above (× qty + molds), so the
+    // customer's own "per-unit × qty" reconciles with the total.
+    `*💵 סה״כ: ${formatIls(customerRoundedTotalIls(pricing.unitSellingPrice, pricing.quantity, pricing.moldsTotalSellingPriceIls ?? 0))}*`,
     "_(לא כולל מע״מ)_"
   );
   lines.push(

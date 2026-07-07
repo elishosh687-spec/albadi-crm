@@ -427,17 +427,20 @@ function CustomerQuotePDF(props: CustomerQuotePdfProps) {
       qty: pricing.quantity,
       total: r2(bagUnit * pricing.quantity),
     });
-    if (pricing.moldsTotalSellingPriceIls > 0) {
-      const moldTotal = r2(pricing.moldsTotalSellingPriceIls);
+    const moldTotalIls = pricing.moldsTotalSellingPriceIls > 0 ? r2(pricing.moldsTotalSellingPriceIls) : 0;
+    if (moldTotalIls > 0) {
       rows.push({
         desc: "תבניות / מולדים (תשלום חד-פעמי)",
-        unit: moldTotal,
+        unit: moldTotalIls,
         qty: 1,
-        total: moldTotal,
+        total: moldTotalIls,
       });
     }
-    displayTotalOrder = pricing.totalSellingPrice;
-    displayUnitPrice = pricing.unitSellingPrice;
+    // Grand total from the ROUNDED per-bag × qty (+ mold), matching the line
+    // items above — not the precise pricing.totalSellingPrice, so the PDF
+    // reconciles with the WhatsApp caption and the customer's own arithmetic.
+    displayTotalOrder = r2(bagUnit * pricing.quantity) + moldTotalIls;
+    displayUnitPrice = bagUnit;
   }
 
   const bullets = [
