@@ -47,6 +47,8 @@ async function main() {
     } catch (e) {
       console.warn(`  FAILED ${r.contactId}:`, e instanceof Error ? e.message : String(e));
     }
+    // Throttle to stay under GHL's rate limit (429s on a tight loop).
+    await new Promise((res) => setTimeout(res, 250));
   }
   if (go) console.log(`Done — patched ${ok}/${valid.length}.`);
 }
