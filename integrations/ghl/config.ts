@@ -119,6 +119,10 @@ export const GHL_FIELD_IDS: Record<string, string> = {
   lead_owner: readEnv("GHL_FIELD_LEAD_OWNER"),
   lead_score: readEnv("GHL_FIELD_LEAD_SCORE"),
   next_action_v2: readEnv("GHL_FIELD_NEXT_ACTION_V2"),
+  // Last PHONE call date (only telephone calls — not WhatsApp/SMS). Written by
+  // the call-recording pipeline so Eli can add a sortable "calls only" column
+  // in GHL Contacts, unlike GHL's mixed "Last activity".
+  last_call_at: readEnv("GHL_FIELD_LAST_CALL_AT"),
 };
 
 // Names used when creating fields in the bootstrap script. The bootstrap
@@ -170,6 +174,11 @@ export const GHL_FIELD_DEFINITIONS = [
     envKey: "GHL_FIELD_LEAD_OWNER",
     name: "Lead Owner",
     dataType: "RADIO",
+  },
+  {
+    envKey: "GHL_FIELD_LAST_CALL_AT",
+    name: "Last Call Date",
+    dataType: "DATE",
   },
 ] as const;
 

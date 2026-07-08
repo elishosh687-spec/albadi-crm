@@ -33,7 +33,8 @@ import {
   listContactTasks,
   searchCallMessages,
 } from "@/integrations/ghl/client";
-import { GHL_SALESPERSON_USER_ID } from "@/integrations/ghl/config";
+import { GHL_SALESPERSON_USER_ID, GHL_FIELD_IDS } from "@/integrations/ghl/config";
+import { updateContact } from "@/integrations/ghl/client";
 import { clampToWorkWindow } from "@/lib/clock/callback-window";
 import { transcribeAudio, TranscribeError } from "@/lib/transcription/whisper";
 import {
@@ -472,6 +473,31 @@ async function stage3Analyze(): Promise<{ done: number }> {
 // ===========================================================================
 // Stage 4 — post note back to GHL contact.
 // ===========================================================================
+/**
+ * Stamp the "Last Call Date" GHL custom field (calls-only, sortable in GHL —
+ * unlike GHL's mixed "Last activity") to the contact's MOST-RECENT call date.
+ * Uses MAX over all the contact's calls so it's order-independent (a late
+ * re-processed old call can't overwrite a newer date). Non-fatal + no-ops until
+ * GHL_FIELD_LAST_CALL_AT is configured.
+ */
+async function stampLastCall(contactId: string): Promise<void> {
+  if (!GHL_FIELD_IDS.last_call_at || !contactId) return;
+  try {
+    const [row] = await db
+      .select({ maxAt: sql<string | null>`max(${callRecordingImports.callStartedAt})` })
+      .from(callRecordingImports)
+      .where(eq(callRecordingImports.ghlContactId, contactId));
+    if (!row?.maxAt) return;
+    await updateContact(contactId, {
+      customFields: [
+        { id: GHL_FIELD_IDS.last_call_at, value: new Date(row.maxAt).toISOString() },
+      ],
+    });
+  } catch (err) {
+    console.warn("[process-recordings] stampLastCall failed (non-fatal)", err);
+  }
+}
+
 async function stage4PostBack(): Promise<{ done: number }> {
   const rows = await db
     .select()
@@ -497,6 +523,10 @@ async function stage4PostBack(): Promise<{ done: number }> {
         );
         continue;
       }
+
+      // Stamp the calls-only "Last Call Date" field. Before the marker
+      // early-return so it's set even on already-noted (re-processed) calls.
+      await stampLastCall(row.ghlContactId);
 
       // Auto-create the salesperson's callback task from the analysis. Runs
       // before the note logic so the note's marker early-return can't skip it.
