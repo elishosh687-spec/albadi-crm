@@ -23,6 +23,7 @@ import type {
   ShippingOption,
 } from "@/lib/factory/types";
 import { priceFactoryQuote } from "@/lib/factory/pricing";
+import { computeCommission } from "@/lib/factory/commission";
 import { isOverCbmConsolidationThreshold, cbmConsolidationAlert } from "@/lib/factory/sea-carriers";
 import {
   computeCombined,
@@ -570,6 +571,31 @@ export function CombinedCalcModalWidget({
                     highlight
                   />
                   <PriceRow label="מרווח כולל" value={`${combinedResult.overallMarginPct}%`} />
+                  {(() => {
+                    // Salesperson commission on the WHOLE combined deal (both
+                    // products together). Base excludes shipping — same rule as a
+                    // single quote. Display-only; never changes the customer price.
+                    const comm = computeCommission(
+                      combinedResult.grandTotal,
+                      combinedResult.totalProfit,
+                      config.commissionPct,
+                      combinedResult.combinedShipping
+                    );
+                    return (
+                      <>
+                        <div className="border-t border-success/20 my-1" />
+                        <PriceRow
+                          label={`עמלת איש מכירות (${comm.pct}%) — על שני המוצרים`}
+                          value={formatIls(comm.commission)}
+                        />
+                        <PriceRow
+                          label="רווח נטו אחרי עמלה"
+                          value={formatIls(comm.netProfit)}
+                          highlight
+                        />
+                      </>
+                    );
+                  })()}
                   <CombinedBreakdown
                     result={combinedResult}
                     items={breakdownItems}
@@ -1088,6 +1114,20 @@ function CombinedBreakdown({
           <BSection title="רווח (חל רק על production, לא על שילוח)">
             <BRow label="סה״כ רווח" value={formatIls(result.totalProfit)} success strong />
             <BRow label="מרווח כולל" value={`${result.overallMarginPct}%`} />
+            {(() => {
+              const comm = computeCommission(
+                result.grandTotal,
+                result.totalProfit,
+                config.commissionPct,
+                result.combinedShipping
+              );
+              return (
+                <>
+                  <BRow label={`עמלת איש מכירות (${comm.pct}%)`} value={formatIls(comm.commission)} muted />
+                  <BRow label="רווח נטו אחרי עמלה" value={formatIls(comm.netProfit)} success strong />
+                </>
+              );
+            })()}
           </BSection>
 
           {/* Price summary */}
