@@ -418,16 +418,21 @@ Every completed GHL call gets transcribed (Whisper), analyzed for sales signals 
 - `BOT_SECRET` — auth (shared with other crons)
 - All `GHL_*` — already configured
 
-**Trigger (2026-07-08 — CHANGED, read this).** `process-recordings` runs as a
-**native Vercel cron** in `vercel.json` (`*/5 * * * *`, GET→POST), auto-authed by
-Vercel's `Authorization: Bearer $CRON_SECRET` (CRON_SECRET's value == BOT_SECRET,
-which `authorized()` accepts). It was PREVIOUSLY an external claude.ai routine
-that **silently died on 2026-07-06** (likely when the Vercel deployment was
-spend-paused → 402) and stopped the WHOLE pipeline for 2 days — no
-transcription/analysis/notes AND no "Last Call Date" stamps. If calls stop
-processing again, check: (1) is the deployment spend-paused (curl the prod URL →
-402)? (2) has the `call_recordings.last_polled_at` cursor in `app_config` gone
-stale (not advancing)? Don't reintroduce an external routine for it.
+**Trigger (2026-07-08 — CHANGED, read this).** `process-recordings` is triggered
+by a **GitHub Actions cron** (`.github/workflows/process-recordings.yml`,
+`*/5 * * * *`) that POSTs the prod endpoint with the `CALL_TRIGGER_SECRET` repo
+Actions secret (which `authorized()` accepts alongside BOT_SECRET). NOT a
+vercel.json cron — **the Vercel plan only runs crons once/day, so a `*/5` vercel
+cron never fires** (verified 2026-07-08: cursor didn't advance in 8 min). It was
+ORIGINALLY an external claude.ai routine that **silently died on 2026-07-06**
+(likely the Vercel spend-pause → 402) and stalled the WHOLE pipeline for 2 days —
+no transcription/analysis/notes AND no "Last Call Date" stamps. If calls stop
+processing again, check: (1) is the GitHub Action running/enabled (Actions tab —
+GitHub disables scheduled workflows after 60d of repo inactivity)? (2) is the
+deployment spend-paused (curl the prod URL → 402)? (3) has the
+`call_recordings.last_polled_at` cursor in `app_config` gone stale? Manual kick:
+`gh workflow run process-recordings.yml`, or POST the endpoint with
+`CALL_TRIGGER_SECRET` (retrievable via `vercel env pull` — it's non-sensitive).
 
 **GHL calls are POLLED, not pushed.** Unlike WhatsApp (bridge webhook, real-time),
 GHL never webhooks us a call — stage 1 polls `searchCallMessages` every tick. So

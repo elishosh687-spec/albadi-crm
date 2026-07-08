@@ -1,0 +1,27 @@
+# Triggers the GHL call-recording pipeline every 5 minutes.
+#
+# WHY GitHub Actions and not vercel.json crons: the Vercel plan only runs crons
+# once/day, so a */5 vercel cron never fires (verified 2026-07-08 — cursor didn't
+# advance). The original design used an external claude.ai routine which silently
+# died 2026-07-06 and stalled the whole pipeline for 2 days. GitHub Actions is
+# repo-native, free, plan-independent, and visible — the reliable replacement.
+#
+# Auth: POSTs with CALL_TRIGGER_SECRET (repo Actions secret) which the endpoint's
+# authorized() accepts alongside BOT_SECRET.
+name: process-recordings
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch: {}
+concurrency:
+  group: process-recordings
+  cancel-in-progress: false
+jobs:
+  trigger:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Poll + process new GHL call recordings
+        run: |
+          curl -sS -X POST "https://albadi-crm.vercel.app/api/bot/process-recordings" \
+            -H "Authorization: Bearer ${{ secrets.CALL_TRIGGER_SECRET }}" \
+            --max-time 300 -w "\nHTTP:%{http_code} time:%{time_total}s\n" || true

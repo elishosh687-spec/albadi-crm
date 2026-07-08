@@ -11,10 +11,6 @@
     {
       "path": "/api/cron/analyze-active-leads",
       "schedule": "30 3 * * *"
-    },
-    {
-      "path": "/api/bot/process-recordings",
-      "schedule": "*/5 * * * *"
     }
   ],
   "functions": {
