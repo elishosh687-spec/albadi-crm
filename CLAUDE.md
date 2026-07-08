@@ -418,7 +418,32 @@ Every completed GHL call gets transcribed (Whisper), analyzed for sales signals 
 - `BOT_SECRET` — auth (shared with other crons)
 - All `GHL_*` — already configured
 
-**Trigger.** Register a Vercel Cloud Routine that hits `POST /api/bot/process-recordings` every 5 min with `Authorization: Bearer $BOT_SECRET`. Same pattern as the existing followups routine documented above.
+**Trigger (2026-07-08 — CHANGED, read this).** `process-recordings` runs as a
+**native Vercel cron** in `vercel.json` (`*/5 * * * *`, GET→POST), auto-authed by
+Vercel's `Authorization: Bearer $CRON_SECRET` (CRON_SECRET's value == BOT_SECRET,
+which `authorized()` accepts). It was PREVIOUSLY an external claude.ai routine
+that **silently died on 2026-07-06** (likely when the Vercel deployment was
+spend-paused → 402) and stopped the WHOLE pipeline for 2 days — no
+transcription/analysis/notes AND no "Last Call Date" stamps. If calls stop
+processing again, check: (1) is the deployment spend-paused (curl the prod URL →
+402)? (2) has the `call_recordings.last_polled_at` cursor in `app_config` gone
+stale (not advancing)? Don't reintroduce an external routine for it.
+
+**GHL calls are POLLED, not pushed.** Unlike WhatsApp (bridge webhook, real-time),
+GHL never webhooks us a call — stage 1 polls `searchCallMessages` every tick. So
+if the cron isn't running, calls are never ingested AT ALL (the field/notes gap
+is an ingestion gap, unrelated to transcription). Manual catch-up: a scratch
+script calling `searchCallMessages({limit:100})` + inserting rows
+(completed→`pending`, non-answered→`no_answer`), dedupes on `ghl_message_id`.
+
+**"Last Call Date" GHL field (2026-07-08).** Calls-only, sortable column in GHL
+Contacts (GHL's native "Last activity" mixes calls + WhatsApp/SMS). GHL custom
+field `GHL_FIELD_LAST_CALL_AT` (id `VGXhVbDq8sfjmxvvOo0U`, DATE). Stamped to
+`MAX(call_started_at)` over ALL a contact's calls — answered AND unanswered
+(stage 1 now ingests non-answered calls as terminal `no_answer` rows; `stampLastCall`
+runs in stage 1 on new calls + stage 4 on post-back). Backfilled via
+`scripts/backfill-last-call-field.ts`. To add the column: GHL Contacts → Manage
+fields → "Last Call Date".
 
 **Dry-run before going live.** `npx tsx scripts/_test-call-pipeline.ts` (with `DATABASE_URL` set) runs all four stages inline against a real recent call and prints the note body that WOULD be posted — DB is touched (cursor stays untouched), but `addContactNote` is NOT called. Use this to validate Hebrew analysis quality before flipping the cron on.
 
