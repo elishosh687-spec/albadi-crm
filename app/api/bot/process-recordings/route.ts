@@ -301,19 +301,21 @@ async function stage1Discover(): Promise<{ inserted: number; scanned: number }> 
   let inserted = 0;
   const newestSeen: Date[] = [];
 
+  const touchedContacts = new Set<string>();
   for (const c of calls) {
-    // Skip non-completed calls (voicemail/busy/etc. produce no useful audio
-    // OR get a separate code path later).
     const status = c.meta?.call?.status;
-    if (status && status !== "completed") continue;
+    const completed = !status || status === "completed";
 
-    // Skip very-recently-added rows — GHL sometimes lags attaching the
-    // recording binary to the message for ~60s after the call ends.
-    if (c.dateAdded) {
+    // Completed calls: wait ~60s for GHL to attach the recording binary before
+    // ingesting (else the download 404s). Non-answered calls (no-answer/busy/
+    // voicemail) have no recording — ingest them immediately: they still count
+    // as a call ATTEMPT and must stamp the "last call" field (a call the
+    // customer didn't pick up is a signal too).
+    if (completed && c.dateAdded) {
       const age = Date.now() - new Date(c.dateAdded).getTime();
       if (age < 60_000) continue;
-      newestSeen.push(new Date(c.dateAdded));
     }
+    if (c.dateAdded) newestSeen.push(new Date(c.dateAdded));
 
     try {
       await db.insert(callRecordingImports).values({
@@ -322,10 +324,13 @@ async function stage1Discover(): Promise<{ inserted: number; scanned: number }> 
         ghlConversationId: c.conversationId,
         callDurationSec: c.meta?.call?.duration ?? null,
         callStartedAt: c.dateAdded ? new Date(c.dateAdded) : null,
-        recordingUrl: c.meta?.call?.recordingUrl ?? null,
-        status: "pending",
+        recordingUrl: completed ? (c.meta?.call?.recordingUrl ?? null) : null,
+        // Non-answered → terminal 'no_answer' (skips transcription/analysis) but
+        // still counts toward the last-call field. Completed → normal pipeline.
+        status: completed ? "pending" : "no_answer",
       });
       inserted++;
+      if (c.contactId) touchedContacts.add(c.contactId);
     } catch (e) {
       // Likely unique violation on ghl_message_id — that's the dedupe path.
       const msg = e instanceof Error ? e.message : String(e);
@@ -333,6 +338,13 @@ async function stage1Discover(): Promise<{ inserted: number; scanned: number }> 
         console.error(`[process-recordings] insert failed for ${c.id}:`, msg);
       }
     }
+  }
+
+  // Stamp "Last Call Date" for each contact with a NEW call this tick — from
+  // MAX(call_started_at) over ALL their calls (answered + unanswered), so an
+  // unanswered attempt updates it immediately without waiting for stage 4.
+  for (const cid of touchedContacts) {
+    await stampLastCall(cid);
   }
 
   // Advance cursor to the newest dateAdded we saw (or leave it as-is).
@@ -354,7 +366,7 @@ async function stage2Transcribe(): Promise<{ done: number }> {
     .where(
       and(
         isNull(callRecordingImports.transcript),
-        sql`${callRecordingImports.status} not in ('failed','skipped_oversize','skipped_voicemail','skipped_no_recording')`,
+        sql`${callRecordingImports.status} not in ('failed','skipped_oversize','skipped_voicemail','skipped_no_recording','no_answer')`,
         lte(callRecordingImports.attempts, MAX_ATTEMPTS),
       ),
     )
@@ -433,7 +445,7 @@ async function stage3Analyze(): Promise<{ done: number }> {
       and(
         isNotNull(callRecordingImports.transcript),
         isNull(callRecordingImports.analyzedAt),
-        sql`${callRecordingImports.status} not in ('failed','skipped_oversize','skipped_voicemail','skipped_no_recording')`,
+        sql`${callRecordingImports.status} not in ('failed','skipped_oversize','skipped_voicemail','skipped_no_recording','no_answer')`,
         lte(callRecordingImports.attempts, MAX_ATTEMPTS),
       ),
     )
@@ -506,7 +518,7 @@ async function stage4PostBack(): Promise<{ done: number }> {
       and(
         isNotNull(callRecordingImports.analyzedAt),
         isNull(callRecordingImports.postedBackAt),
-        sql`${callRecordingImports.status} not in ('failed','skipped_oversize','skipped_voicemail','skipped_no_recording')`,
+        sql`${callRecordingImports.status} not in ('failed','skipped_oversize','skipped_voicemail','skipped_no_recording','no_answer')`,
         lte(callRecordingImports.attempts, MAX_ATTEMPTS),
       ),
     )
