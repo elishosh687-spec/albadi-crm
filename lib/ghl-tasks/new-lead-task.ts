@@ -26,6 +26,10 @@ const MARKER = "[NEWLEAD v1]";
 const COVERED_MARKERS = ["[NEWLEAD v1]", "[CALLBACK v1]", "[BACKFILL v1]"];
 const HEBREW = /[֐-׿]/;
 
+// Brand-new lead (still in / just entered the questionnaire, stage NULL) — Eli
+// wants the salesperson watching from minute one, not only once the bot finishes
+// (2026-07-08). Falls back to this title for any not-yet-classified new lead.
+const NEW_LEAD_TITLE = "📞 ליד חדש נכנס — לדבר עם הלקוח";
 const STAGE_TITLE: Record<string, string> = {
   INTAKE: "📞 ליד חדש — הצעה נשלחה, להתקשר",
   FACTORY_WAIT: "📞 מפרט מיוחד — להתקשר ולתמחר",
@@ -49,7 +53,12 @@ export async function ensureNewLeadTask(
       .from(leads)
       .where(eq(leads.manychatSubId, sid));
     const stage = lead?.stage;
-    if (stage !== "INTAKE" && stage !== "FACTORY_WAIT") return;
+    // Fire for brand-new leads (stage NULL = still in the questionnaire) as well
+    // as INTAKE / FACTORY_WAIT. Skip only leads already worked past intake
+    // (DISCAVERY / CONSIDERATION) or closed (WON / LOST) or parked side-stages —
+    // those either already carry a task or shouldn't get a "new lead" one.
+    const NEW_OR_INTAKE = new Set([null, undefined, "", "INTAKE", "FACTORY_WAIT"]);
+    if (!NEW_OR_INTAKE.has(stage as string | null)) return;
 
     const existing = await listContactTasks(contactId);
     if (
@@ -61,12 +70,14 @@ export async function ensureNewLeadTask(
     }
 
     const due = await clampToWorkWindow(new Date()); // immediate / next work slot
-    const lines = [`${MARKER} sid=${sid}`, `שלב: ${STAGE_HE[stage]}`];
+    const title = STAGE_TITLE[stage as string] ?? NEW_LEAD_TITLE;
+    const heStage = STAGE_HE[stage as string] ?? "ליד חדש (בשאלון)";
+    const lines = [`${MARKER} sid=${sid}`, `שלב: ${heStage}`];
     if (lead?.summary && HEBREW.test(lead.summary)) {
       lines.push(`סיכום: ${lead.summary}`);
     }
     await createContactTask(contactId, {
-      title: STAGE_TITLE[stage],
+      title,
       body: lines.join("\n"),
       dueDate: due.toISOString(),
       assignedTo: GHL_SALESPERSON_USER_ID || undefined,
