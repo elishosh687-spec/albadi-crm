@@ -45,13 +45,53 @@ export async function POST(req: NextRequest) {
   if (!auth(req)) {
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
-  let body: { sid?: string; targetStage?: string } = {};
+  let body: { sid?: string; targetStage?: string; action?: string } = {};
   try {
     body = await req.json();
   } catch {
     /* empty body */
   }
   const sid = body.sid?.trim();
+
+  // action="create_task": create a "call the customer" task for Itay, due today,
+  // and push it to GHL. Used by the "נפלו בין הכיסאות" per-lead button — a lead
+  // fell through the cracks (no auto-task / rep forgot the follow-up), so give
+  // the salesperson a concrete task to talk to the customer.
+  if (body.action === "create_task") {
+    if (!sid) {
+      return NextResponse.json({ ok: false, error: "missing sid" }, { status: 400 });
+    }
+    try {
+      const { db } = await import("@/lib/db");
+      const { crmTasks } = await import("@/drizzle/schema");
+      const { GHL_SALESPERSON_USER_ID } = await import("@/integrations/ghl/config");
+      const [inserted] = await db
+        .insert(crmTasks)
+        .values({
+          manychatSubId: sid,
+          title: "לדבר עם הלקוח",
+          taskType: "follow_up",
+          dueAt: new Date(), // today
+          assignedTo: GHL_SALESPERSON_USER_ID || null,
+        })
+        .returning({ id: crmTasks.id });
+      // Push to GHL — no-ops gracefully if the lead has no ghl_contact_id yet.
+      try {
+        const { syncTaskToGHL } = await import("@/integrations/ghl/sync");
+        await syncTaskToGHL(inserted.id);
+      } catch (err) {
+        console.warn("[pipeline-audit] syncTaskToGHL failed (task saved in DB)", err);
+      }
+      return NextResponse.json({ ok: true, taskId: inserted.id });
+    } catch (e) {
+      console.error("[pipeline-audit] create_task failed", e);
+      return NextResponse.json(
+        { ok: false, error: e instanceof Error ? e.message : "task failed" },
+        { status: 500 }
+      );
+    }
+  }
+
   const targetStage = body.targetStage?.trim();
   if (!sid || !targetStage) {
     return NextResponse.json(

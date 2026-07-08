@@ -184,6 +184,37 @@ export default function PipelineAuditSection({ token }: { token: string }) {
     [token]
   );
 
+  // Create a "call the customer" task (Itay, due today) for a lead that fell
+  // through the cracks, and push it to GHL. On success drop the row — it now has
+  // an open task so it's no longer "between the chairs".
+  const createTask = useCallback(
+    async (sid: string) => {
+      setApplying((s) => new Set(s).add(sid));
+      try {
+        const r = await fetch(
+          `/api/widget/pipeline-audit?widget_token=${encodeURIComponent(token)}`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ sid, action: "create_task" }),
+          }
+        );
+        const j = await r.json();
+        if (!j.ok) throw new Error(j.error || "task failed");
+        setNoTask((prev) => prev?.filter((x) => x.sid !== sid) ?? null);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : String(e));
+      } finally {
+        setApplying((s) => {
+          const n = new Set(s);
+          n.delete(sid);
+          return n;
+        });
+      }
+    },
+    [token]
+  );
+
   const applyGroup = useCallback(
     async (target: Target) => {
       const list = (stageLag ?? []).filter(
@@ -400,7 +431,12 @@ export default function PipelineAuditSection({ token }: { token: string }) {
                         style={{ display: "flex", flexDirection: "column", gap: 6 }}
                       >
                         {rows.map((r) => (
-                          <NoTaskLead key={r.sid} row={r} />
+                          <NoTaskLead
+                            key={r.sid}
+                            row={r}
+                            busy={applying.has(r.sid)}
+                            onCreateTask={createTask}
+                          />
                         ))}
                       </div>
                     </div>
@@ -834,7 +870,15 @@ function LagRow({
 
 // One fallen lead — name + when it entered + when last contacted, coloured by
 // how stale the last contact is so the truly-forgotten ones jump out.
-function NoTaskLead({ row }: { row: NoTaskRow }) {
+function NoTaskLead({
+  row,
+  busy,
+  onCreateTask,
+}: {
+  row: NoTaskRow;
+  busy: boolean;
+  onCreateTask: (sid: string) => void;
+}) {
   const created = fmtDate(row.createdAt);
   const contact = fmtDate(row.lastContactAt);
   const staleDays = daysSince(row.lastContactAt);
@@ -886,6 +930,26 @@ function NoTaskLead({ row }: { row: NoTaskRow }) {
             : "— אין הודעות"}
         </span>
       </div>
+      <button
+        type="button"
+        onClick={() => onCreateTask(row.sid)}
+        disabled={busy}
+        title='יוצר משימה לאיש המכירות ב-GHL — "לדבר עם הלקוח", להיום'
+        style={{
+          marginTop: 2,
+          fontSize: 11,
+          fontWeight: 600,
+          padding: "6px 12px",
+          borderRadius: 6,
+          border: "1px solid rgba(214,196,172,0.35)",
+          background: "rgba(214,196,172,0.10)",
+          color: "#d6c4ac",
+          cursor: busy ? "default" : "pointer",
+          opacity: busy ? 0.6 : 1,
+        }}
+      >
+        {busy ? "יוצר…" : "+ צור משימה למכירות"}
+      </button>
     </div>
   );
 }
