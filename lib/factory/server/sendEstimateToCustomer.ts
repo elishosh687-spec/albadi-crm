@@ -24,6 +24,10 @@ const fmtIls = (n: number) => `₪${n.toLocaleString("he-IL", { maximumFractionD
 function buildEstimateCaption(name: string, spec: FactoryProductSpec, pricing: FactoryPricingResult): string {
   const dims = [spec.widthCm, spec.depthCm, spec.heightCm].filter((n) => n && n > 0).join("×");
   const qty = spec.quantity.toLocaleString("he-IL");
+  // Ordered spec — always shown so the estimate records exactly what was requested.
+  const colors = spec.printing?.match(/(\d+)/)?.[1] ?? "1";
+  const hasHandles = /with handle/i.test(spec.finishing ?? "");
+  const hasLam = /laminat/i.test(spec.finishing ?? "") && !/not laminat|non laminat/i.test(spec.finishing ?? "");
   const lines: (string | null)[] = [
     name ? `היי ${name} 👋` : "היי 👋",
     "",
@@ -32,6 +36,9 @@ function buildEstimateCaption(name: string, spec: FactoryProductSpec, pricing: F
     "📦 *פרטי המוצר*",
     dims ? `מידות: ${dims} ס״מ` : null,
     `כמות: ${qty} יח׳`,
+    `צבעי לוגו: ${colors}`,
+    `ידיות: ${hasHandles ? "כן" : "ללא"}`,
+    `למינציה: ${hasLam ? "כן" : "ללא"}`,
     "",
     "💰 *אומדן* _(כולל שילוח)_",
     `📦 ${qty} יחידות × ${fmtIls(pricing.unitSellingPrice)}`,

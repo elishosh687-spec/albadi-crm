@@ -32,6 +32,11 @@ function buildCaption(opts: {
     .filter((n) => n && n > 0)
     .join("×");
   const qty = spec.quantity.toLocaleString("he-IL");
+  // Ordered spec (from printing/finishing) so the quote records exactly what
+  // the customer ordered — always shown, not only when it carries a price.
+  const colors = spec.printing?.match(/(\d+)/)?.[1] ?? "1";
+  const hasHandles = /with handle/i.test(spec.finishing ?? "");
+  const hasLam = /laminat/i.test(spec.finishing ?? "") && !/not laminat|non laminat/i.test(spec.finishing ?? "");
 
   const lines: (string | null)[] = [
     greeting,
@@ -41,6 +46,9 @@ function buildCaption(opts: {
     "📦 *פרטי המוצר*",
     dims ? `מידות: ${dims} ס״מ` : null,
     `כמות: ${qty} יח׳`,
+    `צבעי לוגו: ${colors}`,
+    `ידיות: ${hasHandles ? "כן" : "ללא"}`,
+    `למינציה: ${hasLam ? "כן" : "ללא"}`,
     "",
     "💰 *תמחור* _(כולל שילוח)_",
     `📦 ${qty} יחידות × ${formatIls(pricing.unitSellingPrice)}`,

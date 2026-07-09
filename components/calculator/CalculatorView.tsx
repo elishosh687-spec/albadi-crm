@@ -1807,6 +1807,12 @@ function buildQuoteText(opts: {
     "📦 *פרטי המוצר*",
     productDesc ? `מוצר: ${productDesc}` : null,
     `כמות: ${qty} יח׳`,
+    // Always state the ordered spec (not just the priced up-charges below), so
+    // the quote is a self-contained record of exactly what the customer ordered.
+    `צבעי לוגו: ${logoColors}`,
+    `ידיות: ${opts.result.hasHandles ? "כן" : "ללא"}`,
+    `למינציה: ${hasLamination ? "כן" : "ללא"}`,
+    shippingMethod ? `שיטת שילוח: ${shippingMethod}` : null,
     "",
     "💰 *תמחור — מחיר ליחידה* _(כולל שילוח)_",
     `▪️ שקית${shippingMethod ? " + שילוח" : ""}: ${ilsFmt(b.productIls)}`,
