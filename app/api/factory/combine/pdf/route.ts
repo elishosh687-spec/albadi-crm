@@ -19,7 +19,7 @@ import {
   fetchImageDataUri,
   type CombinedQuoteItem,
 } from "@/lib/factory/pdf";
-import { combinedShippingIls } from "@/lib/factory/combined";
+import { allocateCombined } from "@/lib/factory/combined";
 import { getFactoryConfig } from "@/lib/factory/config";
 import type {
   FactoryProductSpec,
@@ -88,39 +88,35 @@ export async function GET(req: NextRequest) {
   // each product's price by its CBM share. Profit is unchanged — only the
   // pass-through shipping drops, so the customer's combined price is lower.
   const config = await getFactoryConfig();
-  const pricings = ordered.map((r) => r.finalPricing as FactoryPricingResult);
-  const combinedCbm = r2(pricings.reduce((s, p) => s + (p.totalCbm || 0), 0));
-  const combinedWeight = r2(pricings.reduce((s, p) => s + (p.totalWeightKg || 0), 0));
-  const shipOpt =
-    config.shippingOptions.find((s) => s.id === pricings[0]?.shippingOptionId) ?? null;
-  const combinedShipping = combinedShippingIls(combinedCbm, combinedWeight, shipOpt, config);
+
+  // Optional split shipment: `airIds` = which quotes ship by air; `airShip` /
+  // `seaShip` = the chosen options. Allocation (single or split) is shared with
+  // the WhatsApp caption via allocateCombined so their totals reconcile.
+  const sp = req.nextUrl.searchParams;
+  const airIds = (sp.get("airIds") ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+  const airShipId = sp.get("airShip");
+  const seaShipId = sp.get("seaShip");
+  const split =
+    airIds.length > 0 && airShipId && seaShipId
+      ? { airIds, airShippingOptionId: airShipId, seaShippingOptionId: seaShipId }
+      : undefined;
+  const singleOpt =
+    config.shippingOptions.find((s) => s.id === (ordered[0]?.finalPricing as FactoryPricingResult)?.shippingOptionId) ?? null;
+
+  const alloc = allocateCombined(
+    ordered.map((r) => ({ id: r.id, pricing: r.finalPricing as FactoryPricingResult })),
+    singleOpt,
+    config,
+    split
+  );
+  const adjustedById = new Map(alloc.perProduct.map((x) => [x.id, x.adjusted]));
 
   const items: CombinedQuoteItem[] = await Promise.all(
     ordered.map(async (r) => {
       const spec = r.productSpec as FactoryProductSpec;
-      const p = r.finalPricing as FactoryPricingResult;
-      const share = combinedCbm > 0 ? (p.totalCbm || 0) / combinedCbm : 1 / pricings.length;
-      const allocShipping = r2(combinedShipping * share);
-      // p.totalSellingPrice is the grand total (bags + mold + shipping). Strip
-      // both the original shipping AND the mold one-time before reallocating
-      // shipping, so per-unit ends up bag-only (matches the single-quote PDF).
-      // Older quotes finalized before the mold-split deploy won't have
-      // moldsTotalSellingPriceIls — treat undefined as 0.
-      const moldOneTime = p.moldsTotalSellingPriceIls ?? 0;
-      const bagsSellingTotal = r2(p.totalSellingPrice - p.totalShipping - moldOneTime);
-      const newBagsTotal = r2(bagsSellingTotal + allocShipping);
-      const newUnit = p.quantity > 0 ? r2(newBagsTotal / p.quantity) : newBagsTotal;
-      const newGrand = r2(newBagsTotal + moldOneTime);
-      const adjusted: FactoryPricingResult = {
-        ...p,
-        unitShipping: p.quantity > 0 ? r2(allocShipping / p.quantity) : allocShipping,
-        totalShipping: allocShipping,
-        unitSellingPrice: newUnit,      // bag-only — CombinedQuotePDF renders the mold as its own row
-        totalSellingPrice: newGrand,    // grand total: bags + reallocated shipping + mold one-time
-      };
       return {
         spec,
-        pricing: adjusted,
+        pricing: adjustedById.get(r.id) ?? (r.finalPricing as FactoryPricingResult),
         picDataUri: await fetchImageDataUri(spec.picUrl),
       };
     })

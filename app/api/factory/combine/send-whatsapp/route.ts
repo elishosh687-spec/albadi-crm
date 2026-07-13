@@ -15,12 +15,22 @@ export const runtime = "nodejs";
 export const maxDuration = 30;
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
-  const ids = (req.nextUrl.searchParams.get("ids") ?? "")
+  const sp = req.nextUrl.searchParams;
+  const ids = (sp.get("ids") ?? "")
     .split(",")
     .map((s) => s.trim())
     .filter(Boolean);
 
-  const result = await sendCombinedQuoteWhatsapp(ids, req.headers.get("host"));
+  // Optional split shipment (air/sea) — mirrors the combined PDF query params.
+  const airIds = (sp.get("airIds") ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+  const airShip = sp.get("airShip");
+  const seaShip = sp.get("seaShip");
+  const split =
+    airIds.length > 0 && airShip && seaShip
+      ? { airIds, airShippingOptionId: airShip, seaShippingOptionId: seaShip }
+      : undefined;
+
+  const result = await sendCombinedQuoteWhatsapp(ids, req.headers.get("host"), split);
   if (!result.ok) {
     return NextResponse.json(
       {

@@ -15,7 +15,8 @@
  */
 
 import { useEffect, useMemo, useState } from "react";
-import { Loader2, X, Sparkles, ChevronDown, MessageCircle } from "lucide-react";
+import { Loader2, X, Sparkles, ChevronDown, MessageCircle, Ship, Plane, Copy, Check } from "lucide-react";
+import { cn } from "@/lib/cn";
 import type { FactoryQuoteRow } from "./types";
 import type {
   FactoryPricingConfig,
@@ -27,6 +28,7 @@ import { computeCommission } from "@/lib/factory/commission";
 import { isOverCbmConsolidationThreshold, cbmConsolidationAlert } from "@/lib/factory/sea-carriers";
 import {
   computeCombined,
+  combinedShippingIls,
   defaultMarginFor,
   type CombinedPricingResult,
 } from "@/lib/factory/combined";
@@ -110,6 +112,9 @@ export function CombinedCalcModalWidget({
   const [saveError, setSaveError] = useState<string | null>(null);
   const [sendHint, setSendHint] = useState<string | null>(null);
   const [sendingWa, setSendingWa] = useState(false);
+  const [combinedSplit, setCombinedSplit] = useState<
+    { airIds: string[]; airShippingOptionId: string; seaShippingOptionId: string } | null
+  >(null);
   // Which products are part of THIS offer (default: all). Lets the user build a
   // combined offer from a subset right inside the card.
   const [selected, setSelected] = useState<Set<string>>(
@@ -302,7 +307,15 @@ export function CombinedCalcModalWidget({
   const phoneDigits = (customerPhone ?? "").replace(/[^\d]/g, "");
   const combineIds = selectedRows.map((r) => r.id);
   const canSendWa = sendReady && !!phoneDigits;
-  const combinePdfHref = `${origin}/api/factory/combine/pdf?ids=${combineIds.join(",")}`;
+  // Split-shipment assignment reported by the panel (null when off) — threaded
+  // into the combined PDF + WhatsApp so both reflect the air/sea split.
+  const splitQuery = combinedSplit
+    ? { airIds: combinedSplit.airIds.join(","), airShip: combinedSplit.airShippingOptionId, seaShip: combinedSplit.seaShippingOptionId }
+    : {};
+  const splitQs = combinedSplit
+    ? `&airIds=${encodeURIComponent(combinedSplit.airIds.join(","))}&airShip=${encodeURIComponent(combinedSplit.airShippingOptionId)}&seaShip=${encodeURIComponent(combinedSplit.seaShippingOptionId)}`
+    : "";
+  const combinePdfHref = `${origin}/api/factory/combine/pdf?ids=${combineIds.join(",")}${splitQs}`;
 
   async function handleSaveAll() {
     if (!config) return;
@@ -382,6 +395,7 @@ export function CombinedCalcModalWidget({
       const res = await fetch(
         widgetUrl("/api/factory/combine/send-whatsapp", apiToken, {
           ids: combineIds.join(","),
+          ...splitQuery,
         }),
         { method: "POST" }
       );
@@ -603,6 +617,32 @@ export function CombinedCalcModalWidget({
                     shippingOptionId={shippingOptionId}
                   />
                 </div>
+              )}
+
+              {/* Split shipment — assign each product to air or sea, one total. */}
+              {combinedResult && (
+                <CombinedSplitPanel
+                  config={config}
+                  productPriceTotal={combinedResult.productPriceTotal}
+                  items={selectedRows
+                    .map((r) => {
+                      const p = livePricings[r.id];
+                      if (!p) return null;
+                      return {
+                        id: r.id,
+                        label:
+                          r.productSpec.productName?.trim() ||
+                          [r.productSpec.heightCm && `H${r.productSpec.heightCm}`, r.productSpec.depthCm && `D${r.productSpec.depthCm}`, r.productSpec.widthCm && `W${r.productSpec.widthCm}`]
+                            .filter(Boolean).join("*") ||
+                          r.id.slice(-6),
+                        cbm: p.totalCbm,
+                        weightKg: p.totalWeightKg,
+                      };
+                    })
+                    .filter((x): x is { id: string; label: string; cbm: number; weightKg: number } => !!x)}
+                  customerName={customerName}
+                  onChange={setCombinedSplit}
+                />
               )}
 
               {saveError && <p className="text-xs text-destructive">{saveError}</p>}
@@ -1000,6 +1040,156 @@ function ProductCalcSection({
             </div>
           )}
         </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Split shipment for a combined order — assign each product to air or sea; each
+ * ships on its OWN cbm/weight (exact, no proration). Production price is
+ * unchanged; only the merged shipment splits into two. One combined total.
+ */
+function CombinedSplitPanel({
+  config,
+  productPriceTotal,
+  items,
+  customerName,
+  onChange,
+}: {
+  config: FactoryPricingConfig;
+  productPriceTotal: number;
+  items: { id: string; label: string; cbm: number; weightKg: number }[];
+  customerName: string | null;
+  /** Report the raw split assignment to the parent (null when off/invalid) so
+   *  the combined PDF + WhatsApp caption reflect it. */
+  onChange?: (
+    v: { airIds: string[]; airShippingOptionId: string; seaShippingOptionId: string } | null
+  ) => void;
+}) {
+  const airOptions = config.shippingOptions.filter((s) => s.type === "air" && s.enabled);
+  const seaOptions = config.shippingOptions.filter((s) => s.type === "sea" && s.enabled);
+
+  const [enabled, setEnabled] = useState(false);
+  const [airIds, setAirIds] = useState<Set<string>>(new Set());
+  const [airShipId, setAirShipId] = useState(airOptions[0]?.id ?? "");
+  const [seaShipId, setSeaShipId] = useState(seaOptions[0]?.id ?? "");
+  const [copied, setCopied] = useState(false);
+
+  // Report the assignment upward (server recomputes for the PDF/caption).
+  useEffect(() => {
+    if (!onChange) return;
+    const airList = items.filter((i) => airIds.has(i.id)).map((i) => i.id);
+    const seaCount = items.length - airList.length;
+    onChange(
+      enabled && airList.length > 0 && seaCount > 0 && airShipId && seaShipId
+        ? { airIds: airList, airShippingOptionId: airShipId, seaShippingOptionId: seaShipId }
+        : null
+    );
+  }, [onChange, enabled, airIds, items, airShipId, seaShipId]);
+
+  if (airOptions.length === 0 || seaOptions.length === 0 || items.length < 1) return null;
+
+  const r2 = (n: number) => Math.round(n * 100) / 100;
+  const airItems = items.filter((i) => airIds.has(i.id));
+  const seaItems = items.filter((i) => !airIds.has(i.id));
+  const sum = (arr: typeof items, f: (i: (typeof items)[number]) => number) => arr.reduce((s, i) => s + (f(i) || 0), 0);
+
+  const airOpt = airOptions.find((s) => s.id === airShipId) ?? null;
+  const seaOpt = seaOptions.find((s) => s.id === seaShipId) ?? null;
+  const airIls = airItems.length ? combinedShippingIls(r2(sum(airItems, (i) => i.cbm)), r2(sum(airItems, (i) => i.weightKg)), airOpt, config) : 0;
+  const seaIls = seaItems.length ? combinedShippingIls(r2(sum(seaItems, (i) => i.cbm)), r2(sum(seaItems, (i) => i.weightKg)), seaOpt, config) : 0;
+  const grand = r2(productPriceTotal + airIls + seaIls);
+  const splitValid = airItems.length > 0 && seaItems.length > 0;
+
+  const ilsFmt = (n: number) => `₪${n.toLocaleString("he-IL", { maximumFractionDigits: 2 })}`;
+  const quoteText = (() => {
+    const greeting = customerName ? `היי ${customerName} 👋` : "היי 👋";
+    const airName = airOpt?.name ?? "אווירי";
+    const seaName = seaOpt?.name ?? "ימי";
+    const lines: (string | null)[] = [
+      greeting, "",
+      `*הצעת מחיר משולבת — משלוח מפוצל (${items.length} מוצרים)*`, "",
+      "💰 *מחיר המוצרים (כולל רווח, ללא שילוח)*",
+      `▪️ ${ilsFmt(r2(productPriceTotal))}`, "",
+      "🚚 *פיצול משלוח*",
+      airItems.length ? `✈️ ${airName}: ${airItems.map((i) => i.label).join(", ")} — ${ilsFmt(airIls)}` : null,
+      seaItems.length ? `🚢 ${seaName}: ${seaItems.map((i) => i.label).join(", ")} — ${ilsFmt(seaIls)}` : null,
+      "",
+      `*💵 סה״כ: ${ilsFmt(grand)}*`,
+      "_(לא כולל מע״מ)_", "",
+      "━━━━━━━━━━━━━━",
+      "ההצעה בתוקף ל-14 יום",
+      "נשמח לקבל את אישורך 🙂",
+    ];
+    return lines.filter((l) => l !== null).join("\n");
+  })();
+
+  return (
+    <div className="rounded-lg border border-border bg-card p-3 space-y-2.5 mt-1" dir="rtl">
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <div className="flex items-center gap-2 text-sm font-medium">
+          <Ship className="size-4" /><Plane className="size-4" />
+          פיצול משלוח — חלק אוויר, חלק ים
+        </div>
+        <button
+          type="button"
+          onClick={() => setEnabled((v) => !v)}
+          className={cn("px-3 py-1 rounded text-xs border", enabled ? "bg-primary text-primary-foreground border-primary" : "bg-background/30 text-muted-foreground border-border")}
+        >
+          {enabled ? "פעיל" : "הפעל פיצול"}
+        </button>
+      </div>
+
+      {enabled && (
+        <>
+          <p className="text-xs text-muted-foreground">
+            שייך כל מוצר לאוויר או לים. מחיר המוצרים לא משתנה — רק המשלוח מתפצל, כל חלק לפי הנפח שלו.
+          </p>
+          <div className="flex flex-col gap-1.5">
+            {items.map((it) => {
+              const inAir = airIds.has(it.id);
+              return (
+                <div key={it.id} className="flex items-center justify-between gap-2 rounded-md border border-border bg-background/30 px-2.5 py-1.5">
+                  <span className="text-xs truncate">{it.label} <span className="text-muted-foreground">· {it.cbm}m³</span></span>
+                  <div className="inline-flex rounded-md border border-border overflow-hidden text-xs shrink-0">
+                    <button type="button" onClick={() => setAirIds((p) => { const n = new Set(p); n.delete(it.id); return n; })} className={cn("px-2.5 py-1", !inAir ? "bg-primary text-primary-foreground" : "bg-background/40 text-muted-foreground")}>🚢 ים</button>
+                    <button type="button" onClick={() => setAirIds((p) => { const n = new Set(p); n.add(it.id); return n; })} className={cn("px-2.5 py-1 border-r border-border", inAir ? "bg-primary text-primary-foreground" : "bg-background/40 text-muted-foreground")}>✈️ אוויר</button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="grid grid-cols-2 gap-2">
+            <select value={airShipId} onChange={(e) => setAirShipId(e.target.value)} className="w-full rounded-md border border-border bg-background/40 px-2 py-1.5 text-xs">
+              {airOptions.map((s) => <option key={s.id} value={s.id}>✈️ {s.name}</option>)}
+            </select>
+            <select value={seaShipId} onChange={(e) => setSeaShipId(e.target.value)} className="w-full rounded-md border border-border bg-background/40 px-2 py-1.5 text-xs">
+              {seaOptions.map((s) => <option key={s.id} value={s.id}>🚢 {s.name}</option>)}
+            </select>
+          </div>
+
+          {!splitValid ? (
+            <p className="text-xs text-muted-foreground">שייך לפחות מוצר אחד לאוויר ואחד לים כדי לראות פיצול.</p>
+          ) : (
+            <div className="flex flex-col gap-1.5 rounded-lg border border-border bg-background/30 p-3 text-sm">
+              <PriceRow label="מחיר מוצרים (כולל רווח)" value={ilsFmt(r2(productPriceTotal))} />
+              <PriceRow label={`✈️ ${airOpt?.name ?? "אווירי"} (${airItems.length})`} value={ilsFmt(airIls)} />
+              <PriceRow label={`🚢 ${seaOpt?.name ?? "ימי"} (${seaItems.length})`} value={ilsFmt(seaIls)} />
+              <div className="border-t border-border my-1" />
+              <PriceRow label="סה״כ (לא כולל מע״מ)" value={ilsFmt(grand)} bold />
+              <button
+                type="button"
+                onClick={() => { navigator.clipboard?.writeText(quoteText).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1800); }); }}
+                className="mt-1 inline-flex items-center justify-center gap-2 rounded-md border border-border bg-background/40 px-3 py-2 text-xs hover:bg-background/60"
+              >
+                {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
+                {copied ? "הועתק" : "העתק הצעה מפוצלת ללקוח"}
+              </button>
+            </div>
+          )}
+        </>
       )}
     </div>
   );

@@ -31,6 +31,13 @@ const BodySchema = z.object({
     })
     .optional(),
   allowMissingCarton: z.boolean().optional(),
+  split: z
+    .object({
+      airQuantity: z.number().int().positive(),
+      airShippingOptionId: z.string(),
+      seaShippingOptionId: z.string(),
+    })
+    .optional(),
 });
 
 export async function POST(

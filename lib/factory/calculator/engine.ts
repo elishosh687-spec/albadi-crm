@@ -112,10 +112,13 @@ export function calculateQuote(
   const cbmPerCarton = (carton.length * carton.width * carton.height) / 1_000_000;
   const totalCbm = totalCartons * cbmPerCarton;
 
-  // Step 5: Shipping cost
+  // Step 5: Shipping cost. Compute the WHOLE-ORDER shipment cost first
+  // (shipmentTotalUsd), then divide to per-unit. Exposing the un-divided total
+  // lets the split-shipment UI price each air/sea portion on its own CBM/weight
+  // without rounding drift (rounded per-unit × qty would drift tens of $ at 9k units).
   const shippingOption =
     shippingOptions.find((s) => s.id === formData.shippingOptionId) ?? null;
-  let shippingPerUnitUsd = 0;
+  let shipmentTotalUsd = 0;
   if (shippingOption) {
     if (shippingOption.type === "air" && shippingOption.airRates) {
       const rates = shippingOption.airRates;
@@ -131,7 +134,7 @@ export function calculateQuote(
         chargeableKg <= rates.thresholdKg
           ? rates.rateBelowThreshold
           : rates.rateAboveThreshold;
-      shippingPerUnitUsd = (chargeableKg * rate) / quantity;
+      shipmentTotalUsd = chargeableKg * rate;
     } else if (shippingOption.type === "sea") {
       // Active forwarder profile drives sea cost (same engine as real quotes):
       // small orders billed at the assumed-volume per-CBM rate, larger orders at
@@ -141,12 +144,13 @@ export function calculateQuote(
         const res = seaPerOrderUsd(carrier, totalCbm, {
           assumedCbm: config.assumedShipmentCbm ?? DEFAULT_ASSUMED_SHIPMENT_CBM,
         });
-        shippingPerUnitUsd = res.shipmentUsd / quantity;
+        shipmentTotalUsd = res.shipmentUsd;
       } else if (shippingOption.seaRate && shippingOption.seaRate > 0) {
-        shippingPerUnitUsd = (Math.max(totalCbm, 1) * shippingOption.seaRate) / quantity;
+        shipmentTotalUsd = Math.max(totalCbm, 1) * shippingOption.seaRate;
       }
     }
   }
+  const shippingPerUnitUsd = quantity > 0 ? shipmentTotalUsd / quantity : 0;
 
   // Step 6: Final unit cost
   const finalUnitCostUsd = unitProductionUsd + shippingPerUnitUsd;
@@ -247,6 +251,7 @@ export function calculateQuote(
     volumetricWeightKg: r2(totalCbm * VOLUMETRIC_KG_PER_CBM),
     chargeableWeightKg: r2(Math.max(totalWeightKg, totalCbm * VOLUMETRIC_KG_PER_CBM)),
     shippingPerUnitUsd: r2(shippingPerUnitUsd),
+    shipmentTotalUsd: r2(shipmentTotalUsd),
     finalUnitCostUsd: r2(finalUnitCostUsd),
     finalUnitCostIls: r2(finalUnitCostIls),
     featuresTotalPerUnitIls: r2(featuresTotalPerUnitIls),

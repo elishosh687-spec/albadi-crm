@@ -416,6 +416,28 @@ function CustomerQuotePDF(props: CustomerQuotePdfProps) {
     // the customer. Per-unit price is BAG ONLY — the one-time mold/tooling
     // charge gets its own row below ("תבניות (חד פעמי)") so the customer
     // sees a clean per-bag price.
+    const finishPrint = [finishingHe, printingHe].filter(Boolean).join(" · ");
+    const moldTotalIls = pricing.moldsTotalSellingPriceIls > 0 ? r2(pricing.moldsTotalSellingPriceIls) : 0;
+    const split = pricing.shippingSplit;
+    if (split) {
+      // Split shipment: bag row EXCLUDES shipping; two shipping lines below.
+      const bagDescParts = [`${spec.productName?.trim() || "שקית אלבדי"} — ${sizeLabel(spec)}`];
+      if (finishPrint) bagDescParts.push(finishPrint);
+      const prodUnit = r2(split.productUnitIls);
+      rows.push({
+        desc: bagDescParts.join(" · "),
+        unit: prodUnit,
+        qty: pricing.quantity,
+        total: r2(prodUnit * pricing.quantity),
+      });
+      rows.push({ desc: `שילוח אווירי — ${split.airLabel}`, unit: r2(split.airIls), qty: 1, total: r2(split.airIls) });
+      rows.push({ desc: `שילוח ימי — ${split.seaLabel}`, unit: r2(split.seaIls), qty: 1, total: r2(split.seaIls) });
+      if (moldTotalIls > 0) {
+        rows.push({ desc: "תבניות / מולדים (תשלום חד-פעמי)", unit: moldTotalIls, qty: 1, total: moldTotalIls });
+      }
+      displayTotalOrder = r2(prodUnit * pricing.quantity + split.airIls + split.seaIls + moldTotalIls);
+      displayUnitPrice = prodUnit;
+    } else {
     const bagDescParts: string[] = [`${spec.productName?.trim() || "שקית אלבדי"} — ${sizeLabel(spec)} (כולל שילוח)`];
     if (finishingHe) bagDescParts.push(finishingHe);
     if (printingHe) bagDescParts.push(printingHe);
@@ -427,7 +449,6 @@ function CustomerQuotePDF(props: CustomerQuotePdfProps) {
       qty: pricing.quantity,
       total: r2(bagUnit * pricing.quantity),
     });
-    const moldTotalIls = pricing.moldsTotalSellingPriceIls > 0 ? r2(pricing.moldsTotalSellingPriceIls) : 0;
     if (moldTotalIls > 0) {
       rows.push({
         desc: "תבניות / מולדים (תשלום חד-פעמי)",
@@ -441,6 +462,7 @@ function CustomerQuotePDF(props: CustomerQuotePdfProps) {
     // reconciles with the WhatsApp caption and the customer's own arithmetic.
     displayTotalOrder = r2(bagUnit * pricing.quantity) + moldTotalIls;
     displayUnitPrice = bagUnit;
+    }
   }
 
   const bullets = [
@@ -449,9 +471,11 @@ function CustomerQuotePDF(props: CustomerQuotePdfProps) {
     materialHe ? `חומר: ${materialHe}` : null,
     printingHe ? `הדפסה: ${printingHe}` : null,
     finishingHe ? `גימור: ${finishingHe}` : null,
-    (breakdown?.shippingOptionName ?? pricing.shippingOptionName)
-      ? `שיטת שילוח: ${breakdown?.shippingOptionName ?? pricing.shippingOptionName}`
-      : null,
+    pricing.shippingSplit
+      ? `שילוח מפוצל: אווירי (${pricing.shippingSplit.airLabel}) + ימי (${pricing.shippingSplit.seaLabel})`
+      : (breakdown?.shippingOptionName ?? pricing.shippingOptionName)
+        ? `שיטת שילוח: ${breakdown?.shippingOptionName ?? pricing.shippingOptionName}`
+        : null,
   ].filter(Boolean) as string[];
 
   return (

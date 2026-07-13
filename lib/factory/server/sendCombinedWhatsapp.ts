@@ -13,7 +13,7 @@ import { factoryQuoteRequests, leads } from "@/drizzle/schema";
 import { eq, inArray } from "drizzle-orm";
 import { sendBridgeMessage } from "@/lib/bridge/client";
 import { phoneToJid } from "@/lib/bridge/jid";
-import { combinedShippingIls } from "@/lib/factory/combined";
+import { allocateCombined } from "@/lib/factory/combined";
 import { getFactoryConfig } from "@/lib/factory/config";
 import type { FactoryPricingResult } from "@/lib/factory/types";
 
@@ -45,28 +45,37 @@ export interface SendWhatsappErr {
  * each product's price (ex-shipping) plus the re-allocated single-shipment
  * shipping. Keeps the WhatsApp caption in sync with the PDF the customer opens.
  */
-async function combinedGrandTotal(
-  pricings: FactoryPricingResult[]
-): Promise<number> {
+interface CombinedSplitInput {
+  airIds: string[];
+  airShippingOptionId: string;
+  seaShippingOptionId: string;
+}
+
+async function combinedTotals(
+  priced: { id: string; p: FactoryPricingResult }[],
+  split?: CombinedSplitInput
+): Promise<{ grandTotal: number; airIls?: number; seaIls?: number; airName?: string; seaName?: string }> {
   const config = await getFactoryConfig();
-  const combinedCbm = r2(pricings.reduce((s, p) => s + (p.totalCbm || 0), 0));
-  const combinedWeight = r2(
-    pricings.reduce((s, p) => s + (p.totalWeightKg || 0), 0)
+  const singleOpt = config.shippingOptions.find((s) => s.id === priced[0]?.p.shippingOptionId) ?? null;
+  const alloc = allocateCombined(
+    priced.map((r) => ({ id: r.id, pricing: r.p })),
+    singleOpt,
+    config,
+    split
   );
-  const shipOpt =
-    config.shippingOptions.find((s) => s.id === pricings[0]?.shippingOptionId) ??
-    null;
-  const combinedShipping = combinedShippingIls(combinedCbm, combinedWeight, shipOpt, config);
-  const productsTotal = pricings.reduce(
-    (s, p) => s + r2(p.totalSellingPrice - p.totalShipping),
-    0
-  );
-  return r2(productsTotal + combinedShipping);
+  return {
+    grandTotal: alloc.grandTotal,
+    airIls: alloc.airIls,
+    seaIls: alloc.seaIls,
+    airName: alloc.airName,
+    seaName: alloc.seaName,
+  };
 }
 
 export async function sendCombinedQuoteWhatsapp(
   ids: string[],
-  hostHeader: string | null
+  hostHeader: string | null,
+  split?: CombinedSplitInput
 ): Promise<SendWhatsappOk | SendWhatsappErr> {
   if (ids.length < 1) {
     return { ok: false, status: 400, error: "no_ids" };
@@ -127,28 +136,48 @@ export async function sendCombinedQuoteWhatsapp(
     };
   }
 
+  // Validate the split (if any): both option ids present + at least one product
+  // on each side. Otherwise ignore it and send the normal single-shipment quote.
+  const airSet = new Set(split?.airIds ?? []);
+  const validSplit =
+    split && split.airShippingOptionId && split.seaShippingOptionId &&
+    rows.some((r) => airSet.has(r.id)) && rows.some((r) => !airSet.has(r.id))
+      ? split
+      : undefined;
+
   const host = hostHeader ?? "albadi-crm.vercel.app";
   const proto = host.startsWith("localhost") ? "http" : "https";
   const idsParam = ids.join(",");
-  const pdfMediaUrl = `${proto}://${host}/api/factory/combine/pdf?ids=${encodeURIComponent(
-    idsParam
-  )}`;
+  const splitQs = validSplit
+    ? `&airIds=${encodeURIComponent(validSplit.airIds.join(","))}&airShip=${encodeURIComponent(validSplit.airShippingOptionId)}&seaShip=${encodeURIComponent(validSplit.seaShippingOptionId)}`
+    : "";
+  const pdfMediaUrl = `${proto}://${host}/api/factory/combine/pdf?ids=${encodeURIComponent(idsParam)}${splitQs}`;
 
-  const pricings = rows.map((r) => r.finalPricing as FactoryPricingResult);
-  const grandTotal = await combinedGrandTotal(pricings);
+  const priced = rows.map((r) => ({ id: r.id, p: r.finalPricing as FactoryPricingResult }));
+  const totals = await combinedTotals(priced, validSplit);
 
   const greeting = lead.name ? `היי ${lead.name} 👋` : "היי 👋";
   const title =
     ids.length > 1
       ? `*הצעת מחיר משולבת — ${ids.length} מוצרים*`
       : "*הצעת מחיר*";
+  const splitLines =
+    validSplit && totals.airIls !== undefined && totals.seaIls !== undefined
+      ? [
+          "🚚 *פיצול משלוח*",
+          `✈️ ${totals.airName}: ${formatIls(totals.airIls)}`,
+          `🚢 ${totals.seaName}: ${formatIls(totals.seaIls)}`,
+          "",
+        ]
+      : [];
   const caption = [
     greeting,
     "",
     title,
     "",
-    `*💵 סה״כ: ${formatIls(grandTotal)}*`,
-    "_(כולל שילוח, לא כולל מע״מ)_",
+    ...splitLines,
+    `*💵 סה״כ: ${formatIls(totals.grandTotal)}*`,
+    validSplit ? "_(לא כולל מע״מ)_" : "_(כולל שילוח, לא כולל מע״מ)_",
     "",
     "━━━━━━━━━━━━━━",
     "ההצעה בתוקף ל-14 יום",

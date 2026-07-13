@@ -239,4 +239,26 @@ export interface FactoryPricingResult {
   platePerUnitIls?: number;
   plateFeeTotalCostIls?: number;
   plateFeeLogoColors?: number;
+
+  // Split shipment — present only when the operator split the order into an
+  // air portion and a sea portion. When set, the customer PDF + WhatsApp caption
+  // show the production price on the full quantity plus two shipping lines, and
+  // the total is productTotalIls + airIls + seaIls (+ molds). Production side is
+  // unchanged; only shipping splits. See ShippingSplit.
+  shippingSplit?: ShippingSplit;
+}
+
+/** A split shipment: production price stays on the full order; only shipping
+ *  splits into an air portion and a sea portion, each priced on its own volume. */
+export interface ShippingSplit {
+  /** Bag-only selling price per unit (margin included, shipping EXCLUDED). */
+  productUnitIls: number;
+  /** Production total = productUnitIls × quantity (rounded, excl shipping + molds). */
+  productTotalIls: number;
+  airIls: number;
+  seaIls: number;
+  /** e.g. "אקספרס · 1,000 יח׳" */
+  airLabel: string;
+  /** e.g. "סטנדרט · 9,000 יח׳" */
+  seaLabel: string;
 }

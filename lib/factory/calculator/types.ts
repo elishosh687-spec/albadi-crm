@@ -143,6 +143,10 @@ export interface QuoteResult {
   volumetricWeightKg: number;
   chargeableWeightKg: number;
   shippingPerUnitUsd: number;
+  // Whole-order shipment cost (USD, before ÷ quantity). Exposed so the
+  // split-shipment UI can price an air portion and a sea portion each on its
+  // own CBM/weight without per-unit rounding drift.
+  shipmentTotalUsd: number;
   finalUnitCostUsd: number;
   finalUnitCostIls: number;
   featuresTotalPerUnitIls: number;

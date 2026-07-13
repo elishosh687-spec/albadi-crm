@@ -4,7 +4,7 @@
  * Widget variant — calls /api/widget/factory/* with widget_token.
  */
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Loader2, X, Sparkles } from "lucide-react";
 import type { FactoryQuoteRow } from "./types";
 import type {
@@ -21,6 +21,7 @@ import {
   defaultMarginFor,
 } from "@/lib/factory/combined";
 import { DetailedBreakdown } from "@/components/calculator/DetailedBreakdown";
+import { SplitShipmentPanel } from "./SplitShipmentPanel";
 import { widgetUrl } from "./widget-url";
 
 function formatIls(n: number): string {
@@ -76,6 +77,11 @@ export function FinalizeModalWidget({
   const [verify, setVerify] = useState<VerifyResult | null>(null);
   const [verifying, setVerifying] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  // Split-shipment inputs (raw) reported by the panel — sent on finalize so the
+  // server produces the official split PDF + WhatsApp caption.
+  const [splitInput, setSplitInput] = useState<
+    { airQuantity: number; airShippingOptionId: string; seaShippingOptionId: string } | null
+  >(null);
   const effFr: FactoryResponse | null = liveResponse ?? row.factoryResponse;
 
   // Editable product details that flow into the customer PDF. Pre-filled from
@@ -202,6 +208,33 @@ export function FinalizeModalWidget({
       config
     );
   }, [config, effFr, shippingOptionId, margin, moldsValid, moldsParsed, qtyNum, logoColors]);
+
+  // Split-shipment: price one portion's shipment (ILS) on the factory carton/CBM
+  // data, varying only quantity + shipping method. priceFactoryQuote.totalShipping
+  // is the true un-rounded shipment total for that portion.
+  const priceFinalizeShipmentIls = useCallback(async (q: number, shipId: string) => {
+    if (!config || !effFr) return 0;
+    return priceFactoryQuote(
+      {
+        factoryUnitCostCny: effFr.unitCostCny,
+        quantity: q,
+        shippingOptionId: shipId || null,
+        cartonSpec: {
+          qty: effFr.cartonQty,
+          weightKg: effFr.weightKg,
+          cbm: effFr.cartonCbm,
+          lengthCm: effFr.cartonLengthCm,
+          widthCm: effFr.cartonWidthCm,
+          heightCm: effFr.cartonHeightCm,
+        },
+        profitMarginOverride: margin,
+        moldsCostCny: 0, // shipping-only; molds counted once in the panel total
+        platePerColorCny: effFr.platePerColorCny,
+        logoColors,
+      },
+      config
+    ).totalShipping;
+  }, [config, effFr, margin, logoColors]);
 
   // Live verify against the Feishu row (read-only). Triggered when the operator
   // opens the factory-data section.
@@ -373,6 +406,7 @@ export function FinalizeModalWidget({
             finishing: finishing.trim() || undefined,
             customerNotes: customerNotes.trim() || undefined,
           },
+          split: splitInput ?? undefined,
         }),
       });
       const data = await res.json();
@@ -690,6 +724,22 @@ export function FinalizeModalWidget({
                     value={`${livePricing.totalCartons} קרטונים · ${livePricing.totalWeightKg}kg · ${livePricing.totalCbm}m³`}
                   />
                 </div>
+              )}
+
+              {livePricing && config && effFr && (
+                <SplitShipmentPanel
+                  totalQty={qtyNum}
+                  prodSellPerUnitIls={livePricing.unitSellingPrice - livePricing.unitShipping}
+                  moldsIls={livePricing.moldsTotalSellingPriceIls}
+                  airOptions={config.shippingOptions.filter((s) => s.type === "air" && s.enabled).map((s) => ({ id: s.id, name: s.name }))}
+                  seaOptions={config.shippingOptions.filter((s) => s.type === "sea" && s.enabled).map((s) => ({ id: s.id, name: s.name }))}
+                  priceShipmentIls={priceFinalizeShipmentIls}
+                  spec={{
+                    productLabel: productName.trim() || `H${heightCm || "?"}${depthCm ? `*D${depthCm}` : ""}*W${widthCm || "?"}`,
+                    logoColors,
+                  }}
+                  onSplitChange={setSplitInput}
+                />
               )}
 
               {livePricing && config && effFr && (

@@ -50,18 +50,36 @@ function buildCaption(opts: {
     `ידיות: ${hasHandles ? "כן" : "ללא"}`,
     `למינציה: ${hasLam ? "כן" : "ללא"}`,
     "",
-    "💰 *תמחור* _(כולל שילוח)_",
-    `📦 ${qty} יחידות × ${formatIls(pricing.unitSellingPrice)}`,
   ];
-  if (pricing.shippingOptionName) {
-    lines.push(`🚚 שיטת שילוח: ${pricing.shippingOptionName}`);
+  const split = pricing.shippingSplit;
+  const moldsIls = pricing.moldsTotalSellingPriceIls ?? 0;
+  if (split) {
+    // Split shipment: production on the full quantity + two shipping lines.
+    const r2 = (n: number) => Math.round(n * 100) / 100;
+    const total = r2(split.productTotalIls + split.airIls + split.seaIls + (moldsIls > 0 ? r2(moldsIls) : 0));
+    lines.push(
+      "💰 *תמחור — משלוח מפוצל*",
+      `📦 ${qty} יחידות × ${formatIls(split.productUnitIls)} (ייצור)`,
+      `✈️ שילוח אווירי — ${split.airLabel}: ${formatIls(split.airIls)}`,
+      `🚢 שילוח ימי — ${split.seaLabel}: ${formatIls(split.seaIls)}`,
+    );
+    if (moldsIls > 0) lines.push(`🧩 תבניות / מולדים (חד פעמי): ${formatIls(r2(moldsIls))}`);
+    lines.push(`*💵 סה״כ: ${formatIls(total)}*`, "_(לא כולל מע״מ)_");
+  } else {
+    lines.push(
+      "💰 *תמחור* _(כולל שילוח)_",
+      `📦 ${qty} יחידות × ${formatIls(pricing.unitSellingPrice)}`,
+    );
+    if (pricing.shippingOptionName) {
+      lines.push(`🚚 שיטת שילוח: ${pricing.shippingOptionName}`);
+    }
+    lines.push(
+      // Total from the rounded per-unit shown above (× qty + molds), so the
+      // customer's own "per-unit × qty" reconciles with the total.
+      `*💵 סה״כ: ${formatIls(customerRoundedTotalIls(pricing.unitSellingPrice, pricing.quantity, moldsIls))}*`,
+      "_(לא כולל מע״מ)_"
+    );
   }
-  lines.push(
-    // Total from the rounded per-unit shown above (× qty + molds), so the
-    // customer's own "per-unit × qty" reconciles with the total.
-    `*💵 סה״כ: ${formatIls(customerRoundedTotalIls(pricing.unitSellingPrice, pricing.quantity, pricing.moldsTotalSellingPriceIls ?? 0))}*`,
-    "_(לא כולל מע״מ)_"
-  );
   lines.push(
     "",
     "━━━━━━━━━━━━━━",

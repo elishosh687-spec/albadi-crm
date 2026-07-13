@@ -152,6 +152,95 @@ export interface CombinedPricingResult {
   overallMarginPct: number; // profit ÷ product price (margin-on-price)
 }
 
+export interface CombinedAllocationSplit {
+  airIds: string[];
+  airShippingOptionId: string;
+  seaShippingOptionId: string;
+}
+
+export interface CombinedAllocated {
+  perProduct: { id: string; adjusted: FactoryPricingResult }[];
+  /** Grand total summed the SAME way the PDF sums its rows: rounded per-unit ×
+   *  qty + one-time mold — so the WhatsApp caption and the PDF always agree. */
+  grandTotal: number;
+  airIls?: number;
+  seaIls?: number;
+  airName?: string;
+  seaName?: string;
+}
+
+/**
+ * Allocate one (or, when `split` is given, two) merged shipment(s) back to each
+ * product by its CBM share, folding shipping into a bag-only per-unit price.
+ * Single source of truth for BOTH the combined PDF and the WhatsApp caption so
+ * their grand totals reconcile to the shekel.
+ */
+export function allocateCombined(
+  items: { id: string; pricing: FactoryPricingResult }[],
+  singleOpt: ShippingOption | null | undefined,
+  config: FactoryPricingConfig,
+  split?: CombinedAllocationSplit
+): CombinedAllocated {
+  const airSet = new Set(split?.airIds ?? []);
+  const air = items.filter((i) => airSet.has(i.id));
+  const sea = items.filter((i) => !airSet.has(i.id));
+  const isSplit = !!split && air.length > 0 && sea.length > 0;
+  const gc = (l: typeof items) => r2(l.reduce((s, i) => s + (i.pricing.totalCbm || 0), 0));
+  const gw = (l: typeof items) => r2(l.reduce((s, i) => s + (i.pricing.totalWeightKg || 0), 0));
+
+  let groupOf: (id: string) => { shipping: number; cbm: number; count: number; name: string | null };
+  let airIls: number | undefined;
+  let seaIls: number | undefined;
+  let airName: string | undefined;
+  let seaName: string | undefined;
+
+  if (isSplit) {
+    const airOpt = config.shippingOptions.find((s) => s.id === split!.airShippingOptionId) ?? null;
+    const seaOpt = config.shippingOptions.find((s) => s.id === split!.seaShippingOptionId) ?? null;
+    const airCbm = gc(air);
+    const seaCbm = gc(sea);
+    airIls = combinedShippingIls(airCbm, gw(air), airOpt, config);
+    seaIls = combinedShippingIls(seaCbm, gw(sea), seaOpt, config);
+    airName = airOpt?.name ?? "אווירי";
+    seaName = seaOpt?.name ?? "ימי";
+    groupOf = (id) =>
+      airSet.has(id)
+        ? { shipping: airIls!, cbm: airCbm, count: air.length, name: airOpt?.name ?? null }
+        : { shipping: seaIls!, cbm: seaCbm, count: sea.length, name: seaOpt?.name ?? null };
+  } else {
+    const cbm = gc(items);
+    const shipping = combinedShippingIls(cbm, gw(items), singleOpt, config);
+    groupOf = () => ({ shipping, cbm, count: items.length, name: singleOpt?.name ?? null });
+  }
+
+  const perProduct = items.map(({ id, pricing: p }) => {
+    const g = groupOf(id);
+    const share = g.cbm > 0 ? (p.totalCbm || 0) / g.cbm : 1 / g.count;
+    const allocShipping = r2(g.shipping * share);
+    const mold = p.moldsTotalSellingPriceIls ?? 0;
+    const bags = r2(p.totalSellingPrice - p.totalShipping - mold);
+    const newBags = r2(bags + allocShipping);
+    const newUnit = p.quantity > 0 ? r2(newBags / p.quantity) : newBags;
+    const adjusted: FactoryPricingResult = {
+      ...p,
+      unitShipping: p.quantity > 0 ? r2(allocShipping / p.quantity) : allocShipping,
+      totalShipping: allocShipping,
+      unitSellingPrice: newUnit, // bag-only — the mold renders as its own row
+      totalSellingPrice: r2(newBags + mold),
+      shippingOptionName: isSplit ? g.name : p.shippingOptionName,
+    };
+    return { id, adjusted };
+  });
+
+  const grandTotal = r2(
+    perProduct.reduce(
+      (s, { adjusted: a }) => s + r2(a.unitSellingPrice * a.quantity) + (a.moldsTotalSellingPriceIls ?? 0),
+      0
+    )
+  );
+  return { perProduct, grandTotal, airIls, seaIls, airName, seaName };
+}
+
 export function computeCombined(
   items: CombinedItemInput[],
   opt: ShippingOption | null | undefined,

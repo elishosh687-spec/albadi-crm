@@ -8,6 +8,7 @@ import { computeCommission } from "@/lib/factory/commission";
 import { isOverCbmConsolidationThreshold, cbmConsolidationAlert } from "@/lib/factory/sea-carriers";
 import { customerBreakdownIls, customerRoundedTotalIls } from "@/lib/factory/calculator/customer-breakdown";
 import { DetailedBreakdown } from "./DetailedBreakdown";
+import { SplitShipmentPanel } from "@/components/factory-flow/SplitShipmentPanel";
 
 interface Props {
   products: Product[];
@@ -126,25 +127,21 @@ export function CalculatorView({ products, quantityTiers, shippingOptions, initi
   const moldsParsed = moldsCost !== "" ? parseFloat(moldsCost) : NaN;
   const moldsValid = Number.isFinite(moldsParsed) && moldsParsed > 0;
 
-  const fetchPreview = useCallback(async () => {
-    if (manualMode && !manualValid) {
-      setPreview(null);
-      setError(null);
-      return;
-    }
-    setLoading(true);
-    setError(null);
-    try {
+  // Single source of truth for the quote-preview query string. The split-shipment
+  // panel reuses it to price each portion with the SAME product/spec/margin, only
+  // varying shipping method + quantity.
+  const buildPreviewParams = useCallback(
+    (opts: { shippingId: string; qtyOverride: number | null }) => {
       const params = new URLSearchParams({
         product: manualMode ? "custom" : productId,
         qty: qtyId,
         handles: String(manualMode ? false : handles),
         lamination: String(manualMode ? false : lamination),
         colors: String(manualMode ? 1 : colors),
-        shipping: shippingId,
+        shipping: opts.shippingId,
         margin: String(currentMargin),
       });
-      if (overrideValid) params.set("qtyOverride", String(overrideParsed));
+      if (opts.qtyOverride && opts.qtyOverride > 0) params.set("qtyOverride", String(opts.qtyOverride));
       if (moldsValid) params.set("moldsCostCny", String(moldsParsed));
       if (manualMode) {
         params.set("customUnitCostCny", String(manualCnyNum));
@@ -159,6 +156,30 @@ export function CalculatorView({ products, quantityTiers, shippingOptions, initi
         if (manualCartonH) params.set("customCartonHeight", manualCartonH);
       }
       if (apiToken) params.set("widget_token", apiToken);
+      return params;
+    },
+    [
+      manualMode, productId, qtyId, handles, lamination, colors, currentMargin,
+      moldsValid, moldsParsed, manualCnyNum, manualDesc,
+      manualW, manualH, manualD,
+      manualCartonQty, manualCartonWeight, manualCartonL, manualCartonW, manualCartonH,
+      apiToken,
+    ]
+  );
+
+  const fetchPreview = useCallback(async () => {
+    if (manualMode && !manualValid) {
+      setPreview(null);
+      setError(null);
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    try {
+      const params = buildPreviewParams({
+        shippingId,
+        qtyOverride: overrideValid ? overrideParsed : null,
+      });
       const res = await fetch(`/api/factory/quote-preview?${params}`, { cache: "no-store" });
       const data = await res.json();
       if (!res.ok || !data.ok) {
@@ -173,17 +194,22 @@ export function CalculatorView({ products, quantityTiers, shippingOptions, initi
     } finally {
       setLoading(false);
     }
-  }, [
-    manualMode, manualValid, manualCnyNum, manualDesc,
-    manualW, manualH, manualD,
-    manualCartonQty, manualCartonWeight, manualCartonL, manualCartonW, manualCartonH,
-    productId, qtyId, handles, lamination, colors, shippingId, currentMargin, overrideValid, overrideParsed,
-    moldsValid, moldsParsed,
-  ]);
+  }, [manualMode, manualValid, buildPreviewParams, shippingId, overrideValid, overrideParsed]);
 
   useEffect(() => {
     fetchPreview();
   }, [fetchPreview]);
+
+  // Split-shipment: price a sub-quantity's shipment (ILS) via the same endpoint,
+  // varying only quantity + shipping method. Reads the true un-divided shipment
+  // total so air/sea portions don't accumulate per-unit rounding error.
+  const priceOperatorShipmentIls = useCallback(async (q: number, shipId: string) => {
+    const params = buildPreviewParams({ shippingId: shipId, qtyOverride: q });
+    const res = await fetch(`/api/factory/quote-preview?${params}`, { cache: "no-store" });
+    const data = await res.json();
+    if (!res.ok || !data.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
+    return (data.result?.shipmentTotalUsd ?? 0) * (data.computed?.usdToIls ?? 0);
+  }, [buildPreviewParams]);
 
   const r = preview?.result;
   const c = preview?.computed;
@@ -816,6 +842,25 @@ export function CalculatorView({ products, quantityTiers, shippingOptions, initi
         </>
       )}
 
+      {/* Split shipment — part by air, part by sea, one combined total. */}
+      {r && c && !loading && (
+        <SplitShipmentPanel
+          totalQty={r.quantity}
+          prodSellPerUnitIls={r.sellingPricePerUnitIls - c.shippingPerUnitIls}
+          moldsIls={r.moldsTotalSellingPriceIls}
+          airOptions={shippingOptions.filter((s) => s.type === "air" && s.enabled)}
+          seaOptions={shippingOptions.filter((s) => s.type === "sea" && s.enabled)}
+          priceShipmentIls={priceOperatorShipmentIls}
+          spec={{
+            productLabel: quoteTitle,
+            hasHandles: r.hasHandles,
+            hasLamination: r.selectedFeatures.some((f) => f.id === "f1"),
+            logoColors: r.logoColors,
+            leadName: leadName ?? null,
+          }}
+        />
+      )}
+
       {/* Reverse margin: given a price, what % is the implied profit?
           Revealed by the §IV "חישוב הפוך" toggle (UI-only showReverse). */}
       {r && c && showReverse && (
@@ -988,6 +1033,19 @@ function EstimateTab({ apiToken, shippingOptions, sid, leadName, initialMargins,
   }, [valid, h, d, w, qty, colors, handles, lam, shippingId, apiToken, moldsValid, moldsParsed, marginOverrideValid, marginOverrideParsed]);
 
   useEffect(() => { run(); }, [run]);
+
+  // Split-shipment: price one portion's shipment (ILS) via the estimate endpoint,
+  // varying only quantity + shipping method (same dims/spec/margin).
+  const priceEstimateShipmentIls = useCallback(async (q: number, shipId: string) => {
+    const p = new URLSearchParams({ heightCm: h, depthCm: d || "0", widthCm: w, qty: String(q), colors: String(colors), handles: String(handles), lamination: String(lam), shipping: shipId });
+    if (moldsValid) p.set("moldsCostCny", String(moldsParsed));
+    if (marginOverrideValid) p.set("margin", String(marginOverrideParsed));
+    if (apiToken) p.set("widget_token", apiToken);
+    const res = await fetch(`/api/factory/estimate?${p}`, { cache: "no-store" });
+    const j = await res.json();
+    if (!res.ok || !j.ok) throw new Error(j.error ?? `HTTP ${res.status}`);
+    return (j.result?.shipmentTotalUsd ?? 0) * (j.computed?.usdToIls ?? 0);
+  }, [h, d, w, colors, handles, lam, apiToken, moldsValid, moldsParsed, marginOverrideValid, marginOverrideParsed]);
 
   const est = data?.estimate;
   const r = data?.result; const c = data?.computed;
@@ -1274,6 +1332,24 @@ function EstimateTab({ apiToken, shippingOptions, sid, leadName, initialMargins,
             alt={data?.altResult ? { shippingType: data.altResult.shippingOption?.type === "air" ? "air" : "sea", unitSellingPrice: data.altResult.sellingPricePerUnitIls, totalSellingPrice: data.altResult.totalOrderPriceIls, shippingName: data.altResult.shippingOption?.name ?? null } : null}
           />
         </>
+      )}
+
+      {!loading && est && est.ok && r && c && (
+        <SplitShipmentPanel
+          totalQty={r.quantity}
+          prodSellPerUnitIls={r.sellingPricePerUnitIls - c.shippingPerUnitIls}
+          moldsIls={r.moldsTotalSellingPriceIls}
+          airOptions={shippingOptions.filter((s) => s.type === "air" && s.enabled)}
+          seaOptions={shippingOptions.filter((s) => s.type === "sea" && s.enabled)}
+          priceShipmentIls={priceEstimateShipmentIls}
+          spec={{
+            productLabel: `H${h}${d ? `*D${d}` : ""}*W${w}`,
+            hasHandles: handles,
+            hasLamination: lam,
+            logoColors: colors,
+            leadName: leadName ?? null,
+          }}
+        />
       )}
     </div>
   );

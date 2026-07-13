@@ -116,6 +116,15 @@ export interface FinalizeInput {
    *  data (qty/weight/CBM). Off by default — finalize blocks with a clear
    *  error so a shipping-less quote can't be sent by accident. */
   allowMissingCarton?: boolean;
+  /** Split shipment: send `airQuantity` units by air and the rest by sea. Each
+   *  portion is priced on its own cartons/CBM; production price stays on the
+   *  full quantity, molds paid once. Produces pricing.shippingSplit → the PDF +
+   *  WhatsApp caption render the split. */
+  split?: {
+    airQuantity: number;
+    airShippingOptionId: string;
+    seaShippingOptionId: string;
+  };
 }
 
 export interface FinalizeOk {
@@ -224,26 +233,49 @@ export async function finalizeQuote(
   const printingMatch = /(\d+)/.exec(spec.printing ?? "");
   const logoColors = printingMatch ? Math.max(1, parseInt(printingMatch[1], 10)) : 1;
 
-  const pricing = priceFactoryQuote(
-    {
-      factoryUnitCostCny: resp.unitCostCny,
-      quantity: spec.quantity,
-      shippingOptionId,
-      cartonSpec: {
-        qty: resp.cartonQty,
-        weightKg: resp.weightKg,
-        cbm: resp.cartonCbm,
-        lengthCm: resp.cartonLengthCm,
-        widthCm: resp.cartonWidthCm,
-        heightCm: resp.cartonHeightCm,
-      },
-      profitMarginOverride: body.profitMarginOverride,
-      moldsCostCny: body.moldsCostCny,
-      platePerColorCny: resp.platePerColorCny,
-      logoColors,
+  const baseInput = {
+    factoryUnitCostCny: resp.unitCostCny,
+    quantity: spec.quantity,
+    shippingOptionId,
+    cartonSpec: {
+      qty: resp.cartonQty,
+      weightKg: resp.weightKg,
+      cbm: resp.cartonCbm,
+      lengthCm: resp.cartonLengthCm,
+      widthCm: resp.cartonWidthCm,
+      heightCm: resp.cartonHeightCm,
     },
-    config
-  );
+    profitMarginOverride: body.profitMarginOverride,
+    moldsCostCny: body.moldsCostCny,
+    platePerColorCny: resp.platePerColorCny,
+    logoColors,
+  };
+  const pricing = priceFactoryQuote(baseInput, config);
+
+  // Split shipment: price the air portion + sea portion each on its own
+  // quantity/CBM (production side unchanged), then attach shippingSplit so the
+  // PDF + WhatsApp caption render two shipping lines and the split total.
+  if (body.split) {
+    const { airQuantity, airShippingOptionId, seaShippingOptionId } = body.split;
+    const seaQuantity = spec.quantity - airQuantity;
+    if (airQuantity > 0 && seaQuantity > 0 && airShippingOptionId && seaShippingOptionId) {
+      const r2 = (n: number) => Math.round(n * 100) / 100;
+      const portionShip = (q: number, shipId: string) =>
+        priceFactoryQuote({ ...baseInput, quantity: q, shippingOptionId: shipId, moldsCostCny: 0 }, config).totalShipping;
+      const airIls = portionShip(airQuantity, airShippingOptionId);
+      const seaIls = portionShip(seaQuantity, seaShippingOptionId);
+      const productUnitIls = r2(pricing.unitSellingPrice - pricing.unitShipping);
+      const nameOf = (sid: string) => config.shippingOptions.find((s) => s.id === sid)?.name ?? "";
+      pricing.shippingSplit = {
+        productUnitIls,
+        productTotalIls: r2(productUnitIls * spec.quantity),
+        airIls,
+        seaIls,
+        airLabel: `${nameOf(airShippingOptionId) || "אווירי"} · ${airQuantity.toLocaleString("he-IL")} יח׳`,
+        seaLabel: `${nameOf(seaShippingOptionId) || "ימי"} · ${seaQuantity.toLocaleString("he-IL")} יח׳`,
+      };
+    }
+  }
 
   const leadRow = await db
     .select({ name: leads.name })
