@@ -266,14 +266,24 @@ export async function finalizeQuote(
       const seaIls = portionShip(seaQuantity, seaShippingOptionId);
       const productUnitIls = r2(pricing.unitSellingPrice - pricing.unitShipping);
       const nameOf = (sid: string) => config.shippingOptions.find((s) => s.id === sid)?.name ?? "";
+      const productTotalIls = r2(productUnitIls * spec.quantity);
       pricing.shippingSplit = {
         productUnitIls,
-        productTotalIls: r2(productUnitIls * spec.quantity),
+        productTotalIls,
         airIls,
         seaIls,
         airLabel: `${nameOf(airShippingOptionId) || "אווירי"} · ${airQuantity.toLocaleString("he-IL")} יח׳`,
         seaLabel: `${nameOf(seaShippingOptionId) || "ימי"} · ${seaQuantity.toLocaleString("he-IL")} יח׳`,
       };
+      // The split IS the quote now — overwrite the headline totals so the quote
+      // list, opportunity value, PDF, and WhatsApp caption all show the split
+      // price (not the single-shipment price). Production/profit are unchanged
+      // (shipping is pass-through); only shipping + the grand total move.
+      const molds = pricing.moldsTotalSellingPriceIls ?? 0;
+      pricing.totalShipping = r2(airIls + seaIls);
+      pricing.unitShipping = spec.quantity > 0 ? r2((airIls + seaIls) / spec.quantity) : pricing.unitShipping;
+      pricing.unitSellingPrice = r2(productUnitIls + pricing.unitShipping);
+      pricing.totalSellingPrice = r2(productTotalIls + airIls + seaIls + (molds > 0 ? r2(molds) : 0));
     }
   }
 
