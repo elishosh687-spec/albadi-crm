@@ -334,11 +334,9 @@ export default async function InboxWidgetPage({
         lastSenderIsLead: row?.lastSender === "lead",
       };
     })
-    // Sort by the last message: conversations where the CUSTOMER wrote last
-    // (awaiting your reply) come first, then everything else — each group newest
-    // message on top. So whoever just messaged rises to the top of the list.
+    // Sort PURELY by the last message time — newest conversation on top,
+    // regardless of who sent it. Whoever just messaged rises to the top.
     .sort((a, b) => {
-      if (a.lastSenderIsLead !== b.lastSenderIsLead) return a.lastSenderIsLead ? -1 : 1;
       const ta = a.lastAt ? new Date(a.lastAt).getTime() : 0;
       const tb = b.lastAt ? new Date(b.lastAt).getTime() : 0;
       return tb - ta;
