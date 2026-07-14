@@ -111,6 +111,14 @@ export async function GET(req: NextRequest) {
     : currentType === "sea" ? cfg.shippingOptions.find((s) => s.enabled && s.type === "air") : null;
   const altResult = alt ? calculateQuote({ ...form, shippingOptionId: alt.id }, cfg) : null;
 
+  // The engine ran with hasHandles:false on purpose (the handles up-charge is
+  // baked into factoryUnitCostCny — passing true would double-count). But the
+  // customer DID choose handles, so reflect their real selection in the DISPLAY
+  // field only, so the quote-text/PDF spec line reads correctly. Pricing is
+  // unchanged; handlesAddonCny is 0 here so no bogus up-charge line appears.
+  result.hasHandles = spec.hasHandles;
+  if (altResult) altResult.hasHandles = spec.hasHandles;
+
   return NextResponse.json({
     ok: true, estimate: est, result, altResult,
     computed: { productionPerUnitIls: result.unitProductionUsd * dbConfig.usdToIls, shippingPerUnitIls: result.shippingPerUnitUsd * dbConfig.usdToIls, usdToIls: dbConfig.usdToIls, usdToCny: dbConfig.usdToCny, commissionPct: dbConfig.commissionPct },
