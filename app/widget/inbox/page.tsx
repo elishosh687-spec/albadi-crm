@@ -329,14 +329,19 @@ export default async function InboxWidgetPage({
         overdue: nextAt ? nextAt.getTime() <= now : false,
         script: play.lines[0] ?? null,
         actionLabel: actionLabelForStage(l.stage),
+        botPaused: l.botPaused,
+        lastAt: row?.lastAt ?? null,
+        lastSenderIsLead: row?.lastSender === "lead",
       };
     })
-    // Sort by nextEligibleAt asc (overdue first); leads with no queue entry
-    // sink to the bottom.
+    // Sort by the last message: conversations where the CUSTOMER wrote last
+    // (awaiting your reply) come first, then everything else — each group newest
+    // message on top. So whoever just messaged rises to the top of the list.
     .sort((a, b) => {
-      const ta = nextBySid.get(a.sid.trim())?.getTime() ?? Number.MAX_SAFE_INTEGER;
-      const tb = nextBySid.get(b.sid.trim())?.getTime() ?? Number.MAX_SAFE_INTEGER;
-      return ta - tb;
+      if (a.lastSenderIsLead !== b.lastSenderIsLead) return a.lastSenderIsLead ? -1 : 1;
+      const ta = a.lastAt ? new Date(a.lastAt).getTime() : 0;
+      const tb = b.lastAt ? new Date(b.lastAt).getTime() : 0;
+      return tb - ta;
     });
 
   return (

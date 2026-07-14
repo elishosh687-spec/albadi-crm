@@ -22,6 +22,8 @@ import {
   MessageSquare,
   Sparkles,
   ChevronDown,
+  Play,
+  Pause,
 } from "lucide-react";
 import { Avatar } from "@/components/widget-ui";
 import { LuxStat } from "@/components/widget-ui/lux";
@@ -47,12 +49,20 @@ export interface CockpitLead {
   script: string | null;
   /** the primary action button label, chosen by stage (UI affordance). */
   actionLabel: string;
+  /** whether the bot is currently paused for this lead. */
+  botPaused: boolean;
+  /** ISO of the last message (either side); drives the recency sort. */
+  lastAt: string | null;
+  /** true when the CUSTOMER sent the last message (awaiting your reply). */
+  lastSenderIsLead: boolean;
 }
 
 interface Props {
   leads: CockpitLead[];
   /** total active leads (for the "פעילים" tile); falls back to leads.length. */
   activeCount?: number;
+  /** widget token — needed to toggle the per-lead bot pause. */
+  apiToken: string;
   onOpenChat: (sid: string) => void;
   onSnooze: (sid: string) => void;
 }
@@ -62,7 +72,54 @@ const MUTED = "#8a7f74";
 const COOL = "#bec6e0";
 const CHAMP = "#d6c4ac";
 const ALERT = "#e8b4b4";
+const GREEN = "#a9d3b0";
 const RING = "rgba(69,70,77,0.2)";
+
+/** Prominent per-lead bot on/off toggle. Green = bot active, muted-red = paused.
+ *  Reversible write to /api/widget/toggle-pause; optimistic in the parent. */
+function BotToggle({
+  paused,
+  busy,
+  onToggle,
+  compact,
+}: {
+  paused: boolean;
+  busy?: boolean;
+  onToggle: () => void;
+  compact?: boolean;
+}) {
+  return (
+    <button
+      onClick={(e) => {
+        e.stopPropagation();
+        if (!busy) onToggle();
+      }}
+      title={paused ? "הבוט מושהה — לחץ להפעלה" : "הבוט פעיל — לחץ להשהיה"}
+      aria-label={paused ? "הפעל בוט" : "השהה בוט"}
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 6,
+        height: compact ? 30 : 34,
+        padding: compact ? "0 11px" : "0 14px",
+        border: 0,
+        borderRadius: 9999,
+        cursor: busy ? "wait" : "pointer",
+        fontSize: compact ? 11.5 : 12.5,
+        fontWeight: 500,
+        whiteSpace: "nowrap",
+        flexShrink: 0,
+        opacity: busy ? 0.55 : 1,
+        color: paused ? ALERT : GREEN,
+        background: paused ? "rgba(232,180,180,0.10)" : "rgba(169,211,176,0.10)",
+        boxShadow: `inset 0 0 0 1px ${paused ? "rgba(232,180,180,0.42)" : "rgba(169,211,176,0.42)"}`,
+      }}
+    >
+      {paused ? <Play size={compact ? 13 : 14} strokeWidth={2} /> : <Pause size={compact ? 13 : 14} strokeWidth={2} />}
+      {paused ? "בוט מושהה" : "בוט פעיל"}
+    </button>
+  );
+}
 
 /** small square icon button used in the hero chips + slim rows */
 const iconSquare: CSSProperties = {
@@ -104,12 +161,41 @@ const ghostPill: CSSProperties = {
 export default function CockpitView({
   leads,
   activeCount,
+  apiToken,
   onOpenChat,
   onSnooze,
 }: Props) {
   const hero = leads[0] ?? null;
   const rest = leads.slice(1);
   const overdueCount = leads.filter((l) => l.overdue).length;
+
+  // Per-lead bot pause — optimistic map seeded from the server; reversible write.
+  const [pausedMap, setPausedMap] = useState<Record<string, boolean>>(() =>
+    Object.fromEntries(leads.map((l) => [l.sid, l.botPaused]))
+  );
+  const [busySid, setBusySid] = useState<string | null>(null);
+  const isPaused = (l: CockpitLead) => pausedMap[l.sid] ?? l.botPaused;
+  async function toggleBot(sid: string) {
+    const current = pausedMap[sid] ?? leads.find((l) => l.sid === sid)?.botPaused ?? false;
+    const next = !current;
+    setPausedMap((m) => ({ ...m, [sid]: next }));
+    setBusySid(sid);
+    try {
+      const res = await fetch(
+        `/api/widget/toggle-pause?widget_token=${encodeURIComponent(apiToken)}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ sid, paused: next }),
+        }
+      );
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    } catch {
+      setPausedMap((m) => ({ ...m, [sid]: current })); // revert on failure
+    } finally {
+      setBusySid(null);
+    }
+  }
 
   return (
     <div
@@ -154,7 +240,7 @@ export default function CockpitView({
         </div>
       </div>
       <div style={{ fontSize: 13, color: MUTED, marginBottom: 20 }}>
-        המערכת ניתחה כל ליד — לפי דחיפות וערך. לחץ על הפעולה, וזהו.
+        לפי ההודעה האחרונה — מי שכתב אחרון למעלה, ומי שממתין לתשובה ראשון.
       </div>
 
       {leads.length === 0 ? (
@@ -184,35 +270,45 @@ export default function CockpitView({
             }`,
           }}
         >
-          {/* urgency eyebrow */}
+          {/* eyebrow — recency label on the right, bot toggle up front on the left */}
           <div
             style={{
               display: "flex",
               alignItems: "center",
+              justifyContent: "space-between",
               gap: 8,
               marginBottom: 15,
             }}
           >
-            <span
-              style={{
-                width: 7,
-                height: 7,
-                borderRadius: "50%",
-                background: hero.overdue ? ALERT : CHAMP,
-                animation: hero.overdue ? "acPulse 2s ease-in-out infinite" : "none",
-              }}
+            <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+              <span
+                style={{
+                  width: 7,
+                  height: 7,
+                  borderRadius: "50%",
+                  background: hero.lastSenderIsLead ? ALERT : CHAMP,
+                  animation: hero.lastSenderIsLead ? "acPulse 2s ease-in-out infinite" : "none",
+                  flexShrink: 0,
+                }}
+              />
+              <span
+                style={{
+                  fontFamily: "var(--font-editorial-sans), Manrope, system-ui",
+                  fontSize: 11,
+                  letterSpacing: "0.14em",
+                  textTransform: "uppercase",
+                  color: hero.lastSenderIsLead ? ALERT : CHAMP,
+                }}
+              >
+                {hero.lastSenderIsLead ? "ממתין לתשובה" : "שיחה אחרונה"}
+                {hero.urgencyLabel ? ` · ${hero.urgencyLabel}` : ""}
+              </span>
+            </div>
+            <BotToggle
+              paused={isPaused(hero)}
+              busy={busySid === hero.sid}
+              onToggle={() => toggleBot(hero.sid)}
             />
-            <span
-              style={{
-                fontFamily: "var(--font-editorial-sans), Manrope, system-ui",
-                fontSize: 11,
-                letterSpacing: "0.14em",
-                textTransform: "uppercase",
-                color: hero.overdue ? ALERT : CHAMP,
-              }}
-            >
-              הכי דחוף{hero.urgencyLabel ? ` · ${hero.urgencyLabel}` : ""}
-            </span>
           </div>
 
           {/* lead identity */}
@@ -349,6 +445,9 @@ export default function CockpitView({
       {rest.length > 0 && (
         <SlimRowList
           rows={rest}
+          isPaused={isPaused}
+          busySid={busySid}
+          onToggleBot={toggleBot}
           onOpenChat={onOpenChat}
           onSnooze={onSnooze}
         />
@@ -359,10 +458,16 @@ export default function CockpitView({
 
 function SlimRowList({
   rows,
+  isPaused,
+  busySid,
+  onToggleBot,
   onOpenChat,
   onSnooze,
 }: {
   rows: CockpitLead[];
+  isPaused: (l: CockpitLead) => boolean;
+  busySid: string | null;
+  onToggleBot: (sid: string) => void;
   onOpenChat: (sid: string) => void;
   onSnooze: (sid: string) => void;
 }) {
@@ -373,6 +478,9 @@ function SlimRowList({
         <SlimRow
           key={lead.sid}
           lead={lead}
+          paused={isPaused(lead)}
+          busy={busySid === lead.sid}
+          onToggleBot={() => onToggleBot(lead.sid)}
           expanded={expandedSid === lead.sid}
           onToggle={() =>
             setExpandedSid((cur) => (cur === lead.sid ? null : lead.sid))
@@ -423,12 +531,18 @@ function TemplateChip({
 
 function SlimRow({
   lead,
+  paused,
+  busy,
+  onToggleBot,
   expanded,
   onToggle,
   onOpenChat,
   onSnooze,
 }: {
   lead: CockpitLead;
+  paused: boolean;
+  busy: boolean;
+  onToggleBot: () => void;
   expanded: boolean;
   onToggle: () => void;
   onOpenChat: (sid: string) => void;
@@ -482,7 +596,8 @@ function SlimRow({
           </div>
         </div>
 
-        <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+          <BotToggle paused={paused} busy={busy} onToggle={onToggleBot} compact />
           {lead.stageLabel && (
             <span
               style={{

@@ -97,6 +97,7 @@ export default function CockpitShell({
     <CockpitView
       leads={visible}
       activeCount={inboxRows.length}
+      apiToken={apiToken}
       onOpenChat={(sid) => setOpenSid(sid)}
       onSnooze={handleSnooze}
     />
