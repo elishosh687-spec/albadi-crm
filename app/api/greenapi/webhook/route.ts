@@ -38,8 +38,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { bridgeEvents, leads, messages as messagesTable } from "@/drizzle/schema";
 import { eq, sql } from "drizzle-orm";
-import { handleInbound } from "@/lib/autoresponder/questionnaire";
+import { handleInbound, type QState } from "@/lib/autoresponder/questionnaire";
 import { handleDecisionInbound } from "@/lib/autoresponder/decision";
+import { handleCallbackReply } from "@/lib/autoresponder/callback-request";
 import {
   isStopWord,
   eliEscalationTemplate,
@@ -479,7 +480,12 @@ async function handleIncoming(evt: GreenWebhook): Promise<void> {
 
   // Load lead snapshot for routing.
   const [snap] = await db
-    .select({ stage: leads.pipelineStage, qState: leads.qState })
+    .select({
+      stage: leads.pipelineStage,
+      qState: leads.qState,
+      name: leads.name,
+      waJid: leads.waJid,
+    })
     .from(leads)
     .where(sql`trim(${leads.manychatSubId}) = ${canonicalSid.trim()}`)
     .limit(1);
@@ -545,6 +551,21 @@ async function handleIncoming(evt: GreenWebhook): Promise<void> {
   }
 
   try {
+    // Callback-time reply — when the lead was asked "when's good to talk?", try
+    // to interpret this message first (may open a salesperson task + confirm).
+    // If handled, skip the normal questionnaire/decision handler for it.
+    const fullQ = (snap?.qState ?? null) as QState | null;
+    if (fullQ?.callbackFlow === "awaiting_reply") {
+      const handled = await handleCallbackReply({
+        sid: canonicalSid,
+        text: textForRouting ?? "",
+        recipient: (snap?.waJid && snap.waJid.trim()) || canonicalSid,
+        name: snap?.name ?? null,
+        qState: fullQ,
+      });
+      if (handled) return;
+    }
+
     if (questionnaireActive || !stage) {
       // Pre-quote — questionnaire path. Also forced here when qState is
       // mid-flight even if pipeline_stage is set (re-quote via restart-tag

@@ -263,6 +263,17 @@ export interface QState {
   // contain any extractable field. After 2 strikes the lead is escalated.
   specChangeAttempts?: number;
   orderNotes?: string;
+
+  // ─── Callback-time flow (bot asks "when's good to talk?" after silence) ───
+  // Set to "awaiting_reply" once the bot has sent the callback-time request
+  // (so it's sent ONCE). When the customer replies with a time we detect it,
+  // open a task for the salesperson, and set "answered". "declined" when they
+  // say no. See lib/autoresponder/callback-request.ts.
+  callbackFlow?: "awaiting_reply" | "answered" | "declined" | null;
+  /** ISO when the callback-time request was sent. */
+  callbackAskedAt?: string;
+  /** the raw availability the customer replied with (for the task title). */
+  requestedCallbackTime?: string;
 }
 
 function formatQuestion(q: Question): string {
