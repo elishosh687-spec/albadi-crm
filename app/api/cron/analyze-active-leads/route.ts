@@ -12,12 +12,13 @@
  * within maxDuration + the OpenAI TPM budget.
  */
 import { NextRequest, NextResponse } from "next/server";
-import { and, eq, isNull, or, sql } from "drizzle-orm";
+import { and, eq, isNotNull, isNull, or, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { crmTasks } from "@/drizzle/schema";
 import { analyzeLead } from "@/lib/analysis/analyze-lead";
 import { GHL_SALESPERSON_USER_ID } from "@/integrations/ghl/config";
 import { updateContactTask } from "@/integrations/ghl/client";
+import { syncTaskToGHL } from "@/integrations/ghl/sync";
 import { leads } from "@/drizzle/schema";
 
 export const runtime = "nodejs";
@@ -101,6 +102,14 @@ export async function POST(req: NextRequest) {
   // fix + any edge case that slipped through. Per Eli 2026-07-01.
   const ownerSweep = await sweepOrphanTasks();
 
+  // Same tick — CREATE in GHL any open task that never got pushed (ghl_task_id
+  // IS NULL). Without this, an auto-task lives only in the DB (invisible to Itay
+  // in GHL) while the pipeline-audit counts it as handled → the lead falls
+  // between both chairs. auto-task.ts now syncs on creation, but this covers
+  // rows created before that fix + brand-new leads that got a ghl_contact_id
+  // only after the task was made.
+  const pushSweep = await pushUnsyncedTasks();
+
   return NextResponse.json({
     ok: true,
     processed: results.length,
@@ -108,8 +117,43 @@ export async function POST(req: NextRequest) {
     fail_count: results.length - okCount,
     remaining_estimate: queue.length === MAX_PER_TICK ? "unknown_more" : 0,
     owner_sweep: ownerSweep,
+    push_sweep: pushSweep,
     results,
   });
+}
+
+/**
+ * Create in GHL any OPEN crm_task that never got pushed (ghl_task_id IS NULL),
+ * for active (non-WON/LOST) leads that already have a ghl_contact_id. Bounded
+ * per tick to stay under GHL rate limits; the next tick picks up the rest.
+ */
+async function pushUnsyncedTasks(): Promise<{ found: number; pushed: number }> {
+  if (!GHL_SALESPERSON_USER_ID) return { found: 0, pushed: 0 };
+  const CAP = 25;
+  const rows = await db
+    .select({ id: crmTasks.id })
+    .from(crmTasks)
+    .leftJoin(leads, eq(leads.manychatSubId, crmTasks.manychatSubId))
+    .where(
+      and(
+        isNull(crmTasks.completedAt),
+        eq(crmTasks.status, "open"),
+        isNull(crmTasks.ghlTaskId),
+        isNotNull(leads.ghlContactId),
+        or(isNull(leads.pipelineStage), sql`${leads.pipelineStage} NOT IN ('WON','LOST')`)
+      )
+    )
+    .limit(CAP);
+  let pushed = 0;
+  for (const r of rows) {
+    try {
+      await syncTaskToGHL(r.id);
+      pushed++;
+    } catch (e) {
+      console.warn("[analyze-active-leads] task create-push failed", r.id, e);
+    }
+  }
+  return { found: rows.length, pushed };
 }
 
 async function sweepOrphanTasks(): Promise<{

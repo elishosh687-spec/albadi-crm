@@ -13,6 +13,7 @@ import { and, eq, isNull } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { crmTasks } from "@/drizzle/schema";
 import { GHL_SALESPERSON_USER_ID } from "@/integrations/ghl/config";
+import { syncTaskToGHL } from "@/integrations/ghl/sync";
 import type { V2AssignableStage } from "@/lib/manychat/stages";
 
 export const AUTO_TASK_BY_STAGE: Partial<
@@ -47,15 +48,30 @@ export async function ensureAutoTaskForStage(
   if (existing) return { created: false, reason: "already has open task" };
 
   const dueAt = new Date(Date.now() + spec.hoursUntilDue * 60 * 60 * 1000);
-  await db.insert(crmTasks).values({
-    manychatSubId: sid,
-    taskType: "follow_up",
-    title: spec.title,
-    status: "open",
-    dueAt,
-    // Default owner = Itay (GHL_SALESPERSON_USER_ID). Per Eli 2026-07-01
-    // every task in the system belongs to Itay unless explicitly reassigned.
-    assignedTo: GHL_SALESPERSON_USER_ID || null,
-  });
+  const [inserted] = await db
+    .insert(crmTasks)
+    .values({
+      manychatSubId: sid,
+      taskType: "follow_up",
+      title: spec.title,
+      status: "open",
+      dueAt,
+      // Default owner = Itay (GHL_SALESPERSON_USER_ID). Per Eli 2026-07-01
+      // every task in the system belongs to Itay unless explicitly reassigned.
+      assignedTo: GHL_SALESPERSON_USER_ID || null,
+    })
+    .returning({ id: crmTasks.id });
+
+  // Push it to GHL immediately so Itay actually sees it — otherwise the task
+  // lives only in the DB (invisible in GHL) yet the pipeline-audit counts it as
+  // handled, so the lead falls between both chairs. Best-effort: if the lead has
+  // no ghl_contact_id yet, the nightly sweep re-syncs once it does.
+  if (inserted?.id) {
+    try {
+      await syncTaskToGHL(inserted.id);
+    } catch (e) {
+      console.error("[auto-task] GHL sync failed", inserted.id, e);
+    }
+  }
   return { created: true };
 }
