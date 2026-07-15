@@ -686,3 +686,28 @@ proved this:
   aggregate labels "asked to see product" as a SIGNAL, not a failure.
 - To **seed all leads**: `POST /api/admin/analyze-leads` (BOT_SECRET, in prod)
   or click "נתח הכל" on the screen. Each gpt-4o call costs money.
+
+## Callback-time flow — "מתי נוח לכם לדבר?" (built 2026-07-14, DORMANT/OFF)
+
+When a lead goes quiet **recently** (30 min – 6h) in a trigger state, the bot
+sends ONE context-aware WhatsApp asking when's a good time to talk; when the
+customer replies with a time, a task opens for Itay + the bot confirms. Turns a
+silent lead into a scheduled call.
+
+**Gated OFF** behind `CALLBACK_REQUESTS_ENABLED=1` (not set in prod → deployed
+but inert: the detector sends nothing, the inbound hook is dormant until a lead
+carries `qState.callbackFlow`). Respects quiet hours + no-send days.
+
+- **Triggers** (silent 30min–6h, once/lead): quote sent (INTAKE), questionnaire
+  incomplete (NULL), brand-new lead never replied, GHL call `no_answer`. Windowed
+  30min–6h so it does NOT blast the months-old backlog; internal/test leads
+  excluded (name ~ אלבדי/test/config/בדיקה).
+- **Code:** [lib/autoresponder/callback-request.ts](lib/autoresponder/callback-request.ts).
+  Detector `POST /api/bot/callback-requests` (`?dry=1` = compose + return
+  candidates, send nothing — safe review). Inbound reply→task hook is in
+  [app/api/greenapi/webhook/route.ts](app/api/greenapi/webhook/route.ts) BEFORE
+  the normal handlers. State: `qState.callbackFlow` (awaiting_reply/answered/declined).
+- **To enable (needs Eli's OK — sends real customer messages):** (1) set
+  `CALLBACK_REQUESTS_ENABLED=1` in Vercel prod; (2) add a ~30-min trigger (GitHub
+  Action, like process-recordings) POSTing the detector; (3) test on ONE
+  disposable lead first (reply with a time → task appears).
