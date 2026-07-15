@@ -200,6 +200,12 @@ export function CalculatorView({ products, quantityTiers, shippingOptions, initi
     fetchPreview();
   }, [fetchPreview]);
 
+  // Colors above 3 are only valid when laminated (plate-fee pricing). Clamp back
+  // to 3 when lamination is turned off so we never send an unpriceable count.
+  useEffect(() => {
+    if (!lamination && colors > 3) setColors(3);
+  }, [lamination, colors]);
+
   // Split-shipment: price a sub-quantity's shipment (ILS) via the same endpoint,
   // varying only quantity + shipping method. Reads the true un-divided shipment
   // total so air/sea portions don't accumulate per-unit rounding error.
@@ -582,7 +588,7 @@ export function CalculatorView({ products, quantityTiers, shippingOptions, initi
                   <Stepper
                     value={colors}
                     min={1}
-                    max={3}
+                    max={lamination ? 8 : 3}
                     onChange={setColors}
                   />
                 </AddonField>
@@ -1034,6 +1040,12 @@ function EstimateTab({ apiToken, shippingOptions, sid, leadName, initialMargins,
 
   useEffect(() => { run(); }, [run]);
 
+  // Colors above 3 are only valid when laminated (plate-fee pricing). Clamp back
+  // to 3 when lamination is off so the dropdown + price stay consistent.
+  useEffect(() => {
+    if (!lam && colors > 3) setColors(3);
+  }, [lam, colors]);
+
   // Split-shipment: price one portion's shipment (ILS) via the estimate endpoint,
   // varying only quantity + shipping method (same dims/spec/margin).
   const priceEstimateShipmentIls = useCallback(async (q: number, shipId: string) => {
@@ -1136,7 +1148,12 @@ function EstimateTab({ apiToken, shippingOptions, sid, leadName, initialMargins,
             <div className="flex flex-col gap-1">
               <label className="text-sm font-medium">צבעי לוגו</label>
               <select value={colors} onChange={(e) => setColors(Number(e.target.value))} className={SELECT_CLS}>
-                <option value={1}>1 צבע</option><option value={2}>2 צבעים</option><option value={3}>3 צבעים</option>
+                {/* Non-lamination color up-charge (colorAddons) only covers 1..3.
+                    Lamination prices colors by plate fee (¥ × colors), so any
+                    count works — allow up to 8 when laminated. */}
+                {Array.from({ length: lam ? 8 : 3 }, (_, i) => i + 1).map((n) => (
+                  <option key={n} value={n}>{n === 1 ? "1 צבע" : `${n} צבעים`}</option>
+                ))}
               </select>
             </div>
             <div className="flex gap-6">
