@@ -823,6 +823,7 @@ function FinalizedState({
           unitProfit={p.unitProfit}
           unitSellingPrice={p.unitSellingPrice}
           totalCost={p.totalCost}
+          moldsInTotalCost
           totalShipping={p.totalShipping}
           totalProfit={p.totalProfit}
           totalSellingPrice={p.totalSellingPrice}

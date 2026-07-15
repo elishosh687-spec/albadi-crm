@@ -611,6 +611,7 @@ export function FinalizeModal({
                   unitProfit={livePricing.unitProfit}
                   unitSellingPrice={livePricing.unitSellingPrice}
                   totalCost={livePricing.totalCost}
+                  moldsInTotalCost
                   totalShipping={livePricing.totalShipping}
                   totalProfit={livePricing.totalProfit}
                   totalSellingPrice={livePricing.totalSellingPrice}

@@ -1014,6 +1014,7 @@ function ProductCalcSection({
               unitProfit={pricing.unitProfit}
               unitSellingPrice={pricing.unitSellingPrice}
               totalCost={pricing.totalCost}
+              moldsInTotalCost
               totalShipping={pricing.totalShipping}
               totalProfit={pricing.totalProfit}
               totalSellingPrice={pricing.totalSellingPrice}

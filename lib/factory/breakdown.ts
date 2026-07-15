@@ -75,6 +75,14 @@ export interface BreakdownInput {
     moldsPerUnitCny?: number;
   } | null;
 
+  // Whether the one-time molds/tooling cost is already baked into `totalCost`.
+  // FactoryPricingResult callers (FinalizeModal / FactoryQuotePanel) pass a
+  // grand totalCost that INCLUDES molds → true. The calculator path passes
+  // production-only totalCost (bags + plate, no molds) → false (default). Drives
+  // the "עלות מפעל כולל גלופה" split so base + plate always reconciles to the
+  // total (molds is a separate one-time line, never folded into this total).
+  moldsInTotalCost?: boolean;
+
   // Air-vs-sea comparison (optional, customer-side has altResult)
   alt?: {
     shippingType: "sea" | "air";
@@ -192,6 +200,23 @@ export function buildBreakdownView(input: BreakdownInput): BreakdownView {
       ? (input.totalProfit / input.totalSellingPrice) * 100
       : 0;
 
+  // Plate ("גלופה") total — SAME source the plateFee section renders below, so
+  // the "base + plate = total" split always reconciles. Prefer the explicit
+  // factory-quote ILS/CNY fields, else the calculator's per-unit CNY shape.
+  const plateTotalIls =
+    input.platePerUnitCny && input.platePerUnitCny > 0
+      ? (input.plateFeeTotalCostIls ??
+          (input.plateFeeTotalCny ?? input.platePerUnitCny * input.quantity) * cnyToIls)
+      : input.plateFeeCnyPerUnit && input.plateFeeCnyPerUnit > 0
+        ? input.plateFeeCnyPerUnit * cnyToIls * input.quantity
+        : 0;
+  const moldsTotalIls =
+    (input.components?.moldsPerUnitCny ?? 0) * input.quantity * cnyToIls;
+  // Factory cost total EXCLUDES the one-time molds (separate line). Only strip
+  // molds when the caller baked them into totalCost (FactoryPricingResult path).
+  const factoryTotalIls =
+    input.totalCost - (input.moldsInTotalCost ? moldsTotalIls : 0);
+
   return {
     fx: {
       usdToIls: input.usdToIls,
@@ -202,15 +227,11 @@ export function buildBreakdownView(input: BreakdownInput): BreakdownView {
       cnyPerUnit: factoryCny !== null ? r3(factoryCny) : null,
       usdPerUnit: factoryUsd !== null ? r4(factoryUsd) : null,
       ilsPerUnit: r2(input.unitCost),
-      // Base = all-in totalCost minus the pass-through plate fee and molds.
-      // Derived from totalCost (not unitCost × qty) to stay exact against the
-      // engine — unitCost is already r2-rounded and would drift over quantity.
-      baseIlsTotal: r2(
-        input.totalCost -
-          (input.plateFeeTotalCostIls ?? 0) -
-          (input.components?.moldsPerUnitCny ?? 0) * input.quantity * cnyToIls
-      ),
-      ilsTotal: r2(input.totalCost),
+      // Base production = factory total (molds excluded) minus the pass-through
+      // plate fee. base + plate == ilsTotal by construction, so the displayed
+      // "בסיס ייצור + גלופה = סה״כ עלות מפעל כולל גלופה" always reconciles.
+      baseIlsTotal: r2(factoryTotalIls - plateTotalIls),
+      ilsTotal: r2(factoryTotalIls),
     },
     shipping: {
       type: input.shippingType,
