@@ -281,7 +281,12 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   // ============================================================
   if (
     type === "NoteCreate" || type === "NoteUpdate" || type === "NoteDelete" ||
-    type === "TaskCreate" || type === "TaskUpdate" || type === "TaskDelete"
+    // GHL's actual task events are TaskCreate / TaskComplete / TaskDelete.
+    // TaskComplete was MISSING here — 507 completion events fell through to
+    // "unhandled" and never resynced, so a task Itay finished in GHL stayed
+    // OPEN in the DB and hid the lead from "נפלו בין הכיסאות" (root cause found
+    // 2026-07-16 by diffing bridge_events). TaskUpdate kept as a harmless alias.
+    type === "TaskCreate" || type === "TaskComplete" || type === "TaskUpdate" || type === "TaskDelete"
   ) {
     const contactId = (event as { contactId?: string }).contactId;
     if (!contactId) return NextResponse.json({ error: "missing_contact_id" }, { status: 400 });
