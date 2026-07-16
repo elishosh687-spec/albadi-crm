@@ -49,10 +49,20 @@ export async function reconcileStagesFromGhl(): Promise<StageReconcileResult> {
   }
 
   // contactId → local stage (GHL truth). Single funnel → last opp wins.
+  // Opportunity STATUS overrides the stage COLUMN: GHL lets you mark an opp
+  // won/lost via status without dragging it out of its stage column (e.g. an
+  // opp still in "משא ומתן" but status=lost). Honour status first — else a
+  // lost lead keeps looking active and shows in "נפלו בין הכיסאות". Mirrors
+  // resync-helper.ts. (Found 2026-07-16 via עידן: column=CONSIDERATION,
+  // status=lost.)
   const truth = new Map<string, string>();
   for (const o of opps) {
-    const local = o.pipelineStageId ? reverse.get(o.pipelineStageId) : undefined;
-    if (o.contactId && local) truth.set(o.contactId, local);
+    if (!o.contactId) continue;
+    let local: string | undefined;
+    if (o.status === "won") local = "WON";
+    else if (o.status === "lost") local = "LOST";
+    else local = o.pipelineStageId ? reverse.get(o.pipelineStageId) : undefined;
+    if (local) truth.set(o.contactId, local);
   }
 
   const active = await db
