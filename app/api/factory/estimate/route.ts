@@ -119,6 +119,15 @@ export async function GET(req: NextRequest) {
   result.hasHandles = spec.hasHandles;
   if (altResult) altResult.hasHandles = spec.hasHandles;
 
+  // Same reasoning as hasHandles: for non-laminated quotes the engine ran with
+  // logoColors:1 (the colours are baked into factoryUnitCostCny — passing the
+  // real count would double-count via the colorAddons table). But the customer
+  // DID order N colours, so reflect their real choice in the DISPLAY field only
+  // so the quote-text/PDF spec line reads "צבעי לוגו: N". logoAddonCny is 0 here
+  // so no bogus colour up-charge line appears; pricing is unchanged.
+  result.logoColors = spec.logoColors;
+  if (altResult) altResult.logoColors = spec.logoColors;
+
   return NextResponse.json({
     ok: true, estimate: est, result, altResult,
     computed: { productionPerUnitIls: result.unitProductionUsd * dbConfig.usdToIls, shippingPerUnitIls: result.shippingPerUnitUsd * dbConfig.usdToIls, usdToIls: dbConfig.usdToIls, usdToCny: dbConfig.usdToCny, commissionPct: dbConfig.commissionPct },
