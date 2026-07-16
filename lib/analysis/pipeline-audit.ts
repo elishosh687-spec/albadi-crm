@@ -28,6 +28,7 @@ import {
   messages,
 } from "@/drizzle/schema";
 import { normalizeStage, type V2PipelineStage } from "@/lib/manychat/stages";
+import { reconcileStagesFromGhl } from "./reconcile-stages";
 import type { LeadAnalysis } from "./analyze-lead";
 
 // Stages considered "active" — a lead here should have a next action lined up.
@@ -295,12 +296,16 @@ async function findStageLag(): Promise<StageLagRow[]> {
   // ── Merge per-lead ────────────────────────────────────────────────────
   const out: StageLagRow[] = [];
   for (const l of baseLeads) {
+    // Guard on the RAW db value FIRST: normalizeStage() collapses the two side
+    // stages (FUTURE_FOLLOW_UP / NO_RESPONSE_REENGAGE) to null, so a lead Eli
+    // parked in "לא ענו" / "להתקשר בעתיד" would otherwise look like an active
+    // NULL lead and keep getting suggested. (This was THE bug: the earlier fix
+    // checked the normalized value, which is null for side stages.)
+    if (l.stage && HANDS_OFF_STAGES.has(l.stage)) continue;
     const current = normalizeStage(l.stage);
-    // Skip terminal (WON/LOST) AND side stages (FUTURE_FOLLOW_UP /
-    // NO_RESPONSE_REENGAGE) — Eli parks leads there by hand, so the audit must
-    // never suggest dragging them back into an active stage. Only NULL + the 4
-    // active stages are eligible. (Comment always said this; the code only
-    // skipped WON/LOST until 2026-07-16.)
+    // Skip terminal (WON/LOST) AND side stages — Eli parks leads there by hand,
+    // so the audit must never suggest dragging them back into an active stage.
+    // Only NULL + the 4 active stages are eligible.
     if (current && HANDS_OFF_STAGES.has(current)) continue;
 
     const vRow = verdictBySid.get(l.sid);
@@ -404,6 +409,19 @@ function blockerLabel(b: string): string {
 }
 
 export async function runPipelineAudit(): Promise<PipelineAudit> {
+  // GHL is the source of truth for pipeline_stage. Pull it fresh BEFORE reading
+  // the DB, so the audit reflects where leads actually are in GHL — not a
+  // drifted DB mirror. Best-effort: on any GHL failure we proceed with the DB
+  // as-is (reconcileStagesFromGhl returns ok:false, never throws).
+  try {
+    const rec = await reconcileStagesFromGhl();
+    if (rec.updated.length) {
+      console.log(`[pipeline-audit] reconciled ${rec.updated.length} stages from GHL (kept ${rec.keptLost} LOST)`);
+    }
+  } catch (e) {
+    console.warn("[pipeline-audit] stage reconcile failed — using DB as-is", e);
+  }
+
   const [noTask, stageLag] = await Promise.all([
     findLeadsWithoutTasks(),
     findStageLag(),

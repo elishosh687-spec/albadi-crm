@@ -681,6 +681,38 @@ export async function listOpportunitiesForContact(
   return res.opportunities ?? [];
 }
 
+/**
+ * Pull EVERY opportunity in a pipeline (paginated). Used by the GHL→DB stage
+ * reconcile so the audit reads GHL truth instead of a drifted DB. GHL v2
+ * `/opportunities/search` paginates via meta.startAfter + meta.startAfterId.
+ */
+export async function listAllPipelineOpportunities(
+  pipelineId: string
+): Promise<GHLOpportunity[]> {
+  const out: GHLOpportunity[] = [];
+  let startAfter: string | undefined;
+  let startAfterId: string | undefined;
+  for (let page = 0; page < 40; page++) {
+    const query: Query = {
+      location_id: requireGHLLocationId(),
+      pipeline_id: pipelineId,
+      limit: 100,
+    };
+    if (startAfter) query.startAfter = startAfter;
+    if (startAfterId) query.startAfterId = startAfterId;
+    const res = await ghlFetch<{
+      opportunities?: GHLOpportunity[];
+      meta?: { startAfter?: string; startAfterId?: string };
+    }>("/opportunities/search", undefined, query);
+    const opps = res.opportunities ?? [];
+    out.push(...opps);
+    if (opps.length === 0 || !res.meta?.startAfter || !res.meta?.startAfterId) break;
+    startAfter = res.meta.startAfter;
+    startAfterId = res.meta.startAfterId;
+  }
+  return out;
+}
+
 // ===========================================================================
 // Contact tags (add/remove by name)
 // ===========================================================================

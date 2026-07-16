@@ -1,0 +1,84 @@
+/**
+ * GHL → DB pipeline-stage reconcile. GHL is the source of truth for
+ * pipeline_stage; the DB mirror drifts (the "Opportunity Stage Changed" GHL
+ * workflow fires on CHANGE, not on opp CREATION, so a lead whose opp is created
+ * directly in a side stage never syncs). This pulls every opportunity's real
+ * stage from GHL and corrects the DB, so anything that reads the DB (the audit,
+ * the inbox) reflects GHL.
+ *
+ * Rule: GHL wins EXCEPT a DB row already at LOST stays LOST (Eli 2026-07-16 —
+ * don't auto-revive leads that were closed). Best-effort: any GHL failure
+ * returns ok:false and the caller proceeds with the DB as-is.
+ */
+import { eq } from "drizzle-orm";
+import { db } from "@/lib/db";
+import { leads } from "@/drizzle/schema";
+import { GHL_STAGE_IDS, GHL_PIPELINE_ID } from "@/integrations/ghl/config";
+import { listAllPipelineOpportunities } from "@/integrations/ghl/client";
+
+export interface StageReconcileResult {
+  ok: boolean;
+  reason?: string;
+  checked: number;
+  updated: { sid: string; from: string; to: string }[];
+  keptLost: number;
+}
+
+// GHL stage UUID → local pipeline_stage enum. Excludes NEEDS_ELI (virtual —
+// lives on pipeline_flag, never on pipeline_stage).
+function buildReverseMap(): Map<string, string> {
+  const m = new Map<string, string>();
+  for (const [local, id] of Object.entries(GHL_STAGE_IDS)) {
+    if (!id || local === "NEEDS_ELI") continue;
+    m.set(id, local);
+  }
+  return m;
+}
+
+export async function reconcileStagesFromGhl(): Promise<StageReconcileResult> {
+  const base = { checked: 0, updated: [] as { sid: string; from: string; to: string }[], keptLost: 0 };
+  if (!GHL_PIPELINE_ID) return { ok: false, reason: "no_pipeline_id", ...base };
+  const reverse = buildReverseMap();
+  if (reverse.size === 0) return { ok: false, reason: "no_stage_ids", ...base };
+
+  let opps;
+  try {
+    opps = await listAllPipelineOpportunities(GHL_PIPELINE_ID);
+  } catch (e) {
+    return { ok: false, reason: e instanceof Error ? e.message : String(e), ...base };
+  }
+
+  // contactId → local stage (GHL truth). Single funnel → last opp wins.
+  const truth = new Map<string, string>();
+  for (const o of opps) {
+    const local = o.pipelineStageId ? reverse.get(o.pipelineStageId) : undefined;
+    if (o.contactId && local) truth.set(o.contactId, local);
+  }
+
+  const active = await db
+    .select({ sid: leads.manychatSubId, stage: leads.pipelineStage, ghl: leads.ghlContactId })
+    .from(leads)
+    .where(eq(leads.active, true));
+
+  const updated: { sid: string; from: string; to: string }[] = [];
+  let keptLost = 0;
+  let checked = 0;
+  for (const l of active) {
+    if (!l.ghl) continue;
+    const to = truth.get(l.ghl);
+    if (!to) continue;
+    checked++;
+    const from = l.stage ?? "NULL";
+    if (from === to) continue;
+    if (from === "LOST") {
+      keptLost++;
+      continue; // sticky — don't auto-revive a closed lead
+    }
+    await db
+      .update(leads)
+      .set({ pipelineStage: to, updatedAt: new Date() })
+      .where(eq(leads.manychatSubId, l.sid));
+    updated.push({ sid: l.sid, from, to });
+  }
+  return { ok: true, checked, updated, keptLost };
+}
