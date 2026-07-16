@@ -29,6 +29,7 @@ import {
 } from "@/drizzle/schema";
 import { normalizeStage, type V2PipelineStage } from "@/lib/manychat/stages";
 import { reconcileStagesFromGhl } from "./reconcile-stages";
+import { reconcileTasksFromGhl } from "./reconcile-tasks";
 import type { LeadAnalysis } from "./analyze-lead";
 
 // Stages considered "active" — a lead here should have a next action lined up.
@@ -409,17 +410,25 @@ function blockerLabel(b: string): string {
 }
 
 export async function runPipelineAudit(): Promise<PipelineAudit> {
-  // GHL is the source of truth for pipeline_stage. Pull it fresh BEFORE reading
-  // the DB, so the audit reflects where leads actually are in GHL — not a
-  // drifted DB mirror. Best-effort: on any GHL failure we proceed with the DB
-  // as-is (reconcileStagesFromGhl returns ok:false, never throws).
+  // GHL is the source of truth. Pull BOTH stages and task-completion fresh
+  // BEFORE reading the DB, so the audit reflects reality — not a drifted DB
+  // mirror. Stages: where leads actually sit in GHL. Tasks: a task Itay
+  // completed in GHL that still shows OPEN in the DB would wrongly hide the
+  // lead from "נפלו בין הכיסאות". Both best-effort — a GHL failure just leaves
+  // the DB as-is (neither reconcile throws).
   try {
-    const rec = await reconcileStagesFromGhl();
-    if (rec.updated.length) {
-      console.log(`[pipeline-audit] reconciled ${rec.updated.length} stages from GHL (kept ${rec.keptLost} LOST)`);
+    const [stageRec, taskRec] = await Promise.all([
+      reconcileStagesFromGhl(),
+      reconcileTasksFromGhl(),
+    ]);
+    if (stageRec.updated.length) {
+      console.log(`[pipeline-audit] reconciled ${stageRec.updated.length} stages from GHL (kept ${stageRec.keptLost} LOST)`);
+    }
+    if (taskRec.tasksClosed) {
+      console.log(`[pipeline-audit] closed ${taskRec.tasksClosed} stale-open tasks from GHL (${taskRec.contactsChecked} contacts)`);
     }
   } catch (e) {
-    console.warn("[pipeline-audit] stage reconcile failed — using DB as-is", e);
+    console.warn("[pipeline-audit] reconcile failed — using DB as-is", e);
   }
 
   const [noTask, stageLag] = await Promise.all([
