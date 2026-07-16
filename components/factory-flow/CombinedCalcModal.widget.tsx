@@ -25,6 +25,7 @@ import type {
 } from "@/lib/factory/types";
 import { priceFactoryQuote } from "@/lib/factory/pricing";
 import { computeCommission } from "@/lib/factory/commission";
+import { CommissionControl } from "./CommissionControl";
 import { isOverCbmConsolidationThreshold, cbmConsolidationAlert } from "@/lib/factory/sea-carriers";
 import {
   computeCombined,
@@ -102,6 +103,13 @@ export function CombinedCalcModalWidget({
 }) {
   const [config, setConfig] = useState<FactoryPricingConfig | null>(null);
   const [shippingOptionId, setShippingOptionId] = useState<string>("");
+  // Salesperson commission — boss-only, display-only. Override for this combined
+  // calculation, or save as the new global default (CommissionControl).
+  const [commissionText, setCommissionText] = useState("");
+  const commissionParsed = commissionText !== "" ? parseFloat(commissionText) : NaN;
+  const commissionValid = Number.isFinite(commissionParsed) && commissionParsed >= 0 && commissionParsed <= 100;
+  const defaultCommissionPct = config?.commissionPct ?? 10;
+  const effectiveCommissionPct = commissionValid ? commissionParsed : defaultCommissionPct;
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [sectionState, setSectionState] = useState<Record<string, SectionState>>(() => {
     const init: Record<string, SectionState> = {};
@@ -525,6 +533,7 @@ export function CombinedCalcModalWidget({
                   pricing={livePricings[row.id]}
                   allocated={allocatedByRow[row.id]}
                   config={config}
+                  commissionPct={effectiveCommissionPct}
                   checked={selected.has(row.id)}
                   onCheck={() => toggleSelected(row.id)}
                   expanded={expanded.has(row.id)}
@@ -592,7 +601,7 @@ export function CombinedCalcModalWidget({
                     const comm = computeCommission(
                       combinedResult.grandTotal,
                       combinedResult.totalProfit,
-                      config.commissionPct,
+                      effectiveCommissionPct,
                       combinedResult.combinedShipping
                     );
                     return (
@@ -610,10 +619,21 @@ export function CombinedCalcModalWidget({
                       </>
                     );
                   })()}
+                  <div className="pt-1">
+                    <CommissionControl
+                      text={commissionText}
+                      onTextChange={setCommissionText}
+                      valid={commissionValid}
+                      effectivePct={effectiveCommissionPct}
+                      defaultPct={defaultCommissionPct}
+                      apiToken={apiToken}
+                    />
+                  </div>
                   <CombinedBreakdown
                     result={combinedResult}
                     items={breakdownItems}
                     config={config}
+                    commissionPct={effectiveCommissionPct}
                     shippingOptionId={shippingOptionId}
                   />
                 </div>
@@ -724,6 +744,7 @@ function ProductCalcSection({
   pricing,
   allocated,
   config,
+  commissionPct,
   checked,
   onCheck,
   expanded,
@@ -737,6 +758,8 @@ function ProductCalcSection({
   pricing: FactoryPricingResult | null;
   allocated: { total: number; unit: number } | null;
   config: FactoryPricingConfig;
+  /** Effective salesperson commission % for this combined calc (override or default). */
+  commissionPct: number;
   checked: boolean;
   onCheck: () => void;
   expanded: boolean;
@@ -1020,7 +1043,7 @@ function ProductCalcSection({
               totalSellingPrice={pricing.totalSellingPrice}
               quantity={pricing.quantity}
               profitMarginPct={pricing.profitMarginPct}
-              commissionPct={pricing.commissionPct}
+              commissionPct={commissionPct}
               totalCartons={pricing.totalCartons}
               totalWeightKg={pricing.totalWeightKg}
               totalCbm={pricing.totalCbm}
@@ -1205,11 +1228,14 @@ function CombinedBreakdown({
   result,
   items,
   config,
+  commissionPct,
   shippingOptionId,
 }: {
   result: CombinedPricingResult;
   items: { row: FactoryQuoteRow; pricing: FactoryPricingResult }[];
   config: FactoryPricingConfig;
+  /** Effective salesperson commission % (override or global default). */
+  commissionPct: number;
   shippingOptionId: string;
 }) {
   const [open, setOpen] = useState(false);
@@ -1309,7 +1335,7 @@ function CombinedBreakdown({
               const comm = computeCommission(
                 result.grandTotal,
                 result.totalProfit,
-                config.commissionPct,
+                commissionPct,
                 result.combinedShipping
               );
               return (

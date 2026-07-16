@@ -22,6 +22,7 @@ import {
 } from "@/lib/factory/combined";
 import { DetailedBreakdown } from "@/components/calculator/DetailedBreakdown";
 import { SplitShipmentPanel } from "./SplitShipmentPanel";
+import { CommissionControl } from "./CommissionControl";
 import { widgetUrl } from "./widget-url";
 
 function formatIls(n: number): string {
@@ -64,6 +65,13 @@ export function FinalizeModalWidget({
   );
   const moldsParsed = moldsCost !== "" ? parseFloat(moldsCost) : NaN;
   const moldsValid = Number.isFinite(moldsParsed) && moldsParsed > 0;
+  // Salesperson commission — boss-only, display-only. Editable inline: override
+  // for this quote, or save as the new global default (CommissionControl).
+  const [commissionText, setCommissionText] = useState("");
+  const commissionParsed = commissionText !== "" ? parseFloat(commissionText) : NaN;
+  const commissionValid = Number.isFinite(commissionParsed) && commissionParsed >= 0 && commissionParsed <= 100;
+  const defaultCommissionPct = config?.commissionPct ?? 10;
+  const effectiveCommissionPct = commissionValid ? commissionParsed : defaultCommissionPct;
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [reverseMode, setReverseMode] = useState<"profit" | "total" | "unit">("profit");
@@ -743,6 +751,17 @@ export function FinalizeModalWidget({
               )}
 
               {livePricing && config && effFr && (
+                <CommissionControl
+                  text={commissionText}
+                  onTextChange={setCommissionText}
+                  valid={commissionValid}
+                  effectivePct={effectiveCommissionPct}
+                  defaultPct={defaultCommissionPct}
+                  apiToken={apiToken}
+                />
+              )}
+
+              {livePricing && config && effFr && (
                 <DetailedBreakdown
                   unitCost={livePricing.unitCost}
                   unitShipping={livePricing.unitShipping}
@@ -755,7 +774,7 @@ export function FinalizeModalWidget({
                   totalSellingPrice={livePricing.totalSellingPrice}
                   quantity={livePricing.quantity}
                   profitMarginPct={livePricing.profitMarginPct}
-                  commissionPct={livePricing.commissionPct}
+                  commissionPct={effectiveCommissionPct}
                   totalCartons={livePricing.totalCartons}
                   totalWeightKg={livePricing.totalWeightKg}
                   totalCbm={livePricing.totalCbm}

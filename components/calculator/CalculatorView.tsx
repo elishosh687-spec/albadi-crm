@@ -9,6 +9,7 @@ import { isOverCbmConsolidationThreshold, cbmConsolidationAlert } from "@/lib/fa
 import { customerBreakdownIls, customerRoundedTotalIls } from "@/lib/factory/calculator/customer-breakdown";
 import { DetailedBreakdown } from "./DetailedBreakdown";
 import { SplitShipmentPanel } from "@/components/factory-flow/SplitShipmentPanel";
+import { CommissionControl } from "@/components/factory-flow/CommissionControl";
 
 interface Props {
   products: Product[];
@@ -219,6 +220,18 @@ export function CalculatorView({ products, quantityTiers, shippingOptions, initi
 
   const r = preview?.result;
   const c = preview?.computed;
+
+  // Salesperson commission — boss-only, display-only (never changes the customer
+  // price). Editable inline in the exact (operator) calculator too: override for
+  // this calculation, or save as the new global default via CommissionControl.
+  const [commissionText, setCommissionText] = useState("");
+  const commissionParsed = commissionText !== "" ? parseFloat(commissionText) : NaN;
+  const commissionValid = Number.isFinite(commissionParsed) && commissionParsed >= 0 && commissionParsed <= 100;
+  const defaultCommissionPct = c?.commissionPct ?? 10;
+  const effectiveCommissionPct = commissionValid ? commissionParsed : defaultCommissionPct;
+  // A `computed` clone carrying the effective pct, so BossBreakdownTable /
+  // ProposalSummary (which read commissionPct off `computed`) reflect the override.
+  const cEff = c ? { ...c, commissionPct: effectiveCommissionPct } : c;
 
   // Editorial quote title (display-only — derived from existing product /
   // manual-desc state; no logic change). Falls back gracefully.
@@ -688,7 +701,7 @@ export function CalculatorView({ products, quantityTiers, shippingOptions, initi
                   className="tabular-nums"
                   style={{ background: "var(--lux-inset)", borderRadius: 3, border: "1px solid var(--lux-line)", padding: "11px 14px" }}
                 >
-                  <span style={{ fontSize: 16, color: "var(--lux-ink)" }}>{c?.commissionPct ?? "—"}</span>
+                  <span style={{ fontSize: 16, color: "var(--lux-ink)" }}>{effectiveCommissionPct}</span>
                   <span style={{ fontSize: 12, color: "var(--lux-muted)" }}>% · ללא שילוח</span>
                 </div>
               </AddonField>
@@ -714,6 +727,17 @@ export function CalculatorView({ products, quantityTiers, shippingOptions, initi
                 </span>
               </AddonField>
             </div>
+
+            {/* Salesperson commission — override for this calc or save as the new
+                global default. Boss-only; never changes the customer price. */}
+            <CommissionControl
+              text={commissionText}
+              onTextChange={setCommissionText}
+              valid={commissionValid}
+              effectivePct={effectiveCommissionPct}
+              defaultPct={defaultCommissionPct}
+              apiToken={apiToken}
+            />
 
             {/* reverse-calc reveal toggle (reference §IV) — UI-only boolean
                 that shows/hides the EXISTING reverse-margin block below. */}
@@ -781,7 +805,7 @@ export function CalculatorView({ products, quantityTiers, shippingOptions, initi
             <style>{`@media (max-width: 720px){.cv-breakdown-row{grid-template-columns:1fr !important;}}`}</style>
 
             {/* RIGHT (visually first in RTL): boss breakdown table */}
-            <BossBreakdownTable result={r} computed={c} />
+            <BossBreakdownTable result={r} computed={cEff!} />
 
             {/* LEFT: WhatsApp preview + ¥ components / FX / alt shipping */}
             <div className="flex flex-col gap-4">
@@ -803,7 +827,7 @@ export function CalculatorView({ products, quantityTiers, shippingOptions, initi
                 totalSellingPrice={r.totalOrderPriceIls}
                 quantity={r.quantity}
                 profitMarginPct={r.profitMargin}
-                commissionPct={c.commissionPct}
+                commissionPct={effectiveCommissionPct}
                 totalCartons={r.totalCartons}
                 totalWeightKg={r.totalWeightKg}
                 totalCbm={r.totalCbm}
@@ -1062,6 +1086,18 @@ function EstimateTab({ apiToken, shippingOptions, sid, leadName, initialMargins,
   const est = data?.estimate;
   const r = data?.result; const c = data?.computed;
 
+  // Salesperson commission — boss-only, display-only (never changes the customer
+  // price). Editable inline: the operator can override the global default for
+  // THIS estimate, or save it as the new global default via CommissionControl.
+  const [commissionText, setCommissionText] = useState("");
+  const commissionParsed = commissionText !== "" ? parseFloat(commissionText) : NaN;
+  const commissionValid = Number.isFinite(commissionParsed) && commissionParsed >= 0 && commissionParsed <= 100;
+  const defaultCommissionPct = c?.commissionPct ?? 10;
+  const effectiveCommissionPct = commissionValid ? commissionParsed : defaultCommissionPct;
+  // A `computed` clone carrying the effective pct, so BreakdownCard (which reads
+  // commissionPct off `computed`) reflects the override.
+  const cEff = c ? { ...c, commissionPct: effectiveCommissionPct } : c;
+
   // Hoisted quote text + estimate context + one share instance, shared between
   // the sticky proposal-summary CTAs and the full QuoteShareCard below.
   const estimateQuoteText = (est && est.ok && r && c)
@@ -1221,6 +1257,17 @@ function EstimateTab({ apiToken, shippingOptions, sid, leadName, initialMargins,
                 </span>
               </div>
             </div>
+
+            {/* Salesperson commission — override for this estimate or save as
+                the new global default. Boss-only; never changes customer price. */}
+            <CommissionControl
+              text={commissionText}
+              onTextChange={setCommissionText}
+              valid={commissionValid}
+              effectivePct={effectiveCommissionPct}
+              defaultPct={defaultCommissionPct}
+              apiToken={apiToken}
+            />
           </Section>
         </>}
         quote={<>
@@ -1245,7 +1292,7 @@ function EstimateTab({ apiToken, shippingOptions, sid, leadName, initialMargins,
                   ⚠️ הרווח הכולל ₪{ils(r.totalProfitIls)} נמוך מהמינימום שהוגדר ₪{ils(minProfitParsed)}.
                 </div>
               )}
-              <ProposalSummary r={r} c={c} share={share} hasEstimate />
+              <ProposalSummary r={r} c={cEff!} share={share} hasEstimate />
             </>
           )}
         </>}
@@ -1258,7 +1305,7 @@ function EstimateTab({ apiToken, shippingOptions, sid, leadName, initialMargins,
         <>
           {/* Full breakdown + share flow full-width below the sticky compact
               summary (same fix as the operator tab — avoids the side void). */}
-          <BreakdownCard result={r} computed={c} />
+          <BreakdownCard result={r} computed={cEff!} />
           <QuoteShareCard
             apiToken={apiToken}
             sid={sid}
@@ -1333,7 +1380,7 @@ function EstimateTab({ apiToken, shippingOptions, sid, leadName, initialMargins,
             totalSellingPrice={r.totalOrderPriceIls}
             quantity={r.quantity}
             profitMarginPct={r.profitMargin}
-            commissionPct={c.commissionPct}
+            commissionPct={effectiveCommissionPct}
             totalCartons={r.totalCartons}
             totalWeightKg={r.totalWeightKg}
             totalCbm={r.totalCbm}
