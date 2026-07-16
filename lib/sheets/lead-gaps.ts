@@ -187,3 +187,101 @@ export function sheetRowDeepLink(spreadsheetId: string | null, rowIndex: number)
   if (!spreadsheetId) return null;
   return `https://docs.google.com/spreadsheets/d/${spreadsheetId}/edit#gid=0&range=A${rowIndex}`;
 }
+
+// ---------------------------------------------------------------------------
+// Form-gap vs DB — the DEFINITIVE "did this lead actually enter the CRM?" check.
+//
+// loadSheetGaps above trusts the sheet's own SENT/status markers. But a row can
+// be marked SENT yet have no lead in the DB (created then purged, or a transient
+// insert failure that still returned a sid). The only ground truth is: is the
+// phone present in the `leads` table? This cross-checks every real row against
+// the DB by the last-9 phone digits (format-independent: strips +/0/@suffix).
+// ---------------------------------------------------------------------------
+export interface FormGapVsDbRow {
+  rowIndex: number;
+  name: string;
+  phone: string;
+  sent: string | null;
+  status: string | null;
+  sid: string | null;
+}
+export interface FormGapVsDbSnapshot {
+  checked: number; // real rows compared (name+phone, non-test)
+  inSystem: number;
+  notInSystem: FormGapVsDbRow[];
+  fetchedAt: string;
+  spreadsheetId: string | null;
+}
+
+const last9 = (s: string) => s.replace(/[^0-9]/g, "").slice(-9);
+
+export async function loadFormGapsVsDb(): Promise<FormGapVsDbSnapshot> {
+  const spreadsheetId = readEnv("GOOGLE_SHEETS_FB_LEADS_ID").trim();
+  const empty = (): FormGapVsDbSnapshot => ({
+    checked: 0,
+    inSystem: 0,
+    notInSystem: [],
+    fetchedAt: new Date().toISOString(),
+    spreadsheetId: spreadsheetId || null,
+  });
+  if (!spreadsheetId) return empty();
+
+  let lines: string[];
+  try {
+    const url = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/export?format=csv&gid=0`;
+    const resp = await fetch(url, { redirect: "follow" });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    lines = (await resp.text()).split(/\r?\n/);
+  } catch (e) {
+    console.warn("[sheets.form-gaps] fetch failed — returning empty", e);
+    return empty();
+  }
+
+  // Lazy import keeps this file's other (db-free) exports safe for any caller.
+  const { db } = await import("@/lib/db");
+  const { leads } = await import("@/drizzle/schema");
+  const dbRows = await db.select({ phone: leads.phoneE164, waJid: leads.waJid }).from(leads);
+  const dbSet = new Set<string>();
+  for (const r of dbRows) {
+    for (const cand of [r.phone, r.waJid]) {
+      if (!cand) continue;
+      const k = last9(cand);
+      if (k.length === 9) dbSet.add(k);
+    }
+  }
+
+  const notInSystem: FormGapVsDbRow[] = [];
+  let inSystem = 0;
+  let checked = 0;
+  for (let i = 1; i < lines.length; i++) {
+    const line = lines[i].trim();
+    if (!line) continue;
+    const r = parseCSVLine(line);
+    const name = (r[COL_NAME] ?? "").trim();
+    const rawPhone = (r[COL_PHONE] ?? "").trim();
+    if (!name || !rawPhone) continue;
+    if (rawPhone.toLowerCase().indexOf("test lead") !== -1) continue;
+    checked++;
+    const k = last9(rawPhone);
+    if (k.length === 9 && dbSet.has(k)) {
+      inSystem++;
+      continue;
+    }
+    notInSystem.push({
+      rowIndex: i + 1,
+      name,
+      phone: rawPhone,
+      sent: (r[COL_SENT] ?? "").trim() || null,
+      status: (r[COL_LAST_STATUS] ?? "").trim() || null,
+      sid: (r[COL_SID] ?? "").trim() || null,
+    });
+  }
+
+  return {
+    checked,
+    inSystem,
+    notInSystem,
+    fetchedAt: new Date().toISOString(),
+    spreadsheetId,
+  };
+}

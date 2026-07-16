@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import type { AnalysisAggregate, Pattern } from "@/lib/analysis/aggregate";
 import PlaysEditor from "./PlaysEditor";
 import PipelineAuditSection from "./PipelineAuditSection";
+import FormGapsSection from "./FormGapsSection";
 import InfoTip from "./InfoTip";
 import type { BlockerKey, StagePlay } from "@/lib/sales/stage-plays.he";
 import { LuxShell, LuxTitle, LuxAccent } from "@/components/widget-ui/lux";
@@ -163,6 +164,7 @@ export default function AnalysisScreen({ token }: { token: string }) {
       ) : (
         <>
       <PipelineAuditSection token={token} />
+      <FormGapsSection token={token} />
       {/* Filters */}
       <div style={card}>
         <InfoTip
