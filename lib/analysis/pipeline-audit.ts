@@ -43,6 +43,16 @@ const ACTIVE_STAGES = [
   "CONSIDERATION",
 ] as const;
 
+// Stages the audit must never suggest moving OUT of — terminal (Eli closed it)
+// or side stages (Eli parked it: "call in future" / "no answer"). Anything here
+// stays put; the stage-lag suggester skips it entirely.
+const HANDS_OFF_STAGES = new Set<string>([
+  "WON",
+  "LOST",
+  "FUTURE_FOLLOW_UP",
+  "NO_RESPONSE_REENGAGE",
+]);
+
 export type SuggestedStage = "INTAKE" | "DISCAVERY" | "FACTORY_WAIT" | "CONSIDERATION";
 
 export interface NoTaskRow {
@@ -286,8 +296,12 @@ async function findStageLag(): Promise<StageLagRow[]> {
   const out: StageLagRow[] = [];
   for (const l of baseLeads) {
     const current = normalizeStage(l.stage);
-    // Skip terminal + side stages — Eli owns those manually.
-    if (current === "WON" || current === "LOST") continue;
+    // Skip terminal (WON/LOST) AND side stages (FUTURE_FOLLOW_UP /
+    // NO_RESPONSE_REENGAGE) — Eli parks leads there by hand, so the audit must
+    // never suggest dragging them back into an active stage. Only NULL + the 4
+    // active stages are eligible. (Comment always said this; the code only
+    // skipped WON/LOST until 2026-07-16.)
+    if (current && HANDS_OFF_STAGES.has(current)) continue;
 
     const vRow = verdictBySid.get(l.sid);
     const verdict = vRow?.verdict;
