@@ -455,7 +455,11 @@ export default function PipelineAuditSection({ token }: { token: string }) {
                 key={target}
                 open={openGroups.has(target)}
                 onToggle={() => toggleGroup(target)}
-                title={STAGE_LABEL[target]}
+                // "להעביר ל…" not just the stage name — these are leads SUGGESTED
+                // to move TO this stage (currently at an earlier stage), not
+                // leads already in it. The bare stage label read as "current
+                // leads in אפיון" and confused Eli (2026-07-16).
+                title={`להעביר ל${STAGE_LABEL[target]}`}
                 count={rows.length}
                 tone="champagne"
                 subtitle={STAGE_HINT[target]}
