@@ -6,9 +6,9 @@
  * stage from GHL and corrects the DB, so anything that reads the DB (the audit,
  * the inbox) reflects GHL.
  *
- * Rule: GHL wins EXCEPT a DB row already at LOST stays LOST (Eli 2026-07-16 —
- * don't auto-revive leads that were closed). Best-effort: any GHL failure
- * returns ok:false and the caller proceeds with the DB as-is.
+ * Rule: GHL wins, FULL STOP (Eli 2026-07-16 — "GHL הוא האמת, הכל נמשך משם";
+ * he explicitly approved syncing even the LOST↔active conflicts). Best-effort:
+ * any GHL failure returns ok:false and the caller proceeds with the DB as-is.
  */
 import { eq } from "drizzle-orm";
 import { db } from "@/lib/db";
@@ -61,7 +61,7 @@ export async function reconcileStagesFromGhl(): Promise<StageReconcileResult> {
     .where(eq(leads.active, true));
 
   const updated: { sid: string; from: string; to: string }[] = [];
-  let keptLost = 0;
+  const keptLost = 0;
   let checked = 0;
   for (const l of active) {
     if (!l.ghl) continue;
@@ -70,10 +70,7 @@ export async function reconcileStagesFromGhl(): Promise<StageReconcileResult> {
     checked++;
     const from = l.stage ?? "NULL";
     if (from === to) continue;
-    if (from === "LOST") {
-      keptLost++;
-      continue; // sticky — don't auto-revive a closed lead
-    }
+    // GHL wins unconditionally — including LOST↔active (Eli approved 2026-07-16).
     await db
       .update(leads)
       .set({ pipelineStage: to, updatedAt: new Date() })
