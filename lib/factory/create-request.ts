@@ -20,6 +20,18 @@ import {
 } from "@/lib/feishu/sheets";
 import type { FactoryProductSpec } from "./types";
 
+// The factory works the Feishu sheet in English/Chinese — the description column
+// must never carry Hebrew (Eli 2026-07-16). The customer NAME (col A) stays
+// Hebrew on purpose (just a label the factory ignores); only the product
+// description is forced to English. Custom English text the operator typed is
+// kept; any Hebrew (incl. the "שקית אלבדי" default) → a fixed English label.
+const HAS_HEBREW = /[֐-׿]/;
+function factoryDescription(desc: string | undefined | null): string {
+  const d = (desc ?? "").trim();
+  if (!d || HAS_HEBREW.test(d)) return "Albadi non-woven bag";
+  return d;
+}
+
 function sizeLabel(spec: FactoryProductSpec): string {
   const parts: string[] = [];
   if (spec.heightCm) parts.push(`H${spec.heightCm}`);
@@ -76,7 +88,7 @@ export async function createFactoryRequest(
       customer: customerName,
       quotationNo,
       pic: spec.picUrl ?? "",
-      description: spec.description,
+      description: factoryDescription(spec.description),
       material: spec.material,
       size: sizeLabel(spec),
       printing: spec.printing,
@@ -199,7 +211,7 @@ export async function promoteDraftToFeishu(
       customer: row.customerName ?? "",
       quotationNo,
       pic: spec.picUrl ?? "",
-      description: spec.description,
+      description: factoryDescription(spec.description),
       material: spec.material,
       size: sizeLabel(spec),
       printing: spec.printing,
