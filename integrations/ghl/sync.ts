@@ -216,12 +216,20 @@ export async function upsertGHLContact(
 
   try {
     const customFields = buildCustomFieldsPayload(lead);
+    // Assign the contact owner to Itay ONLY on the first push (this lead has no
+    // ghl_contact_id yet). Passing assignedTo on every upsert would stomp a
+    // manual reassignment on each message sync — so guard on first-create.
+    const isFirstPush = !("ghlContactId" in lead) || !lead.ghlContactId;
     const res = await upsertContact({
       locationId: requireGHLLocationId(),
       name: buildLeadDisplayName(lead),
       phone: lead.phoneE164 ?? undefined,
       source: "whatsapp-bridge",
       customFields,
+      assignedTo:
+        isFirstPush && GHL_SALESPERSON_USER_ID
+          ? GHL_SALESPERSON_USER_ID
+          : undefined,
     });
     const contactId = res.contact.id;
     if ("ghlContactId" in lead && lead.ghlContactId !== contactId) {
@@ -300,6 +308,11 @@ export async function createOrUpdateGHLOpportunity(
       monetaryValue: monetary,
       source: "whatsapp-bridge",
       customFields,
+      // Default owner = Itay so new leads land on his pipeline board, not
+      // unassigned. Create-only (never on update) so a manual reassignment in
+      // GHL is preserved. Per Eli 2026-07-17 (177 legacy leads were ownerless
+      // because only tasks — never opps/contacts — carried assignedTo).
+      assignedTo: GHL_SALESPERSON_USER_ID || undefined,
     });
     await cacheOpportunityId(lead.manychatSubId, created.id);
     return created.id;

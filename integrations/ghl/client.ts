@@ -102,6 +102,9 @@ export interface GHLContactUpsertInput {
   source?: string;
   tags?: string[];
   customFields?: GHLCustomFieldValue[];
+  // GHL user id to own this contact. Only pass on FIRST creation — passing it
+  // on every upsert would stomp a manual reassignment on each message sync.
+  assignedTo?: string;
 }
 
 export interface GHLContactUpsertResponse {
@@ -143,6 +146,8 @@ export interface GHLOpportunityCreateInput {
   monetaryValue?: number;
   source?: string;
   customFields?: GHLCustomFieldValue[];
+  // GHL user id who owns the opportunity (shows as the pipeline-card owner).
+  assignedTo?: string;
 }
 
 export interface GHLOpportunityUpdateInput {
@@ -173,7 +178,7 @@ export interface GHLCustomField {
 export async function upsertContact(
   input: GHLContactUpsertInput
 ): Promise<GHLContactUpsertResponse> {
-  const body = {
+  const body: Record<string, unknown> = {
     locationId: input.locationId ?? requireGHLLocationId(),
     firstName: input.firstName,
     lastName: input.lastName,
@@ -184,6 +189,7 @@ export async function upsertContact(
     tags: input.tags,
     customFields: input.customFields,
   };
+  if (input.assignedTo) body.assignedTo = input.assignedTo;
   return ghlFetch<GHLContactUpsertResponse>("/contacts/upsert", {
     method: "POST",
     body: JSON.stringify(body),
