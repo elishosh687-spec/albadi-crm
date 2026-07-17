@@ -7,9 +7,8 @@
  * (finalPricing) and what actually happened lands on his margin. Two things
  * drift: the factory sometimes raises the price after close, and real shipping
  * differs from the AVERAGED shipping charged to the customer. Here he enters the
- * real factory + shipping (+ free-form other) costs; each card shows
- * planned-vs-actual profit, and a header rolls it up so he can tell whether his
- * pricing/averaging is calibrated. Boss-only.
+ * real factory + shipping (+ free-form other) costs; the hero number per card is
+ * the ACTUAL profit for that customer, and the header rolls it up. Boss-only.
  */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -31,6 +30,7 @@ interface ClosedQuote {
   updatedAt: string;
 }
 
+const MAX_W = 900;
 const ils = (n: number) => `₪${Math.round(n).toLocaleString("he-IL")}`;
 function fmtDate(iso: string | null): string {
   if (!iso) return "—";
@@ -91,53 +91,61 @@ export function ClosedQuotesView({ apiToken }: { apiToken: string }) {
 
   return (
     <LuxShell>
-      <LuxTitle
-        overline="— Closed deals"
-        subtitle="עסקאות שנסגרו (WON) — הזן את העלויות בפועל וראה רווח מתוכנן מול בפועל"
-        aside={
-          quotes ? (
-            <div style={{ display: "flex", gap: 10 }}>
-              <LuxStat value={totals.count} label="עסקאות" />
-              <LuxStat value={`${totals.reconciled}/${totals.count}`} label="הוזנו עלויות" />
-              <LuxStat
-                value={`${totals.variance >= 0 ? "+" : "−"}${ils(Math.abs(totals.variance))}`}
-                label={totals.variance >= 0 ? "רווח מעבר לתכנון" : "נספג מהרווח"}
-                tone={totals.variance >= 0 ? "success" : "alert"}
-              />
-            </div>
-          ) : null
-        }
-      >
-        הצעות <LuxAccent>שנסגרו</LuxAccent>.
-      </LuxTitle>
-
-      {error && (
-        <div style={{ padding: 14, borderRadius: 8, background: "rgba(232,180,180,0.1)", color: "#e8b4b4", fontSize: 13 }}>
-          שגיאה: {error}
-        </div>
-      )}
-
-      {!quotes && !error && (
-        <div style={{ display: "flex", alignItems: "center", gap: 8, color: "var(--lux-muted)", fontSize: 14 }}>
-          <Loader2 className="size-4 animate-spin" /> טוען…
-        </div>
-      )}
-
-      {quotes && quotes.length === 0 && (
-        <div style={{ padding: 20, color: "var(--lux-muted)", fontSize: 14, textAlign: "center" }}>
-          אין עדיין עסקאות שנסגרו (WON) עם הצעה סופית.
-        </div>
-      )}
-
-      {quotes && quotes.length > 0 && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-          {quotes.map((q) =>
-            q.finalPricing ? (
-              <ClosedQuoteCard key={q.id} quote={q} apiToken={apiToken} onSaved={load} />
+      <div style={{ maxWidth: MAX_W, margin: "0 auto" }}>
+        <LuxTitle
+          overline="— Closed deals"
+          subtitle={
+            quotes
+              ? `הרווח האמיתי מכל לקוח — הזן עלויות בפועל · ${totals.reconciled}/${totals.count} עם עלויות שהוזנו`
+              : "הרווח האמיתי מכל לקוח — הזן עלויות בפועל"
+          }
+          aside={
+            quotes && totals.count > 0 ? (
+              <div style={{ display: "flex", gap: 10 }}>
+                <LuxStat value={totals.count} label="עסקאות" />
+                <LuxStat value={ils(totals.actualProfit)} label="רווח בפועל סה״כ" tone="success" />
+                {Math.abs(totals.variance) >= 1 && (
+                  <LuxStat
+                    value={`${totals.variance >= 0 ? "+" : "−"}${ils(Math.abs(totals.variance))}`}
+                    label={totals.variance >= 0 ? "מעל התכנון" : "מתחת לתכנון"}
+                    tone={totals.variance >= 0 ? "success" : "alert"}
+                  />
+                )}
+              </div>
             ) : null
-          )}
-        </div>
-      )}
+          }
+        >
+          הצעות <LuxAccent>שנסגרו</LuxAccent>.
+        </LuxTitle>
+
+        {error && (
+          <div style={{ padding: 14, borderRadius: 8, background: "rgba(232,180,180,0.1)", color: "#e8b4b4", fontSize: 13 }}>
+            שגיאה: {error}
+          </div>
+        )}
+
+        {!quotes && !error && (
+          <div style={{ display: "flex", alignItems: "center", gap: 8, color: "var(--lux-muted)", fontSize: 14 }}>
+            <Loader2 className="size-4 animate-spin" /> טוען…
+          </div>
+        )}
+
+        {quotes && quotes.length === 0 && (
+          <div style={{ padding: 20, color: "var(--lux-muted)", fontSize: 14, textAlign: "center" }}>
+            אין עדיין עסקאות שנסגרו (WON) עם הצעה סופית.
+          </div>
+        )}
+
+        {quotes && quotes.length > 0 && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            {quotes.map((q) =>
+              q.finalPricing ? (
+                <ClosedQuoteCard key={q.id} quote={q} apiToken={apiToken} onSaved={load} />
+              ) : null
+            )}
+          </div>
+        )}
+      </div>
     </LuxShell>
   );
 }
@@ -177,10 +185,10 @@ function ClosedQuoteCard({
 
   const r = useMemo(() => reconcile(fp, draftActuals), [fp, draftActuals]);
 
-  const title =
+  const spec =
     (quote.productSpec?.["productName"] as string) ||
     (quote.productSpec?.["description"] as string) ||
-    quote.quotationNo || quote.id.slice(-6);
+    "";
 
   async function save() {
     setSaveState("saving");
@@ -202,125 +210,118 @@ function ClosedQuoteCard({
   }
 
   const varPos = r.variance >= 0;
+  const varColor = Math.abs(r.variance) < 1 ? "var(--lux-muted)" : varPos ? "var(--lux-success,#a8c0a0)" : "#e8b4b4";
 
   return (
-    <section
-      style={{
-        background: "var(--lux-card)",
-        borderRadius: 10,
-        border: "1px solid var(--lux-line)",
-        padding: "20px 22px",
-      }}
-    >
-      {/* Header */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, flexWrap: "wrap", marginBottom: 16 }}>
+    <section style={{ background: "var(--lux-card)", borderRadius: 10, border: "1px solid var(--lux-line)", overflow: "hidden" }}>
+      {/* Header: name + spec (right) · ACTUAL PROFIT hero (left) */}
+      <div
+        style={{
+          display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap",
+          padding: "16px 20px", background: "var(--lux-inset)", borderBottom: "1px solid var(--lux-line)",
+        }}
+      >
         <div>
-          <div className="lux-sans" style={{ fontSize: 17, fontWeight: 400, color: "var(--lux-ink)" }}>
+          <div className="lux-sans" style={{ fontSize: 16, fontWeight: 400, color: "var(--lux-ink)" }}>
             {quote.customerName || "לקוח"}
           </div>
-          <div style={{ fontSize: 12, color: "var(--lux-muted)", marginTop: 3 }}>
-            {title} · {quote.quotationNo ? `#${quote.quotationNo} · ` : ""}נסגר {fmtDate(quote.sentToCustomerAt ?? quote.updatedAt)}
+          <div style={{ fontSize: 11.5, color: "var(--lux-muted)", marginTop: 3 }}>
+            {[spec, quote.quotationNo ? `#${quote.quotationNo}` : null, `נסגר ${fmtDate(quote.sentToCustomerAt ?? quote.updatedAt)}`]
+              .filter(Boolean).join(" · ")}
           </div>
         </div>
         <div style={{ textAlign: "left" }}>
-          <div style={{ fontSize: 11, color: "var(--lux-muted)", letterSpacing: "0.1em" }}>מחיר ללקוח (נעול)</div>
-          <div className="lux-serif tabular-nums" style={{ fontSize: 24, fontWeight: 300, color: "var(--lux-cool)" }}>
-            {ils(r.revenue)}
+          <div style={{ fontSize: 10.5, color: "var(--lux-muted)", letterSpacing: "0.12em" }}>רווח בפועל מהלקוח</div>
+          <div className="lux-serif tabular-nums" style={{ fontSize: 30, fontWeight: 300, color: varColor, lineHeight: 1.1 }}>
+            {ils(r.actualProfit)}
+          </div>
+          <div style={{ fontSize: 11, color: "var(--lux-muted)", marginTop: 1 }}>
+            מחיר ללקוח {ils(r.revenue)} · מתוכנן היה {ils(r.plannedProfit)}
+            {Math.abs(r.variance) >= 1 && (
+              <span style={{ color: varColor }}> · {varPos ? "+" : "−"}{ils(Math.abs(r.variance))}</span>
+            )}
           </div>
         </div>
       </div>
 
-      {/* Two columns: planned vs actual entry */}
-      <div className="cq-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 18 }}>
-        <style>{`@media (max-width:640px){.cq-grid{grid-template-columns:1fr !important;}}`}</style>
+      {/* Body: tidy planned↔actual table */}
+      <div style={{ padding: "16px 20px" }}>
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "minmax(90px,1fr) 96px 150px minmax(120px,1fr)",
+            columnGap: 14, rowGap: 12, alignItems: "center",
+          }}
+        >
+          {/* column headers */}
+          <div />
+          <div className="lux-label" style={{ color: "var(--lux-muted)", letterSpacing: "0.12em", textAlign: "right" }}>מתוכנן</div>
+          <div className="lux-label" style={{ color: "var(--lux-champagne)", letterSpacing: "0.12em" }}>בפועל</div>
+          <div />
 
-        {/* Planned (read-only) */}
-        <div>
-          <div className="lux-label" style={{ color: "var(--lux-muted)", letterSpacing: "0.16em", marginBottom: 10 }}>מתוכנן (בהצעה)</div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            <PlanRow label="עלות מפעל" value={ils(r.plannedFactory)} />
-            <PlanRow label="שילוח (ממוצע ללקוח)" value={ils(r.plannedShipping)} />
-            <PlanRow label="רווח מתוכנן" value={ils(r.plannedProfit)} strong cool />
-          </div>
-        </div>
+          <CostRow label="עלות מפעל" planned={r.plannedFactory} value={factory} onChange={setFactory} delta={r.factoryDelta} />
+          <CostRow label="שילוח (ממוצע ללקוח)" planned={r.plannedShipping} value={shipping} onChange={setShipping} delta={r.shippingDelta} />
 
-        {/* Actual (editable) */}
-        <div>
-          <div className="lux-label" style={{ color: "var(--lux-champagne)", letterSpacing: "0.16em", marginBottom: 10 }}>בפועל (מה שקרה)</div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            <MoneyInput label="עלות מפעל בפועל" value={factory} onChange={setFactory} planned={r.plannedFactory} delta={r.factoryDelta} />
-            <MoneyInput label="שילוח בפועל" value={shipping} onChange={setShipping} planned={r.plannedShipping} delta={r.shippingDelta} />
-
-            {other.map((c, i) => (
-              <div key={i} style={{ display: "flex", gap: 6, alignItems: "center" }}>
+          {/* other cost lines span the row */}
+          {other.map((c, i) => (
+            <div key={i} style={{ gridColumn: "1 / -1", display: "flex", gap: 8, alignItems: "center" }}>
+              <input
+                value={c.label}
+                onChange={(e) => setOther((prev) => prev.map((x, j) => j === i ? { ...x, label: e.target.value } : x))}
+                placeholder="שם ההוצאה (מכס / שיווק / תיקון…)"
+                style={inputStyle({ flex: 1 })}
+              />
+              <div style={{ display: "flex", alignItems: "center", ...inputStyle({ width: 120, padding: "7px 10px" }) }}>
+                <span style={{ fontSize: 12, color: "var(--lux-muted)" }}>₪</span>
                 <input
-                  value={c.label}
-                  onChange={(e) => setOther((prev) => prev.map((x, j) => j === i ? { ...x, label: e.target.value } : x))}
-                  placeholder="הוצאה (למשל מכס)"
-                  style={inputStyle({ flex: 1 })}
-                />
-                <input
-                  type="number"
-                  value={c.amount}
+                  type="number" value={c.amount}
                   onChange={(e) => setOther((prev) => prev.map((x, j) => j === i ? { ...x, amount: e.target.value } : x))}
-                  placeholder="₪"
-                  style={inputStyle({ width: 90, textAlign: "right" })}
+                  style={{ width: "100%", background: "transparent", border: 0, textAlign: "right", color: "var(--lux-ink)", fontSize: 14, outline: "none" }}
                 />
-                <button type="button" onClick={() => setOther((prev) => prev.filter((_, j) => j !== i))} style={{ color: "var(--lux-muted)", padding: 4 }} aria-label="הסר">
-                  <Trash2 className="size-4" />
-                </button>
               </div>
-            ))}
+              <button type="button" onClick={() => setOther((prev) => prev.filter((_, j) => j !== i))} style={{ color: "var(--lux-muted)", padding: 4 }} aria-label="הסר">
+                <Trash2 className="size-4" />
+              </button>
+            </div>
+          ))}
+
+          <div style={{ gridColumn: "1 / -1" }}>
             <button
               type="button"
               onClick={() => setOther((prev) => [...prev, { label: "", amount: "" }])}
-              style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 12, color: "var(--lux-cool)", alignSelf: "flex-start" }}
+              style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 12.5, color: "var(--lux-cool)" }}
             >
               <Plus className="size-3.5" /> הוסף עלות אחרת
             </button>
           </div>
         </div>
-      </div>
 
-      {/* Note */}
-      <textarea
-        value={note}
-        onChange={(e) => setNote(e.target.value)}
-        placeholder="הערה — למשל: המפעל העלה מחיר, אוחד עם הזמנה אחרת…"
-        rows={2}
-        style={{ ...inputStyle({ width: "100%" }), marginTop: 14, resize: "vertical" }}
-      />
+        {/* Note */}
+        <textarea
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          placeholder="הערה — למשל: המפעל העלה מחיר, אוחד עם הזמנה אחרת…"
+          rows={2}
+          style={{ ...inputStyle({ width: "100%" }), marginTop: 14, resize: "vertical" }}
+        />
 
-      {/* Reconciliation bar */}
-      <div
-        style={{
-          marginTop: 16, paddingTop: 14, borderTop: "1px solid var(--lux-line)",
-          display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap",
-        }}
-      >
-        <div style={{ display: "flex", gap: 22, flexWrap: "wrap" }}>
-          <ReconStat label="רווח בפועל" value={ils(r.actualProfit)} tone={r.actualProfit >= r.plannedProfit ? "success" : "warn"} big />
-          <ReconStat
-            label={varPos ? "מעבר לתכנון" : "נספג מהרווח"}
-            value={`${varPos ? "+" : "−"}${ils(Math.abs(r.variance))}`}
-            tone={varPos ? "success" : "alert"}
-          />
-          {r.otherTotal > 0 && <ReconStat label="עלויות אחרות" value={ils(r.otherTotal)} tone="muted" />}
+        {/* Save */}
+        <div style={{ display: "flex", justifyContent: "flex-start", marginTop: 14 }}>
+          <button
+            type="button"
+            onClick={save}
+            disabled={saveState === "saving"}
+            style={{
+              display: "inline-flex", alignItems: "center", gap: 7, padding: "9px 18px",
+              borderRadius: 6, background: "var(--lux-navy-to, #2b3a55)", color: "#e8eefc",
+              fontSize: 13, fontWeight: 500, opacity: saveState === "saving" ? 0.6 : 1,
+            }}
+          >
+            {saveState === "saving" ? <Loader2 className="size-4 animate-spin" /> :
+             saveState === "saved" ? <Check className="size-4" /> : <Save className="size-4" />}
+            {saveState === "saved" ? "נשמר ✓" : saveState === "error" ? "שגיאה — נסה שוב" : "שמור עלויות בפועל"}
+          </button>
         </div>
-        <button
-          type="button"
-          onClick={save}
-          disabled={saveState === "saving"}
-          style={{
-            display: "inline-flex", alignItems: "center", gap: 7, padding: "10px 18px",
-            borderRadius: 6, background: "var(--lux-navy-to, #2b3a55)", color: "#e8eefc",
-            fontSize: 13, fontWeight: 500, opacity: saveState === "saving" ? 0.6 : 1,
-          }}
-        >
-          {saveState === "saving" ? <Loader2 className="size-4 animate-spin" /> :
-           saveState === "saved" ? <Check className="size-4" /> : <Save className="size-4" />}
-          {saveState === "saved" ? "נשמר ✓" : saveState === "error" ? "שגיאה — נסה שוב" : "שמור עלויות בפועל"}
-        </button>
       </div>
     </section>
   );
@@ -341,51 +342,28 @@ function inputStyle(extra: React.CSSProperties): React.CSSProperties {
   };
 }
 
-function PlanRow({ label, value, strong, cool }: { label: string; value: string; strong?: boolean; cool?: boolean }) {
-  return (
-    <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13 }}>
-      <span style={{ color: "var(--lux-muted)" }}>{label}</span>
-      <span className="tabular-nums" style={{ color: cool ? "var(--lux-cool)" : "var(--lux-ink)", fontWeight: strong ? 500 : 400 }}>{value}</span>
-    </div>
-  );
-}
-
-function MoneyInput({
-  label, value, onChange, planned, delta,
+/** One planned↔actual row inside the card's grid (4 cells). */
+function CostRow({
+  label, planned, value, onChange, delta,
 }: {
-  label: string; value: string; onChange: (v: string) => void; planned: number; delta: number;
+  label: string; planned: number; value: string; onChange: (v: string) => void; delta: number;
 }) {
   const has = Math.abs(delta) > 0.5;
+  const deltaColor = has ? (delta > 0 ? "#e8b4b4" : "var(--lux-success,#a8c0a0)") : "var(--lux-muted)";
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-        <span style={{ fontSize: 13, color: "var(--lux-muted)", flex: 1 }}>{label}</span>
-        <div style={{ display: "flex", alignItems: "center", ...inputStyle({ width: 120, padding: "6px 10px" }) }}>
-          <span style={{ fontSize: 12, color: "var(--lux-muted)" }}>₪</span>
-          <input
-            type="number"
-            value={value}
-            onChange={(e) => onChange(e.target.value)}
-            style={{ width: "100%", background: "transparent", border: 0, textAlign: "right", color: "var(--lux-ink)", fontSize: 14, outline: "none" }}
-          />
-        </div>
+    <>
+      <div style={{ fontSize: 13, color: "var(--lux-muted)" }}>{label}</div>
+      <div className="tabular-nums" style={{ fontSize: 13.5, color: "var(--lux-ink)", textAlign: "right" }}>{ils(planned)}</div>
+      <div style={{ display: "flex", alignItems: "center", ...inputStyle({ padding: "7px 10px" }) }}>
+        <span style={{ fontSize: 12, color: "var(--lux-muted)" }}>₪</span>
+        <input
+          type="number" value={value} onChange={(e) => onChange(e.target.value)}
+          style={{ width: "100%", background: "transparent", border: 0, textAlign: "right", color: "var(--lux-ink)", fontSize: 14, outline: "none" }}
+        />
       </div>
-      <span style={{ fontSize: 10.5, color: has ? (delta > 0 ? "#e8b4b4" : "var(--lux-success,#a8c0a0)") : "var(--lux-muted)", textAlign: "left" }}>
-        {has ? `${delta > 0 ? "יקר ב" : "זול ב"}${ils(Math.abs(delta))} מהתכנון (${ils(planned)})` : `כמתוכנן (${ils(planned)})`}
-      </span>
-    </div>
-  );
-}
-
-function ReconStat({ label, value, tone = "muted", big }: { label: string; value: string; tone?: "success" | "alert" | "warn" | "muted"; big?: boolean }) {
-  const color =
-    tone === "success" ? "var(--lux-success,#a8c0a0)" :
-    tone === "alert" ? "#e8b4b4" :
-    tone === "warn" ? "var(--lux-champagne)" : "var(--lux-muted)";
-  return (
-    <div>
-      <div style={{ fontSize: 10.5, color: "var(--lux-muted)", letterSpacing: "0.1em" }}>{label}</div>
-      <div className="tabular-nums" style={{ fontSize: big ? 22 : 16, fontWeight: 400, color, marginTop: 2 }}>{value}</div>
-    </div>
+      <div style={{ fontSize: 11, color: deltaColor }}>
+        {has ? (delta > 0 ? `יקר ב${ils(Math.abs(delta))}` : `זול ב${ils(Math.abs(delta))}`) : "כמתוכנן"}
+      </div>
+    </>
   );
 }
