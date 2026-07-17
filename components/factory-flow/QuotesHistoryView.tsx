@@ -665,24 +665,27 @@ export function QuotesHistoryView({ apiToken }: { apiToken: string }) {
                       </span>
                     </button>
                     <div className="flex items-center gap-0.5 shrink-0">
-                      {/* Combined-offer toolbar — same actions a single quote has */}
-                      {canSendCombined && (
-                        <a
-                          href={combinedPdfHref}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          title="הצג PDF משולב"
+                      {/* Combined-offer toolbar — same actions a single quote has.
+                          Eye opens the FULL combined view (boss breakdown of both
+                          quotes + customer-PDF link inside), matching the single-
+                          quote eye. Per Eli 2026-07-17: "the eye should open
+                          everything, not just the customer PDF." */}
+                      {canCalc && (
+                        <button
+                          type="button"
+                          onClick={() => setCalcGroup(g)}
+                          title="הצג הכל — פירוט מלא לבוס + PDF"
                           className="size-7 rounded grid place-items-center text-muted-foreground hover:text-foreground hover:bg-secondary"
                         >
                           <Eye className="size-3.5" />
-                        </a>
+                        </button>
                       )}
                       {canSendCombined && (
                         <a
                           href={combinedPdfHref}
                           target="_blank"
                           rel="noopener noreferrer"
-                          title="הורד PDF משולב"
+                          title="הורד PDF משולב ללקוח"
                           className="size-7 rounded grid place-items-center text-muted-foreground hover:text-foreground hover:bg-secondary"
                         >
                           <Download className="size-3.5" />
