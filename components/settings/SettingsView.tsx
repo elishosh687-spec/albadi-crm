@@ -50,6 +50,8 @@ export function SettingsView({ apiToken }: { apiToken: string }) {
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [refreshingFx, setRefreshingFx] = useState(false);
+  const [fxMsg, setFxMsg] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -116,6 +118,31 @@ export function SettingsView({ apiToken }: { apiToken: string }) {
   ) => {
     const num = Number(v);
     setState((s) => (s ? { ...s, [key]: Number.isFinite(num) ? num : 0 } : s));
+  };
+
+  // Pull the live market rate and drop it into the form (operator still clicks
+  // Save to apply). Does NOT write the config itself — keeps the save flow intact.
+  const refreshFx = async () => {
+    setFxMsg(null);
+    setRefreshingFx(true);
+    try {
+      const res = await fetch(widgetUrl("/api/widget/factory/fx-live", apiToken) + "&fresh=1");
+      const data = await res.json();
+      if (data?.ok && data?.fx) {
+        setState((s) => (s ? { ...s, usdToIls: data.fx.usdToIls, usdToCny: data.fx.usdToCny, fxUpdatedAt: data.fx.fetchedAt } : s));
+        setFxMsg(
+          data.fx.source === "config-fallback"
+            ? "לא הצלחתי למשוך שער חי כרגע — נשאר הערך הנוכחי"
+            : `שער חי נטען: 1$ = ₪${data.fx.usdToIls} · 1$ = ¥${data.fx.usdToCny}. לחץ שמור להחיל.`
+        );
+      } else {
+        setFxMsg(data?.error ?? "כשל במשיכת שער");
+      }
+    } catch (err) {
+      setFxMsg(err instanceof Error ? err.message : String(err));
+    } finally {
+      setRefreshingFx(false);
+    }
   };
 
   const updateMarginTier = (qtyKey: string, v: string) => {
@@ -258,6 +285,40 @@ export function SettingsView({ apiToken }: { apiToken: string }) {
       <section className="space-y-6" dir="rtl">
 
       <FormSection icon={ArrowLeftRight} title="שערי המרה" desc="המרות מטבע לחישוב עלות והצעה">
+        {/* Live auto-update controls */}
+        <div className="mb-4 rounded-lg border border-border/60 bg-background/30 p-3 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => setState((s) => (s ? { ...s, fxAutoUpdate: s.fxAutoUpdate !== true } : s))}
+              aria-pressed={state.fxAutoUpdate === true}
+              className={cn(
+                "relative h-6 w-11 rounded-full transition-colors shrink-0",
+                state.fxAutoUpdate === true ? "bg-emerald-500/70" : "bg-muted"
+              )}
+            >
+              <span className={cn("absolute top-0.5 size-5 rounded-full bg-white transition-all", state.fxAutoUpdate === true ? "left-0.5" : "left-[22px]")} />
+            </button>
+            <div>
+              <div className="text-sm font-medium">עדכון שער אוטומטי מהאינטרנט</div>
+              <div className="text-[11px] text-muted-foreground">
+                {state.fxAutoUpdate === true
+                  ? "השער מתעדכן אוטומטית פעם ביום מהשוק."
+                  : "השער קפוא — עדכון ידני בלבד (הפעל כדי לעדכן אוטומטית)."}
+                {state.fxUpdatedAt && ` · עודכן לאחרונה ${new Date(state.fxUpdatedAt).toLocaleString("he-IL", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}`}
+              </div>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={refreshFx}
+            disabled={refreshingFx}
+            className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-xs font-medium hover:bg-muted/30 disabled:opacity-50"
+          >
+            <RefreshCw className={cn("size-3.5", refreshingFx && "animate-spin")} /> רענן עכשיו
+          </button>
+        </div>
+        {fxMsg && <div className="mb-3 text-[11px] text-muted-foreground">{fxMsg}</div>}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <NumField label="USD → ILS" suffix="₪" hint="שער דולר אמריקאי לשקל" value={state.usdToIls} step={0.01} onChange={(v) => updateNumber("usdToIls", v)} error={errors.usdToIls as string | undefined} />
           <NumField label="USD → CNY" suffix="¥" hint="כמה יואן בדולר (לעלות יחידה ¥ → ₪)" value={state.usdToCny} step={0.01} onChange={(v) => updateNumber("usdToCny", v)} error={errors.usdToCny as string | undefined} />

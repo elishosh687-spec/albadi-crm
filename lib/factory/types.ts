@@ -116,6 +116,12 @@ export interface FactoryPricingConfig {
    *  quote for cost reference. Optional — falls back to derived value
    *  (usdToCny / usdToIls) when missing. */
   ilsToCny?: number;
+  /** When true (default), a daily cron overwrites usdToIls/usdToCny with the
+   *  live market rate (see /api/cron/refresh-fx + lib/fx/live-rates.ts). Turn
+   *  OFF to freeze the rate manually. */
+  fxAutoUpdate?: boolean;
+  /** ISO timestamp of the last live-FX write (auto or manual "refresh now"). */
+  fxUpdatedAt?: string;
   /** Default profit margin % when caller doesn't override and no per-qty value */
   defaultProfitMargin: number;
   /**

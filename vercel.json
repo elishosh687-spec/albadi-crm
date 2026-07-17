@@ -11,6 +11,10 @@
     {
       "path": "/api/cron/analyze-active-leads",
       "schedule": "30 3 * * *"
+    },
+    {
+      "path": "/api/cron/refresh-fx",
+      "schedule": "0 5 * * *"
     }
   ],
   "functions": {
