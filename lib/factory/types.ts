@@ -262,3 +262,31 @@ export interface ShippingSplit {
   /** e.g. "סטנדרט · 9,000 יח׳" */
   seaLabel: string;
 }
+
+/**
+ * Post-close ACTUAL costs for a WON deal — the reconciliation layer.
+ *
+ * The customer price is locked once the quote closes, so any gap between what
+ * Eli PLANNED (finalPricing) and what actually happened falls on his margin.
+ * The two things that drift: the factory sometimes raises the price after
+ * close, and real shipping differs from the averaged shipping charged to the
+ * customer. Enter the real totals here (default to the planned values) plus any
+ * number of free-form other-cost lines; the UI shows planned-vs-actual profit
+ * so Eli can tell whether his pricing/averaging is calibrated.
+ *
+ * All amounts in ILS totals (whole order), to compare directly against
+ * finalPricing.totalCost / totalShipping / totalProfit. Stored in its OWN
+ * column (factory_quote_requests.actual_costs) so a re-finalize never wipes it.
+ */
+export interface QuoteActualCosts {
+  /** Real factory cost paid, total ₪ (production all-in). Undefined → use planned. */
+  factoryTotalIls?: number;
+  /** Real shipping paid, total ₪. Undefined → use planned. */
+  shippingTotalIls?: number;
+  /** Any extra costs on this order — customs, rework, samples, etc. */
+  otherCosts?: { label: string; amountIls: number }[];
+  /** Free note — e.g. "אוחד עם הזמנה X", "המפעל העלה מחיר". */
+  note?: string;
+  /** ISO timestamp of the last save. */
+  updatedAt?: string;
+}

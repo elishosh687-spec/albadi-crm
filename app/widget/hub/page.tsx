@@ -21,6 +21,7 @@ import {
   Package,
   Settings,
   Search,
+  CircleCheckBig,
   type LucideIcon,
 } from "lucide-react";
 import { verifyWidgetToken } from "@/integrations/ghl/widget-auth";
@@ -62,6 +63,12 @@ const TABS: TabDef[] = [
     label: "הצעות מחיר",
     icon: Receipt,
     url: (t, sid) => withSid(`/widget/factory-flow?widget_token=${encodeURIComponent(t)}`, sid),
+  },
+  {
+    id: "closed",
+    label: "הצעות שנסגרו",
+    icon: CircleCheckBig,
+    url: (t) => `/widget/closed-quotes?widget_token=${encodeURIComponent(t)}`,
   },
   {
     id: "analysis",

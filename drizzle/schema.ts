@@ -251,6 +251,12 @@ export const factoryQuoteRequests = pgTable("factory_quote_requests", {
   finalPricing: jsonb("final_pricing"),
   pdfUrl: text("pdf_url"),
   sentToCustomerAt: timestamp("sent_to_customer_at", { withTimezone: true }),
+  // QuoteActualCosts — post-close reconciliation: the REAL factory + shipping
+  // (+ free-form other) costs that materialized after a WON deal, so Eli can
+  // compare planned-vs-actual profit. Column added via direct DDL (drizzle-kit
+  // push hangs on orphan configurator_* tables — see CLAUDE.md). Kept SEPARATE
+  // from finalPricing so a re-finalize can't wipe it.
+  actualCosts: jsonb("actual_costs"),
 });
 
 // Append-only audit log of every bot-side quote sent on WhatsApp. Captures
