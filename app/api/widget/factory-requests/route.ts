@@ -13,6 +13,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { widgetAuthed } from "@/lib/widget/auth";
 import { createFactoryDraft } from "@/lib/factory/create-request";
+import { getFactoryConfig } from "@/lib/factory/config";
 import { sendEliDM } from "@/lib/notify/eli";
 
 export const runtime = "nodejs";
@@ -27,6 +28,10 @@ const ProductSpecSchema = z.object({
   printing: z.string().default(""),
   finishing: z.string().default(""),
   notes: z.string().optional(),
+  // Salesperson's shipping pick (sea=regular / air=express). Opaque option id
+  // from the factory config — the FinalizeModal reads it to pre-select the
+  // method, which materially changes the price.
+  shippingOptionId: z.string().optional(),
 });
 
 const BodySchema = z.object({
@@ -37,7 +42,8 @@ const BodySchema = z.object({
 
 function buildEliSummary(
   customerName: string | undefined,
-  spec: z.infer<typeof ProductSpecSchema>
+  spec: z.infer<typeof ProductSpecSchema>,
+  shippingLabel: string | null
 ): string {
   const dims = [spec.widthCm, spec.heightCm, spec.depthCm]
     .filter((n) => n > 0)
@@ -51,11 +57,28 @@ function buildEliSummary(
     `כמות: ${spec.quantity}`,
     spec.printing ? `הדפסה: ${spec.printing}` : null,
     spec.finishing ? `גימור: ${spec.finishing}` : null,
+    shippingLabel ? `שילוח: ${shippingLabel}` : null,
     spec.notes ? `הערות: ${spec.notes}` : null,
     "",
     'לאישור ושליחה למפעל — טאב "הצעות מהמפעל", סינון "טיוטות".',
   ];
   return lines.filter((l): l is string => l !== null).join("\n");
+}
+
+// Resolve the opaque shippingOptionId → a human "name (ים/אוויר)" line for the
+// Eli DM. Best-effort: any config-load failure just drops the line.
+async function resolveShippingLabel(
+  shippingOptionId: string | undefined
+): Promise<string | null> {
+  if (!shippingOptionId) return null;
+  try {
+    const cfg = await getFactoryConfig();
+    const opt = cfg.shippingOptions.find((s) => s.id === shippingOptionId);
+    if (!opt) return null;
+    return `${opt.name} (${opt.type === "sea" ? "ים/רגיל" : "אוויר/אקספרס"})`;
+  } catch {
+    return null;
+  }
 }
 
 export async function POST(req: NextRequest) {
@@ -78,7 +101,8 @@ export async function POST(req: NextRequest) {
       customerName: body.customerName,
       productSpec: body.productSpec,
     });
-    await sendEliDM(buildEliSummary(body.customerName, body.productSpec));
+    const shippingLabel = await resolveShippingLabel(body.productSpec.shippingOptionId);
+    await sendEliDM(buildEliSummary(body.customerName, body.productSpec, shippingLabel));
     return NextResponse.json({ ok: true, ...result });
   } catch (err) {
     console.error("[widget/factory-requests] failed", err);

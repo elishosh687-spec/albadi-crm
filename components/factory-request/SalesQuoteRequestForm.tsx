@@ -87,6 +87,40 @@ export function SalesQuoteRequestForm({ apiToken }: { apiToken: string }) {
   const [error, setError] = useState<string | null>(null);
   const [sent, setSent] = useState(false);
 
+  // --- shipping method (sea/air) ---
+  // Pulled live from the factory config so the ids match what the FinalizeModal
+  // resolves. The salesperson's pick lands on productSpec.shippingOptionId, which
+  // the FinalizeModal already reads to PRE-SELECT the method (sea=רגיל vs
+  // air=אקספרס changes the whole price). Sea is the default (business rule).
+  const [seaOpt, setSeaOpt] = useState<{ id: string; name: string } | null>(null);
+  const [airOpt, setAirOpt] = useState<{ id: string; name: string } | null>(null);
+  const [shippingOptionId, setShippingOptionId] = useState<string>("");
+
+  useEffect(() => {
+    let alive = true;
+    fetch(widgetUrl("/api/widget/factory/config", apiToken))
+      .then((r) => r.json())
+      .then((data) => {
+        if (!alive || !data?.ok || !data?.config?.shippingOptions) return;
+        const opts = data.config.shippingOptions as Array<{
+          id: string;
+          name: string;
+          type: "sea" | "air";
+          enabled: boolean;
+        }>;
+        const sea = opts.find((s) => s.type === "sea" && s.enabled) ?? null;
+        const air = opts.find((s) => s.type === "air" && s.enabled) ?? null;
+        setSeaOpt(sea ? { id: sea.id, name: sea.name } : null);
+        setAirOpt(air ? { id: air.id, name: air.name } : null);
+        // Default to sea (regular) when available, else the first air option.
+        setShippingOptionId(sea?.id ?? air?.id ?? "");
+      })
+      .catch((err) => console.error("[SalesQuoteRequestForm] config load failed", err));
+    return () => {
+      alive = false;
+    };
+  }, [apiToken]);
+
   const set = <K extends keyof typeof EMPTY_SPEC>(key: K, val: (typeof EMPTY_SPEC)[K]) =>
     setF((prev) => ({ ...prev, [key]: val }));
 
@@ -189,6 +223,7 @@ export function SalesQuoteRequestForm({ apiToken }: { apiToken: string }) {
             printing: `${f.logoColors} color${f.logoColors > 1 ? "s" : ""}`,
             finishing: finishingParts.join(" / "),
             notes: f.notes.trim() || undefined,
+            shippingOptionId: shippingOptionId || undefined,
           },
         }),
       });
@@ -450,6 +485,26 @@ export function SalesQuoteRequestForm({ apiToken }: { apiToken: string }) {
               ]}
             />
           </div>
+
+          {/* Shipping method — sea (regular) vs air (express) materially changes
+              the price, so the salesperson picks it and it pre-selects in Eli's
+              pricing screen. Hidden if the config didn't load a sea/air pair. */}
+          {(seaOpt || airOpt) && (
+            <div>
+              <SelectField
+                label="שיטת שילוח"
+                value={shippingOptionId}
+                onChange={setShippingOptionId}
+                options={[
+                  ...(seaOpt ? [{ value: seaOpt.id, label: "ים (רגיל — זול)" }] : []),
+                  ...(airOpt ? [{ value: airOpt.id, label: "אוויר (אקספרס — מהיר)" }] : []),
+                ]}
+              />
+              <div className="mt-1 text-[10px] text-right" style={{ color: "#8a7f74" }}>
+                משפיע מהותית על המחיר — ים זול ואיטי, אוויר יקר ומהיר.
+              </div>
+            </div>
+          )}
 
           <Field
             label="הערות למפעל"
