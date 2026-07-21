@@ -15,6 +15,7 @@ const BodySchema = z.object({
   profitMarginOverride: z.number().min(0).max(99.9).optional(),
   shippingOptionId: z.string().optional(),
   moldsCostCny: z.number().min(0).optional(),
+  totalCbmOverride: z.number().min(0).max(200).optional(),
   specOverride: z
     .object({
       description: z.string().optional(),

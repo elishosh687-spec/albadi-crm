@@ -137,7 +137,8 @@ export interface BreakdownView {
    *  changes the customer price). */
   commission: {
     pct: number;
-    ils: number; // commission amount on the total sale
+    base: number; // the base the commission is charged on = deal EXCLUDING shipping
+    ils: number; // commission amount on the base
     netProfitIls: number; // profit − commission
     ofProfitPct: number; // commission as % of profit
   };
@@ -261,6 +262,7 @@ export function buildBreakdownView(input: BreakdownInput): BreakdownView {
       const c = computeCommission(input.totalSellingPrice, input.totalProfit, input.commissionPct, input.totalShipping);
       return {
         pct: c.pct,
+        base: r2(c.base),
         ils: r2(c.commission),
         netProfitIls: r2(c.netProfit),
         ofProfitPct: r2(c.ofProfitPct),

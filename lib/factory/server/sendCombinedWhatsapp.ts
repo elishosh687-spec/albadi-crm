@@ -53,7 +53,8 @@ interface CombinedSplitInput {
 
 async function combinedTotals(
   priced: { id: string; p: FactoryPricingResult }[],
-  split?: CombinedSplitInput
+  split?: CombinedSplitInput,
+  cbmOverride?: number
 ): Promise<{ grandTotal: number; airIls?: number; seaIls?: number; airName?: string; seaName?: string }> {
   const config = await getFactoryConfig();
   const singleOpt = config.shippingOptions.find((s) => s.id === priced[0]?.p.shippingOptionId) ?? null;
@@ -61,7 +62,8 @@ async function combinedTotals(
     priced.map((r) => ({ id: r.id, pricing: r.p })),
     singleOpt,
     config,
-    split
+    split,
+    cbmOverride
   );
   return {
     grandTotal: alloc.grandTotal,
@@ -75,7 +77,8 @@ async function combinedTotals(
 export async function sendCombinedQuoteWhatsapp(
   ids: string[],
   hostHeader: string | null,
-  split?: CombinedSplitInput
+  split?: CombinedSplitInput,
+  cbmOverride?: number
 ): Promise<SendWhatsappOk | SendWhatsappErr> {
   if (ids.length < 1) {
     return { ok: false, status: 400, error: "no_ids" };
@@ -151,10 +154,13 @@ export async function sendCombinedQuoteWhatsapp(
   const splitQs = validSplit
     ? `&airIds=${encodeURIComponent(validSplit.airIds.join(","))}&airShip=${encodeURIComponent(validSplit.airShippingOptionId)}&seaShip=${encodeURIComponent(validSplit.seaShippingOptionId)}`
     : "";
-  const pdfMediaUrl = `${proto}://${host}/api/factory/combine/pdf?ids=${encodeURIComponent(idsParam)}${splitQs}`;
+  // Manual merged-CBM override → the attached PDF must price shipping on the same
+  // volume, else the caption total and the PDF total diverge.
+  const cbmQs = cbmOverride && cbmOverride > 0 ? `&cbm=${encodeURIComponent(String(cbmOverride))}` : "";
+  const pdfMediaUrl = `${proto}://${host}/api/factory/combine/pdf?ids=${encodeURIComponent(idsParam)}${splitQs}${cbmQs}`;
 
   const priced = rows.map((r) => ({ id: r.id, p: r.finalPricing as FactoryPricingResult }));
-  const totals = await combinedTotals(priced, validSplit);
+  const totals = await combinedTotals(priced, validSplit, cbmOverride);
 
   const greeting = lead.name ? `היי ${lead.name} 👋` : "היי 👋";
   const title =

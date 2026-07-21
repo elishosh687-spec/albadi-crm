@@ -100,6 +100,9 @@ export async function GET(req: NextRequest) {
     airIds.length > 0 && airShipId && seaShipId
       ? { airIds, airShippingOptionId: airShipId, seaShippingOptionId: seaShipId }
       : undefined;
+  // Manual merged-CBM override (grouped orders) — must match the on-screen calc.
+  const cbmParam = parseFloat(sp.get("cbm") ?? "");
+  const cbmOverride = Number.isFinite(cbmParam) && cbmParam > 0 ? cbmParam : undefined;
   const singleOpt =
     config.shippingOptions.find((s) => s.id === (ordered[0]?.finalPricing as FactoryPricingResult)?.shippingOptionId) ?? null;
 
@@ -107,7 +110,8 @@ export async function GET(req: NextRequest) {
     ordered.map((r) => ({ id: r.id, pricing: r.finalPricing as FactoryPricingResult })),
     singleOpt,
     config,
-    split
+    split,
+    cbmOverride
   );
   const adjustedById = new Map(alloc.perProduct.map((x) => [x.id, x.adjusted]));
 

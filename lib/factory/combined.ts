@@ -179,7 +179,10 @@ export function allocateCombined(
   items: { id: string; pricing: FactoryPricingResult }[],
   singleOpt: ShippingOption | null | undefined,
   config: FactoryPricingConfig,
-  split?: CombinedAllocationSplit
+  split?: CombinedAllocationSplit,
+  /** Manual override of the merged CBM (m³), single-shipment only. Sets the
+   *  shipping amount; per-product share still uses each item's own CBM. */
+  cbmOverride?: number
 ): CombinedAllocated {
   const airSet = new Set(split?.airIds ?? []);
   const air = items.filter((i) => airSet.has(i.id));
@@ -209,7 +212,10 @@ export function allocateCombined(
         : { shipping: seaIls!, cbm: seaCbm, count: sea.length, name: seaOpt?.name ?? null };
   } else {
     const cbm = gc(items);
-    const shipping = combinedShippingIls(cbm, gw(items), singleOpt, config);
+    // Override sets the shipping VOLUME; share denominator stays the true summed
+    // CBM so per-product allocation still sums to 1.
+    const shipCbm = cbmOverride && cbmOverride > 0 ? cbmOverride : cbm;
+    const shipping = combinedShippingIls(shipCbm, gw(items), singleOpt, config);
     groupOf = () => ({ shipping, cbm, count: items.length, name: singleOpt?.name ?? null });
   }
 
@@ -244,12 +250,17 @@ export function allocateCombined(
 export function computeCombined(
   items: CombinedItemInput[],
   opt: ShippingOption | null | undefined,
-  config: FactoryPricingConfig
+  config: FactoryPricingConfig,
+  /** Manual override of the merged CBM (m³) — for grouped orders whose real
+   *  packing volume differs from the naive sum. When > 0 it replaces the summed
+   *  CBM in the shipping calc (weight is unaffected). */
+  cbmOverride?: number
 ): CombinedPricingResult {
   const sum = (f: (i: CombinedItemInput) => number) =>
     items.reduce((s, i) => s + (f(i) || 0), 0);
 
-  const combinedCbm = r2(sum((i) => i.totalCbm));
+  const combinedCbm =
+    cbmOverride && cbmOverride > 0 ? r2(cbmOverride) : r2(sum((i) => i.totalCbm));
   const combinedWeightKg = r2(sum((i) => i.totalWeightKg));
   const combinedShipping = combinedShippingIls(
     combinedCbm,

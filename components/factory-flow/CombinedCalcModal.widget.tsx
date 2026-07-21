@@ -103,6 +103,7 @@ export function CombinedCalcModalWidget({
 }) {
   const [config, setConfig] = useState<FactoryPricingConfig | null>(null);
   const [shippingOptionId, setShippingOptionId] = useState<string>("");
+  const [cbmOverride, setCbmOverride] = useState<string>("");
   // Salesperson commission — boss-only, display-only. Override for this combined
   // calculation, or save as the new global default (CommissionControl).
   const [commissionText, setCommissionText] = useState("");
@@ -234,6 +235,12 @@ export function CombinedCalcModalWidget({
     return out;
   }, [config, rows, sectionState, shippingOptionId]);
 
+  // Manual CBM override for the merged shipment — for grouped orders whose real
+  // packing volume differs from the naive sum. Empty → auto (summed). Only the
+  // shipping calc uses it; per-product allocation still uses true CBM share.
+  const cbmOverrideParsed = cbmOverride !== "" ? parseFloat(cbmOverride) : NaN;
+  const cbmOverrideValid = Number.isFinite(cbmOverrideParsed) && cbmOverrideParsed > 0;
+
   const combinedResult = useMemo(() => {
     if (!config) return null;
     // Only the SELECTED products form the offer.
@@ -242,8 +249,8 @@ export function CombinedCalcModalWidget({
       .filter((p): p is FactoryPricingResult => !!p);
     if (priced.length === 0) return null;
     const opt = config.shippingOptions.find((s) => s.id === shippingOptionId) ?? null;
-    return computeCombined(priced, opt, config);
-  }, [livePricings, config, shippingOptionId, selectedRows]);
+    return computeCombined(priced, opt, config, cbmOverrideValid ? cbmOverrideParsed : undefined);
+  }, [livePricings, config, shippingOptionId, selectedRows, cbmOverrideValid, cbmOverrideParsed]);
 
   // Each priceable product paired with its live pricing, for the combined
   // breakdown (the "4 products that make up the one order" view).
@@ -263,22 +270,28 @@ export function CombinedCalcModalWidget({
   const allocatedByRow = useMemo(() => {
     const out: Record<string, { total: number; unit: number } | null> = {};
     const round = (n: number) => Math.round(n * 100) / 100;
+    // Share denominator = TRUE summed CBM of the selected rows (not the manual
+    // override, which only sets the shipping amount) — so shares still sum to 1.
+    const trueSumCbm = selectedRows.reduce(
+      (s, r) => s + (livePricings[r.id]?.totalCbm || 0),
+      0
+    );
     for (const row of rows) {
       const p = livePricings[row.id];
       // Only selected rows get the combined (allocated) price — unselected ones
       // aren't part of the merged shipment, so they show their standalone price.
-      if (!p || !selected.has(row.id) || !combinedResult || combinedResult.combinedCbm <= 0) {
+      if (!p || !selected.has(row.id) || !combinedResult || trueSumCbm <= 0) {
         out[row.id] = null;
         continue;
       }
-      const share = p.totalCbm / combinedResult.combinedCbm;
+      const share = p.totalCbm / trueSumCbm;
       const alloc = combinedResult.combinedShipping * share;
       const total = round(p.totalSellingPrice - p.totalShipping + alloc);
       const unit = p.quantity > 0 ? round(total / p.quantity) : total;
       out[row.id] = { total, unit };
     }
     return out;
-  }, [rows, livePricings, combinedResult, selected]);
+  }, [rows, livePricings, combinedResult, selected, selectedRows]);
 
   function setAllMargins(v: number) {
     setSectionState((prev) => {
@@ -323,7 +336,10 @@ export function CombinedCalcModalWidget({
   const splitQs = combinedSplit
     ? `&airIds=${encodeURIComponent(combinedSplit.airIds.join(","))}&airShip=${encodeURIComponent(combinedSplit.airShippingOptionId)}&seaShip=${encodeURIComponent(combinedSplit.seaShippingOptionId)}`
     : "";
-  const combinePdfHref = `${origin}/api/factory/combine/pdf?ids=${combineIds.join(",")}${splitQs}`;
+  // Manual CBM override → the sent PDF must price shipping on the same volume the
+  // on-screen calc shows, else the sent total won't match.
+  const cbmQs = cbmOverrideValid ? `&cbm=${encodeURIComponent(String(cbmOverrideParsed))}` : "";
+  const combinePdfHref = `${origin}/api/factory/combine/pdf?ids=${combineIds.join(",")}${splitQs}${cbmQs}`;
 
   async function handleSaveAll() {
     if (!config) return;
@@ -404,6 +420,7 @@ export function CombinedCalcModalWidget({
         widgetUrl("/api/factory/combine/send-whatsapp", apiToken, {
           ids: combineIds.join(","),
           ...splitQuery,
+          ...(cbmOverrideValid ? { cbm: String(cbmOverrideParsed) } : {}),
         }),
         { method: "POST" }
       );
@@ -569,6 +586,25 @@ export function CombinedCalcModalWidget({
                     label="סה״כ נפח / משקל"
                     value={`${combinedResult.combinedCbm} m³ · ${combinedResult.combinedWeightKg}kg`}
                   />
+                  {/* Manual CBM override — real merged volume for grouped orders. */}
+                  <div className="flex items-center justify-between gap-2 py-0.5">
+                    <span className="text-[11px] text-muted-foreground shrink-0">נפח ידני (m³)</span>
+                    <input
+                      type="number"
+                      min={0}
+                      step={0.1}
+                      placeholder="אוטומטי (סכום)"
+                      value={cbmOverride}
+                      onChange={(e) => setCbmOverride(e.target.value)}
+                      className="w-28 rounded-md border border-border bg-background px-2 py-1 text-xs tabular-nums text-left focus:outline-none focus:ring-2 focus:ring-ring/30"
+                      dir="ltr"
+                    />
+                  </div>
+                  {cbmOverrideValid && (
+                    <div className="text-[10px] text-amber-500/90 text-right">
+                      שילוח מחושב על {cbmOverrideParsed} m³ (עקיפה ידנית)
+                    </div>
+                  )}
                   <PriceRow
                     label="שילוח מאוחד"
                     value={`${formatIls(combinedResult.combinedShipping)} (בנפרד: ${formatIls(
@@ -607,6 +643,10 @@ export function CombinedCalcModalWidget({
                     return (
                       <>
                         <div className="border-t border-success/20 my-1" />
+                        <PriceRow
+                          label="בסיס עמלה (ללא שילוח)"
+                          value={formatIls(comm.base)}
+                        />
                         <PriceRow
                           label={`עמלת איש מכירות (${comm.pct}%) — על שני המוצרים`}
                           value={formatIls(comm.commission)}

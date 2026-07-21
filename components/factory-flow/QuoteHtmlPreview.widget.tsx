@@ -219,6 +219,7 @@ export function QuoteHtmlPreviewWidget({ apiToken, row }: { apiToken: string; ro
                     const c = computeCommission(p.totalSellingPrice, p.totalProfit, p.commissionPct, p.totalShipping);
                     return (
                       <>
+                        <PriceRow label="בסיס עמלה (ללא שילוח)" value={fmtIls(c.base)} />
                         <PriceRow
                           label={`עמלת מכירות (${c.pct}% מהעסקה ללא שילוח · ${Math.round(c.ofProfitPct)}% מהרווח)`}
                           value={`−${fmtIls(c.commission)}`}

@@ -65,6 +65,12 @@ export function FinalizeModalWidget({
   );
   const moldsParsed = moldsCost !== "" ? parseFloat(moldsCost) : NaN;
   const moldsValid = Number.isFinite(moldsParsed) && moldsParsed > 0;
+  // Manual CBM override — for grouped/consolidated orders whose real packing
+  // volume differs from the dimension-derived sum. Empty → auto. Only affects
+  // the shipping calc (sea). Boss-only.
+  const [cbmOverride, setCbmOverride] = useState<string>("");
+  const cbmOverrideParsed = cbmOverride !== "" ? parseFloat(cbmOverride) : NaN;
+  const cbmOverrideValid = Number.isFinite(cbmOverrideParsed) && cbmOverrideParsed > 0;
   // Salesperson commission — boss-only, display-only. Editable inline: override
   // for this quote, or save as the new global default (CommissionControl).
   const [commissionText, setCommissionText] = useState("");
@@ -212,10 +218,11 @@ export function FinalizeModalWidget({
         moldsCostCny: moldsValid ? moldsParsed : 0,
         platePerColorCny: effFr.platePerColorCny,
         logoColors,
+        totalCbmOverride: cbmOverrideValid ? cbmOverrideParsed : undefined,
       },
       config
     );
-  }, [config, effFr, shippingOptionId, margin, moldsValid, moldsParsed, qtyNum, logoColors]);
+  }, [config, effFr, shippingOptionId, margin, moldsValid, moldsParsed, qtyNum, logoColors, cbmOverrideValid, cbmOverrideParsed]);
 
   // Split-shipment: price one portion's shipment (ILS) on the factory carton/CBM
   // data, varying only quantity + shipping method. priceFactoryQuote.totalShipping
@@ -402,6 +409,7 @@ export function FinalizeModalWidget({
           profitMarginOverride: margin,
           shippingOptionId: shippingOptionId || undefined,
           moldsCostCny: moldsValid ? moldsParsed : undefined,
+          totalCbmOverride: cbmOverrideValid ? cbmOverrideParsed : undefined,
           specOverride: {
             productName: productName.trim() || undefined,
             picUrl: picUrl.trim() || undefined,
@@ -644,6 +652,26 @@ export function FinalizeModalWidget({
                   {moldsValid
                     ? `מתחלק על ${row.productSpec.quantity.toLocaleString("he-IL")} יח׳ = ¥${(moldsParsed / row.productSpec.quantity).toFixed(3)} ליחידה — נכלל בעלות מפעל וברווח`
                     : "ריק → ללא עלות מולדים"}
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-1">
+                  נפח משלוח ידני — CBM (m³)
+                </label>
+                <input
+                  type="number"
+                  min={0}
+                  step={0.1}
+                  placeholder={livePricing ? `אוטומטי: ${livePricing.totalCbm} m³` : "אוטומטי לפי מידות"}
+                  value={cbmOverride}
+                  onChange={(e) => setCbmOverride(e.target.value)}
+                  className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-ring/30"
+                />
+                <p className="text-[10px] text-muted-foreground mt-1">
+                  {cbmOverrideValid
+                    ? `דורס את החישוב האוטומטי → שילוח מחושב על ${cbmOverrideParsed} m³ (להזמנות מקובצות)`
+                    : "ריק → נפח מחושב אוטומטית מהמידות/קרטון"}
                 </p>
               </div>
 

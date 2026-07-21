@@ -295,7 +295,35 @@ export function CalculatorView({ products, quantityTiers, shippingOptions, initi
         result: r,
       })
     : "";
-  const share = useQuoteShare({ apiToken, sid, leadName, quoteText: operatorQuoteText });
+  // Factory-request spec built from the EXACT calculator's own state (catalog or
+  // manual), so the operator tab can also send straight to the factory table.
+  const operatorFactorySpec: FactorySpecContext | null = r
+    ? (() => {
+        const num = (x: string) => {
+          const n = parseFloat(x);
+          return Number.isFinite(n) ? n : 0;
+        };
+        const dims = manualMode
+          ? { widthCm: num(manualW), heightCm: num(manualH), depthCm: num(manualD) }
+          : (() => {
+              const d = parseDims(selectedProduct?.dimensions);
+              return { widthCm: num(d.W), heightCm: num(d.H), depthCm: num(d.D) };
+            })();
+        return {
+          description: quoteTitle,
+          material: "80g non-woven",
+          widthCm: dims.widthCm,
+          heightCm: dims.heightCm,
+          depthCm: dims.depthCm,
+          quantity: r.quantity,
+          colors,
+          handles,
+          lamination,
+          shippingOptionId: shippingId || undefined,
+        };
+      })()
+    : null;
+  const share = useQuoteShare({ apiToken, sid, leadName, quoteText: operatorQuoteText, factorySpec: operatorFactorySpec });
 
   return (
     <div className="calc-lux gg-theme flex flex-col gap-6 rounded-xl p-5" dir="rtl">
@@ -1578,10 +1606,25 @@ function ProposalSummary({
               </button>
             </>
           ) : (
-            <button type="button" onClick={share.copy} className="lux-cta-ghost" style={{ flex: 1 }}>
-              {share.copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
-              {share.copied ? "הועתק" : "העתק טקסט"}
-            </button>
+            <>
+              <button type="button" onClick={share.copy} className="lux-cta-ghost" style={{ flex: 1 }}>
+                {share.copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
+                {share.copied ? "הועתק" : "העתק טקסט"}
+              </button>
+              {share.canFactory && (
+                <button
+                  type="button"
+                  onClick={share.sendToFactory}
+                  disabled={!share.pickedSid || share.busy !== null}
+                  title={!share.pickedSid ? "בחר ליד למטה כדי לשלוח למפעל" : undefined}
+                  className="lux-cta-ghost"
+                  style={{ flex: 1 }}
+                >
+                  {share.busy === "factory" ? <Loader2 className="size-3.5 animate-spin" /> : <Send className="size-3.5" />}
+                  בקשה למפעל
+                </button>
+              )}
+            </>
           )}
         </div>
 
@@ -1701,6 +1744,7 @@ function BossBreakdownTable({
             )}
             <BossRow label="סה״כ הזמנה" value={ils(r.totalOrderPriceIls)} divider strong />
             <BossRow label="רווח גולמי" value={ils(r.totalProfitIls)} champagne />
+            <BossRow label="בסיס עמלה (ללא שילוח)" value={ils(comm.base)} />
             <BossRow label={`עמלת מכירות (${comm.pct}%)`} value={`−${ils(comm.commission)}`} />
             <BossRow label="רווח נטו" value={ils(comm.netProfit)} divider cool />
           </div>
@@ -1804,6 +1848,7 @@ function BreakdownCard({
               { label: "עלות שילוח", value: `₪${ils(shippingTotal)}` },
               { label: "סה״כ עלות", value: `₪${ils(totalCostTotal)}`, bold: true },
               { label: `רווח ${r.profitMargin}%`, value: `₪${ils(r.totalProfitIls)}`, bold: true, green: true },
+              { label: "בסיס עמלה (ללא שילוח)", value: `₪${ils(comm.base)}` },
               { label: `עמלת מכירות (${comm.pct}% מהעסקה ללא שילוח · ${Math.round(comm.ofProfitPct)}% מהרווח)`, value: `−₪${ils(comm.commission)}` },
               { label: "רווח נטו (אחרי עמלה)", value: `₪${ils(comm.netProfit)}`, bold: true, green: true },
               { label: "מחיר ללקוח", value: `₪${ils(r.totalOrderPriceIls)}`, hero: true },
@@ -2001,6 +2046,17 @@ interface EstimateSendContext {
   cartonConfidence?: "high" | "low";
   totalIls?: number;
 }
+
+// Spec context for "בקשה למפעל" from the EXACT calculator (operator tab). Same
+// fields the estimator sends, but sourced from the operator's catalog/manual
+// state. Lets sendToFactory build a FactoryProductSpec from either tab.
+interface FactorySpecContext {
+  description: string;
+  material: string;
+  widthCm: number; heightCm: number; depthCm: number;
+  quantity: number; colors: number; handles: boolean; lamination: boolean;
+  shippingOptionId?: string;
+}
 // Shared share-flow state + actions. Extracted verbatim from QuoteShareCard so
 // BOTH the sticky summary-card CTAs and the full share card can fire the SAME
 // send / PDF / factory-request actions against the SAME picked lead. The handler
@@ -2012,12 +2068,14 @@ function useQuoteShare({
   leadName,
   quoteText,
   estimate,
+  factorySpec,
 }: {
   apiToken: string | undefined;
   sid: string | undefined;
   leadName: string | null | undefined;
   quoteText: string;
   estimate?: EstimateSendContext;
+  factorySpec?: FactorySpecContext | null;
 }) {
   const [sending, setSending] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -2163,16 +2221,38 @@ function useQuoteShare({
     } catch (e) { setError(e instanceof Error ? e.message : String(e)); } finally { setBusy(null); }
   };
 
+  // Resolve the factory spec from whichever tab supplied it: the exact
+  // calculator passes `factorySpec`; the estimator passes `estimate`.
+  const resolvedFactorySpec: FactorySpecContext | null =
+    factorySpec ??
+    (estimate
+      ? {
+          description: "שקית אל-ארוג 80 גרם",
+          material: "80g non-woven",
+          widthCm: estimate.widthCm,
+          heightCm: estimate.heightCm,
+          depthCm: estimate.depthCm,
+          quantity: estimate.qty,
+          colors: estimate.colors,
+          handles: estimate.handles,
+          lamination: estimate.lamination,
+          shippingOptionId: estimate.shipping,
+        }
+      : null);
+  const canFactory = !!resolvedFactorySpec;
+
   const sendToFactory = async () => {
-    if (!pickedSid || !estimate) return;
+    if (!pickedSid || !resolvedFactorySpec) return;
+    const fs = resolvedFactorySpec;
     if (!confirm(`לשלוח את המפרט למפעל ולבקש הצעת מחיר אמיתית עבור ${pickedName ?? "הלקוח"}?`)) return;
     setBusy("factory"); setStatus(null); setError(null);
     try {
       const productSpec = {
-        description: "שקית אל-ארוג 80 גרם", material: "80g non-woven",
-        widthCm: estimate.widthCm, heightCm: estimate.heightCm, depthCm: estimate.depthCm, quantity: estimate.qty,
-        printing: `${estimate.colors} color(s)`,
-        finishing: `${estimate.handles ? "With handles" : "No handles"} / ${estimate.lamination ? "Laminated" : "Not laminated"}`,
+        description: fs.description, material: fs.material,
+        widthCm: fs.widthCm, heightCm: fs.heightCm, depthCm: fs.depthCm, quantity: fs.quantity,
+        printing: `${fs.colors} color(s)`,
+        finishing: `${fs.handles ? "With handles" : "No handles"} / ${fs.lamination ? "Laminated" : "Not laminated"}`,
+        ...(fs.shippingOptionId ? { shippingOptionId: fs.shippingOptionId } : {}),
       };
       const res = await fetch(apiBase("/api/widget/factory/quote-request", "/api/factory/quote-request"), {
         method: "POST", headers: { "Content-Type": "application/json" },
@@ -2189,7 +2269,7 @@ function useQuoteShare({
     pickedSid, pickedName, query, setQuery, open, setOpen,
     results, loadingResults, containerRef, runSearch,
     pickLead, clearLead, copy, send,
-    busy, sendEstimatePdf, sendToFactory,
+    busy, sendEstimatePdf, sendToFactory, canFactory,
   };
 }
 

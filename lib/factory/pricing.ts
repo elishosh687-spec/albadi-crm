@@ -124,7 +124,12 @@ export function priceFactoryQuote(
   ) {
     perCartonCbm = (carton.lengthCm * carton.widthCm * carton.heightCm) / 1_000_000;
   }
-  const totalCbm = (perCartonCbm ?? 0) * totalCartons;
+  // Manual override wins (grouped/consolidated orders whose real volume differs
+  // from the per-carton sum). Only the shipping calc uses totalCbm downstream.
+  const totalCbm =
+    input.totalCbmOverride && input.totalCbmOverride > 0
+      ? input.totalCbmOverride
+      : (perCartonCbm ?? 0) * totalCartons;
 
   const shipping = input.shippingOptionId
     ? config.shippingOptions.find((s) => s.id === input.shippingOptionId) ?? null

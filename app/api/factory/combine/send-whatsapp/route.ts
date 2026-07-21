@@ -29,8 +29,11 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     airIds.length > 0 && airShip && seaShip
       ? { airIds, airShippingOptionId: airShip, seaShippingOptionId: seaShip }
       : undefined;
+  // Manual merged-CBM override (grouped orders) — matches the on-screen calc.
+  const cbmParam = parseFloat(sp.get("cbm") ?? "");
+  const cbmOverride = Number.isFinite(cbmParam) && cbmParam > 0 ? cbmParam : undefined;
 
-  const result = await sendCombinedQuoteWhatsapp(ids, req.headers.get("host"), split);
+  const result = await sendCombinedQuoteWhatsapp(ids, req.headers.get("host"), split, cbmOverride);
   if (!result.ok) {
     return NextResponse.json(
       {

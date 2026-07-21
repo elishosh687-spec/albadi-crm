@@ -107,6 +107,10 @@ export interface FinalizeInput {
   shippingOptionId?: string;
   /** One-time mold/tooling fee in CNY (amortized across the order). */
   moldsCostCny?: number;
+  /** Manual override of total shipment CBM (m³) for grouped/consolidated
+   *  orders whose real packing volume differs from the per-carton sum.
+   *  Replaces the dimension-derived CBM in the shipping calc. */
+  totalCbmOverride?: number;
   /** Manual overrides for the product spec (description, material, dims,
    *  quantity, printing, finishing, productName, customerNotes). Merged over
    *  the stored spec before the PDF is rendered, then persisted back to
@@ -249,6 +253,7 @@ export async function finalizeQuote(
     moldsCostCny: body.moldsCostCny,
     platePerColorCny: resp.platePerColorCny,
     logoColors,
+    totalCbmOverride: body.totalCbmOverride,
   };
   const pricing = priceFactoryQuote(baseInput, config);
 
@@ -261,7 +266,7 @@ export async function finalizeQuote(
     if (airQuantity > 0 && seaQuantity > 0 && airShippingOptionId && seaShippingOptionId) {
       const r2 = (n: number) => Math.round(n * 100) / 100;
       const portionShip = (q: number, shipId: string) =>
-        priceFactoryQuote({ ...baseInput, quantity: q, shippingOptionId: shipId, moldsCostCny: 0 }, config).totalShipping;
+        priceFactoryQuote({ ...baseInput, quantity: q, shippingOptionId: shipId, moldsCostCny: 0, totalCbmOverride: undefined }, config).totalShipping;
       const airIls = portionShip(airQuantity, airShippingOptionId);
       const seaIls = portionShip(seaQuantity, seaShippingOptionId);
       const productUnitIls = r2(pricing.unitSellingPrice - pricing.unitShipping);

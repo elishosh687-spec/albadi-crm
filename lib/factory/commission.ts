@@ -12,7 +12,9 @@
 export interface CommissionBreakdown {
   /** The commission rate actually used (%). */
   pct: number;
-  /** Commission amount in ILS = totalSale × pct / 100. */
+  /** The base the commission is charged on = deal EXCLUDING shipping. */
+  base: number;
+  /** Commission amount in ILS = base × pct / 100. */
   commission: number;
   /** Profit left after paying the commission (profit − commission). */
   netProfit: number;
@@ -37,5 +39,5 @@ export function computeCommission(
   const commission = (commissionableBase * pct) / 100;
   const netProfit = totalProfit - commission;
   const ofProfitPct = totalProfit > 0 ? (commission / totalProfit) * 100 : 0;
-  return { pct, commission, netProfit, ofProfitPct };
+  return { pct, base: commissionableBase, commission, netProfit, ofProfitPct };
 }

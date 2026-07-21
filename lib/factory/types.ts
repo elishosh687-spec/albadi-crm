@@ -180,6 +180,11 @@ export interface FactoryPricingInput {
    *  total. If undefined but platePerColorCny is set, the engine assumes
    *  1 colour. */
   logoColors?: number;
+  /** Manual override of the TOTAL shipment CBM (m³). When > 0 it REPLACES the
+   *  dimension-derived CBM for the shipping-cost calc — for grouped/consolidated
+   *  orders where the real packing volume differs from the naive per-carton sum.
+   *  Weight is unaffected (air pricing is weight-based). Optional. */
+  totalCbmOverride?: number;
 }
 
 export interface FactoryPricingResult {
