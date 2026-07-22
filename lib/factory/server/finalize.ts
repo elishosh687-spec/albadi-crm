@@ -12,6 +12,7 @@ import { db } from "@/lib/db";
 import { factoryQuoteRequests, leads } from "@/drizzle/schema";
 import { eq } from "drizzle-orm";
 import { priceFactoryQuote } from "@/lib/factory/pricing";
+import { applyShippingSplit } from "@/lib/factory/shipping-split";
 import { getFactoryConfig } from "@/lib/factory/config";
 import { renderCustomerQuotePdf, fetchImageDataUri } from "@/lib/factory/pdf";
 import { readRow, parseFactoryResponseRow, hasCartonMasterData } from "@/lib/feishu/sheets";
@@ -255,40 +256,28 @@ export async function finalizeQuote(
     logoColors,
     totalCbmOverride: body.totalCbmOverride,
   };
-  const pricing = priceFactoryQuote(baseInput, config);
+  let pricing = priceFactoryQuote(baseInput, config);
 
   // Split shipment: price the air portion + sea portion each on its own
-  // quantity/CBM (production side unchanged), then attach shippingSplit so the
-  // PDF + WhatsApp caption render two shipping lines and the split total.
+  // quantity/CBM (production side unchanged), then apply the split so the PDF +
+  // WhatsApp caption + boss breakdown render two shipping lines and the split
+  // total. Same helper the client live-preview uses → preview == finalized.
   if (body.split) {
     const { airQuantity, airShippingOptionId, seaShippingOptionId } = body.split;
     const seaQuantity = spec.quantity - airQuantity;
     if (airQuantity > 0 && seaQuantity > 0 && airShippingOptionId && seaShippingOptionId) {
-      const r2 = (n: number) => Math.round(n * 100) / 100;
       const portionShip = (q: number, shipId: string) =>
         priceFactoryQuote({ ...baseInput, quantity: q, shippingOptionId: shipId, moldsCostCny: 0, totalCbmOverride: undefined }, config).totalShipping;
-      const airIls = portionShip(airQuantity, airShippingOptionId);
-      const seaIls = portionShip(seaQuantity, seaShippingOptionId);
-      const productUnitIls = r2(pricing.unitSellingPrice - pricing.unitShipping);
       const nameOf = (sid: string) => config.shippingOptions.find((s) => s.id === sid)?.name ?? "";
-      const productTotalIls = r2(productUnitIls * spec.quantity);
-      pricing.shippingSplit = {
-        productUnitIls,
-        productTotalIls,
-        airIls,
-        seaIls,
-        airLabel: `${nameOf(airShippingOptionId) || "אווירי"} · ${airQuantity.toLocaleString("he-IL")} יח׳`,
-        seaLabel: `${nameOf(seaShippingOptionId) || "ימי"} · ${seaQuantity.toLocaleString("he-IL")} יח׳`,
-      };
-      // The split IS the quote now — overwrite the headline totals so the quote
-      // list, opportunity value, PDF, and WhatsApp caption all show the split
-      // price (not the single-shipment price). Production/profit are unchanged
-      // (shipping is pass-through); only shipping + the grand total move.
-      const molds = pricing.moldsTotalSellingPriceIls ?? 0;
-      pricing.totalShipping = r2(airIls + seaIls);
-      pricing.unitShipping = spec.quantity > 0 ? r2((airIls + seaIls) / spec.quantity) : pricing.unitShipping;
-      pricing.unitSellingPrice = r2(productUnitIls + pricing.unitShipping);
-      pricing.totalSellingPrice = r2(productTotalIls + airIls + seaIls + (molds > 0 ? r2(molds) : 0));
+      pricing = applyShippingSplit(pricing, {
+        quantity: spec.quantity,
+        airQuantity,
+        seaQuantity,
+        airIls: portionShip(airQuantity, airShippingOptionId),
+        seaIls: portionShip(seaQuantity, seaShippingOptionId),
+        airName: nameOf(airShippingOptionId),
+        seaName: nameOf(seaShippingOptionId),
+      });
     }
   }
 

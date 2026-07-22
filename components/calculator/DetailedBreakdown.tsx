@@ -216,15 +216,22 @@ export function DetailedBreakdown(props: BreakdownInput & { defaultOpen?: boolea
           <Section
             icon={ShipIcon}
             title={
-              v.shipping.type === "sea"
-                ? "שילוח ים (pass-through — ללא רווח)"
-                : v.shipping.type === "air"
-                  ? "שילוח אווירי (pass-through — ללא רווח)"
-                  : "שילוח"
+              input.shippingSplit
+                ? "שילוח מפוצל (אוויר + ים — pass-through)"
+                : v.shipping.type === "sea"
+                  ? "שילוח ים (pass-through — ללא רווח)"
+                  : v.shipping.type === "air"
+                    ? "שילוח אווירי (pass-through — ללא רווח)"
+                    : "שילוח"
             }
           >
             <div className="space-y-1">
-              {v.shipping.type === "sea" && v.shipping.effectivePerCbmUsd !== null && v.shipping.rawCbm !== null ? (
+              {input.shippingSplit ? (
+                <>
+                  <Row label={`✈️ ${input.shippingSplit.airLabel}`} value={fmtIls(input.shippingSplit.airIls)} />
+                  <Row label={`🚢 ${input.shippingSplit.seaLabel}`} value={fmtIls(input.shippingSplit.seaIls)} />
+                </>
+              ) : v.shipping.type === "sea" && v.shipping.effectivePerCbmUsd !== null && v.shipping.rawCbm !== null ? (
                 <>
                   <Row label="נפח (CBM)" value={v.shipping.rawCbm.toFixed(3)} />
                   <Row label="עלות לקוב בפועל" value={`${fmtUsd(v.shipping.effectivePerCbmUsd, 0)} / CBM`} />

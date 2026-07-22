@@ -78,12 +78,16 @@ export function CalculatorView({ products, quantityTiers, shippingOptions, initi
   const [lamination, setLamination] = useState(operatorPrefill?.lam ?? false);
   const [colors, setColors]       = useState(operatorPrefill?.colors ?? 1);
   const [shippingId, setShippingId] = useState(shippingOptions.find((s) => s.type === "sea")?.id ?? shippingOptions[0]?.id ?? "s2");
+  const [splitMode, setSplitMode] = useState(false);
+  const hasAirAndSea =
+    shippingOptions.some((s) => s.type === "air" && s.enabled) &&
+    shippingOptions.some((s) => s.type === "sea" && s.enabled);
   const [qtyOverride, setQtyOverride] = useState<string>(operatorPrefill?.qty ?? "");
   const [marginOverride, setMarginOverride] = useState<string>("");
   const [minProfit, setMinProfit] = useState<string>("");
   // One-time mold/tooling fee from the factory (¥ CNY). Empty = none.
   const [moldsCost, setMoldsCost] = useState<string>("");
-  const [reverseMode, setReverseMode] = useState<"total" | "unit" | "profit">("profit");
+  const [reverseMode, setReverseMode] = useState<"total" | "unit" | "profit">("total");
   const [reverseInput, setReverseInput] = useState<string>("");
   // UI-only: reveal the reverse-margin calculator inline (reference §IV toggle).
   const [showReverse, setShowReverse] = useState(false);
@@ -616,10 +620,13 @@ export function CalculatorView({ products, quantityTiers, shippingOptions, initi
                   <ShippingCard
                     key={s.id}
                     option={s}
-                    active={shippingId === s.id}
-                    onSelect={() => setShippingId(s.id)}
+                    active={!splitMode && shippingId === s.id}
+                    onSelect={() => { setShippingId(s.id); setSplitMode(false); }}
                   />
                 ))}
+                {hasAirAndSea && (
+                  <SplitShipCard active={splitMode} onSelect={() => setSplitMode(true)} />
+                )}
               </div>
             </div>
           </Section>
@@ -907,8 +914,8 @@ export function CalculatorView({ products, quantityTiers, shippingOptions, initi
         </>
       )}
 
-      {/* Split shipment — part by air, part by sea, one combined total. */}
-      {r && c && !loading && (
+      {/* Split shipment — inline, only when the "מפוצל" shipping card is chosen. */}
+      {r && c && !loading && splitMode && (
         <SplitShipmentPanel
           totalQty={r.quantity}
           prodSellPerUnitIls={r.sellingPricePerUnitIls - c.shippingPerUnitIls}
@@ -1013,6 +1020,15 @@ export function CalculatorView({ products, quantityTiers, shippingOptions, initi
               <Stat label="רווח כולל" value={`₪${ils(reverseResult.totalProfit)}`} tone={reverseResult.totalProfit < 0 ? "neg" : "pos"} />
             </div>
           )}
+          {reverseResult && reverseResult.marginPct >= 0 && (
+            <button
+              type="button"
+              onClick={() => setMarginOverride(String(Math.max(0, Math.min(99, Math.round(reverseResult.marginPct)))))}
+              className="w-full rounded-md border border-primary bg-primary/10 px-3 py-2 text-xs font-medium text-primary hover:bg-primary/20"
+            >
+              החל על ההצעה — קבע מרווח {r2(reverseResult.marginPct)}%
+            </button>
+          )}
           <p className="text-[11px] text-muted-foreground">
             השוואה למרג'ין הנוכחי בהגדרות: {currentMargin}%. צבע ירוק = ≥ ההגדרה.
           </p>
@@ -1061,6 +1077,10 @@ function EstimateTab({ apiToken, shippingOptions, sid, leadName, initialMargins,
   const [handles, setHandles] = useState(prefill?.handles ?? true);
   const [lam, setLam] = useState(prefill?.lam ?? false);
   const [shippingId, setShippingId] = useState(shippingOptions.find((s) => s.type === "sea")?.id ?? shippingOptions[0]?.id ?? "s2");
+  const [splitMode, setSplitMode] = useState(false);
+  const hasAirAndSea =
+    shippingOptions.some((s) => s.type === "air" && s.enabled) &&
+    shippingOptions.some((s) => s.type === "sea" && s.enabled);
   // Operator overrides — mirror the regular calculator (molds/templates one-time
   // CNY, target-margin override, min-profit warning).
   const [moldsCost, setMoldsCost] = useState("");
@@ -1213,8 +1233,11 @@ function EstimateTab({ apiToken, shippingOptions, sid, leadName, initialMargins,
               <span className="lux-label" style={{ color: "var(--lux-muted)", letterSpacing: "0.14em" }}>שיטת שילוח</span>
               <div className="grid grid-cols-2 gap-2.5">
                 {shippingOptions.map((s) => (
-                  <ShippingCard key={s.id} option={s} active={shippingId === s.id} onSelect={() => setShippingId(s.id)} />
+                  <ShippingCard key={s.id} option={s} active={!splitMode && shippingId === s.id} onSelect={() => { setShippingId(s.id); setSplitMode(false); }} />
                 ))}
+                {hasAirAndSea && (
+                  <SplitShipCard active={splitMode} onSelect={() => setSplitMode(true)} />
+                )}
               </div>
             </div>
           </Section>
@@ -1438,7 +1461,7 @@ function EstimateTab({ apiToken, shippingOptions, sid, leadName, initialMargins,
         </>
       )}
 
-      {!loading && est && est.ok && r && c && (
+      {!loading && est && est.ok && r && c && splitMode && (
         <SplitShipmentPanel
           totalQty={r.quantity}
           prodSellPerUnitIls={r.sellingPricePerUnitIls - c.shippingPerUnitIls}
@@ -2647,6 +2670,30 @@ function BuilderGrid({ inputs, quote }: { inputs: React.ReactNode; quote: React.
 
 // Selectable shipping card (replaces the dropdown). Binds to the SAME
 // shippingId state via onSelect — presentation only.
+// "מפוצל (אוויר+ים)" choice in the shipping-card grid — reveals the inline
+// split panel when active (no separate box).
+function SplitShipCard({ active, onSelect }: { active: boolean; onSelect: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      className={cn("lux-ship-card", active && "lux-ship-card-active")}
+    >
+      <span className="flex items-center gap-3 min-w-0">
+        <span className="flex items-center gap-0.5 shrink-0">
+          <Plane className="size-4" style={{ color: active ? "var(--lux-cool)" : "var(--lux-muted)" }} />
+          <Ship className="size-4" style={{ color: active ? "var(--lux-cool)" : "var(--lux-muted)" }} />
+        </span>
+        <span className="flex flex-col items-start min-w-0">
+          <span style={{ fontSize: 14, color: "var(--lux-ink)" }} className="truncate">מפוצל (אוויר+ים)</span>
+          <span style={{ fontSize: 11, color: "var(--lux-muted)" }} className="truncate">חלק באוויר, חלק בים</span>
+        </span>
+      </span>
+      {active && <Check className="size-4 shrink-0" style={{ color: "var(--lux-cool)" }} />}
+    </button>
+  );
+}
+
 function ShippingCard({ option, active, onSelect }: { option: ShippingOption; active: boolean; onSelect: () => void }) {
   const isAir = option.type === "air";
   const Icon = isAir ? Plane : Ship;

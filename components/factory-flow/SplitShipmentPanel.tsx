@@ -19,7 +19,6 @@
 
 import { useState, useEffect } from "react";
 import { Ship, Plane, Copy, Check, Loader2 } from "lucide-react";
-import { cn } from "@/lib/cn";
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
 const ils = (n: number) =>
@@ -28,6 +27,20 @@ const ils = (n: number) =>
 export interface SplitShipOption {
   id: string;
   name: string;
+}
+
+/** What the panel reports up so the parent can (a) send `split` on finalize and
+ *  (b) drive the live pricing + boss breakdown via applyShippingSplit. The
+ *  air/sea ILS costs are null until the async shipment prices resolve. */
+export interface SplitReport {
+  airQuantity: number;
+  seaQuantity: number;
+  airShippingOptionId: string;
+  seaShippingOptionId: string;
+  airName: string;
+  seaName: string;
+  airIls: number | null;
+  seaIls: number | null;
 }
 
 export interface SplitSpec {
@@ -97,16 +110,16 @@ export function SplitShipmentPanel(props: {
   spec: SplitSpec;
   /** Optional: send the finished split quote text somewhere (e.g. WhatsApp). */
   onQuoteText?: (text: string) => void;
-  /** Optional: report the raw split inputs to the parent (null when off/invalid)
-   *  so it can persist them on finalize → official split PDF + WhatsApp caption. */
-  onSplitChange?: (
-    v: { airQuantity: number; airShippingOptionId: string; seaShippingOptionId: string } | null
-  ) => void;
+  /** Report the split to the parent (null when invalid) so it can persist it on
+   *  finalize AND drive the live pricing + boss breakdown. */
+  onSplitChange?: (v: SplitReport | null) => void;
 }) {
   const { totalQty, prodSellPerUnitIls, moldsIls, airOptions, seaOptions, priceShipmentIls, spec, onQuoteText, onSplitChange } = props;
 
-  const [enabled, setEnabled] = useState(false);
-  const [airQtyStr, setAirQtyStr] = useState("");
+  // Percentage-based: the operator sets the AIR share (%), and the air/sea
+  // quantities auto-derive from the ordered quantity — so they stay correct when
+  // the quantity changes and never need re-typing. Default 50/50.
+  const [airPctStr, setAirPctStr] = useState("50");
   const [airShipId, setAirShipId] = useState(airOptions[0]?.id ?? "");
   const [seaShipId, setSeaShipId] = useState(seaOptions[0]?.id ?? "");
   const [shipCost, setShipCost] = useState<{ airIls: number; seaIls: number } | null>(null);
@@ -114,12 +127,15 @@ export function SplitShipmentPanel(props: {
   const [err, setErr] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
-  const airQty = Math.max(0, Math.round(parseFloat(airQtyStr) || 0));
+  const airPct = Math.min(100, Math.max(0, parseFloat(airPctStr) || 0));
+  const airQty = Math.round((totalQty * airPct) / 100);
   const seaQty = totalQty - airQty;
   const splitValid = airQty > 0 && seaQty > 0 && airQty < totalQty;
+  const airName = airOptions.find((s) => s.id === airShipId)?.name ?? "אווירי";
+  const seaName = seaOptions.find((s) => s.id === seaShipId)?.name ?? "ימי";
 
   useEffect(() => {
-    if (!enabled || !splitValid || !airShipId || !seaShipId) { setShipCost(null); return; }
+    if (!splitValid || !airShipId || !seaShipId) { setShipCost(null); return; }
     let cancelled = false;
     setBusy(true); setErr(null);
     (async () => {
@@ -137,16 +153,29 @@ export function SplitShipmentPanel(props: {
       }
     })();
     return () => { cancelled = true; };
-  }, [enabled, splitValid, airQty, seaQty, airShipId, seaShipId, priceShipmentIls]);
+  }, [splitValid, airQty, seaQty, airShipId, seaShipId, priceShipmentIls]);
 
-  // Report the raw split inputs to the parent (server recomputes on finalize).
+  // Report the split (incl. resolved air/sea costs) so the parent drives live
+  // pricing + the boss breakdown, and persists it on finalize.
   useEffect(() => {
     onSplitChange?.(
-      enabled && splitValid && airShipId && seaShipId
-        ? { airQuantity: airQty, airShippingOptionId: airShipId, seaShippingOptionId: seaShipId }
+      splitValid && airShipId && seaShipId
+        ? {
+            airQuantity: airQty,
+            seaQuantity: seaQty,
+            airShippingOptionId: airShipId,
+            seaShippingOptionId: seaShipId,
+            airName,
+            seaName,
+            airIls: shipCost?.airIls ?? null,
+            seaIls: shipCost?.seaIls ?? null,
+          }
         : null
     );
-  }, [onSplitChange, enabled, splitValid, airQty, airShipId, seaShipId]);
+  }, [onSplitChange, splitValid, airQty, seaQty, airShipId, seaShipId, airName, seaName, shipCost]);
+
+  // Clear the parent's split on unmount (operator switched away from "מפוצל").
+  useEffect(() => () => onSplitChange?.(null), [onSplitChange]);
 
   if (airOptions.length === 0 || seaOptions.length === 0) return null;
 
@@ -154,8 +183,6 @@ export function SplitShipmentPanel(props: {
   const prodTotal = r2(prodUnit * totalQty);
   const molds = moldsIls > 0 ? r2(moldsIls) : 0;
   const grand = shipCost ? r2(prodTotal + shipCost.airIls + shipCost.seaIls + molds) : null;
-  const airName = airOptions.find((s) => s.id === airShipId)?.name ?? "אווירי";
-  const seaName = seaOptions.find((s) => s.id === seaShipId)?.name ?? "ימי";
 
   const quoteText = shipCost && grand !== null
     ? buildSplitQuoteText({
@@ -175,42 +202,55 @@ export function SplitShipmentPanel(props: {
 
   return (
     <section className="rounded-xl border border-border bg-card p-4 flex flex-col gap-4" dir="rtl">
-      <div className="flex items-center justify-between gap-3 flex-wrap">
-        <div className="flex items-center gap-2">
-          <Ship className="size-4" />
-          <Plane className="size-4" />
-          <h3 className="text-sm font-medium">פיצול משלוח — חלק אוויר, חלק ים</h3>
-        </div>
-        <button
-          type="button"
-          onClick={() => setEnabled((v) => !v)}
-          className={cn(
-            "px-3 py-1 rounded text-xs border",
-            enabled ? "bg-primary text-primary-foreground border-primary" : "bg-background/30 text-muted-foreground border-border"
-          )}
-        >
-          {enabled ? "פעיל" : "הפעל פיצול"}
-        </button>
+      <div className="flex items-center gap-2">
+        <Plane className="size-4" />
+        <Ship className="size-4" />
+        <h3 className="text-sm font-medium">פיצול משלוח — חלק אוויר, חלק ים</h3>
       </div>
 
-      {enabled && (
+      {(
         <>
           <p className="text-xs text-muted-foreground">
             מחיר הייצור ליחידה נקבע לפי הכמות הכוללת ({totalQty.toLocaleString("he-IL")} יח׳) ולא משתנה. רק
             השילוח מתפצל — כל חלק מתומחר לפי הנפח שלו. תבניות משולמות פעם אחת.
           </p>
 
+          {/* Air % — the air/sea quantities auto-derive from the ordered qty. */}
+          <div className="flex flex-col gap-1.5">
+            <div className="flex items-center justify-between">
+              <label className="text-xs text-muted-foreground">אחוז באוויר ✈️</label>
+              <span className="text-xs tabular-nums text-muted-foreground">
+                ≈ {splitValid ? `${airQty.toLocaleString("he-IL")} יח׳ אוויר · ${seaQty.toLocaleString("he-IL")} יח׳ ים` : "—"}
+              </span>
+            </div>
+            <div className="flex items-center gap-3">
+              <input
+                type="range"
+                min={0}
+                max={100}
+                step={5}
+                value={airPct}
+                onChange={(e) => setAirPctStr(e.target.value)}
+                className="flex-1"
+              />
+              <div className="flex items-center gap-1">
+                <input
+                  type="number"
+                  inputMode="numeric"
+                  min={0}
+                  max={100}
+                  value={airPctStr}
+                  onChange={(e) => setAirPctStr(e.target.value)}
+                  className="w-16 rounded-md border border-border bg-background/40 px-2 py-1.5 text-sm tabular-nums text-center"
+                />
+                <span className="text-xs text-muted-foreground">%</span>
+              </div>
+            </div>
+          </div>
+
           <div className="grid gap-3" style={{ gridTemplateColumns: "1fr 1fr" }}>
             <div className="flex flex-col gap-1">
-              <label className="text-xs text-muted-foreground">כמות באוויר ✈️</label>
-              <input
-                type="number"
-                inputMode="numeric"
-                value={airQtyStr}
-                onChange={(e) => setAirQtyStr(e.target.value)}
-                placeholder="למשל 1000"
-                className="w-full rounded-md border border-border bg-background/40 px-3 py-2 text-sm tabular-nums"
-              />
+              <label className="text-xs text-muted-foreground">שיטת אוויר ✈️ ({splitValid ? airQty.toLocaleString("he-IL") : "—"} יח׳)</label>
               <select
                 value={airShipId}
                 onChange={(e) => setAirShipId(e.target.value)}
@@ -220,10 +260,7 @@ export function SplitShipmentPanel(props: {
               </select>
             </div>
             <div className="flex flex-col gap-1">
-              <label className="text-xs text-muted-foreground">כמות בים 🚢 (אוטומטי)</label>
-              <div className="w-full rounded-md border border-border bg-background/20 px-3 py-2 text-sm tabular-nums text-muted-foreground">
-                {splitValid ? seaQty.toLocaleString("he-IL") : "—"}
-              </div>
+              <label className="text-xs text-muted-foreground">שיטת ים 🚢 ({splitValid ? seaQty.toLocaleString("he-IL") : "—"} יח׳)</label>
               <select
                 value={seaShipId}
                 onChange={(e) => setSeaShipId(e.target.value)}
@@ -234,9 +271,9 @@ export function SplitShipmentPanel(props: {
             </div>
           </div>
 
-          {airQtyStr.trim() !== "" && !splitValid && (
+          {!splitValid && (
             <p className="text-xs text-destructive">
-              הכמות באוויר חייבת להיות בין 1 ל-{(totalQty - 1).toLocaleString("he-IL")}.
+              בחר אחוז אוויר בין 1% ל-99% (כדי שיישאר גם חלק אוויר וגם חלק ים).
             </p>
           )}
           {err && <p className="text-xs text-destructive">שגיאה: {err}</p>}

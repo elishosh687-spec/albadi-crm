@@ -15,13 +15,17 @@ import type {
   ShippingOption,
 } from "@/lib/factory/types";
 import { priceFactoryQuote, marginPctFromUnitPrice } from "@/lib/factory/pricing";
+import { applyShippingSplit } from "@/lib/factory/shipping-split";
 import {
   computeCombined,
   priceQuoteForCombine,
   defaultMarginFor,
 } from "@/lib/factory/combined";
 import { DetailedBreakdown } from "@/components/calculator/DetailedBreakdown";
-import { SplitShipmentPanel } from "./SplitShipmentPanel";
+import { SplitShipmentPanel, type SplitReport } from "./SplitShipmentPanel";
+
+// Sentinel value for the "מפוצל" choice in the shipping-method <select>.
+const SPLIT_OPTION = "__split__";
 import { CommissionControl } from "./CommissionControl";
 import { widgetUrl } from "./widget-url";
 
@@ -80,7 +84,7 @@ export function FinalizeModalWidget({
   const effectiveCommissionPct = commissionValid ? commissionParsed : defaultCommissionPct;
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [reverseMode, setReverseMode] = useState<"profit" | "total" | "unit">("profit");
+  const [reverseMode, setReverseMode] = useState<"profit" | "total" | "unit">("total");
   const [reverseInput, setReverseInput] = useState<string>("");
 
   // Live Feishu verification of the factory response (carton/cost). `liveResponse`
@@ -93,10 +97,13 @@ export function FinalizeModalWidget({
   const [refreshing, setRefreshing] = useState(false);
   // Split-shipment inputs (raw) reported by the panel — sent on finalize so the
   // server produces the official split PDF + WhatsApp caption.
-  const [splitInput, setSplitInput] = useState<
-    { airQuantity: number; airShippingOptionId: string; seaShippingOptionId: string } | null
-  >(null);
+  const [splitInput, setSplitInput] = useState<SplitReport | null>(null);
   const effFr: FactoryResponse | null = liveResponse ?? row.factoryResponse;
+  const splitMode = shippingOptionId === SPLIT_OPTION;
+  const hasAirAndSea =
+    !!config &&
+    config.shippingOptions.some((s) => s.type === "air" && s.enabled) &&
+    config.shippingOptions.some((s) => s.type === "sea" && s.enabled);
 
   // Editable product details that flow into the customer PDF. Pre-filled from
   // the stored spec (kept in sync with the Feishu table by the refresh), and
@@ -201,11 +208,18 @@ export function FinalizeModalWidget({
 
   const livePricing = useMemo(() => {
     if (!config || !effFr) return null;
-    return priceFactoryQuote(
+    // In split mode the base pricing is shipping-independent (production+profit);
+    // use a real sea option as the neutral base, then apply the split below.
+    const baseShipId = splitMode
+      ? (splitInput?.seaShippingOptionId ||
+         config.shippingOptions.find((s) => s.type === "sea" && s.enabled)?.id ||
+         null)
+      : (shippingOptionId || null);
+    const base = priceFactoryQuote(
       {
         factoryUnitCostCny: effFr.unitCostCny,
         quantity: qtyNum,
-        shippingOptionId: shippingOptionId || null,
+        shippingOptionId: baseShipId,
         cartonSpec: {
           qty: effFr.cartonQty,
           weightKg: effFr.weightKg,
@@ -222,7 +236,21 @@ export function FinalizeModalWidget({
       },
       config
     );
-  }, [config, effFr, shippingOptionId, margin, moldsValid, moldsParsed, qtyNum, logoColors, cbmOverrideValid, cbmOverrideParsed]);
+    // Split active + air/sea costs resolved → the split IS the quote (boss
+    // breakdown + totals reflect it). Same helper as server finalize.
+    if (splitMode && splitInput && splitInput.airIls != null && splitInput.seaIls != null) {
+      return applyShippingSplit(base, {
+        quantity: qtyNum,
+        airQuantity: splitInput.airQuantity,
+        seaQuantity: splitInput.seaQuantity,
+        airIls: splitInput.airIls,
+        seaIls: splitInput.seaIls,
+        airName: splitInput.airName,
+        seaName: splitInput.seaName,
+      });
+    }
+    return base;
+  }, [config, effFr, shippingOptionId, margin, moldsValid, moldsParsed, qtyNum, logoColors, cbmOverrideValid, cbmOverrideParsed, splitMode, splitInput]);
 
   // Split-shipment: price one portion's shipment (ILS) on the factory carton/CBM
   // data, varying only quantity + shipping method. priceFactoryQuote.totalShipping
@@ -407,7 +435,9 @@ export function FinalizeModalWidget({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           profitMarginOverride: margin,
-          shippingOptionId: shippingOptionId || undefined,
+          // In split mode the sentinel isn't a real option — send the sea leg as
+          // the base; the split (below) drives the shipping totals server-side.
+          shippingOptionId: (splitMode ? splitInput?.seaShippingOptionId : shippingOptionId) || undefined,
           moldsCostCny: moldsValid ? moldsParsed : undefined,
           totalCbmOverride: cbmOverrideValid ? cbmOverrideParsed : undefined,
           specOverride: {
@@ -422,7 +452,13 @@ export function FinalizeModalWidget({
             finishing: finishing.trim() || undefined,
             customerNotes: customerNotes.trim() || undefined,
           },
-          split: splitInput ?? undefined,
+          split: splitMode && splitInput
+            ? {
+                airQuantity: splitInput.airQuantity,
+                airShippingOptionId: splitInput.airShippingOptionId,
+                seaShippingOptionId: splitInput.seaShippingOptionId,
+              }
+            : undefined,
         }),
       });
       const data = await res.json();
@@ -690,8 +726,26 @@ export function FinalizeModalWidget({
                         {s.name} ({s.type === "sea" ? "ים" : "אוויר"})
                       </option>
                     ))}
+                  {hasAirAndSea && <option value={SPLIT_OPTION}>מפוצל (אוויר + ים) ✈️🚢</option>}
                 </select>
               </div>
+
+              {/* Split shipment — inline, only when "מפוצל" is chosen (no separate box). */}
+              {splitMode && config && effFr && livePricing && (
+                <SplitShipmentPanel
+                  totalQty={qtyNum}
+                  prodSellPerUnitIls={livePricing.unitSellingPrice - livePricing.unitShipping}
+                  moldsIls={livePricing.moldsTotalSellingPriceIls}
+                  airOptions={config.shippingOptions.filter((s) => s.type === "air" && s.enabled).map((s) => ({ id: s.id, name: s.name }))}
+                  seaOptions={config.shippingOptions.filter((s) => s.type === "sea" && s.enabled).map((s) => ({ id: s.id, name: s.name }))}
+                  priceShipmentIls={priceFinalizeShipmentIls}
+                  spec={{
+                    productLabel: productName.trim() || `H${heightCm || "?"}${depthCm ? `*D${depthCm}` : ""}*W${widthCm || "?"}`,
+                    logoColors,
+                  }}
+                  onSplitChange={setSplitInput}
+                />
+              )}
 
               <div>
                 <div className="flex items-center justify-between mb-1">
@@ -763,22 +817,6 @@ export function FinalizeModalWidget({
               )}
 
               {livePricing && config && effFr && (
-                <SplitShipmentPanel
-                  totalQty={qtyNum}
-                  prodSellPerUnitIls={livePricing.unitSellingPrice - livePricing.unitShipping}
-                  moldsIls={livePricing.moldsTotalSellingPriceIls}
-                  airOptions={config.shippingOptions.filter((s) => s.type === "air" && s.enabled).map((s) => ({ id: s.id, name: s.name }))}
-                  seaOptions={config.shippingOptions.filter((s) => s.type === "sea" && s.enabled).map((s) => ({ id: s.id, name: s.name }))}
-                  priceShipmentIls={priceFinalizeShipmentIls}
-                  spec={{
-                    productLabel: productName.trim() || `H${heightCm || "?"}${depthCm ? `*D${depthCm}` : ""}*W${widthCm || "?"}`,
-                    logoColors,
-                  }}
-                  onSplitChange={setSplitInput}
-                />
-              )}
-
-              {livePricing && config && effFr && (
                 <CommissionControl
                   text={commissionText}
                   onTextChange={setCommissionText}
@@ -809,6 +847,7 @@ export function FinalizeModalWidget({
                   shippingType={
                     config.shippingOptions.find((s) => s.id === livePricing.shippingOptionId)?.type ?? null
                   }
+                  shippingSplit={livePricing.shippingSplit}
                   factoryUnitCostCny={effFr.unitCostCny}
                   usdToIls={config.usdToIls}
                   usdToCny={config.usdToCny}

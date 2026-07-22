@@ -9,6 +9,7 @@
  */
 
 import { computeCommission } from "./commission";
+import type { ShippingSplit } from "./types";
 
 export interface BreakdownInput {
   // Per-unit ILS values from the pricing engine
@@ -29,6 +30,9 @@ export interface BreakdownInput {
   totalWeightKg: number;
   totalCbm: number; // raw, post-Math.max if engine already floored — see floorApplied
   shippingType: "sea" | "air" | null;
+  /** When set, shipping is SPLIT (part air, part sea) — the breakdown renders
+   *  two shipping lines instead of one. See applyShippingSplit. */
+  shippingSplit?: ShippingSplit;
 
   // Factory cost in original CNY (the input ¥ before any conversion)
   // For factory quotes: row.factoryResponse.unitCostCny
