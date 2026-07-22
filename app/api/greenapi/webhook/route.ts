@@ -658,6 +658,32 @@ async function handleOutgoingManual(evt: GreenWebhook): Promise<void> {
     payload: evt as unknown as Record<string, unknown>,
   });
 
+  // A salesperson answered the customer DIRECTLY on WhatsApp → the human is now
+  // driving, so STOP the bot for this lead (sticky pause; the incoming handler
+  // never auto-resumes it — Eli un-pauses manually when he wants the bot back).
+  // Mirrors the widget path (sendManualReply already pauses). Per Eli 2026-07-22.
+  // Gate on the false→true transition so we only push to GHL once, not on every
+  // subsequent manual message in the thread.
+  try {
+    const paused = await db
+      .update(leads)
+      .set({ botPaused: true, updatedAt: new Date() })
+      .where(
+        sql`trim(${leads.manychatSubId}) = ${canonicalSid.trim()} AND ${leads.botPaused} IS DISTINCT FROM TRUE`
+      )
+      .returning({ sid: leads.manychatSubId });
+    if (paused.length > 0) {
+      console.log(
+        `[green.webhook] salesperson replied on WhatsApp → bot paused for ${canonicalSid}`
+      );
+      void syncLeadToGHL(canonicalSid).catch((e) =>
+        console.warn("[green.webhook] pause-on-manual syncLeadToGHL failed", e)
+      );
+    }
+  } catch (e) {
+    console.warn("[green.webhook] pause-on-manual-reply failed", e);
+  }
+
   // Deferred via Next 16 `after()` — keeps the lambda alive past the HTTP
   // response so the mirror completes, without making the customer (or here:
   // Eli's own manual send) wait. Auditing remains intact through
