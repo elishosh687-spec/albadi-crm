@@ -294,10 +294,28 @@ export interface QuoteActualCosts {
   factoryTotalIls?: number;
   /** Real shipping paid, total ₪. Undefined → use planned. */
   shippingTotalIls?: number;
+  /** What the customer ACTUALLY paid (Zoho invoice total), ₪ — catches post-close
+   *  discounts/extras. Undefined → assume the planned totalSellingPrice. */
+  actualRevenueIls?: number;
   /** Any extra costs on this order — customs, rework, samples, etc. */
   otherCosts?: { label: string; amountIls: number }[];
+  /** Zoho Books documents these actuals were pulled from (link-back + audit). */
+  zohoRefs?: ZohoDocRef[];
   /** Free note — e.g. "אוחד עם הזמנה X", "המפעל העלה מחיר". */
   note?: string;
   /** ISO timestamp of the last save. */
   updatedAt?: string;
+}
+
+/** Pointer to the Zoho Books document an actual-cost line came from. */
+export interface ZohoDocRef {
+  type: "invoice" | "bill" | "expense";
+  id: string;
+  /** Human doc number — INV-000231 / BILL-000118. */
+  number?: string;
+  amountIls?: number;
+  /** Document date, ISO yyyy-mm-dd. */
+  date?: string;
+  /** Customer (invoice) or vendor (bill/expense) name on the Zoho doc. */
+  party?: string;
 }

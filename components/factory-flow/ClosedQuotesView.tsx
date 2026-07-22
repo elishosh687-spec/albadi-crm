@@ -12,10 +12,12 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Loader2, Plus, Trash2, Check, Save } from "lucide-react";
+import { Loader2, Plus, Trash2, Check, Save, Download, X } from "lucide-react";
 import { LuxShell, LuxTitle, LuxAccent, LuxStat } from "@/components/widget-ui/lux";
 import { widgetUrl } from "./widget-url";
-import type { FactoryPricingResult, QuoteActualCosts } from "@/lib/factory/types";
+import type { FactoryPricingResult, QuoteActualCosts, ZohoDocRef } from "@/lib/factory/types";
+import type { AccuracyStats, GapStat } from "@/lib/factory/server/accuracy";
+import type { ZohoMatchResult, ZohoSuggestion } from "@/lib/zoho/match";
 
 interface ClosedQuote {
   id: string;
@@ -30,6 +32,17 @@ interface ClosedQuote {
   updatedAt: string;
 }
 
+interface ZohoUnmatchedDoc {
+  type: "invoice" | "bill" | "expense";
+  id: string;
+  number: string;
+  date: string;
+  party: string;
+  total: number;
+  currencyCode: string;
+  totalIls: number | null;
+}
+
 const MAX_W = 900;
 const ils = (n: number) => `₪${Math.round(n).toLocaleString("he-IL")}`;
 function fmtDate(iso: string | null): string {
@@ -42,17 +55,20 @@ function reconcile(fp: FactoryPricingResult, ac: QuoteActualCosts | null) {
   const plannedFactory = fp.totalCost ?? 0;
   const plannedShipping = fp.totalShipping ?? 0;
   const plannedProfit = fp.totalProfit ?? 0;
-  const revenue = fp.totalSellingPrice ?? 0;
+  const plannedRevenue = fp.totalSellingPrice ?? 0;
+  const revenue = ac?.actualRevenueIls ?? plannedRevenue;
   const actualFactory = ac?.factoryTotalIls ?? plannedFactory;
   const actualShipping = ac?.shippingTotalIls ?? plannedShipping;
   const otherTotal = (ac?.otherCosts ?? []).reduce((s, c) => s + (Number(c.amountIls) || 0), 0);
   const factoryDelta = actualFactory - plannedFactory;
   const shippingDelta = actualShipping - plannedShipping;
-  // Planned profit minus every overrun = what the deal really made.
-  const actualProfit = plannedProfit - factoryDelta - shippingDelta - otherTotal;
+  const revenueDelta = revenue - plannedRevenue;
+  // Planned profit, corrected by what really moved on BOTH sides.
+  const actualProfit = plannedProfit + revenueDelta - factoryDelta - shippingDelta - otherTotal;
   const variance = actualProfit - plannedProfit;
   return {
-    revenue, plannedFactory, plannedShipping, plannedProfit,
+    revenue, plannedRevenue, revenueDelta,
+    plannedFactory, plannedShipping, plannedProfit,
     actualFactory, actualShipping, otherTotal, factoryDelta, shippingDelta,
     actualProfit, variance,
   };
@@ -60,6 +76,8 @@ function reconcile(fp: FactoryPricingResult, ac: QuoteActualCosts | null) {
 
 export function ClosedQuotesView({ apiToken }: { apiToken: string }) {
   const [quotes, setQuotes] = useState<ClosedQuote[] | null>(null);
+  const [stats, setStats] = useState<AccuracyStats | null>(null);
+  const [unmatched, setUnmatched] = useState<ZohoUnmatchedDoc[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -68,6 +86,7 @@ export function ClosedQuotesView({ apiToken }: { apiToken: string }) {
       const j = await res.json();
       if (!res.ok || !j.ok) { setError(j.error ?? `HTTP ${res.status}`); return; }
       setQuotes(j.quotes as ClosedQuote[]);
+      setStats((j.stats ?? null) as AccuracyStats | null);
       setError(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -75,6 +94,19 @@ export function ClosedQuotesView({ apiToken }: { apiToken: string }) {
   }, [apiToken]);
 
   useEffect(() => { load(); }, [load]);
+
+  // Zoho reminder panel — soft: unconfigured/down Zoho just hides it.
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const res = await fetch(widgetUrl("/api/widget/zoho/unmatched", apiToken), { cache: "no-store" });
+        const j = await res.json();
+        if (alive && j.ok && j.configured) setUnmatched(j.unmatched as ZohoUnmatchedDoc[]);
+      } catch { /* hidden */ }
+    })();
+    return () => { alive = false; };
+  }, [apiToken]);
 
   // Roll-up across all WON deals, using the SAVED actuals (not live drafts).
   const totals = useMemo(() => {
@@ -117,6 +149,31 @@ export function ClosedQuotesView({ apiToken }: { apiToken: string }) {
         >
           הצעות <LuxAccent>שנסגרו</LuxAccent>.
         </LuxTitle>
+
+        {stats && <AccuracyStrip stats={stats} />}
+
+        {unmatched && unmatched.length > 0 && (
+          <div
+            style={{
+              display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap",
+              padding: "10px 14px", marginBottom: 14, borderRadius: 8,
+              background: "rgba(214,178,106,0.08)", border: "1px solid rgba(214,178,106,0.3)",
+            }}
+          >
+            <span style={{ fontSize: 12.5, color: "var(--lux-champagne, #d6b26a)" }}>
+              {unmatched.length} מסמכי Zoho מ-90 הימים האחרונים עוד לא שויכו לעסקה
+            </span>
+            <span style={{ fontSize: 11.5, color: "var(--lux-muted)" }}>
+              {unmatched.slice(0, 3).map((d) =>
+                `${d.party || d.number}${d.totalIls != null ? ` ₪${Math.round(d.totalIls).toLocaleString("he-IL")}` : ""}`
+              ).join(" · ")}
+              {unmatched.length > 3 ? " · …" : ""}
+            </span>
+            <span style={{ fontSize: 11, color: "var(--lux-muted)", marginInlineStart: "auto" }}>
+              שיוך: פתח עסקה למטה → «משוך מ-Zoho»
+            </span>
+          </div>
+        )}
 
         {error && (
           <div style={{ padding: 14, borderRadius: 8, background: "rgba(232,180,180,0.1)", color: "#e8b4b4", fontSize: 13 }}>
@@ -165,23 +222,37 @@ function ClosedQuoteCard({
   // Local draft — default to the planned values so deltas start at 0.
   const [factory, setFactory] = useState(String(ac?.factoryTotalIls ?? Math.round(fp.totalCost ?? 0)));
   const [shipping, setShipping] = useState(String(ac?.shippingTotalIls ?? Math.round(fp.totalShipping ?? 0)));
+  const [revenue, setRevenue] = useState(String(ac?.actualRevenueIls ?? Math.round(fp.totalSellingPrice ?? 0)));
   const [other, setOther] = useState<{ label: string; amount: string }[]>(
     (ac?.otherCosts ?? []).map((c) => ({ label: c.label, amount: String(c.amountIls) }))
   );
+  const [zohoRefs, setZohoRefs] = useState<ZohoDocRef[]>(ac?.zohoRefs ?? []);
   const [note, setNote] = useState(ac?.note ?? "");
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [zohoOpen, setZohoOpen] = useState(false);
 
   const draftActuals: QuoteActualCosts = useMemo(() => {
-    const f = parseFloat(factory), s = parseFloat(shipping);
+    const f = parseFloat(factory), s = parseFloat(shipping), rv = parseFloat(revenue);
     return {
       factoryTotalIls: Number.isFinite(f) ? f : undefined,
       shippingTotalIls: Number.isFinite(s) ? s : undefined,
+      actualRevenueIls: Number.isFinite(rv) ? rv : undefined,
       otherCosts: other
         .map((c) => ({ label: c.label, amountIls: parseFloat(c.amount) }))
         .filter((c) => Number.isFinite(c.amountIls) && c.amountIls !== 0),
+      zohoRefs: zohoRefs.length > 0 ? zohoRefs : undefined,
       note: note.trim() || undefined,
     };
-  }, [factory, shipping, other, note]);
+  }, [factory, shipping, revenue, other, zohoRefs, note]);
+
+  /** Zoho picker → fill the draft inputs (Eli still reviews + saves). */
+  function applyZoho(sel: { revenueIls?: number; factoryIls?: number; shippingIls?: number; refs: ZohoDocRef[] }) {
+    if (sel.revenueIls !== undefined) setRevenue(String(Math.round(sel.revenueIls)));
+    if (sel.factoryIls !== undefined) setFactory(String(Math.round(sel.factoryIls)));
+    if (sel.shippingIls !== undefined) setShipping(String(Math.round(sel.shippingIls)));
+    setZohoRefs(sel.refs);
+    setZohoOpen(false);
+  }
 
   const r = useMemo(() => reconcile(fp, draftActuals), [fp, draftActuals]);
 
@@ -259,6 +330,7 @@ function ClosedQuoteCard({
           <div className="lux-label" style={{ color: "var(--lux-champagne)", letterSpacing: "0.12em" }}>בפועל</div>
           <div />
 
+          <CostRow label="הכנסה מהלקוח" planned={r.plannedRevenue} value={revenue} onChange={setRevenue} delta={r.revenueDelta} kind="revenue" />
           <CostRow label="עלות מפעל" planned={r.plannedFactory} value={factory} onChange={setFactory} delta={r.factoryDelta} />
           <CostRow label="שילוח (ממוצע ללקוח)" planned={r.plannedShipping} value={shipping} onChange={setShipping} delta={r.shippingDelta} />
 
@@ -305,8 +377,28 @@ function ClosedQuoteCard({
           style={{ ...inputStyle({ width: "100%" }), marginTop: 14, resize: "vertical" }}
         />
 
-        {/* Save */}
-        <div style={{ display: "flex", justifyContent: "flex-start", marginTop: 14 }}>
+        {/* Zoho link-backs */}
+        {zohoRefs.length > 0 && (
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 12 }}>
+            {zohoRefs.map((z) => (
+              <span
+                key={`${z.type}:${z.id}`}
+                style={{
+                  fontSize: 10.5, padding: "3px 9px", borderRadius: 99,
+                  background: "rgba(120,150,200,0.1)", border: "1px solid rgba(120,150,200,0.25)",
+                  color: "var(--lux-cool, #9db4d6)",
+                }}
+                title={z.party ?? ""}
+              >
+                Zoho {z.type === "invoice" ? "חשבונית" : z.type === "bill" ? "ספק" : "הוצאה"} {z.number || z.id.slice(-6)}
+                {z.amountIls != null ? ` · ${ils(z.amountIls)}` : ""}
+              </span>
+            ))}
+          </div>
+        )}
+
+        {/* Save + Zoho pull */}
+        <div style={{ display: "flex", justifyContent: "flex-start", gap: 10, marginTop: 14 }}>
           <button
             type="button"
             onClick={save}
@@ -321,8 +413,28 @@ function ClosedQuoteCard({
              saveState === "saved" ? <Check className="size-4" /> : <Save className="size-4" />}
             {saveState === "saved" ? "נשמר ✓" : saveState === "error" ? "שגיאה — נסה שוב" : "שמור עלויות בפועל"}
           </button>
+          <button
+            type="button"
+            onClick={() => setZohoOpen(true)}
+            style={{
+              display: "inline-flex", alignItems: "center", gap: 7, padding: "9px 16px",
+              borderRadius: 6, background: "transparent", border: "1px solid var(--lux-line)",
+              color: "var(--lux-ink)", fontSize: 13,
+            }}
+          >
+            <Download className="size-4" /> משוך מ-Zoho
+          </button>
         </div>
       </div>
+
+      {zohoOpen && (
+        <ZohoMatchModal
+          dealId={quote.id}
+          apiToken={apiToken}
+          onApply={applyZoho}
+          onClose={() => setZohoOpen(false)}
+        />
+      )}
     </section>
   );
 }
@@ -342,14 +454,23 @@ function inputStyle(extra: React.CSSProperties): React.CSSProperties {
   };
 }
 
-/** One planned↔actual row inside the card's grid (4 cells). */
+/** One planned↔actual row inside the card's grid (4 cells).
+ *  kind="cost" (default): actual ABOVE planned is bad (red).
+ *  kind="revenue": actual ABOVE planned is good (green). */
 function CostRow({
-  label, planned, value, onChange, delta,
+  label, planned, value, onChange, delta, kind = "cost",
 }: {
   label: string; planned: number; value: string; onChange: (v: string) => void; delta: number;
+  kind?: "cost" | "revenue";
 }) {
   const has = Math.abs(delta) > 0.5;
-  const deltaColor = has ? (delta > 0 ? "#e8b4b4" : "var(--lux-success,#a8c0a0)") : "var(--lux-muted)";
+  const good = kind === "revenue" ? delta > 0 : delta < 0;
+  const deltaColor = has ? (good ? "var(--lux-success,#a8c0a0)" : "#e8b4b4") : "var(--lux-muted)";
+  const deltaText = !has
+    ? "כמתוכנן"
+    : kind === "revenue"
+      ? (delta > 0 ? `יותר ב${ils(Math.abs(delta))}` : `פחות ב${ils(Math.abs(delta))}`)
+      : (delta > 0 ? `יקר ב${ils(Math.abs(delta))}` : `זול ב${ils(Math.abs(delta))}`);
   return (
     <>
       <div style={{ fontSize: 13, color: "var(--lux-muted)" }}>{label}</div>
@@ -361,9 +482,260 @@ function CostRow({
           style={{ width: "100%", background: "transparent", border: 0, textAlign: "right", color: "var(--lux-ink)", fontSize: 14, outline: "none" }}
         />
       </div>
-      <div style={{ fontSize: 11, color: deltaColor }}>
-        {has ? (delta > 0 ? `יקר ב${ils(Math.abs(delta))}` : `זול ב${ils(Math.abs(delta))}`) : "כמתוכנן"}
-      </div>
+      <div style={{ fontSize: 11, color: deltaColor }}>{deltaText}</div>
     </>
+  );
+}
+
+/* ---------- accuracy strip ("כמה המחשבון שלי מדויק") ---------- */
+
+function pct(v: number | null | undefined): string {
+  if (v === null || v === undefined || !Number.isFinite(v)) return "—";
+  return `${Math.abs(v).toFixed(1)}%`;
+}
+
+function AccuracyCard({
+  title, stat, signedHint,
+}: {
+  title: string;
+  stat: GapStat | null;
+  /** Render the SIGNED bias line ("המפעל בד״כ יקר/זול מהאומדן"). */
+  signedHint?: (meanSigned: number) => string;
+}) {
+  const trend =
+    stat?.recentMeanAbsPct != null && stat.n >= 4
+      ? stat.recentMeanAbsPct - stat.meanAbsPct
+      : null;
+  return (
+    <div style={{ background: "var(--lux-card)", border: "1px solid var(--lux-line)", borderRadius: 10, padding: "12px 16px" }}>
+      <div style={{ fontSize: 10.5, color: "var(--lux-muted)", letterSpacing: "0.1em", marginBottom: 4 }}>{title}</div>
+      {!stat ? (
+        <div style={{ fontSize: 13, color: "var(--lux-muted)", padding: "6px 0" }}>אין עדיין מספיק נתונים</div>
+      ) : (
+        <>
+          <div className="lux-serif tabular-nums" style={{ fontSize: 26, fontWeight: 300, color: "var(--lux-ink)", lineHeight: 1.15 }}>
+            {pct(stat.medianAbsPct)}
+            <span style={{ fontSize: 11.5, color: "var(--lux-muted)", fontFamily: "inherit", marginInlineStart: 6 }}>פער חציוני</span>
+          </div>
+          <div style={{ fontSize: 11, color: "var(--lux-muted)", marginTop: 3 }}>
+            ממוצע {pct(stat.meanAbsPct)} · {stat.n} עסקאות
+            {signedHint && Math.abs(stat.meanSignedPct) >= 1 && (
+              <> · {signedHint(stat.meanSignedPct)}</>
+            )}
+          </div>
+          {trend !== null && Math.abs(trend) >= 0.5 && (
+            <div style={{ fontSize: 11, marginTop: 2, color: trend < 0 ? "var(--lux-success,#a8c0a0)" : "#e8b4b4" }}>
+              {trend < 0 ? "▼" : "▲"} {pct(trend)} ב-10 האחרונות {trend < 0 ? "— משתפר" : "— נחלש"}
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+function AccuracyStrip({ stats }: { stats: AccuracyStats }) {
+  return (
+    <div style={{ marginBottom: 16 }}>
+      <div style={{ fontSize: 11, color: "var(--lux-muted)", letterSpacing: "0.14em", marginBottom: 8 }}>
+        כמה המחשבון שלי מדויק — מצטבר על כל העסקאות
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 10 }}>
+        <AccuracyCard
+          title="טיוטה ↔ מפעל · מחיר ליחידה"
+          stat={stats.draftVsFactory.unitPrice}
+          signedHint={(s) => (s > 0 ? "המפעל בד״כ יקר מהאומדן" : "המפעל בד״כ זול מהאומדן")}
+        />
+        <AccuracyCard
+          title="טיוטה ↔ מפעל · נפח משלוח (CBM)"
+          stat={stats.draftVsFactory.cbm}
+          signedHint={(s) => (s > 0 ? "הנפח בפועל גדול מהאומדן" : "הנפח בפועל קטן מהאומדן")}
+        />
+        <AccuracyCard
+          title="מתוכנן ↔ בפועל · רווח"
+          stat={stats.plannedVsActual.profit}
+          signedHint={(s) => (s > 0 ? "הרווח בפועל גבוה מהתכנון" : "הרווח בפועל נמוך מהתכנון")}
+        />
+      </div>
+    </div>
+  );
+}
+
+/* ---------- Zoho match modal ---------- */
+
+function zohoAmount(d: ZohoSuggestion): string {
+  const orig = `${d.total.toLocaleString("he-IL")} ${d.currencyCode}`;
+  if (d.currencyCode === "ILS") return ils(d.total);
+  return d.totalIls != null ? `${ils(d.totalIls)} (${orig})` : orig;
+}
+
+function ZohoMatchModal({
+  dealId, apiToken, onApply, onClose,
+}: {
+  dealId: string;
+  apiToken: string;
+  onApply: (sel: { revenueIls?: number; factoryIls?: number; shippingIls?: number; refs: ZohoDocRef[] }) => void;
+  onClose: () => void;
+}) {
+  const [data, setData] = useState<ZohoMatchResult | null>(null);
+  const [state, setState] = useState<"loading" | "ready" | "unconfigured" | "error">("loading");
+  const [errMsg, setErrMsg] = useState("");
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const res = await fetch(widgetUrl(`/api/widget/zoho/match?dealId=${encodeURIComponent(dealId)}`, apiToken), { cache: "no-store" });
+        const j = await res.json();
+        if (!alive) return;
+        if (!res.ok || !j.ok) { setErrMsg(j.error ?? `HTTP ${res.status}`); setState("error"); return; }
+        if (!j.configured) { setState("unconfigured"); return; }
+        const sug = j.suggestions as ZohoMatchResult;
+        setData(sug);
+        // Pre-tick the clear winners only (score high enough to trust).
+        const pre = new Set<string>();
+        const best = (list: ZohoSuggestion[]) => list[0] && list[0].score >= 0.6 ? pre.add(`${list[0].type}:${list[0].id}`) : null;
+        best(sug.invoices); best(sug.factoryBills); best(sug.shippingDocs);
+        setSelected(pre);
+        setState("ready");
+      } catch (e) {
+        if (alive) { setErrMsg(e instanceof Error ? e.message : String(e)); setState("error"); }
+      }
+    })();
+    return () => { alive = false; };
+  }, [dealId, apiToken]);
+
+  function toggle(key: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }
+
+  function apply() {
+    if (!data) return;
+    const pick = (list: ZohoSuggestion[]) => list.filter((d) => selected.has(`${d.type}:${d.id}`));
+    const inv = pick(data.invoices);
+    const fac = pick(data.factoryBills);
+    const shp = pick(data.shippingDocs);
+    const sum = (list: ZohoSuggestion[]) => {
+      const vals = list.map((d) => d.totalIls).filter((v): v is number => v != null);
+      return vals.length > 0 ? vals.reduce((s, v) => s + v, 0) : undefined;
+    };
+    const refs: ZohoDocRef[] = [...inv, ...fac, ...shp].map((d) => ({
+      type: d.type, id: d.id, number: d.number || undefined,
+      amountIls: d.totalIls ?? undefined, date: d.date || undefined, party: d.party || undefined,
+    }));
+    onApply({ revenueIls: sum(inv), factoryIls: sum(fac), shippingIls: sum(shp), refs });
+  }
+
+  function Section({ title, list }: { title: string; list: ZohoSuggestion[] }) {
+    return (
+      <div style={{ marginBottom: 14 }}>
+        <div style={{ fontSize: 11, color: "var(--lux-muted)", letterSpacing: "0.1em", marginBottom: 6 }}>{title}</div>
+        {list.length === 0 ? (
+          <div style={{ fontSize: 12, color: "var(--lux-muted)" }}>לא נמצאו מסמכים מתאימים</div>
+        ) : (
+          list.map((d) => {
+            const key = `${d.type}:${d.id}`;
+            const on = selected.has(key);
+            return (
+              <label
+                key={key}
+                style={{
+                  display: "flex", alignItems: "center", gap: 10, padding: "7px 10px", borderRadius: 6,
+                  border: `1px solid ${on ? "var(--lux-champagne, #d6b26a)" : "var(--lux-line)"}`,
+                  background: on ? "rgba(214,178,106,0.07)" : "transparent",
+                  marginBottom: 5, cursor: "pointer",
+                }}
+              >
+                <input type="checkbox" checked={on} onChange={() => toggle(key)} style={{ accentColor: "#d6b26a" }} />
+                <span style={{ fontSize: 12.5, color: "var(--lux-ink)", flex: 1 }}>
+                  {d.number || d.id.slice(-6)}{d.party ? ` · ${d.party}` : ""}
+                </span>
+                <span className="tabular-nums" style={{ fontSize: 12.5, color: "var(--lux-ink)" }}>{zohoAmount(d)}</span>
+                <span style={{ fontSize: 11, color: "var(--lux-muted)", minWidth: 58, textAlign: "left" }}>{fmtDate(d.date)}</span>
+                {d.score >= 0.6 && (
+                  <span style={{ fontSize: 10, color: "var(--lux-champagne, #d6b26a)" }}>מומלץ</span>
+                )}
+              </label>
+            );
+          })
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div
+      style={{ position: "fixed", inset: 0, zIndex: 60, background: "rgba(0,0,0,0.65)", display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}
+      onClick={onClose}
+    >
+      <div
+        dir="rtl"
+        style={{
+          width: "100%", maxWidth: 620, maxHeight: "85vh", overflowY: "auto",
+          background: "var(--lux-card, #1d1c1a)", border: "1px solid var(--lux-line)", borderRadius: 12, padding: "18px 20px",
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+          <div style={{ fontSize: 15, color: "var(--lux-ink)" }}>משוך עלויות בפועל מ-Zoho Books</div>
+          <button type="button" onClick={onClose} aria-label="סגור" style={{ color: "var(--lux-muted)", padding: 4 }}>
+            <X className="size-4" />
+          </button>
+        </div>
+
+        {state === "loading" && (
+          <div style={{ display: "flex", alignItems: "center", gap: 8, color: "var(--lux-muted)", fontSize: 13, padding: "18px 0" }}>
+            <Loader2 className="size-4 animate-spin" /> מחפש מסמכים מתאימים ב-Zoho…
+          </div>
+        )}
+        {state === "unconfigured" && (
+          <div style={{ fontSize: 13, color: "var(--lux-muted)", padding: "12px 0", lineHeight: 1.7 }}>
+            Zoho Books עוד לא מחובר. צריך להגדיר פעם אחת Self Client בקונסולת ה-API של Zoho
+            ולהזין את המפתחות ב-Vercel — תבקש מקלוד את ההוראות.
+          </div>
+        )}
+        {state === "error" && (
+          <div style={{ fontSize: 13, color: "#e8b4b4", padding: "12px 0" }}>שגיאה מול Zoho: {errMsg}</div>
+        )}
+
+        {state === "ready" && data && (
+          <>
+            <Section title="הכנסה — חשבונית ללקוח" list={data.invoices} />
+            <Section title="עלות מפעל — חשבוניות ספק" list={data.factoryBills} />
+            <Section title="שילוח — חשבוניות/הוצאות" list={data.shippingDocs} />
+            <div style={{ display: "flex", gap: 10, marginTop: 6 }}>
+              <button
+                type="button"
+                onClick={apply}
+                disabled={selected.size === 0}
+                style={{
+                  display: "inline-flex", alignItems: "center", gap: 7, padding: "9px 18px",
+                  borderRadius: 6, background: "var(--lux-navy-to, #2b3a55)", color: "#e8eefc",
+                  fontSize: 13, fontWeight: 500, opacity: selected.size === 0 ? 0.5 : 1,
+                }}
+              >
+                <Check className="size-4" /> מלא לפי הבחירה ({selected.size})
+              </button>
+              <button
+                type="button"
+                onClick={onClose}
+                style={{ padding: "9px 16px", borderRadius: 6, border: "1px solid var(--lux-line)", color: "var(--lux-muted)", fontSize: 13 }}
+              >
+                ביטול
+              </button>
+            </div>
+            <div style={{ fontSize: 11, color: "var(--lux-muted)", marginTop: 10 }}>
+              הסכומים ימולאו בשדות — שום דבר לא נשמר עד שתלחץ «שמור עלויות בפועל».
+            </div>
+          </>
+        )}
+      </div>
+    </div>
   );
 }

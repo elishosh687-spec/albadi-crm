@@ -72,10 +72,24 @@ export async function saveActualCosts(
   const clean: QuoteActualCosts = {
     factoryTotalIls: numOrUndef(actuals.factoryTotalIls),
     shippingTotalIls: numOrUndef(actuals.shippingTotalIls),
+    actualRevenueIls: numOrUndef(actuals.actualRevenueIls),
     otherCosts: Array.isArray(actuals.otherCosts)
       ? actuals.otherCosts
           .map((c) => ({ label: String(c.label ?? "").slice(0, 120), amountIls: Number(c.amountIls) }))
           .filter((c) => Number.isFinite(c.amountIls) && c.amountIls !== 0)
+      : undefined,
+    zohoRefs: Array.isArray(actuals.zohoRefs)
+      ? actuals.zohoRefs
+          .filter((z) => z && typeof z.id === "string" && z.id)
+          .slice(0, 20)
+          .map((z) => ({
+            type: z.type === "invoice" || z.type === "bill" || z.type === "expense" ? z.type : "expense",
+            id: String(z.id).slice(0, 80),
+            number: z.number ? String(z.number).slice(0, 60) : undefined,
+            amountIls: numOrUndef(z.amountIls),
+            date: z.date ? String(z.date).slice(0, 20) : undefined,
+            party: z.party ? String(z.party).slice(0, 120) : undefined,
+          }))
       : undefined,
     note: actuals.note ? String(actuals.note).slice(0, 2000) : undefined,
     updatedAt: new Date().toISOString(),
