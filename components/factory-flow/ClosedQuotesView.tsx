@@ -347,6 +347,24 @@ function ClosedQuoteCard({
           <CostRow label="עלות מפעל" planned={r.plannedFactory} value={factory} onChange={setFactory} delta={r.factoryDelta} />
           <CostRow label="שילוח (ממוצע ללקוח)" planned={r.plannedShipping} value={shipping} onChange={setShipping} delta={r.shippingDelta} />
 
+          {/* Per-CBM view — "כמה חייבתי את הלקוח לקוב מול כמה שילמתי לקוב".
+              Volume basis = the factory's CBM (ground truth per Eli). */}
+          {typeof fp.totalCbm === "number" && fp.totalCbm > 0.001 && (
+            <div style={{ gridColumn: "1 / -1", fontSize: 11, color: "var(--lux-muted)", marginTop: -4 }}>
+              לפי נפח המפעל {fp.totalCbm.toFixed(2)} CBM — חויב ללקוח{" "}
+              <span className="tabular-nums" style={{ color: "var(--lux-ink)" }}>
+                ₪{Math.round(r.plannedShipping / fp.totalCbm).toLocaleString("he-IL")}/CBM
+              </span>
+              {" · "}שולם בפועל{" "}
+              <span
+                className="tabular-nums"
+                style={{ color: r.actualShipping > r.plannedShipping ? "#e8b4b4" : "var(--lux-success,#a8c0a0)" }}
+              >
+                ₪{Math.round(r.actualShipping / fp.totalCbm).toLocaleString("he-IL")}/CBM
+              </span>
+            </div>
+          )}
+
           {/* other cost lines span the row */}
           {other.map((c, i) => (
             <div key={i} style={{ gridColumn: "1 / -1", display: "flex", gap: 8, alignItems: "center" }}>
