@@ -29,6 +29,10 @@ const BodySchema = z.object({
   manychatSubId: z.string().min(1),
   customerName: z.string().optional(),
   productSpec: ProductSpecSchema,
+  // Self-calculated pricing snapshot from the calculator ("שמור כטיוטה").
+  // Passthrough — validated structurally by the FactoryPricingResult type at
+  // the call site; stored as-is in final_pricing.
+  finalPricing: z.record(z.string(), z.unknown()).optional(),
 });
 
 export async function POST(req: NextRequest) {
@@ -49,6 +53,9 @@ export async function POST(req: NextRequest) {
       manychatSubId: body.manychatSubId,
       productSpec: body.productSpec,
       customerName: body.customerName,
+      finalPricing: body.finalPricing as
+        | import("@/lib/factory/types").FactoryPricingResult
+        | undefined,
     });
     return NextResponse.json({ ok: true, ...result });
   } catch (err) {

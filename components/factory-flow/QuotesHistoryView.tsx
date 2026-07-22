@@ -410,9 +410,12 @@ export function QuotesHistoryView({ apiToken }: { apiToken: string }) {
           <span className="text-sm font-medium truncate min-w-0">
             {r.name ?? r.leadSid.slice(0, 20)}
           </span>
-          {r.status === "finalized" && r.finalPricing && (
-            <span className="text-[11px] tabular-nums text-emerald-400 shrink-0">
-              {fmtMoney((r.finalPricing as any).totalOrderPriceIls ?? (r.finalPricing as any).totalSellingPrice)}
+          {(r.status === "finalized" || r.status === "draft") && r.finalPricing && (
+            <span
+              className={`text-[11px] tabular-nums shrink-0 ${r.status === "draft" ? "text-muted-foreground" : "text-emerald-400"}`}
+              title={r.status === "draft" ? "מחיר משוער (טיוטה — לא ממפעל)" : undefined}
+            >
+              {r.status === "draft" ? "~" : ""}{fmtMoney((r.finalPricing as any).totalOrderPriceIls ?? (r.finalPricing as any).totalSellingPrice)}
             </span>
           )}
         </div>

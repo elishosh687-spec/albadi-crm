@@ -38,6 +38,10 @@ const BodySchema = z.object({
   manychatSubId: z.string().min(1),
   customerName: z.string().optional(),
   productSpec: ProductSpecSchema,
+  // Optional auto-estimate the form computed for the spec — saved on the draft
+  // so it carries an estimated price (Eli 2026-07-22). Passthrough; validated by
+  // the FactoryPricingResult type at the createFactoryDraft call site.
+  finalPricing: z.record(z.string(), z.unknown()).optional(),
 });
 
 function buildEliSummary(
@@ -100,6 +104,9 @@ export async function POST(req: NextRequest) {
       manychatSubId: body.manychatSubId,
       customerName: body.customerName,
       productSpec: body.productSpec,
+      finalPricing: body.finalPricing as
+        | import("@/lib/factory/types").FactoryPricingResult
+        | undefined,
     });
     const shippingLabel = await resolveShippingLabel(body.productSpec.shippingOptionId);
     await sendEliDM(buildEliSummary(body.customerName, body.productSpec, shippingLabel));

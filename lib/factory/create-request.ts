@@ -18,7 +18,7 @@ import {
   setCellValue,
   FEISHU_ROW_HEIGHT_PX,
 } from "@/lib/feishu/sheets";
-import type { FactoryProductSpec } from "./types";
+import type { FactoryProductSpec, FactoryPricingResult } from "./types";
 
 // The factory works the Feishu sheet in English/Chinese — the description column
 // must never carry Hebrew (Eli 2026-07-16). The customer NAME (col A) stays
@@ -154,6 +154,12 @@ export interface CreateFactoryDraftInput {
   manychatSubId: string;
   productSpec: FactoryProductSpec;
   customerName?: string;
+  /** Optional self-calculated pricing snapshot ("שמור כטיוטה" from the
+   *  calculator, or the sales-form auto-estimate). Stored in final_pricing so
+   *  the quotes list shows the price the boss quoted the customer. This is an
+   *  ESTIMATE — the row stays status='draft' until a real factory response
+   *  makes it "serious" (received/finalized). */
+  finalPricing?: FactoryPricingResult;
 }
 
 export interface CreateFactoryDraftResult {
@@ -176,6 +182,7 @@ export async function createFactoryDraft(
     quotationNo,
     productSpec: input.productSpec,
     factoryStatus: "draft",
+    finalPricing: input.finalPricing ?? null,
   });
 
   return { id, quotationNo };

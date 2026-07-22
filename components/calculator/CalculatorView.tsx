@@ -4,6 +4,8 @@ import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { Loader2, Send, Copy, Check, Search, X, ChevronDown, Calculator, Pencil, Ship, Plane, Repeat, Minus, Plus } from "lucide-react";
 import { cn } from "@/lib/cn";
 import type { Product, QuantityTier, ShippingOption, QuoteResult } from "@/lib/factory/calculator/types";
+import type { FactoryPricingResult } from "@/lib/factory/types";
+import { quoteResultToPricing } from "@/lib/factory/calculator/to-pricing";
 import { computeCommission } from "@/lib/factory/commission";
 import { isOverCbmConsolidationThreshold, cbmConsolidationAlert } from "@/lib/factory/sea-carriers";
 import { customerBreakdownIls, customerRoundedTotalIls } from "@/lib/factory/calculator/customer-breakdown";
@@ -323,7 +325,12 @@ export function CalculatorView({ products, quantityTiers, shippingOptions, initi
         };
       })()
     : null;
-  const share = useQuoteShare({ apiToken, sid, leadName, quoteText: operatorQuoteText, factorySpec: operatorFactorySpec });
+  // Pricing snapshot for "שמור כטיוטה" — the exact calculated price.
+  const operatorPricing: FactoryPricingResult | null =
+    r && c
+      ? quoteResultToPricing(r as QuoteResult, c.productionPerUnitIls, c.shippingPerUnitIls, effectiveCommissionPct)
+      : null;
+  const share = useQuoteShare({ apiToken, sid, leadName, quoteText: operatorQuoteText, factorySpec: operatorFactorySpec, pricing: operatorPricing });
 
   return (
     <div className="calc-lux gg-theme flex flex-col gap-6 rounded-xl p-5" dir="rtl">
@@ -1158,7 +1165,12 @@ function EstimateTab({ apiToken, shippingOptions, sid, leadName, initialMargins,
         totalIls: r.totalOrderPriceIls,
       }
     : undefined;
-  const share = useQuoteShare({ apiToken, sid, leadName, quoteText: estimateQuoteText, estimate: estimateCtx });
+  // Pricing snapshot for "שמור כטיוטה" — the exact estimated price.
+  const estimatePricing: FactoryPricingResult | null =
+    est && est.ok && r && c
+      ? quoteResultToPricing(r as QuoteResult, c.productionPerUnitIls, c.shippingPerUnitIls, effectiveCommissionPct)
+      : null;
+  const share = useQuoteShare({ apiToken, sid, leadName, quoteText: estimateQuoteText, estimate: estimateCtx, pricing: estimatePricing });
 
   return (
     <div className="flex flex-col gap-6">
@@ -1628,6 +1640,20 @@ function ProposalSummary({
           )}
         </div>
 
+        {share.canSaveDraft && (
+          <button
+            type="button"
+            onClick={share.saveDraft}
+            disabled={!share.pickedSid || share.busy !== null}
+            title={!share.pickedSid ? "בחר ליד למטה כדי לשמור טיוטה" : "שמור את המחיר שחישבת כטיוטה — לתיעוד מה שלחת ללקוח"}
+            className="lux-cta-ghost"
+            style={{ marginTop: 8, width: "100%" }}
+          >
+            {share.busy === "draft" ? <Loader2 className="size-3.5 animate-spin" /> : <Copy className="size-3.5" />}
+            שמור כטיוטה
+          </button>
+        )}
+
         {share.status && <p className="text-[11px]" style={{ color: "var(--lux-cool)", marginTop: 10 }}>{share.status}</p>}
         {share.error && <p className="text-[11px] text-destructive" style={{ marginTop: 10 }}>⚠️ {share.error}</p>}
       </section>
@@ -2069,6 +2095,7 @@ function useQuoteShare({
   quoteText,
   estimate,
   factorySpec,
+  pricing,
 }: {
   apiToken: string | undefined;
   sid: string | undefined;
@@ -2076,6 +2103,9 @@ function useQuoteShare({
   quoteText: string;
   estimate?: EstimateSendContext;
   factorySpec?: FactorySpecContext | null;
+  /** Self-calculated pricing snapshot for "שמור כטיוטה" — the exact price shown
+   *  in the summary, so the saved draft records what was quoted. */
+  pricing?: FactoryPricingResult | null;
 }) {
   const [sending, setSending] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -2201,7 +2231,7 @@ function useQuoteShare({
 
   // Estimate-tab extras: send the preliminary PDF to the customer, or request the
   // real quote from the factory. Both use the picked lead. Widget → token route; v3 → cookie route.
-  const [busy, setBusy] = useState<null | "pdf" | "factory">(null);
+  const [busy, setBusy] = useState<null | "pdf" | "factory" | "draft">(null);
   const apiBase = (widgetPath: string, dashPath: string) =>
     apiToken ? `${widgetPath}?widget_token=${encodeURIComponent(apiToken)}` : dashPath;
 
@@ -2264,12 +2294,41 @@ function useQuoteShare({
     } catch (e) { setError(e instanceof Error ? e.message : String(e)); } finally { setBusy(null); }
   };
 
+  // Save the CALCULATED quote as a DRAFT (spec + the price snapshot shown in the
+  // summary) so the boss has a record of what he quoted the customer. Stays a
+  // draft — a factory response later makes it "serious". Needs a picked lead + a
+  // spec + a pricing snapshot.
+  const canSaveDraft = !!(resolvedFactorySpec && pricing);
+  const saveDraft = async () => {
+    if (!pickedSid || !resolvedFactorySpec || !pricing) return;
+    const fs = resolvedFactorySpec;
+    if (!confirm(`לשמור את ההצעה כטיוטה עבור ${pickedName ?? "הלקוח"}? (מה שחישבת — לתיעוד)`)) return;
+    setBusy("draft"); setStatus(null); setError(null);
+    try {
+      const productSpec = {
+        description: fs.description, material: fs.material,
+        widthCm: fs.widthCm, heightCm: fs.heightCm, depthCm: fs.depthCm, quantity: fs.quantity,
+        printing: `${fs.colors} color(s)`,
+        finishing: `${fs.handles ? "With handles" : "No handles"} / ${fs.lamination ? "Laminated" : "Not laminated"}`,
+        ...(fs.shippingOptionId ? { shippingOptionId: fs.shippingOptionId } : {}),
+      };
+      const res = await fetch(apiBase("/api/widget/factory/quote-draft", "/api/factory/quote-draft"), {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ manychatSubId: pickedSid, customerName: pickedName ?? undefined, productSpec, finalPricing: pricing }),
+      });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok || !j?.ok) { setError(j?.detail ?? j?.error ?? `HTTP ${res.status}`); return; }
+      setStatus(`נשמר כטיוטה ✓ הצעה #${j.quotationNo} — תמצא אותה בטאב "הצעות מהמפעל" (טיוטות).`);
+    } catch (e) { setError(e instanceof Error ? e.message : String(e)); } finally { setBusy(null); }
+  };
+
   return {
     sending, copied, status, error,
     pickedSid, pickedName, query, setQuery, open, setOpen,
     results, loadingResults, containerRef, runSearch,
     pickLead, clearLead, copy, send,
     busy, sendEstimatePdf, sendToFactory, canFactory,
+    saveDraft, canSaveDraft,
   };
 }
 
