@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useMemo } from "react";
-import { ExternalLink, Search, Loader2, Eye, Download, Trash2, X, MessageCircle, Calculator, Pencil, ChevronDown, Check, Send, Sparkles } from "lucide-react";
+import { ExternalLink, Search, Loader2, Eye, Download, Trash2, X, MessageCircle, Calculator, Pencil, ChevronDown, Check, Send, Sparkles, FolderOpen } from "lucide-react";
 import { QuoteHtmlPreview } from "@/app/dashboard/v3/_components/factory/QuoteHtmlPreview";
 import type { FactoryQuoteRow as DashboardFactoryQuoteRow } from "@/app/dashboard/v3/_components/factory/FactoryQuotePanel";
 import { FinalizeModalWidget } from "./FinalizeModal.widget";
@@ -497,6 +497,15 @@ export function QuotesHistoryView({ apiToken }: { apiToken: string }) {
               className="size-7 rounded grid place-items-center text-muted-foreground hover:text-foreground hover:bg-secondary"
             >
               <Download className="size-3.5" />
+            </a>
+          )}
+          {r.status === "finalized" && (
+            <a
+              href={`/widget/closed-quotes?widget_token=${encodeURIComponent(apiToken)}&focus=${encodeURIComponent(r.id)}`}
+              title="פתח תיק עסקה (ציר שלבים + רווח בפועל)"
+              className="size-7 rounded grid place-items-center text-muted-foreground hover:text-amber-400 hover:bg-amber-500/10"
+            >
+              <FolderOpen className="size-3.5" />
             </a>
           )}
           {r.status === "draft" && r.finalPricing && (

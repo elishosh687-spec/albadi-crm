@@ -66,7 +66,7 @@ const TABS: TabDef[] = [
   },
   {
     id: "closed",
-    label: "הצעות שנסגרו",
+    label: "עסקאות",
     icon: CircleCheckBig,
     url: (t) => `/widget/closed-quotes?widget_token=${encodeURIComponent(t)}`,
   },

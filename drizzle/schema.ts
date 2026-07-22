@@ -264,6 +264,11 @@ export const factoryQuoteRequests = pgTable("factory_quote_requests", {
   // even after promotion. Added via direct DDL (drizzle-kit push hangs — see
   // CLAUDE.md). Null for quotes that never had a self-estimate.
   draftEstimate: jsonb("draft_estimate"),
+  // DealMilestones (lib/factory/types.ts) — the post-WON "תיק עסקה" timeline:
+  // mockup → invoice → layout → production → shipping → delivered, each with a
+  // date stamp and optional files (Vercel Blob URLs, mirrored to GHL as notes).
+  // Added via direct DDL 2026-07-22 (drizzle-kit push hangs — see CLAUDE.md).
+  dealMilestones: jsonb("deal_milestones"),
 });
 
 // Append-only audit log of every bot-side quote sent on WhatsApp. Captures

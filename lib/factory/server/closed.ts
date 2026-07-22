@@ -9,7 +9,7 @@
 import { db } from "@/lib/db";
 import { factoryQuoteRequests, leads } from "@/drizzle/schema";
 import { and, desc, eq } from "drizzle-orm";
-import type { FactoryPricingResult, QuoteActualCosts } from "@/lib/factory/types";
+import type { DealMilestones, FactoryPricingResult, QuoteActualCosts } from "@/lib/factory/types";
 
 export interface ClosedQuoteRow {
   id: string;
@@ -20,6 +20,7 @@ export interface ClosedQuoteRow {
   productSpec: Record<string, unknown> | null;
   finalPricing: FactoryPricingResult | null;
   actualCosts: QuoteActualCosts | null;
+  dealMilestones: DealMilestones | null;
   sentToCustomerAt: string | null;
   updatedAt: string;
 }
@@ -34,6 +35,7 @@ export async function listClosedQuotes(): Promise<ClosedQuoteRow[]> {
       productSpec: factoryQuoteRequests.productSpec,
       finalPricing: factoryQuoteRequests.finalPricing,
       actualCosts: factoryQuoteRequests.actualCosts,
+      dealMilestones: factoryQuoteRequests.dealMilestones,
       sentToCustomerAt: factoryQuoteRequests.sentToCustomerAt,
       updatedAt: factoryQuoteRequests.updatedAt,
       customerName: leads.name,
@@ -59,6 +61,7 @@ export async function listClosedQuotes(): Promise<ClosedQuoteRow[]> {
     productSpec: (r.productSpec ?? null) as Record<string, unknown> | null,
     finalPricing: (r.finalPricing ?? null) as FactoryPricingResult | null,
     actualCosts: (r.actualCosts ?? null) as QuoteActualCosts | null,
+    dealMilestones: (r.dealMilestones ?? null) as DealMilestones | null,
     sentToCustomerAt: r.sentToCustomerAt ? r.sentToCustomerAt.toISOString() : null,
     updatedAt: r.updatedAt.toISOString(),
   }));

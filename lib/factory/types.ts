@@ -307,6 +307,41 @@ export interface QuoteActualCosts {
   updatedAt?: string;
 }
 
+/** One file attached to a deal-file stage (stored in Vercel Blob). */
+export interface DealMilestoneFile {
+  url: string;
+  name: string;
+  /** ISO timestamp of the upload. */
+  uploadedAt: string;
+}
+
+/**
+ * The post-WON "תיק עסקה" timeline — everything that happens between winning
+ * the deal and the goods arriving: mockup sent, invoice issued, factory
+ * layout (פריסה) received/approved, production, shipping, delivery.
+ *
+ * All stamps are ISO timestamps set manually from the deal file UI (null/absent
+ * = stage not reached). Files live in Vercel Blob; every upload is also
+ * mirrored to the lead's GHL contact as a note so Itay sees it. Stored in its
+ * OWN column (factory_quote_requests.deal_milestones) — survives re-finalize.
+ */
+export interface DealMilestones {
+  mockupSentAt?: string | null;
+  mockupFiles?: DealMilestoneFile[];
+  invoiceSentAt?: string | null;
+  /** Zoho invoice number/id once issued (Phase 3 wires creation). */
+  invoiceZohoId?: string;
+  invoiceFiles?: DealMilestoneFile[];
+  layoutReceivedAt?: string | null;
+  layoutApprovedAt?: string | null;
+  layoutFiles?: DealMilestoneFile[];
+  productionStartedAt?: string | null;
+  shippedAt?: string | null;
+  deliveredAt?: string | null;
+  notes?: string;
+  updatedAt?: string;
+}
+
 /** Pointer to the Zoho Books document an actual-cost line came from. */
 export interface ZohoDocRef {
   type: "invoice" | "bill" | "expense";

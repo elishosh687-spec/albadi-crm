@@ -11,11 +11,11 @@
  * the ACTUAL profit for that customer, and the header rolls it up. Boss-only.
  */
 
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { Loader2, Plus, Trash2, Check, Save, Download, X } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Loader2, Plus, Trash2, Check, Save, Download, X, Paperclip, Circle, CheckCircle2 } from "lucide-react";
 import { LuxShell, LuxTitle, LuxAccent, LuxStat } from "@/components/widget-ui/lux";
 import { widgetUrl } from "./widget-url";
-import type { FactoryPricingResult, QuoteActualCosts, ZohoDocRef } from "@/lib/factory/types";
+import type { DealMilestones, FactoryPricingResult, QuoteActualCosts, ZohoDocRef } from "@/lib/factory/types";
 import type { AccuracyStats, GapStat } from "@/lib/factory/server/accuracy";
 import type { ZohoMatchResult, ZohoSuggestion } from "@/lib/zoho/match";
 
@@ -28,6 +28,7 @@ interface ClosedQuote {
   productSpec: Record<string, unknown> | null;
   finalPricing: FactoryPricingResult | null;
   actualCosts: QuoteActualCosts | null;
+  dealMilestones: DealMilestones | null;
   sentToCustomerAt: string | null;
   updatedAt: string;
 }
@@ -95,6 +96,21 @@ export function ClosedQuotesView({ apiToken }: { apiToken: string }) {
 
   useEffect(() => { load(); }, [load]);
 
+  // Deep-link from the quotes tab: ?focus=<quote id or lead sid> scrolls to the card.
+  const focusedOnce = useRef(false);
+  useEffect(() => {
+    if (!quotes || focusedOnce.current) return;
+    const focus = new URLSearchParams(window.location.search).get("focus");
+    if (!focus) return;
+    focusedOnce.current = true;
+    setTimeout(() => {
+      const el =
+        document.getElementById(`deal-${focus}`) ??
+        document.querySelector(`[data-lead="${CSS.escape(focus)}"]`);
+      el?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 300);
+  }, [quotes]);
+
   // Zoho reminder panel — soft: unconfigured/down Zoho just hides it.
   useEffect(() => {
     let alive = true;
@@ -125,11 +141,11 @@ export function ClosedQuotesView({ apiToken }: { apiToken: string }) {
     <LuxShell>
       <div style={{ maxWidth: MAX_W, margin: "0 auto" }}>
         <LuxTitle
-          overline="— Closed deals"
+          overline="— Deals"
           subtitle={
             quotes
-              ? `הרווח האמיתי מכל לקוח — הזן עלויות בפועל · ${totals.reconciled}/${totals.count} עם עלויות שהוזנו`
-              : "הרווח האמיתי מכל לקוח — הזן עלויות בפועל"
+              ? `ציר העסקה + הרווח האמיתי מכל לקוח · ${totals.reconciled}/${totals.count} עם עלויות שהוזנו`
+              : "ציר העסקה + הרווח האמיתי מכל לקוח"
           }
           aside={
             quotes && totals.count > 0 ? (
@@ -147,7 +163,7 @@ export function ClosedQuotesView({ apiToken }: { apiToken: string }) {
             ) : null
           }
         >
-          הצעות <LuxAccent>שנסגרו</LuxAccent>.
+          תיקי <LuxAccent>עסקאות</LuxAccent>.
         </LuxTitle>
 
         {stats && <AccuracyStrip stats={stats} />}
@@ -218,6 +234,7 @@ function ClosedQuoteCard({
 }) {
   const fp = quote.finalPricing!;
   const ac = quote.actualCosts;
+  const [milestones, setMilestones] = useState<DealMilestones>(quote.dealMilestones ?? {});
 
   // Local draft — default to the planned values so deltas start at 0.
   const [factory, setFactory] = useState(String(ac?.factoryTotalIls ?? Math.round(fp.totalCost ?? 0)));
@@ -297,15 +314,19 @@ function ClosedQuoteCard({
   const varColor = Math.abs(r.variance) < 1 ? "var(--lux-muted)" : varPos ? "var(--lux-success,#a8c0a0)" : "#e8b4b4";
 
   return (
-    <section style={{ background: "var(--lux-card)", borderRadius: 10, border: "1px solid var(--lux-line)", overflow: "hidden" }}>
-      {/* Header: name + spec (right) · ACTUAL PROFIT hero (left) */}
+    <section
+      id={`deal-${quote.id}`}
+      data-lead={quote.leadSid}
+      style={{ background: "var(--lux-card)", borderRadius: 10, border: "1px solid var(--lux-line)", overflow: "hidden" }}
+    >
+      {/* Header: name + spec + stage chips (right) · ACTUAL PROFIT hero (left) */}
       <div
         style={{
           display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap",
           padding: "16px 20px", background: "var(--lux-inset)", borderBottom: "1px solid var(--lux-line)",
         }}
       >
-        <div>
+        <div style={{ minWidth: 0 }}>
           <div className="lux-sans" style={{ fontSize: 16, fontWeight: 400, color: "var(--lux-ink)" }}>
             {quote.customerName || "לקוח"}
           </div>
@@ -313,6 +334,7 @@ function ClosedQuoteCard({
             {[spec, quote.quotationNo ? `#${quote.quotationNo}` : null, `נסגר ${fmtDate(quote.sentToCustomerAt ?? quote.updatedAt)}`]
               .filter(Boolean).join(" · ")}
           </div>
+          <StageChips quote={quote} m={milestones} />
         </div>
         <div style={{ textAlign: "left" }}>
           <div style={{ fontSize: 10.5, color: "var(--lux-muted)", letterSpacing: "0.12em" }}>רווח בפועל מהלקוח</div>
@@ -327,6 +349,14 @@ function ClosedQuoteCard({
           </div>
         </div>
       </div>
+
+      {/* Deal timeline — the post-WON journey with files per stage */}
+      <DealTimeline
+        quote={quote}
+        milestones={milestones}
+        onChange={setMilestones}
+        apiToken={apiToken}
+      />
 
       {/* Body: tidy planned↔actual table */}
       <div style={{ padding: "16px 20px" }}>
@@ -515,6 +545,233 @@ function CostRow({
       </div>
       <div style={{ fontSize: 11, color: deltaColor }}>{deltaText}</div>
     </>
+  );
+}
+
+/* ---------- deal timeline ("תיק עסקה") ---------- */
+
+type StampKey =
+  | "mockupSentAt" | "invoiceSentAt" | "layoutReceivedAt" | "layoutApprovedAt"
+  | "productionStartedAt" | "shippedAt" | "deliveredAt";
+type FileKey = "mockupFiles" | "invoiceFiles" | "layoutFiles";
+
+const TIMELINE: {
+  key: StampKey;
+  label: string;
+  chip: string;
+  fileStage?: "mockup" | "invoice" | "layout";
+  fileKey?: FileKey;
+}[] = [
+  { key: "mockupSentAt", label: "הדמיה נשלחה ללקוח", chip: "הדמיה", fileStage: "mockup", fileKey: "mockupFiles" },
+  { key: "invoiceSentAt", label: "חשבונית הונפקה", chip: "חשבונית", fileStage: "invoice", fileKey: "invoiceFiles" },
+  { key: "layoutReceivedAt", label: "פריסה התקבלה מהמפעל", chip: "פריסה", fileStage: "layout", fileKey: "layoutFiles" },
+  { key: "layoutApprovedAt", label: "פריסה אושרה", chip: "אישור פריסה" },
+  { key: "productionStartedAt", label: "ייצור התחיל", chip: "ייצור" },
+  { key: "shippedAt", label: "יצא למשלוח", chip: "משלוח" },
+  { key: "deliveredAt", label: "הגיע ללקוח", chip: "הגיע" },
+];
+
+/** Compact done/current/pending pills under the customer name. */
+function StageChips({ quote, m }: { quote: ClosedQuote; m: DealMilestones }) {
+  const stages: { chip: string; done: boolean }[] = [
+    { chip: "הצעה", done: !!quote.sentToCustomerAt },
+    { chip: "זכייה", done: true },
+    ...TIMELINE.filter((s) => s.key !== "layoutApprovedAt").map((s) => ({ chip: s.chip, done: !!m[s.key] })),
+  ];
+  const firstPending = stages.findIndex((s) => !s.done);
+  return (
+    <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginTop: 8 }}>
+      {stages.map((s, i) => {
+        const current = i === firstPending;
+        return (
+          <span
+            key={s.chip}
+            style={{
+              fontSize: 10, padding: "2px 9px", borderRadius: 99, whiteSpace: "nowrap",
+              background: s.done ? "rgba(168,192,160,0.12)" : current ? "rgba(214,178,106,0.12)" : "var(--lux-inset)",
+              border: `1px solid ${s.done ? "rgba(168,192,160,0.35)" : current ? "rgba(214,178,106,0.4)" : "var(--lux-line)"}`,
+              color: s.done ? "var(--lux-success,#a8c0a0)" : current ? "var(--lux-champagne,#d6b26a)" : "var(--lux-muted)",
+            }}
+          >
+            {s.done ? "✓ " : ""}{s.chip}
+          </span>
+        );
+      })}
+    </div>
+  );
+}
+
+function DealTimeline({
+  quote, milestones, onChange, apiToken,
+}: {
+  quote: ClosedQuote;
+  milestones: DealMilestones;
+  onChange: (m: DealMilestones) => void;
+  apiToken: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const [busyKey, setBusyKey] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const fileInputs = useRef<Record<string, HTMLInputElement | null>>({});
+
+  const doneCount = TIMELINE.filter((s) => !!milestones[s.key]).length;
+
+  async function putPatch(patch: Partial<DealMilestones>, busy: string) {
+    setBusyKey(busy);
+    setErr(null);
+    try {
+      const res = await fetch(widgetUrl(`/api/widget/factory/milestones/${quote.id}`, apiToken), {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(patch),
+      });
+      const j = await res.json();
+      if (!res.ok || !j.ok) throw new Error(j.error ?? "save failed");
+      onChange(j.milestones as DealMilestones);
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusyKey(null);
+    }
+  }
+
+  async function uploadFile(stage: "mockup" | "invoice" | "layout", file: File) {
+    setBusyKey(`up-${stage}`);
+    setErr(null);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await fetch(
+        widgetUrl(`/api/widget/factory/deal-upload/${quote.id}`, apiToken) + `&stage=${stage}`,
+        { method: "POST", body: fd }
+      );
+      const j = await res.json();
+      if (!res.ok || !j.ok) throw new Error(j.message ?? j.error ?? "upload failed");
+      onChange(j.milestones as DealMilestones);
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusyKey(null);
+    }
+  }
+
+  return (
+    <div style={{ borderBottom: "1px solid var(--lux-line)" }}>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        style={{
+          width: "100%", display: "flex", alignItems: "center", gap: 8,
+          padding: "10px 20px", fontSize: 12.5, color: "var(--lux-muted)", textAlign: "right",
+        }}
+      >
+        <span style={{ color: "var(--lux-champagne,#d6b26a)" }}>{open ? "▾" : "◂"}</span>
+        ציר העסקה — {doneCount}/{TIMELINE.length} שלבים הושלמו
+        <span style={{ marginInlineStart: "auto", fontSize: 11 }}>{open ? "סגור" : "פתח"}</span>
+      </button>
+
+      {open && (
+        <div style={{ padding: "4px 20px 14px" }}>
+          {/* auto stage — quote sent */}
+          <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "7px 0", borderBottom: "1px solid var(--lux-line)" }}>
+            {quote.sentToCustomerAt
+              ? <CheckCircle2 className="size-4" style={{ color: "var(--lux-success,#a8c0a0)" }} />
+              : <Circle className="size-4" style={{ color: "var(--lux-muted)" }} />}
+            <span style={{ fontSize: 13, color: "var(--lux-ink)" }}>הצעה נשלחה ללקוח</span>
+            <span style={{ fontSize: 11.5, color: "var(--lux-muted)" }}>{fmtDate(quote.sentToCustomerAt)}</span>
+            <span style={{ marginInlineStart: "auto", fontSize: 11, color: "var(--lux-muted)" }}>אוטומטי</span>
+          </div>
+
+          {TIMELINE.map((s) => {
+            const stamped = milestones[s.key];
+            const files = s.fileKey ? milestones[s.fileKey] ?? [] : [];
+            return (
+              <div key={s.key} style={{ padding: "7px 0", borderBottom: "1px solid var(--lux-line)" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                  {stamped
+                    ? <CheckCircle2 className="size-4 shrink-0" style={{ color: "var(--lux-success,#a8c0a0)" }} />
+                    : <Circle className="size-4 shrink-0" style={{ color: "var(--lux-muted)" }} />}
+                  <span style={{ fontSize: 13, color: stamped ? "var(--lux-ink)" : "var(--lux-muted)" }}>{s.label}</span>
+                  {stamped && <span style={{ fontSize: 11.5, color: "var(--lux-muted)" }}>{fmtDate(stamped)}</span>}
+                  <span style={{ marginInlineStart: "auto", display: "flex", gap: 6, alignItems: "center" }}>
+                    {s.fileStage && (
+                      <>
+                        <input
+                          ref={(el) => { fileInputs.current[s.fileStage!] = el; }}
+                          type="file"
+                          accept="image/*,video/*,application/pdf"
+                          style={{ display: "none" }}
+                          onChange={(e) => {
+                            const f = e.target.files?.[0];
+                            if (f) uploadFile(s.fileStage!, f);
+                            e.target.value = "";
+                          }}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => fileInputs.current[s.fileStage!]?.click()}
+                          disabled={busyKey === `up-${s.fileStage}`}
+                          style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11, color: "var(--lux-cool,#9db4d6)", padding: "3px 8px", borderRadius: 5, border: "1px solid var(--lux-line)" }}
+                        >
+                          {busyKey === `up-${s.fileStage}` ? <Loader2 className="size-3 animate-spin" /> : <Paperclip className="size-3" />}
+                          צרף קובץ
+                        </button>
+                      </>
+                    )}
+                    {stamped ? (
+                      <button
+                        type="button"
+                        onClick={() => putPatch({ [s.key]: null }, s.key)}
+                        disabled={busyKey === s.key}
+                        style={{ fontSize: 10.5, color: "var(--lux-muted)", padding: "3px 8px" }}
+                      >
+                        בטל
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => putPatch({ [s.key]: new Date().toISOString() }, s.key)}
+                        disabled={busyKey === s.key}
+                        style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11, color: "var(--lux-champagne,#d6b26a)", padding: "3px 10px", borderRadius: 5, border: "1px solid rgba(214,178,106,0.4)" }}
+                      >
+                        {busyKey === s.key ? <Loader2 className="size-3 animate-spin" /> : <Check className="size-3" />}
+                        סמן ✓
+                      </button>
+                    )}
+                  </span>
+                </div>
+                {files.length > 0 && (
+                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 5, marginInlineStart: 24 }}>
+                    {files.map((f, i) => (
+                      <a
+                        key={i}
+                        href={f.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        style={{
+                          fontSize: 10.5, padding: "3px 9px", borderRadius: 99,
+                          background: "rgba(120,150,200,0.08)", border: "1px solid rgba(120,150,200,0.25)",
+                          color: "var(--lux-cool,#9db4d6)", textDecoration: "none", maxWidth: 220,
+                          overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                        }}
+                        title={f.name}
+                      >
+                        📎 {f.name || "קובץ"}
+                      </a>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+
+          {err && <div style={{ fontSize: 11.5, color: "#e8b4b4", marginTop: 8 }}>שגיאה: {err}</div>}
+          <div style={{ fontSize: 10.5, color: "var(--lux-muted)", marginTop: 8 }}>
+            כל סימון וכל קובץ משתקפים אוטומטית ככרטיסיית הערה על איש הקשר ב-GHL — איתי רואה.
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 
