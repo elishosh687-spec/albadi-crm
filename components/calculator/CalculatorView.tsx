@@ -6,11 +6,12 @@ import { cn } from "@/lib/cn";
 import type { Product, QuantityTier, ShippingOption, QuoteResult } from "@/lib/factory/calculator/types";
 import type { FactoryPricingResult } from "@/lib/factory/types";
 import { quoteResultToPricing } from "@/lib/factory/calculator/to-pricing";
+import { applyShippingSplit } from "@/lib/factory/shipping-split";
 import { computeCommission } from "@/lib/factory/commission";
 import { isOverCbmConsolidationThreshold, cbmConsolidationAlert } from "@/lib/factory/sea-carriers";
 import { customerBreakdownIls, customerRoundedTotalIls } from "@/lib/factory/calculator/customer-breakdown";
 import { DetailedBreakdown } from "./DetailedBreakdown";
-import { SplitShipmentPanel } from "@/components/factory-flow/SplitShipmentPanel";
+import { SplitShipmentPanel, type SplitReport } from "@/components/factory-flow/SplitShipmentPanel";
 import { CommissionControl } from "@/components/factory-flow/CommissionControl";
 
 interface Props {
@@ -79,6 +80,7 @@ export function CalculatorView({ products, quantityTiers, shippingOptions, initi
   const [colors, setColors]       = useState(operatorPrefill?.colors ?? 1);
   const [shippingId, setShippingId] = useState(shippingOptions.find((s) => s.type === "sea")?.id ?? shippingOptions[0]?.id ?? "s2");
   const [splitMode, setSplitMode] = useState(false);
+  const [operatorSplit, setOperatorSplit] = useState<SplitReport | null>(null);
   const hasAirAndSea =
     shippingOptions.some((s) => s.type === "air" && s.enabled) &&
     shippingOptions.some((s) => s.type === "sea" && s.enabled);
@@ -333,6 +335,19 @@ export function CalculatorView({ products, quantityTiers, shippingOptions, initi
   const operatorPricing: FactoryPricingResult | null =
     r && c
       ? quoteResultToPricing(r as QuoteResult, c.productionPerUnitIls, c.shippingPerUnitIls, effectiveCommissionPct)
+      : null;
+  // Split-adjusted pricing → the boss breakdown reflects the split (Eli 2026-07-22).
+  const operatorSplitPricing: FactoryPricingResult | null =
+    operatorPricing && r && splitMode && operatorSplit && operatorSplit.airIls != null && operatorSplit.seaIls != null
+      ? applyShippingSplit(operatorPricing, {
+          quantity: r.quantity,
+          airQuantity: operatorSplit.airQuantity,
+          seaQuantity: operatorSplit.seaQuantity,
+          airIls: operatorSplit.airIls,
+          seaIls: operatorSplit.seaIls,
+          airName: operatorSplit.airName,
+          seaName: operatorSplit.seaName,
+        })
       : null;
   const share = useQuoteShare({ apiToken, sid, leadName, quoteText: operatorQuoteText, factorySpec: operatorFactorySpec, pricing: operatorPricing });
 
@@ -860,19 +875,20 @@ export function CalculatorView({ products, quantityTiers, shippingOptions, initi
               />
               <DetailedBreakdown
                 unitCost={c.productionPerUnitIls}
-                unitShipping={c.shippingPerUnitIls}
+                unitShipping={operatorSplitPricing ? operatorSplitPricing.unitShipping : c.shippingPerUnitIls}
                 unitProfit={r.profitPerUnitIls}
-                unitSellingPrice={r.sellingPricePerUnitIls}
+                unitSellingPrice={operatorSplitPricing ? operatorSplitPricing.unitSellingPrice : r.sellingPricePerUnitIls}
                 totalCost={c.productionPerUnitIls * r.quantity}
-                totalShipping={c.shippingPerUnitIls * r.quantity}
+                totalShipping={operatorSplitPricing ? operatorSplitPricing.totalShipping : c.shippingPerUnitIls * r.quantity}
                 totalProfit={r.totalProfitIls}
-                totalSellingPrice={r.totalOrderPriceIls}
+                totalSellingPrice={operatorSplitPricing ? operatorSplitPricing.totalSellingPrice : r.totalOrderPriceIls}
                 quantity={r.quantity}
                 profitMarginPct={r.profitMargin}
                 commissionPct={effectiveCommissionPct}
                 totalCartons={r.totalCartons}
                 totalWeightKg={r.totalWeightKg}
                 totalCbm={r.totalCbm}
+                shippingSplit={operatorSplitPricing?.shippingSplit}
                 shippingType={
                   r.shippingOption?.type === "sea" || r.shippingOption?.type === "air"
                     ? r.shippingOption.type
@@ -930,6 +946,7 @@ export function CalculatorView({ products, quantityTiers, shippingOptions, initi
             logoColors: r.logoColors,
             leadName: leadName ?? null,
           }}
+          onSplitChange={setOperatorSplit}
         />
       )}
 
@@ -1078,6 +1095,7 @@ function EstimateTab({ apiToken, shippingOptions, sid, leadName, initialMargins,
   const [lam, setLam] = useState(prefill?.lam ?? false);
   const [shippingId, setShippingId] = useState(shippingOptions.find((s) => s.type === "sea")?.id ?? shippingOptions[0]?.id ?? "s2");
   const [splitMode, setSplitMode] = useState(false);
+  const [estimateSplit, setEstimateSplit] = useState<SplitReport | null>(null);
   const hasAirAndSea =
     shippingOptions.some((s) => s.type === "air" && s.enabled) &&
     shippingOptions.some((s) => s.type === "sea" && s.enabled);
@@ -1186,6 +1204,21 @@ function EstimateTab({ apiToken, shippingOptions, sid, leadName, initialMargins,
       }
     : undefined;
   // Pricing snapshot for "שמור כטיוטה" — the exact estimated price.
+  const estimateSplitPricing: FactoryPricingResult | null =
+    r && c && est && est.ok && splitMode && estimateSplit && estimateSplit.airIls != null && estimateSplit.seaIls != null
+      ? applyShippingSplit(
+          quoteResultToPricing(r as QuoteResult, c.productionPerUnitIls, c.shippingPerUnitIls, effectiveCommissionPct),
+          {
+            quantity: r.quantity,
+            airQuantity: estimateSplit.airQuantity,
+            seaQuantity: estimateSplit.seaQuantity,
+            airIls: estimateSplit.airIls,
+            seaIls: estimateSplit.seaIls,
+            airName: estimateSplit.airName,
+            seaName: estimateSplit.seaName,
+          }
+        )
+      : null;
   const estimatePricing: FactoryPricingResult | null =
     est && est.ok && r && c
       ? quoteResultToPricing(r as QuoteResult, c.productionPerUnitIls, c.shippingPerUnitIls, effectiveCommissionPct)
@@ -1434,19 +1467,20 @@ function EstimateTab({ apiToken, shippingOptions, sid, leadName, initialMargins,
 
           <DetailedBreakdown
             unitCost={c.productionPerUnitIls}
-            unitShipping={c.shippingPerUnitIls}
+            unitShipping={estimateSplitPricing ? estimateSplitPricing.unitShipping : c.shippingPerUnitIls}
             unitProfit={r.profitPerUnitIls}
-            unitSellingPrice={r.sellingPricePerUnitIls}
+            unitSellingPrice={estimateSplitPricing ? estimateSplitPricing.unitSellingPrice : r.sellingPricePerUnitIls}
             totalCost={c.productionPerUnitIls * r.quantity}
-            totalShipping={c.shippingPerUnitIls * r.quantity}
+            totalShipping={estimateSplitPricing ? estimateSplitPricing.totalShipping : c.shippingPerUnitIls * r.quantity}
             totalProfit={r.totalProfitIls}
-            totalSellingPrice={r.totalOrderPriceIls}
+            totalSellingPrice={estimateSplitPricing ? estimateSplitPricing.totalSellingPrice : r.totalOrderPriceIls}
             quantity={r.quantity}
             profitMarginPct={r.profitMargin}
             commissionPct={effectiveCommissionPct}
             totalCartons={r.totalCartons}
             totalWeightKg={r.totalWeightKg}
             totalCbm={r.totalCbm}
+            shippingSplit={estimateSplitPricing?.shippingSplit}
             shippingType={r.shippingOption?.type === "sea" || r.shippingOption?.type === "air" ? r.shippingOption.type : null}
             factoryUnitCostCny={r.unitProductionCny}
             usdToIls={c.usdToIls}
@@ -1476,6 +1510,7 @@ function EstimateTab({ apiToken, shippingOptions, sid, leadName, initialMargins,
             logoColors: colors,
             leadName: leadName ?? null,
           }}
+          onSplitChange={setEstimateSplit}
         />
       )}
     </div>
