@@ -263,6 +263,26 @@ export function QuotesHistoryView({ apiToken }: { apiToken: string }) {
     }
   }
 
+  // Mark a draft as sent-to-customer WITHOUT sending — for drafts the salesperson
+  // already sent by hand (Eli 2026-07-22). Drops the row off the "טרם נשלחו" panel.
+  async function handleMarkSent(r: ApiQuoteRow) {
+    setBusyId(r.id);
+    try {
+      const res = await fetch(
+        `/api/widget/factory/${r.id}/mark-sent?widget_token=${encodeURIComponent(apiToken)}`,
+        { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sent: true }) }
+      );
+      const j = await res.json().catch(() => ({}));
+      if (!j?.ok) {
+        alert(`שגיאה: ${j?.error ?? res.status}`);
+        return;
+      }
+      await refresh();
+    } finally {
+      setBusyId(null);
+    }
+  }
+
   async function handleSendWhatsApp(r: ApiQuoteRow) {
     const isDraft = r.status === "draft";
     const prompt = isDraft
@@ -634,6 +654,19 @@ export function QuotesHistoryView({ apiToken }: { apiToken: string }) {
                   className="flex items-center justify-between gap-2 rounded-md border border-border/60 bg-background/40 px-2.5 py-1.5"
                 >
                   <div className="flex items-center gap-2 min-w-0 flex-1 flex-wrap">
+                    <label
+                      className="shrink-0 inline-flex items-center gap-1 cursor-pointer text-[10px] text-muted-foreground hover:text-emerald-400"
+                      title="סמן כנשלח ידנית ללקוח (בלי לשלוח מהמערכת)"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={false}
+                        disabled={busyId === r.id}
+                        onChange={() => handleMarkSent(r)}
+                        className="accent-emerald-500"
+                      />
+                      שלחתי כבר
+                    </label>
                     <span className="text-[11px] text-muted-foreground tabular-nums shrink-0">
                       {fmtDate(r.createdAt)}
                     </span>
