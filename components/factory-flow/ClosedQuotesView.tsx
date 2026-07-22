@@ -246,10 +246,23 @@ function ClosedQuoteCard({
   }, [factory, shipping, revenue, other, zohoRefs, note]);
 
   /** Zoho picker → fill the draft inputs (Eli still reviews + saves). */
-  function applyZoho(sel: { revenueIls?: number; factoryIls?: number; shippingIls?: number; refs: ZohoDocRef[] }) {
+  function applyZoho(sel: {
+    revenueIls?: number; factoryIls?: number; shippingIls?: number;
+    otherLines?: { label: string; amountIls: number }[];
+    refs: ZohoDocRef[];
+  }) {
     if (sel.revenueIls !== undefined) setRevenue(String(Math.round(sel.revenueIls)));
     if (sel.factoryIls !== undefined) setFactory(String(Math.round(sel.factoryIls)));
     if (sel.shippingIls !== undefined) setShipping(String(Math.round(sel.shippingIls)));
+    if (sel.otherLines && sel.otherLines.length > 0) {
+      setOther((prev) => {
+        const existing = new Set(prev.map((c) => c.label));
+        const added = sel.otherLines!
+          .filter((l) => !existing.has(l.label))
+          .map((l) => ({ label: l.label, amount: String(Math.round(l.amountIls)) }));
+        return [...prev, ...added];
+      });
+    }
     setZohoRefs(sel.refs);
     setZohoOpen(false);
   }
@@ -574,7 +587,11 @@ function ZohoMatchModal({
 }: {
   dealId: string;
   apiToken: string;
-  onApply: (sel: { revenueIls?: number; factoryIls?: number; shippingIls?: number; refs: ZohoDocRef[] }) => void;
+  onApply: (sel: {
+    revenueIls?: number; factoryIls?: number; shippingIls?: number;
+    otherLines?: { label: string; amountIls: number }[];
+    refs: ZohoDocRef[];
+  }) => void;
   onClose: () => void;
 }) {
   const [data, setData] = useState<ZohoMatchResult | null>(null);
@@ -597,6 +614,14 @@ function ZohoMatchModal({
         const pre = new Set<string>();
         const best = (list: ZohoSuggestion[]) => list[0] && list[0].score >= 0.6 ? pre.add(`${list[0].type}:${list[0].id}`) : null;
         best(sug.invoices); best(sug.factoryBills); best(sug.shippingDocs);
+        // Factory is often split 30%/70% → pre-tick EVERY strong factory match.
+        for (const d of sug.factoryBills.slice(1)) {
+          if (d.score >= 0.6) pre.add(`${d.type}:${d.id}`);
+        }
+        // Commission expenses are customer-linked → trust a strong name match.
+        for (const d of sug.otherDocs ?? []) {
+          if (d.score >= 0.7) pre.add(`${d.type}:${d.id}`);
+        }
         setSelected(pre);
         setState("ready");
       } catch (e) {
@@ -621,15 +646,29 @@ function ZohoMatchModal({
     const inv = pick(data.invoices);
     const fac = pick(data.factoryBills);
     const shp = pick(data.shippingDocs);
-    const sum = (list: ZohoSuggestion[]) => {
-      const vals = list.map((d) => d.totalIls).filter((v): v is number => v != null);
+    const oth = pick(data.otherDocs ?? []);
+    const sum = (list: ZohoSuggestion[], field: "totalIls" | "exVatIls" = "totalIls") => {
+      const vals = list.map((d) => d[field] ?? d.totalIls).filter((v): v is number => v != null);
       return vals.length > 0 ? vals.reduce((s, v) => s + v, 0) : undefined;
     };
-    const refs: ZohoDocRef[] = [...inv, ...fac, ...shp].map((d) => ({
+    const refs: ZohoDocRef[] = [...inv, ...fac, ...shp, ...oth].map((d) => ({
       type: d.type, id: d.id, number: d.number || undefined,
       amountIls: d.totalIls ?? undefined, date: d.date || undefined, party: d.party || undefined,
     }));
-    onApply({ revenueIls: sum(inv), factoryIls: sum(fac), shippingIls: sum(shp), refs });
+    const otherLines = oth
+      .filter((d) => d.totalIls != null)
+      .map((d) => ({
+        label: (d.description || d.number || "הוצאה מ-Zoho").slice(0, 60),
+        amountIls: d.totalIls!,
+      }));
+    onApply({
+      // Revenue lands EX-VAT so it compares 1:1 with the quote totals.
+      revenueIls: sum(inv, "exVatIls"),
+      factoryIls: sum(fac),
+      shippingIls: sum(shp),
+      otherLines: otherLines.length > 0 ? otherLines : undefined,
+      refs,
+    });
   }
 
   function Section({ title, list }: { title: string; list: ZohoSuggestion[] }) {
@@ -654,7 +693,8 @@ function ZohoMatchModal({
               >
                 <input type="checkbox" checked={on} onChange={() => toggle(key)} style={{ accentColor: "#d6b26a" }} />
                 <span style={{ fontSize: 12.5, color: "var(--lux-ink)", flex: 1 }}>
-                  {d.number || d.id.slice(-6)}{d.party ? ` · ${d.party}` : ""}
+                  {(d.type === "expense" && d.description ? d.description.slice(0, 42) : d.number) || d.id.slice(-6)}
+                  {d.party ? ` · ${d.party}` : ""}
                 </span>
                 <span className="tabular-nums" style={{ fontSize: 12.5, color: "var(--lux-ink)" }}>{zohoAmount(d)}</span>
                 <span style={{ fontSize: 11, color: "var(--lux-muted)", minWidth: 58, textAlign: "left" }}>{fmtDate(d.date)}</span>
@@ -706,9 +746,10 @@ function ZohoMatchModal({
 
         {state === "ready" && data && (
           <>
-            <Section title="הכנסה — חשבונית ללקוח" list={data.invoices} />
-            <Section title="עלות מפעל — חשבוניות ספק" list={data.factoryBills} />
-            <Section title="שילוח — חשבוניות/הוצאות" list={data.shippingDocs} />
+            <Section title="הכנסה — חשבונית ללקוח (ימולא ללא מע״מ)" list={data.invoices} />
+            <Section title="עלות מפעל — תשלומים למפעל" list={data.factoryBills} />
+            <Section title="שילוח / מכס" list={data.shippingDocs} />
+            <Section title="עמלות ועלויות נוספות (יתווספו כשורות)" list={data.otherDocs ?? []} />
             <div style={{ display: "flex", gap: 10, marginTop: 6 }}>
               <button
                 type="button"

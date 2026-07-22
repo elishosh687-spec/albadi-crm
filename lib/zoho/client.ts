@@ -31,13 +31,17 @@ export interface ZohoListedDoc {
   number: string;
   /** yyyy-mm-dd */
   date: string;
-  /** Customer (invoice) or vendor (bill/expense). */
+  /** Customer (invoice/expense customer link) or vendor. */
   party: string;
   status: string;
   total: number;
   currencyCode: string;
-  /** total converted to ₪ via live FX (null if unknown currency). */
+  /** ₪ amount. Prefers Zoho's bcy_total (the ACTUAL booked rate — base currency
+   *  is ILS); falls back to live-FX conversion. Null if neither works. */
   totalIls: number | null;
+  /** Expense account (e.g. "Cost of Goods Sold", "עמלות מכירה"). */
+  accountName?: string;
+  description?: string;
 }
 
 function env(name: string): string {
@@ -139,6 +143,11 @@ async function mapDocs(
   for (const d of raw) {
     const total = Number(d.total ?? d.bcy_total ?? 0);
     const currency = String(d.currency_code ?? "ILS");
+    // bcy_total = amount in the org's base currency (ILS) at the rate Zoho
+    // actually booked — better than any live-FX guess for foreign docs.
+    const bcy = Number(d.bcy_total);
+    const totalIls =
+      Number.isFinite(bcy) && bcy > 0 ? bcy : await toIls(total, currency);
     out.push({
       type,
       id: String(
@@ -148,11 +157,13 @@ async function mapDocs(
         d.invoice_number ?? d.bill_number ?? d.reference_number ?? d.account_name ?? ""
       ),
       date: String(d.date ?? ""),
-      party: String(d.customer_name ?? d.vendor_name ?? ""),
+      party: String(d.customer_name || d.vendor_name || ""),
       status: String(d.status ?? ""),
       total,
       currencyCode: currency,
-      totalIls: await toIls(total, currency),
+      totalIls,
+      accountName: d.account_name ? String(d.account_name) : undefined,
+      description: d.description ? String(d.description) : undefined,
     });
   }
   return out.filter((d) => d.id);
