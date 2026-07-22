@@ -230,7 +230,7 @@ export function QuoteHtmlPreviewWidget({ apiToken, row }: { apiToken: string; ro
                   })()}
                   <PriceRow
                     label="לוגיסטיקה"
-                    value={`${p.totalCartons} קרטונים · ${p.totalWeightKg} ק״ג · ${p.totalCbm} m³`}
+                    value={`${p.totalCartons} קרטונים · ${p.totalWeightKg} ק״ג · ${p.totalCbm} CBM`}
                   />
                   {row.factoryResponse?.unitCostCny != null && (
                     <PriceRow

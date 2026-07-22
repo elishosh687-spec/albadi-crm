@@ -584,11 +584,11 @@ export function CombinedCalcModalWidget({
                   )}
                   <PriceRow
                     label="סה״כ נפח / משקל"
-                    value={`${combinedResult.combinedCbm} m³ · ${combinedResult.combinedWeightKg}kg`}
+                    value={`${combinedResult.combinedCbm} CBM · ${combinedResult.combinedWeightKg}kg`}
                   />
                   {/* Manual CBM override — real merged volume for grouped orders. */}
                   <div className="flex items-center justify-between gap-2 py-0.5">
-                    <span className="text-[11px] text-muted-foreground shrink-0">נפח ידני (m³)</span>
+                    <span className="text-[11px] text-muted-foreground shrink-0">נפח ידני (CBM)</span>
                     <input
                       type="number"
                       min={0}
@@ -602,7 +602,7 @@ export function CombinedCalcModalWidget({
                   </div>
                   {cbmOverrideValid && (
                     <div className="text-[10px] text-amber-500/90 text-right">
-                      שילוח מחושב על {cbmOverrideParsed} m³ (עקיפה ידנית)
+                      שילוח מחושב על {cbmOverrideParsed} CBM (עקיפה ידנית)
                     </div>
                   )}
                   <PriceRow
@@ -1215,7 +1215,7 @@ function CombinedSplitPanel({
               const inAir = airIds.has(it.id);
               return (
                 <div key={it.id} className="flex items-center justify-between gap-2 rounded-md border border-border bg-background/30 px-2.5 py-1.5">
-                  <span className="text-xs truncate">{it.label} <span className="text-muted-foreground">· {it.cbm}m³</span></span>
+                  <span className="text-xs truncate">{it.label} <span className="text-muted-foreground">· {it.cbm}CBM</span></span>
                   <div className="inline-flex rounded-md border border-border overflow-hidden text-xs shrink-0">
                     <button type="button" onClick={() => setAirIds((p) => { const n = new Set(p); n.delete(it.id); return n; })} className={cn("px-2.5 py-1", !inAir ? "bg-primary text-primary-foreground" : "bg-background/40 text-muted-foreground")}>🚢 ים</button>
                     <button type="button" onClick={() => setAirIds((p) => { const n = new Set(p); n.add(it.id); return n; })} className={cn("px-2.5 py-1 border-r border-border", inAir ? "bg-primary text-primary-foreground" : "bg-background/40 text-muted-foreground")}>✈️ אוויר</button>
@@ -1323,7 +1323,7 @@ function CombinedBreakdown({
                   <span className="truncate flex-1 text-muted-foreground">
                     {nameOf(row)} · {pricing.quantity.toLocaleString("he-IL")} יח׳
                   </span>
-                  <span className="shrink-0">{pricing.totalCbm} m³</span>
+                  <span className="shrink-0">{pricing.totalCbm} CBM</span>
                 </div>
               ))}
             </div>
@@ -1345,7 +1345,7 @@ function CombinedBreakdown({
                 : "שילוח ים מאוחד (pass-through — ללא רווח)"
             }
           >
-            <BRow label="נפח כולל (כמה מקום תופס)" value={`${result.combinedCbm} m³`} />
+            <BRow label="נפח כולל (כמה מקום תופס)" value={`${result.combinedCbm} CBM`} />
             {opt?.type === "sea" && opt.seaRate ? (
               <>
                 <BRow

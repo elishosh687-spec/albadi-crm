@@ -1063,7 +1063,8 @@ function DraftVsFactoryStrip({ rows }: { rows: ApiQuoteRow[] }) {
   const dp = estimateFp;
   const fp = factory.finalPricing as Record<string, unknown>;
 
-  const fmtCbm = (v: number | null) => (v === null ? "—" : `${v.toFixed(3)} m³`);
+  // Eli's working unit is "CBM", not m³ (2026-07-22).
+  const fmtCbm = (v: number | null) => (v === null ? "—" : `${v.toFixed(2)} CBM`);
   const fmtUnit = (v: number | null) => (v === null ? "—" : `₪${v.toLocaleString("he-IL", { maximumFractionDigits: 2 })}`);
 
   const rowsCmp: { label: string; draftV: number | null; factV: number | null; fmt: (v: number | null) => string }[] = [

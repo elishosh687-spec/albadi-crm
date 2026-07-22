@@ -693,20 +693,20 @@ export function FinalizeModalWidget({
 
               <div>
                 <label className="block text-sm font-medium mb-1">
-                  נפח משלוח ידני — CBM (m³)
+                  נפח משלוח ידני — CBM
                 </label>
                 <input
                   type="number"
                   min={0}
                   step={0.1}
-                  placeholder={livePricing ? `אוטומטי: ${livePricing.totalCbm} m³` : "אוטומטי לפי מידות"}
+                  placeholder={livePricing ? `אוטומטי: ${livePricing.totalCbm} CBM` : "אוטומטי לפי מידות"}
                   value={cbmOverride}
                   onChange={(e) => setCbmOverride(e.target.value)}
                   className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-ring/30"
                 />
                 <p className="text-[10px] text-muted-foreground mt-1">
                   {cbmOverrideValid
-                    ? `דורס את החישוב האוטומטי → שילוח מחושב על ${cbmOverrideParsed} m³ (להזמנות מקובצות)`
+                    ? `דורס את החישוב האוטומטי → שילוח מחושב על ${cbmOverrideParsed} CBM (להזמנות מקובצות)`
                     : "ריק → נפח מחושב אוטומטית מהמידות/קרטון"}
                 </p>
               </div>
@@ -811,7 +811,7 @@ export function FinalizeModalWidget({
                   <div className="border-t border-success/20 my-1" />
                   <PriceRow
                     label="לוגיסטיקה"
-                    value={`${livePricing.totalCartons} קרטונים · ${livePricing.totalWeightKg}kg · ${livePricing.totalCbm}m³`}
+                    value={`${livePricing.totalCartons} קרטונים · ${livePricing.totalWeightKg}kg · ${livePricing.totalCbm}CBM`}
                   />
                 </div>
               )}
@@ -956,7 +956,7 @@ export function FinalizeModalWidget({
                       </div>
                       <PriceRow
                         label="סה״כ נפח / משקל"
-                        value={`${combinedResult.combinedCbm} m³ · ${combinedResult.combinedWeightKg}kg`}
+                        value={`${combinedResult.combinedCbm} CBM · ${combinedResult.combinedWeightKg}kg`}
                       />
                       <PriceRow
                         label="שילוח מאוחד"
