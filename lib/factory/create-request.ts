@@ -214,7 +214,17 @@ export async function promoteDraftToFeishu(
   }
 
   const spec = row.productSpec as FactoryProductSpec;
-  const quotationNo = row.quotationNo ?? id.slice(-8).toUpperCase();
+  // A PRICED draft is a self-calculated estimate Eli may have already sent the
+  // customer — KEEP it visible as its own quote (Eli 2026-07-22). Send a FRESH
+  // row to the factory (new id + quotationNo) carrying the estimate snapshot for
+  // the "טיוטה מול הצעת מפעל" comparison, and leave the original draft untouched.
+  // A spec-only draft has nothing worth keeping → promote it in place as before.
+  const isPriced = !!row.finalPricing;
+  const targetId = isPriced ? `fq_${Date.now()}_${shortId()}` : id;
+  const quotationNo = isPriced
+    ? targetId.slice(-8).toUpperCase()
+    : (row.quotationNo ?? id.slice(-8).toUpperCase());
+
   const feishuRowIndex = await appendRow(
     buildFactoryRow({
       customer: row.customerName ?? "",
@@ -237,19 +247,27 @@ export async function promoteDraftToFeishu(
     );
   }
 
-  await db
-    .update(factoryQuoteRequests)
-    .set({
-      feishuRowIndex,
+  if (isPriced) {
+    // New factory-bound row; the original draft row stays as a separate, viewable
+    // estimate quote. draftEstimate carries the estimate for the comparison.
+    await db.insert(factoryQuoteRequests).values({
+      id: targetId,
+      manychatSubId: row.manychatSubId,
+      quotationNo,
+      productSpec: row.productSpec as FactoryProductSpec,
       factoryStatus: "pending",
-      // Snapshot the self-calculated estimate BEFORE finalize overwrites
-      // finalPricing with the factory's real price, so the "טיוטה מול הצעת מפעל"
-      // comparison survives promotion. Only on first promote (draftEstimate null)
-      // and only when the draft actually carried a priced estimate.
-      ...(row.finalPricing && !row.draftEstimate ? { draftEstimate: row.finalPricing } : {}),
-      updatedAt: new Date(),
-    })
-    .where(eq(factoryQuoteRequests.id, id));
+      feishuRowIndex,
+      finalPricing: null,
+      draftEstimate: row.draftEstimate ?? row.finalPricing,
+      pdfUrl: null,
+      sentToCustomerAt: null,
+    });
+  } else {
+    await db
+      .update(factoryQuoteRequests)
+      .set({ feishuRowIndex, factoryStatus: "pending", updatedAt: new Date() })
+      .where(eq(factoryQuoteRequests.id, id));
+  }
 
   return { feishuRowIndex, quotationNo };
 }
