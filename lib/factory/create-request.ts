@@ -199,6 +199,8 @@ export async function promoteDraftToFeishu(
       quotationNo: factoryQuoteRequests.quotationNo,
       productSpec: factoryQuoteRequests.productSpec,
       factoryStatus: factoryQuoteRequests.factoryStatus,
+      finalPricing: factoryQuoteRequests.finalPricing,
+      draftEstimate: factoryQuoteRequests.draftEstimate,
       customerName: leads.name,
     })
     .from(factoryQuoteRequests)
@@ -240,6 +242,11 @@ export async function promoteDraftToFeishu(
     .set({
       feishuRowIndex,
       factoryStatus: "pending",
+      // Snapshot the self-calculated estimate BEFORE finalize overwrites
+      // finalPricing with the factory's real price, so the "טיוטה מול הצעת מפעל"
+      // comparison survives promotion. Only on first promote (draftEstimate null)
+      // and only when the draft actually carried a priced estimate.
+      ...(row.finalPricing && !row.draftEstimate ? { draftEstimate: row.finalPricing } : {}),
       updatedAt: new Date(),
     })
     .where(eq(factoryQuoteRequests.id, id));

@@ -257,6 +257,13 @@ export const factoryQuoteRequests = pgTable("factory_quote_requests", {
   // push hangs on orphan configurator_* tables — see CLAUDE.md). Kept SEPARATE
   // from finalPricing so a re-finalize can't wipe it.
   actualCosts: jsonb("actual_costs"),
+  // FactoryPricingResult snapshot of the SELF-CALCULATED estimate (מחשבון משוער)
+  // captured when a priced draft is promoted to the factory — BEFORE finalize
+  // overwrites finalPricing with the factory's real price. Lets the "טיוטה מול
+  // הצעת מפעל" comparison show my-estimate vs factory-actual on the SAME quote
+  // even after promotion. Added via direct DDL (drizzle-kit push hangs — see
+  // CLAUDE.md). Null for quotes that never had a self-estimate.
+  draftEstimate: jsonb("draft_estimate"),
 });
 
 // Append-only audit log of every bot-side quote sent on WhatsApp. Captures

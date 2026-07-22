@@ -19,6 +19,7 @@ interface ApiQuoteRow {
   productSpec: Record<string, unknown> | null;
   factoryResponse: Record<string, unknown> | null;
   finalPricing: Record<string, unknown> | null;
+  draftEstimate: Record<string, unknown> | null;
   pdfUrl: string | null;
   sentToCustomerAt: string | null;
   createdAt: string;
@@ -1040,10 +1041,26 @@ function LeadPickerAssign({
  * finalized factory quote carrying finalPricing (Eli 2026-07-22).
  */
 function DraftVsFactoryStrip({ rows }: { rows: ApiQuoteRow[] }) {
-  const draft = latestMatching(rows, (r) => r.status === "draft" && !!r.finalPricing);
   const factory = latestMatching(rows, (r) => r.status === "finalized" && !!r.finalPricing);
-  if (!draft || !factory) return null;
-  const dp = draft.finalPricing as Record<string, unknown>;
+  if (!factory) return null;
+  // Estimate source, in priority order:
+  //  1. SAME-row snapshot — this finalized quote was promoted from a priced draft,
+  //     so its own draftEstimate holds the original self-calculated price.
+  //  2. CROSS-row — a separate draft row (with finalPricing) for the same lead.
+  let estimateFp: Record<string, unknown> | null = null;
+  let estId: string | null = null;
+  if (factory.draftEstimate) {
+    estimateFp = factory.draftEstimate as Record<string, unknown>;
+    estId = factory.quotationNo ?? factory.id.slice(-5);
+  } else {
+    const draft = latestMatching(rows, (r) => r.status === "draft" && !!r.finalPricing);
+    if (draft) {
+      estimateFp = draft.finalPricing as Record<string, unknown>;
+      estId = draft.quotationNo ?? draft.id.slice(-5);
+    }
+  }
+  if (!estimateFp) return null;
+  const dp = estimateFp;
   const fp = factory.finalPricing as Record<string, unknown>;
 
   const fmtCbm = (v: number | null) => (v === null ? "—" : `${v.toFixed(3)} m³`);
@@ -1061,7 +1078,7 @@ function DraftVsFactoryStrip({ rows }: { rows: ApiQuoteRow[] }) {
         <Sparkles className="size-3" />
         טיוטה מול הצעת מפעל
         <span className="text-[10px] text-muted-foreground font-normal">
-          (אומדן #{draft.quotationNo ?? draft.id.slice(-5)} · מפעל #{factory.quotationNo ?? factory.id.slice(-5)})
+          (אומדן #{estId} · מפעל #{factory.quotationNo ?? factory.id.slice(-5)})
         </span>
       </div>
       <div className="grid grid-cols-[1fr_auto_auto_auto] gap-x-3 gap-y-1 text-[11px] items-center">
