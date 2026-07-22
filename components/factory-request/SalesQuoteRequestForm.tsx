@@ -13,6 +13,7 @@ import { useCallback, useEffect, useRef, useState, type CSSProperties } from "re
 import { Loader2, Send, CheckCircle2, Search, X, User } from "lucide-react";
 import { LuxShell, LuxTitle, LuxAccent, LuxCTA, Section } from "@/components/widget-ui/lux";
 import { quoteResultToPricing } from "@/lib/factory/calculator/to-pricing";
+import { validateBagGeometry } from "@/lib/factory/bag-geometry";
 import type { FactoryPricingResult } from "@/lib/factory/types";
 
 function widgetUrl(path: string, token: string, params?: Record<string, string>): string {
@@ -126,6 +127,14 @@ export function SalesQuoteRequestForm({ apiToken }: { apiToken: string }) {
   const set = <K extends keyof typeof EMPTY_SPEC>(key: K, val: (typeof EMPTY_SPEC)[K]) =>
     setF((prev) => ({ ...prev, [key]: val }));
 
+  // 3 colours or more REQUIRE lamination (factory rule, Eli 2026-07-22). Auto-turn
+  // it on so the spec sent to the factory is consistent (the "3+" option = 4).
+  useEffect(() => {
+    if (f.logoColors >= 3 && !f.hasLamination) {
+      setF((prev) => ({ ...prev, hasLamination: true }));
+    }
+  }, [f.logoColors, f.hasLamination]);
+
   const runSearch = useCallback(
     async (q: string) => {
       setLoadingResults(true);
@@ -194,6 +203,10 @@ export function SalesQuoteRequestForm({ apiToken }: { apiToken: string }) {
     if (!(parseFloat(f.widthCm) > 0)) return "חסר רוחב";
     if (!(parseFloat(f.heightCm) > 0)) return "חסר גובה";
     if (f.depthCm.trim() === "") return "חסר עומק (הקלד 0 לשקית שטוחה)";
+    // Factory machine limits (hard block — Eli 2026-07-22): can't send Eli a
+    // request for a size the factory physically can't make.
+    const geo = validateBagGeometry(parseFloat(f.widthCm) || 0, parseFloat(f.depthCm) || 0, parseFloat(f.heightCm) || 0);
+    if (geo.length) return geo[0];
     if (f.quantity.trim() === "") return "חסרה כמות";
     if ((parseInt(f.quantity, 10) || 0) < MOQ) return `מינימום הזמנה ${MOQ.toLocaleString("he-IL")} יחידות`;
     return null;
@@ -520,6 +533,11 @@ export function SalesQuoteRequestForm({ apiToken }: { apiToken: string }) {
               ]}
             />
           </div>
+          {f.logoColors >= 3 && (
+            <div className="text-[10px] text-right" style={{ color: "#e0a96d" }}>
+              3 צבעים ומעלה מחייבים למינציה — סומן אוטומטית.
+            </div>
+          )}
 
           {/* Shipping method — sea (regular) vs air (express) materially changes
               the price, so the salesperson picks it and it pre-selects in Eli's

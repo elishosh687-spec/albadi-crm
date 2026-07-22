@@ -15,6 +15,7 @@ import type {
   FactoryPricingResult,
 } from "@/lib/factory/types";
 import { customerRoundedTotalIls } from "@/lib/factory/calculator/customer-breakdown";
+import { notifyItayQuoteSent } from "@/lib/notify/itay";
 
 function formatIls(n: number): string {
   return `₪${n.toLocaleString("he-IL", { maximumFractionDigits: 2 })}`;
@@ -118,9 +119,13 @@ export async function sendQuoteWhatsapp(
   if (!row) {
     return { ok: false, status: 404, error: "not_found" };
   }
-  if (row.factoryStatus !== "finalized" || !row.finalPricing) {
+  // Accept a finalized factory quote OR a self-calculated DRAFT (both carry
+  // finalPricing; the PDF route renders from it either way). A draft estimate is
+  // a legit thing to send the customer to keep them warm (Eli 2026-07-22).
+  if (!row.finalPricing || (row.factoryStatus !== "finalized" && row.factoryStatus !== "draft")) {
     return { ok: false, status: 409, error: "not_finalized" };
   }
+  const isDraft = row.factoryStatus === "draft";
   const host = hostHeader ?? "albadi-crm.vercel.app";
   const proto = host.startsWith("localhost") ? "http" : "https";
   // GreenAPI's sendFileByUrl does NOT follow 3xx redirects — if urlFile
@@ -194,6 +199,15 @@ export async function sendQuoteWhatsapp(
   } catch (err) {
     console.warn("[factory/send-whatsapp] db update failed after bridge send", err);
   }
+
+  // Ping Itay (the salesperson) on every quote sent (Eli 2026-07-22). Non-fatal.
+  const sentPricing = row.finalPricing as FactoryPricingResult;
+  await notifyItayQuoteSent({
+    customerName: lead.name ?? "",
+    quotationNo,
+    totalIls: sentPricing?.totalSellingPrice ?? null,
+    kind: isDraft ? "draft" : "factory",
+  });
 
   return {
     ok: true,

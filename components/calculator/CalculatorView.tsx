@@ -7,6 +7,7 @@ import type { Product, QuantityTier, ShippingOption, QuoteResult } from "@/lib/f
 import type { FactoryPricingResult } from "@/lib/factory/types";
 import { quoteResultToPricing } from "@/lib/factory/calculator/to-pricing";
 import { applyShippingSplit } from "@/lib/factory/shipping-split";
+import { validateBagGeometry } from "@/lib/factory/bag-geometry";
 import { computeCommission } from "@/lib/factory/commission";
 import { isOverCbmConsolidationThreshold, cbmConsolidationAlert } from "@/lib/factory/sea-carriers";
 import { customerBreakdownIls, customerRoundedTotalIls } from "@/lib/factory/calculator/customer-breakdown";
@@ -209,11 +210,12 @@ export function CalculatorView({ products, quantityTiers, shippingOptions, initi
     fetchPreview();
   }, [fetchPreview]);
 
-  // Colors above 3 are only valid when laminated (plate-fee pricing). Clamp back
-  // to 3 when lamination is turned off so we never send an unpriceable count.
+  // 3 colours or more REQUIRE lamination (factory rule, Eli 2026-07-22): a
+  // 3+-colour print must be laminated. So instead of clamping colours down, turn
+  // lamination ON automatically once colours reach 3 (never silently drop colours).
   useEffect(() => {
-    if (!lamination && colors > 3) setColors(3);
-  }, [lamination, colors]);
+    if (colors >= 3 && !lamination) setLamination(true);
+  }, [colors, lamination]);
 
   // Split-shipment: price a sub-quantity's shipment (ILS) via the same endpoint,
   // varying only quantity + shipping method. Reads the true un-divided shipment
@@ -1110,6 +1112,11 @@ function EstimateTab({ apiToken, shippingOptions, sid, leadName, initialMargins,
 
   const hN = parseFloat(h), wN = parseFloat(w);
   const valid = Number.isFinite(hN) && hN > 0 && Number.isFinite(wN) && wN > 0;
+  // Factory machine limits (hard block — Eli 2026-07-22): a size the factory
+  // can't physically make must NOT return a price. Only checked once the size is
+  // filled in (`valid`); depth 0 = flat bag, which skips the depth rules.
+  const geoErrors = valid ? validateBagGeometry(wN, parseFloat(d) || 0, hN) : [];
+  const geoBlocked = geoErrors.length > 0;
 
   const effectiveQty = Math.max(1, Math.round(parseFloat(qty) || 0));
   const defaultMargin = initialMargins[qty] ?? 40;
@@ -1121,7 +1128,7 @@ function EstimateTab({ apiToken, shippingOptions, sid, leadName, initialMargins,
   const minProfitValid = Number.isFinite(minProfitParsed) && minProfitParsed > 0;
 
   const run = useCallback(async () => {
-    if (!valid) { setData(null); return; }
+    if (!valid || geoBlocked) { setData(null); return; }
     setLoading(true); setErr(null);
     try {
       const p = new URLSearchParams({ heightCm: h, depthCm: d || "0", widthCm: w, qty, colors: String(colors), handles: String(handles), lamination: String(lam), shipping: shippingId });
@@ -1133,15 +1140,15 @@ function EstimateTab({ apiToken, shippingOptions, sid, leadName, initialMargins,
       if (!res.ok || !j.ok) { setErr(j.error ?? `HTTP ${res.status}`); setData(null); return; }
       setData(j);
     } catch (e) { setErr(e instanceof Error ? e.message : String(e)); setData(null); } finally { setLoading(false); }
-  }, [valid, h, d, w, qty, colors, handles, lam, shippingId, apiToken, moldsValid, moldsParsed, marginOverrideValid, marginOverrideParsed]);
+  }, [valid, geoBlocked, h, d, w, qty, colors, handles, lam, shippingId, apiToken, moldsValid, moldsParsed, marginOverrideValid, marginOverrideParsed]);
 
   useEffect(() => { run(); }, [run]);
 
-  // Colors above 3 are only valid when laminated (plate-fee pricing). Clamp back
-  // to 3 when lamination is off so the dropdown + price stay consistent.
+  // 3 colours or more REQUIRE lamination (factory rule, Eli 2026-07-22). Turn
+  // lamination ON automatically once colours reach 3 instead of clamping colours.
   useEffect(() => {
-    if (!lam && colors > 3) setColors(3);
-  }, [lam, colors]);
+    if (colors >= 3 && !lam) setLam(true);
+  }, [colors, lam]);
 
   // Split-shipment: price one portion's shipment (ILS) via the estimate endpoint,
   // varying only quantity + shipping method (same dims/spec/margin).
@@ -1228,7 +1235,7 @@ function EstimateTab({ apiToken, shippingOptions, sid, leadName, initialMargins,
   return (
     <div className="flex flex-col gap-6">
       <div className="text-[11px] text-muted-foreground">
-        הזן מידות וכמות → המערכת תחזה את המחיר לפי המחירונים האמיתיים של המפעלים (80g, עד 10,000 יח׳), תבחר את המפעל הזול שמייצר, ותראה את ההיגיון. מחוץ לטווח → &quot;שלח למפעל&quot;.
+        הזן מידות וכמות → המערכת תחזה את המחיר לפי המחירונים האמיתיים של המפעלים (80g), תבחר את המפעל הזול שמייצר, ותראה את ההיגיון. מעל 10,000 יח׳ → אומדן מבוסס על שכבת ה‑10,000. מחוץ לטווח → &quot;שלח למפעל&quot;.
       </div>
 
       <BuilderGrid
@@ -1259,6 +1266,23 @@ function EstimateTab({ apiToken, shippingOptions, sid, leadName, initialMargins,
                   </button>
                 ))}
               </div>
+              {/* Custom quantity — allow >10,000. The model is trained up to
+                  10,000, so above it the estimate is ANCHORED to the 10k tier
+                  (per-unit) and scaled; flag it (Eli 2026-07-22). */}
+              <input
+                type="number"
+                min={1}
+                step={500}
+                value={qty}
+                onChange={(e) => setQty(e.target.value)}
+                placeholder="כמות מותאמת (גם מעל 10,000)"
+                className="bg-background/50 border border-border rounded-md px-3 py-1.5 text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-ring/30"
+              />
+              {effectiveQty > 10000 && (
+                <span className="text-[11px] text-amber-500">
+                  ⚠️ מעל 10,000 — האומדן מבוסס על מחיר יחידה בשכבת ה‑10,000 ומוכפל בכמות. לאישור מול המפעל.
+                </span>
+              )}
             </div>
 
             {/* Shipping — selectable cards (same setShippingId state) */}
@@ -1367,7 +1391,16 @@ function EstimateTab({ apiToken, shippingOptions, sid, leadName, initialMargins,
           </Section>
         </>}
         quote={<>
-          {loading && (<div className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="size-4 animate-spin" />מחשב…</div>)}
+          {geoBlocked && (
+            <div className="rounded-xl border border-destructive/50 bg-destructive/10 p-5 text-sm">
+              <div className="font-bold text-destructive mb-1.5">⛔ מידה לא תקינה — המפעל לא יכול לייצר</div>
+              <ul className="list-disc pr-5 text-muted-foreground space-y-0.5">
+                {geoErrors.map((e, i) => (<li key={i}>{e}</li>))}
+              </ul>
+              <div className="text-[11px] text-muted-foreground mt-2">תקן את המידות כדי לחשב מחיר.</div>
+            </div>
+          )}
+          {!geoBlocked && loading && (<div className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="size-4 animate-spin" />מחשב…</div>)}
           {err && (<div className="rounded-lg border border-destructive/40 bg-destructive/10 p-4 text-sm text-destructive">{err}</div>)}
 
           {!loading && est && !est.ok && (

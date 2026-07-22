@@ -15,6 +15,7 @@ import { sendBridgeMessage } from "@/lib/bridge/client";
 import { phoneToJid } from "@/lib/bridge/jid";
 import { allocateCombined } from "@/lib/factory/combined";
 import { getFactoryConfig } from "@/lib/factory/config";
+import { notifyItayQuoteSent } from "@/lib/notify/itay";
 import type { FactoryPricingResult } from "@/lib/factory/types";
 
 function r2(n: number): number {
@@ -224,6 +225,13 @@ export async function sendCombinedQuoteWhatsapp(
       err
     );
   }
+
+  // Ping Itay on every quote sent (Eli 2026-07-22). Non-fatal.
+  await notifyItayQuoteSent({
+    customerName: lead.name ?? "",
+    totalIls: totals.grandTotal,
+    kind: "combined",
+  });
 
   return {
     ok: true,

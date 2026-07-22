@@ -37,6 +37,19 @@ function fmtMoney(v: unknown): string {
   if (Number.isNaN(n)) return "—";
   return `₪${Math.round(n).toLocaleString("he-IL")}`;
 }
+function num(v: unknown): number | null {
+  if (v === null || v === undefined || v === "") return null;
+  const n = typeof v === "number" ? v : Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+
+/** Newest row matching a predicate (rows come pre-sorted newest-first per card,
+ *  but be defensive and sort by createdAt). */
+function latestMatching(rows: ApiQuoteRow[], pred: (r: ApiQuoteRow) => boolean): ApiQuoteRow | null {
+  const m = rows.filter(pred).sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt));
+  return m[0] ?? null;
+}
+
 const STATUS_LABEL: Record<string, { text: string; cls: string }> = {
   draft: { text: "טיוטה", cls: "bg-muted/40 text-muted-foreground border-border" },
   pending: { text: "ממתין", cls: "bg-amber-500/15 text-amber-400 border-amber-500/30" },
@@ -251,7 +264,11 @@ export function QuotesHistoryView({ apiToken }: { apiToken: string }) {
   }
 
   async function handleSendWhatsApp(r: ApiQuoteRow) {
-    if (!confirm(`לשלוח את ההצעה ל-${r.name ?? "לקוח"} ב-WhatsApp?`)) return;
+    const isDraft = r.status === "draft";
+    const prompt = isDraft
+      ? `לשלוח את האומדן (טיוטה) ל-${r.name ?? "לקוח"} ב-WhatsApp?\n\nזהו מחיר שחישבת — לא הצעה סופית מהמפעל.`
+      : `לשלוח את ההצעה ל-${r.name ?? "לקוח"} ב-WhatsApp?`;
+    if (!confirm(prompt)) return;
     setBusyId(r.id);
     try {
       const res = await fetch(
@@ -362,6 +379,16 @@ export function QuotesHistoryView({ apiToken }: { apiToken: string }) {
       .sort((a, b) => +new Date(b.latestAt) - +new Date(a.latestAt));
   }, [filtered]);
 
+  // "Who's still waiting" — drafts that carry a calculated price but were never
+  // sent to the customer. This is Itay's "I asked for 10 quotes, which are still
+  // unsent" list (Eli 2026-07-22). Newest first.
+  const unsentDrafts = useMemo(() => {
+    if (!data) return [];
+    return data
+      .filter((r) => r.status === "draft" && r.finalPricing && !r.sentToCustomerAt)
+      .sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt));
+  }, [data]);
+
   const counts = useMemo(() => {
     if (!data) return { all: 0, draft: 0, pending: 0, received: 0, finalized: 0 };
     return {
@@ -450,6 +477,17 @@ export function QuotesHistoryView({ apiToken }: { apiToken: string }) {
             >
               <Download className="size-3.5" />
             </a>
+          )}
+          {r.status === "draft" && r.finalPricing && (
+            <button
+              type="button"
+              onClick={() => handleSendWhatsApp(r)}
+              disabled={busyId === r.id}
+              title="שלח את האומדן (טיוטה) ללקוח ב-WhatsApp"
+              className="size-7 rounded grid place-items-center text-muted-foreground hover:text-emerald-400 hover:bg-emerald-500/10 disabled:opacity-50"
+            >
+              {busyId === r.id ? <Loader2 className="size-3.5 animate-spin" /> : <MessageCircle className="size-3.5" />}
+            </button>
           )}
           {r.status === "draft" && (
             <button
@@ -578,6 +616,60 @@ export function QuotesHistoryView({ apiToken }: { apiToken: string }) {
                 </div>
               </div>
             ))}
+          </div>
+        )}
+
+        {unsentDrafts.length > 0 && (
+          <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 space-y-1.5" dir="rtl">
+            <div className="text-xs font-semibold text-amber-400 flex items-center gap-1.5">
+              🔔 טיוטות שטרם נשלחו ללקוח ({unsentDrafts.length})
+            </div>
+            <p className="text-[10px] text-muted-foreground">
+              אומדנים שחישבת אך עוד לא נשלחו — שלח ללקוח או אשר ושלח למפעל.
+            </p>
+            <ul className="space-y-1">
+              {unsentDrafts.slice(0, 12).map((r) => (
+                <li
+                  key={r.id}
+                  className="flex items-center justify-between gap-2 rounded-md border border-border/60 bg-background/40 px-2.5 py-1.5"
+                >
+                  <div className="flex items-center gap-2 min-w-0 flex-1 flex-wrap">
+                    <span className="text-[11px] text-muted-foreground tabular-nums shrink-0">
+                      {fmtDate(r.createdAt)}
+                    </span>
+                    <span className="text-[11px] font-mono text-muted-foreground shrink-0">
+                      {r.quotationNo ?? r.id.slice(-6)}
+                    </span>
+                    <span className="text-sm font-medium truncate min-w-0">
+                      {r.name ?? r.leadSid.slice(0, 20)}
+                    </span>
+                    <span className="text-[11px] tabular-nums text-muted-foreground shrink-0" title="מחיר משוער">
+                      ~{fmtMoney((r.finalPricing as Record<string, unknown>).totalOrderPriceIls ?? (r.finalPricing as Record<string, unknown>).totalSellingPrice)}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-0.5 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => (r.finalPricing ? setOpened(r) : setSpecRow(r))}
+                      title="צפה בהצעה"
+                      disabled={busyId === r.id}
+                      className="size-7 rounded grid place-items-center text-muted-foreground hover:text-foreground hover:bg-secondary disabled:opacity-50"
+                    >
+                      <Eye className="size-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleSendWhatsApp(r)}
+                      disabled={busyId === r.id}
+                      title="שלח את האומדן ללקוח ב-WhatsApp"
+                      className="size-7 rounded grid place-items-center text-emerald-400 hover:bg-emerald-500/10 disabled:opacity-50"
+                    >
+                      {busyId === r.id ? <Loader2 className="size-3.5 animate-spin" /> : <MessageCircle className="size-3.5" />}
+                    </button>
+                  </div>
+                </li>
+              ))}
+            </ul>
           </div>
         )}
 
@@ -747,9 +839,12 @@ export function QuotesHistoryView({ apiToken }: { apiToken: string }) {
                     </div>
                   </div>
                   {open && (
-                    <ul className="space-y-1 border-t border-border/60 bg-background/30 px-2 py-2">
-                      {g.rows.map((r) => renderQuoteRow(r))}
-                    </ul>
+                    <div className="border-t border-border/60 bg-background/30 px-2 py-2">
+                      <DraftVsFactoryStrip rows={g.rows} />
+                      <ul className="space-y-1">
+                        {g.rows.map((r) => renderQuoteRow(r))}
+                      </ul>
+                    </div>
                   )}
                 </div>
               );
@@ -900,6 +995,65 @@ function LeadPickerAssign({
       {busy && (
         <Loader2 className="absolute left-2 top-1/2 -translate-y-1/2 size-3.5 animate-spin text-muted-foreground" />
       )}
+    </div>
+  );
+}
+
+/**
+ * "Draft vs factory quote" comparison. Shows how close the self-calculated draft
+ * (מחשבון משוער estimate) was to the factory's real, finalized quote — on unit
+ * price AND on shipping volume (our physical-model CBM vs the factory's actual).
+ * Renders only when the customer has BOTH a draft carrying finalPricing AND a
+ * finalized factory quote carrying finalPricing (Eli 2026-07-22).
+ */
+function DraftVsFactoryStrip({ rows }: { rows: ApiQuoteRow[] }) {
+  const draft = latestMatching(rows, (r) => r.status === "draft" && !!r.finalPricing);
+  const factory = latestMatching(rows, (r) => r.status === "finalized" && !!r.finalPricing);
+  if (!draft || !factory) return null;
+  const dp = draft.finalPricing as Record<string, unknown>;
+  const fp = factory.finalPricing as Record<string, unknown>;
+
+  const fmtCbm = (v: number | null) => (v === null ? "—" : `${v.toFixed(3)} m³`);
+  const fmtUnit = (v: number | null) => (v === null ? "—" : `₪${v.toLocaleString("he-IL", { maximumFractionDigits: 2 })}`);
+
+  const rowsCmp: { label: string; draftV: number | null; factV: number | null; fmt: (v: number | null) => string }[] = [
+    { label: "מחיר ליחידה", draftV: num(dp.unitSellingPrice), factV: num(fp.unitSellingPrice), fmt: fmtUnit },
+    { label: "נפח משלוח (CBM)", draftV: num(dp.totalCbm), factV: num(fp.totalCbm), fmt: fmtCbm },
+    { label: "עלות שילוח", draftV: num(dp.totalShipping), factV: num(fp.totalShipping), fmt: fmtUnit },
+  ];
+
+  return (
+    <div className="rounded-md border border-amber-500/30 bg-amber-500/5 px-3 py-2 mb-1.5" dir="rtl">
+      <div className="text-[11px] font-medium text-amber-400 mb-1.5 flex items-center gap-1.5">
+        <Sparkles className="size-3" />
+        טיוטה מול הצעת מפעל
+        <span className="text-[10px] text-muted-foreground font-normal">
+          (אומדן #{draft.quotationNo ?? draft.id.slice(-5)} · מפעל #{factory.quotationNo ?? factory.id.slice(-5)})
+        </span>
+      </div>
+      <div className="grid grid-cols-[1fr_auto_auto_auto] gap-x-3 gap-y-1 text-[11px] items-center">
+        <span className="text-muted-foreground" />
+        <span className="text-muted-foreground text-left">טיוטה</span>
+        <span className="text-muted-foreground text-left">מפעל</span>
+        <span className="text-muted-foreground text-left">פער</span>
+        {rowsCmp.map((c) => {
+          const gap =
+            c.draftV !== null && c.factV !== null && c.draftV !== 0
+              ? ((c.factV - c.draftV) / c.draftV) * 100
+              : null;
+          const gapCls = gap === null ? "text-muted-foreground" : Math.abs(gap) <= 10 ? "text-emerald-400" : "text-amber-400";
+          return (
+            <div key={c.label} className="contents">
+              <span className="text-foreground">{c.label}</span>
+              <span className="tabular-nums text-left text-muted-foreground">{c.fmt(c.draftV)}</span>
+              <span className="tabular-nums text-left text-foreground">{c.fmt(c.factV)}</span>
+              <span className={`tabular-nums text-left ${gapCls}`}>
+                {gap === null ? "—" : `${gap > 0 ? "+" : ""}${gap.toFixed(0)}%`}
+              </span>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }

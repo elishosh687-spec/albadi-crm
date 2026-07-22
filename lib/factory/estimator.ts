@@ -13,6 +13,15 @@ import { getEstimatorCoeffs, DEFAULT_CARTON_COEF, type EstimatorCoeffs, type Fac
 
 const TIERS = [3000, 5000, 10000] as const;
 
+// Shipping safety buffer (Eli 2026-07-02). The carton CBM model under-estimates
+// on small / laminated bags, and sea shipping is pass-through — a low estimate is
+// a DIRECT loss. We inflate the quoted CBM so we rarely under-quote. Laminated
+// bags pack denser (stiffer) than the flat-stack model assumes → a larger buffer.
+// Validated on 13 confidence-high 3D quotes (scripts/_compare-3-models.ts): raw
+// shipping under-quoted >10% on 2 of them; these buffers pull that to ~0. Tunable.
+const SHIPPING_BUFFER_BASE = 0.15;
+const SHIPPING_BUFFER_LAM = 0.30;
+
 export interface EstimateSpec {
   widthCm: number;
   heightCm: number;
@@ -73,14 +82,17 @@ function snapTier(q: number): number { let t = TIERS[0] as number; for (const x 
  * geometries — there the area→thickness relation breaks (verified up to ~60% error), so the UI
  * flags "verify with factory". Weight is a ROUGH fabric estimate (air only) — never factory-grade.
  */
-function predictCarton(area: number, spec: EstimateSpec, factory: string, cc: CartonCoef): CartonEstimate {
+function predictCarton(area: number, spec: EstimateSpec, factory: string, cc: CartonCoef, bufferPct = 0): CartonEstimate {
   const tMm = cc.perFactoryTMm?.[factory] ?? cc.tMmGusseted;
   const flat = spec.depthCm <= 2;
   const tray = spec.heightCm < 10;
   const outOfRange = area < cc.areaMin || area > cc.areaMax;
   const confidence: "high" | "low" = flat || tray || outOfRange ? "low" : "high";
 
-  const cbmPerUnit = tMm * area * 1e-7;                       // m³/bag
+  // Physical flat-stack CBM, then a safety buffer (pass-through shipping — never
+  // want to under-quote). The buffer flows through qty/dims consistently: bigger
+  // cbm/unit ⇒ fewer units/carton ⇒ more cartons ⇒ higher (safe) total CBM.
+  const cbmPerUnit = tMm * area * 1e-7 * (1 + bufferPct);     // m³/bag (safe)
   const innerCm3 = cc.stdCartonCbm * cc.innerFactor * 1e6;    // usable carton volume, cm³
   const foldedCm3 = cbmPerUnit * 1e6;                         // one bag's packed volume, cm³
   const rawQty = foldedCm3 > 0 ? innerCm3 / foldedCm3 : cc.bundleSnap;
@@ -130,13 +142,25 @@ function predictFactory(fc: FactoryCoef, tier: number, spec: EstimateSpec, area:
   return { unit: base + color + handle, bd: { baseCny: r3(base), colorCny: r3(color), handleCny: r3(handle), lamCny: 0 } };
 }
 
-export async function estimateFactoryCny(spec: EstimateSpec, coeffsArg?: EstimatorCoeffs): Promise<EstimateResult> {
+export async function estimateFactoryCny(
+  spec: EstimateSpec,
+  coeffsArg?: EstimatorCoeffs,
+  opts?: { measure?: boolean }, // measure=true → RAW model: no shipping buffer, no flat/tray refuse (for validation only)
+): Promise<EstimateResult> {
   const coeffs = coeffsArg ?? (await getEstimatorCoeffs());
   const area = bagAreaCm2(spec.heightCm, spec.depthCm, spec.widthCm);
-  if (spec.quantity > coeffs.maxQty) {
-    return { ok: false, refused: `כמות ${spec.quantity} מעל ${coeffs.maxQty} — שלח למפעל`, areaCm2: r2(area) };
+  // Absurd-quantity sanity bound: above this the anchor is meaningless — send to
+  // the factory. Between coeffs.maxQty (trained ceiling, 10k) and here we ANCHOR:
+  // price per-unit at the top tier and scale the total by the real quantity, then
+  // downgrade confidence + note it (Eli 2026-07-22 — customers sometimes want 20k+).
+  const SANE_MAX_QTY = 200_000;
+  if (spec.quantity > SANE_MAX_QTY) {
+    return { ok: false, refused: `כמות ${spec.quantity} חריגה (מעל ${SANE_MAX_QTY.toLocaleString("he-IL")}) — שלח למפעל`, areaCm2: r2(area) };
   }
-  const tier = snapTier(spec.quantity);
+  const anchoredQty = spec.quantity > coeffs.maxQty;
+  // snapTier already picks the largest tier ≤ qty (→ 10k for anything above),
+  // but force the top TIER explicitly when anchoring so the intent is clear.
+  const tier = anchoredQty ? (TIERS[TIERS.length - 1] as number) : snapTier(spec.quantity);
 
   const candidates: { factory: string; unitCny: number; inRange: boolean; bd: EstimateBreakdown; fc: FactoryCoef }[] = [];
   for (const [name, fc] of Object.entries(coeffs.factories)) {
@@ -162,7 +186,16 @@ export async function estimateFactoryCny(spec: EstimateSpec, coeffsArg?: Estimat
 
   const platePer = winner.fc.plateFeePerColor ? Math.max(0, winner.fc.plateFeePerColor.makeFee + winner.fc.plateFeePerColor.perCm2 * area) : 0;
   const plateOneTime = spec.hasLamination ? r2(platePer * Math.max(1, spec.logoColors)) : 0;
-  const carton = predictCarton(area, spec, winner.factory, coeffs.carton ?? DEFAULT_CARTON_COEF);
+  const shippingBuffer = opts?.measure ? 0 : (spec.hasLamination ? SHIPPING_BUFFER_LAM : SHIPPING_BUFFER_BASE);
+  const carton = predictCarton(area, spec, winner.factory, coeffs.carton ?? DEFAULT_CARTON_COEF, shippingBuffer);
+
+  // Flat / tray / out-of-envelope geometry → the CBM (hence shipping) is not
+  // reliably estimable (Eli 2026-07-02: those always go to the factory). Refuse
+  // rather than quote a shipping number we can't stand behind. Bypassed in
+  // measure mode so the harness can score the raw model on those geometries too.
+  if (!opts?.measure && carton.confidence === "low") {
+    return { ok: false, refused: "צורה שטוחה/חריגה — השילוח לא ניתן לאמידה אמינה, שלח למפעל", areaCm2: r2(area), tier, candidates: summary };
+  }
 
   const reasoning: string[] = [
     `שטח השקית = 2·H·W + 2·H·D + W·D = 2·${spec.heightCm}·${spec.widthCm} + 2·${spec.heightCm}·${spec.depthCm} + ${spec.widthCm}·${spec.depthCm} = ${Math.round(area)} ס״מ²`,
@@ -180,11 +213,15 @@ export async function estimateFactoryCny(spec: EstimateSpec, coeffsArg?: Estimat
     reasoning.push(`版费 למינציה = ${spec.logoColors} צבעים × ¥${r2(platePer).toFixed(0)}/צבע = ¥${plateOneTime.toFixed(0)} חד‑פעמי (≈ ¥${perUnit.toFixed(3)}/יח׳ על ${spec.quantity.toLocaleString("he-IL")} יח׳)`);
   }
   reasoning.push(`→ המרה לשקל + מרווח + שילוח מחושבים על בסיס עלות זו`);
+  if (anchoredQty) {
+    reasoning.push(`⚠️ אומדן מבוסס על 10,000 יח׳ — מחיר היחידה נלקח משכבת ה‑10,000 (המקסימום שהמודל מתומחר עליו) והוכפל ב‑${spec.quantity.toLocaleString("he-IL")} יח׳. לאישור מול המפעל.`);
+  }
   // Carton / packing reasoning (the shipping-volume driver).
   const cbmL = (carton.cbmPerUnit * 1000).toFixed(2); // litres/bag for readability
   if (carton.confidence === "high") {
     reasoning.push(`אריזה: שקית מקופלת ≈ שטח × ${(coeffs.carton ?? DEFAULT_CARTON_COEF).tMmGusseted} מ״מ → ${cbmL} ליטר/יח׳ (CBM ${carton.cbmPerUnit.toFixed(5)})`);
     reasoning.push(`→ קרטון ≈ ${carton.lengthCm}×${carton.widthCm}×${carton.heightCm} ס״מ, ${carton.qty} יח׳/קרטון (אומדן; דיוק ~±10%)`);
+    reasoning.push(`כולל כרית ביטחון שילוח +${Math.round(shippingBuffer * 100)}% (שילוח pass-through — לא מציגים מחיר נמוך מדי)`);
   } else {
     reasoning.push(`⚠️ אריזה: צורה שטוחה/חריגה — אומדן הנפח לא אמין (עד ~60% סטייה). מומלץ לאמת את הקרטון מול המפעל`);
   }
@@ -197,7 +234,7 @@ export async function estimateFactoryCny(spec: EstimateSpec, coeffsArg?: Estimat
     platePerColorCny: spec.hasLamination ? r2(platePer) : 0,
     breakdown: winner.bd,
     carton: carton ?? undefined,
-    confidence,
+    confidence: anchoredQty ? "medium" : confidence,
     reasoning,
     areaCm2: r2(area),
     tier,

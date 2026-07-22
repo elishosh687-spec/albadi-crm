@@ -17,6 +17,7 @@ import { priceFactoryQuote } from "@/lib/factory/pricing";
 import { getFactoryConfig } from "@/lib/factory/config";
 import { renderCustomerQuotePdf } from "@/lib/factory/pdf";
 import { customerRoundedTotalIls } from "@/lib/factory/calculator/customer-breakdown";
+import { notifyItayQuoteSent } from "@/lib/notify/itay";
 import type { FactoryProductSpec, FactoryPricingResult } from "@/lib/factory/types";
 
 const fmtIls = (n: number) => `₪${n.toLocaleString("he-IL", { maximumFractionDigits: 2 })}`;
@@ -138,6 +139,13 @@ export async function sendEstimateToCustomer(input: SendEstimateInput): Promise<
   } catch (err) {
     return { ok: false, status: 502, error: "bridge_send_failed", message: err instanceof Error ? err.message : String(err) };
   }
+
+  // Ping Itay on every quote sent (Eli 2026-07-22). Non-fatal.
+  await notifyItayQuoteSent({
+    customerName,
+    totalIls: pricing.totalSellingPrice,
+    kind: "estimate",
+  });
 
   return {
     ok: true,
