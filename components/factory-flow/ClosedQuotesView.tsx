@@ -1031,14 +1031,15 @@ function ZohoMatchModal({
 
   return (
     <div
-      style={{ position: "fixed", inset: 0, zIndex: 60, background: "rgba(0,0,0,0.65)", display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}
+      style={{ position: "fixed", inset: 0, zIndex: 60, background: "rgba(0,0,0,0.8)", backdropFilter: "blur(3px)", WebkitBackdropFilter: "blur(3px)", display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}
       onClick={onClose}
     >
       <div
         dir="rtl"
         style={{
           width: "100%", maxWidth: 620, maxHeight: "85vh", overflowY: "auto",
-          background: "var(--lux-card, #1d1c1a)", border: "1px solid var(--lux-line)", borderRadius: 12, padding: "18px 20px",
+          background: "#1b1917", border: "1px solid var(--lux-line)", borderRadius: 12, padding: "18px 20px",
+          boxShadow: "0 24px 60px rgba(0,0,0,0.6)",
         }}
         onClick={(e) => e.stopPropagation()}
       >
@@ -1104,13 +1105,17 @@ function ZohoMatchModal({
 /* ---------- Zoho push modals ("דחוף ל-Zoho") ---------- */
 
 const modalShell: React.CSSProperties = {
-  position: "fixed", inset: 0, zIndex: 60, background: "rgba(0,0,0,0.65)",
+  position: "fixed", inset: 0, zIndex: 60, background: "rgba(0,0,0,0.8)",
+  backdropFilter: "blur(3px)", WebkitBackdropFilter: "blur(3px)",
   display: "flex", alignItems: "center", justifyContent: "center", padding: 16,
 };
+// SOLID opaque panel — --lux-card is rgba(...,0.03) (near-transparent) so the
+// card behind bleeds through; a modal must be fully opaque.
 const modalBox: React.CSSProperties = {
   width: "100%", maxWidth: 520, maxHeight: "85vh", overflowY: "auto",
-  background: "var(--lux-card, #1d1c1a)", border: "1px solid var(--lux-line)",
+  background: "#1b1917", border: "1px solid var(--lux-line)",
   borderRadius: 12, padding: "18px 20px",
+  boxShadow: "0 24px 60px rgba(0,0,0,0.6)",
 };
 
 /** Create the customer invoice in Zoho from finalPricing (Eli's house rules). */
