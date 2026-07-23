@@ -10,6 +10,7 @@
  */
 
 import Link from "next/link";
+import type { CSSProperties } from "react";
 import {
   MessagesSquare,
   Bot,
@@ -22,6 +23,7 @@ import {
   Settings,
   Search,
   CircleCheckBig,
+  Wand2,
   type LucideIcon,
 } from "lucide-react";
 import { verifyWidgetToken } from "@/integrations/ghl/widget-auth";
@@ -39,6 +41,9 @@ interface TabDef {
   label: string;
   icon: LucideIcon;
   url: (token: string, sid: string) => string;
+  /** When set, the nav item opens this URL in a NEW TAB instead of swapping the
+   *  hub iframe. Used for the local Bag Studio (localhost, Eli's Mac only). */
+  external?: string;
 }
 
 function withSid(base: string, sid: string): string {
@@ -93,6 +98,15 @@ const TABS: TabDef[] = [
     label: "מעצב 3D",
     icon: Box,
     url: (t) => `/configurator?widget_token=${encodeURIComponent(t)}`,
+  },
+  {
+    id: "studio",
+    label: "סטודיו",
+    icon: Wand2,
+    url: () => "",
+    // Local Bag Studio — runs on Eli's Mac (needs the skills + keys). Opens in a
+    // new tab; only reachable while `npm start` is running in studio/.
+    external: "http://localhost:4747",
   },
   {
     id: "shipping",
@@ -197,28 +211,41 @@ export default async function HubWidgetPage({
           const sidSuffix = sid ? `&sid=${encodeURIComponent(sid)}` : "";
           const href = `/widget/hub?widget_token=${encodeURIComponent(token)}&tab=${t.id}${sidSuffix}`;
           const Icon = t.icon;
+          const style: CSSProperties = {
+            gap: 6,
+            padding: "0 11px",
+            fontSize: 13,
+            fontWeight: isActive ? 600 : 500,
+            height: 32,
+            display: "flex",
+            alignItems: "center",
+            background: isActive ? "rgba(214,196,172,0.14)" : "transparent",
+            color: isActive ? "#e6e1e0" : "#8a7f74",
+            border: `1px solid ${isActive ? "rgba(214,196,172,0.30)" : "transparent"}`,
+            borderRadius: 7,
+            textDecoration: "none",
+            whiteSpace: "nowrap",
+            touchAction: "manipulation",
+            flexShrink: 0,
+          };
+          // External (local studio) opens a new tab; regular tabs swap the iframe.
+          if (t.external) {
+            return (
+              <a
+                key={t.id}
+                href={t.external}
+                target="_blank"
+                rel="noopener noreferrer"
+                title="נפתח בטאב חדש — רץ מקומית על ה-Mac (studio: npm start)"
+                style={style}
+              >
+                <Icon size={15} strokeWidth={1.75} style={{ flexShrink: 0 }} />
+                {t.label}
+              </a>
+            );
+          }
           return (
-            <Link
-              key={t.id}
-              href={href}
-              style={{
-                gap: 6,
-                padding: "0 11px",
-                fontSize: 13,
-                fontWeight: isActive ? 600 : 500,
-                height: 32,
-                display: "flex",
-                alignItems: "center",
-                background: isActive ? "rgba(214,196,172,0.14)" : "transparent",
-                color: isActive ? "#e6e1e0" : "#8a7f74",
-                border: `1px solid ${isActive ? "rgba(214,196,172,0.30)" : "transparent"}`,
-                borderRadius: 7,
-                textDecoration: "none",
-                whiteSpace: "nowrap",
-                touchAction: "manipulation",
-                flexShrink: 0,
-              }}
-            >
+            <Link key={t.id} href={href} style={style}>
               <Icon size={15} strokeWidth={1.75} style={{ flexShrink: 0 }} />
               {t.label}
             </Link>
