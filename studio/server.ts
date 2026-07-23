@@ -23,6 +23,10 @@ const PORT = Number(process.env.PORT || 4747);
 function safeKey(k: string): string {
   return (k || "adhoc").replace(/[^a-zA-Z0-9_.-]/g, "_").slice(0, 80) || "adhoc";
 }
+/** Widget token for CRM calls — from the hub URL (header/query) or env fallback. */
+function tokenFrom(req: IncomingMessage, url: URL): string {
+  return (req.headers["x-widget-token"] as string) || url.searchParams.get("token") || TOKEN;
+}
 function workDir(sessionKey: string): string {
   return join(ROOT, safeKey(sessionKey));
 }
@@ -69,7 +73,7 @@ const server = createServer(async (req, res) => {
     if (req.method === "GET" && p === "/api/deal") {
       const dealId = url.searchParams.get("dealId") || "";
       if (!dealId) return json(res, 400, { ok: false, error: "missing dealId" });
-      const brief = await pullDeal(dealId);
+      const brief = await pullDeal(dealId, tokenFrom(req, url));
       const dir = workDir(dealId);
       await ensureDir(dir);
       return json(res, 200, { ok: true, brief, sessionKey: dealId, briefText: briefText(brief) });
@@ -108,7 +112,7 @@ const server = createServer(async (req, res) => {
     if (req.method === "POST" && p === "/api/push") {
       const body = await readJson<{ dealId: string; stage: string; session: string; name: string }>(req);
       const file = join(workDir(body.session), basename(body.name));
-      const uploaded = await pushFile(body.dealId, body.stage, file);
+      const uploaded = await pushFile(body.dealId, body.stage, file, tokenFrom(req, url));
       return json(res, 200, { ok: true, url: uploaded });
     }
 
@@ -116,7 +120,7 @@ const server = createServer(async (req, res) => {
     if (req.method === "POST" && p === "/api/whatsapp") {
       const body = await readJson<{ leadSid: string; session: string; name: string }>(req);
       const file = join(workDir(body.session), basename(body.name));
-      const wa = await sendWhatsApp(body.leadSid, file);
+      const wa = await sendWhatsApp(body.leadSid, file, tokenFrom(req, url));
       return json(res, 200, { ok: true, waMessageId: wa });
     }
 
@@ -152,12 +156,12 @@ const server = createServer(async (req, res) => {
   }
 });
 
-if (!TOKEN) {
-  console.error("\n✗ חסר WIDGET_TOKEN (משתנה סביבה). קבל מ-Vercel env GHL_WIDGET_TOKEN.\n  דוגמה:  WIDGET_TOKEN=xxxx npm start\n");
-  process.exit(1);
-}
 server.listen(PORT, () => {
   console.log(`\n  🎨 סטודיו אלבדי רץ:  http://localhost:${PORT}`);
   console.log(`     CRM: ${CRM_BASE}`);
-  console.log(`     קבצים: ${ROOT}/<lead|deal>\n`);
+  console.log(`     קבצים: ${ROOT}/<lead|deal>`);
+  if (!TOKEN) {
+    console.log(`     טוקן: יגיע מקישור ה-hub (?token=). לפתיחה ישירה קבע WIDGET_TOKEN.`);
+  }
+  console.log("");
 });

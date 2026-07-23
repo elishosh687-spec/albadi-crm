@@ -42,8 +42,9 @@ interface TabDef {
   icon: LucideIcon;
   url: (token: string, sid: string) => string;
   /** When set, the nav item opens this URL in a NEW TAB instead of swapping the
-   *  hub iframe. Used for the local Bag Studio (localhost, Eli's Mac only). */
-  external?: string;
+   *  hub iframe. Used for the local Bag Studio (localhost, Eli's Mac only) — it
+   *  gets the widget token + current lead sid so it works without env setup. */
+  external?: (token: string, sid: string) => string;
 }
 
 function withSid(base: string, sid: string): string {
@@ -105,8 +106,10 @@ const TABS: TabDef[] = [
     icon: Wand2,
     url: () => "",
     // Local Bag Studio — runs on Eli's Mac (needs the skills + keys). Opens in a
-    // new tab; only reachable while `npm start` is running in studio/.
-    external: "http://localhost:4747",
+    // new tab, carrying the widget token + current lead sid so it can pull/send
+    // without env setup. Only reachable while `npm start` is running in studio/.
+    external: (t, sid) =>
+      `http://localhost:4747/?token=${encodeURIComponent(t)}${sid ? `&sid=${encodeURIComponent(sid)}` : ""}`,
   },
   {
     id: "shipping",
@@ -233,7 +236,7 @@ export default async function HubWidgetPage({
             return (
               <a
                 key={t.id}
-                href={t.external}
+                href={t.external(token, sid)}
                 target="_blank"
                 rel="noopener noreferrer"
                 title="נפתח בטאב חדש — רץ מקומית על ה-Mac (studio: npm start)"

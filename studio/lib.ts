@@ -8,13 +8,14 @@ import { join, basename } from "node:path";
 import { homedir } from "node:os";
 
 export const CRM_BASE = (process.env.CRM_BASE || "https://albadi-crm.vercel.app").replace(/\/$/, "");
+/** Env fallback; the token can also arrive per-request from the hub URL. */
 export const TOKEN = process.env.WIDGET_TOKEN || "";
 /** Where the studio keeps per-customer working folders (skills read/write here). */
 export const ROOT = join(homedir(), "albadi-studio");
 
-export function u(path: string): string {
+export function u(path: string, tok: string): string {
   const sep = path.includes("?") ? "&" : "?";
-  return `${CRM_BASE}${path}${sep}widget_token=${encodeURIComponent(TOKEN)}`;
+  return `${CRM_BASE}${path}${sep}widget_token=${encodeURIComponent(tok || TOKEN)}`;
 }
 
 // --- spec interpretation (same rules as scripts/deal-file.ts) ---
@@ -42,9 +43,9 @@ export interface Brief {
 }
 
 /** Map a dealId → its lead sid via the quotes list (no CRM change needed). */
-export async function resolveLeadSid(dealId: string): Promise<string | null> {
+export async function resolveLeadSid(dealId: string, tok: string): Promise<string | null> {
   try {
-    const res = await fetch(u(`/api/widget/quotes/list?limit=400`), { cache: "no-store" });
+    const res = await fetch(u(`/api/widget/quotes/list?limit=400`, tok), { cache: "no-store" });
     const j = (await res.json()) as { rows?: { id: string; leadSid: string | null }[] };
     const row = (j.rows ?? []).find((r) => r.id === dealId);
     return row?.leadSid ?? null;
@@ -54,8 +55,8 @@ export async function resolveLeadSid(dealId: string): Promise<string | null> {
 }
 
 /** Pull a deal's brief (spec + customer) and resolve its lead sid. */
-export async function pullDeal(dealId: string): Promise<Brief> {
-  const res = await fetch(u(`/api/widget/factory/deal/${dealId}`), { cache: "no-store" });
+export async function pullDeal(dealId: string, tok: string): Promise<Brief> {
+  const res = await fetch(u(`/api/widget/factory/deal/${dealId}`, tok), { cache: "no-store" });
   const j = (await res.json()) as {
     ok: boolean; error?: string;
     deal?: {
@@ -65,7 +66,7 @@ export async function pullDeal(dealId: string): Promise<Brief> {
   };
   if (!res.ok || !j.ok || !j.deal) throw new Error(j.error ?? `deal ${dealId} not found (${res.status})`);
   const d = j.deal;
-  const leadSid = await resolveLeadSid(dealId);
+  const leadSid = await resolveLeadSid(dealId, tok);
   return {
     dealId, leadSid,
     quotationNo: d.quotationNo, customerName: d.customerName,
@@ -102,26 +103,26 @@ function mimeFor(name: string): { mime: string; media: "image" | "video" } {
 }
 
 /** Upload a local file into a deal's timeline stage (mockup|invoice|layout). */
-export async function pushFile(dealId: string, stage: string, filePath: string): Promise<string> {
+export async function pushFile(dealId: string, stage: string, filePath: string, tok: string): Promise<string> {
   const buf = await readFile(filePath);
   const name = basename(filePath);
   const { mime } = mimeFor(name);
   const form = new FormData();
   form.append("file", new Blob([new Uint8Array(buf)], { type: mime }), name);
-  const res = await fetch(u(`/api/widget/factory/deal-upload/${dealId}?stage=${stage}`), { method: "POST", body: form });
+  const res = await fetch(u(`/api/widget/factory/deal-upload/${dealId}?stage=${stage}`, tok), { method: "POST", body: form });
   const j = (await res.json()) as { ok: boolean; url?: string; error?: string; message?: string };
   if (!res.ok || !j.ok) throw new Error(j.message ?? j.error ?? `upload failed (${res.status})`);
   return j.url ?? "";
 }
 
-/** Send a local file to the lead on WhatsApp via the existing CRM endpoint. */
-export async function sendWhatsApp(leadSid: string, filePath: string): Promise<string> {
+/** Send a local file to the lead on WhatsApp via the existing CRM endpoint (GreenAPI). */
+export async function sendWhatsApp(leadSid: string, filePath: string, tok: string): Promise<string> {
   const buf = await readFile(filePath);
   const name = basename(filePath);
   const { mime, media } = mimeFor(name);
   const form = new FormData();
   form.append("manychatSubId", leadSid);
-  form.append("widgetToken", TOKEN);
+  form.append("widgetToken", tok || TOKEN);
   form.append("mediaType", media);
   form.append("filename", name);
   form.append("file", new Blob([new Uint8Array(buf)], { type: mime }), name);

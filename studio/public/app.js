@@ -11,7 +11,24 @@ const state = {
   logoName: null,
   dielineName: null,
   busy: false,
+  widgetToken: "",
 };
+
+// The hub link opens us with ?token=<GHL_WIDGET_TOKEN>&sid=<leadSid> so no env
+// is needed and we can send to the current customer even without a closed deal.
+const urlParams = new URLSearchParams(location.search);
+state.widgetToken = urlParams.get("token") || "";
+const urlSid = urlParams.get("sid");
+if (urlSid) {
+  state.leadSid = urlSid;
+  state.sessionKey = "lead-" + urlSid.replace(/[^a-zA-Z0-9_.\-]/g, "_").slice(0, 60);
+}
+/** Attach the widget token so the local server can call the CRM on our behalf. */
+function hdr(extra) {
+  const h = Object.assign({}, extra || {});
+  if (state.widgetToken) h["x-widget-token"] = state.widgetToken;
+  return h;
+}
 
 function addMsg(cls, text) {
   const d = document.createElement("div");
@@ -26,7 +43,7 @@ async function loadDeal() {
   const dealId = $("dealId").value.trim();
   if (!dealId) { addMsg("ai", "אין מזהה עסקה — נמשיך במצב ליד חופשי. תאר לי את התיק ואעלה לוגו."); return; }
   try {
-    const r = await fetch("/api/deal?dealId=" + encodeURIComponent(dealId));
+    const r = await fetch("/api/deal?dealId=" + encodeURIComponent(dealId), { headers: hdr() });
     const j = await r.json();
     if (!j.ok) { addMsg("err", "טעינה נכשלה: " + (j.error || r.status)); return; }
     state.dealId = dealId;
@@ -79,7 +96,7 @@ async function sendWa(name, btn) {
   if (!state.leadSid) return;
   btn.disabled = true; btn.textContent = "שולח…";
   try {
-    const r = await fetch("/api/whatsapp", { method: "POST", headers: {"content-type":"application/json"},
+    const r = await fetch("/api/whatsapp", { method: "POST", headers: hdr({"content-type":"application/json"}),
       body: JSON.stringify({ leadSid: state.leadSid, session: state.sessionKey, name }) });
     const j = await r.json();
     btn.textContent = j.ok ? "נשלח ✓" : "שגיאה";
@@ -91,7 +108,7 @@ async function pushToDeal(name, stage, btn) {
   if (!state.dealId) return;
   btn.disabled = true; btn.textContent = "מעלה…";
   try {
-    const r = await fetch("/api/push", { method: "POST", headers: {"content-type":"application/json"},
+    const r = await fetch("/api/push", { method: "POST", headers: hdr({"content-type":"application/json"}),
       body: JSON.stringify({ dealId: state.dealId, stage, session: state.sessionKey, name }) });
     const j = await r.json();
     btn.textContent = j.ok ? "בתיק ✓" : "שגיאה";
@@ -167,3 +184,15 @@ function wireDrop(dropId, inputId, which) {
 }
 wireDrop("logoDrop", "logoFile", "logo");
 wireDrop("dielineDrop", "dielineFile", "dieline");
+
+// Opened from the hub with a lead in context → ready to send to that customer.
+if (urlSid) {
+  const chip = $("custChip");
+  chip.style.display = "";
+  chip.textContent = "לקוח מ-GHL · מוכן לשליחה ב-WhatsApp";
+  addMsg("ai", "טענתי לקוח מ-GHL — נעשה הדמיה ואפשר לשלוח לו ישירות ב-WhatsApp (גם בלי עסקה סגורה).");
+  refreshOutputs();
+}
+if (!state.widgetToken) {
+  addMsg("ai", "טיפ: אם פתחת ישירות (לא מהתפריט), הרץ עם WIDGET_TOKEN=… כדי שאוכל לשלוח/למשוך מה-CRM.");
+}

@@ -24,11 +24,16 @@ pip3 install -r ~/.claude/skills/dieline-print/scripts/requirements.txt
 
 ```bash
 cd studio
-WIDGET_TOKEN=<GHL_WIDGET_TOKEN> npm start
+npm start
 # פותח: http://localhost:4747
 ```
 
-`WIDGET_TOKEN` = הערך של `GHL_WIDGET_TOKEN` מ-Vercel env (נדרש לשליפה/העלאה/שליחה מול ה-CRM).
+**הטוקן מגיע אוטומטית מהתפריט.** לחיצה על **סטודיו** בתפריט ה-hub פותחת
+`localhost:4747/?token=<GHL_WIDGET_TOKEN>&sid=<לקוח נוכחי>` — אין צורך ב-env,
+והלקוח הנוכחי כבר טעון לשליחה ב-WhatsApp.
+
+לפתיחה **ישירה** (לא מהתפריט) קבע את הטוקן ב-env:
+`WIDGET_TOKEN=<GHL_WIDGET_TOKEN> npm start`.
 אופציונלי: `CRM_BASE` (ברירת מחדל prod), `PORT` (ברירת מחדל 4747).
 
 ## זרימת עבודה
