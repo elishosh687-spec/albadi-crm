@@ -105,8 +105,9 @@ export async function POST(req: NextRequest) {
           },
         ],
       };
-      if (body.applyTo === "factory") patch.factoryTotalIls = (ac.factoryTotalIls ?? 0) + ils;
-      else if (body.applyTo === "shipping") patch.shippingTotalIls = (ac.shippingTotalIls ?? 0) + ils;
+      const r2 = (n: number) => Math.round(n * 100) / 100; // kill float drift
+      if (body.applyTo === "factory") patch.factoryTotalIls = r2((ac.factoryTotalIls ?? 0) + ils);
+      else if (body.applyTo === "shipping") patch.shippingTotalIls = r2((ac.shippingTotalIls ?? 0) + ils);
       else {
         patch.otherCosts = [
           ...(ac.otherCosts ?? []),

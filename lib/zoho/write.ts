@@ -210,20 +210,6 @@ export async function deleteZohoInvoice(invoiceId: string): Promise<void> {
 // expenses
 // ---------------------------------------------------------------------------
 
-let currencyCache: Record<string, string> | null = null;
-async function currencyId(code: string): Promise<string> {
-  if (!currencyCache) {
-    const j = await zohoRequest("GET", "/settings/currencies");
-    currencyCache = {};
-    for (const c of (j.currencies as Record<string, unknown>[]) ?? []) {
-      currencyCache[String(c.currency_code).toUpperCase()] = String(c.currency_id);
-    }
-  }
-  const id = currencyCache[code.toUpperCase()];
-  if (!id) throw new Error(`מטבע ${code} לא מופעל ב-Zoho (Settings → Currencies)`);
-  return id;
-}
-
 export interface CreateExpenseInput {
   category: "cogs" | "commission" | "custom";
   /** Required when category === "custom" (e.g. a shipping account). */
@@ -255,27 +241,34 @@ export async function createZohoExpense(input: CreateExpenseInput): Promise<Crea
   const paidThrough = PAYER_ACCOUNTS[input.partner];
   if (!paidThrough) throw new Error(`משלם לא מוכר: ${input.partner}`);
 
-  const payload: Record<string, unknown> = {
-    account_id: accountId,
-    paid_through_account_id: paidThrough,
-    date: input.date ?? new Date().toISOString().slice(0, 10),
-    amount: input.amount,
-    description: input.description.slice(0, 500),
-    is_inclusive_tax: false, // factory/commission carry no VAT (import default)
-  };
-
+  // Eli's Zoho plan REJECTS foreign-currency expenses via the API
+  // (code 3048 — "plan does not support Expense in any currency other than
+  // base"). Factory payments are always ¥, so we convert to ₪ at the live
+  // rate and preserve the original amount in the description. The ₪ (base)
+  // figure is what the per-order profit report uses anyway.
   let exchangeRate: number | null = null;
+  let bookedAmount = input.amount;
+  let bookedDesc = input.description;
   const cur = input.currency.toUpperCase();
   if (cur !== "ILS") {
-    payload.currency_id = await currencyId(cur);
     exchangeRate = input.exchangeRate ?? null;
     if (!exchangeRate) {
       const fx = await getLiveFx();
       exchangeRate = cur === "CNY" ? fx.cnyToIls : cur === "USD" ? fx.usdToIls : null;
     }
     if (!exchangeRate) throw new Error(`אין שער עבור ${cur} — הזן ידנית`);
-    payload.exchange_rate = exchangeRate;
+    bookedAmount = Math.round(input.amount * exchangeRate * 100) / 100;
+    bookedDesc = `${input.description} (${input.amount} ${cur} × ${exchangeRate.toFixed(3)} = ₪${bookedAmount})`;
   }
+
+  const payload: Record<string, unknown> = {
+    account_id: accountId,
+    paid_through_account_id: paidThrough,
+    date: input.date ?? new Date().toISOString().slice(0, 10),
+    amount: bookedAmount,
+    description: bookedDesc.slice(0, 500),
+    is_inclusive_tax: false, // factory/commission carry no VAT (import default)
+  };
 
   let customerLinked = false;
   if (input.customerName) {
@@ -296,7 +289,7 @@ export async function createZohoExpense(input: CreateExpenseInput): Promise<Crea
 
   return {
     expenseId,
-    bcyTotalIls: Number(exp.bcy_total ?? input.amount),
+    bcyTotalIls: Number(exp.bcy_total ?? bookedAmount),
     exchangeRate,
     customerLinked,
     tagApplied,

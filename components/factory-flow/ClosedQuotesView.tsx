@@ -1412,7 +1412,8 @@ function ZohoExpenseModal({
             </div>
             {currency !== "ILS" && (
               <div style={{ fontSize: 11, color: "var(--lux-muted)", marginTop: -8, marginBottom: 12 }}>
-                שער ההמרה יימשך אוטומטית (כמו בסקריפט המקומי) ויירשם על ההוצאה.
+                יומר ל-₪ בשער חי (התוכנית שלך ב-Zoho לא מאפשרת הוצאה במטבע זר) —
+                הסכום המקורי נשמר בתיאור.
               </div>
             )}
 
