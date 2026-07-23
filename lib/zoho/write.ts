@@ -177,8 +177,11 @@ export async function createZohoInvoice(input: CreateInvoiceInput): Promise<Crea
     inv = (fresh.invoice as Record<string, unknown>) ?? inv;
   }
 
-  // order reporting tag — best-effort (option must pre-exist; API can't create it)
-  const tagApplied = await applyOrderTag("invoices", invoiceId, input.customerName, "order tag");
+  // Per-CUSTOMER consolidation is Eli's preferred model (2026-07-23): the
+  // customer link already groups everything under one customer, so we do NOT
+  // apply the per-ORDER reporting tag (it would split one customer's multiple
+  // orders into separate columns — the opposite of what he wants).
+  const tagApplied = false;
 
   let pdf: Uint8Array | null = null;
   try {
@@ -283,9 +286,9 @@ export async function createZohoExpense(input: CreateExpenseInput): Promise<Crea
   const exp = created.expense as Record<string, unknown>;
   const expenseId = String(exp.expense_id);
 
-  const tagApplied = input.customerName
-    ? await applyOrderTag("expenses", expenseId, input.customerName)
-    : false;
+  // No per-order tag — the customer link already gives per-customer totals
+  // (Eli's preferred consolidation). See createZohoInvoice comment.
+  const tagApplied = false;
 
   return {
     expenseId,
@@ -311,34 +314,6 @@ export async function listExpenseAccounts(): Promise<{ id: string; name: string 
   }));
 }
 
-// ---------------------------------------------------------------------------
-// reporting tag (best-effort)
-// ---------------------------------------------------------------------------
-
-/** Apply the "הזמנה" tag option matching the customer name. Returns false when
- *  the option doesn't exist (Zoho's create-option API is disabled — UI only). */
-async function applyOrderTag(
-  entity: "invoices" | "expenses",
-  entityId: string,
-  optionName: string,
-  reason?: string
-): Promise<boolean> {
-  try {
-    const j = await zohoRequest("GET", `/settings/tags/${REPORTING_TAG_ID}`);
-    const options =
-      ((j.reporting_tag as Record<string, unknown>)?.tag_options as Record<string, unknown>[]) ?? [];
-    const opt = options.find(
-      (o) => String(o.tag_option_name ?? "").trim() === optionName.trim()
-    );
-    if (!opt) return false;
-    const body: Record<string, unknown> = {
-      tags: [{ tag_id: REPORTING_TAG_ID, tag_option_id: String(opt.tag_option_id) }],
-    };
-    if (entity === "invoices" && reason) body.reason = reason;
-    await zohoRequest("PUT", `/${entity}/${entityId}`, { body });
-    return true;
-  } catch (err) {
-    console.warn("[zoho/write] tag apply failed (non-fatal)", err);
-    return false;
-  }
-}
+// Per-order reporting tag intentionally NOT applied — Eli prefers per-customer
+// consolidation (the customer link handles it). REPORTING_TAG_ID kept for
+// reference in case per-order splitting is ever wanted again.

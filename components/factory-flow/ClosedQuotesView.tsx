@@ -1249,15 +1249,7 @@ function ZohoInvoiceModal({
               סה״כ כולל מע״מ: {ils(result.total)} · מקדמה: {ils(result.advance)}
               <br />
               {result.pdfUrl ? <>ה-PDF צורף לתיק העסקה ושוקף ל-GHL.</> : <>ה-PDF לא נמשך — פתח ב-Zoho.</>}
-              <br />החשבונית מקושרת ללקוח — המעקב פר-לקוח עובד תמיד.
-              {!result.tagApplied && (
-                <>
-                  <br /><span style={{ color: "var(--lux-muted)" }}>
-                    (תג ההזמנה "{quote.customerName}" עדיין לא קיים ב-Zoho — רק לדוח פר-הזמנה. הוסף פעם אחת:
-                    Settings → Reporting Tags → הזמנה)
-                  </span>
-                </>
-              )}
+              <br />החשבונית מקושרת ללקוח — כל ההוצאות וההכנסות מרוכזות תחת {quote.customerName}.
             </div>
             <button
               type="button"
@@ -1458,10 +1450,7 @@ function ZohoExpenseModal({
             <div style={{ fontSize: 12.5, color: "var(--lux-muted)", lineHeight: 1.8 }}>
               {ils(result.bcyTotalIls)}
               {result.exchangeRate ? ` (שער ${result.exchangeRate.toFixed(3)})` : ""}
-              {result.customerLinked ? " · ✓ מקושרת ללקוח (מעקב פר-לקוח עובד)" : " · ⚠️ הלקוח לא נמצא ב-Zoho — ההוצאה בלי קישור לקוח"}
-              {!result.tagApplied && (
-                <><br /><span style={{ color: "var(--lux-muted)" }}>(תג ההזמנה עדיין לא ב-Zoho — רק לדוח פר-הזמנה; הוסף פעם אחת ב-UI)</span></>
-              )}
+              {result.customerLinked ? " · ✓ מקושרת ללקוח (מרוכז פר-לקוח)" : " · ⚠️ הלקוח לא נמצא ב-Zoho — ההוצאה בלי קישור לקוח"}
             </div>
             <button
               type="button"
