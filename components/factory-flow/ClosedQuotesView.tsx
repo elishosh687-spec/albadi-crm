@@ -33,6 +33,7 @@ interface ClosedQuote {
   updatedAt: string;
   products?: DealProduct[];
   isCombined?: boolean;
+  fromEstimate?: boolean;
 }
 
 interface DealProduct {
@@ -343,6 +344,14 @@ function ClosedQuoteCard({
             {quote.isCombined && (
               <span style={{ fontSize: 10, padding: "2px 8px", borderRadius: 99, background: "rgba(214,178,106,0.12)", border: "1px solid rgba(214,178,106,0.35)", color: "var(--lux-champagne,#d6b26a)" }}>
                 עסקה משולבת · {quote.products?.length ?? 1} מוצרים
+              </span>
+            )}
+            {quote.fromEstimate && (
+              <span
+                title="נסגר לפי מחיר האומדן — עדיין לא אושר מול המפעל"
+                style={{ fontSize: 10, padding: "2px 8px", borderRadius: 99, background: "rgba(120,150,200,0.12)", border: "1px solid rgba(120,150,200,0.35)", color: "var(--lux-cool,#9db4d6)" }}
+              >
+                לפי אומדן
               </span>
             )}
           </div>

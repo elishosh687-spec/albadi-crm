@@ -596,19 +596,19 @@ export function QuotesHistoryView({ apiToken }: { apiToken: string }) {
               <Download className="size-3.5" />
             </a>
           )}
-          {r.status === "finalized" && !r.closedDealAt && (
+          {(r.status === "finalized" || (r.status === "draft" && r.finalPricing)) && !r.closedDealAt && (
             <button
               type="button"
               onClick={() => handleCloseDeal(r, true)}
               disabled={busyId === r.id}
-              title="סגור עסקה — העבר ללשונית עסקאות"
+              title={r.status === "draft" ? "סגור עסקה מהאומדן — הלקוח קיבל את המחיר" : "סגור עסקה — העבר ללשונית עסקאות"}
               className="shrink-0 inline-flex items-center gap-1 text-[10px] rounded-full border border-amber-500/40 bg-amber-500/10 text-amber-400 px-2 py-0.5 hover:bg-amber-500/20 disabled:opacity-50"
             >
               {busyId === r.id ? <Loader2 className="size-3 animate-spin" /> : <CheckCircle2 className="size-3" />}
-              סגור עסקה
+              {r.status === "draft" ? "סגור עסקה (אומדן)" : "סגור עסקה"}
             </button>
           )}
-          {r.status === "finalized" && r.closedDealAt && (
+          {(r.status === "finalized" || r.status === "draft") && r.closedDealAt && (
             <span
               title="עסקה סגורה — בלשונית עסקאות"
               className="shrink-0 inline-flex items-center gap-0.5 text-[10px] rounded-full border border-emerald-500/30 bg-emerald-500/10 text-emerald-400 px-1.5 py-0.5"
@@ -616,7 +616,7 @@ export function QuotesHistoryView({ apiToken }: { apiToken: string }) {
               <Check className="size-3" /> בעסקאות
             </span>
           )}
-          {r.status === "finalized" && (
+          {(r.status === "finalized" || (r.status === "draft" && r.closedDealAt)) && (
             <a
               href={`/widget/closed-quotes?widget_token=${encodeURIComponent(apiToken)}&focus=${encodeURIComponent(r.id)}`}
               title="פתח תיק עסקה (ציר שלבים + רווח בפועל)"

@@ -40,6 +40,9 @@ export interface ClosedQuoteRow {
   /** The product lines in this deal (1 for single, N for combined). */
   products: DealProduct[];
   isCombined: boolean;
+  /** True when the deal was closed on a DRAFT (self-estimate), not a factory
+   *  quote — the planned price is the estimate, not factory-confirmed. */
+  fromEstimate: boolean;
 }
 
 function r2(n: number): number {
@@ -123,6 +126,7 @@ export async function listClosedQuotes(): Promise<ClosedQuoteRow[]> {
       updatedAt: factoryQuoteRequests.updatedAt,
       closedDealAt: factoryQuoteRequests.closedDealAt,
       dealGroupId: factoryQuoteRequests.dealGroupId,
+      factoryStatus: factoryQuoteRequests.factoryStatus,
       customerName: leads.name,
       customerPhone: leads.phoneE164,
     })
@@ -130,11 +134,17 @@ export async function listClosedQuotes(): Promise<ClosedQuoteRow[]> {
     .innerJoin(leads, eq(leads.manychatSubId, factoryQuoteRequests.manychatSubId))
     .where(
       and(
-        eq(factoryQuoteRequests.factoryStatus, "finalized"),
         isNull(factoryQuoteRequests.deletedAt),
+        isNotNull(factoryQuoteRequests.finalPricing),
         or(
-          eq(leads.pipelineStage, "WON"),
-          isNotNull(factoryQuoteRequests.closedDealAt)
+          // Explicitly pulled in via "סגור עסקה" — a finalized quote OR a
+          // priced draft the customer accepted on the estimate directly.
+          isNotNull(factoryQuoteRequests.closedDealAt),
+          // Legacy auto: finalized + lead WON.
+          and(
+            eq(factoryQuoteRequests.factoryStatus, "finalized"),
+            eq(leads.pipelineStage, "WON")
+          )
         )
       )
     )
@@ -188,6 +198,7 @@ export async function listClosedQuotes(): Promise<ClosedQuoteRow[]> {
       explicitlyClosed: members.some((m) => m.closedDealAt != null),
       products,
       isCombined,
+      fromEstimate: members.every((m) => m.factoryStatus !== "finalized"),
     });
   }
   deals.sort((a, b) => (a.updatedAt > b.updatedAt ? -1 : 1));
