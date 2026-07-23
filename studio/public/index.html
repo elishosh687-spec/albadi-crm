@@ -21,6 +21,13 @@
   input,button{font-family:inherit}
   input[type=text]{background:var(--inset);border:1px solid var(--line);border-radius:8px;color:var(--ink);padding:7px 11px;font-size:13px;outline:none}
   .chip{font-size:12px;color:var(--champagne);border:1px solid rgba(214,196,172,0.35);background:rgba(214,196,172,0.1);padding:4px 11px;border-radius:99px}
+  .dropdown{position:absolute;top:38px;inset-inline-start:0;width:300px;max-height:300px;overflow-y:auto;background:#1b1917;border:1px solid var(--line);border-radius:9px;z-index:50;box-shadow:0 12px 34px rgba(0,0,0,.55)}
+  .dropdown .it{padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--line)}
+  .dropdown .it:last-child{border-bottom:none}
+  .dropdown .it:hover{background:var(--inset)}
+  .dropdown .nm{font-size:13px;color:var(--ink)}
+  .dropdown .ph{font-size:11px;color:var(--muted)}
+  .dropdown .empty{padding:10px 12px;font-size:12px;color:var(--muted)}
   .btn{background:transparent;border:1px solid var(--line);border-radius:8px;color:var(--ink);padding:7px 13px;font-size:13px;cursor:pointer}
   .btn:hover{background:var(--inset)}
   .btn.pri{background:var(--navy);color:#e8eefc;border:none}
@@ -56,7 +63,11 @@
   <div class="bar">
     <h1><span class="o">STUDIO</span> סטודיו אלבדי — הדמיה + פריסה</h1>
     <div class="load">
-      <input type="text" id="dealId" placeholder="מזהה עסקה (fq_…) — או השאר ריק לליד חופשי" style="width:290px">
+      <div style="position:relative">
+        <input type="text" id="custSearch" placeholder="🔍 חפש לקוח (שם / טלפון)…" style="width:230px" autocomplete="off">
+        <div id="custResults" class="dropdown" style="display:none"></div>
+      </div>
+      <input type="text" id="dealId" placeholder="או מזהה עסקה (fq_…)" style="width:190px">
       <button class="btn" id="loadBtn">טען</button>
       <span class="chip" id="custChip" style="display:none"></span>
     </div>

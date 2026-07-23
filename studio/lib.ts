@@ -42,6 +42,20 @@ export interface Brief {
   hasDeal: boolean;
 }
 
+export interface LeadRow {
+  sid: string | null;
+  name: string | null;
+  phone: string | null;
+  stage: string | null;
+}
+
+/** Typeahead search over leads (name/phone/sid) via the CRM. */
+export async function searchLeads(q: string, tok: string): Promise<LeadRow[]> {
+  const res = await fetch(u(`/api/widget/leads/recent?q=${encodeURIComponent(q)}&limit=20`, tok), { cache: "no-store" });
+  const j = (await res.json()) as { ok?: boolean; leads?: LeadRow[] };
+  return j.leads ?? [];
+}
+
 /** Map a dealId → its lead sid via the quotes list (no CRM change needed). */
 export async function resolveLeadSid(dealId: string, tok: string): Promise<string | null> {
   try {

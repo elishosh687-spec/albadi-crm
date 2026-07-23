@@ -14,7 +14,7 @@ import { fileURLToPath } from "node:url";
 import { dirname } from "node:path";
 import { runAgent } from "./agent.ts";
 import {
-  ROOT, TOKEN, CRM_BASE, pullDeal, pushFile, sendWhatsApp, listOutputs, ensureDir, briefText,
+  ROOT, TOKEN, CRM_BASE, pullDeal, pushFile, sendWhatsApp, listOutputs, ensureDir, briefText, searchLeads,
 } from "./lib.ts";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -67,6 +67,13 @@ const server = createServer(async (req, res) => {
       const js = await readFile(join(HERE, "public", "app.js"));
       res.writeHead(200, { "content-type": CT[".js"] });
       return res.end(js);
+    }
+
+    // ---- search customers (leads) ----
+    if (req.method === "GET" && p === "/api/leads") {
+      const q = url.searchParams.get("q") || "";
+      const leads = await searchLeads(q, tokenFrom(req, url));
+      return json(res, 200, { ok: true, leads });
     }
 
     // ---- load a deal's brief ----

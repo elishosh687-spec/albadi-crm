@@ -196,6 +196,43 @@ wireDrop("mLogoDrop", "mLogoFile", "mlogo");
 wireDrop("logoDrop", "logoFile", "logo");
 wireDrop("dielineDrop", "dielineFile", "dieline");
 
+// ---- customer search (typeahead over CRM leads) ----
+let searchTimer = null;
+async function runLeadSearch(q) {
+  const box = $("custResults");
+  try {
+    const r = await fetch("/api/leads?q=" + encodeURIComponent(q), { headers: hdr() });
+    const leads = (await r.json()).leads || [];
+    if (!leads.length) { box.innerHTML = '<div class="empty">לא נמצאו לקוחות</div>'; box.style.display = ""; return; }
+    box.innerHTML = leads.map((l, i) =>
+      `<div class="it" data-i="${i}"><div class="nm">${l.name || "ללא שם"}</div><div class="ph">${l.phone || l.sid || ""}${l.stage ? " · " + l.stage : ""}</div></div>`).join("");
+    box.querySelectorAll(".it").forEach((el) => el.onclick = () => pickLead(leads[+el.getAttribute("data-i")]));
+    box.style.display = "";
+  } catch (e) { box.innerHTML = `<div class="empty">${e}</div>`; box.style.display = ""; }
+}
+function pickLead(l) {
+  if (!l.sid) { alert("ללקוח אין מזהה תקין לשליחה"); return; }
+  state.leadSid = l.sid;
+  state.customerName = l.name;
+  state.dealId = null;
+  state.sessionKey = "lead-" + l.sid.replace(/[^a-zA-Z0-9_.\-]/g, "_").slice(0, 60);
+  state.claudeSessionId = null;
+  $("custResults").style.display = "none";
+  $("custSearch").value = l.name || l.phone || "";
+  const chip = $("custChip"); chip.style.display = ""; chip.textContent = "לקוח · " + (l.name || l.sid);
+  addMsg("ai", `נבחר לקוח: ${l.name || l.sid}. אפשר לעשות הדמיה ולשלוח לו ב-WhatsApp.`);
+  refreshOutputs();
+}
+$("custSearch").addEventListener("input", () => {
+  clearTimeout(searchTimer);
+  const q = $("custSearch").value.trim();
+  if (!q) { $("custResults").style.display = "none"; return; }
+  searchTimer = setTimeout(() => runLeadSearch(q), 250);
+});
+document.addEventListener("click", (e) => {
+  if (!$("custResults").contains(e.target) && e.target !== $("custSearch")) $("custResults").style.display = "none";
+});
+
 // Opened from the hub with a lead in context → ready to send to that customer.
 if (urlSid) {
   const chip = $("custChip");
