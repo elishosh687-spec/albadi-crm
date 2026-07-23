@@ -10,8 +10,6 @@ import { db } from "@/lib/db";
 import { factoryQuoteRequests, leads } from "@/drizzle/schema";
 import { and, asc, desc, eq, inArray, isNotNull, isNull, or } from "drizzle-orm";
 import type { DealMilestones, FactoryPricingResult, QuoteActualCosts } from "@/lib/factory/types";
-import { allocateCombined } from "@/lib/factory/combined";
-import { getFactoryConfig } from "@/lib/factory/config";
 
 /** One product line inside a deal (a deal has 1, or N when combined). */
 export interface DealProduct {
@@ -49,38 +47,28 @@ function r2(n: number): number {
   return Math.round(n * 100) / 100;
 }
 
-/** Combine N members into one FactoryPricingResult summary via allocateCombined
- *  (same engine as the combined PDF — grand total incl. molds + reallocated
- *  single-shipment shipping). */
-function combineMembers(
-  members: FactoryPricingResult[],
-  config: Awaited<ReturnType<typeof getFactoryConfig>>
-): FactoryPricingResult {
-  const singleOpt =
-    config.shippingOptions.find((s) => s.id === members[0]?.shippingOptionId) ?? null;
-  const alloc = allocateCombined(
-    members.map((p, i) => ({ id: String(i), pricing: p })),
-    singleOpt,
-    config
-  );
+/** Combine N ALREADY-CLOSED members into one deal summary by SUMMING them.
+ *
+ *  Each member was finalized and closed with the customer at its own agreed
+ *  price, so the deal's revenue is the SUM of those agreed prices — NOT a
+ *  re-discounted combined quote. We deliberately do NOT re-run allocateCombined
+ *  here: that engine is for pre-sale QUOTING (offer a single-shipment discount
+ *  to win the deal). Post-close, the price is locked.
+ *
+ *  The single-shipment shipping saving is real, but it's Eli's realized PROFIT
+ *  (he charged for N shipments, ships once) — it surfaces on the ACTUAL side
+ *  when he pulls the real shipping cost from Zoho (shippingDelta < 0 → profit
+ *  rises), never as a retroactive discount to the customer.
+ *
+ *  Summing also keeps profit correct: each member's totalProfit is margin-only
+ *  (shipping is pass-through, excluded), so the sum is the true combined profit
+ *  — unlike the old `grandTotal − cost` which folded shipping into profit. */
+function combineMembers(members: FactoryPricingResult[]): FactoryPricingResult {
   const quantity = members.reduce((s, m) => s + (m.quantity || 0), 0);
-  const sumMemberShipping = r2(members.reduce((s, m) => s + (m.totalShipping || 0), 0));
-  let totalShipping = r2(alloc.perProduct.reduce((s, x) => s + (x.adjusted.totalShipping || 0), 0));
-  let totalSellingPrice = r2(alloc.grandTotal);
-  // Safety net: if the shipping option didn't resolve (unknown shippingOptionId)
-  // the combined shipping collapses to 0. Fall back to summing each member's own
-  // shipping so the total is never understated.
-  if (totalShipping < 1 && sumMemberShipping > 1) {
-    const bagsAndMolds = r2(
-      members.reduce((s, m) => s + (m.totalSellingPrice || 0) - (m.totalShipping || 0), 0)
-    );
-    totalShipping = sumMemberShipping;
-    totalSellingPrice = r2(bagsAndMolds + totalShipping);
-  }
-  const totalCost = r2(
-    members.reduce((s, m) => s + (m.totalCost || 0) + (m.moldsTotalCostIls || 0), 0)
-  );
-  const totalProfit = r2(totalSellingPrice - totalCost);
+  const totalCost = r2(members.reduce((s, m) => s + (m.totalCost || 0), 0));
+  const totalShipping = r2(members.reduce((s, m) => s + (m.totalShipping || 0), 0));
+  const totalProfit = r2(members.reduce((s, m) => s + (m.totalProfit || 0), 0));
+  const totalSellingPrice = r2(members.reduce((s, m) => s + (m.totalSellingPrice || 0), 0));
   return {
     ...members[0],
     quantity,
@@ -95,8 +83,6 @@ function combineMembers(
     totalCartons: members.reduce((s, m) => s + (m.totalCartons || 0), 0),
     totalWeightKg: r2(members.reduce((s, m) => s + (m.totalWeightKg || 0), 0)),
     totalCbm: r2(members.reduce((s, m) => s + (m.totalCbm || 0), 0)),
-    // molds already folded into the grand total; zero the standalone fields so
-    // the card doesn't double-count them.
     moldsTotalCny: members.reduce((s, m) => s + (m.moldsTotalCny || 0), 0),
     moldsTotalCostIls: r2(members.reduce((s, m) => s + (m.moldsTotalCostIls || 0), 0)),
     moldsTotalSellingPriceIls: r2(members.reduce((s, m) => s + (m.moldsTotalSellingPriceIls || 0), 0)),
@@ -109,7 +95,9 @@ function combineMembers(
  *  - it was explicitly pulled in via "סגור עסקה" (closed_deal_at set), OR
  *  - its lead is marked WON (legacy/auto path).
  * Quotes sharing a deal_group_id collapse into ONE combined deal (multi-product,
- * one invoice), priced via the same allocateCombined engine as the combined PDF.
+ * one invoice), priced by SUMMING the already-agreed member prices (see
+ * combineMembers) — the deal is closed, so the customer pays the sum, not a
+ * re-discounted combined quote.
  */
 export async function listClosedQuotes(): Promise<ClosedQuoteRow[]> {
   const rows = await db
@@ -160,9 +148,6 @@ export async function listClosedQuotes(): Promise<ClosedQuoteRow[]> {
     else byDeal.set(key, [r]);
   }
 
-  const anyCombined = [...byDeal.values()].some((m) => m.length > 1);
-  const config = anyCombined ? await getFactoryConfig() : null;
-
   const deals: ClosedQuoteRow[] = [];
   for (const members of byDeal.values()) {
     // primary = oldest member (stable; where actuals/milestones live)
@@ -176,9 +161,9 @@ export async function listClosedQuotes(): Promise<ClosedQuoteRow[]> {
     }));
     const isCombined = members.length > 1;
     let finalPricing = (primary.finalPricing ?? null) as FactoryPricingResult | null;
-    if (isCombined && config) {
+    if (isCombined) {
       const priced = products.map((p) => p.finalPricing).filter((p): p is FactoryPricingResult => !!p);
-      if (priced.length > 1) finalPricing = combineMembers(priced, config);
+      if (priced.length > 1) finalPricing = combineMembers(priced);
     }
     // newest updatedAt across members drives the deal's sort/recency
     const newest = members.reduce((a, b) => (+a.updatedAt > +b.updatedAt ? a : b));
