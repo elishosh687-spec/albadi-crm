@@ -27,10 +27,16 @@ const BANK_DETAILS =
   "פרטים להעברה בנקאית:\nלפקודת: אלבדי-אלעזר שושתרי\nבנק: Pepper / בנק לאומי (מס׳ בנק 10)\nסניף: 998\nחשבון: 16499401";
 const COGS_ACCOUNT_ID = "433486000000034003";
 const COMMISSION_ACCOUNT_ID = "433486000000163002";
-export const PARTNER_ACCOUNTS: Record<string, string> = {
+// Who the money was paid THROUGH — the two partners' accounts OR the business
+// bank account (Pepper). Sometimes an expense is paid straight from the
+// business, not by a partner (Eli, 2026-07-23).
+export const PAYER_ACCOUNTS: Record<string, string> = {
   "אלי": "433486000000095003",
   "שמעון": "433486000000095007",
+  "העסק (Pepper)": "433486000000173002",
 };
+// Back-compat alias (older imports referenced PARTNER_ACCOUNTS).
+export const PARTNER_ACCOUNTS = PAYER_ACCOUNTS;
 const REPORTING_TAG_ID = "433486000000000333";
 
 const money = (n: number) =>
@@ -246,8 +252,8 @@ export async function createZohoExpense(input: CreateExpenseInput): Promise<Crea
     input.category === "commission" ? COMMISSION_ACCOUNT_ID :
     input.accountId;
   if (!accountId) throw new Error("missing accountId for custom expense");
-  const paidThrough = PARTNER_ACCOUNTS[input.partner];
-  if (!paidThrough) throw new Error(`שותף לא מוכר: ${input.partner}`);
+  const paidThrough = PAYER_ACCOUNTS[input.partner];
+  if (!paidThrough) throw new Error(`משלם לא מוכר: ${input.partner}`);
 
   const payload: Record<string, unknown> = {
     account_id: accountId,

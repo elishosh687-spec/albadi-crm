@@ -1389,8 +1389,8 @@ function ZohoExpenseModal({
             )}
 
             <div style={{ fontSize: 11.5, color: "var(--lux-muted)", marginBottom: 5 }}>מי שילם</div>
-            <div style={{ display: "flex", gap: 6, marginBottom: 12 }}>
-              {["אלי", "שמעון"].map((p) => (
+            <div style={{ display: "flex", gap: 6, marginBottom: 12, flexWrap: "wrap" }}>
+              {["אלי", "שמעון", "העסק (Pepper)"].map((p) => (
                 <button key={p} type="button" style={radio(partner === p)} onClick={() => setPartner(p)}>{p}</button>
               ))}
             </div>
