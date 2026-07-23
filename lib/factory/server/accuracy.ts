@@ -126,7 +126,9 @@ export async function computeAccuracyStats(): Promise<AccuracyStats> {
     if (!est) continue;
     const fp = factory.finalPricing as Record<string, unknown>;
     const at = +factory.createdAt;
-    const u = gapPct(num(est.unitSellingPrice), num(fp.unitSellingPrice));
+    // Compare the raw FACTORY COST (unitCost), not the customer selling price —
+    // that's the number Eli estimates and wants to validate against reality.
+    const u = gapPct(num(est.unitCost), num(fp.unitCost));
     const c = gapPct(num(est.totalCbm), num(fp.totalCbm));
     const s = gapPct(num(est.totalShipping), num(fp.totalShipping));
     if (u !== null) unitPairs.push({ gap: u, at });

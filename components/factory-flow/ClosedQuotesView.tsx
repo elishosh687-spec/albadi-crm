@@ -916,7 +916,7 @@ function AccuracyStrip({ stats }: { stats: AccuracyStats }) {
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 10 }}>
         <AccuracyCard
-          title="טיוטה ↔ מפעל · מחיר ליחידה"
+          title="טיוטה ↔ מפעל · עלות מפעל ליחידה"
           stat={stats.draftVsFactory.unitPrice}
           signedHint={(s) => (s > 0 ? "המפעל בד״כ יקר מהאומדן" : "המפעל בד״כ זול מהאומדן")}
         />

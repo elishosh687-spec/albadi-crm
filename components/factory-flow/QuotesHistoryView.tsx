@@ -1302,10 +1302,17 @@ function DraftVsFactoryStrip({ rows }: { rows: ApiQuoteRow[] }) {
   const fmtCbm = (v: number | null) => (v === null ? "—" : `${v.toFixed(2)} CBM`);
   const fmtUnit = (v: number | null) => (v === null ? "—" : `₪${v.toLocaleString("he-IL", { maximumFractionDigits: 2 })}`);
 
+  const fmtUnit3 = (v: number | null) => (v === null ? "—" : `₪${v.toLocaleString("he-IL", { maximumFractionDigits: 3 })}`);
+  // What Eli actually wants to validate: how close was MY estimate of the
+  // factory's cost/volume to what the factory ACTUALLY charged. So compare the
+  // raw factory COST (not the customer selling price, which bundles shipping +
+  // margin). Selling price kept as a secondary row.
   const rowsCmp: { label: string; draftV: number | null; factV: number | null; fmt: (v: number | null) => string }[] = [
-    { label: "מחיר ליחידה", draftV: num(dp.unitSellingPrice), factV: num(fp.unitSellingPrice), fmt: fmtUnit },
+    { label: "עלות מפעל ליחידה", draftV: num(dp.unitCost), factV: num(fp.unitCost), fmt: fmtUnit3 },
+    { label: "עלות מפעל סה״כ", draftV: num(dp.totalCost), factV: num(fp.totalCost), fmt: fmtUnit },
     { label: "נפח משלוח (CBM)", draftV: num(dp.totalCbm), factV: num(fp.totalCbm), fmt: fmtCbm },
     { label: "עלות שילוח", draftV: num(dp.totalShipping), factV: num(fp.totalShipping), fmt: fmtUnit },
+    { label: "מחיר ללקוח ליחידה", draftV: num(dp.unitSellingPrice), factV: num(fp.unitSellingPrice), fmt: fmtUnit },
   ];
 
   return (
