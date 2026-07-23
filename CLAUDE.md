@@ -711,3 +711,148 @@ carries `qState.callbackFlow`). Respects quiet hours + no-send days.
   `CALLBACK_REQUESTS_ENABLED=1` in Vercel prod; (2) add a ~30-min trigger (GitHub
   Action, like process-recordings) POSTing the detector; (3) test on ONE
   disposable lead first (reply with a time → task appears).
+
+## Deal lifecycle — עסקאות tab + Zoho Books + "סגור עסקה" (built 2026-07-23)
+
+Full post-sale flow: turn a finalized/draft quote into a tracked **deal**, know
+the **real profit per customer** (planned vs actual, pulled from Zoho), and run
+mockup/invoice/layout without leaving the widget. The old **"הצעות שנסגרו"** hub
+tab is now **"עסקאות"** ([components/factory-flow/ClosedQuotesView.tsx](components/factory-flow/ClosedQuotesView.tsx),
+[app/widget/hub/page.tsx](app/widget/hub/page.tsx) tab id `closed`).
+
+### How a deal ENTERS the עסקאות tab
+
+Source of truth: `listClosedQuotes` in
+[lib/factory/server/closed.ts](lib/factory/server/closed.ts). A finalized/priced
+quote shows when EITHER:
+- **explicitly closed** — `closed_deal_at` set via the **"סגור עסקה"** button, OR
+- **legacy auto** — `factory_status='finalized'` AND lead `pipeline_stage='WON'`.
+
+Problem it fixed: only ~4 of 54 finalized quotes were WON, so ~50 real closed
+deals were invisible. Three close paths, all decoupled from WON:
+- **Single finalized** → "סגור עסקה" (row button, `POST /api/widget/factory/close-deal/[id]` → `setDealClosed`).
+- **Combined (multi-product, one invoice)** → "סגור עסקה משולבת" (customer-group
+  button when ≥2 finalized; `POST /api/widget/factory/close-deal-group` →
+  `closeDealGroup` sets a shared `deal_group_id = dg_<primaryId>`).
+- **Draft (customer accepted the estimate directly)** → "סגור עסקה (אומדן)" (draft
+  row button); the deal card shows a **"לפי אומדן"** badge (`fromEstimate`), price
+  = the estimate, not factory-confirmed.
+
+Columns (direct DDL — drizzle-kit push hangs): `closed_deal_at`, `deal_group_id`,
+`deal_milestones`, `actual_costs`, `draft_estimate` on `factory_quote_requests`.
+
+### Combined deal (deal_group_id)
+
+Quotes sharing a `deal_group_id` collapse into ONE deal card (`products[]`,
+"עסקה משולבת · N מוצרים" badge). Combined pricing uses the SAME
+`allocateCombined` engine as the combined PDF ([lib/factory/combined.ts](lib/factory/combined.ts))
+— grand total incl. molds + one-shipment shipping (the consolidation SAVING). If
+a member's `shippingOptionId` doesn't resolve, `combineMembers` falls back to
+summing member shipping (never understated). Deal-level actuals/milestones/invoice
+live on the PRIMARY (oldest) member; `deal id = primary id`. `dealMemberIds`
+returns all members for the multi-line invoice. `unbindDealGroup` splits.
+
+### Deal file — post-WON timeline + files + GHL mirror
+
+`DealMilestones` ([lib/factory/types.ts](lib/factory/types.ts)) — stages הדמיה →
+חשבונית → פריסה → ייצור → משלוח → הגיע, each a stamp + optional files.
+[lib/factory/server/milestones.ts](lib/factory/server/milestones.ts):
+`saveDealMilestones` (merge), `appendDealFile`, `mirrorDealEventToGhl` (posts a
+`[תיק עסקה]` note to the lead's GHL contact — non-fatal, no-op without
+ghl_contact_id). Endpoints: `PUT /api/widget/factory/milestones/[id]`,
+`POST /api/widget/factory/deal-upload/[id]?stage=mockup|invoice|layout` (Vercel
+Blob under `deal-files/<id>/`, image/PDF/video ≤25MB). Stage-chip row + collapsible
+ציר on each card. Quotes-tab finalized rows get a folder icon →
+`/widget/closed-quotes?focus=<id>`.
+
+### Profit reconciliation + accuracy
+
+`QuoteActualCosts` ([types.ts](lib/factory/types.ts)) — real
+`factoryTotalIls` / `shippingTotalIls` / `actualRevenueIls` / `otherCosts[]` /
+`zohoRefs[]`. Card shows planned (finalPricing) vs actual, hero = real profit,
+plus a **per-CBM** line (charged/CBM vs paid/CBM, basis = factory CBM). Save via
+`PUT /api/widget/factory/actuals/[id]`.
+
+**Draft-vs-factory comparison** (DraftVsFactoryStrip in QuotesHistoryView) +
+**aggregate accuracy strip** (top of עסקאות, [lib/factory/server/accuracy.ts](lib/factory/server/accuracy.ts))
+compare the **factory COST** (`unitCost`), NOT the selling price — that's what
+Eli estimates and wants to validate. Rows: עלות מפעל ליחידה / סה״כ, CBM, שילוח,
+and מחיר ללקוח as a reference. All deterministic (no LLM). **Units are "CBM"
+everywhere, never m³** (Eli's working unit).
+
+### Mockup / dieline — local bridge (generation stays local)
+
+Generation stays on Eli's Mac (the `bag-mockup-video` + `dieline-print` Claude
+Code skills — his ChatGPT/Gemini subs, reference photos, interactive tweaks;
+server-side image gen deliberately NOT attempted). The CRM is the system of
+record; [scripts/deal-file.ts](scripts/deal-file.ts) is the two-way bridge:
+`pull <dealId>` prints a filled skill brief (dims/colors/handles/lam, downloads
+the product photo) + `push <dealId> <mockup|invoice|layout> <file>` uploads the
+result to the deal timeline. Config `CRM_BASE` (default prod) + `WIDGET_TOKEN`
+(= `GHL_WIDGET_TOKEN`). Read endpoint `GET /api/widget/factory/deal/[id]`.
+
+### Test deal
+
+Lead `test:eli-demo` ("אלי — בדיקת מערכת", WON, phoneless) + draft TESTD1 +
+finalized TESTF1 — KEPT on purpose (Eli). Reseed/clean:
+`npx tsx scripts/_seed-eli-test-demo.ts --go | --cleanup`. It IS the accuracy-
+strip data until removed (slightly pollutes aggregates).
+
+See "Zoho Books integration" below for the money side.
+
+## Zoho Books integration — read + write (built 2026-07-23)
+
+Creds reused from Eli's local project `/Users/eli/Projects/zoho/`
+(`secrets.json` + `config.json`, org **929765814**, DC **com**) and copied to
+Vercel prod env (`ZOHO_CLIENT_ID/SECRET/REFRESH_TOKEN/ORG_ID/DC`). His local
+**zoho-invoice skill** (`~/.claude/skills/zoho-invoice/SKILL.md`) is the spec the
+CRM ports. `zohoConfigured()` false → every path soft-fails to a "not connected"
+state. Access token cached in `app_config` key `zoho.token`.
+
+**How his books are ACTUALLY structured (probed live — don't assume standard):**
+- **Factory payments = EXPENSES on "Cost of Goods Sold"**, not vendor bills (bills
+  empty). CNY/USD, often split 30%/70%, `customer_id`-linked.
+- **Commissions = EXPENSES on "עמלות מכירה"**, customer-linked.
+- **Invoices are INC-VAT (18%)** while CRM quote totals are EX-VAT → compare/fill
+  with `total/1.18`.
+- `bcy_total` = ₪ at the booked rate — prefer over live-FX for foreign docs.
+- **Plan blocks foreign-currency EXPENSES via API** (`code 3048`). Factory is
+  always ¥ → `createZohoExpense` CONVERTS to ₪ at the live rate and keeps the
+  original ¥ in the description.
+
+**Read side** ([lib/zoho/client.ts](lib/zoho/client.ts) + [match.ts](lib/zoho/match.ts)):
+list invoices/bills/expenses, deterministic doc→deal scoring (name/amount/date),
+FX-converted ₪. Endpoints `GET /api/widget/zoho/match?dealId=` (ranked
+suggestions) + `/api/widget/zoho/unmatched` (docs not yet linked). UI: **"משוך
+מ-Zoho"** modal fills actualCosts + `zohoRefs`; revenue filled EX-VAT.
+
+**Write side** ([lib/zoho/write.ts](lib/zoho/write.ts)):
+- `createZohoInvoice` — ensureCustomer (auto-creates), consecutive number
+  (`ignore_auto_number_generation`), 18% VAT on EX-VAT lines
+  (`default_tax_id 433486000000133001`), `targetTotal/qty` exact-rate trick, bank
+  details in Notes, mark Sent unless `draft`, pull PDF. Accepts `lineItems[]` →
+  combined deals get ONE invoice with a line per product.
+- `createZohoExpense` — cogs→`433486000000034003` / commission→`433486000000163002`
+  / custom account; paid through a **payer** — אלי / שמעון / **העסק (Pepper)**
+  (`PAYER_ACCOUNTS`, Pepper bank `433486000000173002`); no VAT (imports);
+  customer-linked (`findCustomerId` fuzzy); foreign→₪ conversion. `applyTo` rolls
+  the ₪ into the deal's actualCosts bucket (rounded — kill float drift).
+- UI: **"צור חשבונית ב-Zoho"** (deal-file invoice stage) + **"רשום הוצאה ב-Zoho"**
+  (card button). Endpoints `/api/widget/zoho/create-invoice` + `/create-expense`
+  (GET on the expense path lists accounts).
+
+**Per-CUSTOMER consolidation — the reporting tag is REMOVED (Eli's call).** He
+wants everything grouped under ONE customer, not split per order (a customer's 2
+orders should SUM, not show as 2 columns). The `customer_id` link does that; the
+CRM no longer applies the "הזמנה" reporting tag (Zoho's create-option API is
+disabled anyway). He sees per-customer spend via **Reports → Expense Details →
+group by Customer**. His goal "כמה הוצאתי על כל לקוח" needs NO tag.
+
+**Modals are opaque** — `--lux-card` is `rgba(...,0.03)` (near-transparent); all
+Zoho modal boxes use a solid `#1b1917` panel + backdrop blur (a translucent modal
+looked see-through over the deal card).
+
+**Live-write safety:** creating a real invoice/expense writes to the live books
+(consecutive numbers). Verified read + UI freely; live writes were create-then-
+delete on the test deal, or gated behind Eli's explicit OK. Cleanup uses the Zoho
+DELETE endpoints (`deleteZohoInvoice` / `deleteZohoExpense`, + `/contacts/{id}`).
