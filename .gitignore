@@ -21,3 +21,5 @@ backups/
 .env*.local
 test-output.pdf
 _stitch/
+studio/node_modules
+studio/package-lock.json

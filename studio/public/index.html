@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>סטודיו אלבדי — הדמיה + פריסה</title>
+<style>
+  :root{
+    --bg:#1d1b1a; --card:#141312; --inset:#22201e; --line:rgba(230,225,224,0.08);
+    --ink:#e6e1e0; --muted:#8a7f74; --champagne:#d6c4ac; --cool:#bec6e0;
+    --navy:#2b3a55; --wa:#25d366;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:'Heebo',system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--ink);
+    background-image:radial-gradient(620px 420px at 88% -12%,rgba(190,198,224,0.06),transparent 62%),
+      radial-gradient(560px 420px at 4% 116%,rgba(214,196,172,0.05),transparent 64%);min-height:100vh}
+  .bar{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 18px;background:var(--card);border-bottom:1px solid var(--line);flex-wrap:wrap}
+  .bar h1{font-size:15px;font-weight:400;margin:0;display:flex;align-items:center;gap:9px}
+  .bar h1 .o{letter-spacing:0.2em;font-size:10px;color:var(--muted)}
+  .load{display:flex;gap:6px;align-items:center}
+  input,button{font-family:inherit}
+  input[type=text]{background:var(--inset);border:1px solid var(--line);border-radius:8px;color:var(--ink);padding:7px 11px;font-size:13px;outline:none}
+  .chip{font-size:12px;color:var(--champagne);border:1px solid rgba(214,196,172,0.35);background:rgba(214,196,172,0.1);padding:4px 11px;border-radius:99px}
+  .btn{background:transparent;border:1px solid var(--line);border-radius:8px;color:var(--ink);padding:7px 13px;font-size:13px;cursor:pointer}
+  .btn:hover{background:var(--inset)}
+  .btn.pri{background:var(--navy);color:#e8eefc;border:none}
+  .btn.wa{background:rgba(37,211,102,0.12);border:1px solid rgba(37,211,102,0.4);color:#5fd18b}
+  .btn:disabled{opacity:.5;cursor:default}
+  .wrap{display:grid;grid-template-columns:1.5fr 1fr;gap:0;min-height:calc(100vh - 52px)}
+  .chat{display:flex;flex-direction:column;border-inline-start:1px solid var(--line)}
+  .msgs{flex:1;overflow-y:auto;padding:16px 18px;display:flex;flex-direction:column;gap:12px}
+  .m{max-width:86%;border-radius:12px;padding:9px 13px;font-size:13.5px;line-height:1.6;white-space:pre-wrap;word-break:break-word}
+  .m.me{align-self:flex-end;background:rgba(190,198,224,0.12);border:1px solid rgba(190,198,224,0.25);color:#e9edf7}
+  .m.ai{align-self:flex-start;background:var(--inset);border:1px solid var(--line)}
+  .m.tool{align-self:flex-start;background:transparent;color:var(--muted);font-size:12px;padding:2px 4px;border:none}
+  .m.err{align-self:flex-start;background:rgba(232,180,180,0.1);border:1px solid rgba(232,180,180,0.3);color:#e8b4b4}
+  .composer{display:flex;gap:9px;padding:12px 16px;border-top:1px solid var(--line);background:var(--card)}
+  .composer input{flex:1}
+  .side{padding:16px;display:flex;flex-direction:column;gap:16px;overflow-y:auto}
+  .lbl{letter-spacing:0.12em;font-size:11px;color:var(--muted)}
+  .res{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:11px;display:flex;flex-direction:column;gap:9px}
+  .res .top{display:flex;gap:9px;align-items:center}
+  .thumb{width:58px;height:58px;border-radius:8px;object-fit:cover;background:var(--inset);flex-shrink:0;display:flex;align-items:center;justify-content:center;color:var(--champagne);font-size:11px}
+  .res .nm{font-size:12.5px;word-break:break-all}
+  .res .row{display:flex;gap:7px}
+  .res .row .btn{flex:1;display:flex;align-items:center;justify-content:center;gap:5px;padding:6px;font-size:12px}
+  .drop{border:1px dashed rgba(230,225,224,0.18);border-radius:9px;padding:12px 6px;text-align:center;color:var(--muted);font-size:11.5px;cursor:pointer}
+  .drop.has{border-color:rgba(214,196,172,0.5);color:var(--champagne)}
+  .hint{font-size:11px;color:var(--muted);display:flex;gap:6px;align-items:flex-start}
+  .foot{padding:8px 18px;background:var(--card);border-top:1px solid var(--line);font-size:11px;color:var(--muted)}
+  a{color:var(--cool)}
+  @media(max-width:760px){.wrap{grid-template-columns:1fr}.chat{border:none;border-top:1px solid var(--line)}}
+</style>
+</head>
+<body>
+  <div class="bar">
+    <h1><span class="o">STUDIO</span> סטודיו אלבדי — הדמיה + פריסה</h1>
+    <div class="load">
+      <input type="text" id="dealId" placeholder="מזהה עסקה (fq_…) — או השאר ריק לליד חופשי" style="width:290px">
+      <button class="btn" id="loadBtn">טען</button>
+      <span class="chip" id="custChip" style="display:none"></span>
+    </div>
+  </div>
+
+  <div class="wrap">
+    <div class="side">
+      <div class="lbl">תוצאות</div>
+      <div id="results"></div>
+      <div id="noRes" class="hint">עדיין אין קבצים. בקש מ-Claude "תעשה הדמיה" והם יופיעו כאן.</div>
+
+      <div style="height:1px;background:var(--line)"></div>
+
+      <div class="lbl">פריסה — קובץ הפקה</div>
+      <div style="display:flex;gap:8px">
+        <label class="drop" id="logoDrop" style="flex:1">לוגו<input type="file" id="logoFile" accept="image/*,.pdf" hidden></label>
+        <label class="drop" id="dielineDrop" style="flex:1">פריסת מפעל<input type="file" id="dielineFile" accept="image/*,.pdf" hidden></label>
+      </div>
+      <button class="btn pri" id="dielineBtn">צור קובץ הפקה</button>
+      <div class="hint">מעלה את שני הקבצים ומבקש מ-Claude להריץ את סקיל הפריסה.</div>
+    </div>
+
+    <div class="chat">
+      <div class="msgs" id="msgs">
+        <div class="m ai">שלום 👋 טען עסקה למעלה, או פשוט תגיד לי מה לעשות — למשל: "תעשה הדמיה לתיק 40×30, רקע ירוק זית, עם הלוגו שאעלה".</div>
+      </div>
+      <div class="composer">
+        <input type="text" id="input" placeholder="כתוב ל-Claude… (תעשה הדמיה, שנה צבע, תגדיל לוגו, תעשה וידאו)">
+        <button class="btn pri" id="sendBtn">שלח</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="foot">רץ מקומית על ה-Mac · שומר קבצים ב-<code id="rootPath">~/albadi-studio</code> · מעלה לתיק העסקה + שולח ב-WhatsApp דרך ה-CRM</div>
+
+  <script src="/app.js"></script>
+</body>
+</html>
