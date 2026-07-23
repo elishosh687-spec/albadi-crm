@@ -7,7 +7,7 @@
 
 import { db } from "@/lib/db";
 import { factoryQuoteRequests, leads } from "@/drizzle/schema";
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, isNull, sql } from "drizzle-orm";
 
 export async function listFactoryQuotes(opts: {
   status?: string;
@@ -16,7 +16,8 @@ export async function listFactoryQuotes(opts: {
   const status = opts.status ?? "all";
   const lead = (opts.lead ?? "").trim();
 
-  const where = [];
+  // Soft-deleted rows live only in the recycle bin — never in these lists.
+  const where = [isNull(factoryQuoteRequests.deletedAt)];
   if (status !== "all") {
     where.push(eq(factoryQuoteRequests.factoryStatus, status));
   }

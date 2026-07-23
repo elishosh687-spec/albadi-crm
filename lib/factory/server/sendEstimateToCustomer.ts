@@ -8,7 +8,7 @@
  * Used by POST /api/factory/estimate/send-customer (+ widget variant).
  */
 import { db } from "@/lib/db";
-import { leads } from "@/drizzle/schema";
+import { leads, factoryQuoteRequests } from "@/drizzle/schema";
 import { eq } from "drizzle-orm";
 import { sendBridgeMessage } from "@/lib/bridge/client";
 import { phoneToJid } from "@/lib/bridge/jid";
@@ -59,6 +59,12 @@ export interface SendEstimateInput {
   shippingOptionId?: string | null;
   customerName?: string;
   hostHeader?: string | null;
+  /** When the estimate was opened from an existing draft, its
+   *  factory_quote_requests id — on a successful send we stamp that draft's
+   *  sentToCustomerAt + persist the freshly-priced snapshot (Eli 2026-07-23),
+   *  so sending via the estimator marks the draft "נשלח" just like the
+   *  finalized-quote send path does. */
+  draftId?: string;
 }
 export type SendEstimateResult =
   | { ok: true; wa_message_id: string; status: string; unitIls: number; totalIls: number; pdf: boolean }
@@ -146,6 +152,20 @@ export async function sendEstimateToCustomer(input: SendEstimateInput): Promise<
     totalIls: pricing.totalSellingPrice,
     kind: "estimate",
   });
+
+  // Opened from a draft → mark it sent + persist the freshly-priced snapshot, so
+  // sending via the estimator marks "נשלח" like the finalized-quote path (Eli
+  // 2026-07-23). Non-fatal — the customer already got the estimate.
+  if (input.draftId) {
+    try {
+      await db
+        .update(factoryQuoteRequests)
+        .set({ sentToCustomerAt: new Date(), finalPricing: pricing, updatedAt: new Date() })
+        .where(eq(factoryQuoteRequests.id, input.draftId));
+    } catch (err) {
+      console.warn("[estimate/send-customer] draft mark-sent update failed", err);
+    }
+  }
 
   return {
     ok: true,

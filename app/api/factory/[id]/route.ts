@@ -14,7 +14,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { factoryQuoteRequests } from "@/drizzle/schema";
-import { eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 
 export const runtime = "nodejs";
 
@@ -41,9 +41,23 @@ export async function DELETE(
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
   const { id } = await params;
+  // Default = soft-delete (move to recycle bin, restorable). `?hard=1` permanently
+  // removes the row — only used by the recycle-bin "delete forever" button.
+  const hard = req.nextUrl.searchParams.get("hard") === "1";
+  if (hard) {
+    const deleted = await db
+      .delete(factoryQuoteRequests)
+      .where(eq(factoryQuoteRequests.id, id))
+      .returning({ id: factoryQuoteRequests.id });
+    if (deleted.length === 0) {
+      return NextResponse.json({ error: "not_found" }, { status: 404 });
+    }
+    return NextResponse.json({ ok: true, hard: true });
+  }
   const deleted = await db
-    .delete(factoryQuoteRequests)
-    .where(eq(factoryQuoteRequests.id, id))
+    .update(factoryQuoteRequests)
+    .set({ deletedAt: new Date(), updatedAt: new Date() })
+    .where(and(eq(factoryQuoteRequests.id, id), isNull(factoryQuoteRequests.deletedAt)))
     .returning({ id: factoryQuoteRequests.id });
   if (deleted.length === 0) {
     return NextResponse.json({ error: "not_found" }, { status: 404 });

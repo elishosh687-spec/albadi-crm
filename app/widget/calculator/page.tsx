@@ -39,6 +39,9 @@ interface SearchParams {
   opColors?: string;
   opHandles?: string;
   opLam?: string;
+  // Recalculate an existing draft: its factory_quote_requests id. "שמור כטיוטה"
+  // updates it in place; "שלח אומדן ללקוח" marks it sent.
+  draftId?: string;
 }
 
 interface LeadSnapshot {
@@ -193,6 +196,7 @@ export default async function CalculatorWidgetPage({
         apiToken={token}
         sid={lead?.sid ?? sid ?? undefined}
         leadName={lead?.name ?? null}
+        draftId={params.draftId?.trim() || undefined}
         initialTab={params.tab === "estimate" ? "estimate" : params.tab === "operator" ? "operator" : undefined}
         operatorPrefill={
           params.opProduct

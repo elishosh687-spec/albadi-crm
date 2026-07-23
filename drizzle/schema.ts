@@ -269,6 +269,11 @@ export const factoryQuoteRequests = pgTable("factory_quote_requests", {
   // date stamp and optional files (Vercel Blob URLs, mirrored to GHL as notes).
   // Added via direct DDL 2026-07-22 (drizzle-kit push hangs — see CLAUDE.md).
   dealMilestones: jsonb("deal_milestones"),
+  // Soft-delete tombstone: when set, the quote is in the "סל מיחזור" (recycle
+  // bin) — hidden from every default list but restorable (Eli 2026-07-23).
+  // Lets a deleted draft come back without the salesperson resubmitting. Added
+  // via direct DDL (scripts/_add-deleted-at.ts) — drizzle-kit push hangs (CLAUDE.md).
+  deletedAt: timestamp("deleted_at", { withTimezone: true }),
 });
 
 // Append-only audit log of every bot-side quote sent on WhatsApp. Captures

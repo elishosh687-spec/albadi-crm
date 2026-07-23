@@ -58,10 +58,14 @@ function decodeSpecFeatures(s: RequestSpec): { colors: number; handles: boolean;
 // calculator UI. Catalog products open the OPERATOR (exact/catalog) tab on the
 // matched SKU; everything else opens the ESTIMATE tab. Shipping is left unset so
 // the tab uses its own default (sea) — identical to a fresh manual entry.
-function fullCalculatorHref(row: RequestRow, token: string, catalog: CatalogDim | null): string {
+// `draftId` (optional): when this row is a parked draft, thread its id through so
+// the calculator's "שמור כטיוטה" updates THIS draft in place (not a new copy) and
+// "send to customer" stamps it as sent (Eli 2026-07-23).
+export function fullCalculatorHref(row: RequestRow, token: string, catalog: CatalogDim | null, draftId?: string): string {
   const s = row.productSpec ?? {};
   const { colors, handles, lamination } = decodeSpecFeatures(s);
   const p = new URLSearchParams({ widget_token: token });
+  if (draftId) p.set("draftId", draftId);
   if (catalog) {
     p.set("tab", "operator");
     p.set("opProduct", catalog.id);
@@ -288,7 +292,9 @@ export function EstimateModal({
   const r = data?.result;
   const c = data?.computed;
   const refused = est && !est.ok;
-  const calcHref = fullCalculatorHref(row, apiToken, catalog);
+  // For drafts, thread the id so the full calculator updates THIS draft in place
+  // and marks it sent when a quote goes out (Eli 2026-07-23).
+  const calcHref = fullCalculatorHref(row, apiToken, catalog, row.status === "draft" ? row.id : undefined);
 
   const factoryBtn = onSendToFactory ? (
     <button

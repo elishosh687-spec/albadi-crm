@@ -12,9 +12,7 @@
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import { Loader2, Send, CheckCircle2, Search, X, User } from "lucide-react";
 import { LuxShell, LuxTitle, LuxAccent, LuxCTA, Section } from "@/components/widget-ui/lux";
-import { quoteResultToPricing } from "@/lib/factory/calculator/to-pricing";
 import { validateBagGeometry } from "@/lib/factory/bag-geometry";
-import type { FactoryPricingResult } from "@/lib/factory/types";
 
 function widgetUrl(path: string, token: string, params?: Record<string, string>): string {
   const sp = new URLSearchParams({ widget_token: token, ...(params ?? {}) });
@@ -223,37 +221,9 @@ export function SalesQuoteRequestForm({ apiToken }: { apiToken: string }) {
         f.hasLamination ? "Laminated" : "Not laminated",
       ];
 
-      // Best-effort auto-estimate so the parked draft carries an estimated price
-      // (Eli 2026-07-22). Reuses the self-quote estimator; if it refuses
-      // (off-grid spec) we just save the draft spec-only.
-      let finalPricing: FactoryPricingResult | undefined;
-      try {
-        const shipParam = airOpt && shippingOptionId === airOpt.id ? "s1" : "s2";
-        const p = new URLSearchParams({
-          widthCm: String(parseFloat(f.widthCm) || 0),
-          heightCm: String(parseFloat(f.heightCm) || 0),
-          depthCm: String(parseFloat(f.depthCm) || 0),
-          qty: String(parseInt(f.quantity, 10) || 0),
-          handles: String(f.hasHandles),
-          lamination: String(f.hasLamination),
-          colors: String(f.logoColors),
-          shipping: shipParam,
-          widget_token: apiToken,
-        });
-        const er = await fetch(`/api/factory/estimate?${p.toString()}`);
-        const ej = await er.json();
-        if (ej?.ok && ej?.result && ej?.computed) {
-          finalPricing = quoteResultToPricing(
-            ej.result,
-            ej.computed.productionPerUnitIls,
-            ej.computed.shippingPerUnitIls,
-            ej.computed.commissionPct
-          );
-        }
-      } catch {
-        // ignore — draft saved without a price
-      }
-
+      // The salesperson's request is parked SPEC-ONLY — no price (Eli 2026-07-23).
+      // Itay just enters details; Eli prices it himself from the "הצעות מחיר" tab.
+      // (Previously we ran a best-effort auto-estimate here; removed on purpose.)
       const res = await fetch(widgetUrl("/api/widget/factory-requests", apiToken), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -272,7 +242,6 @@ export function SalesQuoteRequestForm({ apiToken }: { apiToken: string }) {
             notes: f.notes.trim() || undefined,
             shippingOptionId: shippingOptionId || undefined,
           },
-          finalPricing,
         }),
       });
       const data = await res.json();
@@ -511,7 +480,9 @@ export function SalesQuoteRequestForm({ apiToken }: { apiToken: string }) {
                 { value: "1", label: "1 צבע" },
                 { value: "2", label: "2 צבעים" },
                 { value: "3", label: "3 צבעים" },
-                { value: "4", label: "3+ צבעים" },
+                { value: "4", label: "4 צבעים" },
+                { value: "5", label: "5 צבעים" },
+                { value: "6", label: "6 צבעים" },
               ]}
             />
             <SelectField

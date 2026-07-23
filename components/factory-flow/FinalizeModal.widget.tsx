@@ -62,11 +62,17 @@ export function FinalizeModalWidget({
   const [shippingOptionId, setShippingOptionId] = useState<string>(
     row.finalPricing?.shippingOptionId ?? row.productSpec.shippingOptionId ?? ""
   );
-  const [moldsCost, setMoldsCost] = useState<string>(
-    row.finalPricing?.moldsTotalCny && row.finalPricing.moldsTotalCny > 0
-      ? String(row.finalPricing.moldsTotalCny)
-      : ""
-  );
+  // Molds default to the stored value if any, else ¥500 per logo colour — each
+  // colour needs its own printing mold (Eli 2026-07-23). Colour count parsed
+  // from productSpec.printing (same rule as `logoColors` below).
+  const [moldsCost, setMoldsCost] = useState<string>(() => {
+    if (row.finalPricing?.moldsTotalCny && row.finalPricing.moldsTotalCny > 0) {
+      return String(row.finalPricing.moldsTotalCny);
+    }
+    const m = /(\d+)/.exec(row.productSpec?.printing ?? "");
+    const colors = m ? Math.max(1, parseInt(m[1], 10)) : 1;
+    return String(500 * colors);
+  });
   const moldsParsed = moldsCost !== "" ? parseFloat(moldsCost) : NaN;
   const moldsValid = Number.isFinite(moldsParsed) && moldsParsed > 0;
   // Manual CBM override — for grouped/consolidated orders whose real packing

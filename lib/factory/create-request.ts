@@ -188,6 +188,28 @@ export async function createFactoryDraft(
   return { id, quotationNo };
 }
 
+// Recalculate-in-place: updates an EXISTING draft's spec + price snapshot rather
+// than creating a new row (Eli 2026-07-23). Used when the calculator was opened
+// from a draft ("חשב מחדש"). Returns null if the id doesn't exist. Only touches
+// spec/price — status, sentToCustomerAt, deletedAt etc. are left as-is.
+export async function updateFactoryDraft(
+  id: string,
+  input: { productSpec: FactoryProductSpec; finalPricing?: FactoryPricingResult }
+): Promise<CreateFactoryDraftResult | null> {
+  const updated = await db
+    .update(factoryQuoteRequests)
+    .set({
+      productSpec: input.productSpec,
+      finalPricing: input.finalPricing ?? null,
+      updatedAt: new Date(),
+    })
+    .where(eq(factoryQuoteRequests.id, id))
+    .returning({ id: factoryQuoteRequests.id, quotationNo: factoryQuoteRequests.quotationNo });
+  const row = updated[0];
+  if (!row) return null;
+  return { id: row.id, quotationNo: row.quotationNo ?? row.id.slice(-8).toUpperCase() };
+}
+
 // Promotes an existing draft row to pending: appends to Feishu, stores
 // feishuRowIndex, flips status. Throws if the row is missing or not a draft.
 export async function promoteDraftToFeishu(

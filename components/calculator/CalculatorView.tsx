@@ -37,6 +37,9 @@ interface Props {
   initialTab?: "operator" | "estimate";
   estimatePrefill?: EstimatePrefill;
   operatorPrefill?: OperatorPrefill;
+  // When opened from an existing draft (recalculate), its factory_quote_requests
+  // id — makes "שמור כטיוטה" update in place and "שלח אומדן" mark it sent.
+  draftId?: string;
 }
 
 export interface EstimatePrefill {
@@ -69,11 +72,17 @@ interface PreviewResult {
   };
 }
 
+// Default one-time mold/tooling fee per logo colour (¥ CNY). Each colour needs
+// its own printing mold, so the calculator pre-fills ¥500 × colours (Eli 2026-07-23).
+const MOLD_CNY_PER_COLOR = 500;
+// Max selectable logo colours across every calculator surface (Eli 2026-07-23).
+const MAX_LOGO_COLORS = 6;
+
 const r2 = (n: number) => Math.round(n * 100) / 100;
 const ils = (n: number) =>
   n.toLocaleString("he-IL", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-export function CalculatorView({ products, quantityTiers, shippingOptions, initialMargins, apiToken, sid, leadName, initialTab, estimatePrefill, operatorPrefill }: Props) {
+export function CalculatorView({ products, quantityTiers, shippingOptions, initialMargins, apiToken, sid, leadName, initialTab, estimatePrefill, operatorPrefill, draftId }: Props) {
   const [productId, setProductId] = useState(operatorPrefill?.productId ?? products[0]?.id ?? "p1");
   const [qtyId, setQtyId]         = useState(quantityTiers[0]?.id ?? "q0");
   const [handles, setHandles]     = useState(operatorPrefill?.handles ?? true);
@@ -88,8 +97,10 @@ export function CalculatorView({ products, quantityTiers, shippingOptions, initi
   const [qtyOverride, setQtyOverride] = useState<string>(operatorPrefill?.qty ?? "");
   const [marginOverride, setMarginOverride] = useState<string>("");
   const [minProfit, setMinProfit] = useState<string>("");
-  // One-time mold/tooling fee from the factory (¥ CNY). Empty = none.
-  const [moldsCost, setMoldsCost] = useState<string>("");
+  // One-time mold/tooling fee (¥ CNY). Defaults to ¥500 per logo colour and
+  // auto-recomputes when the colour count changes (Eli 2026-07-23) — each colour
+  // needs its own mold. Still fully editable; clear to remove the cost.
+  const [moldsCost, setMoldsCost] = useState<string>(String(MOLD_CNY_PER_COLOR * (operatorPrefill?.colors ?? 1)));
   const [reverseMode, setReverseMode] = useState<"total" | "unit" | "profit">("total");
   const [reverseInput, setReverseInput] = useState<string>("");
   // UI-only: reveal the reverse-margin calculator inline (reference §IV toggle).
@@ -216,6 +227,12 @@ export function CalculatorView({ products, quantityTiers, shippingOptions, initi
   useEffect(() => {
     if (colors >= 3 && !lamination) setLamination(true);
   }, [colors, lamination]);
+
+  // Mold fee tracks the colour count: ¥500 × colours (Eli 2026-07-23). Recomputes
+  // whenever colours change; a manual edit sticks until the next colour change.
+  useEffect(() => {
+    setMoldsCost(String(MOLD_CNY_PER_COLOR * colors));
+  }, [colors]);
 
   // Split-shipment: price a sub-quantity's shipment (ILS) via the same endpoint,
   // varying only quantity + shipping method. Reads the true un-divided shipment
@@ -351,7 +368,7 @@ export function CalculatorView({ products, quantityTiers, shippingOptions, initi
           seaName: operatorSplit.seaName,
         })
       : null;
-  const share = useQuoteShare({ apiToken, sid, leadName, quoteText: operatorQuoteText, factorySpec: operatorFactorySpec, pricing: operatorPricing });
+  const share = useQuoteShare({ apiToken, sid, leadName, quoteText: operatorQuoteText, factorySpec: operatorFactorySpec, pricing: operatorPricing, draftId });
 
   return (
     <div className="calc-lux gg-theme flex flex-col gap-6 rounded-xl p-5" dir="rtl">
@@ -443,7 +460,7 @@ export function CalculatorView({ products, quantityTiers, shippingOptions, initi
       </div>
 
       {tab === "estimate" && (
-        <EstimateTab apiToken={apiToken} shippingOptions={shippingOptions} sid={sid} leadName={leadName} initialMargins={initialMargins} prefill={estimatePrefill} />
+        <EstimateTab apiToken={apiToken} shippingOptions={shippingOptions} sid={sid} leadName={leadName} initialMargins={initialMargins} prefill={estimatePrefill} draftId={draftId} />
       )}
 
       {tab === "operator" && (<>
@@ -660,7 +677,7 @@ export function CalculatorView({ products, quantityTiers, shippingOptions, initi
                   <Stepper
                     value={colors}
                     min={1}
-                    max={lamination ? 8 : 3}
+                    max={MAX_LOGO_COLORS}
                     onChange={setColors}
                   />
                 </AddonField>
@@ -1089,7 +1106,7 @@ function ConfidenceBadge({ confidence }: { confidence?: string }) {
   return <span className={cn("rounded-full px-2.5 py-0.5 text-[11px] font-semibold", cls)}>{label}</span>;
 }
 
-function EstimateTab({ apiToken, shippingOptions, sid, leadName, initialMargins, prefill }: { apiToken?: string; shippingOptions: ShippingOption[]; sid?: string; leadName?: string | null; initialMargins: Record<string, number>; prefill?: EstimatePrefill }) {
+function EstimateTab({ apiToken, shippingOptions, sid, leadName, initialMargins, prefill, draftId }: { apiToken?: string; shippingOptions: ShippingOption[]; sid?: string; leadName?: string | null; initialMargins: Record<string, number>; prefill?: EstimatePrefill; draftId?: string }) {
   const [h, setH] = useState(prefill?.h ?? ""); const [d, setD] = useState(prefill?.d ?? ""); const [w, setW] = useState(prefill?.w ?? "");
   const [qty, setQty] = useState(prefill?.qty ?? "5000");
   const [colors, setColors] = useState(prefill?.colors ?? 1);
@@ -1102,8 +1119,9 @@ function EstimateTab({ apiToken, shippingOptions, sid, leadName, initialMargins,
     shippingOptions.some((s) => s.type === "air" && s.enabled) &&
     shippingOptions.some((s) => s.type === "sea" && s.enabled);
   // Operator overrides — mirror the regular calculator (molds/templates one-time
-  // CNY, target-margin override, min-profit warning).
-  const [moldsCost, setMoldsCost] = useState("");
+  // CNY, target-margin override, min-profit warning). Molds default to ¥500 per
+  // colour and track the colour count (Eli 2026-07-23).
+  const [moldsCost, setMoldsCost] = useState(String(MOLD_CNY_PER_COLOR * (prefill?.colors ?? 1)));
   const [marginOverride, setMarginOverride] = useState("");
   const [minProfit, setMinProfit] = useState("");
   const [data, setData] = useState<EstimateApiResponse | null>(null);
@@ -1149,6 +1167,11 @@ function EstimateTab({ apiToken, shippingOptions, sid, leadName, initialMargins,
   useEffect(() => {
     if (colors >= 3 && !lam) setLam(true);
   }, [colors, lam]);
+
+  // Mold fee tracks the colour count: ¥500 × colours (Eli 2026-07-23).
+  useEffect(() => {
+    setMoldsCost(String(MOLD_CNY_PER_COLOR * colors));
+  }, [colors]);
 
   // Split-shipment: price one portion's shipment (ILS) via the estimate endpoint,
   // varying only quantity + shipping method (same dims/spec/margin).
@@ -1230,7 +1253,7 @@ function EstimateTab({ apiToken, shippingOptions, sid, leadName, initialMargins,
     est && est.ok && r && c
       ? quoteResultToPricing(r as QuoteResult, c.productionPerUnitIls, c.shippingPerUnitIls, effectiveCommissionPct)
       : null;
-  const share = useQuoteShare({ apiToken, sid, leadName, quoteText: estimateQuoteText, estimate: estimateCtx, pricing: estimatePricing });
+  const share = useQuoteShare({ apiToken, sid, leadName, quoteText: estimateQuoteText, estimate: estimateCtx, pricing: estimatePricing, draftId });
 
   return (
     <div className="flex flex-col gap-6">
@@ -1304,10 +1327,9 @@ function EstimateTab({ apiToken, shippingOptions, sid, leadName, initialMargins,
             <div className="flex flex-col gap-1">
               <label className="text-sm font-medium">צבעי לוגו</label>
               <select value={colors} onChange={(e) => setColors(Number(e.target.value))} className={SELECT_CLS}>
-                {/* Non-lamination color up-charge (colorAddons) only covers 1..3.
-                    Lamination prices colors by plate fee (¥ × colors), so any
-                    count works — allow up to 8 when laminated. */}
-                {Array.from({ length: lam ? 8 : 3 }, (_, i) => i + 1).map((n) => (
+                {/* Up to 6 colours — each colour is its own printing mold
+                    (¥500), reflected in the molds field below (Eli 2026-07-23). */}
+                {Array.from({ length: MAX_LOGO_COLORS }, (_, i) => i + 1).map((n) => (
                   <option key={n} value={n}>{n === 1 ? "1 צבע" : `${n} צבעים`}</option>
                 ))}
               </select>
@@ -2187,6 +2209,7 @@ function useQuoteShare({
   estimate,
   factorySpec,
   pricing,
+  draftId,
 }: {
   apiToken: string | undefined;
   sid: string | undefined;
@@ -2197,6 +2220,10 @@ function useQuoteShare({
   /** Self-calculated pricing snapshot for "שמור כטיוטה" — the exact price shown
    *  in the summary, so the saved draft records what was quoted. */
   pricing?: FactoryPricingResult | null;
+  /** When the calculator was opened from an existing draft (recalculate), its
+   *  factory_quote_requests id. "שמור כטיוטה" then UPDATES that draft in place,
+   *  and "שלח אומדן ללקוח" stamps it sentToCustomerAt (Eli 2026-07-23). */
+  draftId?: string;
 }) {
   const [sending, setSending] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -2334,11 +2361,11 @@ function useQuoteShare({
     try {
       const res = await fetch(apiBase("/api/widget/factory/estimate/send-customer", "/api/factory/estimate/send-customer"), {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sid: pickedSid, customerName: pickedName, heightCm: estimate.heightCm, depthCm: estimate.depthCm, widthCm: estimate.widthCm, qty: estimate.qty, colors: estimate.colors, handles: estimate.handles, lamination: estimate.lamination, shipping: estimate.shipping }),
+        body: JSON.stringify({ sid: pickedSid, customerName: pickedName, heightCm: estimate.heightCm, depthCm: estimate.depthCm, widthCm: estimate.widthCm, qty: estimate.qty, colors: estimate.colors, handles: estimate.handles, lamination: estimate.lamination, shipping: estimate.shipping, ...(draftId ? { draftId } : {}) }),
       });
       const j = await res.json().catch(() => ({}));
       if (!res.ok || !j?.ok) { setError(j?.message ?? j?.error ?? `HTTP ${res.status}`); return; }
-      setStatus(`אומדן ראשוני נשלח ל-${pickedName ?? "לקוח"} ✓${j.pdf ? " (כולל PDF)" : " (טקסט בלבד)"}`);
+      setStatus(`אומדן ראשוני נשלח ל-${pickedName ?? "לקוח"} ✓${j.pdf ? " (כולל PDF)" : " (טקסט בלבד)"}${draftId ? " · סומן כנשלח" : ""}`);
     } catch (e) { setError(e instanceof Error ? e.message : String(e)); } finally { setBusy(null); }
   };
 
@@ -2405,11 +2432,13 @@ function useQuoteShare({
       };
       const res = await fetch(apiBase("/api/widget/factory/quote-draft", "/api/factory/quote-draft"), {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ manychatSubId: pickedSid, customerName: pickedName ?? undefined, productSpec, finalPricing: pricing }),
+        body: JSON.stringify({ manychatSubId: pickedSid, customerName: pickedName ?? undefined, productSpec, finalPricing: pricing, ...(draftId ? { draftId } : {}) }),
       });
       const j = await res.json().catch(() => ({}));
       if (!res.ok || !j?.ok) { setError(j?.detail ?? j?.error ?? `HTTP ${res.status}`); return; }
-      setStatus(`נשמר כטיוטה ✓ הצעה #${j.quotationNo} — תמצא אותה בטאב "הצעות מהמפעל" (טיוטות).`);
+      setStatus(draftId
+        ? `הטיוטה עודכנה ✓ הצעה #${j.quotationNo}`
+        : `נשמר כטיוטה ✓ הצעה #${j.quotationNo} — תמצא אותה בטאב "הצעות מהמפעל" (טיוטות).`);
     } catch (e) { setError(e instanceof Error ? e.message : String(e)); } finally { setBusy(null); }
   };
 

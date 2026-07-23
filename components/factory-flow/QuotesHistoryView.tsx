@@ -1,12 +1,13 @@
 "use client";
 
 import { useEffect, useState, useMemo } from "react";
-import { ExternalLink, Search, Loader2, Eye, Download, Trash2, X, MessageCircle, Calculator, Pencil, ChevronDown, Check, Send, Sparkles, FolderOpen } from "lucide-react";
+import { ExternalLink, Search, Loader2, Eye, Download, Trash2, Trash, X, MessageCircle, Calculator, Pencil, ChevronDown, Check, Send, Sparkles, FolderOpen, RotateCcw } from "lucide-react";
 import { QuoteHtmlPreview } from "@/app/dashboard/v3/_components/factory/QuoteHtmlPreview";
 import type { FactoryQuoteRow as DashboardFactoryQuoteRow } from "@/app/dashboard/v3/_components/factory/FactoryQuotePanel";
 import { FinalizeModalWidget } from "./FinalizeModal.widget";
 import { CombinedCalcModalWidget } from "./CombinedCalcModal.widget";
-import { SpecModal, EstimateModal, type RequestRow } from "./RequestInspectModals";
+import { SpecModal, EstimateModal, fullCalculatorHref, type RequestRow } from "./RequestInspectModals";
+import { matchCatalogProduct } from "@/lib/factory/catalog-dims";
 
 interface ApiQuoteRow {
   id: string;
@@ -24,6 +25,7 @@ interface ApiQuoteRow {
   sentToCustomerAt: string | null;
   createdAt: string;
   updatedAt: string;
+  deletedAt: string | null;
   ghlUrl: string | null;
 }
 
@@ -116,6 +118,9 @@ export function QuotesHistoryView({ apiToken }: { apiToken: string }) {
   const [importing, setImporting] = useState(false);
   // Rows the import couldn't auto-match to a lead — the user assigns them manually.
   const [unmatched, setUnmatched] = useState<{ quotationNo: string; customer: string }[]>([]);
+  // "סל מיחזור" recycle bin — soft-deleted quotes, loaded on demand.
+  const [showTrash, setShowTrash] = useState(false);
+  const [trash, setTrash] = useState<ApiQuoteRow[] | null>(null);
 
   // Customer cards: which are expanded, and which one's combined-calc is open.
   const [openCards, setOpenCards] = useState<Set<string>>(new Set());
@@ -193,7 +198,7 @@ export function QuotesHistoryView({ apiToken }: { apiToken: string }) {
   }
 
   async function handleDelete(r: ApiQuoteRow) {
-    if (!confirm(`למחוק את הצעה #${r.quotationNo ?? r.id.slice(-6)}? פעולה לא הפיכה.`)) return;
+    if (!confirm(`למחוק את הצעה #${r.quotationNo ?? r.id.slice(-6)}? היא תעבור לסל המיחזור וניתן לשחזר.`)) return;
     setBusyId(r.id);
     try {
       const res = await fetch(
@@ -206,6 +211,63 @@ export function QuotesHistoryView({ apiToken }: { apiToken: string }) {
         return;
       }
       await refresh();
+      if (showTrash) await loadTrash();
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  // Recycle bin: load, restore, and permanent-delete.
+  async function loadTrash() {
+    try {
+      const r = await fetch(
+        `/api/widget/quotes/list?widget_token=${encodeURIComponent(apiToken)}&deleted=1&limit=300`
+      );
+      const j = await r.json();
+      setTrash(j.quotes ?? []);
+    } catch {
+      setTrash([]);
+    }
+  }
+
+  async function toggleTrash() {
+    const next = !showTrash;
+    setShowTrash(next);
+    if (next && trash === null) await loadTrash();
+  }
+
+  async function handleRestore(r: ApiQuoteRow) {
+    setBusyId(r.id);
+    try {
+      const res = await fetch(
+        `/api/widget/factory/${r.id}/restore?widget_token=${encodeURIComponent(apiToken)}`,
+        { method: "POST" }
+      );
+      const j = await res.json().catch(() => ({}));
+      if (!j?.ok) {
+        alert(`שגיאה בשחזור: ${j?.error ?? res.status}`);
+        return;
+      }
+      await Promise.all([refresh(), loadTrash()]);
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function handleHardDelete(r: ApiQuoteRow) {
+    if (!confirm(`למחוק לצמיתות את הצעה #${r.quotationNo ?? r.id.slice(-6)}? פעולה לא הפיכה!`)) return;
+    setBusyId(r.id);
+    try {
+      const res = await fetch(
+        `/api/factory/${r.id}?widget_token=${encodeURIComponent(apiToken)}&hard=1`,
+        { method: "DELETE" }
+      );
+      const j = await res.json().catch(() => ({}));
+      if (!j?.ok) {
+        alert(`שגיאה במחיקה: ${j?.error ?? res.status}`);
+        return;
+      }
+      await loadTrash();
     } finally {
       setBusyId(null);
     }
@@ -215,7 +277,7 @@ export function QuotesHistoryView({ apiToken }: { apiToken: string }) {
   async function handleDeleteGroup(g: CustomerGroup) {
     if (
       !confirm(
-        `למחוק את כל ${g.rows.length} ההצעות של ${g.name ?? "הלקוח"}? פעולה לא הפיכה.`
+        `למחוק את כל ${g.rows.length} ההצעות של ${g.name ?? "הלקוח"}? הן יעברו לסל המיחזור וניתן לשחזר.`
       )
     )
       return;
@@ -228,6 +290,7 @@ export function QuotesHistoryView({ apiToken }: { apiToken: string }) {
         );
       }
       await refresh();
+      if (showTrash) await loadTrash();
     } finally {
       setBusyId(null);
     }
@@ -509,6 +572,24 @@ export function QuotesHistoryView({ apiToken }: { apiToken: string }) {
             </a>
           )}
           {r.status === "draft" && r.finalPricing && (
+            <a
+              href={fullCalculatorHref(
+                toRequestRow(r),
+                apiToken,
+                matchCatalogProduct(
+                  Number((r.productSpec as Record<string, unknown> | null)?.heightCm) || 0,
+                  Number((r.productSpec as Record<string, unknown> | null)?.depthCm) || 0,
+                  Number((r.productSpec as Record<string, unknown> | null)?.widthCm) || 0
+                ),
+                r.id
+              )}
+              title="חשב מחדש / ערוך מחיר — יעדכן את אותה טיוטה"
+              className="size-7 rounded grid place-items-center text-muted-foreground hover:text-accent hover:bg-accent/10"
+            >
+              <Calculator className="size-3.5" />
+            </a>
+          )}
+          {r.status === "draft" && r.finalPricing && (
             <button
               type="button"
               onClick={() => handleSendWhatsApp(r)}
@@ -606,16 +687,95 @@ export function QuotesHistoryView({ apiToken }: { apiToken: string }) {
           <span className="text-[11px] text-muted-foreground">
             נמחקו הצעות? ייבא אותן מחדש מ-Feishu (עם אותו מס' הצעה).
           </span>
-          <button
-            type="button"
-            onClick={handleImport}
-            disabled={importing}
-            className="inline-flex items-center gap-1.5 rounded-md border border-primary/40 bg-primary/10 px-2.5 py-1.5 text-xs font-medium text-primary hover:bg-primary/20 disabled:opacity-60"
-          >
-            {importing ? <Loader2 className="size-3.5 animate-spin" /> : <Download className="size-3.5" />}
-            ייבא מ-Feishu
-          </button>
+          <div className="flex items-center gap-1.5 shrink-0">
+            <button
+              type="button"
+              onClick={toggleTrash}
+              className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-medium transition-colors ${
+                showTrash
+                  ? "border-amber-500/40 bg-amber-500/15 text-amber-400"
+                  : "border-border bg-card/40 text-muted-foreground hover:bg-secondary"
+              }`}
+              title="הצעות שנמחקו — ניתן לשחזר"
+            >
+              <Trash className="size-3.5" />
+              סל מיחזור{trash && trash.length > 0 ? ` (${trash.length})` : ""}
+            </button>
+            <button
+              type="button"
+              onClick={handleImport}
+              disabled={importing}
+              className="inline-flex items-center gap-1.5 rounded-md border border-primary/40 bg-primary/10 px-2.5 py-1.5 text-xs font-medium text-primary hover:bg-primary/20 disabled:opacity-60"
+            >
+              {importing ? <Loader2 className="size-3.5 animate-spin" /> : <Download className="size-3.5" />}
+              ייבא מ-Feishu
+            </button>
+          </div>
         </div>
+
+        {showTrash && (
+          <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 space-y-1.5" dir="rtl">
+            <div className="text-xs font-semibold text-amber-400 flex items-center gap-1.5">
+              <Trash className="size-3.5" /> סל מיחזור
+              {trash && <span className="text-[10px] text-muted-foreground font-normal">({trash.length})</span>}
+            </div>
+            <p className="text-[10px] text-muted-foreground">
+              הצעות שנמחקו. שחזר כדי להחזיר לרשימה, או מחק לצמיתות.
+            </p>
+            {trash === null ? (
+              <div className="text-muted-foreground text-xs flex items-center gap-2 py-2">
+                <Loader2 className="size-3.5 animate-spin" /> טוען...
+              </div>
+            ) : trash.length === 0 ? (
+              <div className="text-muted-foreground text-xs py-2">הסל ריק.</div>
+            ) : (
+              <ul className="space-y-1">
+                {trash.map((r) => (
+                  <li
+                    key={r.id}
+                    className="flex items-center justify-between gap-2 rounded-md border border-border/60 bg-background/40 px-2.5 py-1.5"
+                  >
+                    <div className="flex items-center gap-2 min-w-0 flex-1 flex-wrap">
+                      <span className="text-[11px] text-muted-foreground tabular-nums shrink-0">
+                        {fmtDate(r.createdAt)}
+                      </span>
+                      <span className="text-[11px] font-mono text-muted-foreground shrink-0">
+                        {r.quotationNo ?? r.id.slice(-6)}
+                      </span>
+                      <span className={`text-[10px] rounded-full border px-1.5 py-0.5 shrink-0 ${STATUS_LABEL[r.status]?.cls ?? "bg-muted"}`}>
+                        {STATUS_LABEL[r.status]?.text ?? r.status}
+                      </span>
+                      <span className="text-sm font-medium truncate min-w-0">
+                        {r.name ?? r.leadSid.slice(0, 20)}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-0.5 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => handleRestore(r)}
+                        disabled={busyId === r.id}
+                        title="שחזר"
+                        className="inline-flex items-center gap-1 rounded-md border border-emerald-500/30 bg-emerald-500/10 px-2 py-1 text-[11px] font-medium text-emerald-400 hover:bg-emerald-500/20 disabled:opacity-50"
+                      >
+                        {busyId === r.id ? <Loader2 className="size-3 animate-spin" /> : <RotateCcw className="size-3" />}
+                        שחזר
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleHardDelete(r)}
+                        disabled={busyId === r.id}
+                        title="מחק לצמיתות"
+                        className="size-7 rounded grid place-items-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 disabled:opacity-50"
+                      >
+                        <Trash2 className="size-3.5" />
+                      </button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
 
         {unmatched.length > 0 && (
           <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 space-y-2">

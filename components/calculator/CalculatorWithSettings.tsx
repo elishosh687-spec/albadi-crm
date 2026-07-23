@@ -24,6 +24,7 @@ interface Props {
   initialTab?: "operator" | "estimate";
   estimatePrefill?: EstimatePrefill;
   operatorPrefill?: OperatorPrefill;
+  draftId?: string;
 }
 
 export function CalculatorWithSettings(props: Props) {
@@ -60,6 +61,7 @@ export function CalculatorWithSettings(props: Props) {
       initialTab={props.initialTab}
       estimatePrefill={props.estimatePrefill}
       operatorPrefill={props.operatorPrefill}
+      draftId={props.draftId}
     />
   );
 }

@@ -28,6 +28,7 @@ export async function POST(req: NextRequest) {
     shippingOptionId: typeof b.shipping === "string" ? b.shipping : null,
     customerName: typeof b.customerName === "string" ? b.customerName : undefined,
     hostHeader: req.headers.get("host"),
+    draftId: typeof b.draftId === "string" && b.draftId ? b.draftId : undefined,
   });
   if (!result.ok) {
     return NextResponse.json({ ok: false, error: result.error, ...(result.message ? { message: result.message } : {}) }, { status: result.status });

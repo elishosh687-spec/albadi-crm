@@ -8,7 +8,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { widgetAuthed } from "@/lib/widget/auth";
-import { createFactoryDraft } from "@/lib/factory/create-request";
+import { createFactoryDraft, updateFactoryDraft } from "@/lib/factory/create-request";
 
 export const runtime = "nodejs";
 
@@ -33,6 +33,9 @@ const BodySchema = z.object({
   // Passthrough — validated structurally by the FactoryPricingResult type at
   // the call site; stored as-is in final_pricing.
   finalPricing: z.record(z.string(), z.unknown()).optional(),
+  // When present, UPDATE this existing draft in place (recalculate) instead of
+  // creating a new row.
+  draftId: z.string().optional(),
 });
 
 export async function POST(req: NextRequest) {
@@ -49,13 +52,24 @@ export async function POST(req: NextRequest) {
     );
   }
   try {
+    const finalPricing = body.finalPricing as
+      | import("@/lib/factory/types").FactoryPricingResult
+      | undefined;
+    if (body.draftId) {
+      const updated = await updateFactoryDraft(body.draftId, {
+        productSpec: body.productSpec,
+        finalPricing,
+      });
+      if (!updated) {
+        return NextResponse.json({ ok: false, error: "draft_not_found" }, { status: 404 });
+      }
+      return NextResponse.json({ ok: true, ...updated, updated: true });
+    }
     const result = await createFactoryDraft({
       manychatSubId: body.manychatSubId,
       productSpec: body.productSpec,
       customerName: body.customerName,
-      finalPricing: body.finalPricing as
-        | import("@/lib/factory/types").FactoryPricingResult
-        | undefined,
+      finalPricing,
     });
     return NextResponse.json({ ok: true, ...result });
   } catch (err) {

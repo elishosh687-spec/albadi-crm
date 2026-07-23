@@ -9,7 +9,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { factoryQuoteRequests, leads } from "@/drizzle/schema";
-import { desc, sql } from "drizzle-orm";
+import { desc, isNotNull, isNull, sql } from "drizzle-orm";
 import { verifyWidgetToken } from "@/integrations/ghl/widget-auth";
 
 export const runtime = "nodejs";
@@ -20,6 +20,12 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
   const limit = Math.min(Number(req.nextUrl.searchParams.get("limit") ?? "200"), 500);
+  // ?deleted=1 → the "סל מיחזור" recycle bin (only soft-deleted rows). Default →
+  // only live rows (deletedAt IS NULL).
+  const deletedOnly = req.nextUrl.searchParams.get("deleted") === "1";
+  const deletedFilter = deletedOnly
+    ? isNotNull(factoryQuoteRequests.deletedAt)
+    : isNull(factoryQuoteRequests.deletedAt);
 
   const locationId = (process.env.GHL_LOCATION_ID ?? "").replace(/^﻿/, "");
   const ghlBase = `https://app.gohighlevel.com/v2/location/${locationId}/contacts/detail/`;
@@ -38,6 +44,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
       sentToCustomerAt: factoryQuoteRequests.sentToCustomerAt,
       createdAt: factoryQuoteRequests.createdAt,
       updatedAt: factoryQuoteRequests.updatedAt,
+      deletedAt: factoryQuoteRequests.deletedAt,
       name: leads.name,
       phone: leads.phoneE164,
       stage: leads.pipelineStage,
@@ -45,6 +52,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     })
     .from(factoryQuoteRequests)
     .leftJoin(leads, sql`trim(${leads.manychatSubId}) = trim(${factoryQuoteRequests.manychatSubId})`)
+    .where(deletedFilter)
     .orderBy(desc(factoryQuoteRequests.createdAt))
     .limit(limit);
 
@@ -64,6 +72,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     sentToCustomerAt: r.sentToCustomerAt?.toISOString() ?? null,
     createdAt: r.createdAt.toISOString(),
     updatedAt: r.updatedAt.toISOString(),
+    deletedAt: r.deletedAt?.toISOString() ?? null,
     ghlUrl: r.ghlContactId ? `${ghlBase}${r.ghlContactId}` : null,
   }));
 
