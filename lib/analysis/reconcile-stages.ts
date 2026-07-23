@@ -48,25 +48,33 @@ export async function reconcileStagesFromGhl(): Promise<StageReconcileResult> {
     return { ok: false, reason: e instanceof Error ? e.message : String(e), ...base };
   }
 
-  // contactId → local stage (GHL truth). Single funnel → last opp wins.
   // Opportunity STATUS overrides the stage COLUMN: GHL lets you mark an opp
   // won/lost via status without dragging it out of its stage column (e.g. an
   // opp still in "משא ומתן" but status=lost). Honour status first — else a
-  // lost lead keeps looking active and shows in "נפלו בין הכיסאות". Mirrors
-  // resync-helper.ts. (Found 2026-07-16 via עידן: column=CONSIDERATION,
-  // status=lost.)
-  const truth = new Map<string, string>();
+  // lost lead keeps looking active and shows in "נפלו בין הכיסאות".
+  // (Found 2026-07-16 via עידן: column=CONSIDERATION, status=lost.)
+  const oppToLocal = (o: (typeof opps)[number]): string | undefined => {
+    if (o.status === "won") return "WON";
+    if (o.status === "lost") return "LOST";
+    return o.pipelineStageId ? reverse.get(o.pipelineStageId) : undefined;
+  };
+
+  // Two indexes: by OPPORTUNITY id (precise — the deal the lead is linked to)
+  // and by CONTACT id (fallback, last-opp-wins). A contact can hold BOTH a lost
+  // deal AND a stray open duplicate; keying by the lead's own ghl_opportunity_id
+  // picks the RIGHT one instead of letting the open duplicate win and keep a
+  // lost lead "active" (Eli 2026-07-23: 3 lost leads stuck in "בין הכיסאות").
+  const byOpp = new Map<string, string>();
+  const byContact = new Map<string, string>();
   for (const o of opps) {
-    if (!o.contactId) continue;
-    let local: string | undefined;
-    if (o.status === "won") local = "WON";
-    else if (o.status === "lost") local = "LOST";
-    else local = o.pipelineStageId ? reverse.get(o.pipelineStageId) : undefined;
-    if (local) truth.set(o.contactId, local);
+    const local = oppToLocal(o);
+    if (!local) continue;
+    if (o.id) byOpp.set(o.id, local);
+    if (o.contactId) byContact.set(o.contactId, local);
   }
 
   const active = await db
-    .select({ sid: leads.manychatSubId, stage: leads.pipelineStage, ghl: leads.ghlContactId })
+    .select({ sid: leads.manychatSubId, stage: leads.pipelineStage, ghl: leads.ghlContactId, opp: leads.ghlOpportunityId })
     .from(leads)
     .where(eq(leads.active, true));
 
@@ -74,8 +82,9 @@ export async function reconcileStagesFromGhl(): Promise<StageReconcileResult> {
   const keptLost = 0;
   let checked = 0;
   for (const l of active) {
-    if (!l.ghl) continue;
-    const to = truth.get(l.ghl);
+    // Prefer the lead's OWN linked opportunity; fall back to contact-level
+    // (last-wins) only when the linked opp isn't in the scanned pipeline.
+    const to = (l.opp && byOpp.get(l.opp)) || (l.ghl && byContact.get(l.ghl)) || undefined;
     if (!to) continue;
     checked++;
     const from = l.stage ?? "NULL";
