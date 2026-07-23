@@ -274,6 +274,14 @@ export const factoryQuoteRequests = pgTable("factory_quote_requests", {
   // Lets a deleted draft come back without the salesperson resubmitting. Added
   // via direct DDL (scripts/_add-deleted-at.ts) — drizzle-kit push hangs (CLAUDE.md).
   deletedAt: timestamp("deleted_at", { withTimezone: true }),
+  // "סגור עסקה" — explicitly pull a finalized quote into the עסקאות tab,
+  // decoupled from the lead's WON pipeline stage (most finalized quotes never
+  // got marked WON, so they were invisible). Non-null = shown in עסקאות.
+  // deal_group_id groups several quotes into ONE combined deal (multi-product,
+  // one invoice); a single-quote deal shares its own id. Added via direct DDL
+  // 2026-07-23 (drizzle-kit push hangs — see CLAUDE.md).
+  closedDealAt: timestamp("closed_deal_at", { withTimezone: true }),
+  dealGroupId: text("deal_group_id"),
 });
 
 // Append-only audit log of every bot-side quote sent on WhatsApp. Captures

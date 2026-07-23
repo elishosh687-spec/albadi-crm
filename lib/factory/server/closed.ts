@@ -8,7 +8,7 @@
 
 import { db } from "@/lib/db";
 import { factoryQuoteRequests, leads } from "@/drizzle/schema";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, isNotNull, isNull, or } from "drizzle-orm";
 import type { DealMilestones, FactoryPricingResult, QuoteActualCosts } from "@/lib/factory/types";
 
 export interface ClosedQuoteRow {
@@ -23,9 +23,17 @@ export interface ClosedQuoteRow {
   dealMilestones: DealMilestones | null;
   sentToCustomerAt: string | null;
   updatedAt: string;
+  /** True when this quote was pulled in via "סגור עסקה" (vs. the lead's WON stage). */
+  explicitlyClosed: boolean;
 }
 
-/** Every WON + finalized factory quote, newest first. */
+/**
+ * Deals in the עסקאות tab: a finalized quote appears when EITHER
+ *  - it was explicitly pulled in via "סגור עסקה" (closed_deal_at set), OR
+ *  - its lead is marked WON (legacy/auto path).
+ * Explicitly-closed quotes are decoupled from the pipeline stage, since most
+ * finalized quotes never got marked WON (54 finalized → only 4 WON).
+ */
 export async function listClosedQuotes(): Promise<ClosedQuoteRow[]> {
   const rows = await db
     .select({
@@ -38,6 +46,7 @@ export async function listClosedQuotes(): Promise<ClosedQuoteRow[]> {
       dealMilestones: factoryQuoteRequests.dealMilestones,
       sentToCustomerAt: factoryQuoteRequests.sentToCustomerAt,
       updatedAt: factoryQuoteRequests.updatedAt,
+      closedDealAt: factoryQuoteRequests.closedDealAt,
       customerName: leads.name,
       customerPhone: leads.phoneE164,
     })
@@ -46,11 +55,15 @@ export async function listClosedQuotes(): Promise<ClosedQuoteRow[]> {
     .where(
       and(
         eq(factoryQuoteRequests.factoryStatus, "finalized"),
-        eq(leads.pipelineStage, "WON")
+        isNull(factoryQuoteRequests.deletedAt),
+        or(
+          eq(leads.pipelineStage, "WON"),
+          isNotNull(factoryQuoteRequests.closedDealAt)
+        )
       )
     )
     .orderBy(desc(factoryQuoteRequests.updatedAt))
-    .limit(300);
+    .limit(500);
 
   return rows.map((r) => ({
     id: r.id,
@@ -64,6 +77,7 @@ export async function listClosedQuotes(): Promise<ClosedQuoteRow[]> {
     dealMilestones: (r.dealMilestones ?? null) as DealMilestones | null,
     sentToCustomerAt: r.sentToCustomerAt ? r.sentToCustomerAt.toISOString() : null,
     updatedAt: r.updatedAt.toISOString(),
+    explicitlyClosed: r.closedDealAt != null,
   }));
 }
 
@@ -106,4 +120,15 @@ export async function saveActualCosts(
 function numOrUndef(v: unknown): number | undefined {
   const n = typeof v === "number" ? v : Number(v);
   return Number.isFinite(n) ? n : undefined;
+}
+
+/**
+ * "סגור עסקה" — pull a finalized quote into the עסקאות tab (or push it back
+ * out). Sets/clears closed_deal_at. Independent of the lead's pipeline stage.
+ */
+export async function setDealClosed(id: string, closed: boolean): Promise<void> {
+  await db
+    .update(factoryQuoteRequests)
+    .set({ closedDealAt: closed ? new Date() : null, updatedAt: new Date() })
+    .where(eq(factoryQuoteRequests.id, id));
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useMemo } from "react";
-import { ExternalLink, Search, Loader2, Eye, Download, Trash2, Trash, X, MessageCircle, Calculator, Pencil, ChevronDown, Check, Send, Sparkles, FolderOpen, RotateCcw } from "lucide-react";
+import { ExternalLink, Search, Loader2, Eye, Download, Trash2, Trash, X, MessageCircle, Calculator, Pencil, ChevronDown, Check, Send, Sparkles, FolderOpen, RotateCcw, CheckCircle2 } from "lucide-react";
 import { QuoteHtmlPreview } from "@/app/dashboard/v3/_components/factory/QuoteHtmlPreview";
 import type { FactoryQuoteRow as DashboardFactoryQuoteRow } from "@/app/dashboard/v3/_components/factory/FactoryQuotePanel";
 import { FinalizeModalWidget } from "./FinalizeModal.widget";
@@ -23,6 +23,7 @@ interface ApiQuoteRow {
   draftEstimate: Record<string, unknown> | null;
   pdfUrl: string | null;
   sentToCustomerAt: string | null;
+  closedDealAt: string | null;
   createdAt: string;
   updatedAt: string;
   deletedAt: string | null;
@@ -268,6 +269,22 @@ export function QuotesHistoryView({ apiToken }: { apiToken: string }) {
         return;
       }
       await loadTrash();
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  // "סגור עסקה" — pull a finalized quote into the עסקאות tab (toggle).
+  async function handleCloseDeal(r: ApiQuoteRow, closed: boolean) {
+    setBusyId(r.id);
+    try {
+      const res = await fetch(
+        `/api/widget/factory/close-deal/${r.id}?widget_token=${encodeURIComponent(apiToken)}`,
+        { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ closed }) }
+      );
+      const j = await res.json().catch(() => ({}));
+      if (!j?.ok) { alert(`שגיאה: ${j?.error ?? res.status}`); return; }
+      await refresh();
     } finally {
       setBusyId(null);
     }
@@ -561,6 +578,26 @@ export function QuotesHistoryView({ apiToken }: { apiToken: string }) {
             >
               <Download className="size-3.5" />
             </a>
+          )}
+          {r.status === "finalized" && !r.closedDealAt && (
+            <button
+              type="button"
+              onClick={() => handleCloseDeal(r, true)}
+              disabled={busyId === r.id}
+              title="סגור עסקה — העבר ללשונית עסקאות"
+              className="shrink-0 inline-flex items-center gap-1 text-[10px] rounded-full border border-amber-500/40 bg-amber-500/10 text-amber-400 px-2 py-0.5 hover:bg-amber-500/20 disabled:opacity-50"
+            >
+              {busyId === r.id ? <Loader2 className="size-3 animate-spin" /> : <CheckCircle2 className="size-3" />}
+              סגור עסקה
+            </button>
+          )}
+          {r.status === "finalized" && r.closedDealAt && (
+            <span
+              title="עסקה סגורה — בלשונית עסקאות"
+              className="shrink-0 inline-flex items-center gap-0.5 text-[10px] rounded-full border border-emerald-500/30 bg-emerald-500/10 text-emerald-400 px-1.5 py-0.5"
+            >
+              <Check className="size-3" /> בעסקאות
+            </span>
           )}
           {r.status === "finalized" && (
             <a
