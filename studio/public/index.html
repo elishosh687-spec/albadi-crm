@@ -66,17 +66,25 @@
     <div class="side">
       <div class="lbl">תוצאות</div>
       <div id="results"></div>
-      <div id="noRes" class="hint">עדיין אין קבצים. בקש מ-Claude "תעשה הדמיה" והם יופיעו כאן.</div>
+      <div id="noRes" class="hint">עדיין אין קבצים. צור הדמיה או פריסה למטה, או בקש מ-Claude בצ'אט.</div>
 
       <div style="height:1px;background:var(--line)"></div>
 
-      <div class="lbl">פריסה — קובץ הפקה</div>
+      <div class="lbl">🎨 הדמיה — mockup ריאליסטי</div>
+      <label class="drop" id="mLogoDrop">לוגו הלקוח<input type="file" id="mLogoFile" accept="image/*,.pdf" hidden></label>
+      <input type="text" id="mNote" placeholder="צבע רקע / הערה (למשל: ירוק זית)" style="width:100%">
+      <button class="btn pri" id="mockupBtn">צור הדמיה</button>
+      <div class="hint">מעלה לוגו ומבקש מ-Claude הדמיה (סקיל bag-mockup-video). תיקונים + וידאו — בצ'אט.</div>
+
+      <div style="height:1px;background:var(--line)"></div>
+
+      <div class="lbl">📐 פריסה — קובץ הפקה למפעל</div>
       <div style="display:flex;gap:8px">
         <label class="drop" id="logoDrop" style="flex:1">לוגו<input type="file" id="logoFile" accept="image/*,.pdf" hidden></label>
         <label class="drop" id="dielineDrop" style="flex:1">פריסת מפעל<input type="file" id="dielineFile" accept="image/*,.pdf" hidden></label>
       </div>
       <button class="btn pri" id="dielineBtn">צור קובץ הפקה</button>
-      <div class="hint">מעלה את שני הקבצים ומבקש מ-Claude להריץ את סקיל הפריסה.</div>
+      <div class="hint">מעלה את שני הקבצים ומבקש מ-Claude להריץ את סקיל הפריסה (dieline-print).</div>
     </div>
 
     <div class="chat">

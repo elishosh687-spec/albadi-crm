@@ -8,6 +8,7 @@ const state = {
   dealId: null,
   leadSid: null,
   customerName: null,
+  mLogoName: null,
   logoName: null,
   dielineName: null,
   busy: false,
@@ -156,6 +157,12 @@ async function sendChat(message) {
   finally { state.busy = false; $("sendBtn").disabled = false; }
 }
 
+async function makeMockup() {
+  if (!state.mLogoName) { alert("העלה קודם את הלוגו של הלקוח"); return; }
+  const note = ($("mNote").value || "").trim();
+  sendChat(`צור הדמיה ריאליסטית של השקית עם הלוגו בקובץ "${state.mLogoName}"${note ? " — " + note : ""}. השתמש בסקיל bag-mockup-video ושמור את התמונה בתיקייה. אם חסר פרט (מידות/צבע/ידיות) קח מהבריף או בחר ברירת מחדל סבירה וציין אותה.`);
+}
+
 async function makeDieline() {
   if (!state.logoName || !state.dielineName) { alert("העלה קודם לוגו + פריסת מפעל"); return; }
   sendChat(`יש בתיקייה שני קבצים: לוגו="${state.logoName}" ופריסת מפעל="${state.dielineName}". הרץ את סקיל dieline-print (produce.py) עם --logo ו--dieline, ושמור את קובץ ההפקה כ-PDF בתיקייה.`);
@@ -167,7 +174,10 @@ $("dealId").addEventListener("keydown", (e) => { if (e.key === "Enter") loadDeal
 $("sendBtn").onclick = () => sendChat($("input").value);
 $("input").addEventListener("keydown", (e) => { if (e.key === "Enter") sendChat($("input").value); });
 $("dielineBtn").onclick = makeDieline;
+$("mockupBtn").onclick = makeMockup;
 
+const DROP_KEY = { mlogo: "mLogoName", logo: "logoName", dieline: "dielineName" };
+const DROP_LABEL = { mlogo: "לוגו ✓ ", logo: "לוגו ✓ ", dieline: "פריסה ✓ " };
 function wireDrop(dropId, inputId, which) {
   const drop = $(dropId), input = $(inputId);
   drop.onclick = () => input.click();
@@ -175,13 +185,14 @@ function wireDrop(dropId, inputId, which) {
     if (!input.files[0]) return;
     try {
       const name = await uploadFile(input.files[0]);
-      if (which === "logo") state.logoName = name; else state.dielineName = name;
+      state[DROP_KEY[which]] = name;
       drop.classList.add("has");
-      drop.firstChild.textContent = (which === "logo" ? "לוגו ✓ " : "פריסה ✓ ") + name;
+      drop.firstChild.textContent = DROP_LABEL[which] + name;
       refreshOutputs();
     } catch (e) { alert(String(e)); }
   };
 }
+wireDrop("mLogoDrop", "mLogoFile", "mlogo");
 wireDrop("logoDrop", "logoFile", "logo");
 wireDrop("dielineDrop", "dielineFile", "dieline");
 
