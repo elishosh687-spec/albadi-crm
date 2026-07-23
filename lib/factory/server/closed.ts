@@ -281,3 +281,32 @@ export async function setDealClosed(id: string, closed: boolean): Promise<void> 
     .set({ closedDealAt: closed ? new Date() : null, updatedAt: new Date() })
     .where(eq(factoryQuoteRequests.id, id));
 }
+
+/**
+ * "הסר מעסקאות" — reversible removal of a deal from the עסקאות tab. Clears
+ * closed_deal_at on ALL members (single or combined) and unbinds the group, so
+ * the underlying quote(s) stay in "הצעות מפעל" and can be re-closed later.
+ *
+ * Returns `stillWon`: true when a member's lead is still WON, in which case the
+ * deal keeps showing via the legacy WON path even after un-closing — the caller
+ * warns the operator (removing then means moving the lead off WON in GHL).
+ */
+export async function removeDeal(primaryId: string): Promise<{ stillWon: boolean }> {
+  const memberIds = await dealMemberIds(primaryId);
+  await db
+    .update(factoryQuoteRequests)
+    .set({ closedDealAt: null, dealGroupId: null, updatedAt: new Date() })
+    .where(inArray(factoryQuoteRequests.id, memberIds));
+
+  const memberRows = await db
+    .select({ sid: factoryQuoteRequests.manychatSubId })
+    .from(factoryQuoteRequests)
+    .where(inArray(factoryQuoteRequests.id, memberIds));
+  const sids = [...new Set(memberRows.map((r) => (r.sid ?? "").trim()).filter(Boolean))];
+  if (sids.length === 0) return { stillWon: false };
+  const wonRows = await db
+    .select({ stage: leads.pipelineStage })
+    .from(leads)
+    .where(inArray(leads.manychatSubId, sids));
+  return { stillWon: wonRows.some((r) => r.stage === "WON") };
+}

@@ -259,6 +259,29 @@ function ClosedQuoteCard({
   const [zohoOpen, setZohoOpen] = useState(false);
   const [invoiceOpen, setInvoiceOpen] = useState(false);
   const [expenseOpen, setExpenseOpen] = useState(false);
+  const [removing, setRemoving] = useState(false);
+
+  /** "הסר מעסקאות" — reversible: clears closed stamp (+ unbinds a combined
+   *  group). The quote stays in "הצעות מפעל" and can be re-closed. */
+  async function handleRemove() {
+    const n = quote.products?.length ?? 1;
+    const what = quote.isCombined && n > 1 ? `עסקה משולבת (${n} מוצרים)` : "העסקה";
+    if (!confirm(`להסיר את ${what} של ${quote.customerName || "הלקוח"} מלשונית עסקאות?\n\nההצעה נשארת ב«הצעות מפעל» וניתן לסגור אותה שוב.`)) return;
+    setRemoving(true);
+    try {
+      const res = await fetch(widgetUrl(`/api/widget/factory/remove-deal/${quote.id}`, apiToken), {
+        method: "POST",
+      });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok || !j.ok) { alert(`שגיאה: ${j?.error ?? res.status}`); return; }
+      if (j.stillWon) {
+        alert("הוסר מהסגירה, אבל העסקה עדיין מוצגת כי הליד מסומן «נסגר/WON» ב-GHL.\nכדי להעלים אותה לגמרי — העבר את הליד מ-WON לשלב אחר.");
+      }
+      onSaved();
+    } finally {
+      setRemoving(false);
+    }
+  }
 
   const draftActuals: QuoteActualCosts = useMemo(() => {
     const f = parseFloat(factory), s = parseFloat(shipping), rv = parseFloat(revenue);
@@ -390,6 +413,20 @@ function ClosedQuoteCard({
               <span style={{ color: varColor }}> · {varPos ? "+" : "−"}{ils(Math.abs(r.variance))}</span>
             )}
           </div>
+          <button
+            onClick={handleRemove}
+            disabled={removing}
+            title="הסר מלשונית עסקאות — הפיך; ההצעה נשארת ב«הצעות מפעל»"
+            style={{
+              marginTop: 8, display: "inline-flex", alignItems: "center", gap: 5,
+              fontSize: 11, color: "var(--lux-muted)", background: "transparent",
+              border: "1px solid var(--lux-line)", borderRadius: 6, padding: "3px 9px",
+              cursor: removing ? "default" : "pointer", opacity: removing ? 0.5 : 1,
+            }}
+          >
+            {removing ? <Loader2 className="size-3 animate-spin" /> : <X className="size-3" />}
+            הסר מעסקאות
+          </button>
         </div>
       </div>
 
