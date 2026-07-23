@@ -744,13 +744,27 @@ Columns (direct DDL — drizzle-kit push hangs): `closed_deal_at`, `deal_group_i
 ### Combined deal (deal_group_id)
 
 Quotes sharing a `deal_group_id` collapse into ONE deal card (`products[]`,
-"עסקה משולבת · N מוצרים" badge). Combined pricing uses the SAME
-`allocateCombined` engine as the combined PDF ([lib/factory/combined.ts](lib/factory/combined.ts))
-— grand total incl. molds + one-shipment shipping (the consolidation SAVING). If
-a member's `shippingOptionId` doesn't resolve, `combineMembers` falls back to
-summing member shipping (never understated). Deal-level actuals/milestones/invoice
-live on the PRIMARY (oldest) member; `deal id = primary id`. `dealMemberIds`
-returns all members for the multi-line invoice. `unbindDealGroup` splits.
+"עסקה משולבת · N מוצרים" badge). **Combined pricing = SUM of the already-agreed
+member prices** (`combineMembers` in [lib/factory/server/closed.ts](lib/factory/server/closed.ts)),
+NOT a re-run of `allocateCombined`. The members are already CLOSED with the
+customer at their own prices, so the deal's revenue is their sum. `allocateCombined`
+is the pre-sale QUOTING engine (offer a single-shipment discount to win); using
+it post-close wrongly re-discounted revenue AND folded pass-through shipping into
+profit (fixed 2026-07-23 — Eli caught יוסי גולד: הכנסה ₪13,705 vs the real
+₪14,192, profit ₪9,005 vs the real ₪3,512). The single-shipment saving is Eli's
+REALIZED profit — it surfaces when actual shipping is pulled from Zoho
+(`shippingDelta` < 0 raises profit), never as a retroactive customer discount.
+Deal-level actuals/milestones/invoice live on the PRIMARY (oldest) member;
+`deal id = primary id`. `dealMemberIds` returns all members for the multi-line
+invoice. `unbindDealGroup` splits.
+
+**Remove a deal (reversible):** each card has "הסר מעסקאות" → `removeDeal`
+clears `closed_deal_at` on all members + unbinds the group (quote stays in
+הצעות מפעל, re-closable). `POST /api/widget/factory/remove-deal/[id]`. A deal
+shows if `WON OR closed_deal_at`, so for a still-WON lead clearing the stamp
+doesn't hide it — `removeDeal` returns `stillWon` and the UI tells Eli to move
+the lead off WON in GHL. Most deals are explicitly-closed (not WON) → vanish
+cleanly.
 
 ### Deal file — post-WON timeline + files + GHL mirror
 
