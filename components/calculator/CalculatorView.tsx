@@ -2319,6 +2319,23 @@ function useQuoteShare({
     }
   };
 
+  // When the calculator was opened FROM a specific quote (draftId in the URL),
+  // any successful send marks THAT quote "נשלח" — so it behaves exactly like the
+  // row's own send button, not just "remembering the customer" (Eli 2026-07-23).
+  // Non-fatal + only stamps sentToCustomerAt (never clobbers a finalized price).
+  const markLinkedQuoteSent = async () => {
+    if (!draftId || !apiToken) return;
+    try {
+      await fetch(`/api/widget/factory/${draftId}/mark-sent?widget_token=${encodeURIComponent(apiToken)}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sent: true }),
+      });
+    } catch {
+      /* the customer already got the quote — badge can be re-marked from the row */
+    }
+  };
+
   const send = async () => {
     if (!pickedSid || !apiToken) return;
     if (!confirm(`לשלוח את ההצעה ל-${pickedName ?? "לקוח"} ב-WhatsApp?`)) return;
@@ -2339,7 +2356,8 @@ function useQuoteShare({
         setError(j?.error ?? `HTTP ${res.status}`);
         return;
       }
-      setStatus(`נשלח ל-${pickedName ?? "לקוח"} בהצלחה ✓`);
+      await markLinkedQuoteSent();
+      setStatus(`נשלח ל-${pickedName ?? "לקוח"} בהצלחה ✓${draftId ? " · סומן כנשלח" : ""}`);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -2361,10 +2379,11 @@ function useQuoteShare({
     try {
       const res = await fetch(apiBase("/api/widget/factory/estimate/send-customer", "/api/factory/estimate/send-customer"), {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sid: pickedSid, customerName: pickedName, heightCm: estimate.heightCm, depthCm: estimate.depthCm, widthCm: estimate.widthCm, qty: estimate.qty, colors: estimate.colors, handles: estimate.handles, lamination: estimate.lamination, shipping: estimate.shipping, ...(draftId ? { draftId } : {}) }),
+        body: JSON.stringify({ sid: pickedSid, customerName: pickedName, heightCm: estimate.heightCm, depthCm: estimate.depthCm, widthCm: estimate.widthCm, qty: estimate.qty, colors: estimate.colors, handles: estimate.handles, lamination: estimate.lamination, shipping: estimate.shipping }),
       });
       const j = await res.json().catch(() => ({}));
       if (!res.ok || !j?.ok) { setError(j?.message ?? j?.error ?? `HTTP ${res.status}`); return; }
+      await markLinkedQuoteSent();
       setStatus(`אומדן ראשוני נשלח ל-${pickedName ?? "לקוח"} ✓${j.pdf ? " (כולל PDF)" : " (טקסט בלבד)"}${draftId ? " · סומן כנשלח" : ""}`);
     } catch (e) { setError(e instanceof Error ? e.message : String(e)); } finally { setBusy(null); }
   };

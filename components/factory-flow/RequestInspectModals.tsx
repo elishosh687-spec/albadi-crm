@@ -292,9 +292,10 @@ export function EstimateModal({
   const r = data?.result;
   const c = data?.computed;
   const refused = est && !est.ok;
-  // For drafts, thread the id so the full calculator updates THIS draft in place
-  // and marks it sent when a quote goes out (Eli 2026-07-23).
-  const calcHref = fullCalculatorHref(row, apiToken, catalog, row.status === "draft" ? row.id : undefined);
+  // Thread the quote id (ANY status) so the full calculator "remembers" WHICH
+  // quote it opened — sending from the calculator then marks THIS quote "נשלח",
+  // and for a draft it also updates in place (Eli 2026-07-23).
+  const calcHref = fullCalculatorHref(row, apiToken, catalog, row.id);
 
   const factoryBtn = onSendToFactory ? (
     <button

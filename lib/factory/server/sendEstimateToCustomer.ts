@@ -8,7 +8,7 @@
  * Used by POST /api/factory/estimate/send-customer (+ widget variant).
  */
 import { db } from "@/lib/db";
-import { leads, factoryQuoteRequests } from "@/drizzle/schema";
+import { leads } from "@/drizzle/schema";
 import { eq } from "drizzle-orm";
 import { sendBridgeMessage } from "@/lib/bridge/client";
 import { phoneToJid } from "@/lib/bridge/jid";
@@ -153,19 +153,9 @@ export async function sendEstimateToCustomer(input: SendEstimateInput): Promise<
     kind: "estimate",
   });
 
-  // Opened from a draft → mark it sent + persist the freshly-priced snapshot, so
-  // sending via the estimator marks "נשלח" like the finalized-quote path (Eli
-  // 2026-07-23). Non-fatal — the customer already got the estimate.
-  if (input.draftId) {
-    try {
-      await db
-        .update(factoryQuoteRequests)
-        .set({ sentToCustomerAt: new Date(), finalPricing: pricing, updatedAt: new Date() })
-        .where(eq(factoryQuoteRequests.id, input.draftId));
-    } catch (err) {
-      console.warn("[estimate/send-customer] draft mark-sent update failed", err);
-    }
-  }
+  // Marking the linked quote "נשלח" is done by the caller (client → mark-sent),
+  // which only stamps sentToCustomerAt and never clobbers a finalized price. See
+  // markLinkedQuoteSent in CalculatorView (Eli 2026-07-23).
 
   return {
     ok: true,
