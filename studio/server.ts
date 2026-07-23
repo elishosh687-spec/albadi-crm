@@ -14,11 +14,15 @@ import { fileURLToPath } from "node:url";
 import { dirname } from "node:path";
 import { runAgent } from "./agent.ts";
 import {
-  ROOT, TOKEN, CRM_BASE, pullDeal, pushFile, sendWhatsApp, listOutputs, ensureDir, briefText, searchLeads,
+  ROOT, TOKEN, CRM_BASE, pullDeal, pushFile, sendWhatsApp, listOutputs, ensureDir, briefText, searchLeads, safeRel,
 } from "./lib.ts";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT || 4747);
+
+// A bad skill run must never take the whole studio down.
+process.on("uncaughtException", (e) => console.error("[studio] uncaughtException:", e));
+process.on("unhandledRejection", (e) => console.error("[studio] unhandledRejection:", e));
 
 function safeKey(k: string): string {
   return (k || "adhoc").replace(/[^a-zA-Z0-9_.-]/g, "_").slice(0, 80) || "adhoc";
@@ -56,6 +60,7 @@ const server = createServer(async (req, res) => {
   try {
     const url = new URL(req.url || "/", `http://localhost:${PORT}`);
     const p = url.pathname;
+    if (p.startsWith("/api/")) console.log(new Date().toISOString().slice(11, 19), req.method, p);
 
     // ---- static ----
     if (req.method === "GET" && (p === "/" || p === "/index.html")) {
@@ -107,7 +112,7 @@ const server = createServer(async (req, res) => {
     // ---- serve a work-dir file ----
     if (req.method === "GET" && p === "/api/file") {
       const key = safeKey(url.searchParams.get("session") || "adhoc");
-      const name = basename(url.searchParams.get("name") || "");
+      const name = safeRel(url.searchParams.get("name") || "");
       if (!name) return json(res, 400, { ok: false, error: "missing name" });
       const buf = await readFile(join(workDir(key), name)).catch(() => null);
       if (!buf) return json(res, 404, { ok: false, error: "not found" });
@@ -118,7 +123,7 @@ const server = createServer(async (req, res) => {
     // ---- push a file into the deal timeline ----
     if (req.method === "POST" && p === "/api/push") {
       const body = await readJson<{ dealId: string; stage: string; session: string; name: string }>(req);
-      const file = join(workDir(body.session), basename(body.name));
+      const file = join(workDir(body.session), safeRel(body.name));
       const uploaded = await pushFile(body.dealId, body.stage, file, tokenFrom(req, url));
       return json(res, 200, { ok: true, url: uploaded });
     }
@@ -126,7 +131,7 @@ const server = createServer(async (req, res) => {
     // ---- send a file to the lead on WhatsApp ----
     if (req.method === "POST" && p === "/api/whatsapp") {
       const body = await readJson<{ leadSid: string; session: string; name: string }>(req);
-      const file = join(workDir(body.session), basename(body.name));
+      const file = join(workDir(body.session), safeRel(body.name));
       const wa = await sendWhatsApp(body.leadSid, file, tokenFrom(req, url));
       return json(res, 200, { ok: true, waMessageId: wa });
     }
@@ -143,23 +148,46 @@ const server = createServer(async (req, res) => {
         "content-type": "text/event-stream; charset=utf-8",
         "cache-control": "no-cache", connection: "keep-alive",
       });
-      const send = (ev: unknown) => res.write(`data: ${JSON.stringify(ev)}\n\n`);
-
-      for await (const ev of runAgent(body.message, dir, body.claudeSessionId, (s) => send({ kind: "stderr", text: s }))) {
-        if (ev.kind === "done") {
-          const after = await listOutputs(dir);
-          const fresh = after.filter((f) => !before.has(f.name));
-          send({ kind: "done", sessionId: ev.sessionId, result: ev.result, newFiles: fresh, allFiles: after });
-        } else {
-          send(ev);
+      let alive = true;
+      req.on("close", () => { alive = false; });
+      const send = (ev: unknown) => {
+        if (!alive) return;
+        try { res.write(`data: ${JSON.stringify(ev)}\n\n`); } catch { alive = false; }
+      };
+      // Heartbeat so a long mockup/video generation doesn't look like a dead
+      // connection (proxies/browsers can drop idle streams).
+      const hb = setInterval(() => { if (alive) { try { res.write(`: ping\n\n`); } catch { alive = false; } } }, 15000);
+      try {
+        for await (const ev of runAgent(body.message, dir, body.claudeSessionId, (s) => console.error("[agent stderr]", s))) {
+          if (!alive) break;
+          if (ev.kind === "done") {
+            const after = await listOutputs(dir);
+            const fresh = after.filter((f) => !before.has(f.name));
+            send({ kind: "done", sessionId: ev.sessionId, result: ev.result, newFiles: fresh, allFiles: after });
+          } else {
+            send(ev);
+          }
         }
+      } catch (e) {
+        console.error("[studio] agent run error:", e);
+        send({ kind: "error", error: e instanceof Error ? e.message : String(e) });
+      } finally {
+        clearInterval(hb);
       }
-      return res.end();
+      try { res.end(); } catch { /* already closed */ }
+      return;
     }
 
     json(res, 404, { ok: false, error: "not found" });
   } catch (e) {
-    json(res, 500, { ok: false, error: e instanceof Error ? e.message : String(e) });
+    console.error("[studio] request error:", e);
+    // Never write a second header set over an in-flight SSE stream (that throws
+    // ERR_HTTP_HEADERS_SENT and would crash the process).
+    if (!res.headersSent) {
+      json(res, 500, { ok: false, error: e instanceof Error ? e.message : String(e) });
+    } else {
+      try { res.end(); } catch { /* ignore */ }
+    }
   }
 });
 

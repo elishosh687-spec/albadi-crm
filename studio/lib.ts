@@ -146,21 +146,30 @@ export async function sendWhatsApp(leadSid: string, filePath: string, tok: strin
   return j.waMessageId ?? "sent";
 }
 
-/** List files in a work dir newest-first (skills write their outputs here). */
+/** List files in a work dir newest-first. Scans the root AND the skills' own
+ *  output subfolders (bag-mockup-video writes to output_images/) so generated
+ *  files always surface. Names are relative (e.g. "output_images/bag.png"). */
 export async function listOutputs(dir: string): Promise<{ name: string; mtime: number; size: number }[]> {
-  try {
-    const names = await readdir(dir);
-    const out: { name: string; mtime: number; size: number }[] = [];
+  const out: { name: string; mtime: number; size: number }[] = [];
+  const SUBDIRS = new Set(["output_images", "outputs", "output"]);
+  async function scan(base: string, prefix: string): Promise<void> {
+    const names = await readdir(base).catch(() => [] as string[]);
     for (const n of names) {
       if (n.startsWith(".")) continue;
-      const st = await stat(join(dir, n)).catch(() => null);
-      if (!st || !st.isFile()) continue;
-      out.push({ name: n, mtime: +st.mtime, size: st.size });
+      const full = join(base, n);
+      const st = await stat(full).catch(() => null);
+      if (!st) continue;
+      if (st.isFile()) out.push({ name: prefix + n, mtime: +st.mtime, size: st.size });
+      else if (st.isDirectory() && prefix === "" && SUBDIRS.has(n)) await scan(full, n + "/");
     }
-    return out.sort((a, b) => b.mtime - a.mtime);
-  } catch {
-    return [];
   }
+  await scan(dir, "");
+  return out.sort((a, b) => b.mtime - a.mtime);
+}
+
+/** Resolve a (possibly subdir) file name safely inside a work dir. */
+export function safeRel(name: string): string {
+  return (name || "").split(/[\\/]/).filter((s) => s && s !== "..").join("/");
 }
 
 export async function ensureDir(dir: string): Promise<void> {
