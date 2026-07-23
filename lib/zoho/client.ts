@@ -117,6 +117,47 @@ async function zohoGet(path: string, params: Record<string, string>): Promise<Re
   return j;
 }
 
+/** Write-side request (POST/PUT/DELETE). Exported for lib/zoho/write.ts. */
+export async function zohoRequest(
+  method: "GET" | "POST" | "PUT" | "DELETE",
+  path: string,
+  opts?: { params?: Record<string, string>; body?: unknown }
+): Promise<Record<string, unknown>> {
+  const token = await getAccessToken();
+  const qs = new URLSearchParams({ organization_id: env("ZOHO_ORG_ID"), ...(opts?.params ?? {}) });
+  const res = await fetch(`https://www.zohoapis.${dc()}/books/v3${path}?${qs}`, {
+    method,
+    headers: {
+      Authorization: `Zoho-oauthtoken ${token}`,
+      ...(opts?.body !== undefined ? { "Content-Type": "application/json" } : {}),
+    },
+    body: opts?.body !== undefined ? JSON.stringify(opts.body) : undefined,
+    cache: "no-store",
+  });
+  const j = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+  if (!res.ok) {
+    throw new Error(
+      `zoho ${method} ${path} failed: ${res.status} ${JSON.stringify(j).slice(0, 300)}`
+    );
+  }
+  return j;
+}
+
+/** Raw binary GET (invoice PDF). */
+export async function zohoGetBinary(
+  path: string,
+  params: Record<string, string>
+): Promise<Uint8Array> {
+  const token = await getAccessToken();
+  const qs = new URLSearchParams({ organization_id: env("ZOHO_ORG_ID"), ...params });
+  const res = await fetch(`https://www.zohoapis.${dc()}/books/v3${path}?${qs}`, {
+    headers: { Authorization: `Zoho-oauthtoken ${token}` },
+    cache: "no-store",
+  });
+  if (!res.ok) throw new Error(`zoho binary GET ${path} failed: ${res.status}`);
+  return new Uint8Array(await res.arrayBuffer());
+}
+
 function isoDaysAgo(days: number): string {
   const d = new Date(Date.now() - days * 86_400_000);
   return d.toISOString().slice(0, 10);

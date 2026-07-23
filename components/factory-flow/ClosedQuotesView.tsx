@@ -12,7 +12,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Loader2, Plus, Trash2, Check, Save, Download, X, Paperclip, Circle, CheckCircle2 } from "lucide-react";
+import { Loader2, Plus, Trash2, Check, Save, Download, Upload, X, Paperclip, Circle, CheckCircle2 } from "lucide-react";
 import { LuxShell, LuxTitle, LuxAccent, LuxStat } from "@/components/widget-ui/lux";
 import { widgetUrl } from "./widget-url";
 import type { DealMilestones, FactoryPricingResult, QuoteActualCosts, ZohoDocRef } from "@/lib/factory/types";
@@ -247,6 +247,8 @@ function ClosedQuoteCard({
   const [note, setNote] = useState(ac?.note ?? "");
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [zohoOpen, setZohoOpen] = useState(false);
+  const [invoiceOpen, setInvoiceOpen] = useState(false);
+  const [expenseOpen, setExpenseOpen] = useState(false);
 
   const draftActuals: QuoteActualCosts = useMemo(() => {
     const f = parseFloat(factory), s = parseFloat(shipping), rv = parseFloat(revenue);
@@ -356,6 +358,7 @@ function ClosedQuoteCard({
         milestones={milestones}
         onChange={setMilestones}
         apiToken={apiToken}
+        onCreateInvoice={() => setInvoiceOpen(true)}
       />
 
       {/* Body: tidy planned↔actual table */}
@@ -485,6 +488,17 @@ function ClosedQuoteCard({
           >
             <Download className="size-4" /> משוך מ-Zoho
           </button>
+          <button
+            type="button"
+            onClick={() => setExpenseOpen(true)}
+            style={{
+              display: "inline-flex", alignItems: "center", gap: 7, padding: "9px 16px",
+              borderRadius: 6, background: "transparent", border: "1px solid var(--lux-line)",
+              color: "var(--lux-ink)", fontSize: 13,
+            }}
+          >
+            <Upload className="size-4" /> רשום הוצאה ב-Zoho
+          </button>
         </div>
       </div>
 
@@ -494,6 +508,22 @@ function ClosedQuoteCard({
           apiToken={apiToken}
           onApply={applyZoho}
           onClose={() => setZohoOpen(false)}
+        />
+      )}
+      {invoiceOpen && (
+        <ZohoInvoiceModal
+          quote={quote}
+          apiToken={apiToken}
+          onDone={() => { setInvoiceOpen(false); onSaved(); }}
+          onClose={() => setInvoiceOpen(false)}
+        />
+      )}
+      {expenseOpen && (
+        <ZohoExpenseModal
+          quote={quote}
+          apiToken={apiToken}
+          onDone={() => { setExpenseOpen(false); onSaved(); }}
+          onClose={() => setExpenseOpen(false)}
         />
       )}
     </section>
@@ -602,12 +632,13 @@ function StageChips({ quote, m }: { quote: ClosedQuote; m: DealMilestones }) {
 }
 
 function DealTimeline({
-  quote, milestones, onChange, apiToken,
+  quote, milestones, onChange, apiToken, onCreateInvoice,
 }: {
   quote: ClosedQuote;
   milestones: DealMilestones;
   onChange: (m: DealMilestones) => void;
   apiToken: string;
+  onCreateInvoice: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const [busyKey, setBusyKey] = useState<string | null>(null);
@@ -694,6 +725,20 @@ function DealTimeline({
                   <span style={{ fontSize: 13, color: stamped ? "var(--lux-ink)" : "var(--lux-muted)" }}>{s.label}</span>
                   {stamped && <span style={{ fontSize: 11.5, color: "var(--lux-muted)" }}>{fmtDate(stamped)}</span>}
                   <span style={{ marginInlineStart: "auto", display: "flex", gap: 6, alignItems: "center" }}>
+                    {s.key === "invoiceSentAt" && milestones.invoiceZohoId && (
+                      <span style={{ fontSize: 10.5, color: "var(--lux-cool,#9db4d6)" }}>
+                        Zoho {milestones.invoiceZohoId}
+                      </span>
+                    )}
+                    {s.key === "invoiceSentAt" && !milestones.invoiceZohoId && (
+                      <button
+                        type="button"
+                        onClick={onCreateInvoice}
+                        style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11, color: "var(--lux-champagne,#d6b26a)", padding: "3px 10px", borderRadius: 5, border: "1px solid rgba(214,178,106,0.4)" }}
+                      >
+                        🧾 צור חשבונית ב-Zoho
+                      </button>
+                    )}
                     {s.fileStage && (
                       <>
                         <input
@@ -1050,6 +1095,373 @@ function ZohoMatchModal({
               הסכומים ימולאו בשדות — שום דבר לא נשמר עד שתלחץ «שמור עלויות בפועל».
             </div>
           </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ---------- Zoho push modals ("דחוף ל-Zoho") ---------- */
+
+const modalShell: React.CSSProperties = {
+  position: "fixed", inset: 0, zIndex: 60, background: "rgba(0,0,0,0.65)",
+  display: "flex", alignItems: "center", justifyContent: "center", padding: 16,
+};
+const modalBox: React.CSSProperties = {
+  width: "100%", maxWidth: 520, maxHeight: "85vh", overflowY: "auto",
+  background: "var(--lux-card, #1d1c1a)", border: "1px solid var(--lux-line)",
+  borderRadius: 12, padding: "18px 20px",
+};
+
+/** Create the customer invoice in Zoho from finalPricing (Eli's house rules). */
+function ZohoInvoiceModal({
+  quote, apiToken, onDone, onClose,
+}: {
+  quote: ClosedQuote;
+  apiToken: string;
+  onDone: () => void;
+  onClose: () => void;
+}) {
+  const fp = quote.finalPricing!;
+  const spec = (quote.productSpec ?? {}) as Record<string, unknown>;
+  const sizeLabel = [
+    spec.heightCm ? `H${spec.heightCm}` : null,
+    spec.depthCm ? `D${spec.depthCm}` : null,
+    spec.widthCm ? `W${spec.widthCm}` : null,
+  ].filter(Boolean).join("*");
+
+  const [productName, setProductName] = useState(`שקית אלבד ממותגת — ${sizeLabel}`.trim());
+  const [advance, setAdvance] = useState("50");
+  const [asDraft, setAsDraft] = useState(false);
+  const [state, setState] = useState<"idle" | "working" | "done" | "error">("idle");
+  const [errMsg, setErrMsg] = useState("");
+  const [result, setResult] = useState<{ invoiceNumber: string; total: number; advance: number; pdfUrl: string | null; tagApplied: boolean } | null>(null);
+
+  const subtotal = fp.totalSellingPrice ?? 0;
+  const vat = Math.round(subtotal * 0.18 * 100) / 100;
+  const total = Math.round((subtotal + vat) * 100) / 100;
+  const advPct = Math.min(100, Math.max(0, parseFloat(advance) || 50));
+
+  async function create() {
+    setState("working");
+    setErrMsg("");
+    try {
+      const res = await fetch(widgetUrl("/api/widget/zoho/create-invoice", apiToken), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          dealId: quote.id,
+          advancePercent: advPct,
+          draft: asDraft,
+          productName,
+        }),
+      });
+      const j = await res.json();
+      if (!res.ok || !j.ok) throw new Error(j.error ?? `HTTP ${res.status}`);
+      setResult({ invoiceNumber: j.invoiceNumber, total: j.total, advance: j.advance, pdfUrl: j.pdfUrl, tagApplied: j.tagApplied });
+      setState("done");
+    } catch (e) {
+      setErrMsg(e instanceof Error ? e.message : String(e));
+      setState("error");
+    }
+  }
+
+  return (
+    <div style={modalShell} onClick={state === "working" ? undefined : onClose}>
+      <div dir="rtl" style={modalBox} onClick={(e) => e.stopPropagation()}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+          <div style={{ fontSize: 15, color: "var(--lux-ink)" }}>🧾 צור חשבונית ב-Zoho Books</div>
+          <button type="button" onClick={onClose} aria-label="סגור" style={{ color: "var(--lux-muted)", padding: 4 }}>
+            <X className="size-4" />
+          </button>
+        </div>
+
+        {state !== "done" && (
+          <>
+            <div style={{ fontSize: 12.5, color: "var(--lux-muted)", marginBottom: 10 }}>
+              לקוח: <span style={{ color: "var(--lux-ink)" }}>{quote.customerName}</span>
+            </div>
+            <label style={{ display: "block", fontSize: 11.5, color: "var(--lux-muted)", marginBottom: 4 }}>שם המוצר בחשבונית</label>
+            <input value={productName} onChange={(e) => setProductName(e.target.value)} style={inputStyle({ width: "100%", marginBottom: 12 })} />
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr auto", rowGap: 6, fontSize: 13, marginBottom: 12 }}>
+              <span style={{ color: "var(--lux-muted)" }}>כמות</span>
+              <span className="tabular-nums" style={{ color: "var(--lux-ink)" }}>{(fp.quantity ?? 0).toLocaleString("he-IL")}</span>
+              <span style={{ color: "var(--lux-muted)" }}>סך ההזמנה (לפני מע״מ)</span>
+              <span className="tabular-nums" style={{ color: "var(--lux-ink)" }}>{ils(subtotal)}</span>
+              <span style={{ color: "var(--lux-muted)" }}>מע״מ 18%</span>
+              <span className="tabular-nums" style={{ color: "var(--lux-ink)" }}>{ils(vat)}</span>
+              <span style={{ color: "var(--lux-muted)" }}>סה״כ כולל מע״מ</span>
+              <span className="tabular-nums" style={{ color: "var(--lux-champagne,#d6b26a)", fontSize: 15 }}>{ils(total)}</span>
+            </div>
+
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+              <label style={{ fontSize: 12, color: "var(--lux-muted)" }}>מקדמה %</label>
+              <input type="number" value={advance} onChange={(e) => setAdvance(e.target.value)} style={inputStyle({ width: 70, padding: "6px 8px" })} />
+              <span style={{ fontSize: 12, color: "var(--lux-muted)" }}>
+                = {ils(Math.round(total * advPct) / 100)} עכשיו · יתרה {ils(Math.round(total * (100 - advPct)) / 100)}
+              </span>
+            </div>
+
+            <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12.5, color: "var(--lux-muted)", marginBottom: 14, cursor: "pointer" }}>
+              <input type="checkbox" checked={asDraft} onChange={(e) => setAsDraft(e.target.checked)} style={{ accentColor: "#d6b26a" }} />
+              השאר כטיוטה ב-Zoho (בלי לסמן "נשלחה")
+            </label>
+
+            <div style={{ fontSize: 11, color: "#e8b4b4", marginBottom: 12 }}>
+              ⚠️ יוצר חשבונית אמיתית בספרים — מספר עוקב, פרטי בנק, מע״מ 18%. בדיוק כמו הסקיל המקומי שלך.
+            </div>
+
+            {state === "error" && <div style={{ fontSize: 12, color: "#e8b4b4", marginBottom: 10 }}>שגיאה: {errMsg}</div>}
+
+            <div style={{ display: "flex", gap: 10 }}>
+              <button
+                type="button"
+                onClick={create}
+                disabled={state === "working"}
+                style={{
+                  display: "inline-flex", alignItems: "center", gap: 7, padding: "9px 18px",
+                  borderRadius: 6, background: "var(--lux-navy-to, #2b3a55)", color: "#e8eefc",
+                  fontSize: 13, fontWeight: 500, opacity: state === "working" ? 0.6 : 1,
+                }}
+              >
+                {state === "working" ? <Loader2 className="size-4 animate-spin" /> : <Check className="size-4" />}
+                {state === "working" ? "יוצר…" : "צור חשבונית"}
+              </button>
+              <button type="button" onClick={onClose} style={{ padding: "9px 16px", borderRadius: 6, border: "1px solid var(--lux-line)", color: "var(--lux-muted)", fontSize: 13 }}>
+                ביטול
+              </button>
+            </div>
+          </>
+        )}
+
+        {state === "done" && result && (
+          <div>
+            <div style={{ fontSize: 14, color: "var(--lux-success,#a8c0a0)", marginBottom: 8 }}>
+              ✓ חשבונית {result.invoiceNumber} נוצרה{asDraft ? " (טיוטה)" : " וסומנה נשלחה"}
+            </div>
+            <div style={{ fontSize: 12.5, color: "var(--lux-muted)", lineHeight: 1.8 }}>
+              סה״כ כולל מע״מ: {ils(result.total)} · מקדמה: {ils(result.advance)}
+              <br />
+              {result.pdfUrl ? <>ה-PDF צורף לתיק העסקה ושוקף ל-GHL.</> : <>ה-PDF לא נמשך — פתח ב-Zoho.</>}
+              {!result.tagApplied && (
+                <>
+                  <br />⚠️ תג ההזמנה "{quote.customerName}" לא קיים ב-Zoho — הוסף אותו פעם אחת ב-UI
+                  (Settings → Reporting Tags → הזמנה) כדי שדוח הרווח-פר-הזמנה יתפוס אותה.
+                </>
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={onDone}
+              style={{ marginTop: 14, padding: "9px 18px", borderRadius: 6, background: "var(--lux-navy-to, #2b3a55)", color: "#e8eefc", fontSize: 13 }}
+            >
+              סגור ורענן
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/** Record an order expense in Zoho (factory / commission / shipping / other). */
+function ZohoExpenseModal({
+  quote, apiToken, onDone, onClose,
+}: {
+  quote: ClosedQuote;
+  apiToken: string;
+  onDone: () => void;
+  onClose: () => void;
+}) {
+  type Bucket = "factory" | "commission" | "shipping" | "other";
+  const name = quote.customerName ?? "";
+  const DESC: Record<Bucket, string> = {
+    factory: `מפעל — הזמנת ${name}`,
+    commission: `עמלת מכירה — הזמנת ${name}`,
+    shipping: `שילוח — הזמנת ${name}`,
+    other: `הוצאה — הזמנת ${name}`,
+  };
+  const [bucket, setBucket] = useState<Bucket>("factory");
+  const [partner, setPartner] = useState("אלי");
+  const [amount, setAmount] = useState("");
+  const [currency, setCurrency] = useState("CNY");
+  const [description, setDescription] = useState(DESC.factory);
+  const [descTouched, setDescTouched] = useState(false);
+  const [applyToCard, setApplyToCard] = useState(true);
+  const [accounts, setAccounts] = useState<{ id: string; name: string }[]>([]);
+  const [accountId, setAccountId] = useState("");
+  const [state, setState] = useState<"idle" | "working" | "done" | "error">("idle");
+  const [errMsg, setErrMsg] = useState("");
+  const [result, setResult] = useState<{ bcyTotalIls: number; exchangeRate: number | null; tagApplied: boolean; customerLinked: boolean } | null>(null);
+
+  useEffect(() => {
+    if (!descTouched) setDescription(DESC[bucket]);
+    if (bucket === "factory") setCurrency("CNY");
+    if (bucket === "commission") setCurrency("ILS");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bucket]);
+
+  const needsAccount = bucket === "shipping" || bucket === "other";
+  useEffect(() => {
+    if (!needsAccount || accounts.length > 0) return;
+    (async () => {
+      try {
+        const res = await fetch(widgetUrl("/api/widget/zoho/create-expense", apiToken), { cache: "no-store" });
+        const j = await res.json();
+        if (j.ok) setAccounts(j.accounts ?? []);
+      } catch { /* dropdown stays empty */ }
+    })();
+  }, [needsAccount, accounts.length, apiToken]);
+
+  async function create() {
+    const amt = parseFloat(amount);
+    if (!Number.isFinite(amt) || amt <= 0) { setErrMsg("סכום לא תקין"); setState("error"); return; }
+    if (needsAccount && !accountId) { setErrMsg("בחר חשבון הוצאה"); setState("error"); return; }
+    setState("working");
+    setErrMsg("");
+    try {
+      const res = await fetch(widgetUrl("/api/widget/zoho/create-expense", apiToken), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          dealId: quote.id,
+          category: bucket === "factory" ? "cogs" : bucket === "commission" ? "commission" : "custom",
+          accountId: needsAccount ? accountId : undefined,
+          partner,
+          amount: amt,
+          currency,
+          description,
+          applyTo: applyToCard
+            ? (bucket === "factory" ? "factory" : bucket === "shipping" ? "shipping" : "other")
+            : null,
+        }),
+      });
+      const j = await res.json();
+      if (!res.ok || !j.ok) throw new Error(j.error ?? `HTTP ${res.status}`);
+      setResult({ bcyTotalIls: j.bcyTotalIls, exchangeRate: j.exchangeRate, tagApplied: j.tagApplied, customerLinked: j.customerLinked });
+      setState("done");
+    } catch (e) {
+      setErrMsg(e instanceof Error ? e.message : String(e));
+      setState("error");
+    }
+  }
+
+  const radio = (checked: boolean): React.CSSProperties => ({
+    fontSize: 12, padding: "5px 12px", borderRadius: 99, cursor: "pointer",
+    border: `1px solid ${checked ? "var(--lux-champagne,#d6b26a)" : "var(--lux-line)"}`,
+    background: checked ? "rgba(214,178,106,0.1)" : "transparent",
+    color: checked ? "var(--lux-champagne,#d6b26a)" : "var(--lux-muted)",
+  });
+
+  return (
+    <div style={modalShell} onClick={state === "working" ? undefined : onClose}>
+      <div dir="rtl" style={modalBox} onClick={(e) => e.stopPropagation()}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+          <div style={{ fontSize: 15, color: "var(--lux-ink)" }}>רשום הוצאה ב-Zoho Books</div>
+          <button type="button" onClick={onClose} aria-label="סגור" style={{ color: "var(--lux-muted)", padding: 4 }}>
+            <X className="size-4" />
+          </button>
+        </div>
+
+        {state !== "done" && (
+          <>
+            <div style={{ fontSize: 11.5, color: "var(--lux-muted)", marginBottom: 5 }}>סוג ההוצאה</div>
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 12 }}>
+              {([["factory", "מפעל (COGS)"], ["commission", "עמלת מכירות"], ["shipping", "שילוח"], ["other", "אחר"]] as [Bucket, string][]).map(([b, l]) => (
+                <button key={b} type="button" style={radio(bucket === b)} onClick={() => setBucket(b)}>{l}</button>
+              ))}
+            </div>
+
+            {needsAccount && (
+              <>
+                <div style={{ fontSize: 11.5, color: "var(--lux-muted)", marginBottom: 5 }}>חשבון הוצאה ב-Zoho</div>
+                <select value={accountId} onChange={(e) => setAccountId(e.target.value)} style={{ ...inputStyle({ width: "100%", marginBottom: 12 }), appearance: "auto" } as React.CSSProperties}>
+                  <option value="">בחר חשבון…</option>
+                  {accounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+                </select>
+              </>
+            )}
+
+            <div style={{ fontSize: 11.5, color: "var(--lux-muted)", marginBottom: 5 }}>מי שילם</div>
+            <div style={{ display: "flex", gap: 6, marginBottom: 12 }}>
+              {["אלי", "שמעון"].map((p) => (
+                <button key={p} type="button" style={radio(partner === p)} onClick={() => setPartner(p)}>{p}</button>
+              ))}
+            </div>
+
+            <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 11.5, color: "var(--lux-muted)", marginBottom: 5 }}>סכום</div>
+                <input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0" style={inputStyle({ width: "100%" })} />
+              </div>
+              <div>
+                <div style={{ fontSize: 11.5, color: "var(--lux-muted)", marginBottom: 5 }}>מטבע</div>
+                <select value={currency} onChange={(e) => setCurrency(e.target.value)} style={{ ...inputStyle({ width: 90 }), appearance: "auto" } as React.CSSProperties}>
+                  <option>ILS</option><option>CNY</option><option>USD</option>
+                </select>
+              </div>
+            </div>
+            {currency !== "ILS" && (
+              <div style={{ fontSize: 11, color: "var(--lux-muted)", marginTop: -8, marginBottom: 12 }}>
+                שער ההמרה יימשך אוטומטית (כמו בסקריפט המקומי) ויירשם על ההוצאה.
+              </div>
+            )}
+
+            <div style={{ fontSize: 11.5, color: "var(--lux-muted)", marginBottom: 5 }}>תיאור</div>
+            <input value={description} onChange={(e) => { setDescription(e.target.value); setDescTouched(true); }} style={inputStyle({ width: "100%", marginBottom: 12 })} />
+
+            <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12.5, color: "var(--lux-muted)", marginBottom: 12, cursor: "pointer" }}>
+              <input type="checkbox" checked={applyToCard} onChange={(e) => setApplyToCard(e.target.checked)} style={{ accentColor: "#d6b26a" }} />
+              עדכן גם את "עלויות בפועל" בכרטיס הזה (בש״ח לפי השער)
+            </label>
+
+            <div style={{ fontSize: 11, color: "#e8b4b4", marginBottom: 12 }}>
+              ⚠️ רושם הוצאה אמיתית בספרים — ללא מע״מ (ייבוא), מקושרת ללקוח {name}.
+            </div>
+
+            {state === "error" && <div style={{ fontSize: 12, color: "#e8b4b4", marginBottom: 10 }}>שגיאה: {errMsg}</div>}
+
+            <div style={{ display: "flex", gap: 10 }}>
+              <button
+                type="button"
+                onClick={create}
+                disabled={state === "working"}
+                style={{
+                  display: "inline-flex", alignItems: "center", gap: 7, padding: "9px 18px",
+                  borderRadius: 6, background: "var(--lux-navy-to, #2b3a55)", color: "#e8eefc",
+                  fontSize: 13, fontWeight: 500, opacity: state === "working" ? 0.6 : 1,
+                }}
+              >
+                {state === "working" ? <Loader2 className="size-4 animate-spin" /> : <Check className="size-4" />}
+                {state === "working" ? "רושם…" : "צור הוצאה"}
+              </button>
+              <button type="button" onClick={onClose} style={{ padding: "9px 16px", borderRadius: 6, border: "1px solid var(--lux-line)", color: "var(--lux-muted)", fontSize: 13 }}>
+                ביטול
+              </button>
+            </div>
+          </>
+        )}
+
+        {state === "done" && result && (
+          <div>
+            <div style={{ fontSize: 14, color: "var(--lux-success,#a8c0a0)", marginBottom: 8 }}>✓ ההוצאה נרשמה ב-Zoho</div>
+            <div style={{ fontSize: 12.5, color: "var(--lux-muted)", lineHeight: 1.8 }}>
+              {ils(result.bcyTotalIls)}
+              {result.exchangeRate ? ` (שער ${result.exchangeRate.toFixed(3)})` : ""}
+              {result.customerLinked ? " · מקושרת ללקוח" : " · ⚠️ הלקוח לא נמצא ב-Zoho — ההוצאה בלי קישור לקוח"}
+              {!result.tagApplied && (
+                <><br />⚠️ תג ההזמנה חסר — הוסף פעם אחת ב-Zoho UI כדי שדוח רווח-פר-הזמנה יתפוס.</>
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={onDone}
+              style={{ marginTop: 14, padding: "9px 18px", borderRadius: 6, background: "var(--lux-navy-to, #2b3a55)", color: "#e8eefc", fontSize: 13 }}
+            >
+              סגור ורענן
+            </button>
+          </div>
         )}
       </div>
     </div>
