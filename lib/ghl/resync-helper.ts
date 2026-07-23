@@ -78,11 +78,15 @@ export async function resyncContact(
     ? sql`${leads.ghlContactId} = ${contactId} OR ${leads.phoneE164} = ${phoneNorm}`
     : eq(leads.ghlContactId, contactId);
 
-  const existing = await db.select({ sid: leads.manychatSubId }).from(leads).where(matchClause);
+  const existing = await db
+    .select({ sid: leads.manychatSubId, existingOppId: leads.ghlOpportunityId })
+    .from(leads)
+    .where(matchClause);
   if (existing.length === 0) {
     return { ok: false, error: "no_lead_matched", contactId };
   }
   const sid = existing[0].sid;
+  const existingOppId = existing[0].existingOppId;
 
   const cf: Record<string, unknown> = {};
   for (const f of contact.customFields ?? []) {
@@ -90,10 +94,17 @@ export async function resyncContact(
     if (key) cf[key] = f.value;
   }
 
+  // A contact can hold BOTH a closed deal (lost/won) AND a stray open duplicate.
+  // Prefer the opp the lead is ALREADY linked to (ghl_opportunity_id) so a later
+  // resync doesn't let an open duplicate override a lost status and resurrect the
+  // lead as "active" (Eli 2026-07-23 — same footgun fixed in reconcile-stages).
+  // Fall back to the pipeline match / first opp only when the linked opp is gone.
   const pipelineId = process.env.GHL_PIPELINE_ID;
-  const opp = pipelineId
-    ? opps.find((o) => o.pipelineId === pipelineId) ?? opps[0] ?? null
-    : opps[0] ?? null;
+  const opp =
+    (existingOppId ? opps.find((o) => o.id === existingOppId) : undefined) ??
+    (pipelineId ? opps.find((o) => o.pipelineId === pipelineId) : undefined) ??
+    opps[0] ??
+    null;
 
   let localStage: string | null = null;
   let pipelineFlag: string | null = null;
