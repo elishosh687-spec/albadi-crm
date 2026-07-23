@@ -8,31 +8,105 @@
 
 import { db } from "@/lib/db";
 import { factoryQuoteRequests, leads } from "@/drizzle/schema";
-import { and, desc, eq, isNotNull, isNull, or } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNotNull, isNull, or } from "drizzle-orm";
 import type { DealMilestones, FactoryPricingResult, QuoteActualCosts } from "@/lib/factory/types";
+import { allocateCombined } from "@/lib/factory/combined";
+import { getFactoryConfig } from "@/lib/factory/config";
+
+/** One product line inside a deal (a deal has 1, or N when combined). */
+export interface DealProduct {
+  id: string;
+  quotationNo: string | null;
+  productSpec: Record<string, unknown> | null;
+  finalPricing: FactoryPricingResult | null;
+}
 
 export interface ClosedQuoteRow {
+  /** Primary member id — actuals / milestones / invoice attach here. */
   id: string;
+  dealGroupId: string | null;
   leadSid: string;
   quotationNo: string | null;
   customerName: string | null;
   customerPhone: string | null;
   productSpec: Record<string, unknown> | null;
+  /** Combined summary for a group; the single quote's pricing otherwise. */
   finalPricing: FactoryPricingResult | null;
   actualCosts: QuoteActualCosts | null;
   dealMilestones: DealMilestones | null;
   sentToCustomerAt: string | null;
   updatedAt: string;
-  /** True when this quote was pulled in via "סגור עסקה" (vs. the lead's WON stage). */
   explicitlyClosed: boolean;
+  /** The product lines in this deal (1 for single, N for combined). */
+  products: DealProduct[];
+  isCombined: boolean;
+}
+
+function r2(n: number): number {
+  return Math.round(n * 100) / 100;
+}
+
+/** Combine N members into one FactoryPricingResult summary via allocateCombined
+ *  (same engine as the combined PDF — grand total incl. molds + reallocated
+ *  single-shipment shipping). */
+function combineMembers(
+  members: FactoryPricingResult[],
+  config: Awaited<ReturnType<typeof getFactoryConfig>>
+): FactoryPricingResult {
+  const singleOpt =
+    config.shippingOptions.find((s) => s.id === members[0]?.shippingOptionId) ?? null;
+  const alloc = allocateCombined(
+    members.map((p, i) => ({ id: String(i), pricing: p })),
+    singleOpt,
+    config
+  );
+  const quantity = members.reduce((s, m) => s + (m.quantity || 0), 0);
+  const sumMemberShipping = r2(members.reduce((s, m) => s + (m.totalShipping || 0), 0));
+  let totalShipping = r2(alloc.perProduct.reduce((s, x) => s + (x.adjusted.totalShipping || 0), 0));
+  let totalSellingPrice = r2(alloc.grandTotal);
+  // Safety net: if the shipping option didn't resolve (unknown shippingOptionId)
+  // the combined shipping collapses to 0. Fall back to summing each member's own
+  // shipping so the total is never understated.
+  if (totalShipping < 1 && sumMemberShipping > 1) {
+    const bagsAndMolds = r2(
+      members.reduce((s, m) => s + (m.totalSellingPrice || 0) - (m.totalShipping || 0), 0)
+    );
+    totalShipping = sumMemberShipping;
+    totalSellingPrice = r2(bagsAndMolds + totalShipping);
+  }
+  const totalCost = r2(
+    members.reduce((s, m) => s + (m.totalCost || 0) + (m.moldsTotalCostIls || 0), 0)
+  );
+  const totalProfit = r2(totalSellingPrice - totalCost);
+  return {
+    ...members[0],
+    quantity,
+    unitCost: quantity > 0 ? r2(totalCost / quantity) : totalCost,
+    unitShipping: quantity > 0 ? r2(totalShipping / quantity) : totalShipping,
+    unitProfit: quantity > 0 ? r2(totalProfit / quantity) : totalProfit,
+    unitSellingPrice: quantity > 0 ? r2(totalSellingPrice / quantity) : totalSellingPrice,
+    totalCost,
+    totalShipping,
+    totalProfit,
+    totalSellingPrice,
+    totalCartons: members.reduce((s, m) => s + (m.totalCartons || 0), 0),
+    totalWeightKg: r2(members.reduce((s, m) => s + (m.totalWeightKg || 0), 0)),
+    totalCbm: r2(members.reduce((s, m) => s + (m.totalCbm || 0), 0)),
+    // molds already folded into the grand total; zero the standalone fields so
+    // the card doesn't double-count them.
+    moldsTotalCny: members.reduce((s, m) => s + (m.moldsTotalCny || 0), 0),
+    moldsTotalCostIls: r2(members.reduce((s, m) => s + (m.moldsTotalCostIls || 0), 0)),
+    moldsTotalSellingPriceIls: r2(members.reduce((s, m) => s + (m.moldsTotalSellingPriceIls || 0), 0)),
+    moldsTotalProfitIls: r2(members.reduce((s, m) => s + (m.moldsTotalProfitIls || 0), 0)),
+  };
 }
 
 /**
  * Deals in the עסקאות tab: a finalized quote appears when EITHER
  *  - it was explicitly pulled in via "סגור עסקה" (closed_deal_at set), OR
  *  - its lead is marked WON (legacy/auto path).
- * Explicitly-closed quotes are decoupled from the pipeline stage, since most
- * finalized quotes never got marked WON (54 finalized → only 4 WON).
+ * Quotes sharing a deal_group_id collapse into ONE combined deal (multi-product,
+ * one invoice), priced via the same allocateCombined engine as the combined PDF.
  */
 export async function listClosedQuotes(): Promise<ClosedQuoteRow[]> {
   const rows = await db
@@ -45,8 +119,10 @@ export async function listClosedQuotes(): Promise<ClosedQuoteRow[]> {
       actualCosts: factoryQuoteRequests.actualCosts,
       dealMilestones: factoryQuoteRequests.dealMilestones,
       sentToCustomerAt: factoryQuoteRequests.sentToCustomerAt,
+      createdAt: factoryQuoteRequests.createdAt,
       updatedAt: factoryQuoteRequests.updatedAt,
       closedDealAt: factoryQuoteRequests.closedDealAt,
+      dealGroupId: factoryQuoteRequests.dealGroupId,
       customerName: leads.name,
       customerPhone: leads.phoneE164,
     })
@@ -65,20 +141,97 @@ export async function listClosedQuotes(): Promise<ClosedQuoteRow[]> {
     .orderBy(desc(factoryQuoteRequests.updatedAt))
     .limit(500);
 
-  return rows.map((r) => ({
-    id: r.id,
-    leadSid: r.leadSid,
-    quotationNo: r.quotationNo,
-    customerName: r.customerName,
-    customerPhone: r.customerPhone,
-    productSpec: (r.productSpec ?? null) as Record<string, unknown> | null,
-    finalPricing: (r.finalPricing ?? null) as FactoryPricingResult | null,
-    actualCosts: (r.actualCosts ?? null) as QuoteActualCosts | null,
-    dealMilestones: (r.dealMilestones ?? null) as DealMilestones | null,
-    sentToCustomerAt: r.sentToCustomerAt ? r.sentToCustomerAt.toISOString() : null,
-    updatedAt: r.updatedAt.toISOString(),
-    explicitlyClosed: r.closedDealAt != null,
-  }));
+  // Group rows into deals: shared deal_group_id → one deal; else keyed by own id.
+  const byDeal = new Map<string, typeof rows>();
+  for (const r of rows) {
+    const key = r.dealGroupId ?? r.id;
+    const list = byDeal.get(key);
+    if (list) list.push(r);
+    else byDeal.set(key, [r]);
+  }
+
+  const anyCombined = [...byDeal.values()].some((m) => m.length > 1);
+  const config = anyCombined ? await getFactoryConfig() : null;
+
+  const deals: ClosedQuoteRow[] = [];
+  for (const members of byDeal.values()) {
+    // primary = oldest member (stable; where actuals/milestones live)
+    members.sort((a, b) => +a.createdAt - +b.createdAt);
+    const primary = members[0];
+    const products: DealProduct[] = members.map((m) => ({
+      id: m.id,
+      quotationNo: m.quotationNo,
+      productSpec: (m.productSpec ?? null) as Record<string, unknown> | null,
+      finalPricing: (m.finalPricing ?? null) as FactoryPricingResult | null,
+    }));
+    const isCombined = members.length > 1;
+    let finalPricing = (primary.finalPricing ?? null) as FactoryPricingResult | null;
+    if (isCombined && config) {
+      const priced = products.map((p) => p.finalPricing).filter((p): p is FactoryPricingResult => !!p);
+      if (priced.length > 1) finalPricing = combineMembers(priced, config);
+    }
+    // newest updatedAt across members drives the deal's sort/recency
+    const newest = members.reduce((a, b) => (+a.updatedAt > +b.updatedAt ? a : b));
+    deals.push({
+      id: primary.id,
+      dealGroupId: primary.dealGroupId,
+      leadSid: primary.leadSid,
+      quotationNo: primary.quotationNo,
+      customerName: primary.customerName,
+      customerPhone: primary.customerPhone,
+      productSpec: (primary.productSpec ?? null) as Record<string, unknown> | null,
+      finalPricing,
+      actualCosts: (primary.actualCosts ?? null) as QuoteActualCosts | null,
+      dealMilestones: (primary.dealMilestones ?? null) as DealMilestones | null,
+      sentToCustomerAt: primary.sentToCustomerAt ? primary.sentToCustomerAt.toISOString() : null,
+      updatedAt: newest.updatedAt.toISOString(),
+      explicitlyClosed: members.some((m) => m.closedDealAt != null),
+      products,
+      isCombined,
+    });
+  }
+  deals.sort((a, b) => (a.updatedAt > b.updatedAt ? -1 : 1));
+  return deals;
+}
+
+/**
+ * "סגור עסקה משולבת" — close several finalized quotes of one customer as ONE
+ * combined deal (shared deal_group_id + closed stamp). Returns the group id.
+ */
+export async function closeDealGroup(quoteIds: string[]): Promise<string> {
+  const ids = [...new Set(quoteIds.filter(Boolean))].sort();
+  if (ids.length === 0) throw new Error("no quote ids");
+  // Deterministic group id from the primary (sorted-first) quote — idempotent.
+  const groupId = `dg_${ids[0]}`;
+  await db
+    .update(factoryQuoteRequests)
+    .set({ closedDealAt: new Date(), dealGroupId: groupId, updatedAt: new Date() })
+    .where(inArray(factoryQuoteRequests.id, ids));
+  return groupId;
+}
+
+/** Ungroup a combined deal (clear group id on all its members). */
+export async function unbindDealGroup(groupId: string): Promise<void> {
+  await db
+    .update(factoryQuoteRequests)
+    .set({ dealGroupId: null, updatedAt: new Date() })
+    .where(eq(factoryQuoteRequests.dealGroupId, groupId));
+}
+
+/** Quote ids belonging to a deal (for multi-line invoice creation). */
+export async function dealMemberIds(primaryId: string): Promise<string[]> {
+  const [row] = await db
+    .select({ groupId: factoryQuoteRequests.dealGroupId })
+    .from(factoryQuoteRequests)
+    .where(eq(factoryQuoteRequests.id, primaryId))
+    .limit(1);
+  if (!row?.groupId) return [primaryId];
+  const members = await db
+    .select({ id: factoryQuoteRequests.id })
+    .from(factoryQuoteRequests)
+    .where(eq(factoryQuoteRequests.dealGroupId, row.groupId))
+    .orderBy(asc(factoryQuoteRequests.createdAt));
+  return members.map((m) => m.id);
 }
 
 /** Upsert the actual-cost reconciliation for one quote. Stamps updatedAt. */

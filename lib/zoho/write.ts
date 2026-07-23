@@ -105,14 +105,24 @@ function buildTerms(subtotal: number, taxAmount: number, total: number, advance:
   ].join("\n");
 }
 
-export interface CreateInvoiceInput {
-  customerName: string;
+export interface InvoiceLine {
   /** Line name, e.g. שקית אלבד ממותגת — H35*D10*W25 (never "נון-וובן"). */
-  productName: string;
+  name: string;
   description?: string;
   quantity: number;
   /** Exact EX-VAT line total (₪) — rate becomes targetTotal/quantity. */
   targetTotalIls: number;
+}
+
+export interface CreateInvoiceInput {
+  customerName: string;
+  /** Multi-line order (combined deal). Takes precedence over the single fields. */
+  lineItems?: InvoiceLine[];
+  // --- single-product shorthand (kept for the common case) ---
+  productName?: string;
+  description?: string;
+  quantity?: number;
+  targetTotalIls?: number;
   advancePercent?: number;
   /** Override the auto-built terms text entirely (fixed-deposit deals). */
   customTerms?: string;
@@ -137,9 +147,30 @@ export interface CreateInvoiceResult {
 export async function createZohoInvoice(input: CreateInvoiceInput): Promise<CreateInvoiceResult> {
   const pct = input.advancePercent ?? 50;
   const customerId = await ensureCustomer(input.customerName);
-  const qty = input.quantity;
-  const rate = input.targetTotalIls / qty; // exact-total trick — Zoho keeps >2 decimals
-  const subtotal = qty * rate;
+
+  // Normalize to one-or-more lines (combined deals pass lineItems).
+  const lines: InvoiceLine[] =
+    input.lineItems && input.lineItems.length > 0
+      ? input.lineItems
+      : [{
+          name: input.productName ?? "שקית אלבד ממותגת",
+          description: input.description,
+          quantity: input.quantity ?? 1,
+          targetTotalIls: input.targetTotalIls ?? 0,
+        }];
+
+  const lineBodies = lines.map((li) => {
+    const q = li.quantity || 1;
+    return {
+      name: li.name,
+      description: li.description ?? "",
+      quantity: q,
+      rate: li.targetTotalIls / q, // exact-total trick — Zoho keeps >2 decimals
+      tax_id: DEFAULT_TAX_ID,
+    };
+  });
+
+  const subtotal = lineBodies.reduce((s, l) => s + l.quantity * l.rate, 0);
   const taxAmount = Math.round(subtotal * (VAT_PCT / 100) * 100) / 100;
   const total = Math.round((subtotal + taxAmount) * 100) / 100;
   const advance = Math.round(total * (pct / 100) * 100) / 100;
@@ -148,15 +179,7 @@ export async function createZohoInvoice(input: CreateInvoiceInput): Promise<Crea
   const invoiceNumber = await nextInvoiceNumber();
   const body: Record<string, unknown> = {
     customer_id: customerId,
-    line_items: [
-      {
-        name: input.productName,
-        description: input.description ?? "",
-        quantity: qty,
-        rate,
-        tax_id: DEFAULT_TAX_ID,
-      },
-    ],
+    line_items: lineBodies,
     terms: input.customTerms || buildTerms(subtotal, taxAmount, total, advance, balance, pct),
     notes: `תודה על ההזמנה!\n\n${BANK_DETAILS}`,
     is_inclusive_tax: false,

@@ -15,16 +15,29 @@ import { NextRequest, NextResponse } from "next/server";
 import { widgetAuthed } from "@/lib/widget/auth";
 import { db } from "@/lib/db";
 import { factoryQuoteRequests, leads } from "@/drizzle/schema";
-import { eq, sql } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 import { zohoConfigured } from "@/lib/zoho/client";
-import { createZohoInvoice } from "@/lib/zoho/write";
+import { createZohoInvoice, type InvoiceLine } from "@/lib/zoho/write";
 import {
   appendDealFile,
   mirrorDealEventToGhl,
   saveDealMilestones,
 } from "@/lib/factory/server/milestones";
-import { saveActualCosts } from "@/lib/factory/server/closed";
+import { dealMemberIds, saveActualCosts } from "@/lib/factory/server/closed";
 import type { FactoryPricingResult, FactoryProductSpec, QuoteActualCosts } from "@/lib/factory/types";
+
+function lineFromSpec(spec: FactoryProductSpec | null, fp: FactoryPricingResult, customerName: string): InvoiceLine {
+  const size = spec
+    ? [spec.heightCm && `H${spec.heightCm}`, spec.depthCm && `D${spec.depthCm}`, spec.widthCm && `W${spec.widthCm}`]
+        .filter(Boolean).join("*")
+    : "";
+  return {
+    name: `שקית אלבד ממותגת — ${size || spec?.productName || ""}`.trim(),
+    description: [spec?.material, spec?.printing, spec?.finishing].filter(Boolean).join(" · "),
+    quantity: fp.quantity,
+    targetTotalIls: fp.totalSellingPrice,
+  };
+}
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -69,26 +82,38 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: "deal missing pricing or customer name" }, { status: 400 });
   }
 
-  const sizeLabel = spec
-    ? [spec.heightCm && `H${spec.heightCm}`, spec.depthCm && `D${spec.depthCm}`, spec.widthCm && `W${spec.widthCm}`]
-        .filter(Boolean)
-        .join("*")
-    : "";
-  // House rule: "שקית אלבד ממותגת — <מידות>", never "נון-וובן".
-  const productName = body.productName || `שקית אלבד ממותגת — ${sizeLabel || spec?.productName || ""}`.trim();
-  const description =
-    body.description ??
-    [spec?.material, spec?.printing, spec?.finishing, `לקוח: ${row.customerName}`]
-      .filter(Boolean)
-      .join(" · ");
+  // A combined deal (multiple grouped quotes) → one invoice with a line per
+  // product. dealMemberIds returns [primary] for a single-quote deal.
+  const memberIds = await dealMemberIds(body.dealId);
+  let lineItems: InvoiceLine[];
+  if (memberIds.length > 1) {
+    const members = await db
+      .select({
+        productSpec: factoryQuoteRequests.productSpec,
+        finalPricing: factoryQuoteRequests.finalPricing,
+      })
+      .from(factoryQuoteRequests)
+      .where(inArray(factoryQuoteRequests.id, memberIds));
+    lineItems = members
+      .filter((m) => m.finalPricing)
+      .map((m) => lineFromSpec(m.productSpec as FactoryProductSpec | null, m.finalPricing as FactoryPricingResult, row.customerName!));
+  } else {
+    const sizeLabel = spec
+      ? [spec.heightCm && `H${spec.heightCm}`, spec.depthCm && `D${spec.depthCm}`, spec.widthCm && `W${spec.widthCm}`]
+          .filter(Boolean).join("*")
+      : "";
+    lineItems = [{
+      name: body.productName || `שקית אלבד ממותגת — ${sizeLabel || spec?.productName || ""}`.trim(),
+      description: body.description ?? [spec?.material, spec?.printing, spec?.finishing, `לקוח: ${row.customerName}`].filter(Boolean).join(" · "),
+      quantity: fp.quantity,
+      targetTotalIls: fp.totalSellingPrice,
+    }];
+  }
 
   try {
     const result = await createZohoInvoice({
       customerName: row.customerName,
-      productName,
-      description,
-      quantity: fp.quantity,
-      targetTotalIls: fp.totalSellingPrice,
+      lineItems,
       advancePercent: body.advancePercent,
       customTerms: body.customTerms,
       draft: body.draft,

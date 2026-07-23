@@ -31,6 +31,15 @@ interface ClosedQuote {
   dealMilestones: DealMilestones | null;
   sentToCustomerAt: string | null;
   updatedAt: string;
+  products?: DealProduct[];
+  isCombined?: boolean;
+}
+
+interface DealProduct {
+  id: string;
+  quotationNo: string | null;
+  productSpec: Record<string, unknown> | null;
+  finalPricing: FactoryPricingResult | null;
 }
 
 interface ZohoUnmatchedDoc {
@@ -329,13 +338,36 @@ function ClosedQuoteCard({
         }}
       >
         <div style={{ minWidth: 0 }}>
-          <div className="lux-sans" style={{ fontSize: 16, fontWeight: 400, color: "var(--lux-ink)" }}>
+          <div className="lux-sans" style={{ fontSize: 16, fontWeight: 400, color: "var(--lux-ink)", display: "flex", alignItems: "center", gap: 8 }}>
             {quote.customerName || "לקוח"}
+            {quote.isCombined && (
+              <span style={{ fontSize: 10, padding: "2px 8px", borderRadius: 99, background: "rgba(214,178,106,0.12)", border: "1px solid rgba(214,178,106,0.35)", color: "var(--lux-champagne,#d6b26a)" }}>
+                עסקה משולבת · {quote.products?.length ?? 1} מוצרים
+              </span>
+            )}
           </div>
-          <div style={{ fontSize: 11.5, color: "var(--lux-muted)", marginTop: 3 }}>
-            {[spec, quote.quotationNo ? `#${quote.quotationNo}` : null, `נסגר ${fmtDate(quote.sentToCustomerAt ?? quote.updatedAt)}`]
-              .filter(Boolean).join(" · ")}
-          </div>
+          {quote.isCombined && quote.products && quote.products.length > 1 ? (
+            <div style={{ fontSize: 11.5, color: "var(--lux-muted)", marginTop: 4, display: "flex", flexDirection: "column", gap: 2 }}>
+              {quote.products.map((p, i) => {
+                const ps = (p.productSpec ?? {}) as Record<string, unknown>;
+                const label = (ps.productName as string) || (ps.description as string) ||
+                  [ps.heightCm && `H${ps.heightCm}`, ps.depthCm && `D${ps.depthCm}`, ps.widthCm && `W${ps.widthCm}`].filter(Boolean).join("×") || "מוצר";
+                return (
+                  <span key={p.id}>
+                    {i + 1}. {label}
+                    {ps.quantity ? ` · ${Number(ps.quantity).toLocaleString("he-IL")} יח׳` : ""}
+                    {p.finalPricing ? ` · ${ils(p.finalPricing.totalSellingPrice)}` : ""}
+                  </span>
+                );
+              })}
+              <span style={{ marginTop: 2 }}>נסגר {fmtDate(quote.sentToCustomerAt ?? quote.updatedAt)}</span>
+            </div>
+          ) : (
+            <div style={{ fontSize: 11.5, color: "var(--lux-muted)", marginTop: 3 }}>
+              {[spec, quote.quotationNo ? `#${quote.quotationNo}` : null, `נסגר ${fmtDate(quote.sentToCustomerAt ?? quote.updatedAt)}`]
+                .filter(Boolean).join(" · ")}
+            </div>
+          )}
           <StageChips quote={quote} m={milestones} />
         </div>
         <div style={{ textAlign: "left" }}>

@@ -290,6 +290,23 @@ export function QuotesHistoryView({ apiToken }: { apiToken: string }) {
     }
   }
 
+  // "סגור עסקה משולבת" — close ALL a customer's finalized quotes as ONE deal.
+  async function handleCloseDealGroup(leadSid: string, ids: string[]) {
+    if (!confirm(`לסגור עסקה משולבת מ-${ids.length} מוצרים? הם יופיעו כעסקה אחת עם חשבונית אחת.`)) return;
+    setBusyId(`closegroup:${leadSid}`);
+    try {
+      const res = await fetch(
+        `/api/widget/factory/close-deal-group?widget_token=${encodeURIComponent(apiToken)}`,
+        { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ quoteIds: ids }) }
+      );
+      const j = await res.json().catch(() => ({}));
+      if (!j?.ok) { alert(`שגיאה: ${j?.error ?? res.status}`); return; }
+      await refresh();
+    } finally {
+      setBusyId(null);
+    }
+  }
+
   // Delete the whole combined offer = every quote of this customer.
   async function handleDeleteGroup(g: CustomerGroup) {
     if (
@@ -1050,6 +1067,18 @@ export function QuotesHistoryView({ apiToken }: { apiToken: string }) {
                           ) : (
                             <MessageCircle className="size-3.5" />
                           )}
+                        </button>
+                      )}
+                      {finalizedIds.length >= 2 && (
+                        <button
+                          type="button"
+                          onClick={() => handleCloseDealGroup(g.leadSid, finalizedIds)}
+                          disabled={busyId === `closegroup:${g.leadSid}`}
+                          title={`סגור עסקה משולבת (${finalizedIds.length} מוצרים → עסקה אחת)`}
+                          className="shrink-0 inline-flex items-center gap-1 text-[10px] rounded-full border border-amber-500/40 bg-amber-500/10 text-amber-400 px-2 py-0.5 hover:bg-amber-500/20 disabled:opacity-50"
+                        >
+                          {busyId === `closegroup:${g.leadSid}` ? <Loader2 className="size-3 animate-spin" /> : <CheckCircle2 className="size-3" />}
+                          סגור עסקה משולבת
                         </button>
                       )}
                       <button
