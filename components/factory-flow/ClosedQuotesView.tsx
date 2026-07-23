@@ -12,7 +12,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Loader2, Plus, Trash2, Check, Save, Download, Upload, X, Paperclip, Circle, CheckCircle2 } from "lucide-react";
+import { Loader2, Plus, Trash2, Check, Save, Download, Upload, X, Paperclip, Circle, CheckCircle2, ChevronDown, Search } from "lucide-react";
 import { LuxShell, LuxTitle, LuxAccent, LuxStat } from "@/components/widget-ui/lux";
 import { widgetUrl } from "./widget-url";
 import type { DealMilestones, FactoryPricingResult, QuoteActualCosts, ZohoDocRef } from "@/lib/factory/types";
@@ -106,13 +106,16 @@ export function ClosedQuotesView({ apiToken }: { apiToken: string }) {
 
   useEffect(() => { load(); }, [load]);
 
-  // Deep-link from the quotes tab: ?focus=<quote id or lead sid> scrolls to the card.
+  // Deep-link from the quotes tab: ?focus=<quote id or lead sid> — render ALL
+  // (bypass the window), expand the target, and scroll to it.
   const focusedOnce = useRef(false);
   useEffect(() => {
     if (!quotes || focusedOnce.current) return;
     const focus = new URLSearchParams(window.location.search).get("focus");
     if (!focus) return;
     focusedOnce.current = true;
+    setLimit(9999);
+    setExpandedIds((prev) => new Set(prev).add(focus));
     setTimeout(() => {
       const el =
         document.getElementById(`deal-${focus}`) ??
@@ -146,6 +149,47 @@ export function ClosedQuotesView({ apiToken }: { apiToken: string }) {
     }
     return { count: priced.length, plannedProfit, actualProfit, variance: actualProfit - plannedProfit, reconciled };
   }, [quotes]);
+
+  // ---- navigation: search + filter + sort + windowing (scales to 1000s) ----
+  const [query, setQuery] = useState("");
+  const [filter, setFilter] = useState<"all" | "pending" | "done" | "combined" | "estimate">("all");
+  const [sort, setSort] = useState<"recent" | "profit" | "name">("recent");
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+  const [limit, setLimit] = useState(30);
+
+  const visible = useMemo(() => {
+    let list = (quotes ?? []).filter((q) => q.finalPricing);
+    const q = query.trim().toLowerCase();
+    if (q) {
+      list = list.filter((d) => {
+        const hay = [
+          d.customerName, d.quotationNo,
+          ...(d.products?.map((p) => p.quotationNo) ?? []),
+        ].filter(Boolean).join(" ").toLowerCase();
+        return hay.includes(q);
+      });
+    }
+    if (filter === "pending") list = list.filter((d) => !d.actualCosts);
+    else if (filter === "done") list = list.filter((d) => !!d.actualCosts);
+    else if (filter === "combined") list = list.filter((d) => d.isCombined);
+    else if (filter === "estimate") list = list.filter((d) => d.fromEstimate);
+
+    const sorted = [...list];
+    if (sort === "recent") sorted.sort((a, b) => +new Date(b.updatedAt) - +new Date(a.updatedAt));
+    else if (sort === "name") sorted.sort((a, b) => (a.customerName ?? "").localeCompare(b.customerName ?? "", "he"));
+    else if (sort === "profit")
+      sorted.sort((a, b) => reconcile(b.finalPricing!, b.actualCosts).actualProfit - reconcile(a.finalPricing!, a.actualCosts).actualProfit);
+    return sorted;
+  }, [quotes, query, filter, sort]);
+
+  const shown = visible.slice(0, limit);
+  const toggleExpand = useCallback((id: string) => {
+    setExpandedIds((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  }, []);
 
   return (
     <LuxShell>
@@ -220,13 +264,103 @@ export function ClosedQuotesView({ apiToken }: { apiToken: string }) {
         )}
 
         {quotes && quotes.length > 0 && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-            {quotes.map((q) =>
-              q.finalPricing ? (
-                <ClosedQuoteCard key={q.id} quote={q} apiToken={apiToken} onSaved={load} />
-              ) : null
+          <>
+            {/* Toolbar: search + filter chips + sort — keeps 1000s navigable */}
+            <div
+              style={{
+                display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap",
+                marginBottom: 14, paddingBottom: 14, borderBottom: "1px solid var(--lux-line)",
+              }}
+            >
+              <div style={{ position: "relative", flex: "1 1 220px", minWidth: 180 }}>
+                <Search className="size-4" style={{ position: "absolute", insetInlineStart: 10, top: "50%", transform: "translateY(-50%)", color: "var(--lux-muted)" }} />
+                <input
+                  value={query}
+                  onChange={(e) => { setQuery(e.target.value); setLimit(30); }}
+                  placeholder="חיפוש לקוח / מס׳ הצעה…"
+                  style={{
+                    width: "100%", padding: "8px 12px 8px 34px", borderRadius: 8,
+                    background: "var(--lux-inset)", border: "1px solid var(--lux-line)",
+                    color: "var(--lux-ink)", fontSize: 13, outline: "none",
+                  }}
+                />
+              </div>
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                {([
+                  ["all", "הכל"],
+                  ["pending", "ללא עלויות"],
+                  ["done", "הוזנו עלויות"],
+                  ["combined", "משולבות"],
+                  ["estimate", "לפי אומדן"],
+                ] as const).map(([key, label]) => {
+                  const active = filter === key;
+                  return (
+                    <button
+                      key={key}
+                      onClick={() => { setFilter(key); setLimit(30); }}
+                      style={{
+                        fontSize: 12, padding: "5px 11px", borderRadius: 99, cursor: "pointer",
+                        background: active ? "rgba(214,196,172,0.14)" : "transparent",
+                        border: `1px solid ${active ? "var(--lux-champagne)" : "var(--lux-line)"}`,
+                        color: active ? "var(--lux-champagne)" : "var(--lux-muted)",
+                      }}
+                    >
+                      {label}
+                    </button>
+                  );
+                })}
+              </div>
+              <select
+                value={sort}
+                onChange={(e) => setSort(e.target.value as typeof sort)}
+                style={{
+                  fontSize: 12, padding: "6px 10px", borderRadius: 8, cursor: "pointer",
+                  background: "var(--lux-inset)", border: "1px solid var(--lux-line)", color: "var(--lux-ink)",
+                }}
+              >
+                <option value="recent">עדכני ביותר</option>
+                <option value="profit">רווח (גבוה→נמוך)</option>
+                <option value="name">שם לקוח</option>
+              </select>
+            </div>
+
+            <div style={{ fontSize: 11.5, color: "var(--lux-muted)", marginBottom: 10 }}>
+              מציג {shown.length} מתוך {visible.length}
+              {visible.length !== totals.count ? ` (מסונן מ-${totals.count})` : ""}
+            </div>
+
+            {visible.length === 0 ? (
+              <div style={{ padding: 20, color: "var(--lux-muted)", fontSize: 13.5, textAlign: "center" }}>
+                אין עסקאות שתואמות את החיפוש/הסינון.
+              </div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                {shown.map((q) => (
+                  <ClosedQuoteCard
+                    key={q.id}
+                    quote={q}
+                    apiToken={apiToken}
+                    onSaved={load}
+                    expanded={expandedIds.has(q.id)}
+                    onToggle={() => toggleExpand(q.id)}
+                  />
+                ))}
+              </div>
             )}
-          </div>
+
+            {visible.length > limit && (
+              <button
+                onClick={() => setLimit((n) => n + 30)}
+                style={{
+                  display: "block", margin: "16px auto 0", padding: "9px 22px", borderRadius: 8,
+                  background: "transparent", border: "1px solid var(--lux-line)", cursor: "pointer",
+                  color: "var(--lux-ink)", fontSize: 13,
+                }}
+              >
+                טען עוד ({visible.length - limit})
+              </button>
+            )}
+          </>
         )}
       </div>
     </LuxShell>
@@ -237,10 +371,14 @@ function ClosedQuoteCard({
   quote,
   apiToken,
   onSaved,
+  expanded,
+  onToggle,
 }: {
   quote: ClosedQuote;
   apiToken: string;
   onSaved: () => void;
+  expanded: boolean;
+  onToggle: () => void;
 }) {
   const fp = quote.finalPricing!;
   const ac = quote.actualCosts;
@@ -347,6 +485,8 @@ function ClosedQuoteCard({
 
   const varPos = r.variance >= 0;
   const varColor = Math.abs(r.variance) < 1 ? "var(--lux-muted)" : varPos ? "var(--lux-success,#a8c0a0)" : "#e8b4b4";
+  const doneCount = TIMELINE.filter((s) => !!milestones[s.key]).length;
+  const reconciled = !!quote.actualCosts;
 
   return (
     <section
@@ -354,15 +494,25 @@ function ClosedQuoteCard({
       data-lead={quote.leadSid}
       style={{ background: "var(--lux-card)", borderRadius: 10, border: "1px solid var(--lux-line)", overflow: "hidden" }}
     >
-      {/* Header: name + spec + stage chips (right) · ACTUAL PROFIT hero (left) */}
+      {/* Header — clickable summary row; body expands on click */}
       <div
+        onClick={onToggle}
         style={{
           display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap",
-          padding: "16px 20px", background: "var(--lux-inset)", borderBottom: "1px solid var(--lux-line)",
+          padding: "14px 18px", background: "var(--lux-inset)", cursor: "pointer",
+          borderBottom: expanded ? "1px solid var(--lux-line)" : "none",
         }}
       >
+        <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0, flex: "1 1 auto" }}>
+        <ChevronDown
+          className="size-4"
+          style={{
+            color: "var(--lux-muted)", flexShrink: 0, transition: "transform 0.15s",
+            transform: expanded ? "rotate(180deg)" : "none",
+          }}
+        />
         <div style={{ minWidth: 0 }}>
-          <div className="lux-sans" style={{ fontSize: 16, fontWeight: 400, color: "var(--lux-ink)", display: "flex", alignItems: "center", gap: 8 }}>
+          <div className="lux-sans" style={{ fontSize: 16, fontWeight: 400, color: "var(--lux-ink)", display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
             {quote.customerName || "לקוח"}
             {quote.isCombined && (
               <span style={{ fontSize: 10, padding: "2px 8px", borderRadius: 99, background: "rgba(214,178,106,0.12)", border: "1px solid rgba(214,178,106,0.35)", color: "var(--lux-champagne,#d6b26a)" }}>
@@ -402,9 +552,24 @@ function ClosedQuoteCard({
           )}
           <StageChips quote={quote} m={milestones} />
         </div>
-        <div style={{ textAlign: "left" }}>
+        </div>
+        <div style={{ textAlign: "left", flexShrink: 0 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, justifyContent: "flex-end", marginBottom: 3 }}>
+            <span
+              title={reconciled ? "עלויות בפועל הוזנו" : "עלויות בפועל טרם הוזנו"}
+              style={{
+                fontSize: 10, padding: "1px 7px", borderRadius: 99,
+                background: reconciled ? "rgba(168,192,160,0.12)" : "rgba(214,178,106,0.1)",
+                border: `1px solid ${reconciled ? "rgba(168,192,160,0.35)" : "rgba(214,178,106,0.3)"}`,
+                color: reconciled ? "var(--lux-success,#a8c0a0)" : "var(--lux-champagne,#d6b26a)",
+              }}
+            >
+              {reconciled ? "עלויות ✓" : "ללא עלויות"}
+            </span>
+            <span style={{ fontSize: 10, color: "var(--lux-muted)" }}>{doneCount}/{TIMELINE.length} שלבים</span>
+          </div>
           <div style={{ fontSize: 10.5, color: "var(--lux-muted)", letterSpacing: "0.12em" }}>רווח בפועל מהלקוח</div>
-          <div className="lux-serif tabular-nums" style={{ fontSize: 30, fontWeight: 300, color: varColor, lineHeight: 1.1 }}>
+          <div className="lux-serif tabular-nums" style={{ fontSize: 28, fontWeight: 300, color: varColor, lineHeight: 1.1 }}>
             {ils(r.actualProfit)}
           </div>
           <div style={{ fontSize: 11, color: "var(--lux-muted)", marginTop: 1 }}>
@@ -413,8 +578,9 @@ function ClosedQuoteCard({
               <span style={{ color: varColor }}> · {varPos ? "+" : "−"}{ils(Math.abs(r.variance))}</span>
             )}
           </div>
+          {expanded && (
           <button
-            onClick={handleRemove}
+            onClick={(e) => { e.stopPropagation(); handleRemove(); }}
             disabled={removing}
             title="הסר מלשונית עסקאות — הפיך; ההצעה נשארת ב«הצעות מפעל»"
             style={{
@@ -427,9 +593,12 @@ function ClosedQuoteCard({
             {removing ? <Loader2 className="size-3 animate-spin" /> : <X className="size-3" />}
             הסר מעסקאות
           </button>
+          )}
         </div>
       </div>
 
+      {expanded && (
+      <>
       {/* Deal timeline — the post-WON journey with files per stage */}
       <DealTimeline
         quote={quote}
@@ -603,6 +772,8 @@ function ClosedQuoteCard({
           onDone={() => { setExpenseOpen(false); onSaved(); }}
           onClose={() => setExpenseOpen(false)}
         />
+      )}
+      </>
       )}
     </section>
   );
