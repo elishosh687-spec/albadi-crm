@@ -877,16 +877,20 @@ The Albadi Claude Code skills (`bag-mockup-video` / `dieline-print` /
 `zoho-invoice`) file + send their output through ONE CRM endpoint so credentials
 stay server-side. `POST /api/widget/albadi/deliver`
 ([app/api/widget/albadi/deliver/route.ts](app/api/widget/albadi/deliver/route.ts)),
-multipart `{file, customerName, customerSid?, kind(mockup|video|dieline|invoice),
+multipart `{file, customerName, customerSid?, kind(mockup|video|logo|factory_dieline|dieline|invoice),
 send?(whatsapp), quotationNo?}`:
 1. hosts the file on Vercel Blob (`albadi-files/<customer>/<kind>-<ts>.<ext>`),
 2. attaches its link to the customer's row in the **"ALBADI ORDER FOLLOW"**
-   Feishu sheet — mockup/video→col **Y** (Grapgic), dieline→col **X** (die line);
-   invoice has NO column (skipped). Match by Customer (col A); >1 order →
-   `needQuotation` so the skill asks which Quotation No. Feishu auto-hyperlinks
-   the URL. `GET ?customer=` returns the order rows **plus** matching CRM
-   customers with `sid` + auto-pulled `size`/`handles` (from the lead's latest
-   `factory_quote_requests.productSpec`).
+   Feishu sheet. Column map (Eli's correction 2026-07-24 — the 3 production-stage
+   files of an order): **`factory_dieline`→col X** (die line, the blank template
+   the factory first sends), **`logo`→col Y** (Grapgic, the logo the customer
+   sent), **`dieline`→col Z** (Final Design, the FINAL production file = logo
+   placed on the dieline). mockup/video (pre-sale 3D הדמיה) and invoice have NO
+   column (skipped). All three production files ALSO save to the local customer
+   folder. Match by Customer (col A); >1 order → `needQuotation` so the skill asks
+   which Quotation No. Feishu auto-hyperlinks the URL. `GET ?customer=` returns
+   the order rows **plus** matching CRM customers with `sid` + auto-pulled
+   `size`/`handles` (from the lead's latest `factory_quote_requests.productSpec`).
 3. with `send=whatsapp` + a lead `customerSid`, sends via
    `sendBridgeMessage(sid, caption, blobUrl, "eli", fileName)` (GreenAPI; PDF as
    a **document**). Reuses the send-to-customer path.
