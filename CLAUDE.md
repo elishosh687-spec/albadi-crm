@@ -870,3 +870,41 @@ looked see-through over the deal card).
 (consecutive numbers). Verified read + UI freely; live writes were create-then-
 delete on the test deal, or gated behind Eli's explicit OK. Cleanup uses the Zoho
 DELETE endpoints (`deleteZohoInvoice` / `deleteZohoExpense`, + `/contacts/{id}`).
+
+## Skill "deliver" hub — send-to-customer + Feishu ORDER FOLLOW (built 2026-07-24)
+
+The Albadi Claude Code skills (`bag-mockup-video` / `dieline-print` /
+`zoho-invoice`) file + send their output through ONE CRM endpoint so credentials
+stay server-side. `POST /api/widget/albadi/deliver`
+([app/api/widget/albadi/deliver/route.ts](app/api/widget/albadi/deliver/route.ts)),
+multipart `{file, customerName, customerSid?, kind(mockup|video|dieline|invoice),
+send?(whatsapp), quotationNo?}`:
+1. hosts the file on Vercel Blob (`albadi-files/<customer>/<kind>-<ts>.<ext>`),
+2. attaches its link to the customer's row in the **"ALBADI ORDER FOLLOW"**
+   Feishu sheet — mockup/video→col **Y** (Grapgic), dieline→col **X** (die line);
+   invoice has NO column (skipped). Match by Customer (col A); >1 order →
+   `needQuotation` so the skill asks which Quotation No.; no match → append a new
+   row. Feishu auto-hyperlinks the URL. `GET ?customer=` returns the order rows.
+3. with `send=whatsapp` + a lead `customerSid`, sends via
+   `sendBridgeMessage(sid, caption, blobUrl, "eli", fileName)` (GreenAPI; PDF as
+   a **document**). Reuses the send-to-customer path.
+
+Code: [lib/feishu/order-follow.ts](lib/feishu/order-follow.ts) (`findOrderRows` +
+`attachFileToOrder`, own token/tab via `FEISHU_FILES_SHEET_TOKEN` +
+`FEISHU_FILES_TAB_ID` — set in prod; soft-skips the sheet when unset). The Feishu
+app already has write access to that sheet (no sharing step needed).
+
+**Local side (Eli's Mac, NOT deployed):** shared helper
+`~/.claude/skills/albadi-deliver/deliver.mjs` — each skill's SKILL.md has a
+"מסירה ללקוח" section that (a) saves the file to
+`/Users/eli/Projects/content/albadi/customers/<customer>/`, (b) POSTs to the
+deliver endpoint. Config `~/.claude/skills/albadi-deliver/.env` needs
+`WIDGET_TOKEN` (=GHL_WIDGET_TOKEN) + optional `CRM_BASE`. Customer lookup uses
+`/api/widget/leads/recent?q=` for the sid.
+
+**zoho-invoice skill relocated to global** (`~/.claude/skills/zoho-invoice/`) from
+the project-local `/Users/eli/Projects/zoho/.claude/skills/`. `zoho_import.py`
+self-locates config/secrets/state via `__file__`, so it's relocatable; the
+SKILL.md now says to `cd` into the skill dir first (its relative
+`state/invoice_input.json` writes need it). Verified E2E locally (helper → Blob →
+Feishu row + customer folder); WhatsApp `--send` is prod-only.
