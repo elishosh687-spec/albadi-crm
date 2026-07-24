@@ -16,6 +16,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { widgetAuthed } from "@/lib/widget/auth";
 import { findOrderRows, attachFileToOrder } from "@/lib/feishu/order-follow";
 import { sendBridgeMessage } from "@/lib/bridge/client";
+import { db } from "@/lib/db";
+import { leads, factoryQuoteRequests } from "@/drizzle/schema";
+import { ilike, eq, desc, and, isNotNull } from "drizzle-orm";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -37,13 +40,53 @@ function extOf(name: string, type: string): string {
   return "jpg";
 }
 
+function handlesFrom(finishing: string): string {
+  const s = (finishing || "").toLowerCase();
+  if (/no handle|ללא ידיות|die.?cut|punch|不带提手/.test(s)) return "die-cut (flat punched hole, no sewn handles)";
+  return "loop-handle tote (sewn handles + bottom gusset)";
+}
+
+/** Given a typed name, the matching CRM lead(s) + their latest quote spec —
+ *  so the mockup skill can auto-fill size/handles instead of asking. */
+async function lookupCustomers(name: string) {
+  const q = name.trim();
+  if (!q) return [];
+  const rows = await db
+    .select({ sid: leads.manychatSubId, name: leads.name, phone: leads.phoneE164 })
+    .from(leads)
+    .where(ilike(leads.name, `%${q}%`))
+    .limit(8);
+  const out: {
+    sid: string; name: string | null; phone: string | null;
+    size: string | null; handles: string | null; finishing: string | null; printing: string | null;
+  }[] = [];
+  for (const r of rows) {
+    if (!r.sid) continue;
+    const [quote] = await db
+      .select({ spec: factoryQuoteRequests.productSpec })
+      .from(factoryQuoteRequests)
+      .where(and(eq(factoryQuoteRequests.manychatSubId, r.sid), isNotNull(factoryQuoteRequests.productSpec)))
+      .orderBy(desc(factoryQuoteRequests.createdAt))
+      .limit(1);
+    const s = (quote?.spec ?? {}) as Record<string, unknown>;
+    const size = [s.heightCm && `H${s.heightCm}`, s.depthCm && `D${s.depthCm}`, s.widthCm && `W${s.widthCm}`]
+      .filter(Boolean).join("×") || null;
+    out.push({
+      sid: r.sid, name: r.name, phone: r.phone, size,
+      handles: s.finishing ? handlesFrom(String(s.finishing)) : null,
+      finishing: (s.finishing as string) ?? null, printing: (s.printing as string) ?? null,
+    });
+  }
+  return out;
+}
+
 export async function GET(req: NextRequest) {
   if (!widgetAuthed(req)) return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   const customer = req.nextUrl.searchParams.get("customer") || "";
   if (!customer) return NextResponse.json({ ok: false, error: "missing customer" }, { status: 400 });
   try {
-    const orders = await findOrderRows(customer);
-    return NextResponse.json({ ok: true, orders });
+    const [orders, customers] = await Promise.all([findOrderRows(customer), lookupCustomers(customer)]);
+    return NextResponse.json({ ok: true, orders, customers });
   } catch (e) {
     return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : "failed" }, { status: 500 });
   }
