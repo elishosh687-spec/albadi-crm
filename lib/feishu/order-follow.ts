@@ -107,7 +107,8 @@ export async function attachFileToOrder(
   customerName: string,
   kind: string,
   fileUrl: string,
-  quotationNo?: string | null
+  quotationNo?: string | null,
+  appendIfMissing: boolean = true
 ): Promise<OrderWriteResult> {
   const col = KIND_COL[kind];
   if (col === undefined) return { ok: false, skipped: `no column for kind "${kind}"` };
@@ -115,6 +116,9 @@ export async function attachFileToOrder(
   const matches = await findOrderRows(customerName);
 
   if (matches.length === 0) {
+    // Pre-sale mockups (appendIfMissing=false) don't create a row — the customer
+    // may not have an order yet, and we don't want to clutter ORDER FOLLOW.
+    if (!appendIfMissing) return { ok: false, skipped: "עדיין אין שורת הזמנה ללקוח (הדמיה pre-sale) — לא נכתב לגיליון" };
     const row = (await lastCustomerRow()) + 1;
     await putCell(COL.customer, row, customerName);
     await putCell(col, row, fileUrl);

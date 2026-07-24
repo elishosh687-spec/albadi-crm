@@ -120,7 +120,10 @@ export async function POST(req: NextRequest) {
     });
 
     // 2. attach to the ORDER FOLLOW sheet (skipped for kinds with no column, e.g. invoice)
-    const feishu = await attachFileToOrder(customerName, kind, blob.url, quotationNo).catch((e) => ({
+    // Mockups/videos are pre-sale — attach only if the customer already has an
+    // order row; never create one. Dieline/invoice (post-close) may append.
+    const appendIfMissing = !["mockup", "video"].includes(kind);
+    const feishu = await attachFileToOrder(customerName, kind, blob.url, quotationNo, appendIfMissing).catch((e) => ({
       ok: false as const, skipped: e instanceof Error ? e.message : "feishu failed",
     }));
     if ("needQuotation" in feishu && feishu.needQuotation) {
