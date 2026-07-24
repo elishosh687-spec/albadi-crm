@@ -883,11 +883,20 @@ send?(whatsapp), quotationNo?}`:
 2. attaches its link to the customer's row in the **"ALBADI ORDER FOLLOW"**
    Feishu sheet — mockup/video→col **Y** (Grapgic), dieline→col **X** (die line);
    invoice has NO column (skipped). Match by Customer (col A); >1 order →
-   `needQuotation` so the skill asks which Quotation No.; no match → append a new
-   row. Feishu auto-hyperlinks the URL. `GET ?customer=` returns the order rows.
+   `needQuotation` so the skill asks which Quotation No. Feishu auto-hyperlinks
+   the URL. `GET ?customer=` returns the order rows **plus** matching CRM
+   customers with `sid` + auto-pulled `size`/`handles` (from the lead's latest
+   `factory_quote_requests.productSpec`).
 3. with `send=whatsapp` + a lead `customerSid`, sends via
    `sendBridgeMessage(sid, caption, blobUrl, "eli", fileName)` (GreenAPI; PDF as
    a **document**). Reuses the send-to-customer path.
+
+**Pre-sale vs post-close (Eli's rule).** הדמיה/mockup is pre-sale — the customer
+is often not in the tables yet. So mockups: **no size/handles lookup** (ask the
+user / defaults), **no local folder**, and **never append** an ORDER FOLLOW row
+(`appendIfMissing=false` → attach only to an existing row, else just WhatsApp);
+the customer name is asked ONLY at delivery to resolve the sid. פריסה/חשבונית are
+post-close → save to the customer folder + may append a row.
 
 Code: [lib/feishu/order-follow.ts](lib/feishu/order-follow.ts) (`findOrderRows` +
 `attachFileToOrder`, own token/tab via `FEISHU_FILES_SHEET_TOKEN` +
