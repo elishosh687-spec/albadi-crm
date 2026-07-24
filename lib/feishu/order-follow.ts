@@ -8,14 +8,25 @@
  *   A Customer · B Quotation No. · C date · D Pic · … · X die line ·
  *   Y Grapgic (image) · Z Final Design
  *
- * File→column map (confirmed with Eli): mockup/video → Y (Grapgic),
- * dieline → X (die line). Invoice has no column here (skipped).
+ * File→column map (confirmed with Eli 2026-07-24) — the three production-stage
+ * files of an order, all also saved to the local customer folder:
+ *   X die line     ← factory_dieline : the BLANK dieline the factory first sends
+ *   Y Grapgic      ← logo            : the logo the CUSTOMER sent
+ *   Z Final Design ← dieline         : the FINAL production file (logo placed on
+ *                                      the dieline — the dieline-print output)
+ * Mockup/video (3D הדמיה) are pre-sale and have NO column here (skipped).
+ * Invoice also has no column.
  */
 import { feishuFetch } from "./client";
 
 const DATA_START_ROW = 7;
-const COL = { customer: 0, quotationNo: 1, dieline: 23 /*X*/, mockup: 24 /*Y*/, finalDesign: 25 /*Z*/ };
-const KIND_COL: Record<string, number> = { mockup: COL.mockup, video: COL.mockup, dieline: COL.dieline };
+const COL = { customer: 0, quotationNo: 1, factoryDieline: 23 /*X*/, logo: 24 /*Y*/, finalDesign: 25 /*Z*/ };
+const KIND_COL: Record<string, number> = {
+  factory_dieline: COL.factoryDieline, // X — blank factory template
+  logo: COL.logo,                      // Y — customer's logo
+  dieline: COL.finalDesign,            // Z — final production file (logo on dieline)
+  final: COL.finalDesign,              // alias
+};
 
 function filesToken(): string {
   const t = process.env.FEISHU_FILES_SHEET_TOKEN;

@@ -25,7 +25,10 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 const KIND_LABEL: Record<string, string> = {
-  mockup: "הדמיה", video: "וידאו", dieline: "פריסה / קובץ הפקה", invoice: "חשבונית",
+  mockup: "הדמיה", video: "וידאו",
+  logo: "לוגו", factory_dieline: "פריסת מפעל (ריקה)",
+  dieline: "פריסה סופית / קובץ הפקה", final: "פריסה סופית / קובץ הפקה",
+  invoice: "חשבונית",
 };
 
 function slug(s: string): string {
