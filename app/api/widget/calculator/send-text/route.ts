@@ -17,9 +17,12 @@ import { leads } from "@/drizzle/schema";
 import { sql } from "drizzle-orm";
 import { sendBridgeMessage } from "@/lib/bridge/client";
 import { phoneToJid } from "@/lib/bridge/jid";
+import { notifyItayQuoteSent } from "@/lib/notify/itay";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
+
+const NOTIFY_KINDS = new Set(["draft", "factory", "estimate", "combined"]);
 
 export async function POST(req: NextRequest) {
   const token = req.nextUrl.searchParams.get("widget_token") ?? "";
@@ -27,9 +30,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
 
-  let body: { sid?: string; text?: string };
+  let body: {
+    sid?: string; text?: string;
+    customerName?: string; kind?: string; totalIls?: number | null;
+  };
   try {
-    body = (await req.json()) as { sid?: string; text?: string };
+    body = (await req.json()) as typeof body;
   } catch {
     return NextResponse.json({ ok: false, error: "invalid_json" }, { status: 400 });
   }
@@ -48,6 +54,7 @@ export async function POST(req: NextRequest) {
   const [lead] = await db
     .select({
       sid: leads.manychatSubId,
+      name: leads.name,
       waJid: leads.waJid,
       phoneE164: leads.phoneE164,
     })
@@ -69,6 +76,15 @@ export async function POST(req: NextRequest) {
 
   try {
     const result = await sendBridgeMessage(recipient, text, undefined, "eli");
+    // Every quote sent to a customer pings Itay (Eli's rule 2026-07-26).
+    // Fire-and-forget; never blocks or fails the send.
+    const kind = (NOTIFY_KINDS.has(body.kind ?? "") ? body.kind : "estimate") as
+      "draft" | "factory" | "estimate" | "combined";
+    void notifyItayQuoteSent({
+      customerName: body.customerName?.trim() || lead.name,
+      totalIls: typeof body.totalIls === "number" ? body.totalIls : null,
+      kind,
+    });
     return NextResponse.json({
       ok: true,
       wa_message_id: result.wa_message_id,

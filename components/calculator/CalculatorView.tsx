@@ -2351,7 +2351,13 @@ function useQuoteShare({
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ sid: pickedSid, text: quoteText }),
+          body: JSON.stringify({
+            sid: pickedSid,
+            text: quoteText,
+            customerName: pickedName,
+            kind: estimate ? "estimate" : "factory",
+            totalIls: pricing?.totalSellingPrice ?? null,
+          }),
         }
       );
       const j = await res.json().catch(() => ({}));
