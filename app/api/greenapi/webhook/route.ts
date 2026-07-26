@@ -531,6 +531,23 @@ async function handleIncoming(evt: GreenWebhook): Promise<void> {
   const questionnaireActive =
     !!q && typeof q.step === "number" && q.step <= 9 && !q.doneAt && !q.bailed;
 
+  // Re-read the pause state as late as possible: a salesperson (or Eli) may have
+  // jumped into THIS chat — outgoingMessageReceived → handleOutgoingManual set
+  // botPaused=true — while we were persisting + mirroring this inbound. If so,
+  // the human is now driving: stay silent instead of firing one more bot reply
+  // on top of them. Closes the race that let the bot "keep talking" after a
+  // takeover (Eli 2026-07-26). wasBotPaused (read at the top) only covers a pause
+  // that predates this inbound; this catches one that landed mid-processing.
+  const [latePause] = await db
+    .select({ botPaused: leads.botPaused })
+    .from(leads)
+    .where(sql`trim(${leads.manychatSubId}) = ${canonicalSid.trim()}`)
+    .limit(1);
+  if (latePause?.botPaused === true) {
+    console.log(`[green.webhook] late-pause hit for ${canonicalSid} — human took over mid-inbound, bot stays silent`);
+    return;
+  }
+
   // Supervisor gate — LLM decides whether to let the bot reply, draft for Eli,
   // escalate, or silence. Mirrors lib/supervisor/server/dispatch logic used
   // by the bridge webhook so both inbound paths share decision tracking +
@@ -542,7 +559,7 @@ async function handleIncoming(evt: GreenWebhook): Promise<void> {
     inboundText: textForRouting ?? "",
     stage,
     mediaPresent: hasMedia,
-    botPaused: false, // already auto-unpaused above
+    botPaused: false, // not paused (checked immediately above)
     source: "green",
   });
 
