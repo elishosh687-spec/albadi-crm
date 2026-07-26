@@ -282,6 +282,12 @@ export const factoryQuoteRequests = pgTable("factory_quote_requests", {
   // 2026-07-23 (drizzle-kit push hangs — see CLAUDE.md).
   closedDealAt: timestamp("closed_deal_at", { withTimezone: true }),
   dealGroupId: text("deal_group_id"),
+  // "הסר מהתזכורת" — when set, the quote is hidden from the "המפעל ענה — צריך
+  // לשלוח ללקוח" reminder panel (a dead lead Eli will never price/send), WITHOUT
+  // deleting the quote or falsely stamping sentToCustomerAt (keeps "נשלח" stats
+  // clean). Persistent so it doesn't resurface next load. Added via direct DDL
+  // 2026-07-26 (drizzle-kit push hangs — see CLAUDE.md).
+  reminderDismissedAt: timestamp("reminder_dismissed_at", { withTimezone: true }),
 });
 
 // Append-only audit log of every bot-side quote sent on WhatsApp. Captures

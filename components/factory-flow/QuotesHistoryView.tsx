@@ -23,6 +23,7 @@ interface ApiQuoteRow {
   draftEstimate: Record<string, unknown> | null;
   pdfUrl: string | null;
   sentToCustomerAt: string | null;
+  reminderDismissedAt: string | null;
   closedDealAt: string | null;
   createdAt: string;
   updatedAt: string;
@@ -381,6 +382,27 @@ export function QuotesHistoryView({ apiToken }: { apiToken: string }) {
     }
   }
 
+  // Remove a quote from the "צריך לשלוח" reminder without sending/deleting — a
+  // dead lead Eli will never price/send. Persistent (reminder_dismissed_at).
+  async function handleDismissReminder(r: ApiQuoteRow) {
+    if (!confirm(`להסיר את ההצעה של ${r.name ?? "הלקוח"} מתזכורת "צריך לשלוח"?\n\nההצעה לא נמחקת — רק יורדת מהתזכורת ולא תחזור.`)) return;
+    setBusyId(r.id);
+    try {
+      const res = await fetch(
+        `/api/widget/factory/${r.id}/dismiss-reminder?widget_token=${encodeURIComponent(apiToken)}`,
+        { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ dismissed: true }) }
+      );
+      const j = await res.json().catch(() => ({}));
+      if (!j?.ok) {
+        alert(`שגיאה: ${j?.error ?? res.status}`);
+        return;
+      }
+      await refresh();
+    } finally {
+      setBusyId(null);
+    }
+  }
+
   async function handleSendWhatsApp(r: ApiQuoteRow) {
     const isDraft = r.status === "draft";
     const prompt = isDraft
@@ -514,7 +536,12 @@ export function QuotesHistoryView({ apiToken }: { apiToken: string }) {
   const needsSending = useMemo(() => {
     if (!data) return [];
     return data
-      .filter((r) => (r.status === "received" || r.status === "finalized") && !r.sentToCustomerAt)
+      .filter(
+        (r) =>
+          (r.status === "received" || r.status === "finalized") &&
+          !r.sentToCustomerAt &&
+          !r.reminderDismissedAt
+      )
       .sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt));
   }, [data]);
 
@@ -944,6 +971,15 @@ export function QuotesHistoryView({ apiToken }: { apiToken: string }) {
                         {busyId === r.id ? <Loader2 className="size-3.5 animate-spin" /> : <MessageCircle className="size-3.5" />}
                       </button>
                     )}
+                    <button
+                      type="button"
+                      onClick={() => handleDismissReminder(r)}
+                      disabled={busyId === r.id}
+                      title="הסר מהתזכורת (ליד מת — לא נמחק ולא נשלח, לא יחזור)"
+                      className="size-7 rounded grid place-items-center text-muted-foreground hover:text-red-400 hover:bg-red-500/10 disabled:opacity-50"
+                    >
+                      <X className="size-3.5" />
+                    </button>
                   </div>
                 </li>
               ))}
