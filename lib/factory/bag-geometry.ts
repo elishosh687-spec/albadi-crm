@@ -4,7 +4,10 @@
  *
  *   - D (gusset):  9 ≤ D ≤ 39          (skipped when D === 0 → a flat bag)
  *   - W (width):   W > D  and  W ≤ 53
- *   - H (height):  18 ≤ H ≤ min(D/2 + 35, 55)
+ *   - H (height):  gusseted bag → 18 ≤ H ≤ min(D/2 + 35, 55)
+ *                  flat bag (D=0) → 18 ≤ H ≤ 55  (the D/2+35 formula ties height
+ *                    to the gusset, so it does NOT apply without one — a flat bag
+ *                    is capped only by the hard ceiling. Eli 2026-07-26.)
  *
  * Factory's own example: D=10 → max H = 10/2 + 35 = 40. Since max D is 39, the
  * D/2+35 term tops out at ~54.5, so the 55 is just a hard ceiling.
@@ -70,8 +73,11 @@ export function validateBagGeometry(
     if (h < BAG_MIN_HEIGHT_CM) {
       errs.push(`גובה מינימלי ${BAG_MIN_HEIGHT_CM} ס״מ (הוזן ${h})`);
     }
-    // Max height depends on the gusset; only enforce when depth is known.
-    if (dFilled) {
+    // Max height depends on the gusset via ½·D+35 — but ONLY for a gusseted
+    // bag. A flat bag (D=0) has no gusset, so that formula doesn't apply to it
+    // (Eli 2026-07-26): a flat bag is capped only by the hard ceiling. Unknown
+    // depth also falls back to the hard ceiling.
+    if (dFilled && !isFlat) {
       const maxH = maxHeightForDepth(d);
       if (h > maxH) {
         errs.push(
