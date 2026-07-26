@@ -507,6 +507,17 @@ export function QuotesHistoryView({ apiToken }: { apiToken: string }) {
       .sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt));
   }, [data]);
 
+  // Factory replied but the customer hasn't got the quote yet. `finalized` =
+  // priced, ready to send; `received` = factory answered, still needs finalizing
+  // (pricing) before sending. Eli's reminder "the factory sent quotes — send
+  // them to the customer" (2026-07-26).
+  const needsSending = useMemo(() => {
+    if (!data) return [];
+    return data
+      .filter((r) => (r.status === "received" || r.status === "finalized") && !r.sentToCustomerAt)
+      .sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt));
+  }, [data]);
+
   const counts = useMemo(() => {
     if (!data) return { all: 0, draft: 0, pending: 0, received: 0, finalized: 0 };
     return {
@@ -860,6 +871,83 @@ export function QuotesHistoryView({ apiToken }: { apiToken: string }) {
                 </div>
               </div>
             ))}
+          </div>
+        )}
+
+        {needsSending.length > 0 && (
+          <div className="rounded-lg border border-red-500/40 bg-red-500/10 p-3 space-y-1.5" dir="rtl">
+            <div className="text-xs font-semibold text-red-400 flex items-center gap-1.5">
+              📤 המפעל ענה — צריך לשלוח ללקוח ({needsSending.length})
+            </div>
+            <p className="text-[10px] text-muted-foreground">
+              הצעות שהמפעל החזיר וטרם נשלחו ללקוח. <b>סופי</b> = מוכן לשליחה; <b>התקבל</b> = צריך לתמחר (finalize) ואז לשלוח.
+            </p>
+            <ul className="space-y-1">
+              {needsSending.slice(0, 12).map((r) => (
+                <li
+                  key={r.id}
+                  className="flex items-center justify-between gap-2 rounded-md border border-border/60 bg-background/40 px-2.5 py-1.5"
+                >
+                  <div className="flex items-center gap-2 min-w-0 flex-1 flex-wrap">
+                    {r.status === "finalized" && (
+                      <label
+                        className="shrink-0 inline-flex items-center gap-1 cursor-pointer text-[10px] text-muted-foreground hover:text-emerald-400"
+                        title="סמן כנשלח ידנית ללקוח (בלי לשלוח מהמערכת)"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={false}
+                          disabled={busyId === r.id}
+                          onChange={() => handleMarkSent(r)}
+                          className="accent-emerald-500"
+                        />
+                        שלחתי כבר
+                      </label>
+                    )}
+                    <span className="text-[11px] text-muted-foreground tabular-nums shrink-0">
+                      {fmtDate(r.createdAt)}
+                    </span>
+                    <span className="text-[11px] font-mono text-muted-foreground shrink-0">
+                      {r.quotationNo ?? r.id.slice(-6)}
+                    </span>
+                    <span className="text-sm font-medium truncate min-w-0">
+                      {r.name ?? r.leadSid.slice(0, 20)}
+                    </span>
+                    <span
+                      className={`text-[10px] px-1.5 py-0.5 rounded shrink-0 ${
+                        r.status === "finalized"
+                          ? "bg-emerald-500/15 text-emerald-400"
+                          : "bg-amber-500/15 text-amber-400"
+                      }`}
+                    >
+                      {r.status === "finalized" ? "סופי — מוכן לשליחה" : "התקבל — צריך לתמחר"}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-0.5 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => (r.finalPricing ? setOpened(r) : setSpecRow(r))}
+                      title={r.status === "finalized" ? "צפה בהצעה" : "פתח לתמחור ושליחה"}
+                      disabled={busyId === r.id}
+                      className="size-7 rounded grid place-items-center text-muted-foreground hover:text-foreground hover:bg-secondary disabled:opacity-50"
+                    >
+                      <Eye className="size-3.5" />
+                    </button>
+                    {r.status === "finalized" && (
+                      <button
+                        type="button"
+                        onClick={() => handleSendWhatsApp(r)}
+                        disabled={busyId === r.id}
+                        title="שלח את ההצעה ללקוח ב-WhatsApp"
+                        className="size-7 rounded grid place-items-center text-emerald-400 hover:bg-emerald-500/10 disabled:opacity-50"
+                      >
+                        {busyId === r.id ? <Loader2 className="size-3.5 animate-spin" /> : <MessageCircle className="size-3.5" />}
+                      </button>
+                    )}
+                  </div>
+                </li>
+              ))}
+            </ul>
           </div>
         )}
 
