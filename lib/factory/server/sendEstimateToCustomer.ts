@@ -104,7 +104,9 @@ export async function sendEstimateToCustomer(input: SendEstimateInput): Promise<
     depthCm: s.depthCm,
     quantity: s.quantity,
     printing: `${s.logoColors} color(s)`,
-    finishing: `${s.hasHandles ? "With handles" : "No handles"} / ${s.hasLamination ? "Laminated" : "Not laminated"}`,
+    // 3+ logo colours are always laminated (factory rule) — force it so the
+    // caption AND the PDF (both read this finishing string) never contradict it.
+    finishing: `${s.hasHandles ? "With handles" : "No handles"} / ${s.hasLamination || s.logoColors >= 3 ? "Laminated" : "Not laminated"}`,
     shippingOptionId: shippingOptionId ?? undefined,
   };
 

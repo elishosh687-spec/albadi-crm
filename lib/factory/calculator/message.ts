@@ -65,7 +65,9 @@ export function buildQuoteMessage(params: QuoteMessageParams): string {
   const savings = alt && altTotalShown < totalShown ? totalShown - altTotalShown : 0;
 
   const handlesText = hasHandles ? "עם ידיות" : "ללא ידיות";
-  const laminationText = hasLamination ? "עם למינציה" : "ללא למינציה";
+  // 3+ logo colours are always laminated (factory rule) — reflect it in the text
+  // even if the flag wasn't set upstream, so the quote never contradicts pricing.
+  const laminationText = hasLamination || logoColors >= 3 ? "עם למינציה" : "ללא למינציה";
   const altBlock = alt
     ? `\n💡 חלופה — משלוח ${alt.shippingName} (~${alt.shippingDays} ימים):\n` +
       `   ליחידה: ${fp(alt.pricePerUnit)} | סה״כ: ${fp(altTotalShown)}\n` +

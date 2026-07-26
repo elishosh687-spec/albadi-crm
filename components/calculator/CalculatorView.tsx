@@ -2120,8 +2120,11 @@ function buildQuoteText(opts: {
   // costs/margin). Each chosen option is shown as its own up-charge so the
   // customer sees exactly what lamination / handles / colours add.
   const b = customerBreakdownIls(opts.result);
-  const hasLamination = opts.result.selectedFeatures.some((f) => f.id === "f1");
   const logoColors = opts.result.logoColors;
+  // 3+ logo colours are always laminated (factory rule) — show it even if the
+  // priced feature flag didn't carry through, so the text never says "ללא".
+  const hasLamination =
+    logoColors >= 3 || opts.result.selectedFeatures.some((f) => f.id === "f1");
 
   const lines: (string | null)[] = [
     greeting,
