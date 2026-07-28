@@ -421,8 +421,14 @@ export async function runPipelineAudit(): Promise<PipelineAudit> {
       reconcileStagesFromGhl(),
       reconcileTasksFromGhl(),
     ]);
-    if (stageRec.updated.length) {
-      console.log(`[pipeline-audit] reconciled ${stageRec.updated.length} stages from GHL (kept ${stageRec.keptLost} LOST)`);
+    // Log the OUTCOME unconditionally, not just the happy path: a reconcile
+    // that returned ok:false (bad token, missing pipeline id, GHL down) used to
+    // produce ZERO output, so the audit silently rendered a drifted DB as if it
+    // were fresh. Never let a failed reconcile look like a clean one.
+    if (!stageRec.ok) {
+      console.warn(`[pipeline-audit] STAGE RECONCILE FAILED (${stageRec.reason}) — panel is showing the DB as-is, which may be stale`);
+    } else {
+      console.log(`[pipeline-audit] stage reconcile ok — checked ${stageRec.checked}, updated ${stageRec.updated.length}`);
     }
     if (taskRec.tasksClosed) {
       console.log(`[pipeline-audit] closed ${taskRec.tasksClosed} stale-open tasks from GHL (${taskRec.contactsChecked} contacts)`);

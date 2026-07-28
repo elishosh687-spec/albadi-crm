@@ -134,6 +134,9 @@ export interface GHLOpportunity {
   monetaryValue?: number;
   source?: string;
   customFields?: Array<{ id: string; fieldValue: unknown }>;
+  /** Last-modified timestamp GHL returns on search. Used to pick the freshest
+   *  opportunity when a contact holds several (see reconcile-stages). */
+  updatedAt?: string;
 }
 
 export interface GHLOpportunityCreateInput {

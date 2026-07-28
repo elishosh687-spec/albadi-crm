@@ -59,18 +59,33 @@ export async function reconcileStagesFromGhl(): Promise<StageReconcileResult> {
     return o.pipelineStageId ? reverse.get(o.pipelineStageId) : undefined;
   };
 
-  // Two indexes: by OPPORTUNITY id (precise — the deal the lead is linked to)
-  // and by CONTACT id (fallback, last-opp-wins). A contact can hold BOTH a lost
-  // deal AND a stray open duplicate; keying by the lead's own ghl_opportunity_id
-  // picks the RIGHT one instead of letting the open duplicate win and keep a
-  // lost lead "active" (Eli 2026-07-23: 3 lost leads stuck in "בין הכיסאות").
+  // Two indexes: by OPPORTUNITY id, and by CONTACT id keeping the MOST RECENTLY
+  // UPDATED opportunity.
+  //
+  // Why newest-wins per contact (Eli 2026-07-28): a contact can hold several
+  // opportunities (duplicates accumulate). Preferring the lead's own
+  // ghl_opportunity_id — the 2026-07-23 rule — breaks the moment Eli drags a
+  // DIFFERENT one of that contact's cards to "לא נסגר": the linked (stale, still
+  // active) duplicate kept winning, so the lead stayed "active" and hung around
+  // in "נפלו בין הכיסאות" forever. (Real case: גיא רג'ואן — LOST opp touched
+  // 07-28, linked INTAKE duplicate untouched since 07-17.)
+  //
+  // Newest-wins matches how Eli actually works — the card he last moved IS his
+  // latest intent — and still fixes the original 07-23 case (a lost deal beats a
+  // stray open duplicate as long as the lost one is the more recent action),
+  // while a repeat customer's genuinely NEW active deal correctly outranks an
+  // old lost one.
   const byOpp = new Map<string, string>();
-  const byContact = new Map<string, string>();
+  const byContact = new Map<string, { local: string; at: number }>();
   for (const o of opps) {
     const local = oppToLocal(o);
     if (!local) continue;
     if (o.id) byOpp.set(o.id, local);
-    if (o.contactId) byContact.set(o.contactId, local);
+    if (!o.contactId) continue;
+    const at = o.updatedAt ? new Date(o.updatedAt).getTime() : 0;
+    const prev = byContact.get(o.contactId);
+    // No timestamp anywhere → keep last-wins (the pre-2026-07-28 behaviour).
+    if (!prev || at >= prev.at) byContact.set(o.contactId, { local, at });
   }
 
   const active = await db
@@ -82,9 +97,10 @@ export async function reconcileStagesFromGhl(): Promise<StageReconcileResult> {
   const keptLost = 0;
   let checked = 0;
   for (const l of active) {
-    // Prefer the lead's OWN linked opportunity; fall back to contact-level
-    // (last-wins) only when the linked opp isn't in the scanned pipeline.
-    const to = (l.opp && byOpp.get(l.opp)) || (l.ghl && byContact.get(l.ghl)) || undefined;
+    // The contact's FRESHEST opportunity wins (Eli's last action on any of his
+    // cards); the lead's own linked opp is the fallback when the contact isn't
+    // indexed (e.g. its opps live outside the scanned pipeline).
+    const to = (l.ghl && byContact.get(l.ghl)?.local) || (l.opp && byOpp.get(l.opp)) || undefined;
     if (!to) continue;
     checked++;
     const from = l.stage ?? "NULL";
