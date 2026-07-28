@@ -367,6 +367,7 @@ export function QuoteHtmlPreview({
                   totalWeightKg={p.totalWeightKg}
                   totalCbm={p.totalCbm}
                   shippingType={currentType}
+                  shippingSplit={p.shippingSplit}
                   factoryUnitCostCny={row.factoryResponse?.unitCostCny}
                   usdToIls={cfg.usdToIls}
                   usdToCny={cfg.usdToCny}
