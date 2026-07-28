@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { Loader2, Send, Copy, Check, Search, X, ChevronDown, Calculator, Pencil, Ship, Plane, Repeat, Minus, Plus } from "lucide-react";
 import { cn } from "@/lib/cn";
 import type { Product, QuantityTier, ShippingOption, QuoteResult } from "@/lib/factory/calculator/types";
-import type { FactoryPricingResult } from "@/lib/factory/types";
+import type { FactoryPricingResult, ShippingSplit } from "@/lib/factory/types";
 import { quoteResultToPricing } from "@/lib/factory/calculator/to-pricing";
 import { applyShippingSplit } from "@/lib/factory/shipping-split";
 import { validateBagGeometry } from "@/lib/factory/bag-geometry";
@@ -290,6 +290,27 @@ export function CalculatorView({ products, quantityTiers, shippingOptions, initi
     return { marginPct, profitPerUnit, totalProfit, perUnit, totalPrice };
   }, [r, c, reverseInput, reverseMode]);
 
+  // Pricing snapshot for "שמור כטיוטה" — the exact calculated price.
+  // Defined BEFORE the quote text so the customer caption can carry the split.
+  const operatorPricing: FactoryPricingResult | null =
+    r && c
+      ? quoteResultToPricing(r as QuoteResult, c.productionPerUnitIls, c.shippingPerUnitIls, effectiveCommissionPct)
+      : null;
+  // Split-adjusted pricing → the boss breakdown AND the customer text/PDF
+  // reflect the split (Eli 2026-07-22, caption added 2026-07-28).
+  const operatorSplitPricing: FactoryPricingResult | null =
+    operatorPricing && r && splitMode && operatorSplit && operatorSplit.airIls != null && operatorSplit.seaIls != null
+      ? applyShippingSplit(operatorPricing, {
+          quantity: r.quantity,
+          airQuantity: operatorSplit.airQuantity,
+          seaQuantity: operatorSplit.seaQuantity,
+          airIls: operatorSplit.airIls,
+          seaIls: operatorSplit.seaIls,
+          airName: operatorSplit.airName,
+          seaName: operatorSplit.seaName,
+        })
+      : null;
+
   // Customer-facing quote text — hoisted out of the JSX so BOTH the sticky
   // proposal-summary CTAs and the full QuoteShareCard share one string + one
   // share-flow instance (same picked lead, same send/PDF/factory endpoints).
@@ -320,6 +341,7 @@ export function CalculatorView({ products, quantityTiers, shippingOptions, initi
         totalShippingIls: c.shippingPerUnitIls * r.quantity,
         oneTimeMoldsIls: r.moldsTotalSellingPriceIls,
         result: r,
+        shippingSplit: operatorSplitPricing?.shippingSplit ?? null,
       })
     : "";
   // Factory-request spec built from the EXACT calculator's own state (catalog or
@@ -350,24 +372,6 @@ export function CalculatorView({ products, quantityTiers, shippingOptions, initi
         };
       })()
     : null;
-  // Pricing snapshot for "שמור כטיוטה" — the exact calculated price.
-  const operatorPricing: FactoryPricingResult | null =
-    r && c
-      ? quoteResultToPricing(r as QuoteResult, c.productionPerUnitIls, c.shippingPerUnitIls, effectiveCommissionPct)
-      : null;
-  // Split-adjusted pricing → the boss breakdown reflects the split (Eli 2026-07-22).
-  const operatorSplitPricing: FactoryPricingResult | null =
-    operatorPricing && r && splitMode && operatorSplit && operatorSplit.airIls != null && operatorSplit.seaIls != null
-      ? applyShippingSplit(operatorPricing, {
-          quantity: r.quantity,
-          airQuantity: operatorSplit.airQuantity,
-          seaQuantity: operatorSplit.seaQuantity,
-          airIls: operatorSplit.airIls,
-          seaIls: operatorSplit.seaIls,
-          airName: operatorSplit.airName,
-          seaName: operatorSplit.seaName,
-        })
-      : null;
   const share = useQuoteShare({ apiToken, sid, leadName, quoteText: operatorQuoteText, factorySpec: operatorFactorySpec, pricing: operatorPricing, draftId });
 
   return (
@@ -1201,6 +1205,24 @@ function EstimateTab({ apiToken, shippingOptions, sid, leadName, initialMargins,
   // commissionPct off `computed`) reflects the override.
   const cEff = c ? { ...c, commissionPct: effectiveCommissionPct } : c;
 
+  // Split-adjusted pricing — defined BEFORE the quote text so the customer
+  // caption carries the split too (Eli 2026-07-28), not just the boss breakdown.
+  const estimateSplitPricing: FactoryPricingResult | null =
+    r && c && est && est.ok && splitMode && estimateSplit && estimateSplit.airIls != null && estimateSplit.seaIls != null
+      ? applyShippingSplit(
+          quoteResultToPricing(r as QuoteResult, c.productionPerUnitIls, c.shippingPerUnitIls, effectiveCommissionPct),
+          {
+            quantity: r.quantity,
+            airQuantity: estimateSplit.airQuantity,
+            seaQuantity: estimateSplit.seaQuantity,
+            airIls: estimateSplit.airIls,
+            seaIls: estimateSplit.seaIls,
+            airName: estimateSplit.airName,
+            seaName: estimateSplit.seaName,
+          }
+        )
+      : null;
+
   // Hoisted quote text + estimate context + one share instance, shared between
   // the sticky proposal-summary CTAs and the full QuoteShareCard below.
   const estimateQuoteText = (est && est.ok && r && c)
@@ -1217,6 +1239,7 @@ function EstimateTab({ apiToken, shippingOptions, sid, leadName, initialMargins,
         totalShippingIls: c.shippingPerUnitIls * r.quantity,
         oneTimeMoldsIls: r.moldsTotalSellingPriceIls,
         result: r,
+        shippingSplit: estimateSplitPricing?.shippingSplit ?? null,
       })
     : "";
   const estimateCtx: EstimateSendContext | undefined = (est && est.ok && r)
@@ -1234,21 +1257,6 @@ function EstimateTab({ apiToken, shippingOptions, sid, leadName, initialMargins,
       }
     : undefined;
   // Pricing snapshot for "שמור כטיוטה" — the exact estimated price.
-  const estimateSplitPricing: FactoryPricingResult | null =
-    r && c && est && est.ok && splitMode && estimateSplit && estimateSplit.airIls != null && estimateSplit.seaIls != null
-      ? applyShippingSplit(
-          quoteResultToPricing(r as QuoteResult, c.productionPerUnitIls, c.shippingPerUnitIls, effectiveCommissionPct),
-          {
-            quantity: r.quantity,
-            airQuantity: estimateSplit.airQuantity,
-            seaQuantity: estimateSplit.seaQuantity,
-            airIls: estimateSplit.airIls,
-            seaIls: estimateSplit.seaIls,
-            airName: estimateSplit.airName,
-            seaName: estimateSplit.seaName,
-          }
-        )
-      : null;
   const estimatePricing: FactoryPricingResult | null =
     est && est.ok && r && c
       ? quoteResultToPricing(r as QuoteResult, c.productionPerUnitIls, c.shippingPerUnitIls, effectiveCommissionPct)
@@ -2104,6 +2112,11 @@ function buildQuoteText(opts: {
   oneTimeMoldsIls?: number;
   /** Full quote result — drives the customer-safe itemised breakdown. */
   result: QuoteResult;
+  /** Part-air/part-sea split, when one is configured. Replaces the
+   *  shipping-inclusive per-unit block with a production line + the two shipping
+   *  legs — same shape as the official caption (server/sendWhatsapp.ts) and the
+   *  customer PDF, so every surface quotes the same number. */
+  shippingSplit?: ShippingSplit | null;
 }): string {
   const ilsFmt = (n: number) =>
     `₪${n.toLocaleString("he-IL", { maximumFractionDigits: 2 })}`;
@@ -2126,6 +2139,9 @@ function buildQuoteText(opts: {
   const hasLamination =
     logoColors >= 3 || opts.result.selectedFeatures.some((f) => f.id === "f1");
 
+  const split = opts.shippingSplit ?? null;
+  const molds = opts.oneTimeMoldsIls ?? 0;
+
   const lines: (string | null)[] = [
     greeting,
     "",
@@ -2139,33 +2155,56 @@ function buildQuoteText(opts: {
     `צבעי לוגו: ${logoColors}`,
     `ידיות: ${opts.result.hasHandles ? "כן" : "ללא"}`,
     `למינציה: ${hasLamination ? "כן" : "ללא"}`,
-    shippingMethod ? `שיטת שילוח: ${shippingMethod}` : null,
+    split
+      ? `שיטת שילוח: מפוצל — ✈️ ${split.airLabel} + 🚢 ${split.seaLabel}`
+      : shippingMethod
+        ? `שיטת שילוח: ${shippingMethod}`
+        : null,
     "",
-    "💰 *תמחור — מחיר ליחידה* _(כולל שילוח)_",
-    `▪️ שקית${shippingMethod ? " + שילוח" : ""}: ${ilsFmt(b.productIls)}`,
-    opts.result.hasHandles && b.handlesIls > 0
-      ? `▪️ ידיות: +${ilsFmt(b.handlesIls)}`
-      : null,
-    hasLamination && b.laminationIls > 0
-      ? `▪️ למינציה: +${ilsFmt(b.laminationIls)}`
-      : null,
-    !hasLamination && b.logoColorsIls > 0
-      ? `▪️ צבעי לוגו (${logoColors}): +${ilsFmt(b.logoColorsIls)}`
-      : null,
-    "",
-    `📦 ${qty} יחידות × ${ilsFmt(opts.unitSellingPriceIls)}`,
   ];
-  if (shippingMethod) {
-    lines.push(`🚚 שיטת שילוח: ${shippingMethod}`);
+
+  if (split) {
+    // Split shipment: production is quoted on the FULL quantity and each
+    // shipping leg bills separately — identical to the official caption and the
+    // customer PDF. Folding shipping into a per-unit here would hide the air leg
+    // and round the total away from what the PDF says (Eli 2026-07-28).
+    const r2 = (n: number) => Math.round(n * 100) / 100;
+    const total = r2(split.productTotalIls + split.airIls + split.seaIls + (molds > 0 ? r2(molds) : 0));
+    lines.push(
+      "💰 *תמחור — משלוח מפוצל*",
+      `📦 ${qty} יחידות × ${ilsFmt(split.productUnitIls)} (ייצור)`,
+      `✈️ שילוח אווירי — ${split.airLabel}: ${ilsFmt(split.airIls)}`,
+      `🚢 שילוח ימי — ${split.seaLabel}: ${ilsFmt(split.seaIls)}`,
+    );
+    if (molds > 0) lines.push(`🧩 תבניות / מולדים (חד פעמי): ${ilsFmt(r2(molds))}`);
+    lines.push(`*💵 סה״כ: ${ilsFmt(total)}*`, "_(לא כולל מע״מ)_");
+  } else {
+    lines.push(
+      "💰 *תמחור — מחיר ליחידה* _(כולל שילוח)_",
+      `▪️ שקית${shippingMethod ? " + שילוח" : ""}: ${ilsFmt(b.productIls)}`,
+      opts.result.hasHandles && b.handlesIls > 0 ? `▪️ ידיות: +${ilsFmt(b.handlesIls)}` : null,
+      hasLamination && b.laminationIls > 0 ? `▪️ למינציה: +${ilsFmt(b.laminationIls)}` : null,
+      !hasLamination && b.logoColorsIls > 0
+        ? `▪️ צבעי לוגו (${logoColors}): +${ilsFmt(b.logoColorsIls)}`
+        : null,
+      "",
+      `📦 ${qty} יחידות × ${ilsFmt(opts.unitSellingPriceIls)}`,
+    );
+    if (shippingMethod) {
+      lines.push(`🚚 שיטת שילוח: ${shippingMethod}`);
+    }
+    if (molds > 0) {
+      lines.push(`🧩 תבניות / מולדים (חד פעמי): +${ilsFmt(molds)}`);
+    }
+    lines.push(
+      // Total = rounded per-unit × qty (+ molds) so it reconciles with the
+      // ₪0.60/unit shown above — not the precise ₪0.6031 × qty.
+      `*💵 סה״כ: ${ilsFmt(customerRoundedTotalIls(opts.unitSellingPriceIls, opts.result.quantity, molds))}*`,
+      "_(לא כולל מע״מ)_",
+    );
   }
-  if (opts.oneTimeMoldsIls && opts.oneTimeMoldsIls > 0) {
-    lines.push(`🧩 תבניות / מולדים (חד פעמי): +${ilsFmt(opts.oneTimeMoldsIls)}`);
-  }
+
   lines.push(
-    // Total = rounded per-unit × qty (+ molds) so it reconciles with the
-    // ₪0.60/unit shown above — not the precise ₪0.6031 × qty.
-    `*💵 סה״כ: ${ilsFmt(customerRoundedTotalIls(opts.unitSellingPriceIls, opts.result.quantity, opts.oneTimeMoldsIls ?? 0))}*`,
-    "_(לא כולל מע״מ)_",
     "",
     "━━━━━━━━━━━━━━",
     "ההצעה בתוקף ל-14 יום",
