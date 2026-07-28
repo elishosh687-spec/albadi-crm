@@ -21,6 +21,7 @@ import type {
   SeaCarrierProfile,
   ShippingOption,
 } from "@/lib/factory/types";
+import { PAYMENT_PRESETS, DEFAULT_PAYMENT_PLAN_ID, VAT_PCT } from "@/lib/factory/payment-terms";
 import { SeaCarriersSection } from "@/components/settings/SeaCarriersSection";
 import { LuxShell, LuxTitle, LuxAccent } from "@/components/widget-ui/lux";
 
@@ -323,6 +324,68 @@ export function SettingsView({ apiToken }: { apiToken: string }) {
           <NumField label="USD → ILS" suffix="₪" hint="שער דולר אמריקאי לשקל" value={state.usdToIls} step={0.01} onChange={(v) => updateNumber("usdToIls", v)} error={errors.usdToIls as string | undefined} />
           <NumField label="USD → CNY" suffix="¥" hint="כמה יואן בדולר (לעלות יחידה ¥ → ₪)" value={state.usdToCny} step={0.01} onChange={(v) => updateNumber("usdToCny", v)} error={errors.usdToCny as string | undefined} />
           <NumField label="ILS → CNY" suffix="¥" hint="להצגה בלבד ב-boss view של ההצעה" value={state.ilsToCny ?? 0} step={0.01} onChange={(v) => updateNumber("ilsToCny", v)} error={errors.ilsToCny as string | undefined} />
+        </div>
+      </FormSection>
+
+      <FormSection icon={Percent} title="תנאי תשלום" desc="מה הלקוח רואה בסוף ההצעה בוואטסאפ — מע״מ, סה״כ לתשלום ופריסה">
+        <div className="space-y-3">
+          <div>
+            <div className="text-xs font-medium mb-2">פריסת תשלומים — ברירת מחדל</div>
+            <div className="flex flex-wrap gap-2">
+              {PAYMENT_PRESETS.map((p) => {
+                const active = (state.paymentTerms?.defaultPlanId ?? DEFAULT_PAYMENT_PLAN_ID) === p.id;
+                return (
+                  <button
+                    key={p.id}
+                    type="button"
+                    onClick={() =>
+                      setState((prev) =>
+                        prev
+                          ? {
+                              ...prev,
+                              paymentTerms: {
+                                defaultPlanId: p.id,
+                                vatPct: prev.paymentTerms?.vatPct ?? VAT_PCT,
+                              },
+                            }
+                          : prev
+                      )
+                    }
+                    className={`text-xs px-3 py-1.5 rounded-md border transition-colors ${
+                      active
+                        ? "bg-primary text-primary-foreground border-primary"
+                        : "border-border bg-card/40 text-muted-foreground hover:bg-secondary"
+                    }`}
+                  >
+                    {p.label}
+                  </button>
+                );
+              })}
+            </div>
+            <p className="text-[11px] text-muted-foreground mt-2">
+              אפשר לשנות לכל שליחה בנפרד (כולל אחוז חופשי) במסך שליחת ההצעה.
+            </p>
+          </div>
+          <NumField
+            label="מע״מ"
+            suffix="%"
+            hint="נכון להיום 18%. משנים רק אם שיעור המע״מ בישראל משתנה."
+            value={state.paymentTerms?.vatPct ?? VAT_PCT}
+            step={1}
+            onChange={(v) =>
+              setState((prev) =>
+                prev
+                  ? {
+                      ...prev,
+                      paymentTerms: {
+                        defaultPlanId: prev.paymentTerms?.defaultPlanId ?? DEFAULT_PAYMENT_PLAN_ID,
+                        vatPct: Number(v) || VAT_PCT,
+                      },
+                    }
+                  : prev
+              )
+            }
+          />
         </div>
       </FormSection>
 
