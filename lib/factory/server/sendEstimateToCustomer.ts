@@ -19,11 +19,24 @@ import { renderCustomerQuotePdf } from "@/lib/factory/pdf";
 import { customerRoundedTotalIls } from "@/lib/factory/calculator/customer-breakdown";
 import { notifyItayQuoteSent } from "@/lib/notify/itay";
 import { applyShippingSplit, splitCustomerView } from "@/lib/factory/shipping-split";
+import {
+  VAT_PCT,
+  resolvePaymentPlan,
+  computePaymentSchedule,
+  buildPaymentBlock,
+  type PaymentPlan,
+} from "@/lib/factory/payment-terms";
 import type { FactoryProductSpec, FactoryPricingResult } from "@/lib/factory/types";
 
 const fmtIls = (n: number) => `₪${n.toLocaleString("he-IL", { maximumFractionDigits: 2 })}`;
 
-function buildEstimateCaption(name: string, spec: FactoryProductSpec, pricing: FactoryPricingResult): string {
+function buildEstimateCaption(
+  name: string,
+  spec: FactoryProductSpec,
+  pricing: FactoryPricingResult,
+  plan: PaymentPlan,
+  vatPct: number
+): string {
   const dims = [spec.widthCm, spec.depthCm, spec.heightCm].filter((n) => n && n > 0).join("×");
   const qty = spec.quantity.toLocaleString("he-IL");
   // Ordered spec — always shown so the estimate records exactly what was requested.
@@ -53,15 +66,24 @@ function buildEstimateCaption(name: string, spec: FactoryProductSpec, pricing: F
             v.moldsIls > 0 ? `🧩 תבניות / מולדים (חד פעמי): ${fmtIls(v.moldsIls)}` : null,
             `*💵 סה״כ משוער: ${fmtIls(v.grandTotalIls)}*`,
             "_(לא כולל מע״מ)_",
+            ...buildPaymentBlock(computePaymentSchedule(v.grandTotalIls, plan, vatPct), vatPct),
           ];
         })()
-      : [
-          "💰 *אומדן* _(כולל שילוח)_",
-          `📦 ${qty} יחידות × ${fmtIls(pricing.unitSellingPrice)}`,
-          pricing.shippingOptionName ? `🚚 שיטת שילוח: ${pricing.shippingOptionName}` : null,
-          `*💵 סה״כ משוער: ${fmtIls(customerRoundedTotalIls(pricing.unitSellingPrice, pricing.quantity, pricing.moldsTotalSellingPriceIls ?? 0))}*`,
-          "_(לא כולל מע״מ)_",
-        ]),
+      : (() => {
+          const total = customerRoundedTotalIls(
+            pricing.unitSellingPrice,
+            pricing.quantity,
+            pricing.moldsTotalSellingPriceIls ?? 0
+          );
+          return [
+            "💰 *אומדן* _(כולל שילוח)_",
+            `📦 ${qty} יחידות × ${fmtIls(pricing.unitSellingPrice)}`,
+            pricing.shippingOptionName ? `🚚 שיטת שילוח: ${pricing.shippingOptionName}` : null,
+            `*💵 סה״כ משוער: ${fmtIls(total)}*`,
+            "_(לא כולל מע״מ)_",
+            ...buildPaymentBlock(computePaymentSchedule(total, plan, vatPct), vatPct),
+          ];
+        })()),
     "",
     "━━━━━━━━━━━━━━",
     "_זהו אומדן ראשוני — המחיר הסופי כפוף לאישור המפעל. נחזור אליך עם הצעה סופית._",
@@ -89,6 +111,9 @@ export interface SendEstimateInput {
    *  so sending via the estimator marks the draft "נשלח" just like the
    *  finalized-quote send path does. */
   draftId?: string;
+  /** Payment schedule for THIS send (preset id or `custom_NN`); omitted → the
+   *  operator's configured default. */
+  paymentPlanId?: string | null;
 }
 export type SendEstimateResult =
   | { ok: true; wa_message_id: string; status: string; unitIls: number; totalIls: number; pdf: boolean }
@@ -162,7 +187,9 @@ export async function sendEstimateToCustomer(input: SendEstimateInput): Promise<
   if (!recipient) return { ok: false, status: 409, error: "no_whatsapp_id", message: "לליד אין WhatsApp — לא ניתן לשלוח." };
 
   const customerName = input.customerName ?? lead.name ?? "";
-  const caption = buildEstimateCaption(customerName, productSpec, pricing);
+  const vatPct = config.paymentTerms?.vatPct ?? VAT_PCT;
+  const plan = resolvePaymentPlan(input.paymentPlanId ?? config.paymentTerms?.defaultPlanId);
+  const caption = buildEstimateCaption(customerName, productSpec, pricing, plan, vatPct);
 
   // Render PDF + upload to Blob (estimate has no DB id → timestamped key). GreenAPI needs a
   // direct-download URL; the Blob URL is one. Without a Blob token we send text-only.

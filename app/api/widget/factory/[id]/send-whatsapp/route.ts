@@ -18,7 +18,13 @@ export async function POST(
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
   const { id } = await ctx.params;
-  const result = await sendQuoteWhatsapp(id, req.headers.get("host"));
+  // Optional body — the payment schedule picked for THIS send. Absent (or an
+  // empty body, which is how every pre-2026-07-28 caller posts) falls back to
+  // the operator's configured default.
+  const body = await req.json().catch(() => ({}));
+  const paymentPlanId =
+    typeof body?.paymentPlanId === "string" ? body.paymentPlanId : null;
+  const result = await sendQuoteWhatsapp(id, req.headers.get("host"), paymentPlanId);
   if (!result.ok) {
     return NextResponse.json(
       {

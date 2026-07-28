@@ -4,6 +4,11 @@ import { useEffect, useState, useMemo } from "react";
 import { ExternalLink, Search, Loader2, Eye, Download, Trash2, Trash, X, MessageCircle, Calculator, Pencil, ChevronDown, Check, Send, Sparkles, FolderOpen, RotateCcw, CheckCircle2 } from "lucide-react";
 import { QuoteHtmlPreview } from "@/app/dashboard/v3/_components/factory/QuoteHtmlPreview";
 import { splitCustomerView } from "@/lib/factory/shipping-split";
+import {
+  PAYMENT_PRESETS,
+  DEFAULT_PAYMENT_PLAN_ID,
+  customDepositPlan,
+} from "@/lib/factory/payment-terms";
 import type { ShippingSplit } from "@/lib/factory/types";
 import type { FactoryQuoteRow as DashboardFactoryQuoteRow } from "@/app/dashboard/v3/_components/factory/FactoryQuotePanel";
 import { FinalizeModalWidget } from "./FinalizeModal.widget";
@@ -135,6 +140,11 @@ export function QuotesHistoryView({ apiToken }: { apiToken: string }) {
   const [estimateRow, setEstimateRow] = useState<ApiQuoteRow | null>(null);
   const [finalizing, setFinalizing] = useState<ApiQuoteRow | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  // Payment-plan picker shown before a send (Eli 2026-07-28).
+  const [payModal, setPayModal] = useState<
+    { row: ApiQuoteRow; planId: string; customPct: string } | null
+  >(null);
+  const [defaultPlanId, setDefaultPlanId] = useState<string>(DEFAULT_PAYMENT_PLAN_ID);
   const [importing, setImporting] = useState(false);
   // Rows the import couldn't auto-match to a lead — the user assigns them manually.
   const [unmatched, setUnmatched] = useState<{ quotationNo: string; customer: string }[]>([]);
@@ -421,17 +431,23 @@ export function QuotesHistoryView({ apiToken }: { apiToken: string }) {
     }
   }
 
-  async function handleSendWhatsApp(r: ApiQuoteRow) {
-    const isDraft = r.status === "draft";
-    const prompt = isDraft
-      ? `לשלוח את האומדן (טיוטה) ל-${r.name ?? "לקוח"} ב-WhatsApp?\n\nזהו מחיר שחישבת — לא הצעה סופית מהמפעל.`
-      : `לשלוח את ההצעה ל-${r.name ?? "לקוח"} ב-WhatsApp?`;
-    if (!confirm(prompt)) return;
+  // Sending now goes through the payment-plan picker (Eli 2026-07-28): the
+  // message carries VAT + the payment schedule + bank details, and the deposit
+  // split changes per deal (50/50, 30/70, 3 payments, or a custom %).
+  function handleSendWhatsApp(r: ApiQuoteRow) {
+    setPayModal({ row: r, planId: defaultPlanId, customPct: "" });
+  }
+
+  async function doSendWhatsApp(r: ApiQuoteRow, paymentPlanId: string) {
     setBusyId(r.id);
     try {
       const res = await fetch(
         `/api/factory/${r.id}/send-whatsapp?widget_token=${encodeURIComponent(apiToken)}`,
-        { method: "POST" }
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ paymentPlanId }),
+        }
       );
       const j = await res.json().catch(() => ({}));
       if (!j?.ok) {
@@ -476,6 +492,18 @@ export function QuotesHistoryView({ apiToken }: { apiToken: string }) {
       setBusyId(null);
     }
   }
+
+  // The operator's default payment schedule, preselected in the picker.
+  useEffect(() => {
+    (async () => {
+      try {
+        const r = await fetch(`/api/widget/factory/config?widget_token=${encodeURIComponent(apiToken)}`);
+        const j = await r.json();
+        const id = j?.config?.paymentTerms?.defaultPlanId ?? j?.paymentTerms?.defaultPlanId;
+        if (typeof id === "string" && id) setDefaultPlanId(id);
+      } catch { /* keep the built-in default */ }
+    })();
+  }, [apiToken]);
 
   useEffect(() => {
     (async () => {
@@ -1353,6 +1381,99 @@ export function QuotesHistoryView({ apiToken }: { apiToken: string }) {
           )}
         </div>
       </div>
+
+      {payModal && (
+        <div
+          className="fixed inset-0 z-50 grid place-items-center bg-black/60 backdrop-blur-sm p-4"
+          dir="rtl"
+          onClick={() => setPayModal(null)}
+        >
+          <div
+            className="w-full max-w-md rounded-xl border border-border p-5 space-y-4"
+            style={{ backgroundColor: "#1b1917" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div>
+              <div className="text-base font-semibold">שליחת הצעה ל-{payModal.row.name ?? "לקוח"}</div>
+              <p className="text-xs text-muted-foreground mt-1">
+                {payModal.row.status === "draft"
+                  ? "זהו מחיר שחישבת — לא הצעה סופית מהמפעל."
+                  : "ההודעה תכלול מע״מ, סה״כ לתשלום, פריסת תשלומים ופרטי בנק."}
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <div className="text-xs font-medium text-muted-foreground">פריסת תשלומים</div>
+              <div className="flex flex-wrap gap-2">
+                {PAYMENT_PRESETS.map((p) => (
+                  <button
+                    key={p.id}
+                    type="button"
+                    onClick={() => setPayModal({ ...payModal, planId: p.id, customPct: "" })}
+                    className={`text-xs px-3 py-1.5 rounded-md border transition-colors ${
+                      payModal.planId === p.id && !payModal.customPct
+                        ? "bg-primary text-primary-foreground border-primary"
+                        : "border-border bg-card/40 text-muted-foreground hover:bg-secondary"
+                    }`}
+                  >
+                    {p.label}
+                  </button>
+                ))}
+                <div className="flex items-center gap-1">
+                  <input
+                    type="number"
+                    min={1}
+                    max={99}
+                    placeholder="אחר %"
+                    value={payModal.customPct}
+                    onChange={(e) => setPayModal({ ...payModal, customPct: e.target.value })}
+                    className="w-20 rounded-md border border-border bg-background/40 px-2 py-1.5 text-xs text-center tabular-nums"
+                  />
+                  <span className="text-[11px] text-muted-foreground">מקדמה</span>
+                </div>
+              </div>
+              <p className="text-[11px] text-muted-foreground">
+                {(() => {
+                  const pct = parseInt(payModal.customPct, 10);
+                  const plan =
+                    Number.isFinite(pct) && pct > 0 && pct < 100
+                      ? customDepositPlan(pct)
+                      : PAYMENT_PRESETS.find((p) => p.id === payModal.planId) ?? PAYMENT_PRESETS[0];
+                  return `יישלח: ${plan.pcts.map((x) => `${x}%`).join(" · ")}`;
+                })()}
+              </p>
+            </div>
+
+            <div className="flex gap-2 justify-end pt-1">
+              <button
+                type="button"
+                onClick={() => setPayModal(null)}
+                className="text-xs px-3 py-2 rounded-md border border-border text-muted-foreground hover:bg-secondary"
+              >
+                ביטול
+              </button>
+              <button
+                type="button"
+                disabled={busyId === payModal.row.id}
+                onClick={() => {
+                  const pct = parseInt(payModal.customPct, 10);
+                  const planId =
+                    Number.isFinite(pct) && pct > 0 && pct < 100
+                      ? customDepositPlan(pct).id
+                      : payModal.planId;
+                  const row = payModal.row;
+                  setPayModal(null);
+                  void doSendWhatsApp(row, planId);
+                }}
+                className="text-xs px-4 py-2 rounded-md bg-emerald-600 text-white hover:bg-emerald-500 disabled:opacity-50 inline-flex items-center gap-1.5"
+              >
+                {busyId === payModal.row.id ? <Loader2 className="size-3.5 animate-spin" /> : <MessageCircle className="size-3.5" />}
+                שלח ב-WhatsApp
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {opened && <QuoteModal row={opened} onClose={() => setOpened(null)} widgetToken={apiToken} />}
       {specRow && <SpecModal row={toRequestRow(specRow)} onClose={() => setSpecRow(null)} />}

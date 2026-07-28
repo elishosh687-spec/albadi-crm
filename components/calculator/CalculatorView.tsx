@@ -7,6 +7,12 @@ import type { Product, QuantityTier, ShippingOption, QuoteResult } from "@/lib/f
 import type { FactoryPricingResult, ShippingSplit } from "@/lib/factory/types";
 import { quoteResultToPricing } from "@/lib/factory/calculator/to-pricing";
 import { applyShippingSplit, splitCustomerView } from "@/lib/factory/shipping-split";
+import {
+  VAT_PCT,
+  resolvePaymentPlan,
+  computePaymentSchedule,
+  buildPaymentBlock,
+} from "@/lib/factory/payment-terms";
 import { validateBagGeometry } from "@/lib/factory/bag-geometry";
 import { computeCommission } from "@/lib/factory/commission";
 import { isOverCbmConsolidationThreshold, cbmConsolidationAlert } from "@/lib/factory/sea-carriers";
@@ -2128,6 +2134,10 @@ function buildQuoteText(opts: {
    *  legs — same shape as the official caption (server/sendWhatsapp.ts) and the
    *  customer PDF, so every surface quotes the same number. */
   shippingSplit?: ShippingSplit | null;
+  /** Payment schedule id (preset or `custom_NN`) — drives the VAT + schedule +
+   *  bank-details block Eli wants at the end of every manual quote. */
+  paymentPlanId?: string | null;
+  vatPct?: number;
 }): string {
   const ilsFmt = (n: number) =>
     `₪${n.toLocaleString("he-IL", { maximumFractionDigits: 2 })}`;
@@ -2152,11 +2162,14 @@ function buildQuoteText(opts: {
 
   const split = opts.shippingSplit ?? null;
   const molds = opts.oneTimeMoldsIls ?? 0;
+  // The ex-VAT total this text PRINTS — the payment block builds on it, never
+  // on a recomputed figure.
+  let printedTotalIls = 0;
 
   const lines: (string | null)[] = [
     greeting,
     "",
-    "*הצעת מחיר*",
+    "*פרטי תשלום ופירוט חשבון*",
     "",
     "📦 *פרטי המוצר*",
     productDesc ? `מוצר: ${productDesc}` : null,
@@ -2187,6 +2200,7 @@ function buildQuoteText(opts: {
     );
     if (v.moldsIls > 0) lines.push(`🧩 תבניות / מולדים (חד פעמי): ${ilsFmt(v.moldsIls)}`);
     lines.push(`*💵 סה״כ: ${ilsFmt(v.grandTotalIls)}*`, "_(לא כולל מע״מ)_");
+    printedTotalIls = v.grandTotalIls;
   } else {
     lines.push(
       "💰 *תמחור — מחיר ליחידה* _(כולל שילוח)_",
@@ -2205,19 +2219,20 @@ function buildQuoteText(opts: {
     if (molds > 0) {
       lines.push(`🧩 תבניות / מולדים (חד פעמי): +${ilsFmt(molds)}`);
     }
-    lines.push(
-      // Total = rounded per-unit × qty (+ molds) so it reconciles with the
-      // ₪0.60/unit shown above — not the precise ₪0.6031 × qty.
-      `*💵 סה״כ: ${ilsFmt(customerRoundedTotalIls(opts.unitSellingPriceIls, opts.result.quantity, molds))}*`,
-      "_(לא כולל מע״מ)_",
-    );
+    // Total = rounded per-unit × qty (+ molds) so it reconciles with the
+    // ₪0.60/unit shown above — not the precise ₪0.6031 × qty.
+    const total = customerRoundedTotalIls(opts.unitSellingPriceIls, opts.result.quantity, molds);
+    lines.push(`*💵 סה״כ: ${ilsFmt(total)}*`, "_(לא כולל מע״מ)_");
+    printedTotalIls = total;
   }
 
+  // VAT → amount due → payment schedule → bank details (Eli 2026-07-28).
+  const vatPct = opts.vatPct ?? VAT_PCT;
   lines.push(
-    "",
-    "━━━━━━━━━━━━━━",
-    "ההצעה בתוקף ל-14 יום",
-    "נשמח לקבל את אישורך 🙂",
+    ...buildPaymentBlock(
+      computePaymentSchedule(printedTotalIls, resolvePaymentPlan(opts.paymentPlanId), vatPct),
+      vatPct
+    )
   );
   return lines.filter((l) => l !== null).join("\n");
 }

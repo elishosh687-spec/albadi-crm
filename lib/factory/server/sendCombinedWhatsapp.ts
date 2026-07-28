@@ -16,6 +16,12 @@ import { phoneToJid } from "@/lib/bridge/jid";
 import { allocateCombined } from "@/lib/factory/combined";
 import { getFactoryConfig } from "@/lib/factory/config";
 import { notifyItayQuoteSent } from "@/lib/notify/itay";
+import {
+  VAT_PCT,
+  resolvePaymentPlan,
+  computePaymentSchedule,
+  buildPaymentBlock,
+} from "@/lib/factory/payment-terms";
 import type { FactoryPricingResult } from "@/lib/factory/types";
 
 function r2(n: number): number {
@@ -79,7 +85,10 @@ export async function sendCombinedQuoteWhatsapp(
   ids: string[],
   hostHeader: string | null,
   split?: CombinedSplitInput,
-  cbmOverride?: number
+  cbmOverride?: number,
+  /** Payment schedule for THIS send (preset id or `custom_NN`); omitted → the
+   *  operator's configured default. */
+  paymentPlanId?: string | null
 ): Promise<SendWhatsappOk | SendWhatsappErr> {
   if (ids.length < 1) {
     return { ok: false, status: 400, error: "no_ids" };
@@ -177,18 +186,21 @@ export async function sendCombinedQuoteWhatsapp(
           "",
         ]
       : [];
+  // Payment-details template (Eli 2026-07-28): VAT + amount due + schedule +
+  // bank details, built from the total this caption PRINTS.
+  const cfg = await getFactoryConfig();
+  const vatPct = cfg.paymentTerms?.vatPct ?? VAT_PCT;
+  const plan = resolvePaymentPlan(paymentPlanId ?? cfg.paymentTerms?.defaultPlanId);
   const caption = [
     greeting,
     "",
+    "*פרטי תשלום ופירוט חשבון*",
     title,
     "",
     ...splitLines,
     `*💵 סה״כ: ${formatIls(totals.grandTotal)}*`,
     validSplit ? "_(לא כולל מע״מ)_" : "_(כולל שילוח, לא כולל מע״מ)_",
-    "",
-    "━━━━━━━━━━━━━━",
-    "ההצעה בתוקף ל-14 יום",
-    "נשמח לקבל את אישורך 🙂",
+    ...buildPaymentBlock(computePaymentSchedule(totals.grandTotal, plan, vatPct), vatPct),
   ].join("\n");
 
   const pdfFilename = `הצעת-מחיר-משולבת-${ids.length}-מוצרים.pdf`;

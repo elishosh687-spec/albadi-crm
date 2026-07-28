@@ -132,6 +132,14 @@ export interface FactoryPricingConfig {
    */
   commissionPct?: number;
   /**
+   * Default payment schedule quoted to the customer in the WhatsApp message
+   * (VAT, amount due, deposit/installments, bank details). `defaultPlanId` is a
+   * PAYMENT_PRESETS id or `custom_NN`; the send screen can override it per
+   * quote. Optional for back-compat — `normalizeConfig` backfills it.
+   * See lib/factory/payment-terms.ts. Added 2026-07-28.
+   */
+  paymentTerms?: { defaultPlanId: string; vatPct: number };
+  /**
    * Profit margin % per quantity tier. Keys are quantity strings matching
    * `quantityTiers[].quantity` (e.g. "1000","3000","5000","10000"). Falls back
    * to `defaultProfitMargin` when the customer's quantity isn't in the map.

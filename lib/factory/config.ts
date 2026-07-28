@@ -7,6 +7,7 @@ import { db } from "@/lib/db";
 import { appConfig } from "@/drizzle/schema";
 import { eq } from "drizzle-orm";
 import type { FactoryPricingConfig } from "./types";
+import { DEFAULT_PAYMENT_PLAN_ID, VAT_PCT } from "./payment-terms";
 import {
   YEADIM_CARRIER,
   DEFAULT_ASSUMED_SHIPMENT_CBM,
@@ -55,6 +56,7 @@ export const DEFAULT_FACTORY_CONFIG: FactoryPricingConfig = {
   profitMarginByQuantity: { "1000": 40, "3000": 40, "5000": 40, "10000": 40 },
   commissionPct: 10,
   currency: "ILS",
+  paymentTerms: { defaultPlanId: DEFAULT_PAYMENT_PLAN_ID, vatPct: VAT_PCT },
 };
 
 /**
@@ -96,6 +98,12 @@ function normalizeConfig(raw: FactoryPricingConfig): FactoryPricingConfig {
   }
   if (out.assumedShipmentCbm === undefined) {
     out = { ...out, assumedShipmentCbm: DEFAULT_ASSUMED_SHIPMENT_CBM };
+  }
+
+  // Payment terms for the customer WhatsApp message (added 2026-07-28) — rows
+  // written before it get the 50/50 default and the statutory VAT rate.
+  if (!out.paymentTerms) {
+    out = { ...out, paymentTerms: { defaultPlanId: DEFAULT_PAYMENT_PLAN_ID, vatPct: VAT_PCT } };
   }
 
   return out;

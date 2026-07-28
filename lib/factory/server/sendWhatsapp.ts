@@ -17,6 +17,15 @@ import type {
 import { customerRoundedTotalIls } from "@/lib/factory/calculator/customer-breakdown";
 import { splitCustomerView } from "@/lib/factory/shipping-split";
 import { notifyItayQuoteSent } from "@/lib/notify/itay";
+import { getFactoryConfig } from "@/lib/factory/config";
+import {
+  VAT_PCT,
+  DEFAULT_PAYMENT_PLAN_ID,
+  resolvePaymentPlan,
+  computePaymentSchedule,
+  buildPaymentBlock,
+  type PaymentPlan,
+} from "@/lib/factory/payment-terms";
 
 function formatIls(n: number): string {
   return `₪${n.toLocaleString("he-IL", { maximumFractionDigits: 2 })}`;
@@ -27,8 +36,13 @@ function buildCaption(opts: {
   spec: FactoryProductSpec;
   pricing: FactoryPricingResult;
   quotationNo: string;
+  /** Payment schedule to quote. Falls back to the 50/50 default. */
+  plan?: PaymentPlan;
+  vatPct?: number;
 }): string {
   const { name, spec, pricing, quotationNo } = opts;
+  const plan = opts.plan ?? resolvePaymentPlan(DEFAULT_PAYMENT_PLAN_ID);
+  const vatPct = opts.vatPct ?? VAT_PCT;
   const greeting = name ? `היי ${name} 👋` : "היי 👋";
   const dims = [spec.widthCm, spec.depthCm, spec.heightCm]
     .filter((n) => n && n > 0)
@@ -43,7 +57,10 @@ function buildCaption(opts: {
   const lines: (string | null)[] = [
     greeting,
     "",
-    `*הצעת מחיר #${quotationNo}*`,
+    // Payment-details template (Eli 2026-07-28) — replaced the plain quote
+    // header. The quote number stays on its own line for traceability.
+    "*פרטי תשלום ופירוט חשבון*",
+    `_הצעה #${quotationNo}_`,
     "",
     "📦 *פרטי המוצר*",
     dims ? `מידות: ${dims} ס״מ` : null,
@@ -55,6 +72,10 @@ function buildCaption(opts: {
   ];
   const split = pricing.shippingSplit;
   const moldsIls = pricing.moldsTotalSellingPriceIls ?? 0;
+  // The ex-VAT total this message actually PRINTS — the payment block is built
+  // from it, never from a recomputed figure, so VAT and the installments can't
+  // disagree with the line above them.
+  let printedTotalIls: number;
   if (split) {
     // Split shipment: ONE all-in price per bag for each shipping method — no
     // separate production line (Eli 2026-07-28: "עלות פר יחידה למשלוח אווירי,
@@ -67,6 +88,7 @@ function buildCaption(opts: {
     );
     if (v.moldsIls > 0) lines.push(`🧩 תבניות / מולדים (חד פעמי): ${formatIls(v.moldsIls)}`);
     lines.push(`*💵 סה״כ: ${formatIls(v.grandTotalIls)}*`, "_(לא כולל מע״מ)_");
+    printedTotalIls = v.grandTotalIls;
   } else {
     lines.push(
       "💰 *תמחור* _(כולל שילוח)_",
@@ -75,21 +97,14 @@ function buildCaption(opts: {
     if (pricing.shippingOptionName) {
       lines.push(`🚚 שיטת שילוח: ${pricing.shippingOptionName}`);
     }
-    lines.push(
-      // Total from the rounded per-unit shown above (× qty + molds), so the
-      // customer's own "per-unit × qty" reconciles with the total.
-      `*💵 סה״כ: ${formatIls(customerRoundedTotalIls(pricing.unitSellingPrice, pricing.quantity, moldsIls))}*`,
-      "_(לא כולל מע״מ)_"
-    );
+    // Total from the rounded per-unit shown above (× qty + molds), so the
+    // customer's own "per-unit × qty" reconciles with the total.
+    const total = customerRoundedTotalIls(pricing.unitSellingPrice, pricing.quantity, moldsIls);
+    lines.push(`*💵 סה״כ: ${formatIls(total)}*`, "_(לא כולל מע״מ)_");
+    printedTotalIls = total;
   }
-  lines.push(
-    "",
-    "━━━━━━━━━━━━━━",
-    "ההצעה בתוקף ל-14 יום",
-    "נשמח לקבל את אישורך 🙂",
-    "",
-    "_מצאתם מחיר זול יותר? שלחו חשבונית ונבדוק אם נוכל להוזיל._"
-  );
+  // VAT → amount due → payment schedule → bank details.
+  lines.push(...buildPaymentBlock(computePaymentSchedule(printedTotalIls, plan, vatPct), vatPct));
   return lines.filter((l) => l !== null).join("\n");
 }
 
@@ -109,7 +124,10 @@ export interface SendWhatsappErr {
 
 export async function sendQuoteWhatsapp(
   id: string,
-  hostHeader: string | null
+  hostHeader: string | null,
+  /** Payment schedule for THIS send — a preset id or `custom_NN`. Omitted →
+   *  the operator's configured default (Eli 2026-07-28). */
+  paymentPlanId?: string | null
 ): Promise<SendWhatsappOk | SendWhatsappErr> {
   const rows = await db
     .select()
@@ -165,11 +183,15 @@ export async function sendQuoteWhatsapp(
   }
 
   const quotationNo = row.quotationNo ?? id.slice(-8).toUpperCase();
+  // Payment schedule: the caller's pick, else the operator's configured default.
+  const cfg = await getFactoryConfig();
   const caption = buildCaption({
     name: lead.name ?? "",
     spec: row.productSpec as FactoryProductSpec,
     pricing: row.finalPricing as FactoryPricingResult,
     quotationNo,
+    plan: resolvePaymentPlan(paymentPlanId ?? cfg.paymentTerms?.defaultPlanId),
+    vatPct: cfg.paymentTerms?.vatPct ?? VAT_PCT,
   });
   const pdfFilename = `הצעת-מחיר-${quotationNo}.pdf`;
 

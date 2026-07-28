@@ -19,12 +19,13 @@
 
 import { zohoGetBinary, zohoRequest } from "./client";
 import { getLiveFx } from "@/lib/fx/live-rates";
+import { VAT_PCT, BANK_DETAILS as BANK_DETAILS_SHARED } from "@/lib/factory/payment-terms";
 
 // --- Albadi org constants (source: /Users/eli/Projects/zoho/config.json) ---
-const DEFAULT_TAX_ID = "433486000000133001"; // 18% VAT
-const VAT_PCT = 18;
-const BANK_DETAILS =
-  "פרטים להעברה בנקאית:\nלפקודת: אלבדי-אלעזר שושתרי\nבנק: Pepper / בנק לאומי (מס׳ בנק 10)\nסניף: 998\nחשבון: 16499401";
+const DEFAULT_TAX_ID = "433486000000133001"; // the 18% VAT tax id in Zoho
+// VAT % and the bank details now live in a client-safe module so the customer
+// WhatsApp message and this invoice can't drift apart (Eli 2026-07-28).
+const BANK_DETAILS = BANK_DETAILS_SHARED;
 const COGS_ACCOUNT_ID = "433486000000034003";
 const COMMISSION_ACCOUNT_ID = "433486000000163002";
 // Who the money was paid THROUGH — the two partners' accounts OR the business
