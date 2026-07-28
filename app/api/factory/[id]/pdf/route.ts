@@ -13,6 +13,7 @@ import { db } from "@/lib/db";
 import { factoryQuoteRequests, leads } from "@/drizzle/schema";
 import { eq } from "drizzle-orm";
 import { renderCustomerQuotePdf, fetchImageDataUri } from "@/lib/factory/pdf";
+import { getFactoryConfig } from "@/lib/factory/config";
 import type {
   FactoryProductSpec,
   FactoryPricingResult,
@@ -80,6 +81,7 @@ export async function GET(
     // catalog-derived breakdown ignores factoryResponse.unitCostCny and
     // would display a different total than the WhatsApp text (see lead
     // 972509111981 / quote LHPL3ATC).
+    const cfg = await getFactoryConfig();
     const picDataUri = await fetchImageDataUri(spec.picUrl);
     const buf = await renderCustomerQuotePdf({
       customerName,
@@ -89,6 +91,12 @@ export async function GET(
       customerNotes: spec.customerNotes,
       picDataUri,
       quotationNo: row.quotationNo ?? id.slice(-8).toUpperCase(),
+      // ?plan= is set by the WhatsApp send so the attached PDF prints the SAME
+      // VAT + payment schedule as the caption (Eli 2026-07-28). Absent → the
+      // operator's configured default, so an ad-hoc PDF download still shows
+      // payment terms rather than a bare ex-VAT quote.
+      paymentPlanId: req.nextUrl.searchParams.get("plan") ?? cfg.paymentTerms?.defaultPlanId ?? null,
+      vatPct: cfg.paymentTerms?.vatPct,
     });
 
     return new NextResponse(new Uint8Array(buf), {

@@ -153,10 +153,16 @@ export async function sendQuoteWhatsapp(
   // URL when row.pdfUrl is set, which broke the send into a bare link. So:
   // hand GreenAPI a direct-download URL — the Blob URL itself when present,
   // otherwise the proxy path (?stream=1 returns the bytes with no redirect).
-  const pdfMediaUrl =
-    row.pdfUrl && !row.pdfUrl.includes("/api/factory/")
-      ? row.pdfUrl
-      : `${proto}://${host}/api/factory/${id}/pdf?stream=1`;
+  // Payment schedule for this send — resolved BEFORE the PDF url so the
+  // attachment and the caption quote the same figures.
+  const cfg = await getFactoryConfig();
+  const planId = paymentPlanId ?? cfg.paymentTerms?.defaultPlanId ?? DEFAULT_PAYMENT_PLAN_ID;
+  // A stored Blob PDF was rendered at finalize time, BEFORE any payment plan was
+  // chosen — so it has no payment block, and reusing it would attach an ex-VAT
+  // PDF to a VAT-inclusive caption. Always re-render through the proxy (which
+  // returns the bytes directly — GreenAPI doesn't follow redirects) so the PDF
+  // carries the same schedule as the message (Eli 2026-07-28).
+  const pdfMediaUrl = `${proto}://${host}/api/factory/${id}/pdf?stream=1&plan=${encodeURIComponent(planId)}`;
 
   const leadRows = await db
     .select({
@@ -183,14 +189,12 @@ export async function sendQuoteWhatsapp(
   }
 
   const quotationNo = row.quotationNo ?? id.slice(-8).toUpperCase();
-  // Payment schedule: the caller's pick, else the operator's configured default.
-  const cfg = await getFactoryConfig();
   const caption = buildCaption({
     name: lead.name ?? "",
     spec: row.productSpec as FactoryProductSpec,
     pricing: row.finalPricing as FactoryPricingResult,
     quotationNo,
-    plan: resolvePaymentPlan(paymentPlanId ?? cfg.paymentTerms?.defaultPlanId),
+    plan: resolvePaymentPlan(planId),
     vatPct: cfg.paymentTerms?.vatPct ?? VAT_PCT,
   });
   const pdfFilename = `הצעת-מחיר-${quotationNo}.pdf`;

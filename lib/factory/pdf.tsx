@@ -30,6 +30,12 @@ import {
   forceLaminationForColors,
 } from "./qstate-decode";
 import { splitCustomerView } from "./shipping-split";
+import {
+  VAT_PCT,
+  BANK_DETAILS_LINES,
+  resolvePaymentPlan,
+  computePaymentSchedule,
+} from "./payment-terms";
 
 /** Colour count encoded in a printing spec ("3 color(s)" / "3 צבעים") → int. */
 function colorsFromPrinting(printing: string | null | undefined): number {
@@ -340,6 +346,11 @@ export interface CustomerQuotePdfProps {
   /** Product image as a data URI (data:image/...;base64,...). Pre-fetched
    *  server-side via fetchImageDataUri so a broken URL never breaks the PDF. */
   picDataUri?: string;
+  /** Payment schedule id (preset or `custom_NN`). When set the PDF prints the
+   *  VAT + amount due + installments + bank details, matching the WhatsApp
+   *  caption it's attached to. Omitted → no payment block (legacy callers). */
+  paymentPlanId?: string | null;
+  vatPct?: number;
 }
 
 function CustomerQuotePDF(props: CustomerQuotePdfProps) {
@@ -347,6 +358,7 @@ function CustomerQuotePDF(props: CustomerQuotePdfProps) {
   // it lives in the filename only (Content-Disposition) for tracking.
   const { customerName, spec, pricing, breakdown, customerNotes, picDataUri, isEstimate } = props;
   const validityDays = props.validityDays ?? (isEstimate ? 7 : 14);
+  const paymentVatPct = props.vatPct ?? VAT_PCT;
   const date = new Date().toLocaleDateString("he-IL", {
     day: "numeric",
     month: "long",
@@ -481,6 +493,12 @@ function CustomerQuotePDF(props: CustomerQuotePdfProps) {
     }
   }
 
+  // Built from the total this PDF PRINTS (displayTotalOrder), so the payment
+  // figures can never disagree with the table above them.
+  const paymentSchedule = props.paymentPlanId
+    ? computePaymentSchedule(displayTotalOrder, resolvePaymentPlan(props.paymentPlanId), paymentVatPct)
+    : null;
+
   const bullets = [
     `מידות: ${breakdown?.dimensions ?? sizeLabel(spec)} ס״מ`,
     `כמות: ${qty.toLocaleString("he-IL")} יח׳`,
@@ -550,6 +568,41 @@ function CustomerQuotePDF(props: CustomerQuotePdfProps) {
         <View style={styles.vatNote}>
           <Text style={styles.vatText}>המחיר אינו כולל מע״מ</Text>
         </View>
+
+        {/* Payment terms — the PDF must show the same VAT / amount due /
+            schedule as the WhatsApp caption it's attached to, otherwise the two
+            documents the customer opens together differ by 18% (Eli 2026-07-28). */}
+        {paymentSchedule ? (
+          <View style={styles.bullets}>
+            <Text style={styles.bulletsTitle}>פרטי תשלום</Text>
+            <View style={styles.bulletRow}>
+              <Text style={styles.bulletMark}>•</Text>
+              <Text style={styles.bulletText}>
+                מע״מ {paymentVatPct}%: {formatILS(paymentSchedule.vat)}
+              </Text>
+            </View>
+            <View style={styles.bulletRow}>
+              <Text style={styles.bulletMark}>•</Text>
+              <Text style={[styles.bulletText, { fontWeight: "bold" }]}>
+                סה״כ לתשלום: {formatILS(paymentSchedule.total)}
+              </Text>
+            </View>
+            {paymentSchedule.installments.map((inst, i) => (
+              <View key={i} style={styles.bulletRow}>
+                <Text style={styles.bulletMark}>•</Text>
+                <Text style={styles.bulletText}>
+                  {`תשלום ${i + 1} — ${formatILS(inst.ils)} (${inst.pct}% · ${inst.when})`}
+                </Text>
+              </View>
+            ))}
+            {BANK_DETAILS_LINES.map((b, i) => (
+              <View key={`bank-${i}`} style={styles.bulletRow}>
+                <Text style={styles.bulletMark}>{i === 0 ? "•" : " "}</Text>
+                <Text style={styles.bulletText}>{b}</Text>
+              </View>
+            ))}
+          </View>
+        ) : null}
 
         <View style={styles.bullets}>
           <Text style={styles.bulletsTitle}>סיכום הזמנה</Text>
