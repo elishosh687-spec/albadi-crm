@@ -3,6 +3,8 @@
 import { useEffect, useState, useMemo } from "react";
 import { ExternalLink, Search, Loader2, Eye, Download, Trash2, Trash, X, MessageCircle, Calculator, Pencil, ChevronDown, Check, Send, Sparkles, FolderOpen, RotateCcw, CheckCircle2 } from "lucide-react";
 import { QuoteHtmlPreview } from "@/app/dashboard/v3/_components/factory/QuoteHtmlPreview";
+import { splitCustomerView } from "@/lib/factory/shipping-split";
+import type { ShippingSplit } from "@/lib/factory/types";
 import type { FactoryQuoteRow as DashboardFactoryQuoteRow } from "@/app/dashboard/v3/_components/factory/FactoryQuotePanel";
 import { FinalizeModalWidget } from "./FinalizeModal.widget";
 import { CombinedCalcModalWidget } from "./CombinedCalcModal.widget";
@@ -45,6 +47,19 @@ function fmtMoney(v: unknown): string {
   if (Number.isNaN(n)) return "—";
   return `₪${Math.round(n).toLocaleString("he-IL")}`;
 }
+/** The total to SHOW for a quote. On a split shipment the customer-facing total
+ *  is derived from the per-leg rounded unit prices (splitCustomerView), so the
+ *  list row must use that too — otherwise the row and the opened quote print two
+ *  different numbers for the same quote (Eli 2026-07-28). */
+function displayTotal(finalPricing: Record<string, unknown> | null): unknown {
+  if (!finalPricing) return null;
+  const split = finalPricing.shippingSplit as ShippingSplit | undefined;
+  if (split) {
+    return splitCustomerView(split, Number(finalPricing.moldsTotalSellingPriceIls ?? 0)).grandTotalIls;
+  }
+  return finalPricing.totalOrderPriceIls ?? finalPricing.totalSellingPrice;
+}
+
 function num(v: unknown): number | null {
   if (v === null || v === undefined || v === "") return null;
   const n = typeof v === "number" ? v : Number(v);
@@ -621,7 +636,7 @@ export function QuotesHistoryView({ apiToken }: { apiToken: string }) {
               className={`text-[11px] tabular-nums shrink-0 ${r.status === "draft" ? "text-muted-foreground" : "text-emerald-400"}`}
               title={r.status === "draft" ? "מחיר משוער (טיוטה — לא ממפעל)" : undefined}
             >
-              {r.status === "draft" ? "~" : ""}{fmtMoney((r.finalPricing as any).totalOrderPriceIls ?? (r.finalPricing as any).totalSellingPrice)}
+              {r.status === "draft" ? "~" : ""}{fmtMoney(displayTotal(r.finalPricing as Record<string, unknown>))}
             </span>
           )}
         </div>
@@ -1118,7 +1133,7 @@ export function QuotesHistoryView({ apiToken }: { apiToken: string }) {
                       {r.name ?? r.leadSid.slice(0, 20)}
                     </span>
                     <span className="text-[11px] tabular-nums text-muted-foreground shrink-0" title="מחיר משוער">
-                      ~{fmtMoney((r.finalPricing as Record<string, unknown>).totalOrderPriceIls ?? (r.finalPricing as Record<string, unknown>).totalSellingPrice)}
+                      ~{fmtMoney(displayTotal(r.finalPricing as Record<string, unknown>))}
                     </span>
                   </div>
                   <div className="flex items-center gap-0.5 shrink-0">
