@@ -75,6 +75,17 @@ export async function reconcileStagesFromGhl(): Promise<StageReconcileResult> {
   // stray open duplicate as long as the lost one is the more recent action),
   // while a repeat customer's genuinely NEW active deal correctly outranks an
   // old lost one.
+  // A terminal decision (WON/LOST) beats a weak, never-progressed INTAKE
+  // duplicate regardless of recency (Eli 2026-07-28b): a contact often keeps a
+  // leftover "קליטה" opp next to the one Eli dragged to "לא נסגר". An automated
+  // bulk-touch of that קליטה duplicate (real case: all 4 touched 07-17) made it
+  // look "newer" than the LOST opp, so plain newest-wins kept the lead active and
+  // it kept nagging the salesperson in "נפלו בין הכיסאות". The stage that matters
+  // is "לא נסגר", not which row was touched last. A genuinely PROGRESSED active
+  // opp (DISCAVERY+) still outranks an old LOST by recency — a repeat customer's
+  // real new deal is unaffected; only a never-worked INTAKE duplicate loses.
+  const WEAK = new Set(["INTAKE"]);
+  const TERMINAL = new Set(["WON", "LOST"]);
   const byOpp = new Map<string, string>();
   const byContact = new Map<string, { local: string; at: number }>();
   for (const o of opps) {
@@ -84,8 +95,12 @@ export async function reconcileStagesFromGhl(): Promise<StageReconcileResult> {
     if (!o.contactId) continue;
     const at = o.updatedAt ? new Date(o.updatedAt).getTime() : 0;
     const prev = byContact.get(o.contactId);
-    // No timestamp anywhere → keep last-wins (the pre-2026-07-28 behaviour).
-    if (!prev || at >= prev.at) byContact.set(o.contactId, { local, at });
+    if (!prev) { byContact.set(o.contactId, { local, at }); continue; }
+    if (TERMINAL.has(prev.local) && WEAK.has(local)) continue; // keep the close over a stale intake dup
+    // terminal beats weak-intake; otherwise newest-updated wins.
+    if ((WEAK.has(prev.local) && TERMINAL.has(local)) || at >= prev.at) {
+      byContact.set(o.contactId, { local, at });
+    }
   }
 
   const active = await db
