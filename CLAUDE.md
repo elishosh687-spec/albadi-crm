@@ -933,3 +933,38 @@ self-locates config/secrets/state via `__file__`, so it's relocatable; the
 SKILL.md now says to `cd` into the skill dir first (its relative
 `state/invoice_input.json` writes need it). Verified E2E locally (helper → Blob →
 Feishu row + customer folder); WhatsApp `--send` is prod-only.
+
+## Payment-details template — VAT + schedule + bank (built 2026-07-28)
+
+Every **manually sent** quote ends with what the customer owes and how to pay:
+`מע״מ → סה״כ לתשלום → פריסת תשלומים → פרטי העברה בנקאית`. Header is
+`*פרטי תשלום ופירוט חשבון*` (replaced the plain quote header; the 14-day footer
+is gone).
+
+**[lib/factory/payment-terms.ts](lib/factory/payment-terms.ts) is the single
+source of truth** — client-safe (no server imports, per the client-bundle rule).
+It owns `VAT_PCT = 18` and `BANK_DETAILS`, and **[lib/zoho/write.ts](lib/zoho/write.ts)
+imports them** instead of its old private copies, so an invoice and the WhatsApp
+message can never quote different numbers. Don't re-hardcode 18% or the bank
+details anywhere.
+
+**Two money rules — deliberate, don't "fix" them:**
+1. The deposit is a share of the **VAT-INCLUSIVE** total (matches `buildTerms`
+   and Eli's own example: 50% of ₪21,977, not of ₪18,625).
+2. The **last installment absorbs the rounding remainder**, so the parts always
+   sum to the printed total (30/40/30 → 6,593.31 + 8,791.08 + **6,593.32**).
+   Same rule as `customerRoundedTotalIls` / `splitCustomerView`.
+
+**Plans:** `50_50` · `30_70` · `30_40_30` (30% התחלה / 40% לפני משלוח / 30%
+בהגעה) + `custom_NN`. Default in `factory_pricing.paymentTerms.defaultPlanId`
+(backfilled by `normalizeConfig` — no migration), edited in the widget settings
+"תנאי תשלום"; a picker on the quotes list overrides per send. Both
+`send-whatsapp` routes accept an optional `paymentPlanId`; absent = the default.
+
+**Wired into the FOUR MANUAL builders only** — finalized+PDF, combined,
+calculator text, estimate. ⚠️ **The bot's questionnaire auto-quote
+(`buildQuoteMessage`) is deliberately EXCLUDED** (Eli: a cold lead must not get
+bank details). **Each builder feeds the block the total it actually PRINTED**
+(`splitCustomerView(...).grandTotalIls` on a split) — never a recomputed one.
+
+Open: the PDF is still ex-VAT while the caption is VAT-inclusive.
