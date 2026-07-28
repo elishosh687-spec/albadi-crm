@@ -121,7 +121,11 @@ export function QuoteHtmlPreview({
             {fmtIls(p.totalSellingPrice)}
           </div>
           <div className="text-sm text-gray-400 mt-1">
-            {fmtIls(p.unitSellingPrice)}/יח׳ · {p.quantity.toLocaleString("he-IL")} יח׳
+            {/* On a split shipment the per-unit headline is the BAG price
+                (shipping bills as its own two lines below), matching the
+                customer PDF — otherwise it's the shipping-inclusive unit. */}
+            {fmtIls(p.shippingSplit ? p.shippingSplit.productUnitIls : p.unitSellingPrice)}/יח׳ ·{" "}
+            {p.quantity.toLocaleString("he-IL")} יח׳
           </div>
         </div>
 
@@ -142,7 +146,14 @@ export function QuoteHtmlPreview({
                 <SpecRow label="גימור" value={stripCjk(humanizeFinishing(spec.finishing))} />
               )}
               <SpecRow label="כמות" value={`${spec.quantity.toLocaleString("he-IL")} יח׳`} />
-              {p.shippingOptionName && <SpecRow label="שיטת שילוח" value={p.shippingOptionName} />}
+              {p.shippingSplit ? (
+                <SpecRow
+                  label="שיטת שילוח"
+                  value={`מפוצל — ✈️ ${p.shippingSplit.airLabel} + 🚢 ${p.shippingSplit.seaLabel}`}
+                />
+              ) : (
+                p.shippingOptionName && <SpecRow label="שיטת שילוח" value={p.shippingOptionName} />
+              )}
             </tbody>
           </table>
         </div>
@@ -152,12 +163,36 @@ export function QuoteHtmlPreview({
           <div className="bg-gray-900 px-4 py-2 text-xs font-semibold text-gray-300">פירוט מחיר</div>
           <table className="w-full text-sm">
             <tbody>
-              <PriceRow label="מחיר ליחידה (לשקית)" value={fmtIls(p.unitSellingPrice)} />
+              {/* Split shipment: the bag line EXCLUDES shipping and the two legs
+                  bill separately — mirrors the customer PDF exactly. Without
+                  this the preview hid the air leg AND its line items summed
+                  ₪10.71 below the "סה״כ הזמנה" it printed (rounding the
+                  shipping-inclusive unit price). Eli 2026-07-28. */}
+              <PriceRow
+                label="מחיר ליחידה (לשקית)"
+                value={fmtIls(p.shippingSplit ? p.shippingSplit.productUnitIls : p.unitSellingPrice)}
+              />
               <PriceRow label="כמות" value={`${p.quantity.toLocaleString("he-IL")} יח׳`} />
               <PriceRow
                 label="סה״כ שקיות"
-                value={fmtIls(p.unitSellingPrice * p.quantity)}
+                value={fmtIls(
+                  p.shippingSplit
+                    ? p.shippingSplit.productUnitIls * p.quantity
+                    : p.unitSellingPrice * p.quantity
+                )}
               />
+              {p.shippingSplit && (
+                <>
+                  <PriceRow
+                    label={`✈️ שילוח אווירי — ${p.shippingSplit.airLabel}`}
+                    value={fmtIls(p.shippingSplit.airIls)}
+                  />
+                  <PriceRow
+                    label={`🚢 שילוח ימי — ${p.shippingSplit.seaLabel}`}
+                    value={fmtIls(p.shippingSplit.seaIls)}
+                  />
+                </>
+              )}
               {p.moldsTotalSellingPriceIls !== undefined && p.moldsTotalSellingPriceIls > 0 && (
                 <PriceRow
                   label="תבניות / מולדים (תשלום חד-פעמי)"
