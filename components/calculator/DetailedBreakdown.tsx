@@ -20,6 +20,12 @@ import { useState } from "react";
 import { cn } from "@/lib/cn";
 import { buildBreakdownView, type BreakdownInput } from "@/lib/factory/breakdown";
 import { isOverCbmConsolidationThreshold, cbmConsolidationAlert } from "@/lib/factory/sea-carriers";
+import { splitCustomerView } from "@/lib/factory/shipping-split";
+
+/** IATA air divisor 6000 → 1 m³ = 166.67 kg, rounded to 167 (mirrors the engine
+ *  + pricing constants). Air bills on max(physical, volumetric) kg. */
+const VOLUMETRIC_KG_PER_CBM = 167;
+const r2 = (n: number) => Math.round(n * 100) / 100;
 
 function fmtIls(n: number, digits = 2): string {
   return `₪${n.toLocaleString("he-IL", { minimumFractionDigits: digits, maximumFractionDigits: digits })}`;
@@ -227,10 +233,88 @@ export function DetailedBreakdown(props: BreakdownInput & { defaultOpen?: boolea
           >
             <div className="space-y-1">
               {input.shippingSplit ? (
-                <>
-                  <Row label={`✈️ ${input.shippingSplit.airLabel}`} value={fmtIls(input.shippingSplit.airIls)} />
-                  <Row label={`🚢 ${input.shippingSplit.seaLabel}`} value={fmtIls(input.shippingSplit.seaIls)} />
-                </>
+                (() => {
+                  // Per-leg detail — Eli 2026-07-28: "לא מופיע פירוט האוויר… אני
+                  // רוצה שהפירוט האווירי יהיה פר קילו, קילו פיזי וקילו נפחי,
+                  // כי בסוף החישוב לפי הקילו הנבחר". Air bills on CHARGEABLE
+                  // weight = max(physical, volumetric) — show all three.
+                  // Each leg's kg/CBM is pro-rated by its share of the units
+                  // (the split stores only the two costs, not per-leg cargo).
+                  const legs = splitCustomerView(input.shippingSplit!);
+                  const qty = input.quantity || 1;
+                  const airShare = legs.air.quantity / qty;
+                  const seaShare = legs.sea.quantity / qty;
+                  const airKg = r2(input.totalWeightKg * airShare);
+                  const airCbm = input.totalCbm * airShare;
+                  const airVol = r2(airCbm * VOLUMETRIC_KG_PER_CBM);
+                  const airChg = Math.max(airKg, airVol);
+                  const seaCbm = input.totalCbm * seaShare;
+                  return (
+                    <>
+                      <Row
+                        label={<strong>✈️ {input.shippingSplit!.airLabel}</strong>}
+                        value={<strong>{fmtIls(input.shippingSplit!.airIls)}</strong>}
+                      />
+                      <div className="pr-3 space-y-0.5">
+                        <Row label="משקל פיזי" value={`${airKg.toLocaleString("he-IL")} ק״ג`} />
+                        <Row label={`משקל נפחי (${airCbm.toFixed(3)} CBM × ${VOLUMETRIC_KG_PER_CBM})`} value={`${airVol.toLocaleString("he-IL")} ק״ג`} />
+                        <Row
+                          label={<span className="text-foreground">משקל לחיוב (הגבוה מביניהם)</span>}
+                          value={<strong className="text-foreground">{airChg.toLocaleString("he-IL")} ק״ג</strong>}
+                        />
+                        {airChg > 0 && (
+                          <Row
+                            label="עלות בפועל לק״ג"
+                            value={<span className="text-muted-foreground">{fmtIls(input.shippingSplit!.airIls / airChg, 2)} / ק״ג</span>}
+                          />
+                        )}
+                      </div>
+                      <Row
+                        label={<strong>🚢 {input.shippingSplit!.seaLabel}</strong>}
+                        value={<strong>{fmtIls(input.shippingSplit!.seaIls)}</strong>}
+                      />
+                      <div className="pr-3 space-y-0.5">
+                        <Row label="נפח (CBM)" value={seaCbm.toFixed(3)} />
+                        {seaCbm > 0 && input.usdToIls > 0 && (
+                          <Row
+                            label="עלות בפועל לקוב"
+                            value={
+                              <span className="text-muted-foreground">
+                                {fmtUsd(input.shippingSplit!.seaIls / input.usdToIls / seaCbm, 0)} / CBM
+                              </span>
+                            }
+                          />
+                        )}
+                      </div>
+                    </>
+                  );
+                })()
+              ) : v.shipping.type === "air" ? (
+                (() => {
+                  // Air (single method) — same chargeable-weight detail.
+                  const vol = r2(input.totalCbm * VOLUMETRIC_KG_PER_CBM);
+                  const chg = Math.max(r2(input.totalWeightKg), vol);
+                  return (
+                    <>
+                      <Row label="משקל פיזי" value={`${r2(input.totalWeightKg).toLocaleString("he-IL")} ק״ג`} />
+                      <Row label={`משקל נפחי (${input.totalCbm.toFixed(3)} CBM × ${VOLUMETRIC_KG_PER_CBM})`} value={`${vol.toLocaleString("he-IL")} ק״ג`} />
+                      <Row
+                        label={<span className="text-foreground">משקל לחיוב (הגבוה מביניהם)</span>}
+                        value={<strong className="text-foreground">{chg.toLocaleString("he-IL")} ק״ג</strong>}
+                      />
+                      {chg > 0 && (
+                        <Row
+                          label="חישוב"
+                          value={
+                            <span className="text-muted-foreground">
+                              {fmtIls(input.totalShipping / chg, 2)}/ק״ג × {chg.toLocaleString("he-IL")} ק״ג ÷ {input.quantity.toLocaleString("he-IL")} יח׳ = <strong className="text-foreground">{fmtIls(v.shipping.ilsPerUnit, 3)}/יח׳</strong>
+                            </span>
+                          }
+                        />
+                      )}
+                    </>
+                  );
+                })()
               ) : v.shipping.type === "sea" && v.shipping.effectivePerCbmUsd !== null && v.shipping.rawCbm !== null ? (
                 <>
                   <Row label="נפח (CBM)" value={v.shipping.rawCbm.toFixed(3)} />
