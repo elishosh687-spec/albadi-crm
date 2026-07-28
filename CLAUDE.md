@@ -543,6 +543,18 @@ SQL + LLM verdict, no separate LLM for the audit itself.
 DISCAVERY / FACTORY_WAIT / CONSIDERATION — anything except WON/LOST) with
 zero open `crm_tasks`. Eli opens each in GHL, adds a task by hand.
 
+**⚠️ Duplicate opportunities — newest wins (2026-07-28).** A GHL contact often
+holds SEVERAL opps in the albadi pipeline. `reconcileStagesFromGhl`
+([reconcile-stages.ts](lib/analysis/reconcile-stages.ts)) picks the contact's
+**most-recently-updated** opp (linked `ghl_opportunity_id` is only the fallback).
+The earlier "linked opp always wins" rule left a lead stuck ACTIVE whenever Eli
+dragged a *different* card of that contact to "לא נסגר" — the stale linked
+duplicate kept winning and the lead never left this panel. Also note GHL dragging
+to the "לא נסגר" column does NOT set `status:'lost'` (status stays `open`), so
+LOST detection depends on `GHL_STAGE_LOST` being mapped — it is, in prod.
+Reconcile failures are now logged loudly (`ok:false` used to print nothing, so a
+drifted DB looked freshly synced).
+
 **"שלב לא תואם"** — leads whose `pipeline_stage` lags behind the [lead-analyzer]
 verdict, gated on `commitment_scorecard.score_1_5`. Rules in
 [lib/analysis/pipeline-audit.ts](lib/analysis/pipeline-audit.ts):
