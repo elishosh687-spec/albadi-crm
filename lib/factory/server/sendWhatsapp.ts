@@ -31,7 +31,9 @@ function formatIls(n: number): string {
   return `₪${n.toLocaleString("he-IL", { maximumFractionDigits: 2 })}`;
 }
 
-function buildCaption(opts: {
+/** Exported so a preview/test can render the REAL customer caption instead of
+ *  reimplementing the template (which is how the surfaces drifted apart before). */
+export function buildCaption(opts: {
   name: string;
   spec: FactoryProductSpec;
   pricing: FactoryPricingResult;

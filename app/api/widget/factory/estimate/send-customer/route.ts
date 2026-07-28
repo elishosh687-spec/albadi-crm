@@ -39,6 +39,7 @@ export async function POST(req: NextRequest) {
             seaName: String(b.split.seaName ?? "ימי"),
           }
         : null,
+    paymentPlanId: typeof b.paymentPlanId === "string" ? b.paymentPlanId : null,
     customerName: typeof b.customerName === "string" ? b.customerName : undefined,
     hostHeader: req.headers.get("host"),
     draftId: typeof b.draftId === "string" && b.draftId ? b.draftId : undefined,

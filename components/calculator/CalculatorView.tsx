@@ -9,6 +9,9 @@ import { quoteResultToPricing } from "@/lib/factory/calculator/to-pricing";
 import { applyShippingSplit, splitCustomerView } from "@/lib/factory/shipping-split";
 import {
   VAT_PCT,
+  PAYMENT_PRESETS,
+  DEFAULT_PAYMENT_PLAN_ID,
+  customDepositPlan,
   resolvePaymentPlan,
   computePaymentSchedule,
   buildPaymentBlock,
@@ -97,6 +100,8 @@ export function CalculatorView({ products, quantityTiers, shippingOptions, initi
   const [shippingId, setShippingId] = useState(shippingOptions.find((s) => s.type === "sea")?.id ?? shippingOptions[0]?.id ?? "s2");
   const [splitMode, setSplitMode] = useState(false);
   const [operatorSplit, setOperatorSplit] = useState<SplitReport | null>(null);
+  // Payment schedule quoted at the end of the customer message.
+  const [payPlanId, setPayPlanId] = useState<string>(DEFAULT_PAYMENT_PLAN_ID);
   const hasAirAndSea =
     shippingOptions.some((s) => s.type === "air" && s.enabled) &&
     shippingOptions.some((s) => s.type === "sea" && s.enabled);
@@ -348,6 +353,7 @@ export function CalculatorView({ products, quantityTiers, shippingOptions, initi
         oneTimeMoldsIls: r.moldsTotalSellingPriceIls,
         result: r,
         shippingSplit: operatorSplitPricing?.shippingSplit ?? null,
+        paymentPlanId: payPlanId,
       })
     : "";
   // Factory-request spec built from the EXACT calculator's own state (catalog or
@@ -901,6 +907,8 @@ export function CalculatorView({ products, quantityTiers, shippingOptions, initi
                 leadName={leadName}
                 quoteText={operatorQuoteText}
                 share={share}
+                paymentPlanId={payPlanId}
+                onPaymentPlanChange={setPayPlanId}
               />
               <DetailedBreakdown
                 unitCost={c.productionPerUnitIls}
@@ -1125,6 +1133,7 @@ function EstimateTab({ apiToken, shippingOptions, sid, leadName, initialMargins,
   const [shippingId, setShippingId] = useState(shippingOptions.find((s) => s.type === "sea")?.id ?? shippingOptions[0]?.id ?? "s2");
   const [splitMode, setSplitMode] = useState(false);
   const [estimateSplit, setEstimateSplit] = useState<SplitReport | null>(null);
+  const [payPlanId, setPayPlanId] = useState<string>(DEFAULT_PAYMENT_PLAN_ID);
   const hasAirAndSea =
     shippingOptions.some((s) => s.type === "air" && s.enabled) &&
     shippingOptions.some((s) => s.type === "sea" && s.enabled);
@@ -1246,6 +1255,7 @@ function EstimateTab({ apiToken, shippingOptions, sid, leadName, initialMargins,
         oneTimeMoldsIls: r.moldsTotalSellingPriceIls,
         result: r,
         shippingSplit: estimateSplitPricing?.shippingSplit ?? null,
+        paymentPlanId: payPlanId,
       })
     : "";
   const estimateCtx: EstimateSendContext | undefined = (est && est.ok && r)
@@ -1271,6 +1281,7 @@ function EstimateTab({ apiToken, shippingOptions, sid, leadName, initialMargins,
                 seaName: estimateSplit.seaName,
               }
             : null,
+        paymentPlanId: payPlanId,
       }
     : undefined;
   // Pricing snapshot for "שמור כטיוטה" — the exact estimated price.
@@ -1489,6 +1500,8 @@ function EstimateTab({ apiToken, shippingOptions, sid, leadName, initialMargins,
             quoteText={estimateQuoteText}
             estimate={estimateCtx}
             share={share}
+            paymentPlanId={payPlanId}
+            onPaymentPlanChange={setPayPlanId}
           />
           <div className="rounded-xl border border-border bg-card p-4 flex flex-wrap items-center gap-3">
             <span className="text-sm font-medium">מפעל מומלץ:</span>
@@ -2259,6 +2272,9 @@ interface EstimateSendContext {
     airIls: number; seaIls: number;
     airName: string; seaName: string;
   } | null;
+  /** Payment schedule — the server re-renders the estimate PDF, so it needs the
+   *  same plan the on-screen text used. */
+  paymentPlanId?: string;
 }
 
 // Spec context for "בקשה למפעל" from the EXACT calculator (operator tab). Same
@@ -2460,7 +2476,7 @@ function useQuoteShare({
     try {
       const res = await fetch(apiBase("/api/widget/factory/estimate/send-customer", "/api/factory/estimate/send-customer"), {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sid: pickedSid, customerName: pickedName, heightCm: estimate.heightCm, depthCm: estimate.depthCm, widthCm: estimate.widthCm, qty: estimate.qty, colors: estimate.colors, handles: estimate.handles, lamination: estimate.lamination, shipping: estimate.shipping, split: estimate.split ?? null }),
+        body: JSON.stringify({ sid: pickedSid, customerName: pickedName, heightCm: estimate.heightCm, depthCm: estimate.depthCm, widthCm: estimate.widthCm, qty: estimate.qty, colors: estimate.colors, handles: estimate.handles, lamination: estimate.lamination, shipping: estimate.shipping, split: estimate.split ?? null, paymentPlanId: estimate.paymentPlanId }),
       });
       const j = await res.json().catch(() => ({}));
       if (!res.ok || !j?.ok) { setError(j?.message ?? j?.error ?? `HTTP ${res.status}`); return; }
@@ -2554,6 +2570,50 @@ function useQuoteShare({
 
 type QuoteShareApi = ReturnType<typeof useQuoteShare>;
 
+/** Payment-schedule picker shown on the send card — the deposit split changes
+ *  per deal (Eli 2026-07-28), so it must be changeable right where you send,
+ *  not only in settings. */
+function PaymentPlanPicker({
+  planId,
+  onChange,
+}: {
+  planId: string;
+  onChange: (id: string) => void;
+}) {
+  const custom = planId.startsWith("custom_") ? planId.slice(7) : "";
+  return (
+    <div className="flex items-center gap-2 flex-wrap" dir="rtl">
+      <span className="text-[11px] text-muted-foreground">פריסת תשלומים:</span>
+      {PAYMENT_PRESETS.map((p) => (
+        <button
+          key={p.id}
+          type="button"
+          onClick={() => onChange(p.id)}
+          className={`text-[11px] px-2.5 py-1 rounded-md border transition-colors ${
+            planId === p.id
+              ? "bg-primary text-primary-foreground border-primary"
+              : "border-border bg-background/40 text-muted-foreground hover:bg-secondary"
+          }`}
+        >
+          {p.label}
+        </button>
+      ))}
+      <input
+        type="number"
+        min={1}
+        max={99}
+        placeholder="אחר %"
+        value={custom}
+        onChange={(e) => {
+          const n = parseInt(e.target.value, 10);
+          onChange(Number.isFinite(n) && n > 0 && n < 100 ? customDepositPlan(n).id : DEFAULT_PAYMENT_PLAN_ID);
+        }}
+        className="w-16 rounded-md border border-border bg-background/40 px-2 py-1 text-[11px] text-center tabular-nums"
+      />
+    </div>
+  );
+}
+
 function QuoteShareCard(props: {
   apiToken: string | undefined;
   sid: string | undefined;
@@ -2565,6 +2625,9 @@ function QuoteShareCard(props: {
   /** Pre-made share instance so the sticky summary CTAs and this card drive the
    *  SAME picked lead + send/PDF/factory actions. Omit to self-own. */
   share?: QuoteShareApi;
+  /** Payment schedule quoted at the end of the message. */
+  paymentPlanId?: string;
+  onPaymentPlanChange?: (id: string) => void;
 }) {
   const { apiToken, quoteText, estimate } = props;
   const ownShare = useQuoteShare(props);
@@ -2601,6 +2664,13 @@ function QuoteShareCard(props: {
           </button>
         </div>
       </div>
+
+      {props.onPaymentPlanChange && (
+        <PaymentPlanPicker
+          planId={props.paymentPlanId ?? DEFAULT_PAYMENT_PLAN_ID}
+          onChange={props.onPaymentPlanChange}
+        />
+      )}
 
       {/* Lead picker */}
       <div ref={containerRef} className="relative">
