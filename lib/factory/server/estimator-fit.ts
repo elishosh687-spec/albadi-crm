@@ -73,10 +73,14 @@ async function quoteLogPoints(): Promise<Pt[]> {
   const rows = (await feishuFetch<{ data: { valueRange: { values: unknown[][] } } }>(`/open-apis/sheets/v2/spreadsheets/${QLOG}/values/${encodeURIComponent(`${QTAB}!A1:Z220`)}`, { method: "GET" })).data?.valueRange?.values ?? [];
   const out: Pt[] = [];
   for (const r of rows) {
-    const mat = txt(r[5]); if (!/80\s*(g|克|gsm)/i.test(mat) || /kraft|牛皮|card|食品|food|140|110|250/i.test(mat)) continue;
-    const dm = dimsStr(txt(r[6])); const price = numOf(r[10]); const q = numOf(r[9]); if (!dm || price == null || q == null) continue;
-    const fin = txt(r[8]).toLowerCase();
-    out.push({ factory: normSupplier(txt(r[17])), size: txt(r[6]), area: bagAreaCm2(dm.h, dm.d, dm.w), colors: colorsFromText(txt(r[7])),
+    // Columns shifted +1 (a `Type` 类型 column was inserted at F) — the SAME
+    // insertion that shifted the three parsers in lib/feishu/sheets.ts; this
+    // fourth reader was missed. Current layout: G(6)=Material · H(7)=Size ·
+    // I(8)=Printing · J(9)=Finishing · K(10)=Quantity · L(11)=Price · S(18)=Supplier.
+    const mat = txt(r[6]); if (!/80\s*(g|克|gsm)/i.test(mat) || /kraft|牛皮|card|食品|food|140|110|250/i.test(mat)) continue;
+    const dm = dimsStr(txt(r[7])); const price = numOf(r[11]); const q = numOf(r[10]); if (!dm || price == null || q == null) continue;
+    const fin = txt(r[9]).toLowerCase();
+    out.push({ factory: normSupplier(txt(r[18])), size: txt(r[7]), area: bagAreaCm2(dm.h, dm.d, dm.w), colors: colorsFromText(txt(r[8])),
       hasHandle: /with handle|handles\b|ידיות|big handel/i.test(fin) && !/no handle|non handle|ללא/i.test(fin),
       hasLam: /laminat/i.test(fin) && !/not laminat|non laminat/i.test(fin), qty: q, price, src: "quote" });
   }

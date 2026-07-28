@@ -102,6 +102,8 @@ export interface SendEstimateInput {
     airQuantity: number; seaQuantity: number;
     airIls: number; seaIls: number;
     airName: string; seaName: string;
+    airCbm?: number; airWeightKg?: number; airCartons?: number;
+    seaCbm?: number; seaWeightKg?: number; seaCartons?: number;
   } | null;
   customerName?: string;
   hostHeader?: string | null;

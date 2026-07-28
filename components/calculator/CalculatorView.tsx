@@ -253,7 +253,15 @@ export function CalculatorView({ products, quantityTiers, shippingOptions, initi
     const res = await fetch(`/api/factory/quote-preview?${params}`, { cache: "no-store" });
     const data = await res.json();
     if (!res.ok || !data.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
-    return (data.result?.shipmentTotalUsd ?? 0) * (data.computed?.usdToIls ?? 0);
+    // Keep the leg's REAL cargo (the engine already computed it on this
+    // quantity, cartons rounded up) — pro-rating it later understates the
+    // chargeable weight and the "kg × rate" line stops reconciling.
+    return {
+      ils: (data.result?.shipmentTotalUsd ?? 0) * (data.computed?.usdToIls ?? 0),
+      cartons: data.result?.totalCartons,
+      cbm: data.result?.totalCbm,
+      weightKg: data.result?.totalWeightKg,
+    };
   }, [buildPreviewParams]);
 
   const r = preview?.result;
@@ -319,6 +327,12 @@ export function CalculatorView({ products, quantityTiers, shippingOptions, initi
           seaIls: operatorSplit.seaIls,
           airName: operatorSplit.airName,
           seaName: operatorSplit.seaName,
+          airCbm: operatorSplit.airCbm,
+          airWeightKg: operatorSplit.airWeightKg,
+          airCartons: operatorSplit.airCartons,
+          seaCbm: operatorSplit.seaCbm,
+          seaWeightKg: operatorSplit.seaWeightKg,
+          seaCartons: operatorSplit.seaCartons,
         })
       : null;
 
@@ -1202,7 +1216,12 @@ function EstimateTab({ apiToken, shippingOptions, sid, leadName, initialMargins,
     const res = await fetch(`/api/factory/estimate?${p}`, { cache: "no-store" });
     const j = await res.json();
     if (!res.ok || !j.ok) throw new Error(j.error ?? `HTTP ${res.status}`);
-    return (j.result?.shipmentTotalUsd ?? 0) * (j.computed?.usdToIls ?? 0);
+    return {
+      ils: (j.result?.shipmentTotalUsd ?? 0) * (j.computed?.usdToIls ?? 0),
+      cartons: j.result?.totalCartons,
+      cbm: j.result?.totalCbm,
+      weightKg: j.result?.totalWeightKg,
+    };
   }, [h, d, w, colors, handles, lam, apiToken, moldsValid, moldsParsed, marginOverrideValid, marginOverrideParsed]);
 
   const est = data?.estimate;
@@ -1234,6 +1253,12 @@ function EstimateTab({ apiToken, shippingOptions, sid, leadName, initialMargins,
             seaIls: estimateSplit.seaIls,
             airName: estimateSplit.airName,
             seaName: estimateSplit.seaName,
+            airCbm: estimateSplit.airCbm,
+            airWeightKg: estimateSplit.airWeightKg,
+            airCartons: estimateSplit.airCartons,
+            seaCbm: estimateSplit.seaCbm,
+            seaWeightKg: estimateSplit.seaWeightKg,
+            seaCartons: estimateSplit.seaCartons,
           }
         )
       : null;
@@ -1279,6 +1304,12 @@ function EstimateTab({ apiToken, shippingOptions, sid, leadName, initialMargins,
                 seaIls: estimateSplit.seaIls,
                 airName: estimateSplit.airName,
                 seaName: estimateSplit.seaName,
+                airCbm: estimateSplit.airCbm,
+                airWeightKg: estimateSplit.airWeightKg,
+                airCartons: estimateSplit.airCartons,
+                seaCbm: estimateSplit.seaCbm,
+                seaWeightKg: estimateSplit.seaWeightKg,
+                seaCartons: estimateSplit.seaCartons,
               }
             : null,
         paymentPlanId: payPlanId,
@@ -2271,6 +2302,8 @@ interface EstimateSendContext {
     airQuantity: number; seaQuantity: number;
     airIls: number; seaIls: number;
     airName: string; seaName: string;
+    airCbm?: number; airWeightKg?: number; airCartons?: number;
+    seaCbm?: number; seaWeightKg?: number; seaCartons?: number;
   } | null;
   /** Payment schedule — the server re-renders the estimate PDF, so it needs the
    *  same plan the on-screen text used. */

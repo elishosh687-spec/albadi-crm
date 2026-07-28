@@ -308,6 +308,10 @@ export function QuoteHtmlPreviewWidget({ apiToken, row }: { apiToken: string; ro
                   cfg.shippingOptions.find((s) => s.id === p.shippingOptionId)?.type ?? null
                 }
                 shippingSplit={p.shippingSplit}
+                airRates={
+                  cfg.shippingOptions.find((s) => s.id === p.shippingOptionId && s.type === "air")?.airRates ??
+                  cfg.shippingOptions.find((s) => s.type === "air")?.airRates
+                }
                 factoryUnitCostCny={row.factoryResponse?.unitCostCny}
                 usdToIls={cfg.usdToIls}
                 usdToCny={cfg.usdToCny}

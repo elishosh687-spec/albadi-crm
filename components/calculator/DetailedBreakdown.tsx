@@ -240,15 +240,32 @@ export function DetailedBreakdown(props: BreakdownInput & { defaultOpen?: boolea
                   // weight = max(physical, volumetric) — show all three.
                   // Each leg's kg/CBM is pro-rated by its share of the units
                   // (the split stores only the two costs, not per-leg cargo).
-                  const legs = splitCustomerView(input.shippingSplit!);
+                  const sp = input.shippingSplit!;
+                  const legs = splitCustomerView(sp);
                   const qty = input.quantity || 1;
+                  // Prefer the REAL cargo stored per leg (each leg rounds cartons
+                  // up on its own). Quotes finalized before 2026-07-28 didn't
+                  // store it — fall back to pro-rating, which understates by ~10%.
                   const airShare = legs.air.quantity / qty;
                   const seaShare = legs.sea.quantity / qty;
-                  const airKg = r2(input.totalWeightKg * airShare);
-                  const airCbm = input.totalCbm * airShare;
+                  const exact = sp.airWeightKg != null && sp.airCbm != null;
+                  const airKg = r2(sp.airWeightKg ?? input.totalWeightKg * airShare);
+                  const airCbm = sp.airCbm ?? input.totalCbm * airShare;
                   const airVol = r2(airCbm * VOLUMETRIC_KG_PER_CBM);
-                  const airChg = Math.max(airKg, airVol);
-                  const seaCbm = input.totalCbm * seaShare;
+                  // Prefer the engine's exact chargeable weight — recomputing it
+                  // from the DISPLAYED (rounded) CBM drifts ~0.1% and the
+                  // "kg × rate" line then misses the real charge.
+                  const airChg = r2(sp.airChargeableKg ?? Math.max(airKg, airVol));
+                  const seaCbm = sp.seaCbm ?? input.totalCbm * seaShare;
+                  // The configured $/kg for this leg — the number Eli set in
+                  // settings, NOT one derived from the total (he asked for the
+                  // rate itself plus the explicit multiplication).
+                  const airRates = input.airRates;
+                  const airRateUsd = airRates
+                    ? airChg >= airRates.thresholdKg
+                      ? airRates.rateAboveThreshold
+                      : airRates.rateBelowThreshold
+                    : null;
                   return (
                     <>
                       <Row
@@ -262,10 +279,36 @@ export function DetailedBreakdown(props: BreakdownInput & { defaultOpen?: boolea
                           label={<span className="text-foreground">משקל לחיוב (הגבוה מביניהם)</span>}
                           value={<strong className="text-foreground">{airChg.toLocaleString("he-IL")} ק״ג</strong>}
                         />
-                        {airChg > 0 && (
+                        {airRateUsd != null && airChg > 0 ? (
+                          /* Shown in USD — that's the currency the forwarder
+                             actually bills, and it reconciles exactly. The ₪
+                             figure is the rate LOCKED IN when the quote was
+                             priced, so recomputing it at today's FX would drift
+                             (Eli's quote: priced at 3.0486, today 3.051). */
+                          <Row
+                            label="חישוב"
+                            value={
+                              <span className="text-muted-foreground">
+                                {airChg.toLocaleString("he-IL")} ק״ג × {fmtUsd(airRateUsd, 2)}/ק״ג ={" "}
+                                {fmtUsd(r2(airChg * airRateUsd), 2)} →{" "}
+                                <strong className="text-foreground">{fmtIls(sp.airIls)}</strong>
+                              </span>
+                            }
+                          />
+                        ) : airChg > 0 ? (
                           <Row
                             label="עלות בפועל לק״ג"
-                            value={<span className="text-muted-foreground">{fmtIls(input.shippingSplit!.airIls / airChg, 2)} / ק״ג</span>}
+                            value={<span className="text-muted-foreground">{fmtIls(sp.airIls / airChg, 2)} / ק״ג</span>}
+                          />
+                        ) : null}
+                        {!exact && (
+                          <Row
+                            label=""
+                            value={
+                              <span className="text-[10px] text-muted-foreground">
+                                * משקל מוערך — ההצעה נסגרה לפני שנשמר המשקל המדויק לכל רגל
+                              </span>
+                            }
                           />
                         )}
                       </div>

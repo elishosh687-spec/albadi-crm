@@ -266,17 +266,30 @@ export async function finalizeQuote(
     const { airQuantity, airShippingOptionId, seaShippingOptionId } = body.split;
     const seaQuantity = spec.quantity - airQuantity;
     if (airQuantity > 0 && seaQuantity > 0 && airShippingOptionId && seaShippingOptionId) {
+      // Price each leg on its OWN cargo and KEEP that cargo — each leg rounds
+      // cartons up separately, so pro-rating the whole-order weight/CBM later
+      // understates the chargeable weight and the boss breakdown's
+      // "kg × rate = total" stops reconciling (Eli 2026-07-28).
       const portionShip = (q: number, shipId: string) =>
-        priceFactoryQuote({ ...baseInput, quantity: q, shippingOptionId: shipId, moldsCostCny: 0, totalCbmOverride: undefined }, config).totalShipping;
+        priceFactoryQuote({ ...baseInput, quantity: q, shippingOptionId: shipId, moldsCostCny: 0, totalCbmOverride: undefined }, config);
       const nameOf = (sid: string) => config.shippingOptions.find((s) => s.id === sid)?.name ?? "";
+      const airLeg = portionShip(airQuantity, airShippingOptionId);
+      const seaLeg = portionShip(seaQuantity, seaShippingOptionId);
       pricing = applyShippingSplit(pricing, {
         quantity: spec.quantity,
         airQuantity,
         seaQuantity,
-        airIls: portionShip(airQuantity, airShippingOptionId),
-        seaIls: portionShip(seaQuantity, seaShippingOptionId),
+        airIls: airLeg.totalShipping,
+        seaIls: seaLeg.totalShipping,
         airName: nameOf(airShippingOptionId),
         seaName: nameOf(seaShippingOptionId),
+        airCbm: airLeg.totalCbm,
+        airWeightKg: airLeg.totalWeightKg,
+        airCartons: airLeg.totalCartons,
+        airChargeableKg: airLeg.chargeableWeightKg,
+        seaCbm: seaLeg.totalCbm,
+        seaWeightKg: seaLeg.totalWeightKg,
+        seaCartons: seaLeg.totalCartons,
       });
     }
   }

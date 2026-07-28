@@ -33,6 +33,10 @@ export interface BreakdownInput {
   /** When set, shipping is SPLIT (part air, part sea) — the breakdown renders
    *  two shipping lines instead of one. See applyShippingSplit. */
   shippingSplit?: ShippingSplit;
+  /** Air $/kg tiers from the chosen air option — so the breakdown can print the
+   *  CONFIGURED rate and the explicit "kg × rate" maths instead of dividing the
+   *  total by an estimated weight (Eli 2026-07-28). */
+  airRates?: { thresholdKg: number; rateBelowThreshold: number; rateAboveThreshold: number };
 
   // Factory cost in original CNY (the input ¥ before any conversion)
   // For factory quotes: row.factoryResponse.unitCostCny

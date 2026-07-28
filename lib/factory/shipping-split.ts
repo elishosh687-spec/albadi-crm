@@ -85,6 +85,14 @@ export function applyShippingSplit(
     seaIls: number;
     airName: string;
     seaName: string;
+    /** Real per-leg cargo, when the caller priced each leg separately. */
+    airCbm?: number;
+    airWeightKg?: number;
+    airCartons?: number;
+    airChargeableKg?: number;
+    seaCbm?: number;
+    seaWeightKg?: number;
+    seaCartons?: number;
   }
 ): FactoryPricingResult {
   const { quantity } = args;
@@ -103,6 +111,13 @@ export function applyShippingSplit(
     seaLabel: `${args.seaName || "ימי"} · ${args.seaQuantity.toLocaleString("he-IL")} יח׳`,
     airQuantity: args.airQuantity,
     seaQuantity: args.seaQuantity,
+    airCbm: args.airCbm,
+    airWeightKg: args.airWeightKg,
+    airCartons: args.airCartons,
+    airChargeableKg: args.airChargeableKg,
+    seaCbm: args.seaCbm,
+    seaWeightKg: args.seaWeightKg,
+    seaCartons: args.seaCartons,
   };
 
   return {

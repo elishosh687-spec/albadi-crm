@@ -224,6 +224,11 @@ export function priceFactoryQuote(
     totalCartons,
     totalWeightKg: r2(totalWeightKg),
     totalCbm: r2(totalCbm),
+    // Precise chargeable weight (air bills on max(physical, volumetric)).
+    // Exposed because recomputing it from the ROUNDED totalCbm above drifts by
+    // ~0.1% and the boss breakdown's "kg × rate" then misses the actual charge
+    // (Eli 2026-07-28).
+    chargeableWeightKg: r2(Math.max(totalWeightKg, totalCbm * VOLUMETRIC_KG_PER_CBM)),
     profitMarginPct: marginPct,
     shippingOptionId: shipping?.id ?? null,
     shippingOptionName: shipping?.name ?? null,

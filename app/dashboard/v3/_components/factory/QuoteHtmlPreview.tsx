@@ -368,6 +368,10 @@ export function QuoteHtmlPreview({
                   totalCbm={p.totalCbm}
                   shippingType={currentType}
                   shippingSplit={p.shippingSplit}
+                  airRates={
+                    cfg.shippingOptions.find((s) => s.id === p.shippingOptionId && s.type === "air")?.airRates ??
+                    cfg.shippingOptions.find((s) => s.type === "air")?.airRates
+                  }
                   factoryUnitCostCny={row.factoryResponse?.unitCostCny}
                   usdToIls={cfg.usdToIls}
                   usdToCny={cfg.usdToCny}

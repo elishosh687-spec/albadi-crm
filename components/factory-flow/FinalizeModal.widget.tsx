@@ -253,6 +253,12 @@ export function FinalizeModalWidget({
         seaIls: splitInput.seaIls,
         airName: splitInput.airName,
         seaName: splitInput.seaName,
+        airCbm: splitInput.airCbm,
+        airWeightKg: splitInput.airWeightKg,
+        airCartons: splitInput.airCartons,
+        seaCbm: splitInput.seaCbm,
+        seaWeightKg: splitInput.seaWeightKg,
+        seaCartons: splitInput.seaCartons,
       });
     }
     return base;
@@ -263,7 +269,7 @@ export function FinalizeModalWidget({
   // is the true un-rounded shipment total for that portion.
   const priceFinalizeShipmentIls = useCallback(async (q: number, shipId: string) => {
     if (!config || !effFr) return 0;
-    return priceFactoryQuote(
+    const res = priceFactoryQuote(
       {
         factoryUnitCostCny: effFr.unitCostCny,
         quantity: q,
@@ -282,7 +288,15 @@ export function FinalizeModalWidget({
         logoColors,
       },
       config
-    ).totalShipping;
+    );
+    // Keep the leg's REAL cargo (cartons rounded up on THIS quantity) so the
+    // boss breakdown's chargeable-weight maths reconciles with the price.
+    return {
+      ils: res.totalShipping,
+      cartons: res.totalCartons,
+      cbm: res.totalCbm,
+      weightKg: res.totalWeightKg,
+    };
   }, [config, effFr, margin, logoColors]);
 
   // Live verify against the Feishu row (read-only). Triggered when the operator

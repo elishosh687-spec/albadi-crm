@@ -215,6 +215,9 @@ export interface FactoryPricingResult {
   totalCartons: number;
   totalWeightKg: number;
   totalCbm: number;
+  /** max(physical, volumetric) kg — what an air forwarder actually bills.
+   *  Optional: results produced before 2026-07-28 don't carry it. */
+  chargeableWeightKg?: number;
 
   // meta
   profitMarginPct: number;
@@ -285,6 +288,20 @@ export interface ShippingSplit {
    *  `splitCustomerView`, which falls back to parsing the label. */
   airQuantity?: number;
   seaQuantity?: number;
+  /** REAL cargo of each leg — each leg rounds cartons UP on its own, so these
+   *  do NOT sum to the whole-order totals and must not be derived by pro-rating.
+   *  Drives the boss breakdown's chargeable-weight maths. Optional: quotes
+   *  finalized before 2026-07-28 fall back to a pro-rated estimate. */
+  airCbm?: number;
+  airWeightKg?: number;
+  airCartons?: number;
+  /** Exact max(physical, volumetric) kg for the AIR leg — what the forwarder
+   *  bills. Stored so the breakdown prints "kg × rate = total" and it actually
+   *  reconciles (recomputing from the rounded CBM drifts ~0.1%). */
+  airChargeableKg?: number;
+  seaCbm?: number;
+  seaWeightKg?: number;
+  seaCartons?: number;
 }
 
 /**

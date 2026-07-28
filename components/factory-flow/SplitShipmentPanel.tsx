@@ -41,6 +41,15 @@ export interface SplitReport {
   seaName: string;
   airIls: number | null;
   seaIls: number | null;
+  /** Real cargo of each leg (cartons rounded up per leg) — for the boss
+   *  breakdown's chargeable-weight maths. Optional: a caller that only returns
+   *  a cost still works. */
+  airCbm?: number;
+  airWeightKg?: number;
+  airCartons?: number;
+  seaCbm?: number;
+  seaWeightKg?: number;
+  seaCartons?: number;
 }
 
 export interface SplitSpec {
@@ -105,8 +114,14 @@ export function SplitShipmentPanel(props: {
   moldsIls: number;
   airOptions: SplitShipOption[];
   seaOptions: SplitShipOption[];
-  /** Returns the WHOLE shipment cost (ILS) for `qty` units by `shippingId`. */
-  priceShipmentIls: (qty: number, shippingId: string) => Promise<number>;
+  /** Prices the WHOLE shipment for `qty` units by `shippingId`. Returns the cost
+   *  AND the real cargo of that leg — each leg rounds cartons UP on its own, so
+   *  pro-rating the whole-order weight/CBM understates it by ~10% and the boss
+   *  breakdown's "kg × rate" then doesn't reconcile (Eli 2026-07-28). */
+  priceShipmentIls: (
+    qty: number,
+    shippingId: string
+  ) => Promise<number | { ils: number; cartons?: number; cbm?: number; weightKg?: number }>;
   spec: SplitSpec;
   /** Optional: send the finished split quote text somewhere (e.g. WhatsApp). */
   onQuoteText?: (text: string) => void;
@@ -122,7 +137,14 @@ export function SplitShipmentPanel(props: {
   const [airPctStr, setAirPctStr] = useState("50");
   const [airShipId, setAirShipId] = useState(airOptions[0]?.id ?? "");
   const [seaShipId, setSeaShipId] = useState(seaOptions[0]?.id ?? "");
-  const [shipCost, setShipCost] = useState<{ airIls: number; seaIls: number } | null>(null);
+  const [shipCost, setShipCost] = useState<
+    | {
+        airIls: number; seaIls: number;
+        airCbm?: number; airWeightKg?: number; airCartons?: number;
+        seaCbm?: number; seaWeightKg?: number; seaCartons?: number;
+      }
+    | null
+  >(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -140,12 +162,18 @@ export function SplitShipmentPanel(props: {
     setBusy(true); setErr(null);
     (async () => {
       try {
-        const [airIls, seaIls] = await Promise.all([
+        const [airRes, seaRes] = await Promise.all([
           priceShipmentIls(airQty, airShipId),
           priceShipmentIls(seaQty, seaShipId),
         ]);
         if (cancelled) return;
-        setShipCost({ airIls: r2(airIls), seaIls: r2(seaIls) });
+        const air = typeof airRes === "number" ? { ils: airRes } : airRes;
+        const sea = typeof seaRes === "number" ? { ils: seaRes } : seaRes;
+        setShipCost({
+          airIls: r2(air.ils), seaIls: r2(sea.ils),
+          airCbm: air.cbm, airWeightKg: air.weightKg, airCartons: air.cartons,
+          seaCbm: sea.cbm, seaWeightKg: sea.weightKg, seaCartons: sea.cartons,
+        });
       } catch (e) {
         if (!cancelled) { setErr(e instanceof Error ? e.message : String(e)); setShipCost(null); }
       } finally {
@@ -169,6 +197,12 @@ export function SplitShipmentPanel(props: {
             seaName,
             airIls: shipCost?.airIls ?? null,
             seaIls: shipCost?.seaIls ?? null,
+            airCbm: shipCost?.airCbm,
+            airWeightKg: shipCost?.airWeightKg,
+            airCartons: shipCost?.airCartons,
+            seaCbm: shipCost?.seaCbm,
+            seaWeightKg: shipCost?.seaWeightKg,
+            seaCartons: shipCost?.seaCartons,
           }
         : null
     );
