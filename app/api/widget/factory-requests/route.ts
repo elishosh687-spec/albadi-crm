@@ -107,6 +107,10 @@ export async function POST(req: NextRequest) {
       finalPricing: body.finalPricing as
         | import("@/lib/factory/types").FactoryPricingResult
         | undefined,
+      // This endpoint IS the salesperson's quote-request form — tag it so the
+      // widget can surface "a request is waiting for you to price" (the Eli DM
+      // alone was too easy to miss). Eli 2026-07-28.
+      createdBy: "sales",
     });
     const shippingLabel = await resolveShippingLabel(body.productSpec.shippingOptionId);
     await sendEliDM(buildEliSummary(body.customerName, body.productSpec, shippingLabel));

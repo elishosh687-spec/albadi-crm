@@ -160,6 +160,10 @@ export interface CreateFactoryDraftInput {
    *  ESTIMATE — the row stays status='draft' until a real factory response
    *  makes it "serious" (received/finalized). */
   finalPricing?: FactoryPricingResult;
+  /** Who parked it: "sales" (the salesperson's quote-request form — Eli still
+   *  has to price and send it) or "eli" (parked from the calculator). Drives the
+   *  "בקשות מחיר שממתינות לתמחור" reminder. */
+  createdBy?: "sales" | "eli";
 }
 
 export interface CreateFactoryDraftResult {
@@ -183,6 +187,7 @@ export async function createFactoryDraft(
     productSpec: input.productSpec,
     factoryStatus: "draft",
     finalPricing: input.finalPricing ?? null,
+    createdBy: input.createdBy ?? null,
   });
 
   return { id, quotationNo };

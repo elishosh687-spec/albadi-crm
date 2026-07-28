@@ -24,6 +24,9 @@ interface ApiQuoteRow {
   pdfUrl: string | null;
   sentToCustomerAt: string | null;
   reminderDismissedAt: string | null;
+  /** "sales" = the salesperson's quote-request form; "eli" = parked from the
+   *  calculator; null on pre-2026-07-28 rows. */
+  createdBy: string | null;
   closedDealAt: string | null;
   createdAt: string;
   updatedAt: string;
@@ -529,6 +532,26 @@ export function QuotesHistoryView({ apiToken }: { apiToken: string }) {
       .sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt));
   }, [data]);
 
+  // Parked WITHOUT a price — nobody can send these until Eli prices them. The
+  // salesperson's form (createdBy="sales") lands here, and its Eli DM was too
+  // easy to miss, so the request could sit unnoticed for days (Eli 2026-07-28).
+  // Sales requests sort first — someone is actively waiting on them.
+  const needsPricing = useMemo(() => {
+    if (!data) return [];
+    return data
+      .filter(
+        (r) =>
+          r.status === "draft" &&
+          !r.finalPricing &&
+          !r.sentToCustomerAt &&
+          !r.reminderDismissedAt
+      )
+      .sort((a, b) => {
+        const sales = (r: ApiQuoteRow) => (r.createdBy === "sales" ? 0 : 1);
+        return sales(a) - sales(b) || +new Date(b.createdAt) - +new Date(a.createdAt);
+      });
+  }, [data]);
+
   // Factory replied but the customer hasn't got the quote yet. `finalized` =
   // priced, ready to send; `received` = factory answered, still needs finalizing
   // (pricing) before sending. Eli's reminder "the factory sent quotes — send
@@ -898,6 +921,76 @@ export function QuotesHistoryView({ apiToken }: { apiToken: string }) {
                 </div>
               </div>
             ))}
+          </div>
+        )}
+
+        {needsPricing.length > 0 && (
+          <div className="rounded-lg border border-sky-500/40 bg-sky-500/10 p-3 space-y-1.5" dir="rtl">
+            <div className="text-xs font-semibold text-sky-400 flex items-center gap-1.5">
+              📝 בקשות מחיר שממתינות לתמחור ({needsPricing.length})
+              {needsPricing.some((r) => r.createdBy === "sales") && (
+                <span className="text-[10px] px-1.5 py-0.5 rounded bg-sky-500/20">
+                  {needsPricing.filter((r) => r.createdBy === "sales").length} מאיש מכירות
+                </span>
+              )}
+            </div>
+            <p className="text-[10px] text-muted-foreground">
+              מפרטים ללא מחיר — צריך לתמחר (מחשבון) ואז לשלוח ללקוח או למפעל.
+            </p>
+            <ul className="space-y-1">
+              {needsPricing.slice(0, 12).map((r) => (
+                <li
+                  key={r.id}
+                  className="flex items-center justify-between gap-2 rounded-md border border-border/60 bg-background/40 px-2.5 py-1.5"
+                >
+                  <div className="flex items-center gap-2 min-w-0 flex-1 flex-wrap">
+                    <span className="text-[11px] text-muted-foreground tabular-nums shrink-0">
+                      {fmtDate(r.createdAt)}
+                    </span>
+                    <span className="text-[11px] font-mono text-muted-foreground shrink-0">
+                      {r.quotationNo ?? r.id.slice(-6)}
+                    </span>
+                    <span className="text-sm font-medium truncate min-w-0">
+                      {r.name ?? r.leadSid.slice(0, 20)}
+                    </span>
+                    {r.createdBy === "sales" && (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-sky-500/15 text-sky-400 shrink-0">
+                        בקשה מאיש מכירות
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-0.5 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => setSpecRow(r)}
+                      title="פתח את המפרט"
+                      disabled={busyId === r.id}
+                      className="size-7 rounded grid place-items-center text-muted-foreground hover:text-foreground hover:bg-secondary disabled:opacity-50"
+                    >
+                      <Eye className="size-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setEstimateRow(r)}
+                      title="תמחר במחשבון"
+                      disabled={busyId === r.id}
+                      className="size-7 rounded grid place-items-center text-sky-400 hover:bg-sky-500/10 disabled:opacity-50"
+                    >
+                      <Calculator className="size-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDismissReminder(r)}
+                      disabled={busyId === r.id}
+                      title="הסר מהתזכורת (לא נמחק, לא יחזור)"
+                      className="size-7 rounded grid place-items-center text-muted-foreground hover:text-red-400 hover:bg-red-500/10 disabled:opacity-50"
+                    >
+                      <X className="size-3.5" />
+                    </button>
+                  </div>
+                </li>
+              ))}
+            </ul>
           </div>
         )}
 

@@ -288,6 +288,12 @@ export const factoryQuoteRequests = pgTable("factory_quote_requests", {
   // clean). Persistent so it doesn't resurface next load. Added via direct DDL
   // 2026-07-26 (drizzle-kit push hangs — see CLAUDE.md).
   reminderDismissedAt: timestamp("reminder_dismissed_at", { withTimezone: true }),
+  // Who parked this row: 'sales' = the salesperson's quote-request form
+  // (/widget/factory-request — Eli must price it and send), 'eli' = parked from
+  // the calculator. Null on pre-2026-07-28 rows. Drives the "בקשות מחיר
+  // שממתינות לתמחור" reminder so a salesperson request can't sit unnoticed.
+  // Added via direct DDL (drizzle-kit push hangs — see CLAUDE.md).
+  createdBy: text("created_by"),
 });
 
 // Append-only audit log of every bot-side quote sent on WhatsApp. Captures
