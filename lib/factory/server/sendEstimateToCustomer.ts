@@ -18,6 +18,7 @@ import { getFactoryConfig } from "@/lib/factory/config";
 import { renderCustomerQuotePdf } from "@/lib/factory/pdf";
 import { customerRoundedTotalIls } from "@/lib/factory/calculator/customer-breakdown";
 import { notifyItayQuoteSent } from "@/lib/notify/itay";
+import { applyShippingSplit, splitCustomerView } from "@/lib/factory/shipping-split";
 import type { FactoryProductSpec, FactoryPricingResult } from "@/lib/factory/types";
 
 const fmtIls = (n: number) => `₪${n.toLocaleString("he-IL", { maximumFractionDigits: 2 })}`;
@@ -41,11 +42,26 @@ function buildEstimateCaption(name: string, spec: FactoryProductSpec, pricing: F
     `ידיות: ${hasHandles ? "כן" : "ללא"}`,
     `למינציה: ${hasLam ? "כן" : "ללא"}`,
     "",
-    "💰 *אומדן* _(כולל שילוח)_",
-    `📦 ${qty} יחידות × ${fmtIls(pricing.unitSellingPrice)}`,
-    pricing.shippingOptionName ? `🚚 שיטת שילוח: ${pricing.shippingOptionName}` : null,
-    `*💵 סה״כ משוער: ${fmtIls(customerRoundedTotalIls(pricing.unitSellingPrice, pricing.quantity, pricing.moldsTotalSellingPriceIls ?? 0))}*`,
-    "_(לא כולל מע״מ)_",
+    ...(pricing.shippingSplit
+      ? (() => {
+          // Split: one all-in per-bag price per shipping method (Eli 2026-07-28).
+          const v = splitCustomerView(pricing.shippingSplit, pricing.moldsTotalSellingPriceIls ?? 0);
+          return [
+            "💰 *אומדן — משלוח מפוצל*",
+            `✈️ ${v.air.quantity.toLocaleString("he-IL")} יח׳ · משלוח אווירי × ${fmtIls(v.air.unitIls)} = ${fmtIls(v.air.totalIls)}`,
+            `🚢 ${v.sea.quantity.toLocaleString("he-IL")} יח׳ · משלוח ימי × ${fmtIls(v.sea.unitIls)} = ${fmtIls(v.sea.totalIls)}`,
+            v.moldsIls > 0 ? `🧩 תבניות / מולדים (חד פעמי): ${fmtIls(v.moldsIls)}` : null,
+            `*💵 סה״כ משוער: ${fmtIls(v.grandTotalIls)}*`,
+            "_(לא כולל מע״מ)_",
+          ];
+        })()
+      : [
+          "💰 *אומדן* _(כולל שילוח)_",
+          `📦 ${qty} יחידות × ${fmtIls(pricing.unitSellingPrice)}`,
+          pricing.shippingOptionName ? `🚚 שיטת שילוח: ${pricing.shippingOptionName}` : null,
+          `*💵 סה״כ משוער: ${fmtIls(customerRoundedTotalIls(pricing.unitSellingPrice, pricing.quantity, pricing.moldsTotalSellingPriceIls ?? 0))}*`,
+          "_(לא כולל מע״מ)_",
+        ]),
     "",
     "━━━━━━━━━━━━━━",
     "_זהו אומדן ראשוני — המחיר הסופי כפוף לאישור המפעל. נחזור אליך עם הצעה סופית._",
@@ -57,6 +73,14 @@ export interface SendEstimateInput {
   sid: string;
   spec: EstimateSpec & { depthCm: number };
   shippingOptionId?: string | null;
+  /** Part-air/part-sea split from the estimator. When present the estimate is
+   *  priced with it (applyShippingSplit), so the caption + PDF show the two
+   *  shipping legs and the same total Eli saw on screen. */
+  split?: {
+    airQuantity: number; seaQuantity: number;
+    airIls: number; seaIls: number;
+    airName: string; seaName: string;
+  } | null;
   customerName?: string;
   hostHeader?: string | null;
   /** When the estimate was opened from an existing draft, its
@@ -78,7 +102,7 @@ export async function sendEstimateToCustomer(input: SendEstimateInput): Promise<
 
   const config = await getFactoryConfig({ fresh: true });
   const shippingOptionId = input.shippingOptionId ?? config.shippingOptions.find((s) => s.enabled)?.id ?? null;
-  const pricing = priceFactoryQuote(
+  const basePricing = priceFactoryQuote(
     {
       factoryUnitCostCny: est.factoryUnitCostCny,
       quantity: input.spec.quantity,
@@ -94,6 +118,23 @@ export async function sendEstimateToCustomer(input: SendEstimateInput): Promise<
     },
     config
   );
+
+  // Apply the part-air/part-sea split Eli configured, so the caption AND the
+  // PDF quote the same split he saw on screen instead of silently re-pricing on
+  // a single shipping method (Eli 2026-07-28).
+  const sp = input.split;
+  const pricing =
+    sp && sp.airIls != null && sp.seaIls != null
+      ? applyShippingSplit(basePricing, {
+          quantity: input.spec.quantity,
+          airQuantity: sp.airQuantity,
+          seaQuantity: sp.seaQuantity,
+          airIls: sp.airIls,
+          seaIls: sp.seaIls,
+          airName: sp.airName,
+          seaName: sp.seaName,
+        })
+      : basePricing;
 
   const s = input.spec;
   const productSpec: FactoryProductSpec = {

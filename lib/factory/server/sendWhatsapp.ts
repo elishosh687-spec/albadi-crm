@@ -15,6 +15,7 @@ import type {
   FactoryPricingResult,
 } from "@/lib/factory/types";
 import { customerRoundedTotalIls } from "@/lib/factory/calculator/customer-breakdown";
+import { splitCustomerView } from "@/lib/factory/shipping-split";
 import { notifyItayQuoteSent } from "@/lib/notify/itay";
 
 function formatIls(n: number): string {
@@ -55,17 +56,17 @@ function buildCaption(opts: {
   const split = pricing.shippingSplit;
   const moldsIls = pricing.moldsTotalSellingPriceIls ?? 0;
   if (split) {
-    // Split shipment: production on the full quantity + two shipping lines.
-    const r2 = (n: number) => Math.round(n * 100) / 100;
-    const total = r2(split.productTotalIls + split.airIls + split.seaIls + (moldsIls > 0 ? r2(moldsIls) : 0));
+    // Split shipment: ONE all-in price per bag for each shipping method — no
+    // separate production line (Eli 2026-07-28: "עלות פר יחידה למשלוח אווירי,
+    // עלות פר יחידה למשלוח ימי — מאוד פשוט").
+    const v = splitCustomerView(split, moldsIls);
     lines.push(
       "💰 *תמחור — משלוח מפוצל*",
-      `📦 ${qty} יחידות × ${formatIls(split.productUnitIls)} (ייצור)`,
-      `✈️ שילוח אווירי — ${split.airLabel}: ${formatIls(split.airIls)}`,
-      `🚢 שילוח ימי — ${split.seaLabel}: ${formatIls(split.seaIls)}`,
+      `✈️ ${v.air.quantity.toLocaleString("he-IL")} יח׳ · משלוח אווירי × ${formatIls(v.air.unitIls)} = ${formatIls(v.air.totalIls)}`,
+      `🚢 ${v.sea.quantity.toLocaleString("he-IL")} יח׳ · משלוח ימי × ${formatIls(v.sea.unitIls)} = ${formatIls(v.sea.totalIls)}`,
     );
-    if (moldsIls > 0) lines.push(`🧩 תבניות / מולדים (חד פעמי): ${formatIls(r2(moldsIls))}`);
-    lines.push(`*💵 סה״כ: ${formatIls(total)}*`, "_(לא כולל מע״מ)_");
+    if (v.moldsIls > 0) lines.push(`🧩 תבניות / מולדים (חד פעמי): ${formatIls(v.moldsIls)}`);
+    lines.push(`*💵 סה״כ: ${formatIls(v.grandTotalIls)}*`, "_(לא כולל מע״מ)_");
   } else {
     lines.push(
       "💰 *תמחור* _(כולל שילוח)_",

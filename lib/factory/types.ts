@@ -272,6 +272,11 @@ export interface ShippingSplit {
   airLabel: string;
   /** e.g. "סטנדרט · 9,000 יח׳" */
   seaLabel: string;
+  /** Units on each leg. Optional only because quotes finalized before
+   *  2026-07-28 stored the counts solely inside the labels — read them via
+   *  `splitCustomerView`, which falls back to parsing the label. */
+  airQuantity?: number;
+  seaQuantity?: number;
 }
 
 /**

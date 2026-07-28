@@ -15,6 +15,7 @@ import { humanizeMaterial, humanizePrinting, humanizeFinishing } from "@/lib/fac
 import { DetailedBreakdown } from "@/components/calculator/DetailedBreakdown";
 import type { FactoryPricingConfig } from "@/lib/factory/types";
 import { computeCommission } from "@/lib/factory/commission";
+import { splitCustomerView } from "@/lib/factory/shipping-split";
 
 const PRODUCT_LABEL = "שקית אלבדי";
 const stripCjk = (s: string | null | undefined): string =>
@@ -70,6 +71,12 @@ export function QuoteHtmlPreview({
     );
   }
   const spec = row.productSpec;
+  // Split shipment → the customer view: one all-in per-bag price per shipping
+  // method, and a total derived from those rounded prices so the printed
+  // arithmetic reconciles (Eli 2026-07-28). Shared with the PDF + captions.
+  const splitView = p.shippingSplit
+    ? splitCustomerView(p.shippingSplit, p.moldsTotalSellingPriceIls ?? 0)
+    : null;
   const dims = dimensionsHe(spec);
   const quotationNo = row.quotationNo ?? row.id.slice(-8).toUpperCase();
   const sentDate = row.sentToCustomerAt
@@ -118,14 +125,15 @@ export function QuoteHtmlPreview({
           style={{ borderColor: "#4A7C59", backgroundColor: "rgba(74, 124, 89, 0.12)" }}
         >
           <div className="text-3xl font-bold" style={{ color: "#7CB890" }}>
-            {fmtIls(p.totalSellingPrice)}
+            {fmtIls(splitView ? splitView.grandTotalIls : p.totalSellingPrice)}
           </div>
           <div className="text-sm text-gray-400 mt-1">
-            {/* On a split shipment the per-unit headline is the BAG price
-                (shipping bills as its own two lines below), matching the
-                customer PDF — otherwise it's the shipping-inclusive unit. */}
-            {fmtIls(p.shippingSplit ? p.shippingSplit.productUnitIls : p.unitSellingPrice)}/יח׳ ·{" "}
-            {p.quantity.toLocaleString("he-IL")} יח׳
+            {/* A split has TWO per-bag prices (one per shipping method) — show
+                the range rather than a single misleading figure. */}
+            {splitView
+              ? `${fmtIls(Math.min(splitView.air.unitIls, splitView.sea.unitIls))}–${fmtIls(Math.max(splitView.air.unitIls, splitView.sea.unitIls))}/יח׳`
+              : `${fmtIls(p.unitSellingPrice)}/יח׳`}{" "}
+            · {p.quantity.toLocaleString("he-IL")} יח׳
           </div>
         </div>
 
@@ -168,29 +176,22 @@ export function QuoteHtmlPreview({
                   this the preview hid the air leg AND its line items summed
                   ₪10.71 below the "סה״כ הזמנה" it printed (rounding the
                   shipping-inclusive unit price). Eli 2026-07-28. */}
-              <PriceRow
-                label="מחיר ליחידה (לשקית)"
-                value={fmtIls(p.shippingSplit ? p.shippingSplit.productUnitIls : p.unitSellingPrice)}
-              />
-              <PriceRow label="כמות" value={`${p.quantity.toLocaleString("he-IL")} יח׳`} />
-              <PriceRow
-                label="סה״כ שקיות"
-                value={fmtIls(
-                  p.shippingSplit
-                    ? p.shippingSplit.productUnitIls * p.quantity
-                    : p.unitSellingPrice * p.quantity
-                )}
-              />
-              {p.shippingSplit && (
+              {splitView ? (
                 <>
                   <PriceRow
-                    label={`✈️ שילוח אווירי — ${p.shippingSplit.airLabel}`}
-                    value={fmtIls(p.shippingSplit.airIls)}
+                    label={`✈️ ${splitView.air.quantity.toLocaleString("he-IL")} יח׳ · משלוח אווירי × ${fmtIls(splitView.air.unitIls)}`}
+                    value={fmtIls(splitView.air.totalIls)}
                   />
                   <PriceRow
-                    label={`🚢 שילוח ימי — ${p.shippingSplit.seaLabel}`}
-                    value={fmtIls(p.shippingSplit.seaIls)}
+                    label={`🚢 ${splitView.sea.quantity.toLocaleString("he-IL")} יח׳ · משלוח ימי × ${fmtIls(splitView.sea.unitIls)}`}
+                    value={fmtIls(splitView.sea.totalIls)}
                   />
+                </>
+              ) : (
+                <>
+                  <PriceRow label="מחיר ליחידה (לשקית)" value={fmtIls(p.unitSellingPrice)} />
+                  <PriceRow label="כמות" value={`${p.quantity.toLocaleString("he-IL")} יח׳`} />
+                  <PriceRow label="סה״כ שקיות" value={fmtIls(p.unitSellingPrice * p.quantity)} />
                 </>
               )}
               {p.moldsTotalSellingPriceIls !== undefined && p.moldsTotalSellingPriceIls > 0 && (
@@ -201,7 +202,7 @@ export function QuoteHtmlPreview({
               )}
               <PriceRow
                 label="סה״כ הזמנה"
-                value={fmtIls(p.totalSellingPrice)}
+                value={fmtIls(splitView ? splitView.grandTotalIls : p.totalSellingPrice)}
                 bold
                 primary
               />

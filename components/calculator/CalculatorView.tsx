@@ -6,7 +6,7 @@ import { cn } from "@/lib/cn";
 import type { Product, QuantityTier, ShippingOption, QuoteResult } from "@/lib/factory/calculator/types";
 import type { FactoryPricingResult, ShippingSplit } from "@/lib/factory/types";
 import { quoteResultToPricing } from "@/lib/factory/calculator/to-pricing";
-import { applyShippingSplit } from "@/lib/factory/shipping-split";
+import { applyShippingSplit, splitCustomerView } from "@/lib/factory/shipping-split";
 import { validateBagGeometry } from "@/lib/factory/bag-geometry";
 import { computeCommission } from "@/lib/factory/commission";
 import { isOverCbmConsolidationThreshold, cbmConsolidationAlert } from "@/lib/factory/sea-carriers";
@@ -1254,6 +1254,17 @@ function EstimateTab({ apiToken, shippingOptions, sid, leadName, initialMargins,
         shipping: shippingId,
         cartonConfidence: est.carton?.confidence,
         totalIls: r.totalOrderPriceIls,
+        split:
+          splitMode && estimateSplit && estimateSplit.airIls != null && estimateSplit.seaIls != null
+            ? {
+                airQuantity: estimateSplit.airQuantity,
+                seaQuantity: estimateSplit.seaQuantity,
+                airIls: estimateSplit.airIls,
+                seaIls: estimateSplit.seaIls,
+                airName: estimateSplit.airName,
+                seaName: estimateSplit.seaName,
+              }
+            : null,
       }
     : undefined;
   // Pricing snapshot for "שמור כטיוטה" — the exact estimated price.
@@ -2168,16 +2179,14 @@ function buildQuoteText(opts: {
     // shipping leg bills separately — identical to the official caption and the
     // customer PDF. Folding shipping into a per-unit here would hide the air leg
     // and round the total away from what the PDF says (Eli 2026-07-28).
-    const r2 = (n: number) => Math.round(n * 100) / 100;
-    const total = r2(split.productTotalIls + split.airIls + split.seaIls + (molds > 0 ? r2(molds) : 0));
+    const v = splitCustomerView(split, molds);
     lines.push(
       "💰 *תמחור — משלוח מפוצל*",
-      `📦 ${qty} יחידות × ${ilsFmt(split.productUnitIls)} (ייצור)`,
-      `✈️ שילוח אווירי — ${split.airLabel}: ${ilsFmt(split.airIls)}`,
-      `🚢 שילוח ימי — ${split.seaLabel}: ${ilsFmt(split.seaIls)}`,
+      `✈️ ${v.air.quantity.toLocaleString("he-IL")} יח׳ · משלוח אווירי × ${ilsFmt(v.air.unitIls)} = ${ilsFmt(v.air.totalIls)}`,
+      `🚢 ${v.sea.quantity.toLocaleString("he-IL")} יח׳ · משלוח ימי × ${ilsFmt(v.sea.unitIls)} = ${ilsFmt(v.sea.totalIls)}`,
     );
-    if (molds > 0) lines.push(`🧩 תבניות / מולדים (חד פעמי): ${ilsFmt(r2(molds))}`);
-    lines.push(`*💵 סה״כ: ${ilsFmt(total)}*`, "_(לא כולל מע״מ)_");
+    if (v.moldsIls > 0) lines.push(`🧩 תבניות / מולדים (חד פעמי): ${ilsFmt(v.moldsIls)}`);
+    lines.push(`*💵 סה״כ: ${ilsFmt(v.grandTotalIls)}*`, "_(לא כולל מע״מ)_");
   } else {
     lines.push(
       "💰 *תמחור — מחיר ליחידה* _(כולל שילוח)_",
@@ -2226,6 +2235,15 @@ interface EstimateSendContext {
   colors: number; handles: boolean; lamination: boolean; shipping: string;
   cartonConfidence?: "high" | "low";
   totalIls?: number;
+  /** Part-air/part-sea split, when configured. Sent to the estimate endpoint so
+   *  the server prices the SAME split Eli sees — otherwise it re-prices on the
+   *  single `shipping` option and the customer's PDF/caption silently drop the
+   *  air leg (Eli 2026-07-28). */
+  split?: {
+    airQuantity: number; seaQuantity: number;
+    airIls: number; seaIls: number;
+    airName: string; seaName: string;
+  } | null;
 }
 
 // Spec context for "בקשה למפעל" from the EXACT calculator (operator tab). Same
@@ -2427,7 +2445,7 @@ function useQuoteShare({
     try {
       const res = await fetch(apiBase("/api/widget/factory/estimate/send-customer", "/api/factory/estimate/send-customer"), {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sid: pickedSid, customerName: pickedName, heightCm: estimate.heightCm, depthCm: estimate.depthCm, widthCm: estimate.widthCm, qty: estimate.qty, colors: estimate.colors, handles: estimate.handles, lamination: estimate.lamination, shipping: estimate.shipping }),
+        body: JSON.stringify({ sid: pickedSid, customerName: pickedName, heightCm: estimate.heightCm, depthCm: estimate.depthCm, widthCm: estimate.widthCm, qty: estimate.qty, colors: estimate.colors, handles: estimate.handles, lamination: estimate.lamination, shipping: estimate.shipping, split: estimate.split ?? null }),
       });
       const j = await res.json().catch(() => ({}));
       if (!res.ok || !j?.ok) { setError(j?.message ?? j?.error ?? `HTTP ${res.status}`); return; }

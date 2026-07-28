@@ -29,6 +29,7 @@ import {
   humanizeMaterial,
   forceLaminationForColors,
 } from "./qstate-decode";
+import { splitCustomerView } from "./shipping-split";
 
 /** Colour count encoded in a printing spec ("3 color(s)" / "3 צבעים") → int. */
 function colorsFromPrinting(printing: string | null | undefined): number {
@@ -426,23 +427,32 @@ function CustomerQuotePDF(props: CustomerQuotePdfProps) {
     const moldTotalIls = pricing.moldsTotalSellingPriceIls > 0 ? r2(pricing.moldsTotalSellingPriceIls) : 0;
     const split = pricing.shippingSplit;
     if (split) {
-      // Split shipment: bag row EXCLUDES shipping; two shipping lines below.
+      // Split shipment: ONE all-in per-bag price per shipping method — the
+      // customer reads two simple lines instead of a production row plus two
+      // lump shipping charges (Eli 2026-07-28).
+      const v = splitCustomerView(split, moldTotalIls);
       const bagDescParts = [`${spec.productName?.trim() || "שקית אלבדי"} — ${sizeLabel(spec)}`];
       if (finishPrint) bagDescParts.push(finishPrint);
-      const prodUnit = r2(split.productUnitIls);
+      const bagDesc = bagDescParts.join(" · ");
       rows.push({
-        desc: bagDescParts.join(" · "),
-        unit: prodUnit,
-        qty: pricing.quantity,
-        total: r2(prodUnit * pricing.quantity),
+        desc: `${bagDesc} · משלוח אווירי`,
+        unit: v.air.unitIls,
+        qty: v.air.quantity,
+        total: v.air.totalIls,
       });
-      rows.push({ desc: `שילוח אווירי — ${split.airLabel}`, unit: r2(split.airIls), qty: 1, total: r2(split.airIls) });
-      rows.push({ desc: `שילוח ימי — ${split.seaLabel}`, unit: r2(split.seaIls), qty: 1, total: r2(split.seaIls) });
-      if (moldTotalIls > 0) {
-        rows.push({ desc: "תבניות / מולדים (תשלום חד-פעמי)", unit: moldTotalIls, qty: 1, total: moldTotalIls });
+      rows.push({
+        desc: `${bagDesc} · משלוח ימי`,
+        unit: v.sea.unitIls,
+        qty: v.sea.quantity,
+        total: v.sea.totalIls,
+      });
+      if (v.moldsIls > 0) {
+        rows.push({ desc: "תבניות / מולדים (תשלום חד-פעמי)", unit: v.moldsIls, qty: 1, total: v.moldsIls });
       }
-      displayTotalOrder = r2(prodUnit * pricing.quantity + split.airIls + split.seaIls + moldTotalIls);
-      displayUnitPrice = prodUnit;
+      displayTotalOrder = v.grandTotalIls;
+      // Headline per-unit: the sea (usually larger) leg's price is the honest
+      // "from" figure; the two rows above carry the exact per-method prices.
+      displayUnitPrice = v.sea.quantity >= v.air.quantity ? v.sea.unitIls : v.air.unitIls;
     } else {
     const bagDescParts: string[] = [`${spec.productName?.trim() || "שקית אלבדי"} — ${sizeLabel(spec)} (כולל שילוח)`];
     if (finishingHe) bagDescParts.push(finishingHe);
