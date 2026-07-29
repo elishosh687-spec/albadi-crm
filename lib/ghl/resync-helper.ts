@@ -28,6 +28,9 @@ export interface ResyncResult {
   ok: true;
   sid: string;
   contactId: string;
+  /** True when this resync CREATED the DB lead (GHL-only / manually-created
+   *  contact that had no DB row). False for a normal update of an existing lead. */
+  created: boolean;
   updated: {
     stage: string | null;
     flag: string | null;
@@ -82,11 +85,49 @@ export async function resyncContact(
     .select({ sid: leads.manychatSubId, existingOppId: leads.ghlOpportunityId })
     .from(leads)
     .where(matchClause);
+
+  const ghlName =
+    contact.name ||
+    [contact.firstName, contact.lastName].filter(Boolean).join(" ").trim() ||
+    null;
+
+  let sid: string;
+  let existingOppId: string | null;
+  let created = false;
   if (existing.length === 0) {
-    return { ok: false, error: "no_lead_matched", contactId };
+    // No DB lead for this GHL contact. Historically resync BAILED here — which
+    // meant a contact created manually in the GHL UI (attributionSource
+    // "CRM UI" / medium "manual"), the ONE ingestion path that never creates a
+    // DB row, stayed invisible to the bot and every CRM screen forever (Eli
+    // 2026-07-29: "אריק" fell exactly this way). Create the row now so any
+    // GHL-origin lead is mirrored into DB automatically — the rest of this
+    // function then fills in stage/tags/tasks/notes exactly like an update.
+    // Skip only truly-empty system contacts (no phone AND no name).
+    if (!phoneNorm && !ghlName) {
+      return { ok: false, error: "no_lead_matched", contactId };
+    }
+    // sid convention matches the reassign path: phone → JID, else ghl:<id>.
+    sid = phoneNorm ? `${phoneNorm}@s.whatsapp.net` : `ghl:${contactId}`;
+    // onConflictDoNothing guards webhook retries / a ContactCreate racing a
+    // ContactUpdate for the same brand-new contact.
+    await db
+      .insert(leads)
+      .values({
+        manychatSubId: sid,
+        name: ghlName,
+        ghlContactId: contactId,
+        phoneE164: phoneNorm || null,
+        waJid: phoneNorm ? `${phoneNorm}@s.whatsapp.net` : null,
+        active: true,
+        source: "ghl_sync",
+      })
+      .onConflictDoNothing({ target: leads.manychatSubId });
+    existingOppId = null;
+    created = true;
+  } else {
+    sid = existing[0].sid;
+    existingOppId = existing[0].existingOppId;
   }
-  const sid = existing[0].sid;
-  const existingOppId = existing[0].existingOppId;
 
   const cf: Record<string, unknown> = {};
   for (const f of contact.customFields ?? []) {
@@ -121,10 +162,6 @@ export async function resyncContact(
     updatedAt: new Date(),
     ghlContactId: contactId,
   };
-  const ghlName =
-    contact.name ||
-    [contact.firstName, contact.lastName].filter(Boolean).join(" ").trim() ||
-    null;
   if (ghlName) updateSet.name = ghlName;
   if (contact.phone) updateSet.phoneE164 = phoneNorm;
   if (contact.email !== undefined) updateSet.email = contact.email || null;
@@ -287,10 +324,11 @@ export async function resyncContact(
 
   await db.insert(leadEvents).values({
     manychatSubId: sid,
-    eventType: "ghl_resync",
+    eventType: created ? "ghl_lead_created" : "ghl_resync",
     actor,
     payload: {
       contactId,
+      created,
       opportunityId: opp?.id ?? null,
       stage: localStage,
       flag: pipelineFlag,
@@ -306,6 +344,7 @@ export async function resyncContact(
     ok: true,
     sid,
     contactId,
+    created,
     updated: {
       stage: localStage,
       flag: pipelineFlag,
