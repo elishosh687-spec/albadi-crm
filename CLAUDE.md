@@ -231,6 +231,19 @@ GHL. DB just follows. No two-source-of-truth drift.
 | `/api/integrations/inbound/ghl-custom-field` | Custom Field Changed | `bot_paused`, `follow_up_date` only |
 | `/api/ghl/resync` | Contact Changed + Opportunity Changed | **catch-all full pull** — name, phone, email, tags, customFields, notes, tasks, opps |
 
+**resync now CREATES, not just updates (2026-07-29).** `resyncContact`
+([lib/ghl/resync-helper.ts](lib/ghl/resync-helper.ts)) used to bail with
+`no_lead_matched` when a GHL contact had no DB lead — which meant a contact
+created **manually in the GHL UI** (`attributionSource` = CRM UI / manual),
+the one ingestion path that never makes a DB row, stayed invisible to the bot
+and every CRM screen forever. It now INSERTS the lead (synthetic sid:
+`<phone>@s.whatsapp.net`, or `ghl:<contactId>` when phoneless) and fills the
+rest as usual. The native `ContactCreate` app-webhook already fires, so manual
+GHL leads now land in DB automatically — no screen, no cron. Only truly-empty
+contacts (no phone AND no name) are still skipped. So the old "resync only
+updates, never creates" assumption (still echoed in some scratch scripts /
+memories) is **no longer true**.
+
 **Rule:** if you add a new shared field or webhook, update the matrix in
 [docs/ARCHITECTURE.md §3b](docs/ARCHITECTURE.md). If GHL doesn't have a
 trigger for what you need, prefer extending the resync endpoint over
