@@ -1386,6 +1386,7 @@ export async function saveTemplateAction(data: {
   ctaLabel?: string | null;
   ctaUrl?: string | null;
   sortOrder?: number;
+  active?: boolean;
 }): Promise<SimpleResult> {
   const name = data.name.trim();
   const body = data.body.trim();
@@ -1404,6 +1405,9 @@ export async function saveTemplateAction(data: {
       ctaLabel: data.ctaLabel?.trim() || null,
       ctaUrl: data.ctaUrl?.trim() || null,
       sortOrder: typeof data.sortOrder === "number" ? data.sortOrder : 0,
+      // Only touch `active` when the caller passes it, so an edit that omits
+      // it doesn't silently reactivate a disabled template.
+      ...(typeof data.active === "boolean" ? { active: data.active } : {}),
       updatedAt: new Date(),
     };
     if (data.id) {

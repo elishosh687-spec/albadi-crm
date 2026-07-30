@@ -23,6 +23,7 @@ import type {
 } from "@/lib/factory/types";
 import { PAYMENT_PRESETS, DEFAULT_PAYMENT_PLAN_ID, VAT_PCT } from "@/lib/factory/payment-terms";
 import { SeaCarriersSection } from "@/components/settings/SeaCarriersSection";
+import { TemplatesManager } from "@/components/settings/TemplatesManager";
 import { LuxShell, LuxTitle, LuxAccent } from "@/components/widget-ui/lux";
 
 function widgetUrl(path: string, token: string): string {
@@ -483,6 +484,12 @@ export function SettingsView({ apiToken }: { apiToken: string }) {
             {msg.text}
           </span>
         )}
+      </div>
+
+      {/* Message templates — self-saving via server actions, independent of the
+          pricing-config save button above. */}
+      <div className="mt-6">
+        <TemplatesManager />
       </div>
       </section>
     </LuxShell>
