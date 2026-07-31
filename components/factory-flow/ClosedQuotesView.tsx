@@ -412,9 +412,6 @@ function ClosedQuoteCard({
       });
       const j = await res.json().catch(() => ({}));
       if (!res.ok || !j.ok) { alert(`שגיאה: ${j?.error ?? res.status}`); return; }
-      if (j.stillWon) {
-        alert("הוסר מהסגירה, אבל העסקה עדיין מוצגת כי הליד מסומן «נסגר/WON» ב-GHL.\nכדי להעלים אותה לגמרי — העבר את הליד מ-WON לשלב אחר.");
-      }
       onSaved();
     } finally {
       setRemoving(false);

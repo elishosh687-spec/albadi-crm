@@ -123,6 +123,8 @@ export async function listClosedQuotes(): Promise<ClosedQuoteRow[]> {
     .where(
       and(
         isNull(factoryQuoteRequests.deletedAt),
+        // "הסר מעסקאות" tombstone — hides the deal even when the lead is WON.
+        isNull(factoryQuoteRequests.dealRemovedAt),
         isNotNull(factoryQuoteRequests.finalPricing),
         or(
           // Explicitly pulled in via "סגור עסקה" — a finalized quote OR a
@@ -201,7 +203,8 @@ export async function closeDealGroup(quoteIds: string[]): Promise<string> {
   const groupId = `dg_${ids[0]}`;
   await db
     .update(factoryQuoteRequests)
-    .set({ closedDealAt: new Date(), dealGroupId: groupId, updatedAt: new Date() })
+    // Re-closing clears any "הסר מעסקאות" tombstone so the deal reappears.
+    .set({ closedDealAt: new Date(), dealGroupId: groupId, dealRemovedAt: null, updatedAt: new Date() })
     .where(inArray(factoryQuoteRequests.id, ids));
   return groupId;
 }
@@ -278,7 +281,12 @@ function numOrUndef(v: unknown): number | undefined {
 export async function setDealClosed(id: string, closed: boolean): Promise<void> {
   await db
     .update(factoryQuoteRequests)
-    .set({ closedDealAt: closed ? new Date() : null, updatedAt: new Date() })
+    // Closing clears any "הסר מעסקאות" tombstone so the deal reappears.
+    .set({
+      closedDealAt: closed ? new Date() : null,
+      ...(closed ? { dealRemovedAt: null } : {}),
+      updatedAt: new Date(),
+    })
     .where(eq(factoryQuoteRequests.id, id));
 }
 
@@ -287,15 +295,18 @@ export async function setDealClosed(id: string, closed: boolean): Promise<void> 
  * closed_deal_at on ALL members (single or combined) and unbinds the group, so
  * the underlying quote(s) stay in "הצעות מפעל" and can be re-closed later.
  *
- * Returns `stillWon`: true when a member's lead is still WON, in which case the
- * deal keeps showing via the legacy WON path even after un-closing — the caller
- * warns the operator (removing then means moving the lead off WON in GHL).
+ * Sets a persistent `deal_removed_at` tombstone so the deal disappears EVEN when
+ * its lead is WON (the legacy auto-show path would otherwise re-pin it). Fully
+ * reversible: "סגור עסקה" clears the tombstone and the deal comes back.
+ *
+ * Returns `stillWon` for backward compat with the caller — but it no longer
+ * means the deal stays visible: the tombstone hides it regardless of WON.
  */
 export async function removeDeal(primaryId: string): Promise<{ stillWon: boolean }> {
   const memberIds = await dealMemberIds(primaryId);
   await db
     .update(factoryQuoteRequests)
-    .set({ closedDealAt: null, dealGroupId: null, updatedAt: new Date() })
+    .set({ closedDealAt: null, dealGroupId: null, dealRemovedAt: new Date(), updatedAt: new Date() })
     .where(inArray(factoryQuoteRequests.id, memberIds));
 
   const memberRows = await db

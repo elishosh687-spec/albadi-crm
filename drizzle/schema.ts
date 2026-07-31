@@ -288,6 +288,13 @@ export const factoryQuoteRequests = pgTable("factory_quote_requests", {
   // clean). Persistent so it doesn't resurface next load. Added via direct DDL
   // 2026-07-26 (drizzle-kit push hangs — see CLAUDE.md).
   reminderDismissedAt: timestamp("reminder_dismissed_at", { withTimezone: true }),
+  // "הסר מעסקאות" — persistent tombstone that hides a deal from the עסקאות tab
+  // EVEN when the lead is WON (the legacy auto-show path would otherwise re-pin
+  // it). Clearing closed_deal_at alone can't hide a WON deal, so removeDeal sets
+  // this too; re-closing via "סגור עסקה" clears it. Mirrors reminder_dismissed_at.
+  // Added via direct DDL (scripts/_add-deal-removed-at.ts) — drizzle-kit push
+  // hangs (CLAUDE.md).
+  dealRemovedAt: timestamp("deal_removed_at", { withTimezone: true }),
   // Who parked this row: 'sales' = the salesperson's quote-request form
   // (/widget/factory-request — Eli must price it and send), 'eli' = parked from
   // the calculator. Null on pre-2026-07-28 rows. Drives the "בקשות מחיר
