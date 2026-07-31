@@ -240,7 +240,20 @@ export async function listClosedQuotes(): Promise<ClosedQuoteRow[]> {
     // The combined offer as it was SENT (frozen at close). When present it —
     // not the standalone quotes — is the deal's price: a combined offer ships
     // once, so each product was quoted cheaper than its own quote says.
-    const combinedSnap = (primary.combinedPricing ?? null) as CombinedDealPricing | null;
+    //
+    // Honour it ONLY while it still describes THIS deal. Re-closing a different
+    // set (drop a product, or re-close one quote on its own) leaves the old
+    // snapshot on the row, and applying it would price the new deal off products
+    // it no longer contains — so it must match the current members exactly.
+    const rawSnap = (primary.combinedPricing ?? null) as CombinedDealPricing | null;
+    const memberIdSet = new Set(members.map((m) => m.id));
+    const combinedSnap =
+      rawSnap &&
+      members.length > 1 &&
+      rawSnap.perProduct?.length === members.length &&
+      rawSnap.perProduct.every((p) => memberIdSet.has(p.id))
+        ? rawSnap
+        : null;
     const allocatedById = new Map(
       (combinedSnap?.perProduct ?? []).map((p) => [p.id, p.pricing])
     );
@@ -413,7 +426,9 @@ export async function closeDealGroup(
 export async function unbindDealGroup(groupId: string): Promise<void> {
   await db
     .update(factoryQuoteRequests)
-    .set({ dealGroupId: null, updatedAt: new Date() })
+    // Drop the frozen combined offer too — once the group is split there is no
+    // combined deal for it to price.
+    .set({ dealGroupId: null, combinedPricing: null, updatedAt: new Date() })
     .where(eq(factoryQuoteRequests.dealGroupId, groupId));
 }
 
@@ -460,6 +475,9 @@ export async function saveActualCosts(
             date: z.date ? String(z.date).slice(0, 20) : undefined,
             party: z.party ? String(z.party).slice(0, 120) : undefined,
           }))
+      : undefined,
+    paidToZoho: Array.isArray(actuals.paidToZoho)
+      ? [...new Set(actuals.paidToZoho.map((k) => String(k).slice(0, 120)))].slice(0, 20)
       : undefined,
     note: actuals.note ? String(actuals.note).slice(0, 2000) : undefined,
     updatedAt: new Date().toISOString(),
@@ -522,7 +540,15 @@ export async function removeDeal(primaryId: string): Promise<{ stillWon: boolean
   const memberIds = await dealMemberIds(primaryId);
   await db
     .update(factoryQuoteRequests)
-    .set({ closedDealAt: null, dealGroupId: null, dealRemovedAt: new Date(), updatedAt: new Date() })
+    // combinedPricing goes with it: the next close re-freezes the offer for
+    // whatever set is closed then, so a leftover snapshot could only mislead.
+    .set({
+      closedDealAt: null,
+      dealGroupId: null,
+      combinedPricing: null,
+      dealRemovedAt: new Date(),
+      updatedAt: new Date(),
+    })
     .where(inArray(factoryQuoteRequests.id, memberIds));
 
   const memberRows = await db
