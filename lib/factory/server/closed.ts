@@ -476,9 +476,6 @@ export async function saveActualCosts(
             party: z.party ? String(z.party).slice(0, 120) : undefined,
           }))
       : undefined,
-    paidToZoho: Array.isArray(actuals.paidToZoho)
-      ? [...new Set(actuals.paidToZoho.map((k) => String(k).slice(0, 120)))].slice(0, 20)
-      : undefined,
     note: actuals.note ? String(actuals.note).slice(0, 2000) : undefined,
     updatedAt: new Date().toISOString(),
   };
