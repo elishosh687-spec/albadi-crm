@@ -58,6 +58,10 @@ export async function POST(req: NextRequest) {
     exchangeRate?: number;
     description?: string;
     applyTo?: "factory" | "shipping" | "other" | null;
+    /** Dedup key — the expense bucket being recorded ("factory"/"shipping"/
+     *  "commission"/`other:<label>`). Added to actualCosts.paidToZoho so it
+     *  can't be recorded to Zoho twice. */
+    paidBucketKey?: string;
   };
   if (!body.dealId || !body.category || !body.partner || !body.amount || !body.currency) {
     return NextResponse.json({ ok: false, error: "missing fields" }, { status: 400 });
@@ -87,8 +91,8 @@ export async function POST(req: NextRequest) {
       customerName: row.customerName,
     });
 
-    // roll into the reconciliation bucket + link-back ref
-    if (body.applyTo) {
+    // roll into the reconciliation bucket + link-back ref + dedup marker
+    if (body.applyTo || body.paidBucketKey) {
       const ac = (row.actualCosts ?? {}) as QuoteActualCosts;
       const ils = Math.round(result.bcyTotalIls * 100) / 100;
       const patch: QuoteActualCosts = {
@@ -106,13 +110,19 @@ export async function POST(req: NextRequest) {
         ],
       };
       const r2 = (n: number) => Math.round(n * 100) / 100; // kill float drift
-      if (body.applyTo === "factory") patch.factoryTotalIls = r2((ac.factoryTotalIls ?? 0) + ils);
-      else if (body.applyTo === "shipping") patch.shippingTotalIls = r2((ac.shippingTotalIls ?? 0) + ils);
-      else {
+      // Only roll into a total when applyTo is set AND the bucket wasn't already
+      // filled from the actuals (the "paid" flow keeps the existing figure).
+      if (body.applyTo === "factory" && !body.paidBucketKey) patch.factoryTotalIls = r2((ac.factoryTotalIls ?? 0) + ils);
+      else if (body.applyTo === "shipping" && !body.paidBucketKey) patch.shippingTotalIls = r2((ac.shippingTotalIls ?? 0) + ils);
+      else if (body.applyTo === "other" && !body.paidBucketKey) {
         patch.otherCosts = [
           ...(ac.otherCosts ?? []),
           { label: (body.description ?? "הוצאה").slice(0, 60), amountIls: ils },
         ];
+      }
+      // Dedup marker — this bucket is now recorded in Zoho.
+      if (body.paidBucketKey && !(ac.paidToZoho ?? []).includes(body.paidBucketKey)) {
+        patch.paidToZoho = [...(ac.paidToZoho ?? []), body.paidBucketKey];
       }
       await saveActualCosts(row.id, patch);
     }

@@ -473,7 +473,8 @@ function ClosedQuoteCard({
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [zohoOpen, setZohoOpen] = useState(false);
   const [invoiceOpen, setInvoiceOpen] = useState(false);
-  const [expenseOpen, setExpenseOpen] = useState(false);
+  type ExpensePrefill = { bucket: "factory" | "commission" | "shipping" | "other"; amount: string; currency: string; description: string; bucketKey: string };
+  const [expenseOpen, setExpenseOpen] = useState<boolean | ExpensePrefill>(false);
   const [removing, setRemoving] = useState(false);
   // Which product's quote preview (customer + boss toggle) is open, by product id.
   const [previewOpen, setPreviewOpen] = useState<Set<string>>(new Set());
@@ -1000,6 +1001,46 @@ function ClosedQuoteCard({
             <Upload className="size-4" /> רשום הוצאה ב-Zoho
           </button>
         </div>
+
+        {/* Mark an expense paid → record it once as a Zoho expense under the
+            customer. Dedup via actualCosts.paidToZoho so it can't double-record. */}
+        {(() => {
+          const paidSet = new Set(ac?.paidToZoho ?? []);
+          const cname = quote.customerName ?? "";
+          const chips: { key: string; label: string; bucket: "factory" | "shipping" | "commission" | "other"; amount: string; desc: string }[] = [];
+          const add = (key: string, label: string, bucket: "factory" | "shipping" | "commission" | "other", amountStr: string, desc: string) => {
+            const amt = parseFloat(amountStr);
+            if (Number.isFinite(amt) && amt > 0) chips.push({ key, label, bucket, amount: String(Math.round(amt)), desc });
+          };
+          add("factory", "מפעל", "factory", factory, `מפעל — הזמנת ${cname}`);
+          add("shipping", "שילוח", "shipping", shipping, `שילוח — הזמנת ${cname}`);
+          add("commission", "עמלה", "commission", commission, `עמלת מכירה — הזמנת ${cname}`);
+          other.forEach((c) => add(`other:${c.label}`, c.label || "הוצאה", "other", c.amount, `${c.label || "הוצאה"} — הזמנת ${cname}`));
+          if (chips.length === 0) return null;
+          return (
+            <div style={{ marginTop: 12, paddingTop: 10, borderTop: "1px solid var(--lux-line)" }}>
+              <div style={{ fontSize: 11.5, color: "var(--lux-muted)", marginBottom: 6 }}>
+                סמן הוצאה ששולמה → נרשמת ב-Zoho על שם {cname || "הלקוח"} (פעם אחת):
+              </div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                {chips.map((ch) => paidSet.has(ch.key) ? (
+                  <span key={ch.key} style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 12, padding: "5px 11px", borderRadius: 99, border: "1px solid rgba(168,192,160,0.35)", background: "rgba(168,192,160,0.12)", color: "var(--lux-success,#a8c0a0)" }}>
+                    <Check className="size-3.5" /> {ch.label} · נרשם ב-Zoho
+                  </span>
+                ) : (
+                  <button
+                    key={ch.key}
+                    type="button"
+                    onClick={() => setExpenseOpen({ bucket: ch.bucket, amount: ch.amount, currency: "ILS", description: ch.desc, bucketKey: ch.key })}
+                    style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 12, padding: "5px 11px", borderRadius: 99, border: "1px solid var(--lux-line)", background: "transparent", color: "var(--lux-ink)", cursor: "pointer" }}
+                  >
+                    <Upload className="size-3.5" style={{ color: "var(--lux-champagne)" }} /> רשום {ch.label} (₪{Number(ch.amount).toLocaleString("he-IL")})
+                  </button>
+                ))}
+              </div>
+            </div>
+          );
+        })()}
       </div>
 
       {zohoOpen && (
@@ -1024,6 +1065,13 @@ function ClosedQuoteCard({
           apiToken={apiToken}
           onDone={() => { setExpenseOpen(false); onSaved(); }}
           onClose={() => setExpenseOpen(false)}
+          {...(typeof expenseOpen === "object" ? {
+            initialBucket: expenseOpen.bucket,
+            initialAmount: expenseOpen.amount,
+            initialCurrency: expenseOpen.currency,
+            initialDescription: expenseOpen.description,
+            paidBucketKey: expenseOpen.bucketKey,
+          } : {})}
         />
       )}
       </>
@@ -1772,11 +1820,19 @@ function ZohoInvoiceModal({
 /** Record an order expense in Zoho (factory / commission / shipping / other). */
 function ZohoExpenseModal({
   quote, apiToken, onDone, onClose,
+  initialBucket, initialAmount, initialCurrency, initialDescription, paidBucketKey,
 }: {
   quote: ClosedQuote;
   apiToken: string;
   onDone: () => void;
   onClose: () => void;
+  /** Pre-fill from a clicked actuals row ("שולם → רשום ב-Zoho"). */
+  initialBucket?: "factory" | "commission" | "shipping" | "other";
+  initialAmount?: string;
+  initialCurrency?: string;
+  initialDescription?: string;
+  /** Dedup key stamped into actualCosts.paidToZoho on success. */
+  paidBucketKey?: string;
 }) {
   type Bucket = "factory" | "commission" | "shipping" | "other";
   const name = quote.customerName ?? "";
@@ -1786,11 +1842,12 @@ function ZohoExpenseModal({
     shipping: `שילוח — הזמנת ${name}`,
     other: `הוצאה — הזמנת ${name}`,
   };
-  const [bucket, setBucket] = useState<Bucket>("factory");
+  const preFilled = useRef(!!paidBucketKey);
+  const [bucket, setBucket] = useState<Bucket>(initialBucket ?? "factory");
   const [partner, setPartner] = useState("אלי");
-  const [amount, setAmount] = useState("");
-  const [currency, setCurrency] = useState("CNY");
-  const [description, setDescription] = useState(DESC.factory);
+  const [amount, setAmount] = useState(initialAmount ?? "");
+  const [currency, setCurrency] = useState(initialCurrency ?? "CNY");
+  const [description, setDescription] = useState(initialDescription ?? DESC[initialBucket ?? "factory"]);
   const [descTouched, setDescTouched] = useState(false);
   const [applyToCard, setApplyToCard] = useState(true);
   const [accounts, setAccounts] = useState<{ id: string; name: string }[]>([]);
@@ -1800,6 +1857,9 @@ function ZohoExpenseModal({
   const [result, setResult] = useState<{ bcyTotalIls: number; exchangeRate: number | null; tagApplied: boolean; customerLinked: boolean } | null>(null);
 
   useEffect(() => {
+    // Skip the very first run when pre-filled from an actuals row — keep the
+    // passed ₪ amount/currency/description instead of resetting to defaults.
+    if (preFilled.current) { preFilled.current = false; return; }
     if (!descTouched) setDescription(DESC[bucket]);
     if (bucket === "factory") setCurrency("CNY");
     if (bucket === "commission") setCurrency("ILS");
@@ -1839,6 +1899,7 @@ function ZohoExpenseModal({
           applyTo: applyToCard
             ? (bucket === "factory" ? "factory" : bucket === "shipping" ? "shipping" : "other")
             : null,
+          paidBucketKey,
         }),
       });
       const j = await res.json();
