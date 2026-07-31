@@ -10,6 +10,7 @@ import { db } from "@/lib/db";
 import { factoryQuoteRequests, leads } from "@/drizzle/schema";
 import { and, asc, desc, eq, inArray, isNotNull, isNull, or } from "drizzle-orm";
 import type { DealMilestones, FactoryPricingResult, QuoteActualCosts } from "@/lib/factory/types";
+import { getFactoryConfig } from "@/lib/factory/config";
 
 /** One product line inside a deal (a deal has 1, or N when combined). */
 export interface DealProduct {
@@ -17,6 +18,27 @@ export interface DealProduct {
   quotationNo: string | null;
   productSpec: Record<string, unknown> | null;
   finalPricing: FactoryPricingResult | null;
+  /** Factory ¥/unit (factoryResponse.unitCostCny) — feeds the full boss
+   *  breakdown's ¥→$→₪ pipeline in the deal card. */
+  factoryUnitCostCny?: number | null;
+}
+
+/** Deal-independent pricing context needed to render the full boss breakdown
+ *  (FX rates + shipping-option type/rate lookup). Read from the live config. */
+export interface ClosedPricingMeta {
+  usdToIls: number;
+  usdToCny: number;
+  shippingOptions: { id: string; type: "sea" | "air"; seaRate?: number }[];
+}
+
+/** The live pricing context for the boss breakdown in each deal card. */
+export async function getClosedPricingMeta(): Promise<ClosedPricingMeta> {
+  const cfg = await getFactoryConfig();
+  return {
+    usdToIls: cfg.usdToIls,
+    usdToCny: cfg.usdToCny,
+    shippingOptions: (cfg.shippingOptions ?? []).map((s) => ({ id: s.id, type: s.type, seaRate: s.seaRate })),
+  };
 }
 
 export interface ClosedQuoteRow {
@@ -107,6 +129,7 @@ export async function listClosedQuotes(): Promise<ClosedQuoteRow[]> {
       quotationNo: factoryQuoteRequests.quotationNo,
       productSpec: factoryQuoteRequests.productSpec,
       finalPricing: factoryQuoteRequests.finalPricing,
+      factoryResponse: factoryQuoteRequests.factoryResponse,
       actualCosts: factoryQuoteRequests.actualCosts,
       dealMilestones: factoryQuoteRequests.dealMilestones,
       sentToCustomerAt: factoryQuoteRequests.sentToCustomerAt,
@@ -160,6 +183,7 @@ export async function listClosedQuotes(): Promise<ClosedQuoteRow[]> {
       quotationNo: m.quotationNo,
       productSpec: (m.productSpec ?? null) as Record<string, unknown> | null,
       finalPricing: (m.finalPricing ?? null) as FactoryPricingResult | null,
+      factoryUnitCostCny: (m.factoryResponse as { unitCostCny?: number } | null)?.unitCostCny ?? null,
     }));
     const isCombined = members.length > 1;
     let finalPricing = (primary.finalPricing ?? null) as FactoryPricingResult | null;

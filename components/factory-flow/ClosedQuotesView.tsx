@@ -17,6 +17,7 @@ import { LuxShell, LuxTitle, LuxAccent, LuxStat } from "@/components/widget-ui/l
 import { widgetUrl } from "./widget-url";
 import type { DealMilestones, FactoryPricingResult, QuoteActualCosts, ZohoDocRef } from "@/lib/factory/types";
 import { computeCommission } from "@/lib/factory/commission";
+import { DetailedBreakdown } from "@/components/calculator/DetailedBreakdown";
 import type { AccuracyStats, GapStat } from "@/lib/factory/server/accuracy";
 import type { ZohoMatchResult, ZohoSuggestion } from "@/lib/zoho/match";
 
@@ -42,6 +43,13 @@ interface DealProduct {
   quotationNo: string | null;
   productSpec: Record<string, unknown> | null;
   finalPricing: FactoryPricingResult | null;
+  factoryUnitCostCny?: number | null;
+}
+
+interface PricingMeta {
+  usdToIls: number;
+  usdToCny: number;
+  shippingOptions: { id: string; type: "sea" | "air"; seaRate?: number }[];
 }
 
 interface ZohoUnmatchedDoc {
@@ -103,6 +111,7 @@ function reconcile(fp: FactoryPricingResult, ac: QuoteActualCosts | null) {
 export function ClosedQuotesView({ apiToken }: { apiToken: string }) {
   const [quotes, setQuotes] = useState<ClosedQuote[] | null>(null);
   const [stats, setStats] = useState<AccuracyStats | null>(null);
+  const [pricingMeta, setPricingMeta] = useState<PricingMeta | null>(null);
   const [unmatched, setUnmatched] = useState<ZohoUnmatchedDoc[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -113,6 +122,7 @@ export function ClosedQuotesView({ apiToken }: { apiToken: string }) {
       if (!res.ok || !j.ok) { setError(j.error ?? `HTTP ${res.status}`); return; }
       setQuotes(j.quotes as ClosedQuote[]);
       setStats((j.stats ?? null) as AccuracyStats | null);
+      setPricingMeta((j.pricingMeta ?? null) as PricingMeta | null);
       setError(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -359,6 +369,7 @@ export function ClosedQuotesView({ apiToken }: { apiToken: string }) {
                     key={q.id}
                     quote={q}
                     apiToken={apiToken}
+                    pricingMeta={pricingMeta}
                     onSaved={load}
                     expanded={expandedIds.has(q.id)}
                     onToggle={() => toggleExpand(q.id)}
@@ -386,15 +397,60 @@ export function ClosedQuotesView({ apiToken }: { apiToken: string }) {
   );
 }
 
+/** Build the props for the full boss breakdown (פירוט מלא לבוס) from a saved
+ *  deal's pricing snapshot + the live FX/shipping context. Returns null when
+ *  there's not enough context (no FX) so the panel is simply skipped. */
+function breakdownProps(
+  fp: FactoryPricingResult,
+  factoryUnitCostCny: number | null | undefined,
+  meta: PricingMeta | null
+): React.ComponentProps<typeof DetailedBreakdown> | null {
+  if (!meta) return null;
+  const opt = meta.shippingOptions.find((s) => s.id === fp.shippingOptionId);
+  return {
+    unitCost: fp.unitCost,
+    unitShipping: fp.unitShipping,
+    unitProfit: fp.unitProfit,
+    unitSellingPrice: fp.unitSellingPrice,
+    totalCost: fp.totalCost,
+    moldsInTotalCost: true,
+    totalShipping: fp.totalShipping,
+    totalProfit: fp.totalProfit,
+    totalSellingPrice: fp.totalSellingPrice,
+    quantity: fp.quantity,
+    profitMarginPct: fp.profitMarginPct,
+    commissionPct: fp.commissionPct,
+    totalCartons: fp.totalCartons,
+    totalWeightKg: fp.totalWeightKg,
+    totalCbm: fp.totalCbm,
+    shippingType: opt?.type ?? (fp.shippingSplit ? "sea" : null),
+    shippingSplit: fp.shippingSplit,
+    factoryUnitCostCny: factoryUnitCostCny ?? undefined,
+    usdToIls: meta.usdToIls,
+    usdToCny: meta.usdToCny,
+    seaRate: opt?.seaRate,
+    rawCbm: fp.totalCbm,
+    seaMinCbm: 1,
+    platePerColorCny: fp.platePerColorCny,
+    plateFeeLogoColors: fp.plateFeeLogoColors,
+    plateFeeTotalCny: fp.plateFeeTotalCny,
+    plateFeeTotalCostIls: fp.plateFeeTotalCostIls,
+    platePerUnitCny: fp.platePerUnitCny,
+    platePerUnitIls: fp.platePerUnitIls,
+  };
+}
+
 function ClosedQuoteCard({
   quote,
   apiToken,
+  pricingMeta,
   onSaved,
   expanded,
   onToggle,
 }: {
   quote: ClosedQuote;
   apiToken: string;
+  pricingMeta: PricingMeta | null;
   onSaved: () => void;
   expanded: boolean;
   onToggle: () => void;
@@ -630,6 +686,34 @@ function ClosedQuoteCard({
         apiToken={apiToken}
         onCreateInvoice={() => setInvoiceOpen(true)}
       />
+
+      {/* Full pricing breakdown per product — the SAME "פירוט מלא לבוס" shown on
+          the הצעות מחיר tab, so the whole deal's numbers are here too. */}
+      {pricingMeta && (
+        <div style={{ padding: "0 20px", marginTop: 4, display: "flex", flexDirection: "column", gap: 8 }}>
+          {(quote.products && quote.products.length > 0
+            ? quote.products
+            : [{ id: quote.id, quotationNo: quote.quotationNo, finalPricing: fp, factoryUnitCostCny: undefined } as DealProduct]
+          ).map((p) => {
+            const props = p.finalPricing ? breakdownProps(p.finalPricing, p.factoryUnitCostCny, pricingMeta) : null;
+            if (!props) return null;
+            return (
+              <div key={p.id}>
+                {(quote.products?.length ?? 1) > 1 && (
+                  <div style={{ fontSize: 11.5, color: "var(--lux-muted)", marginBottom: 4 }}>
+                    {p.quotationNo ? `#${p.quotationNo}` : "מוצר"}
+                    {(() => {
+                      const s = p.productSpec as { widthCm?: number; heightCm?: number } | null;
+                      return s?.widthCm && s?.heightCm ? ` · ${s.widthCm}×${s.heightCm} ס״מ` : "";
+                    })()}
+                  </div>
+                )}
+                <DetailedBreakdown {...props} />
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       {/* Body: tidy planned↔actual table */}
       <div style={{ padding: "16px 20px" }}>
