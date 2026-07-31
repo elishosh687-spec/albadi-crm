@@ -10,7 +10,6 @@ import { db } from "@/lib/db";
 import { factoryQuoteRequests, leads } from "@/drizzle/schema";
 import { and, asc, desc, eq, inArray, isNotNull, isNull, or } from "drizzle-orm";
 import type { DealMilestones, FactoryPricingResult, QuoteActualCosts } from "@/lib/factory/types";
-import { getFactoryConfig } from "@/lib/factory/config";
 
 /** One product line inside a deal (a deal has 1, or N when combined). */
 export interface DealProduct {
@@ -101,10 +100,6 @@ function combineMembers(members: FactoryPricingResult[]): FactoryPricingResult {
  * re-discounted combined quote.
  */
 export async function listClosedQuotes(): Promise<ClosedQuoteRow[]> {
-  // Live commission rate — the closed-deal commission follows the current
-  // setting, not the % frozen in each deal's snapshot. Same source the boss
-  // breakdown reads.
-  const liveCommissionPct = (await getFactoryConfig()).commissionPct ?? 10;
   const rows = await db
     .select({
       id: factoryQuoteRequests.id,
@@ -172,11 +167,6 @@ export async function listClosedQuotes(): Promise<ClosedQuoteRow[]> {
       const priced = products.map((p) => p.finalPricing).filter((p): p is FactoryPricingResult => !!p);
       if (priced.length > 1) finalPricing = combineMembers(priced);
     }
-    // Commission rate is boss-only and follows the CURRENT setting — not the %
-    // frozen into an old finalPricing snapshot (a deal priced when the rate was
-    // 7% must still pay today's 10%). Override with the live config value so the
-    // עסקאות commission line matches the boss breakdown exactly.
-    if (finalPricing) finalPricing = { ...finalPricing, commissionPct: liveCommissionPct };
     // newest updatedAt across members drives the deal's sort/recency
     const newest = members.reduce((a, b) => (+a.updatedAt > +b.updatedAt ? a : b));
     deals.push({
