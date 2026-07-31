@@ -366,10 +366,6 @@ export interface QuoteActualCosts {
   otherCosts?: { label: string; amountIls: number }[];
   /** Zoho Books documents these actuals were pulled from (link-back + audit). */
   zohoRefs?: ZohoDocRef[];
-  /** Which expense buckets have ALREADY been recorded as a Zoho expense (under
-   *  the customer) — dedup guard so marking "paid" can't create the same expense
-   *  twice. Keys: "factory" | "shipping" | "commission" | `other:<label>`. */
-  paidToZoho?: string[];
   /** Free note — e.g. "אוחד עם הזמנה X", "המפעל העלה מחיר". */
   note?: string;
   /** ISO timestamp of the last save. */
