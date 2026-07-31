@@ -19,6 +19,7 @@ import type { DealMilestones, FactoryPricingResult, QuoteActualCosts, ZohoDocRef
 import { computeCommission } from "@/lib/factory/commission";
 import { customerTotalExVat } from "@/lib/factory/customer-total";
 import { QuoteHtmlPreviewWidget } from "@/components/factory-flow/QuoteHtmlPreview.widget";
+import { CombinedCalcModalWidget } from "@/components/factory-flow/CombinedCalcModal.widget";
 import type { FactoryQuoteRow } from "@/components/factory-flow/types";
 import type { PaymentSchedule } from "@/lib/factory/payment-terms";
 import type { AccuracyStats, GapStat } from "@/lib/factory/server/accuracy";
@@ -197,6 +198,10 @@ export function ClosedQuotesView({ apiToken }: { apiToken: string }) {
   const [filter, setFilter] = useState<"all" | "pending" | "done" | "combined" | "estimate">("all");
   const [sort, setSort] = useState<"recent" | "profit" | "name">("recent");
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+  // Deal whose full COMBINED offer is open — the same modal the eye opens on the
+  // הצעות מפעל tab, so a combined deal is inspectable here exactly as it was
+  // quoted (Eli 2026-07-31).
+  const [combinedDeal, setCombinedDeal] = useState<ClosedQuote | null>(null);
   const [limit, setLimit] = useState(30);
 
   const visible = useMemo(() => {
@@ -388,6 +393,7 @@ export function ClosedQuotesView({ apiToken }: { apiToken: string }) {
                     onSaved={load}
                     expanded={expandedIds.has(q.id)}
                     onToggle={() => toggleExpand(q.id)}
+                    onOpenCombined={() => setCombinedDeal(q)}
                   />
                 ))}
               </div>
@@ -408,6 +414,17 @@ export function ClosedQuotesView({ apiToken }: { apiToken: string }) {
           </>
         )}
       </div>
+
+      {combinedDeal && (combinedDeal.products?.length ?? 0) > 0 && (
+        <CombinedCalcModalWidget
+          apiToken={apiToken}
+          rows={combinedDeal.products as unknown as FactoryQuoteRow[]}
+          customerName={combinedDeal.customerName}
+          customerPhone={combinedDeal.customerPhone}
+          onClose={() => setCombinedDeal(null)}
+          onChanged={load}
+        />
+      )}
     </LuxShell>
   );
 }
@@ -421,12 +438,15 @@ function ClosedQuoteCard({
   onSaved,
   expanded,
   onToggle,
+  onOpenCombined,
 }: {
   quote: ClosedQuote;
   apiToken: string;
   onSaved: () => void;
   expanded: boolean;
   onToggle: () => void;
+  /** Open the full combined-offer view (same modal as the eye in הצעות מפעל). */
+  onOpenCombined?: () => void;
 }) {
   const fp = quote.finalPricing!;
   const ac = quote.actualCosts;
@@ -741,14 +761,26 @@ function ClosedQuoteCard({
                   (מסמך אחד · {ils(dealTotalExVat)})
                 </span>
               </span>
-              <a
-                href={combinedPdfHref}
-                target="_blank"
-                rel="noreferrer"
-                style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11.5, color: "var(--lux-cool)" }}
-              >
-                <Download className="size-3.5" /> PDF משולב
-              </a>
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 12 }}>
+                {/* Same full combined view as the eye in הצעות מפעל — the whole
+                    offer with the boss breakdown, not just a download link
+                    (Eli 2026-07-31: "אני לא יכול לפתוח את זה כמו בהצעות מפעל"). */}
+                <button
+                  type="button"
+                  onClick={() => onOpenCombined?.()}
+                  style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11.5, color: "var(--lux-champagne)", background: "transparent", border: 0, cursor: "pointer" }}
+                >
+                  <Search className="size-3.5" /> הצג הכל
+                </button>
+                <a
+                  href={combinedPdfHref}
+                  target="_blank"
+                  rel="noreferrer"
+                  style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11.5, color: "var(--lux-cool)" }}
+                >
+                  <Download className="size-3.5" /> PDF משולב
+                </a>
+              </span>
             </div>
           )}
           {quote.products.map((p) => {

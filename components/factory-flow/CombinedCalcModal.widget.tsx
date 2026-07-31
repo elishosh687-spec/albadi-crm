@@ -29,6 +29,7 @@ import { CommissionControl } from "./CommissionControl";
 import { isOverCbmConsolidationThreshold, cbmConsolidationAlert } from "@/lib/factory/sea-carriers";
 import {
   computeCombined,
+  allocateCombined,
   combinedShippingIls,
   defaultMarginFor,
   type CombinedPricingResult,
@@ -251,6 +252,28 @@ export function CombinedCalcModalWidget({
     const opt = config.shippingOptions.find((s) => s.id === shippingOptionId) ?? null;
     return computeCombined(priced, opt, config, cbmOverrideValid ? cbmOverrideParsed : undefined);
   }, [livePricings, config, shippingOptionId, selectedRows, cbmOverrideValid, cbmOverrideParsed]);
+
+  // THE customer total for this combined offer — the figure the PDF and the
+  // WhatsApp message actually print (allocateCombined: each product's per-bag
+  // price rounded to agorot, then × qty). computeCombined's own grandTotal is an
+  // exact production+profit+shipping sum that no document ever shows, and
+  // quoting it here made this screen disagree with the PDF and with the deal by
+  // a few ₪ (Eli 2026-07-31: "בהצעות מפעל רשום 13,520, כאן רשום 13,475").
+  const allocatedTotal = useMemo(() => {
+    if (!config) return null;
+    const items = selectedRows
+      .map((r) => ({ id: r.id, pricing: livePricings[r.id] }))
+      .filter((x): x is { id: string; pricing: FactoryPricingResult } => !!x.pricing);
+    if (items.length === 0) return null;
+    const opt = config.shippingOptions.find((s) => s.id === shippingOptionId) ?? null;
+    return allocateCombined(
+      items,
+      opt,
+      config,
+      combinedSplit ?? undefined,
+      cbmOverrideValid ? cbmOverrideParsed : undefined
+    ).grandTotal;
+  }, [livePricings, config, shippingOptionId, selectedRows, combinedSplit, cbmOverrideValid, cbmOverrideParsed]);
 
   // Each priceable product paired with its live pricing, for the combined
   // breakdown (the "4 products that make up the one order" view).
@@ -619,7 +642,7 @@ export function CombinedCalcModalWidget({
                   <div className="border-t border-success/20 my-1" />
                   <PriceRow
                     label="סה״כ ללקוח (משולב)"
-                    value={`${formatIls(combinedResult.grandTotal)} (בנפרד: ${formatIls(
+                    value={`${formatIls(allocatedTotal ?? combinedResult.grandTotal)} (בנפרד: ${formatIls(
                       combinedResult.separateGrandTotal
                     )})`}
                     bold
@@ -635,7 +658,7 @@ export function CombinedCalcModalWidget({
                     // products together). Base excludes shipping — same rule as a
                     // single quote. Display-only; never changes the customer price.
                     const comm = computeCommission(
-                      combinedResult.grandTotal,
+                      allocatedTotal ?? combinedResult.grandTotal,
                       combinedResult.totalProfit,
                       effectiveCommissionPct,
                       combinedResult.combinedShipping
@@ -675,6 +698,7 @@ export function CombinedCalcModalWidget({
                     config={config}
                     commissionPct={effectiveCommissionPct}
                     shippingOptionId={shippingOptionId}
+                    customerTotal={allocatedTotal}
                   />
                 </div>
               )}
@@ -1270,6 +1294,7 @@ function CombinedBreakdown({
   config,
   commissionPct,
   shippingOptionId,
+  customerTotal,
 }: {
   result: CombinedPricingResult;
   items: { row: FactoryQuoteRow; pricing: FactoryPricingResult }[];
@@ -1277,7 +1302,11 @@ function CombinedBreakdown({
   /** Effective salesperson commission % (override or global default). */
   commissionPct: number;
   shippingOptionId: string;
+  /** The total the PDF/WhatsApp actually print (allocateCombined). `result`'s
+   *  own grandTotal is the exact unrounded sum — never shown to a customer. */
+  customerTotal?: number | null;
 }) {
+  const printedTotal = customerTotal ?? result.grandTotal;
   const [open, setOpen] = useState(false);
   const opt = config.shippingOptions.find((s) => s.id === shippingOptionId) ?? null;
   const cartons = items.reduce((s, it) => s + (it.pricing.totalCartons || 0), 0);
@@ -1373,7 +1402,7 @@ function CombinedBreakdown({
             <BRow label="מרווח כולל" value={`${result.overallMarginPct}%`} />
             {(() => {
               const comm = computeCommission(
-                result.grandTotal,
+                printedTotal,
                 result.totalProfit,
                 commissionPct,
                 result.combinedShipping
@@ -1391,7 +1420,7 @@ function CombinedBreakdown({
           <BSection title="סיכום מחיר ללקוח">
             <BRow label="מחיר מוצרים (עלות + רווח)" value={formatIls(result.productPriceTotal)} />
             <BRow label="+ שילוח מאוחד" value={formatIls(result.combinedShipping)} />
-            <BRow label="סה״כ ללקוח" value={formatIls(result.grandTotal)} strong />
+            <BRow label="סה״כ ללקוח" value={formatIls(printedTotal)} strong />
             <BRow label="לעומת בנפרד" value={formatIls(result.separateGrandTotal)} muted />
           </BSection>
 
