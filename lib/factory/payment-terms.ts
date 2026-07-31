@@ -159,6 +159,60 @@ export function computePaymentSchedule(
 }
 
 /**
+ * A payment plan stored PER DEAL (factory_quote_requests.payment_plan). Either:
+ *  - a plan id string (preset "50_50"/"30_40_30"/… or "custom_NN"), OR
+ *  - a custom installments object — needed for shapes the presets can't express,
+ *    e.g. Yossi Gold: a FIXED ₪3,420 deposit (already paid) + the balance 50/50.
+ *    Each installment is a fixed `ils` amount OR a `pct` share of the REMAINDER
+ *    (total − sum of fixed amounts). Added 2026-07-31.
+ */
+export type StoredDealPlan =
+  | string
+  | { label?: string; installments: { pct?: number; ils?: number; when: string }[] };
+
+/**
+ * Resolve a stored per-deal plan into a schedule on the given ex-VAT total.
+ *  - string / null → the preset (or custom_NN) path via computePaymentSchedule.
+ *  - object → honor fixed `ils` installments, split the remainder across the
+ *    `pct` installments by weight, last absorbs the rounding remainder (same
+ *    rule as computePaymentSchedule). `pct` on a fixed installment is derived
+ *    for display only.
+ */
+export function resolveDealSchedule(
+  exVatTotalIls: number,
+  stored: StoredDealPlan | null | undefined,
+  vatPct: number = VAT_PCT
+): PaymentSchedule {
+  if (stored == null || typeof stored === "string") {
+    return computePaymentSchedule(exVatTotalIls, resolvePaymentPlan(stored ?? undefined), vatPct);
+  }
+  const subtotal = r2(exVatTotalIls);
+  const vat = r2(subtotal * (vatPct / 100));
+  const total = r2(subtotal + vat);
+
+  const items = stored.installments ?? [];
+  const isFixed = (it: { ils?: number }) => typeof it.ils === "number";
+  const fixedSum = items.reduce((s, it) => s + (isFixed(it) ? (it.ils as number) : 0), 0);
+  const remainder = r2(total - fixedSum);
+  const pctSum = items.reduce((s, it) => s + (isFixed(it) ? 0 : (it.pct ?? 0)), 0);
+
+  const installments: PaymentInstallment[] = items.map((it) => {
+    if (isFixed(it)) {
+      const ils = r2(it.ils as number);
+      return { pct: total > 0 ? Math.round((ils / total) * 100) : 0, when: it.when, ils };
+    }
+    const share = pctSum > 0 ? (it.pct ?? 0) / pctSum : 0;
+    return { pct: it.pct ?? 0, when: it.when, ils: r2(remainder * share) };
+  });
+  // Last installment absorbs the rounding drift so the parts sum to `total`.
+  if (installments.length > 0) {
+    const paidBeforeLast = installments.slice(0, -1).reduce((s, x) => s + x.ils, 0);
+    installments[installments.length - 1].ils = r2(total - paidBeforeLast);
+  }
+  return { subtotal, vat, total, installments };
+}
+
+/**
  * The customer-facing payment block, appended to a quote message. Phrasing
  * follows the template Eli wrote by hand.
  */

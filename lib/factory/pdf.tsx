@@ -33,8 +33,8 @@ import { splitCustomerView } from "./shipping-split";
 import {
   VAT_PCT,
   BANK_DETAILS_LINES,
-  resolvePaymentPlan,
-  computePaymentSchedule,
+  resolveDealSchedule,
+  type StoredDealPlan,
 } from "./payment-terms";
 
 /** Colour count encoded in a printing spec ("3 color(s)" / "3 צבעים") → int. */
@@ -350,6 +350,10 @@ export interface CustomerQuotePdfProps {
    *  VAT + amount due + installments + bank details, matching the WhatsApp
    *  caption it's attached to. Omitted → no payment block (legacy callers). */
   paymentPlanId?: string | null;
+  /** Per-deal stored plan (StoredDealPlan — a preset id OR a custom installments
+   *  object). Wins over paymentPlanId when set, so a deal with custom terms (e.g.
+   *  a fixed deposit + balance split) prints its own schedule. */
+  paymentPlan?: StoredDealPlan | null;
   vatPct?: number;
 }
 
@@ -495,8 +499,9 @@ function CustomerQuotePDF(props: CustomerQuotePdfProps) {
 
   // Built from the total this PDF PRINTS (displayTotalOrder), so the payment
   // figures can never disagree with the table above them.
-  const paymentSchedule = props.paymentPlanId
-    ? computePaymentSchedule(displayTotalOrder, resolvePaymentPlan(props.paymentPlanId), paymentVatPct)
+  const storedPlan: StoredDealPlan | null = props.paymentPlan ?? props.paymentPlanId ?? null;
+  const paymentSchedule = storedPlan
+    ? resolveDealSchedule(displayTotalOrder, storedPlan, paymentVatPct)
     : null;
 
   const bullets = [

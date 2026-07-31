@@ -19,6 +19,7 @@ import type { DealMilestones, FactoryPricingResult, QuoteActualCosts, ZohoDocRef
 import { computeCommission } from "@/lib/factory/commission";
 import { QuoteHtmlPreviewWidget } from "@/components/factory-flow/QuoteHtmlPreview.widget";
 import type { FactoryQuoteRow } from "@/components/factory-flow/types";
+import { BANK_DETAILS_LINES, type PaymentSchedule } from "@/lib/factory/payment-terms";
 import type { AccuracyStats, GapStat } from "@/lib/factory/server/accuracy";
 import type { ZohoMatchResult, ZohoSuggestion } from "@/lib/zoho/match";
 
@@ -37,6 +38,8 @@ interface ClosedQuote {
   products?: DealProduct[];
   isCombined?: boolean;
   fromEstimate?: boolean;
+  paymentSchedule?: PaymentSchedule | null;
+  paymentPlanLabel?: string | null;
 }
 
 /** Each deal product is a full FactoryQuoteRow → the deal card reuses the exact
@@ -56,6 +59,7 @@ interface ZohoUnmatchedDoc {
 
 const MAX_W = 900;
 const ils = (n: number) => `₪${Math.round(n).toLocaleString("he-IL")}`;
+const ils2 = (n: number) => `₪${n.toLocaleString("he-IL", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 function fmtDate(iso: string | null): string {
   if (!iso) return "—";
   return new Date(iso).toLocaleDateString("he-IL", { day: "2-digit", month: "2-digit", year: "2-digit" });
@@ -681,6 +685,43 @@ function ClosedQuoteCard({
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* Customer payment terms for THIS deal — VAT + amount due + installments +
+          bank details, on the deal's grand total (combined-aware). This is what
+          the customer's PDF/message shows for this specific deal. */}
+      {quote.paymentSchedule && (
+        <div style={{ padding: "0 20px", marginTop: 10 }}>
+          <div style={{ border: "1px solid var(--lux-line)", borderRadius: 10, padding: "12px 14px" }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 8 }}>
+              <div style={{ fontSize: 12.5, color: "var(--lux-ink)", fontWeight: 500 }}>תנאי תשלום ללקוח</div>
+              {quote.paymentPlanLabel && (
+                <div style={{ fontSize: 11, color: "var(--lux-champagne)" }}>{quote.paymentPlanLabel}</div>
+              )}
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 12.5 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", color: "var(--lux-muted)" }}>
+                <span>מע״מ 18%</span><span className="tabular-nums">{ils2(quote.paymentSchedule.vat)}</span>
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between", color: "var(--lux-ink)", fontWeight: 600, borderTop: "1px solid var(--lux-line)", paddingTop: 4 }}>
+                <span>סה״כ לתשלום</span><span className="tabular-nums">{ils2(quote.paymentSchedule.total)}</span>
+              </div>
+              <div style={{ height: 4 }} />
+              {quote.paymentSchedule.installments.map((inst, i, arr) => (
+                <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8 }}>
+                  <span style={{ color: "var(--lux-muted)" }}>
+                    {i === 0 ? "תשלום ראשוני" : i === arr.length - 1 ? "תשלום אחרון" : `תשלום ${i + 1}`}
+                    <span style={{ fontSize: 11, opacity: 0.8 }}> · {inst.pct}% · {inst.when}</span>
+                  </span>
+                  <span className="tabular-nums" style={{ color: "var(--lux-ink)" }}>{ils2(inst.ils)}</span>
+                </div>
+              ))}
+            </div>
+            <div style={{ marginTop: 8, paddingTop: 8, borderTop: "1px solid var(--lux-line)", fontSize: 11, color: "var(--lux-muted)", lineHeight: 1.6 }}>
+              {BANK_DETAILS_LINES.map((b, i) => (<div key={i}>{b}</div>))}
+            </div>
+          </div>
         </div>
       )}
 

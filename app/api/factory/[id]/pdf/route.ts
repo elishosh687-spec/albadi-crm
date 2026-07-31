@@ -14,6 +14,7 @@ import { factoryQuoteRequests, leads } from "@/drizzle/schema";
 import { eq } from "drizzle-orm";
 import { renderCustomerQuotePdf, fetchImageDataUri } from "@/lib/factory/pdf";
 import { getFactoryConfig } from "@/lib/factory/config";
+import type { StoredDealPlan } from "@/lib/factory/payment-terms";
 import type {
   FactoryProductSpec,
   FactoryPricingResult,
@@ -102,9 +103,12 @@ export async function GET(
       quotationNo: row.quotationNo ?? id.slice(-8).toUpperCase(),
       // ?plan= is set by the WhatsApp send so the attached PDF prints the SAME
       // VAT + payment schedule as the caption (Eli 2026-07-28). Absent → the
-      // operator's configured default, so an ad-hoc PDF download still shows
-      // payment terms rather than a bare ex-VAT quote.
-      paymentPlanId: planId,
+      // deal's own stored plan (row.paymentPlan), else the operator's configured
+      // default — so a deal with custom terms prints its own schedule and an
+      // ad-hoc download still shows payment terms rather than a bare ex-VAT quote.
+      paymentPlan: req.nextUrl.searchParams.get("plan")
+        ? planId
+        : ((row.paymentPlan as StoredDealPlan | null) ?? planId),
       vatPct: cfg.paymentTerms?.vatPct,
     });
 

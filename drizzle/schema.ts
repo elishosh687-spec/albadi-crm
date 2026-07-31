@@ -282,6 +282,13 @@ export const factoryQuoteRequests = pgTable("factory_quote_requests", {
   // 2026-07-23 (drizzle-kit push hangs — see CLAUDE.md).
   closedDealAt: timestamp("closed_deal_at", { withTimezone: true }),
   dealGroupId: text("deal_group_id"),
+  // Per-deal payment plan (StoredDealPlan in lib/factory/payment-terms.ts): a
+  // plan id string ("50_50"/"30_40_30"/"custom_NN") OR a custom installments
+  // object (fixed ₪ + pct-of-remainder — e.g. Yossi Gold's ₪3,420 deposit +
+  // balance 50/50). Overrides the global config default for this quote's PDF /
+  // message. Null → the config default. Added via direct DDL 2026-07-31
+  // (drizzle-kit push hangs — see CLAUDE.md).
+  paymentPlan: jsonb("payment_plan"),
   // "הסר מהתזכורת" — when set, the quote is hidden from the "המפעל ענה — צריך
   // לשלוח ללקוח" reminder panel (a dead lead Eli will never price/send), WITHOUT
   // deleting the quote or falsely stamping sentToCustomerAt (keeps "נשלח" stats

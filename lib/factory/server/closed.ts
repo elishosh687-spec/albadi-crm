@@ -17,6 +17,12 @@ import type {
   FactoryResponse,
   FactoryQuoteStatus,
 } from "@/lib/factory/types";
+import { splitCustomerView } from "@/lib/factory/shipping-split";
+import {
+  resolveDealSchedule,
+  type StoredDealPlan,
+  type PaymentSchedule,
+} from "@/lib/factory/payment-terms";
 
 /** One product line inside a deal (a deal has 1, or N when combined). Shaped as
  *  a full FactoryQuoteRow so the deal card can render the SAME quote preview
@@ -61,6 +67,42 @@ export interface ClosedQuoteRow {
   /** True when the deal was closed on a DRAFT (self-estimate), not a factory
    *  quote — the planned price is the estimate, not factory-confirmed. */
   fromEstimate: boolean;
+  /** Customer payment schedule for THIS deal (VAT + amount due + installments),
+   *  computed on the customer grand total (combined = sum of members, split-aware)
+   *  using the primary's stored payment_plan. Null when no plan is stored. */
+  paymentSchedule: PaymentSchedule | null;
+  /** Human label of the plan (e.g. "50% / 50%" or the custom label). */
+  paymentPlanLabel: string | null;
+  /** Stored preset id (`50_50` / `30_70` / `30_40_30` / `custom_NN`). Null when
+   *  no plan is stored, or when the deal carries a custom installments object
+   *  (which has no id — read `paymentSchedule.installments` instead). */
+  paymentPlanId: string | null;
+}
+
+/** A member's customer-facing grand total (ex-VAT), matching what the PDF/message
+ *  prints: split shipments round per-leg (splitCustomerView), else rounded
+ *  per-bag × qty + one-time molds. Mirrors pdf.tsx displayTotalOrder.
+ *
+ *  Exported because the read API (`/api/widget/deals`) must quote the SAME
+ *  figure the customer received — the payment schedule is computed on it. */
+export function memberDisplayTotalExVat(fp: FactoryPricingResult): number {
+  const moldTotalIls = (fp.moldsTotalSellingPriceIls ?? 0) > 0 ? r2(fp.moldsTotalSellingPriceIls) : 0;
+  if (fp.shippingSplit) {
+    return splitCustomerView(fp.shippingSplit, moldTotalIls).grandTotalIls;
+  }
+  return r2(r2(fp.unitSellingPrice) * fp.quantity) + moldTotalIls;
+}
+
+/** A readable label for a stored plan (id or custom object). */
+function planLabel(stored: StoredDealPlan | null | undefined): string | null {
+  if (!stored) return null;
+  if (typeof stored === "object") return stored.label ?? "תנאי תשלום מותאמים";
+  const map: Record<string, string> = {
+    "50_50": "50% / 50%",
+    "30_70": "30% / 70%",
+    "30_40_30": "3 פעימות — 30% / 40% / 30%",
+  };
+  return map[stored] ?? stored;
 }
 
 function r2(n: number): number {
@@ -130,6 +172,7 @@ export async function listClosedQuotes(): Promise<ClosedQuoteRow[]> {
       factoryResponse: factoryQuoteRequests.factoryResponse,
       feishuRowIndex: factoryQuoteRequests.feishuRowIndex,
       pdfUrl: factoryQuoteRequests.pdfUrl,
+      paymentPlan: factoryQuoteRequests.paymentPlan,
       actualCosts: factoryQuoteRequests.actualCosts,
       dealMilestones: factoryQuoteRequests.dealMilestones,
       sentToCustomerAt: factoryQuoteRequests.sentToCustomerAt,
@@ -202,6 +245,18 @@ export async function listClosedQuotes(): Promise<ClosedQuoteRow[]> {
     }
     // newest updatedAt across members drives the deal's sort/recency
     const newest = members.reduce((a, b) => (+a.updatedAt > +b.updatedAt ? a : b));
+
+    // Customer payment schedule for the deal: the primary's stored plan applied
+    // to the deal's customer grand total (sum of each member's split-aware
+    // display total — combined deals pay on the sum). Null when no plan stored.
+    const storedPlan = (primary.paymentPlan ?? null) as StoredDealPlan | null;
+    const dealGrandTotalExVat = r2(
+      products.reduce((s, p) => s + (p.finalPricing ? memberDisplayTotalExVat(p.finalPricing) : 0), 0)
+    );
+    const paymentSchedule = storedPlan
+      ? resolveDealSchedule(dealGrandTotalExVat, storedPlan)
+      : null;
+
     deals.push({
       id: primary.id,
       dealGroupId: primary.dealGroupId,
@@ -219,6 +274,9 @@ export async function listClosedQuotes(): Promise<ClosedQuoteRow[]> {
       products,
       isCombined,
       fromEstimate: members.every((m) => m.factoryStatus !== "finalized"),
+      paymentSchedule,
+      paymentPlanLabel: planLabel(storedPlan),
+      paymentPlanId: typeof storedPlan === "string" ? storedPlan : null,
     });
   }
   deals.sort((a, b) => (a.updatedAt > b.updatedAt ? -1 : 1));

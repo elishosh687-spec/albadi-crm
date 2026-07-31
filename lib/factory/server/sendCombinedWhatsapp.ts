@@ -18,9 +18,9 @@ import { getFactoryConfig } from "@/lib/factory/config";
 import { notifyItayQuoteSent } from "@/lib/notify/itay";
 import {
   VAT_PCT,
-  resolvePaymentPlan,
-  computePaymentSchedule,
+  resolveDealSchedule,
   buildPaymentBlock,
+  type StoredDealPlan,
 } from "@/lib/factory/payment-terms";
 import type { FactoryPricingResult } from "@/lib/factory/types";
 
@@ -190,7 +190,13 @@ export async function sendCombinedQuoteWhatsapp(
   // bank details, built from the total this caption PRINTS.
   const cfg = await getFactoryConfig();
   const vatPct = cfg.paymentTerms?.vatPct ?? VAT_PCT;
-  const plan = resolvePaymentPlan(paymentPlanId ?? cfg.paymentTerms?.defaultPlanId);
+  // Plan precedence: explicit per-send override → the deal PRIMARY's stored
+  // payment_plan (oldest member — where the deal's custom terms live) → config
+  // default. resolveDealSchedule handles both preset ids and custom objects.
+  const primaryRow = [...rows].sort((a, b) => +a.createdAt - +b.createdAt)[0];
+  const storedPlan: StoredDealPlan | null =
+    paymentPlanId ??
+    ((primaryRow?.paymentPlan as StoredDealPlan | null) ?? cfg.paymentTerms?.defaultPlanId ?? null);
   const caption = [
     greeting,
     "",
@@ -200,7 +206,7 @@ export async function sendCombinedQuoteWhatsapp(
     ...splitLines,
     `*💵 סה״כ: ${formatIls(totals.grandTotal)}*`,
     validSplit ? "_(לא כולל מע״מ)_" : "_(כולל שילוח, לא כולל מע״מ)_",
-    ...buildPaymentBlock(computePaymentSchedule(totals.grandTotal, plan, vatPct), vatPct),
+    ...buildPaymentBlock(resolveDealSchedule(totals.grandTotal, storedPlan, vatPct), vatPct),
   ].join("\n");
 
   const pdfFilename = `הצעת-מחיר-משולבת-${ids.length}-מוצרים.pdf`;
