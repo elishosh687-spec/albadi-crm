@@ -319,6 +319,36 @@ export interface ShippingSplit {
  * finalPricing.totalCost / totalShipping / totalProfit. Stored in its OWN
  * column (factory_quote_requests.actual_costs) so a re-finalize never wipes it.
  */
+/**
+ * The COMBINED offer, frozen as it was sent to the customer.
+ *
+ * A combined offer is NOT the sum of its quotes: allocateCombined re-prices the
+ * whole group on ONE merged shipment and folds the (cheaper) shipping back into
+ * each product, so the customer pays noticeably less than the standalone quotes
+ * add up to. That allocation depends on ad-hoc screen state — the manual merged
+ * CBM and any air/sea split — which cannot be reproduced later, so it is frozen
+ * here when the deal is closed and every downstream surface (deal card, payment
+ * schedule, invoice) reads it instead of re-guessing.
+ *
+ * Stored on the PRIMARY (oldest) member of the group, in
+ * factory_quote_requests.combined_pricing.
+ */
+export interface CombinedDealPricing {
+  /** Ex-VAT grand total the combined offer printed (allocateCombined.grandTotal). */
+  grandTotalIls: number;
+  /** Each member's ALLOCATED pricing — its share of the merged shipment. */
+  perProduct: { id: string; pricing: FactoryPricingResult }[];
+  /** Merged shipping option used for the single-shipment allocation. */
+  shippingOptionId?: string | null;
+  shippingOptionName?: string | null;
+  /** Manual merged-CBM override, when the operator set one. */
+  cbmOverride?: number | null;
+  /** Air/sea split across members, when the offer was split. */
+  split?: { airIds: string[]; airShippingOptionId: string; seaShippingOptionId: string } | null;
+  /** When this snapshot was taken (ISO). */
+  computedAt: string;
+}
+
 export interface QuoteActualCosts {
   /** Real factory cost paid, total ₪ (production all-in). Undefined → use planned. */
   factoryTotalIls?: number;

@@ -16,8 +16,11 @@ import type {
   FactoryProductSpec,
   FactoryResponse,
   FactoryQuoteStatus,
+  CombinedDealPricing,
 } from "@/lib/factory/types";
 import { customerTotalExVat } from "@/lib/factory/customer-total";
+import { allocateCombined } from "@/lib/factory/combined";
+import { getFactoryConfig } from "@/lib/factory/config";
 import {
   resolveDealSchedule,
   type StoredDealPlan,
@@ -34,6 +37,9 @@ export interface DealProduct {
   createdAt: string;
   updatedAt: string;
   productSpec: FactoryProductSpec;
+  /** On a combined deal this is the ALLOCATED pricing (the customer's combined
+   *  offer); on a single deal it's the quote's own pricing. */
+  standalonePricing?: FactoryPricingResult | null;
   feishuRowIndex: string | null;
   factoryStatus: FactoryQuoteStatus;
   factoryResponse: FactoryResponse | null;
@@ -77,6 +83,15 @@ export interface ClosedQuoteRow {
    *  no plan is stored, or when the deal carries a custom installments object
    *  (which has no id — read `paymentSchedule.installments` instead). */
   paymentPlanId: string | null;
+  /** The combined offer frozen at close (null on single deals / legacy groups).
+   *  When set, THIS is the deal's price — products[].finalPricing already carries
+   *  the allocated per-product numbers. */
+  combinedPricing?: CombinedDealPricing | null;
+  /** THE deal's customer total, ex-VAT — the combined offer's grand total when
+   *  one was frozen, else the sum of the members' printed totals. Every surface
+   *  (card, invoice, payment plan) must show this rather than recompute; that
+   *  recomputation is exactly what made the screens disagree. */
+  grandTotalExVat: number;
   /** Internal payment tracking — how much was actually paid per installment
    *  (parallel to paymentSchedule.installments). Boss-only. */
   paymentsReceived: { paidIls: number }[] | null;
@@ -173,6 +188,7 @@ export async function listClosedQuotes(): Promise<ClosedQuoteRow[]> {
       pdfUrl: factoryQuoteRequests.pdfUrl,
       paymentPlan: factoryQuoteRequests.paymentPlan,
       paymentsReceived: factoryQuoteRequests.paymentsReceived,
+      combinedPricing: factoryQuoteRequests.combinedPricing,
       actualCosts: factoryQuoteRequests.actualCosts,
       dealMilestones: factoryQuoteRequests.dealMilestones,
       sentToCustomerAt: factoryQuoteRequests.sentToCustomerAt,
@@ -221,6 +237,13 @@ export async function listClosedQuotes(): Promise<ClosedQuoteRow[]> {
     // primary = oldest member (stable; where actuals/milestones live)
     members.sort((a, b) => +a.createdAt - +b.createdAt);
     const primary = members[0];
+    // The combined offer as it was SENT (frozen at close). When present it —
+    // not the standalone quotes — is the deal's price: a combined offer ships
+    // once, so each product was quoted cheaper than its own quote says.
+    const combinedSnap = (primary.combinedPricing ?? null) as CombinedDealPricing | null;
+    const allocatedById = new Map(
+      (combinedSnap?.perProduct ?? []).map((p) => [p.id, p.pricing])
+    );
     const products: DealProduct[] = members.map((m) => ({
       id: m.id,
       manychatSubId: m.leadSid,
@@ -231,7 +254,12 @@ export async function listClosedQuotes(): Promise<ClosedQuoteRow[]> {
       feishuRowIndex: m.feishuRowIndex,
       factoryStatus: m.factoryStatus as FactoryQuoteStatus,
       factoryResponse: (m.factoryResponse ?? null) as FactoryResponse | null,
-      finalPricing: (m.finalPricing ?? null) as FactoryPricingResult | null,
+      finalPricing: (allocatedById.get(m.id) ??
+        m.finalPricing ??
+        null) as FactoryPricingResult | null,
+      /** The standalone quote's own pricing, before the combined allocation —
+       *  kept so the quote preview / boss breakdown can still show it. */
+      standalonePricing: (m.finalPricing ?? null) as FactoryPricingResult | null,
       pdfUrl: m.pdfUrl,
       sentToCustomerAt: m.sentToCustomerAt ? m.sentToCustomerAt.toISOString() : null,
       customerName: m.customerName,
@@ -247,12 +275,19 @@ export async function listClosedQuotes(): Promise<ClosedQuoteRow[]> {
     const newest = members.reduce((a, b) => (+a.updatedAt > +b.updatedAt ? a : b));
 
     // Customer payment schedule for the deal: the primary's stored plan applied
-    // to the deal's customer grand total (sum of each member's split-aware
-    // display total — combined deals pay on the sum). Null when no plan stored.
+    // to the deal's customer grand total. A combined deal pays the COMBINED
+    // offer's grand total (frozen at close); without a snapshot we fall back to
+    // summing the members' own printed totals. Null when no plan stored.
     const storedPlan = (primary.paymentPlan ?? null) as StoredDealPlan | null;
-    const dealGrandTotalExVat = r2(
-      products.reduce((s, p) => s + (p.finalPricing ? memberDisplayTotalExVat(p.finalPricing) : 0), 0)
-    );
+    const dealGrandTotalExVat =
+      combinedSnap?.grandTotalIls != null
+        ? r2(combinedSnap.grandTotalIls)
+        : r2(
+            products.reduce(
+              (s, p) => s + (p.finalPricing ? memberDisplayTotalExVat(p.finalPricing) : 0),
+              0
+            )
+          );
     const paymentSchedule = storedPlan
       ? resolveDealSchedule(dealGrandTotalExVat, storedPlan)
       : null;
@@ -278,6 +313,8 @@ export async function listClosedQuotes(): Promise<ClosedQuoteRow[]> {
       paymentPlanLabel: planLabel(storedPlan),
       paymentPlanId: typeof storedPlan === "string" ? storedPlan : null,
       paymentsReceived: (primary.paymentsReceived ?? null) as { paidIls: number }[] | null,
+      combinedPricing: combinedSnap,
+      grandTotalExVat: dealGrandTotalExVat,
     });
   }
   deals.sort((a, b) => (a.updatedAt > b.updatedAt ? -1 : 1));
@@ -288,7 +325,62 @@ export async function listClosedQuotes(): Promise<ClosedQuoteRow[]> {
  * "סגור עסקה משולבת" — close several finalized quotes of one customer as ONE
  * combined deal (shared deal_group_id + closed stamp). Returns the group id.
  */
-export async function closeDealGroup(quoteIds: string[]): Promise<string> {
+export interface CombinedCloseOptions {
+  /** Manual merged-CBM override the operator used on screen (m³). */
+  cbmOverride?: number | null;
+  /** Air/sea split, when the combined offer was split. */
+  split?: { airIds: string[]; airShippingOptionId: string; seaShippingOptionId: string } | null;
+}
+
+/**
+ * Freeze the COMBINED offer for a group — the allocation the customer was
+ * quoted, not the sum of the standalone quotes.
+ *
+ * Mirrors /api/factory/combine/pdf exactly (same allocateCombined call, same
+ * default merged shipping option) so the deal records the very numbers that
+ * PDF prints. Returns null when the group has fewer than 2 priced members —
+ * there is no "combined" price to speak of.
+ */
+export async function buildCombinedPricing(
+  ids: string[],
+  opts: CombinedCloseOptions = {}
+): Promise<CombinedDealPricing | null> {
+  const rows = await db
+    .select({
+      id: factoryQuoteRequests.id,
+      finalPricing: factoryQuoteRequests.finalPricing,
+      createdAt: factoryQuoteRequests.createdAt,
+    })
+    .from(factoryQuoteRequests)
+    .where(inArray(factoryQuoteRequests.id, ids));
+  const priced = rows
+    .filter((r) => r.finalPricing)
+    .sort((a, b) => +a.createdAt - +b.createdAt);
+  if (priced.length < 2) return null;
+
+  const config = await getFactoryConfig();
+  const items = priced.map((r) => ({ id: r.id, pricing: r.finalPricing as FactoryPricingResult }));
+  const singleOpt =
+    config.shippingOptions.find((s) => s.id === items[0].pricing.shippingOptionId) ?? null;
+  const split = opts.split ?? undefined;
+  const cbmOverride = opts.cbmOverride && opts.cbmOverride > 0 ? opts.cbmOverride : undefined;
+  const alloc = allocateCombined(items, singleOpt, config, split, cbmOverride);
+
+  return {
+    grandTotalIls: alloc.grandTotal,
+    perProduct: alloc.perProduct.map((p) => ({ id: p.id, pricing: p.adjusted })),
+    shippingOptionId: singleOpt?.id ?? null,
+    shippingOptionName: singleOpt?.name ?? null,
+    cbmOverride: cbmOverride ?? null,
+    split: opts.split ?? null,
+    computedAt: new Date().toISOString(),
+  };
+}
+
+export async function closeDealGroup(
+  quoteIds: string[],
+  opts: CombinedCloseOptions = {}
+): Promise<string> {
   const ids = [...new Set(quoteIds.filter(Boolean))].sort();
   if (ids.length === 0) throw new Error("no quote ids");
   // Deterministic group id from the primary (sorted-first) quote — idempotent.
@@ -298,6 +390,22 @@ export async function closeDealGroup(quoteIds: string[]): Promise<string> {
     // Re-closing clears any "הסר מעסקאות" tombstone so the deal reappears.
     .set({ closedDealAt: new Date(), dealGroupId: groupId, dealRemovedAt: null, updatedAt: new Date() })
     .where(inArray(factoryQuoteRequests.id, ids));
+
+  // Freeze the combined offer on the PRIMARY (oldest) member — the same row
+  // listClosedQuotes treats as primary. Non-fatal: a failure here must not undo
+  // the close, it just leaves the deal on the legacy sum-of-quotes fallback.
+  try {
+    const combined = await buildCombinedPricing(ids, opts);
+    if (combined) {
+      const primaryId = combined.perProduct[0]?.id ?? ids[0];
+      await db
+        .update(factoryQuoteRequests)
+        .set({ combinedPricing: combined, updatedAt: new Date() })
+        .where(eq(factoryQuoteRequests.id, primaryId));
+    }
+  } catch (err) {
+    console.warn("[closeDealGroup] combined pricing snapshot failed (non-fatal)", err);
+  }
   return groupId;
 }
 

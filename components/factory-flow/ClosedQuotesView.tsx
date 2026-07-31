@@ -42,6 +42,11 @@ interface ClosedQuote {
   paymentSchedule?: PaymentSchedule | null;
   paymentPlanLabel?: string | null;
   paymentsReceived?: { paidIls: number }[] | null;
+  /** THE deal's customer total ex-VAT (combined offer's grand total when the
+   *  deal is combined). Always prefer it over recomputing from finalPricing. */
+  grandTotalExVat?: number;
+  /** Set when the deal's price is a frozen COMBINED offer (one merged shipment). */
+  combinedPricing?: { grandTotalIls: number; shippingOptionName?: string | null } | null;
 }
 
 /** Each deal product is a full FactoryQuoteRow → the deal card reuses the exact
@@ -68,15 +73,22 @@ function fmtDate(iso: string | null): string {
 }
 
 /** Reconciliation from planned finalPricing + entered actuals. */
-function reconcile(fp: FactoryPricingResult, ac: QuoteActualCosts | null) {
+function reconcile(
+  fp: FactoryPricingResult,
+  ac: QuoteActualCosts | null,
+  /** The deal's canonical customer total (server-computed: the combined offer's
+   *  grand total on a combined deal). Falls back to deriving it from fp. */
+  grandTotalExVat?: number
+) {
   const plannedFactory = fp.totalCost ?? 0;
   const plannedShipping = fp.totalShipping ?? 0;
   const plannedProfit = fp.totalProfit ?? 0;
-  // Revenue = what the customer was actually QUOTED (rounded per-bag × qty +
-  // molds), not the engine's unrounded totalSellingPrice — those differ by a few
-  // ₪ per deal and made this card contradict the quote, the payment schedule and
-  // the invoice (Eli 2026-07-31).
-  const plannedRevenue = customerTotalExVat(fp) ?? 0;
+  // Revenue = what the customer was actually QUOTED — the deal's server-computed
+  // total (a combined deal ships once, so it's the combined offer's grand total,
+  // NOT the sum of the standalone quotes), never the engine's unrounded
+  // totalSellingPrice. Recomputing it here is what made this card contradict the
+  // quote, the payment schedule and the invoice (Eli 2026-07-31).
+  const plannedRevenue = grandTotalExVat ?? customerTotalExVat(fp) ?? 0;
   const revenue = ac?.actualRevenueIls ?? plannedRevenue;
   const actualFactory = ac?.factoryTotalIls ?? plannedFactory;
   const actualShipping = ac?.shippingTotalIls ?? plannedShipping;
@@ -166,7 +178,7 @@ export function ClosedQuotesView({ apiToken }: { apiToken: string }) {
     const priced = (quotes ?? []).filter((q) => q.finalPricing);
     let plannedProfit = 0, actualProfit = 0, commission = 0, reconciled = 0;
     for (const q of priced) {
-      const r = reconcile(q.finalPricing!, q.actualCosts);
+      const r = reconcile(q.finalPricing!, q.actualCosts, q.grandTotalExVat);
       plannedProfit += r.plannedProfit;
       actualProfit += r.actualProfit;
       commission += r.commission;
@@ -203,7 +215,7 @@ export function ClosedQuotesView({ apiToken }: { apiToken: string }) {
     if (sort === "recent") sorted.sort((a, b) => +new Date(b.updatedAt) - +new Date(a.updatedAt));
     else if (sort === "name") sorted.sort((a, b) => (a.customerName ?? "").localeCompare(b.customerName ?? "", "he"));
     else if (sort === "profit")
-      sorted.sort((a, b) => reconcile(b.finalPricing!, b.actualCosts).actualProfit - reconcile(a.finalPricing!, a.actualCosts).actualProfit);
+      sorted.sort((a, b) => reconcile(b.finalPricing!, b.actualCosts, b.grandTotalExVat).actualProfit - reconcile(a.finalPricing!, a.actualCosts, a.grandTotalExVat).actualProfit);
     return sorted;
   }, [quotes, query, filter, sort]);
 
@@ -418,13 +430,16 @@ function ClosedQuoteCard({
   // Local draft — default to the planned values so deltas start at 0.
   const [factory, setFactory] = useState(String(ac?.factoryTotalIls ?? Math.round(fp.totalCost ?? 0)));
   const [shipping, setShipping] = useState(String(ac?.shippingTotalIls ?? Math.round(fp.totalShipping ?? 0)));
+  // The deal's canonical customer total — combined offer's grand total on a
+  // combined deal, else what this quote printed.
+  const dealTotalExVat = quote.grandTotalExVat ?? customerTotalExVat(fp) ?? 0;
   const [revenue, setRevenue] = useState(
-    String(ac?.actualRevenueIls ?? Math.round(customerTotalExVat(fp) ?? 0))
+    String(ac?.actualRevenueIls ?? Math.round(dealTotalExVat))
   );
   // Default commission = the boss-breakdown figure (pct × base EXCLUDING
   // shipping, ex-VAT) — same as reconcile(), never on the full price.
   const commDefault = Math.round(
-    computeCommission(customerTotalExVat(fp) ?? 0, fp.totalProfit ?? 0, fp.commissionPct, fp.totalShipping ?? 0).commission
+    computeCommission(dealTotalExVat, fp.totalProfit ?? 0, fp.commissionPct, fp.totalShipping ?? 0).commission
   );
   const [commission, setCommission] = useState(String(ac?.commissionIls ?? commDefault));
   const [other, setOther] = useState<{ label: string; amount: string }[]>(
@@ -502,7 +517,10 @@ function ClosedQuoteCard({
     setZohoOpen(false);
   }
 
-  const r = useMemo(() => reconcile(fp, draftActuals), [fp, draftActuals]);
+  const r = useMemo(
+    () => reconcile(fp, draftActuals, quote.grandTotalExVat),
+    [fp, draftActuals, quote.grandTotalExVat]
+  );
 
   // "מעקב תשלומים" — how much was actually paid per installment (internal).
   const sched = quote.paymentSchedule;
@@ -1574,8 +1592,9 @@ function ZohoInvoiceModal({
   const [errMsg, setErrMsg] = useState("");
   const [result, setResult] = useState<{ invoiceNumber: string; total: number; advance: number; pdfUrl: string | null; tagApplied: boolean } | null>(null);
 
-  // Invoice the customer what the quote said, not the engine's exact total.
-  const subtotal = customerTotalExVat(fp) ?? 0;
+  // Invoice the deal's own total — the combined offer's grand total on a
+  // combined deal — not the engine's exact total.
+  const subtotal = quote.grandTotalExVat ?? customerTotalExVat(fp) ?? 0;
   const vat = Math.round(subtotal * 0.18 * 100) / 100;
   const total = Math.round((subtotal + vat) * 100) / 100;
   const advPct = Math.min(100, Math.max(0, parseFloat(advance) || 50));

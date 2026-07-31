@@ -26,7 +26,12 @@ import {
 import { dealMemberIds, saveActualCosts } from "@/lib/factory/server/closed";
 import { dealLineName, dealLineDescription } from "@/lib/factory/server/deal-lines";
 import { customerTotalExVat } from "@/lib/factory/customer-total";
-import type { FactoryPricingResult, FactoryProductSpec, QuoteActualCosts } from "@/lib/factory/types";
+import type {
+  CombinedDealPricing,
+  FactoryPricingResult,
+  FactoryProductSpec,
+  QuoteActualCosts,
+} from "@/lib/factory/types";
 
 function lineFromSpec(spec: FactoryProductSpec | null, fp: FactoryPricingResult): InvoiceLine {
   return {
@@ -90,14 +95,28 @@ export async function POST(req: NextRequest) {
   if (memberIds.length > 1) {
     const members = await db
       .select({
+        id: factoryQuoteRequests.id,
         productSpec: factoryQuoteRequests.productSpec,
         finalPricing: factoryQuoteRequests.finalPricing,
+        combinedPricing: factoryQuoteRequests.combinedPricing,
       })
       .from(factoryQuoteRequests)
       .where(inArray(factoryQuoteRequests.id, memberIds));
+    // Bill the COMBINED offer that was sent (one merged shipment → each product
+    // was quoted cheaper than its standalone quote), not the standalone quotes.
+    // The snapshot lives on the primary member; absent → legacy fallback.
+    const snap = members
+      .map((m) => m.combinedPricing as CombinedDealPricing | null)
+      .find((c): c is CombinedDealPricing => !!c?.perProduct?.length);
+    const allocated = new Map((snap?.perProduct ?? []).map((p) => [p.id, p.pricing]));
     lineItems = members
       .filter((m) => m.finalPricing)
-      .map((m) => lineFromSpec(m.productSpec as FactoryProductSpec | null, m.finalPricing as FactoryPricingResult));
+      .map((m) =>
+        lineFromSpec(
+          m.productSpec as FactoryProductSpec | null,
+          (allocated.get(m.id) ?? m.finalPricing) as FactoryPricingResult
+        )
+      );
   } else {
     lineItems = [{
       name: body.productName || dealLineName(spec),

@@ -141,9 +141,14 @@ export async function GET(req: NextRequest) {
         };
       });
 
-    const subtotalExVat = d.paymentSchedule
-      ? r2(d.paymentSchedule.subtotal)
-      : r2(lineItems.reduce((s, l) => s + l.line_total_ex_vat, 0));
+    // The deal's canonical total — on a combined deal this is the COMBINED
+    // offer's grand total (one merged shipment), which is deliberately LESS than
+    // the members' standalone quotes add up to.
+    const subtotalExVat = r2(
+      d.grandTotalExVat ??
+        d.paymentSchedule?.subtotal ??
+        lineItems.reduce((s, l) => s + l.line_total_ex_vat, 0)
+    );
     const vatAmount = d.paymentSchedule ? r2(d.paymentSchedule.vat) : r2(subtotalExVat * (vatPct / 100));
     const totalIncVat = d.paymentSchedule ? r2(d.paymentSchedule.total) : r2(subtotalExVat + vatAmount);
 

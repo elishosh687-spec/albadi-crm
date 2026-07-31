@@ -17,12 +17,21 @@ export async function POST(req: NextRequest) {
   if (!widgetAuthed(req)) {
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
-  const body = (await req.json().catch(() => ({}))) as { quoteIds?: string[] };
+  const body = (await req.json().catch(() => ({}))) as {
+    quoteIds?: string[];
+    // Optional — the merged-CBM override / air-sea split the operator had on
+    // screen, so the frozen combined offer matches the PDF that was sent.
+    cbmOverride?: number | null;
+    split?: { airIds: string[]; airShippingOptionId: string; seaShippingOptionId: string } | null;
+  };
   if (!Array.isArray(body.quoteIds) || body.quoteIds.length === 0) {
     return NextResponse.json({ ok: false, error: "missing quoteIds" }, { status: 400 });
   }
   try {
-    const groupId = await closeDealGroup(body.quoteIds);
+    const groupId = await closeDealGroup(body.quoteIds, {
+      cbmOverride: body.cbmOverride ?? null,
+      split: body.split ?? null,
+    });
     return NextResponse.json({ ok: true, groupId });
   } catch (err) {
     return NextResponse.json(

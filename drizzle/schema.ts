@@ -289,6 +289,15 @@ export const factoryQuoteRequests = pgTable("factory_quote_requests", {
   // message. Null → the config default. Added via direct DDL 2026-07-31
   // (drizzle-kit push hangs — see CLAUDE.md).
   paymentPlan: jsonb("payment_plan"),
+  // The COMBINED offer as it was sent (CombinedDealPricing in lib/factory/types.ts),
+  // stored on the PRIMARY member when "סגור עסקה משולבת" runs. A combined offer
+  // re-prices on ONE merged shipment (allocateCombined) and is ~₪975 cheaper than
+  // the two standalone quotes — but nothing used to persist it, so the deal card
+  // guessed by summing the standalone quotes and contradicted what the customer
+  // received (Eli 2026-07-31: "אם אני כותב סגור עסקה משולבת אז מה שרשום שם הוא
+  // הקובע"). Null on single-quote deals and on groups closed before this change.
+  // Added via direct DDL (scripts/_add-combined-pricing.ts) — push hangs (CLAUDE.md).
+  combinedPricing: jsonb("combined_pricing"),
   // Internal payment tracking: how much the customer actually paid per
   // installment. Array parallel to the deal's payment schedule installments —
   // { paidIls } (0/absent = not yet paid). Boss-only, never customer-facing.
