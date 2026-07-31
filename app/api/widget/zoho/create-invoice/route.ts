@@ -24,16 +24,13 @@ import {
   saveDealMilestones,
 } from "@/lib/factory/server/milestones";
 import { dealMemberIds, saveActualCosts } from "@/lib/factory/server/closed";
+import { dealLineName, dealLineDescription } from "@/lib/factory/server/deal-lines";
 import type { FactoryPricingResult, FactoryProductSpec, QuoteActualCosts } from "@/lib/factory/types";
 
-function lineFromSpec(spec: FactoryProductSpec | null, fp: FactoryPricingResult, customerName: string): InvoiceLine {
-  const size = spec
-    ? [spec.heightCm && `H${spec.heightCm}`, spec.depthCm && `D${spec.depthCm}`, spec.widthCm && `W${spec.widthCm}`]
-        .filter(Boolean).join("*")
-    : "";
+function lineFromSpec(spec: FactoryProductSpec | null, fp: FactoryPricingResult): InvoiceLine {
   return {
-    name: `שקית אלבד ממותגת — ${size || spec?.productName || ""}`.trim(),
-    description: [spec?.material, spec?.printing, spec?.finishing].filter(Boolean).join(" · "),
+    name: dealLineName(spec),
+    description: dealLineDescription(spec),
     quantity: fp.quantity,
     targetTotalIls: fp.totalSellingPrice,
   };
@@ -96,15 +93,11 @@ export async function POST(req: NextRequest) {
       .where(inArray(factoryQuoteRequests.id, memberIds));
     lineItems = members
       .filter((m) => m.finalPricing)
-      .map((m) => lineFromSpec(m.productSpec as FactoryProductSpec | null, m.finalPricing as FactoryPricingResult, row.customerName!));
+      .map((m) => lineFromSpec(m.productSpec as FactoryProductSpec | null, m.finalPricing as FactoryPricingResult));
   } else {
-    const sizeLabel = spec
-      ? [spec.heightCm && `H${spec.heightCm}`, spec.depthCm && `D${spec.depthCm}`, spec.widthCm && `W${spec.widthCm}`]
-          .filter(Boolean).join("*")
-      : "";
     lineItems = [{
-      name: body.productName || `שקית אלבד ממותגת — ${sizeLabel || spec?.productName || ""}`.trim(),
-      description: body.description ?? [spec?.material, spec?.printing, spec?.finishing, `לקוח: ${row.customerName}`].filter(Boolean).join(" · "),
+      name: body.productName || dealLineName(spec),
+      description: body.description ?? dealLineDescription(spec, row.customerName),
       quantity: fp.quantity,
       targetTotalIls: fp.totalSellingPrice,
     }];
