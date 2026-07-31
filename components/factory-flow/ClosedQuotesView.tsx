@@ -16,6 +16,7 @@ import { Loader2, Plus, Trash2, Check, Save, Download, Upload, X, Paperclip, Cir
 import { LuxShell, LuxTitle, LuxAccent, LuxStat } from "@/components/widget-ui/lux";
 import { widgetUrl } from "./widget-url";
 import type { DealMilestones, FactoryPricingResult, QuoteActualCosts, ZohoDocRef } from "@/lib/factory/types";
+import { computeCommission } from "@/lib/factory/commission";
 import type { AccuracyStats, GapStat } from "@/lib/factory/server/accuracy";
 import type { ZohoMatchResult, ZohoSuggestion } from "@/lib/zoho/match";
 
@@ -71,13 +72,15 @@ function reconcile(fp: FactoryPricingResult, ac: QuoteActualCosts | null) {
   const actualFactory = ac?.factoryTotalIls ?? plannedFactory;
   const actualShipping = ac?.shippingTotalIls ?? plannedShipping;
   const otherTotal = (ac?.otherCosts ?? []).reduce((s, c) => s + (Number(c.amountIls) || 0), 0);
-  // Salesperson commission — a fixed cost booked at close. Auto = pct × revenue
-  // unless a per-deal ₪ override was saved (incl. 0). Netted out of profit on
-  // BOTH the planned and actual sides so the comparison stays apples-to-apples.
-  const commissionPct = typeof fp.commissionPct === "number" ? fp.commissionPct : 10;
-  const plannedCommission = Math.round((commissionPct / 100) * plannedRevenue);
-  const commission =
-    ac?.commissionIls != null ? ac.commissionIls : Math.round((commissionPct / 100) * revenue);
+  // Salesperson commission — pull the SAME figure the boss breakdown shows:
+  // pct of the deal base EXCLUDING shipping (shipping is pass-through, no
+  // commission) and ex-VAT. Never recompute on the full customer price. It's a
+  // fixed cost booked at close, netted from profit on BOTH sides. Editable
+  // per-deal override via commissionIls (incl. 0).
+  const commCalc = computeCommission(plannedRevenue, plannedProfit, fp.commissionPct, plannedShipping);
+  const commissionPct = commCalc.pct;
+  const plannedCommission = Math.round(commCalc.commission);
+  const commission = ac?.commissionIls != null ? ac.commissionIls : plannedCommission;
   const factoryDelta = actualFactory - plannedFactory;
   const shippingDelta = actualShipping - plannedShipping;
   const revenueDelta = revenue - plannedRevenue;
@@ -404,10 +407,12 @@ function ClosedQuoteCard({
   const [factory, setFactory] = useState(String(ac?.factoryTotalIls ?? Math.round(fp.totalCost ?? 0)));
   const [shipping, setShipping] = useState(String(ac?.shippingTotalIls ?? Math.round(fp.totalShipping ?? 0)));
   const [revenue, setRevenue] = useState(String(ac?.actualRevenueIls ?? Math.round(fp.totalSellingPrice ?? 0)));
-  const commPct = typeof fp.commissionPct === "number" ? fp.commissionPct : 10;
-  const [commission, setCommission] = useState(
-    String(ac?.commissionIls ?? Math.round((commPct / 100) * (ac?.actualRevenueIls ?? fp.totalSellingPrice ?? 0)))
+  // Default commission = the boss-breakdown figure (pct × base EXCLUDING
+  // shipping, ex-VAT) — same as reconcile(), never on the full price.
+  const commDefault = Math.round(
+    computeCommission(fp.totalSellingPrice ?? 0, fp.totalProfit ?? 0, fp.commissionPct, fp.totalShipping ?? 0).commission
   );
+  const [commission, setCommission] = useState(String(ac?.commissionIls ?? commDefault));
   const [other, setOther] = useState<{ label: string; amount: string }[]>(
     (ac?.otherCosts ?? []).map((c) => ({ label: c.label, amount: String(c.amountIls) }))
   );
@@ -646,7 +651,7 @@ function ClosedQuoteCard({
           <CostRow label="שילוח (ממוצע ללקוח)" planned={r.plannedShipping} value={shipping} onChange={setShipping} delta={r.shippingDelta} />
           <CostRow label="עמלת סוכן מכירות" planned={r.plannedCommission} value={commission} onChange={setCommission} delta={r.commission - r.plannedCommission} />
           <div style={{ gridColumn: "1 / -1", fontSize: 11, color: "var(--lux-muted)", marginTop: -4 }}>
-            {r.commissionPct}% ממחיר העסקה · הוצאה קבועה שנרשמת עם סגירת העסקה (גם לפני שהלקוח שילם במלואו)
+            {r.commissionPct}% מבסיס העסקה (ללא שילוח, ללא מע״מ) · הוצאה קבועה שנרשמת עם סגירת העסקה (גם לפני שהלקוח שילם במלואו)
           </div>
 
           {/* Per-CBM view — "כמה חייבתי את הלקוח לקוב מול כמה שילמתי לקוב".
