@@ -135,8 +135,10 @@ export async function GET(req: NextRequest) {
           total_cartons: fp.totalCartons ?? null,
           total_cbm: fp.totalCbm ?? null,
           total_weight_kg: fp.totalWeightKg ?? null,
-          /** The exact customer PDF (fresh render, carries the payment terms). */
-          customer_pdf_url: `${base}/api/factory/${p.id}/pdf?stream=1`,
+          /** This product's OWN quote PDF. On a combined deal the customer never
+           *  received it (it predates the combination) — use the deal-level
+           *  customer_pdf_url instead. */
+          quote_pdf_url: `${base}/api/factory/${p.id}/pdf?stream=1`,
           sent_to_customer_at: p.sentToCustomerAt,
         };
       });
@@ -152,9 +154,28 @@ export async function GET(req: NextRequest) {
     const vatAmount = d.paymentSchedule ? r2(d.paymentSchedule.vat) : r2(subtotalExVat * (vatPct / 100));
     const totalIncVat = d.paymentSchedule ? r2(d.paymentSchedule.total) : r2(subtotalExVat + vatAmount);
 
+    // The ONE document the customer holds: the combined PDF for a combined deal
+    // (rebuilt from the frozen snapshot), else this quote's own PDF.
+    const snap = d.combinedPricing;
+    let customerPdfUrl: string;
+    if (d.isCombined && d.products.length > 1) {
+      const qs = new URLSearchParams({ ids: d.products.map((p) => p.id).join(",") });
+      if (snap?.cbmOverride && snap.cbmOverride > 0) qs.set("cbm", String(snap.cbmOverride));
+      if (snap?.split?.airIds?.length) {
+        qs.set("airIds", snap.split.airIds.join(","));
+        qs.set("airShip", snap.split.airShippingOptionId);
+        qs.set("seaShip", snap.split.seaShippingOptionId);
+      }
+      customerPdfUrl = `${base}/api/factory/combine/pdf?${qs.toString()}`;
+    } else {
+      customerPdfUrl = `${base}/api/factory/${d.id}/pdf?stream=1`;
+    }
+
     return {
       deal_id: d.id,
       deal_group_id: d.dealGroupId,
+      /** The single customer-facing quote document for this deal. */
+      customer_pdf_url: customerPdfUrl,
       quotation_no: d.quotationNo,
       is_combined: d.isCombined,
       /** Closed on a self-estimate, not a factory-confirmed quote. */

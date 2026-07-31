@@ -46,7 +46,12 @@ interface ClosedQuote {
    *  deal is combined). Always prefer it over recomputing from finalPricing. */
   grandTotalExVat?: number;
   /** Set when the deal's price is a frozen COMBINED offer (one merged shipment). */
-  combinedPricing?: { grandTotalIls: number; shippingOptionName?: string | null } | null;
+  combinedPricing?: {
+    grandTotalIls: number;
+    shippingOptionName?: string | null;
+    cbmOverride?: number | null;
+    split?: { airIds: string[]; airShippingOptionId: string; seaShippingOptionId: string } | null;
+  } | null;
 }
 
 /** Each deal product is a full FactoryQuoteRow → the deal card reuses the exact
@@ -433,6 +438,24 @@ function ClosedQuoteCard({
   // The deal's canonical customer total — combined offer's grand total on a
   // combined deal, else what this quote printed.
   const dealTotalExVat = quote.grandTotalExVat ?? customerTotalExVat(fp) ?? 0;
+  // The ONE document a combined deal was sent as. Rebuilt from the frozen
+  // snapshot (same ids + merged CBM + split) so it renders the very prices the
+  // customer holds, not a fresh re-allocation at today's config.
+  const isCombinedDeal = Boolean(quote.isCombined && (quote.products?.length ?? 0) > 1);
+  const combinedPdfHref = (() => {
+    if (!isCombinedDeal) return null;
+    const ids = (quote.products ?? []).map((p) => p.id).join(",");
+    if (!ids) return null;
+    const qs = new URLSearchParams({ ids });
+    const snap = quote.combinedPricing;
+    if (snap?.cbmOverride && snap.cbmOverride > 0) qs.set("cbm", String(snap.cbmOverride));
+    if (snap?.split?.airIds?.length) {
+      qs.set("airIds", snap.split.airIds.join(","));
+      qs.set("airShip", snap.split.airShippingOptionId);
+      qs.set("seaShip", snap.split.seaShippingOptionId);
+    }
+    return `/api/factory/combine/pdf?${qs.toString()}`;
+  })();
   const [revenue, setRevenue] = useState(
     String(ac?.actualRevenueIls ?? Math.round(dealTotalExVat))
   );
@@ -704,6 +727,29 @@ function ClosedQuoteCard({
           Rendered only when opened (lazy — self-fetches config for the boss view). */}
       {quote.products && quote.products.length > 0 && (
         <div style={{ padding: "0 20px", marginTop: 4, display: "flex", flexDirection: "column", gap: 10 }}>
+          {/* A COMBINED deal was sent as ONE pdf (one merged shipment, cheaper
+              per-product prices). Linking the members' standalone PDFs here
+              showed the customer two documents he never got, at the higher
+              pre-combination prices (Eli 2026-07-31: "PDF אחד או שניים?"). */}
+          {isCombinedDeal && combinedPdfHref && (
+            <div style={{ border: "1px solid var(--lux-champagne)", borderRadius: 10, padding: "9px 12px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 7, fontSize: 13, color: "var(--lux-ink)" }}>
+                <Paperclip className="size-3.5" style={{ color: "var(--lux-champagne)" }} />
+                ההצעה המשולבת שנשלחה ללקוח · {quote.products.length} מוצרים
+                <span style={{ fontSize: 11, color: "var(--lux-muted)" }}>
+                  (מסמך אחד · {ils(dealTotalExVat)})
+                </span>
+              </span>
+              <a
+                href={combinedPdfHref}
+                target="_blank"
+                rel="noreferrer"
+                style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11.5, color: "var(--lux-cool)" }}
+              >
+                <Download className="size-3.5" /> PDF משולב
+              </a>
+            </div>
+          )}
           {quote.products.map((p) => {
             const showLabel = (quote.products?.length ?? 1) > 1;
             const isOpen = previewOpen.has(p.id);
@@ -717,18 +763,24 @@ function ClosedQuoteCard({
                   >
                     <ChevronDown className="size-4" style={{ transform: isOpen ? "none" : "rotate(-90deg)", transition: "transform .15s", color: "var(--lux-muted)" }} />
                     <Paperclip className="size-3.5" style={{ color: "var(--lux-champagne)" }} />
-                    ההצעה שנשלחה ללקוח {showLabel ? (p.quotationNo ? `· #${p.quotationNo}` : "") : ""}
+                    {isCombinedDeal ? "פירוט מוצר" : "ההצעה שנשלחה ללקוח"}
+                    {showLabel ? (p.quotationNo ? ` · #${p.quotationNo}` : "") : ""}
                     <span style={{ fontSize: 11, color: "var(--lux-muted)" }}>(תצוגת לקוח / בוס)</span>
                   </button>
-                  <a
-                    href={`/api/factory/${p.id}/pdf?stream=1`}
-                    target="_blank"
-                    rel="noreferrer"
-                    onClick={(e) => e.stopPropagation()}
-                    style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11.5, color: "var(--lux-cool)" }}
-                  >
-                    <Download className="size-3.5" /> PDF
-                  </a>
+                  {/* On a combined deal the member's own PDF is the PRE-combination
+                      quote — a document the customer never received. Only the
+                      combined PDF above is offered. */}
+                  {!isCombinedDeal && (
+                    <a
+                      href={`/api/factory/${p.id}/pdf?stream=1`}
+                      target="_blank"
+                      rel="noreferrer"
+                      onClick={(e) => e.stopPropagation()}
+                      style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11.5, color: "var(--lux-cool)" }}
+                    >
+                      <Download className="size-3.5" /> PDF
+                    </a>
+                  )}
                 </div>
                 {isOpen && (
                   <div style={{ height: 620, display: "flex", flexDirection: "column", borderTop: "1px solid var(--lux-line)" }}>
