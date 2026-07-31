@@ -769,16 +769,33 @@ Columns (direct DDL — drizzle-kit push hangs): `closed_deal_at`, `deal_group_i
 ### Combined deal (deal_group_id)
 
 Quotes sharing a `deal_group_id` collapse into ONE deal card (`products[]`,
-"עסקה משולבת · N מוצרים" badge). **Combined pricing = SUM of the already-agreed
-member prices** (`combineMembers` in [lib/factory/server/closed.ts](lib/factory/server/closed.ts)),
-NOT a re-run of `allocateCombined`. The members are already CLOSED with the
-customer at their own prices, so the deal's revenue is their sum. `allocateCombined`
-is the pre-sale QUOTING engine (offer a single-shipment discount to win); using
-it post-close wrongly re-discounted revenue AND folded pass-through shipping into
-profit (fixed 2026-07-23 — Eli caught יוסי גולד: הכנסה ₪13,705 vs the real
-₪14,192, profit ₪9,005 vs the real ₪3,512). The single-shipment saving is Eli's
-REALIZED profit — it surfaces when actual shipping is pulled from Zoho
-(`shippingDelta` < 0 raises profit), never as a retroactive customer discount.
+"עסקה משולבת · N מוצרים" badge).
+
+**⚠️ Combined pricing = the COMBINED OFFER, frozen at close (2026-07-31 — this
+REPLACES the 2026-07-23 "sum the members" rule; don't restore it).** Eli:
+"אם אני כותב סגור עסקה משולבת אז ברור שמה שרשום שם הוא הקובע." A combined offer
+ships ONCE — `allocateCombined` re-prices the group on the merged CBM and folds
+the cheaper shipping back per product, so the customer pays materially less than
+the standalone quotes add up to (יוסי גולד: **₪13,235 vs ₪14,210**, −₪975).
+Summing the members therefore over-stated revenue and contradicted the PDF the
+customer holds. It also can't be recomputed later — the allocation depends on
+the manual merged CBM and any air/sea split that lived only in screen state.
+
+So `closeDealGroup` **freezes** it: `buildCombinedPricing` (mirrors
+`/api/factory/combine/pdf` exactly) writes a `CombinedDealPricing` to
+`factory_quote_requests.combined_pricing` on the PRIMARY member — grand total,
+per-product ALLOCATED pricing, merged shipping option, cbmOverride, split. The
+close endpoint accepts `cbmOverride` + `split` so a caller can freeze precisely
+what it showed. `listClosedQuotes` then serves the allocated pricing per product
+and exposes **`grandTotalExVat`** — the deal's canonical customer total, which the
+card, the actual-costs defaults, the invoice modal, the Zoho invoice lines and
+`/api/widget/deals` all read instead of each recomputing. Legacy groups with no
+snapshot fall back to `combineMembers` (the old sum).
+
+The single-shipment saving is NOT a retroactive discount to hunt for on the
+actual side any more — it's already in the price the customer was quoted; Eli's
+realized gain shows up as a LOWER actual shipping cost from Zoho.
+
 Deal-level actuals/milestones/invoice live on the PRIMARY (oldest) member;
 `deal id = primary id`. `dealMemberIds` returns all members for the multi-line
 invoice. `unbindDealGroup` splits.
@@ -979,6 +996,19 @@ calculator text, estimate. ⚠️ **The bot's questionnaire auto-quote
 (`buildQuoteMessage`) is deliberately EXCLUDED** (Eli: a cold lead must not get
 bank details). **Each builder feeds the block the total it actually PRINTED**
 (`splitCustomerView(...).grandTotalIls` on a split) — never a recomputed one.
+
+**One customer total, everywhere — `customerTotalExVat`
+([lib/factory/customer-total.ts](lib/factory/customer-total.ts)).** The same
+quote used to print THREE totals: the WhatsApp/PDF/payment block quoted
+`round2(unit) × qty + molds` (what the customer agreed to pay) while the quotes
+list, the deal card and the Zoho invoice read the engine's `totalSellingPrice`
+(the UNROUNDED unit × qty) — ₪8,160 vs ₪8,106 on one line, so a deal contradicted
+its own payment schedule and the invoice under-billed the quote. `customerTotalExVat`
+is now the single definition (split-aware, molds included) and every
+customer-facing/billing surface reads it; `memberDisplayTotalExVat` delegates to
+it. **Internal cost/profit figures keep using the engine's exact totals.** For a
+COMBINED deal the deal-level number is `grandTotalExVat` (the frozen combined
+offer) — see "Combined deal" above.
 
 The PDF prints the SAME payment block as the caption (VAT + amount due +
 installments + bank) — [pdf.tsx](lib/factory/pdf.tsx) gated on `paymentPlanId`.
