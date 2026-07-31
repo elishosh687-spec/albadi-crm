@@ -17,6 +17,7 @@ import { LuxShell, LuxTitle, LuxAccent, LuxStat } from "@/components/widget-ui/l
 import { widgetUrl } from "./widget-url";
 import type { DealMilestones, FactoryPricingResult, QuoteActualCosts, ZohoDocRef } from "@/lib/factory/types";
 import { computeCommission } from "@/lib/factory/commission";
+import { customerTotalExVat } from "@/lib/factory/customer-total";
 import { QuoteHtmlPreviewWidget } from "@/components/factory-flow/QuoteHtmlPreview.widget";
 import type { FactoryQuoteRow } from "@/components/factory-flow/types";
 import type { PaymentSchedule } from "@/lib/factory/payment-terms";
@@ -71,7 +72,11 @@ function reconcile(fp: FactoryPricingResult, ac: QuoteActualCosts | null) {
   const plannedFactory = fp.totalCost ?? 0;
   const plannedShipping = fp.totalShipping ?? 0;
   const plannedProfit = fp.totalProfit ?? 0;
-  const plannedRevenue = fp.totalSellingPrice ?? 0;
+  // Revenue = what the customer was actually QUOTED (rounded per-bag × qty +
+  // molds), not the engine's unrounded totalSellingPrice — those differ by a few
+  // ₪ per deal and made this card contradict the quote, the payment schedule and
+  // the invoice (Eli 2026-07-31).
+  const plannedRevenue = customerTotalExVat(fp) ?? 0;
   const revenue = ac?.actualRevenueIls ?? plannedRevenue;
   const actualFactory = ac?.factoryTotalIls ?? plannedFactory;
   const actualShipping = ac?.shippingTotalIls ?? plannedShipping;
@@ -413,11 +418,13 @@ function ClosedQuoteCard({
   // Local draft — default to the planned values so deltas start at 0.
   const [factory, setFactory] = useState(String(ac?.factoryTotalIls ?? Math.round(fp.totalCost ?? 0)));
   const [shipping, setShipping] = useState(String(ac?.shippingTotalIls ?? Math.round(fp.totalShipping ?? 0)));
-  const [revenue, setRevenue] = useState(String(ac?.actualRevenueIls ?? Math.round(fp.totalSellingPrice ?? 0)));
+  const [revenue, setRevenue] = useState(
+    String(ac?.actualRevenueIls ?? Math.round(customerTotalExVat(fp) ?? 0))
+  );
   // Default commission = the boss-breakdown figure (pct × base EXCLUDING
   // shipping, ex-VAT) — same as reconcile(), never on the full price.
   const commDefault = Math.round(
-    computeCommission(fp.totalSellingPrice ?? 0, fp.totalProfit ?? 0, fp.commissionPct, fp.totalShipping ?? 0).commission
+    computeCommission(customerTotalExVat(fp) ?? 0, fp.totalProfit ?? 0, fp.commissionPct, fp.totalShipping ?? 0).commission
   );
   const [commission, setCommission] = useState(String(ac?.commissionIls ?? commDefault));
   const [other, setOther] = useState<{ label: string; amount: string }[]>(
@@ -603,7 +610,7 @@ function ClosedQuoteCard({
                   <span key={p.id}>
                     {i + 1}. {label}
                     {ps.quantity ? ` · ${Number(ps.quantity).toLocaleString("he-IL")} יח׳` : ""}
-                    {p.finalPricing ? ` · ${ils(p.finalPricing.totalSellingPrice)}` : ""}
+                    {p.finalPricing ? ` · ${ils(customerTotalExVat(p.finalPricing) ?? 0)}` : ""}
                   </span>
                 );
               })}
@@ -1567,7 +1574,8 @@ function ZohoInvoiceModal({
   const [errMsg, setErrMsg] = useState("");
   const [result, setResult] = useState<{ invoiceNumber: string; total: number; advance: number; pdfUrl: string | null; tagApplied: boolean } | null>(null);
 
-  const subtotal = fp.totalSellingPrice ?? 0;
+  // Invoice the customer what the quote said, not the engine's exact total.
+  const subtotal = customerTotalExVat(fp) ?? 0;
   const vat = Math.round(subtotal * 0.18 * 100) / 100;
   const total = Math.round((subtotal + vat) * 100) / 100;
   const advPct = Math.min(100, Math.max(0, parseFloat(advance) || 50));

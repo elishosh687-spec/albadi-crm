@@ -4,6 +4,7 @@ import { useEffect, useState, useMemo } from "react";
 import { ExternalLink, Search, Loader2, Eye, Download, Trash2, Trash, X, MessageCircle, Calculator, Pencil, ChevronDown, Check, Send, Sparkles, FolderOpen, RotateCcw, CheckCircle2 } from "lucide-react";
 import { QuoteHtmlPreview } from "@/app/dashboard/v3/_components/factory/QuoteHtmlPreview";
 import { splitCustomerView } from "@/lib/factory/shipping-split";
+import { customerTotalExVat } from "@/lib/factory/customer-total";
 import {
   PAYMENT_PRESETS,
   DEFAULT_PAYMENT_PLAN_ID,
@@ -52,17 +53,13 @@ function fmtMoney(v: unknown): string {
   if (Number.isNaN(n)) return "—";
   return `₪${Math.round(n).toLocaleString("he-IL")}`;
 }
-/** The total to SHOW for a quote. On a split shipment the customer-facing total
- *  is derived from the per-leg rounded unit prices (splitCustomerView), so the
- *  list row must use that too — otherwise the row and the opened quote print two
- *  different numbers for the same quote (Eli 2026-07-28). */
+/** The total to SHOW for a quote — the SAME figure the customer received in the
+ *  PDF/WhatsApp (rounded per-bag × qty + molds; per-leg on a split shipment).
+ *  Reading the engine's `totalSellingPrice` here instead made the row disagree
+ *  with the opened quote, with the deal card, and with the invoice — the split
+ *  case was patched 2026-07-28, the plain case only 2026-07-31 (Eli). */
 function displayTotal(finalPricing: Record<string, unknown> | null): unknown {
-  if (!finalPricing) return null;
-  const split = finalPricing.shippingSplit as ShippingSplit | undefined;
-  if (split) {
-    return splitCustomerView(split, Number(finalPricing.moldsTotalSellingPriceIls ?? 0)).grandTotalIls;
-  }
-  return finalPricing.totalOrderPriceIls ?? finalPricing.totalSellingPrice;
+  return customerTotalExVat(finalPricing);
 }
 
 function num(v: unknown): number | null {

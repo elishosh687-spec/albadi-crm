@@ -17,7 +17,7 @@ import type {
   FactoryResponse,
   FactoryQuoteStatus,
 } from "@/lib/factory/types";
-import { splitCustomerView } from "@/lib/factory/shipping-split";
+import { customerTotalExVat } from "@/lib/factory/customer-total";
 import {
   resolveDealSchedule,
   type StoredDealPlan,
@@ -89,11 +89,7 @@ export interface ClosedQuoteRow {
  *  Exported because the read API (`/api/widget/deals`) must quote the SAME
  *  figure the customer received — the payment schedule is computed on it. */
 export function memberDisplayTotalExVat(fp: FactoryPricingResult): number {
-  const moldTotalIls = (fp.moldsTotalSellingPriceIls ?? 0) > 0 ? r2(fp.moldsTotalSellingPriceIls) : 0;
-  if (fp.shippingSplit) {
-    return splitCustomerView(fp.shippingSplit, moldTotalIls).grandTotalIls;
-  }
-  return r2(r2(fp.unitSellingPrice) * fp.quantity) + moldTotalIls;
+  return customerTotalExVat(fp) ?? 0;
 }
 
 /** A readable label for a stored plan (id or custom object). */

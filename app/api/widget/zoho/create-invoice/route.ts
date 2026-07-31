@@ -25,6 +25,7 @@ import {
 } from "@/lib/factory/server/milestones";
 import { dealMemberIds, saveActualCosts } from "@/lib/factory/server/closed";
 import { dealLineName, dealLineDescription } from "@/lib/factory/server/deal-lines";
+import { customerTotalExVat } from "@/lib/factory/customer-total";
 import type { FactoryPricingResult, FactoryProductSpec, QuoteActualCosts } from "@/lib/factory/types";
 
 function lineFromSpec(spec: FactoryProductSpec | null, fp: FactoryPricingResult): InvoiceLine {
@@ -32,7 +33,10 @@ function lineFromSpec(spec: FactoryProductSpec | null, fp: FactoryPricingResult)
     name: dealLineName(spec),
     description: dealLineDescription(spec),
     quantity: fp.quantity,
-    targetTotalIls: fp.totalSellingPrice,
+    // Bill what the customer was QUOTED (rounded per-bag × qty + molds), not the
+    // engine's unrounded total — they differ by a few ₪ and the invoice must
+    // reconcile with the PDF/WhatsApp the customer holds (Eli 2026-07-31).
+    targetTotalIls: customerTotalExVat(fp) ?? fp.totalSellingPrice,
   };
 }
 
@@ -99,7 +103,7 @@ export async function POST(req: NextRequest) {
       name: body.productName || dealLineName(spec),
       description: body.description ?? dealLineDescription(spec, row.customerName),
       quantity: fp.quantity,
-      targetTotalIls: fp.totalSellingPrice,
+      targetTotalIls: customerTotalExVat(fp) ?? fp.totalSellingPrice,
     }];
   }
 
