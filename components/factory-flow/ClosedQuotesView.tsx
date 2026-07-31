@@ -17,7 +17,8 @@ import { LuxShell, LuxTitle, LuxAccent, LuxStat } from "@/components/widget-ui/l
 import { widgetUrl } from "./widget-url";
 import type { DealMilestones, FactoryPricingResult, QuoteActualCosts, ZohoDocRef } from "@/lib/factory/types";
 import { computeCommission } from "@/lib/factory/commission";
-import { DetailedBreakdown } from "@/components/calculator/DetailedBreakdown";
+import { QuoteHtmlPreviewWidget } from "@/components/factory-flow/QuoteHtmlPreview.widget";
+import type { FactoryQuoteRow } from "@/components/factory-flow/types";
 import type { AccuracyStats, GapStat } from "@/lib/factory/server/accuracy";
 import type { ZohoMatchResult, ZohoSuggestion } from "@/lib/zoho/match";
 
@@ -38,19 +39,9 @@ interface ClosedQuote {
   fromEstimate?: boolean;
 }
 
-interface DealProduct {
-  id: string;
-  quotationNo: string | null;
-  productSpec: Record<string, unknown> | null;
-  finalPricing: FactoryPricingResult | null;
-  factoryUnitCostCny?: number | null;
-}
-
-interface PricingMeta {
-  usdToIls: number;
-  usdToCny: number;
-  shippingOptions: { id: string; type: "sea" | "air"; seaRate?: number }[];
-}
+/** Each deal product is a full FactoryQuoteRow → the deal card reuses the exact
+ *  quote preview (customer + boss toggle) from the הצעות מחיר tab. */
+type DealProduct = FactoryQuoteRow;
 
 interface ZohoUnmatchedDoc {
   type: "invoice" | "bill" | "expense";
@@ -111,7 +102,6 @@ function reconcile(fp: FactoryPricingResult, ac: QuoteActualCosts | null) {
 export function ClosedQuotesView({ apiToken }: { apiToken: string }) {
   const [quotes, setQuotes] = useState<ClosedQuote[] | null>(null);
   const [stats, setStats] = useState<AccuracyStats | null>(null);
-  const [pricingMeta, setPricingMeta] = useState<PricingMeta | null>(null);
   const [unmatched, setUnmatched] = useState<ZohoUnmatchedDoc[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -122,7 +112,6 @@ export function ClosedQuotesView({ apiToken }: { apiToken: string }) {
       if (!res.ok || !j.ok) { setError(j.error ?? `HTTP ${res.status}`); return; }
       setQuotes(j.quotes as ClosedQuote[]);
       setStats((j.stats ?? null) as AccuracyStats | null);
-      setPricingMeta((j.pricingMeta ?? null) as PricingMeta | null);
       setError(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -369,7 +358,6 @@ export function ClosedQuotesView({ apiToken }: { apiToken: string }) {
                     key={q.id}
                     quote={q}
                     apiToken={apiToken}
-                    pricingMeta={pricingMeta}
                     onSaved={load}
                     expanded={expandedIds.has(q.id)}
                     onToggle={() => toggleExpand(q.id)}
@@ -400,57 +388,15 @@ export function ClosedQuotesView({ apiToken }: { apiToken: string }) {
 /** Build the props for the full boss breakdown (פירוט מלא לבוס) from a saved
  *  deal's pricing snapshot + the live FX/shipping context. Returns null when
  *  there's not enough context (no FX) so the panel is simply skipped. */
-function breakdownProps(
-  fp: FactoryPricingResult,
-  factoryUnitCostCny: number | null | undefined,
-  meta: PricingMeta | null
-): React.ComponentProps<typeof DetailedBreakdown> | null {
-  if (!meta) return null;
-  const opt = meta.shippingOptions.find((s) => s.id === fp.shippingOptionId);
-  return {
-    unitCost: fp.unitCost,
-    unitShipping: fp.unitShipping,
-    unitProfit: fp.unitProfit,
-    unitSellingPrice: fp.unitSellingPrice,
-    totalCost: fp.totalCost,
-    moldsInTotalCost: true,
-    totalShipping: fp.totalShipping,
-    totalProfit: fp.totalProfit,
-    totalSellingPrice: fp.totalSellingPrice,
-    quantity: fp.quantity,
-    profitMarginPct: fp.profitMarginPct,
-    commissionPct: fp.commissionPct,
-    totalCartons: fp.totalCartons,
-    totalWeightKg: fp.totalWeightKg,
-    totalCbm: fp.totalCbm,
-    shippingType: opt?.type ?? (fp.shippingSplit ? "sea" : null),
-    shippingSplit: fp.shippingSplit,
-    factoryUnitCostCny: factoryUnitCostCny ?? undefined,
-    usdToIls: meta.usdToIls,
-    usdToCny: meta.usdToCny,
-    seaRate: opt?.seaRate,
-    rawCbm: fp.totalCbm,
-    seaMinCbm: 1,
-    platePerColorCny: fp.platePerColorCny,
-    plateFeeLogoColors: fp.plateFeeLogoColors,
-    plateFeeTotalCny: fp.plateFeeTotalCny,
-    plateFeeTotalCostIls: fp.plateFeeTotalCostIls,
-    platePerUnitCny: fp.platePerUnitCny,
-    platePerUnitIls: fp.platePerUnitIls,
-  };
-}
-
 function ClosedQuoteCard({
   quote,
   apiToken,
-  pricingMeta,
   onSaved,
   expanded,
   onToggle,
 }: {
   quote: ClosedQuote;
   apiToken: string;
-  pricingMeta: PricingMeta | null;
   onSaved: () => void;
   expanded: boolean;
   onToggle: () => void;
@@ -479,10 +425,10 @@ function ClosedQuoteCard({
   const [invoiceOpen, setInvoiceOpen] = useState(false);
   const [expenseOpen, setExpenseOpen] = useState(false);
   const [removing, setRemoving] = useState(false);
-  // Which product's customer-facing PDF preview is open (by product id).
-  const [pdfOpen, setPdfOpen] = useState<Set<string>>(new Set());
-  const togglePdf = (pid: string) =>
-    setPdfOpen((prev) => {
+  // Which product's quote preview (customer + boss toggle) is open, by product id.
+  const [previewOpen, setPreviewOpen] = useState<Set<string>>(new Set());
+  const togglePreview = (pid: string) =>
+    setPreviewOpen((prev) => {
       const next = new Set(prev);
       next.has(pid) ? next.delete(pid) : next.add(pid);
       return next;
@@ -618,7 +564,7 @@ function ClosedQuoteCard({
           {quote.isCombined && quote.products && quote.products.length > 1 ? (
             <div style={{ fontSize: 11.5, color: "var(--lux-muted)", marginTop: 4, display: "flex", flexDirection: "column", gap: 2 }}>
               {quote.products.map((p, i) => {
-                const ps = (p.productSpec ?? {}) as Record<string, unknown>;
+                const ps = (p.productSpec ?? {}) as unknown as Record<string, unknown>;
                 const label = (ps.productName as string) || (ps.description as string) ||
                   [ps.heightCm && `H${ps.heightCm}`, ps.depthCm && `D${ps.depthCm}`, ps.widthCm && `W${ps.widthCm}`].filter(Boolean).join("×") || "מוצר";
                 return (
@@ -695,65 +641,48 @@ function ClosedQuoteCard({
         onCreateInvoice={() => setInvoiceOpen(true)}
       />
 
-      {/* Per product: the customer-facing PDF that was SENT (with payment terms)
-          + the full "פירוט מלא לבוס" — so Eli has the quote the customer got AND
-          the internal breakdown side by side. */}
-      <div style={{ padding: "0 20px", marginTop: 4, display: "flex", flexDirection: "column", gap: 10 }}>
-        {(quote.products && quote.products.length > 0
-          ? quote.products
-          : [{ id: quote.id, quotationNo: quote.quotationNo, productSpec: quote.productSpec, finalPricing: fp, factoryUnitCostCny: undefined } as DealProduct]
-        ).map((p) => {
-          const props = p.finalPricing && pricingMeta ? breakdownProps(p.finalPricing, p.factoryUnitCostCny, pricingMeta) : null;
-          const spec = p.productSpec as { widthCm?: number; heightCm?: number } | null;
-          const showLabel = (quote.products?.length ?? 1) > 1;
-          const pdfSrc = `/api/factory/${p.id}/pdf?stream=1`;
-          const isOpen = pdfOpen.has(p.id);
-          return (
-            <div key={p.id} style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              {showLabel && (
-                <div style={{ fontSize: 11.5, color: "var(--lux-muted)" }}>
-                  {p.quotationNo ? `#${p.quotationNo}` : "מוצר"}
-                  {spec?.widthCm && spec?.heightCm ? ` · ${spec.widthCm}×${spec.heightCm} ס״מ` : ""}
-                </div>
-              )}
-
-              {/* The quote the customer received (fresh render → carries the
-                  payment terms). Toggle an inline preview + open-in-tab. */}
-              <div style={{ border: "1px solid var(--lux-line)", borderRadius: 10, overflow: "hidden" }}>
+      {/* Per product: the EXACT quote preview from the הצעות מחיר tab — same
+          formatted quote WITH the customer / boss (פנימי) toggle built in, so Eli
+          sees the quote the customer got and the internal breakdown in one place.
+          Rendered only when opened (lazy — self-fetches config for the boss view). */}
+      {quote.products && quote.products.length > 0 && (
+        <div style={{ padding: "0 20px", marginTop: 4, display: "flex", flexDirection: "column", gap: 10 }}>
+          {quote.products.map((p) => {
+            const showLabel = (quote.products?.length ?? 1) > 1;
+            const isOpen = previewOpen.has(p.id);
+            return (
+              <div key={p.id} style={{ border: "1px solid var(--lux-line)", borderRadius: 10, overflow: "hidden" }}>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: "9px 12px" }}>
                   <button
                     type="button"
-                    onClick={() => togglePdf(p.id)}
+                    onClick={() => togglePreview(p.id)}
                     style={{ display: "inline-flex", alignItems: "center", gap: 7, background: "transparent", border: 0, cursor: "pointer", color: "var(--lux-ink)", fontSize: 13 }}
                   >
                     <ChevronDown className="size-4" style={{ transform: isOpen ? "none" : "rotate(-90deg)", transition: "transform .15s", color: "var(--lux-muted)" }} />
                     <Paperclip className="size-3.5" style={{ color: "var(--lux-champagne)" }} />
-                    ההצעה שנשלחה ללקוח (PDF)
+                    ההצעה שנשלחה ללקוח {showLabel ? (p.quotationNo ? `· #${p.quotationNo}` : "") : ""}
+                    <span style={{ fontSize: 11, color: "var(--lux-muted)" }}>(תצוגת לקוח / בוס)</span>
                   </button>
                   <a
-                    href={pdfSrc}
+                    href={`/api/factory/${p.id}/pdf?stream=1`}
                     target="_blank"
                     rel="noreferrer"
                     onClick={(e) => e.stopPropagation()}
                     style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11.5, color: "var(--lux-cool)" }}
                   >
-                    <Download className="size-3.5" /> פתח / הורד
+                    <Download className="size-3.5" /> PDF
                   </a>
                 </div>
                 {isOpen && (
-                  <iframe
-                    src={pdfSrc}
-                    title={`הצעה ${p.quotationNo ?? ""}`}
-                    style={{ width: "100%", height: 520, border: 0, borderTop: "1px solid var(--lux-line)", background: "#fff" }}
-                  />
+                  <div style={{ height: 620, display: "flex", flexDirection: "column", borderTop: "1px solid var(--lux-line)" }}>
+                    <QuoteHtmlPreviewWidget apiToken={apiToken} row={p} />
+                  </div>
                 )}
               </div>
-
-              {props && <DetailedBreakdown {...props} />}
-            </div>
-          );
-        })}
-      </div>
+            );
+          })}
+        </div>
+      )}
 
       {/* Body: tidy planned↔actual table */}
       <div style={{ padding: "16px 20px" }}>

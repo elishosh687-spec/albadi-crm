@@ -6,7 +6,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { widgetAuthed } from "@/lib/widget/auth";
-import { listClosedQuotes, getClosedPricingMeta } from "@/lib/factory/server/closed";
+import { listClosedQuotes } from "@/lib/factory/server/closed";
 import { computeAccuracyStats } from "@/lib/factory/server/accuracy";
 
 export const runtime = "nodejs";
@@ -16,18 +16,13 @@ export async function GET(req: NextRequest) {
   if (!widgetAuthed(req)) {
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
-  const [quotes, stats, pricingMeta] = await Promise.all([
+  const [quotes, stats] = await Promise.all([
     listClosedQuotes(),
     // Accuracy strip is decoration — never fail the screen over it.
     computeAccuracyStats().catch((err) => {
       console.warn("[factory/closed] accuracy stats failed (non-fatal)", err);
       return null;
     }),
-    // Boss-breakdown context (FX + shipping) — non-fatal.
-    getClosedPricingMeta().catch((err) => {
-      console.warn("[factory/closed] pricing meta failed (non-fatal)", err);
-      return null;
-    }),
   ]);
-  return NextResponse.json({ ok: true, quotes, stats, pricingMeta });
+  return NextResponse.json({ ok: true, quotes, stats });
 }

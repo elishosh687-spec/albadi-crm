@@ -9,37 +9,35 @@
 import { db } from "@/lib/db";
 import { factoryQuoteRequests, leads } from "@/drizzle/schema";
 import { and, asc, desc, eq, inArray, isNotNull, isNull, or } from "drizzle-orm";
-import type { DealMilestones, FactoryPricingResult, QuoteActualCosts } from "@/lib/factory/types";
-import { getFactoryConfig } from "@/lib/factory/config";
+import type {
+  DealMilestones,
+  FactoryPricingResult,
+  QuoteActualCosts,
+  FactoryProductSpec,
+  FactoryResponse,
+  FactoryQuoteStatus,
+} from "@/lib/factory/types";
 
-/** One product line inside a deal (a deal has 1, or N when combined). */
+/** One product line inside a deal (a deal has 1, or N when combined). Shaped as
+ *  a full FactoryQuoteRow so the deal card can render the SAME quote preview
+ *  (customer + boss toggle) shown on the הצעות מחיר tab — no separate PDF/breakdown. */
 export interface DealProduct {
   id: string;
+  manychatSubId: string;
   quotationNo: string | null;
-  productSpec: Record<string, unknown> | null;
+  createdAt: string;
+  updatedAt: string;
+  productSpec: FactoryProductSpec;
+  feishuRowIndex: string | null;
+  factoryStatus: FactoryQuoteStatus;
+  factoryResponse: FactoryResponse | null;
   finalPricing: FactoryPricingResult | null;
-  /** Factory ¥/unit (factoryResponse.unitCostCny) — feeds the full boss
-   *  breakdown's ¥→$→₪ pipeline in the deal card. */
-  factoryUnitCostCny?: number | null;
+  pdfUrl: string | null;
+  sentToCustomerAt: string | null;
+  customerName: string | null;
+  customerPhone: string | null;
 }
 
-/** Deal-independent pricing context needed to render the full boss breakdown
- *  (FX rates + shipping-option type/rate lookup). Read from the live config. */
-export interface ClosedPricingMeta {
-  usdToIls: number;
-  usdToCny: number;
-  shippingOptions: { id: string; type: "sea" | "air"; seaRate?: number }[];
-}
-
-/** The live pricing context for the boss breakdown in each deal card. */
-export async function getClosedPricingMeta(): Promise<ClosedPricingMeta> {
-  const cfg = await getFactoryConfig();
-  return {
-    usdToIls: cfg.usdToIls,
-    usdToCny: cfg.usdToCny,
-    shippingOptions: (cfg.shippingOptions ?? []).map((s) => ({ id: s.id, type: s.type, seaRate: s.seaRate })),
-  };
-}
 
 export interface ClosedQuoteRow {
   /** Primary member id — actuals / milestones / invoice attach here. */
@@ -130,6 +128,8 @@ export async function listClosedQuotes(): Promise<ClosedQuoteRow[]> {
       productSpec: factoryQuoteRequests.productSpec,
       finalPricing: factoryQuoteRequests.finalPricing,
       factoryResponse: factoryQuoteRequests.factoryResponse,
+      feishuRowIndex: factoryQuoteRequests.feishuRowIndex,
+      pdfUrl: factoryQuoteRequests.pdfUrl,
       actualCosts: factoryQuoteRequests.actualCosts,
       dealMilestones: factoryQuoteRequests.dealMilestones,
       sentToCustomerAt: factoryQuoteRequests.sentToCustomerAt,
@@ -180,10 +180,19 @@ export async function listClosedQuotes(): Promise<ClosedQuoteRow[]> {
     const primary = members[0];
     const products: DealProduct[] = members.map((m) => ({
       id: m.id,
+      manychatSubId: m.leadSid,
       quotationNo: m.quotationNo,
-      productSpec: (m.productSpec ?? null) as Record<string, unknown> | null,
+      createdAt: m.createdAt.toISOString(),
+      updatedAt: m.updatedAt.toISOString(),
+      productSpec: (m.productSpec ?? {}) as FactoryProductSpec,
+      feishuRowIndex: m.feishuRowIndex,
+      factoryStatus: m.factoryStatus as FactoryQuoteStatus,
+      factoryResponse: (m.factoryResponse ?? null) as FactoryResponse | null,
       finalPricing: (m.finalPricing ?? null) as FactoryPricingResult | null,
-      factoryUnitCostCny: (m.factoryResponse as { unitCostCny?: number } | null)?.unitCostCny ?? null,
+      pdfUrl: m.pdfUrl,
+      sentToCustomerAt: m.sentToCustomerAt ? m.sentToCustomerAt.toISOString() : null,
+      customerName: m.customerName,
+      customerPhone: m.customerPhone,
     }));
     const isCombined = members.length > 1;
     let finalPricing = (primary.finalPricing ?? null) as FactoryPricingResult | null;
