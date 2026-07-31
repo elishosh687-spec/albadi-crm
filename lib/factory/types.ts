@@ -327,6 +327,11 @@ export interface QuoteActualCosts {
   /** What the customer ACTUALLY paid (Zoho invoice total), ₪ — catches post-close
    *  discounts/extras. Undefined → assume the planned totalSellingPrice. */
   actualRevenueIls?: number;
+  /** Salesperson commission paid on this deal, total ₪. A fixed cost booked the
+   *  moment the deal closes (even before the customer pays in full), so it's
+   *  netted out of the deal's real profit. Undefined → auto-computed from the
+   *  deal's commissionPct × revenue. Set (incl. 0) → this exact amount. */
+  commissionIls?: number;
   /** Any extra costs on this order — customs, rework, samples, etc. */
   otherCosts?: { label: string; amountIls: number }[];
   /** Zoho Books documents these actuals were pulled from (link-back + audit). */

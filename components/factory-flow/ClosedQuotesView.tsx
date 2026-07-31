@@ -71,15 +71,27 @@ function reconcile(fp: FactoryPricingResult, ac: QuoteActualCosts | null) {
   const actualFactory = ac?.factoryTotalIls ?? plannedFactory;
   const actualShipping = ac?.shippingTotalIls ?? plannedShipping;
   const otherTotal = (ac?.otherCosts ?? []).reduce((s, c) => s + (Number(c.amountIls) || 0), 0);
+  // Salesperson commission — a fixed cost booked at close. Auto = pct × revenue
+  // unless a per-deal ₪ override was saved (incl. 0). Netted out of profit on
+  // BOTH the planned and actual sides so the comparison stays apples-to-apples.
+  const commissionPct = typeof fp.commissionPct === "number" ? fp.commissionPct : 10;
+  const plannedCommission = Math.round((commissionPct / 100) * plannedRevenue);
+  const commission =
+    ac?.commissionIls != null ? ac.commissionIls : Math.round((commissionPct / 100) * revenue);
   const factoryDelta = actualFactory - plannedFactory;
   const shippingDelta = actualShipping - plannedShipping;
   const revenueDelta = revenue - plannedRevenue;
-  // Planned profit, corrected by what really moved on BOTH sides.
-  const actualProfit = plannedProfit + revenueDelta - factoryDelta - shippingDelta - otherTotal;
-  const variance = actualProfit - plannedProfit;
+  // Planned profit is gross (pre-commission); net it, and correct the actual by
+  // what really moved on every side — including the commission expense.
+  const plannedProfitNet = plannedProfit - plannedCommission;
+  const actualProfit =
+    plannedProfit + revenueDelta - factoryDelta - shippingDelta - otherTotal - commission;
+  const variance = actualProfit - plannedProfitNet;
   return {
     revenue, plannedRevenue, revenueDelta,
-    plannedFactory, plannedShipping, plannedProfit,
+    plannedFactory, plannedShipping,
+    plannedProfit: plannedProfitNet, grossPlannedProfit: plannedProfit,
+    commission, plannedCommission, commissionPct,
     actualFactory, actualShipping, otherTotal, factoryDelta, shippingDelta,
     actualProfit, variance,
   };
@@ -140,14 +152,15 @@ export function ClosedQuotesView({ apiToken }: { apiToken: string }) {
   // Roll-up across all WON deals, using the SAVED actuals (not live drafts).
   const totals = useMemo(() => {
     const priced = (quotes ?? []).filter((q) => q.finalPricing);
-    let plannedProfit = 0, actualProfit = 0, reconciled = 0;
+    let plannedProfit = 0, actualProfit = 0, commission = 0, reconciled = 0;
     for (const q of priced) {
       const r = reconcile(q.finalPricing!, q.actualCosts);
       plannedProfit += r.plannedProfit;
       actualProfit += r.actualProfit;
+      commission += r.commission;
       if (q.actualCosts) reconciled += 1;
     }
-    return { count: priced.length, plannedProfit, actualProfit, variance: actualProfit - plannedProfit, reconciled };
+    return { count: priced.length, plannedProfit, actualProfit, commission, variance: actualProfit - plannedProfit, reconciled };
   }, [quotes]);
 
   // ---- navigation: search + filter + sort + windowing (scales to 1000s) ----
@@ -206,6 +219,9 @@ export function ClosedQuotesView({ apiToken }: { apiToken: string }) {
               <div style={{ display: "flex", gap: 10 }}>
                 <LuxStat value={totals.count} label="עסקאות" />
                 <LuxStat value={ils(totals.actualProfit)} label="רווח בפועל סה״כ" tone="success" />
+                {totals.commission >= 1 && (
+                  <LuxStat value={ils(totals.commission)} label="עמלות מכירה (סה״כ)" />
+                )}
                 {Math.abs(totals.variance) >= 1 && (
                   <LuxStat
                     value={`${totals.variance >= 0 ? "+" : "−"}${ils(Math.abs(totals.variance))}`}
@@ -388,6 +404,10 @@ function ClosedQuoteCard({
   const [factory, setFactory] = useState(String(ac?.factoryTotalIls ?? Math.round(fp.totalCost ?? 0)));
   const [shipping, setShipping] = useState(String(ac?.shippingTotalIls ?? Math.round(fp.totalShipping ?? 0)));
   const [revenue, setRevenue] = useState(String(ac?.actualRevenueIls ?? Math.round(fp.totalSellingPrice ?? 0)));
+  const commPct = typeof fp.commissionPct === "number" ? fp.commissionPct : 10;
+  const [commission, setCommission] = useState(
+    String(ac?.commissionIls ?? Math.round((commPct / 100) * (ac?.actualRevenueIls ?? fp.totalSellingPrice ?? 0)))
+  );
   const [other, setOther] = useState<{ label: string; amount: string }[]>(
     (ac?.otherCosts ?? []).map((c) => ({ label: c.label, amount: String(c.amountIls) }))
   );
@@ -419,18 +439,19 @@ function ClosedQuoteCard({
   }
 
   const draftActuals: QuoteActualCosts = useMemo(() => {
-    const f = parseFloat(factory), s = parseFloat(shipping), rv = parseFloat(revenue);
+    const f = parseFloat(factory), s = parseFloat(shipping), rv = parseFloat(revenue), cm = parseFloat(commission);
     return {
       factoryTotalIls: Number.isFinite(f) ? f : undefined,
       shippingTotalIls: Number.isFinite(s) ? s : undefined,
       actualRevenueIls: Number.isFinite(rv) ? rv : undefined,
+      commissionIls: Number.isFinite(cm) ? cm : undefined,
       otherCosts: other
         .map((c) => ({ label: c.label, amountIls: parseFloat(c.amount) }))
         .filter((c) => Number.isFinite(c.amountIls) && c.amountIls !== 0),
       zohoRefs: zohoRefs.length > 0 ? zohoRefs : undefined,
       note: note.trim() || undefined,
     };
-  }, [factory, shipping, revenue, other, zohoRefs, note]);
+  }, [factory, shipping, revenue, commission, other, zohoRefs, note]);
 
   /** Zoho picker → fill the draft inputs (Eli still reviews + saves). */
   function applyZoho(sel: {
@@ -623,6 +644,10 @@ function ClosedQuoteCard({
           <CostRow label="הכנסה מהלקוח" planned={r.plannedRevenue} value={revenue} onChange={setRevenue} delta={r.revenueDelta} kind="revenue" />
           <CostRow label="עלות מפעל" planned={r.plannedFactory} value={factory} onChange={setFactory} delta={r.factoryDelta} />
           <CostRow label="שילוח (ממוצע ללקוח)" planned={r.plannedShipping} value={shipping} onChange={setShipping} delta={r.shippingDelta} />
+          <CostRow label="עמלת סוכן מכירות" planned={r.plannedCommission} value={commission} onChange={setCommission} delta={r.commission - r.plannedCommission} />
+          <div style={{ gridColumn: "1 / -1", fontSize: 11, color: "var(--lux-muted)", marginTop: -4 }}>
+            {r.commissionPct}% ממחיר העסקה · הוצאה קבועה שנרשמת עם סגירת העסקה (גם לפני שהלקוח שילם במלואו)
+          </div>
 
           {/* Per-CBM view — "כמה חייבתי את הלקוח לקוב מול כמה שילמתי לקוב".
               Volume basis = the factory's CBM (ground truth per Eli). */}

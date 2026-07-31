@@ -242,6 +242,7 @@ export async function saveActualCosts(
     factoryTotalIls: numOrUndef(actuals.factoryTotalIls),
     shippingTotalIls: numOrUndef(actuals.shippingTotalIls),
     actualRevenueIls: numOrUndef(actuals.actualRevenueIls),
+    commissionIls: numOrUndef(actuals.commissionIls),
     otherCosts: Array.isArray(actuals.otherCosts)
       ? actuals.otherCosts
           .map((c) => ({ label: String(c.label ?? "").slice(0, 120), amountIls: Number(c.amountIls) }))
