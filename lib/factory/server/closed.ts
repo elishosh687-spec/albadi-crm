@@ -77,6 +77,9 @@ export interface ClosedQuoteRow {
    *  no plan is stored, or when the deal carries a custom installments object
    *  (which has no id — read `paymentSchedule.installments` instead). */
   paymentPlanId: string | null;
+  /** Internal payment tracking — how much was actually paid per installment
+   *  (parallel to paymentSchedule.installments). Boss-only. */
+  paymentsReceived: { paidIls: number }[] | null;
 }
 
 /** A member's customer-facing grand total (ex-VAT), matching what the PDF/message
@@ -173,6 +176,7 @@ export async function listClosedQuotes(): Promise<ClosedQuoteRow[]> {
       feishuRowIndex: factoryQuoteRequests.feishuRowIndex,
       pdfUrl: factoryQuoteRequests.pdfUrl,
       paymentPlan: factoryQuoteRequests.paymentPlan,
+      paymentsReceived: factoryQuoteRequests.paymentsReceived,
       actualCosts: factoryQuoteRequests.actualCosts,
       dealMilestones: factoryQuoteRequests.dealMilestones,
       sentToCustomerAt: factoryQuoteRequests.sentToCustomerAt,
@@ -277,6 +281,7 @@ export async function listClosedQuotes(): Promise<ClosedQuoteRow[]> {
       paymentSchedule,
       paymentPlanLabel: planLabel(storedPlan),
       paymentPlanId: typeof storedPlan === "string" ? storedPlan : null,
+      paymentsReceived: (primary.paymentsReceived ?? null) as { paidIls: number }[] | null,
     });
   }
   deals.sort((a, b) => (a.updatedAt > b.updatedAt ? -1 : 1));
@@ -364,6 +369,21 @@ export async function saveActualCosts(
 function numOrUndef(v: unknown): number | undefined {
   const n = typeof v === "number" ? v : Number(v);
   return Number.isFinite(n) ? n : undefined;
+}
+
+/** Save the per-installment amounts actually paid (internal tracking) on the
+ *  deal's primary quote. Sanitized to non-negative numbers. */
+export async function savePaymentsReceived(
+  primaryId: string,
+  received: { paidIls: number }[]
+): Promise<void> {
+  const clean = (Array.isArray(received) ? received : []).map((r) => ({
+    paidIls: Number.isFinite(Number(r?.paidIls)) && Number(r.paidIls) > 0 ? r2(Number(r.paidIls)) : 0,
+  }));
+  await db
+    .update(factoryQuoteRequests)
+    .set({ paymentsReceived: clean, updatedAt: new Date() })
+    .where(eq(factoryQuoteRequests.id, primaryId));
 }
 
 /**

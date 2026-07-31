@@ -289,6 +289,12 @@ export const factoryQuoteRequests = pgTable("factory_quote_requests", {
   // message. Null → the config default. Added via direct DDL 2026-07-31
   // (drizzle-kit push hangs — see CLAUDE.md).
   paymentPlan: jsonb("payment_plan"),
+  // Internal payment tracking: how much the customer actually paid per
+  // installment. Array parallel to the deal's payment schedule installments —
+  // { paidIls } (0/absent = not yet paid). Boss-only, never customer-facing.
+  // Also tracked in Zoho; this is a quick at-a-glance record on the deal card.
+  // Added via direct DDL 2026-07-31 (drizzle-kit push hangs — see CLAUDE.md).
+  paymentsReceived: jsonb("payments_received"),
   // "הסר מהתזכורת" — when set, the quote is hidden from the "המפעל ענה — צריך
   // לשלוח ללקוח" reminder panel (a dead lead Eli will never price/send), WITHOUT
   // deleting the quote or falsely stamping sentToCustomerAt (keeps "נשלח" stats

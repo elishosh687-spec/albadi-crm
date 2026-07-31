@@ -19,7 +19,7 @@ import type { DealMilestones, FactoryPricingResult, QuoteActualCosts, ZohoDocRef
 import { computeCommission } from "@/lib/factory/commission";
 import { QuoteHtmlPreviewWidget } from "@/components/factory-flow/QuoteHtmlPreview.widget";
 import type { FactoryQuoteRow } from "@/components/factory-flow/types";
-import { BANK_DETAILS_LINES, type PaymentSchedule } from "@/lib/factory/payment-terms";
+import type { PaymentSchedule } from "@/lib/factory/payment-terms";
 import type { AccuracyStats, GapStat } from "@/lib/factory/server/accuracy";
 import type { ZohoMatchResult, ZohoSuggestion } from "@/lib/zoho/match";
 
@@ -40,6 +40,7 @@ interface ClosedQuote {
   fromEstimate?: boolean;
   paymentSchedule?: PaymentSchedule | null;
   paymentPlanLabel?: string | null;
+  paymentsReceived?: { paidIls: number }[] | null;
 }
 
 /** Each deal product is a full FactoryQuoteRow → the deal card reuses the exact
@@ -496,6 +497,33 @@ function ClosedQuoteCard({
 
   const r = useMemo(() => reconcile(fp, draftActuals), [fp, draftActuals]);
 
+  // "מעקב תשלומים" — how much was actually paid per installment (internal).
+  const sched = quote.paymentSchedule;
+  const [paid, setPaid] = useState<string[]>(() =>
+    (sched?.installments ?? []).map((_, i) => {
+      const v = quote.paymentsReceived?.[i]?.paidIls;
+      return v && v > 0 ? String(v) : "";
+    })
+  );
+  const [savingPaid, setSavingPaid] = useState(false);
+  const paidTotal = paid.reduce((s, p) => s + (parseFloat(p) || 0), 0);
+  async function savePaid() {
+    setSavingPaid(true);
+    try {
+      const received = paid.map((p) => ({ paidIls: parseFloat(p) || 0 }));
+      const res = await fetch(widgetUrl(`/api/widget/factory/payments/${quote.id}`, apiToken), {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ received }),
+      });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok || !j.ok) { alert(`שגיאה: ${j?.error ?? res.status}`); return; }
+      onSaved();
+    } finally {
+      setSavingPaid(false);
+    }
+  }
+
   const spec =
     (quote.productSpec?.["productName"] as string) ||
     (quote.productSpec?.["description"] as string) ||
@@ -688,38 +716,65 @@ function ClosedQuoteCard({
         </div>
       )}
 
-      {/* Customer payment terms for THIS deal — VAT + amount due + installments +
-          bank details, on the deal's grand total (combined-aware). This is what
-          the customer's PDF/message shows for this specific deal. */}
-      {quote.paymentSchedule && (
+      {/* מעקב תשלומים — internal record of how much the customer actually paid
+          per installment. The customer-facing terms live in the PDF (pulled from
+          it, not regenerated here); this is boss-only tracking, no bank details. */}
+      {sched && sched.installments.length > 0 && (
         <div style={{ padding: "0 20px", marginTop: 10 }}>
           <div style={{ border: "1px solid var(--lux-line)", borderRadius: 10, padding: "12px 14px" }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 8 }}>
-              <div style={{ fontSize: 12.5, color: "var(--lux-ink)", fontWeight: 500 }}>תנאי תשלום ללקוח</div>
-              {quote.paymentPlanLabel && (
-                <div style={{ fontSize: 11, color: "var(--lux-champagne)" }}>{quote.paymentPlanLabel}</div>
-              )}
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 12.5 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", color: "var(--lux-muted)" }}>
-                <span>מע״מ 18%</span><span className="tabular-nums">{ils2(quote.paymentSchedule.vat)}</span>
+              <div style={{ fontSize: 12.5, color: "var(--lux-ink)", fontWeight: 500 }}>מעקב תשלומים</div>
+              <div style={{ fontSize: 11, color: paidTotal >= sched.total - 0.5 ? "var(--lux-success,#a8c0a0)" : "var(--lux-muted)" }}>
+                שולם {ils2(paidTotal)} מתוך {ils2(sched.total)}
+                {quote.paymentPlanLabel ? ` · ${quote.paymentPlanLabel}` : ""}
               </div>
-              <div style={{ display: "flex", justifyContent: "space-between", color: "var(--lux-ink)", fontWeight: 600, borderTop: "1px solid var(--lux-line)", paddingTop: 4 }}>
-                <span>סה״כ לתשלום</span><span className="tabular-nums">{ils2(quote.paymentSchedule.total)}</span>
-              </div>
-              <div style={{ height: 4 }} />
-              {quote.paymentSchedule.installments.map((inst, i, arr) => (
-                <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8 }}>
-                  <span style={{ color: "var(--lux-muted)" }}>
-                    {i === 0 ? "תשלום ראשוני" : i === arr.length - 1 ? "תשלום אחרון" : `תשלום ${i + 1}`}
-                    <span style={{ fontSize: 11, opacity: 0.8 }}> · {inst.pct}% · {inst.when}</span>
-                  </span>
-                  <span className="tabular-nums" style={{ color: "var(--lux-ink)" }}>{ils2(inst.ils)}</span>
-                </div>
-              ))}
             </div>
-            <div style={{ marginTop: 8, paddingTop: 8, borderTop: "1px solid var(--lux-line)", fontSize: 11, color: "var(--lux-muted)", lineHeight: 1.6 }}>
-              {BANK_DETAILS_LINES.map((b, i) => (<div key={i}>{b}</div>))}
+            <div style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 12.5 }}>
+              {sched.installments.map((inst, i, arr) => {
+                const isPaid = (parseFloat(paid[i] ?? "") || 0) > 0;
+                return (
+                  <div key={i} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <button
+                      type="button"
+                      onClick={() => setPaid((prev) => prev.map((v, j) => j === i ? (isPaid ? "" : String(inst.ils)) : v))}
+                      title={isPaid ? "בטל סימון ששולם" : "סמן ששולם (סכום מלא)"}
+                      style={{
+                        width: 18, height: 18, borderRadius: 4, flexShrink: 0, cursor: "pointer",
+                        border: `1px solid ${isPaid ? "var(--lux-success,#a8c0a0)" : "var(--lux-line)"}`,
+                        background: isPaid ? "var(--lux-success,#a8c0a0)" : "transparent",
+                        display: "flex", alignItems: "center", justifyContent: "center", color: "#1b1917",
+                      }}
+                    >
+                      {isPaid && <Check className="size-3" />}
+                    </button>
+                    <span style={{ color: "var(--lux-muted)", flex: 1, minWidth: 0 }}>
+                      {i === 0 ? "תשלום ראשוני" : i === arr.length - 1 ? "תשלום אחרון" : `תשלום ${i + 1}`}
+                      <span style={{ fontSize: 11, opacity: 0.8 }}> · צריך {ils2(inst.ils)} ({inst.pct}% · {inst.when})</span>
+                    </span>
+                    <div style={{ display: "flex", alignItems: "center", ...inputStyle({ width: 120, padding: "5px 9px" }) }}>
+                      <span style={{ fontSize: 12, color: "var(--lux-muted)" }}>שולם ₪</span>
+                      <input
+                        type="number" value={paid[i] ?? ""}
+                        placeholder="0"
+                        onChange={(e) => setPaid((prev) => prev.map((v, j) => j === i ? e.target.value : v))}
+                        style={{ width: "100%", background: "transparent", border: 0, textAlign: "right", color: "var(--lux-ink)", fontSize: 13.5, outline: "none" }}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            <div style={{ marginTop: 10, display: "flex", justifyContent: "flex-end" }}>
+              <button
+                type="button"
+                onClick={savePaid}
+                disabled={savingPaid}
+                className="lux-cta-champagne"
+                style={{ fontSize: 12.5, padding: "6px 16px", borderRadius: 7, opacity: savingPaid ? 0.6 : 1, cursor: savingPaid ? "default" : "pointer", display: "inline-flex", alignItems: "center", gap: 6 }}
+              >
+                {savingPaid ? <Loader2 className="size-3.5 animate-spin" /> : <Save className="size-3.5" />}
+                שמור מעקב תשלומים
+              </button>
             </div>
           </div>
         </div>
