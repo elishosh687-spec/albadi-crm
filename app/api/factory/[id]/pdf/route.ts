@@ -47,7 +47,17 @@ export async function GET(
     );
   }
 
-  if (row.pdfUrl) {
+  // Resolve the payment plan up front. The stored Blob (row.pdfUrl) was rendered
+  // at FINALIZE time — BEFORE any payment plan existed — so it carries NO payment
+  // block. Serving it made the customer PDF disagree with the WhatsApp caption
+  // (Eli 2026-07-31: "I don't see payment terms in the PDF"). Whenever a plan is
+  // resolvable (always, since config carries a default), re-render fresh below so
+  // the PDF prints VAT + amount due + installments + bank. Fall back to the stale
+  // Blob only when there is genuinely no plan (legacy configs with no default).
+  const cfg = await getFactoryConfig();
+  const planId = req.nextUrl.searchParams.get("plan") ?? cfg.paymentTerms?.defaultPlanId ?? null;
+
+  if (row.pdfUrl && !planId) {
     if (!stream) return NextResponse.redirect(row.pdfUrl);
     try {
       const upstream = await fetch(row.pdfUrl);
@@ -65,7 +75,7 @@ export async function GET(
     }
   }
 
-  // Re-render on demand.
+  // Re-render on demand (fresh — carries the payment terms).
   try {
     const leadRow = await db
       .select({ name: leads.name })
@@ -81,7 +91,6 @@ export async function GET(
     // catalog-derived breakdown ignores factoryResponse.unitCostCny and
     // would display a different total than the WhatsApp text (see lead
     // 972509111981 / quote LHPL3ATC).
-    const cfg = await getFactoryConfig();
     const picDataUri = await fetchImageDataUri(spec.picUrl);
     const buf = await renderCustomerQuotePdf({
       customerName,
@@ -95,7 +104,7 @@ export async function GET(
       // VAT + payment schedule as the caption (Eli 2026-07-28). Absent → the
       // operator's configured default, so an ad-hoc PDF download still shows
       // payment terms rather than a bare ex-VAT quote.
-      paymentPlanId: req.nextUrl.searchParams.get("plan") ?? cfg.paymentTerms?.defaultPlanId ?? null,
+      paymentPlanId: planId,
       vatPct: cfg.paymentTerms?.vatPct,
     });
 

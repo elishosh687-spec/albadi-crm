@@ -479,6 +479,14 @@ function ClosedQuoteCard({
   const [invoiceOpen, setInvoiceOpen] = useState(false);
   const [expenseOpen, setExpenseOpen] = useState(false);
   const [removing, setRemoving] = useState(false);
+  // Which product's customer-facing PDF preview is open (by product id).
+  const [pdfOpen, setPdfOpen] = useState<Set<string>>(new Set());
+  const togglePdf = (pid: string) =>
+    setPdfOpen((prev) => {
+      const next = new Set(prev);
+      next.has(pid) ? next.delete(pid) : next.add(pid);
+      return next;
+    });
 
   /** "הסר מעסקאות" — reversible: clears closed stamp (+ unbinds a combined
    *  group). The quote stays in "הצעות מפעל" and can be re-closed. */
@@ -687,33 +695,65 @@ function ClosedQuoteCard({
         onCreateInvoice={() => setInvoiceOpen(true)}
       />
 
-      {/* Full pricing breakdown per product — the SAME "פירוט מלא לבוס" shown on
-          the הצעות מחיר tab, so the whole deal's numbers are here too. */}
-      {pricingMeta && (
-        <div style={{ padding: "0 20px", marginTop: 4, display: "flex", flexDirection: "column", gap: 8 }}>
-          {(quote.products && quote.products.length > 0
-            ? quote.products
-            : [{ id: quote.id, quotationNo: quote.quotationNo, finalPricing: fp, factoryUnitCostCny: undefined } as DealProduct]
-          ).map((p) => {
-            const props = p.finalPricing ? breakdownProps(p.finalPricing, p.factoryUnitCostCny, pricingMeta) : null;
-            if (!props) return null;
-            return (
-              <div key={p.id}>
-                {(quote.products?.length ?? 1) > 1 && (
-                  <div style={{ fontSize: 11.5, color: "var(--lux-muted)", marginBottom: 4 }}>
-                    {p.quotationNo ? `#${p.quotationNo}` : "מוצר"}
-                    {(() => {
-                      const s = p.productSpec as { widthCm?: number; heightCm?: number } | null;
-                      return s?.widthCm && s?.heightCm ? ` · ${s.widthCm}×${s.heightCm} ס״מ` : "";
-                    })()}
-                  </div>
+      {/* Per product: the customer-facing PDF that was SENT (with payment terms)
+          + the full "פירוט מלא לבוס" — so Eli has the quote the customer got AND
+          the internal breakdown side by side. */}
+      <div style={{ padding: "0 20px", marginTop: 4, display: "flex", flexDirection: "column", gap: 10 }}>
+        {(quote.products && quote.products.length > 0
+          ? quote.products
+          : [{ id: quote.id, quotationNo: quote.quotationNo, productSpec: quote.productSpec, finalPricing: fp, factoryUnitCostCny: undefined } as DealProduct]
+        ).map((p) => {
+          const props = p.finalPricing && pricingMeta ? breakdownProps(p.finalPricing, p.factoryUnitCostCny, pricingMeta) : null;
+          const spec = p.productSpec as { widthCm?: number; heightCm?: number } | null;
+          const showLabel = (quote.products?.length ?? 1) > 1;
+          const pdfSrc = `/api/factory/${p.id}/pdf?stream=1`;
+          const isOpen = pdfOpen.has(p.id);
+          return (
+            <div key={p.id} style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {showLabel && (
+                <div style={{ fontSize: 11.5, color: "var(--lux-muted)" }}>
+                  {p.quotationNo ? `#${p.quotationNo}` : "מוצר"}
+                  {spec?.widthCm && spec?.heightCm ? ` · ${spec.widthCm}×${spec.heightCm} ס״מ` : ""}
+                </div>
+              )}
+
+              {/* The quote the customer received (fresh render → carries the
+                  payment terms). Toggle an inline preview + open-in-tab. */}
+              <div style={{ border: "1px solid var(--lux-line)", borderRadius: 10, overflow: "hidden" }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: "9px 12px" }}>
+                  <button
+                    type="button"
+                    onClick={() => togglePdf(p.id)}
+                    style={{ display: "inline-flex", alignItems: "center", gap: 7, background: "transparent", border: 0, cursor: "pointer", color: "var(--lux-ink)", fontSize: 13 }}
+                  >
+                    <ChevronDown className="size-4" style={{ transform: isOpen ? "none" : "rotate(-90deg)", transition: "transform .15s", color: "var(--lux-muted)" }} />
+                    <Paperclip className="size-3.5" style={{ color: "var(--lux-champagne)" }} />
+                    ההצעה שנשלחה ללקוח (PDF)
+                  </button>
+                  <a
+                    href={pdfSrc}
+                    target="_blank"
+                    rel="noreferrer"
+                    onClick={(e) => e.stopPropagation()}
+                    style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11.5, color: "var(--lux-cool)" }}
+                  >
+                    <Download className="size-3.5" /> פתח / הורד
+                  </a>
+                </div>
+                {isOpen && (
+                  <iframe
+                    src={pdfSrc}
+                    title={`הצעה ${p.quotationNo ?? ""}`}
+                    style={{ width: "100%", height: 520, border: 0, borderTop: "1px solid var(--lux-line)", background: "#fff" }}
+                  />
                 )}
-                <DetailedBreakdown {...props} />
               </div>
-            );
-          })}
-        </div>
-      )}
+
+              {props && <DetailedBreakdown {...props} />}
+            </div>
+          );
+        })}
+      </div>
 
       {/* Body: tidy planned↔actual table */}
       <div style={{ padding: "16px 20px" }}>

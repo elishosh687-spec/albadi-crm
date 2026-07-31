@@ -980,4 +980,16 @@ calculator text, estimate. ⚠️ **The bot's questionnaire auto-quote
 bank details). **Each builder feeds the block the total it actually PRINTED**
 (`splitCustomerView(...).grandTotalIls` on a split) — never a recomputed one.
 
-Open: the PDF is still ex-VAT while the caption is VAT-inclusive.
+The PDF prints the SAME payment block as the caption (VAT + amount due +
+installments + bank) — [pdf.tsx](lib/factory/pdf.tsx) gated on `paymentPlanId`.
+**Footgun fixed 2026-07-31:** `/api/factory/[id]/pdf` served the stored Blob
+(`row.pdfUrl`) FIRST when set — but that Blob was rendered at finalize time,
+BEFORE any plan existed, so it had NO payment block. Both the send and every UI
+view got the stale ex-VAT PDF (Eli: "I don't see payment terms in the PDF"). The
+route now re-renders fresh whenever a plan is resolvable (always — config carries
+a default); the Blob is only a legacy no-plan fallback. So the customer PDF always
+carries the payment terms now.
+
+The עסקאות (deals) tab shows, per product in each closed deal: an inline preview
+of that customer PDF (`?stream=1`, fresh render) PLUS the full "פירוט מלא לבוס"
+breakdown — the sent quote and the internal numbers side by side.
