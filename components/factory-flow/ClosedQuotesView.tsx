@@ -12,7 +12,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Loader2, Plus, Trash2, Check, Save, Download, Upload, X, Paperclip, Circle, CheckCircle2, ChevronDown, Search } from "lucide-react";
+import { Loader2, Plus, Trash2, Check, Save, Download, X, Paperclip, Circle, CheckCircle2, ChevronDown, Search } from "lucide-react";
 import { LuxShell, LuxTitle, LuxAccent, LuxStat } from "@/components/widget-ui/lux";
 import { widgetUrl } from "./widget-url";
 import type { DealMilestones, FactoryPricingResult, QuoteActualCosts, ZohoDocRef } from "@/lib/factory/types";
@@ -493,6 +493,8 @@ function ClosedQuoteCard({
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [zohoOpen, setZohoOpen] = useState(false);
   const [invoiceOpen, setInvoiceOpen] = useState(false);
+  // Expense-writing is OFF (Eli 2026-08-01 — he books expenses in Zoho himself).
+  // The modal stays wired but nothing opens it; restoring = re-add the button.
   const [expenseOpen, setExpenseOpen] = useState(false);
   const [removing, setRemoving] = useState(false);
   // Which product's quote preview (customer + boss toggle) is open, by product id.
@@ -988,6 +990,20 @@ function ClosedQuoteCard({
               >
                 Zoho {z.type === "invoice" ? "חשבונית" : z.type === "bill" ? "ספק" : "הוצאה"} {z.number || z.id.slice(-6)}
                 {z.amountIls != null ? ` · ${ils(z.amountIls)}` : ""}
+                {/* A ref is just a link-back — deleting the document in Zoho can't
+                    reach back and clear it, so it has to be removable here or a
+                    deleted expense haunts the deal forever (Eli 2026-08-01). */}
+                <button
+                  type="button"
+                  onClick={() => setZohoRefs((prev) => prev.filter((r) => !(r.type === z.type && r.id === z.id)))}
+                  title="הסר קישור (לא מוחק ב-Zoho)"
+                  style={{
+                    marginInlineStart: 6, background: "transparent", border: 0, cursor: "pointer",
+                    color: "inherit", opacity: 0.6, fontSize: 12, lineHeight: 1, padding: 0,
+                  }}
+                >
+                  ✕
+                </button>
               </span>
             ))}
           </div>
@@ -1020,17 +1036,11 @@ function ClosedQuoteCard({
           >
             <Download className="size-4" /> משוך מ-Zoho
           </button>
-          <button
-            type="button"
-            onClick={() => setExpenseOpen(true)}
-            style={{
-              display: "inline-flex", alignItems: "center", gap: 7, padding: "9px 16px",
-              borderRadius: 6, background: "transparent", border: "1px solid var(--lux-line)",
-              color: "var(--lux-ink)", fontSize: 13,
-            }}
-          >
-            <Upload className="size-4" /> רשום הוצאה ב-Zoho
-          </button>
+          {/* "רשום הוצאה ב-Zoho" removed 2026-08-01 — Eli records expenses
+              directly in Zoho now ("ההוצאות שלי אני יעשה אותם ידנית לזוהו ולא
+              דרך המערכת"). Pulling FROM Zoho stays; the CRM no longer writes
+              expenses into the live books. ZohoExpenseModal + the create-expense
+              endpoint are kept, unused, in case he wants it back. */}
         </div>
       </div>
 
