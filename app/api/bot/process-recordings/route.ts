@@ -33,7 +33,8 @@ import {
   listContactTasks,
   searchCallMessages,
 } from "@/integrations/ghl/client";
-import { GHL_SALESPERSON_USER_ID, GHL_FIELD_IDS } from "@/integrations/ghl/config";
+import { GHL_FIELD_IDS } from "@/integrations/ghl/config";
+import { resolveAssigneeUserId } from "@/lib/crm-tasks/assignee";
 import { updateContact } from "@/integrations/ghl/client";
 import { clampToWorkWindow } from "@/lib/clock/callback-window";
 import { transcribeAudio, TranscribeError } from "@/lib/transcription/whisper";
@@ -150,7 +151,7 @@ async function ensureCallbackTask(row: {
       title,
       body,
       dueDate: due.toISOString(),
-      assignedTo: GHL_SALESPERSON_USER_ID || undefined,
+      assignedTo: (await resolveAssigneeUserId()) ?? undefined,
     });
     await db
       .update(callRecordingImports)

@@ -12,7 +12,7 @@
 import { and, eq, isNull } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { crmTasks } from "@/drizzle/schema";
-import { GHL_SALESPERSON_USER_ID } from "@/integrations/ghl/config";
+import { resolveAssigneeUserId } from "@/lib/crm-tasks/assignee";
 import { syncTaskToGHL } from "@/integrations/ghl/sync";
 import type { V2AssignableStage } from "@/lib/manychat/stages";
 
@@ -56,9 +56,9 @@ export async function ensureAutoTaskForStage(
       title: spec.title,
       status: "open",
       dueAt,
-      // Default owner = Itay (GHL_SALESPERSON_USER_ID). Per Eli 2026-07-01
+      // Default owner = the salesperson configured in settings. Per Eli 2026-07-01
       // every task in the system belongs to Itay unless explicitly reassigned.
-      assignedTo: GHL_SALESPERSON_USER_ID || null,
+      assignedTo: (await resolveAssigneeUserId()) ?? null,
     })
     .returning({ id: crmTasks.id });
 

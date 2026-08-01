@@ -18,7 +18,7 @@ import { db } from "@/lib/db";
 import { leads } from "@/drizzle/schema";
 import { eq } from "drizzle-orm";
 import { listContactTasks, createContactTask } from "@/integrations/ghl/client";
-import { GHL_SALESPERSON_USER_ID } from "@/integrations/ghl/config";
+import { resolveAssigneeUserId } from "@/lib/crm-tasks/assignee";
 import { clampToWorkWindow } from "@/lib/clock/callback-window";
 
 const MARKER = "[NEWLEAD v1]";
@@ -80,7 +80,7 @@ export async function ensureNewLeadTask(
       title,
       body: lines.join("\n"),
       dueDate: due.toISOString(),
-      assignedTo: GHL_SALESPERSON_USER_ID || undefined,
+      assignedTo: (await resolveAssigneeUserId()) ?? undefined,
     });
   } catch (e) {
     console.warn(

@@ -24,7 +24,7 @@ import { sql, eq } from "drizzle-orm";
 import { sendBridgeMessage } from "@/lib/bridge/client";
 import { callLLM } from "./openai-client";
 import { syncTaskToGHL } from "@/integrations/ghl/sync";
-import { GHL_SALESPERSON_USER_ID } from "@/integrations/ghl/config";
+import { resolveAssigneeUserId } from "@/lib/crm-tasks/assignee";
 import type { QState } from "./questionnaire";
 
 export const CALLBACK_REQUESTS_ENABLED =
@@ -383,7 +383,7 @@ export async function handleCallbackReply(input: {
       dueAt: verdict.dueAtIso && Number.isFinite(new Date(verdict.dueAtIso).getTime())
         ? new Date(verdict.dueAtIso)
         : null,
-      assignedTo: GHL_SALESPERSON_USER_ID || null,
+      assignedTo: (await resolveAssigneeUserId()) ?? null,
     })
     .returning({ id: crmTasks.id });
 

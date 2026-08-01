@@ -64,7 +64,8 @@ export async function POST(req: NextRequest) {
     try {
       const { db } = await import("@/lib/db");
       const { crmTasks } = await import("@/drizzle/schema");
-      const { GHL_SALESPERSON_USER_ID } = await import("@/integrations/ghl/config");
+      const { resolveAssigneeUserId } = await import("@/lib/crm-tasks/assignee");
+      const defaultAssignee = await resolveAssigneeUserId();
       const [inserted] = await db
         .insert(crmTasks)
         .values({
@@ -72,7 +73,7 @@ export async function POST(req: NextRequest) {
           title: "לדבר עם הלקוח",
           taskType: "follow_up",
           dueAt: new Date(), // today
-          assignedTo: GHL_SALESPERSON_USER_ID || null,
+          assignedTo: defaultAssignee ?? null,
         })
         .returning({ id: crmTasks.id });
       // Push to GHL — no-ops gracefully if the lead has no ghl_contact_id yet.

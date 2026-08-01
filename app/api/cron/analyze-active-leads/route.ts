@@ -16,7 +16,7 @@ import { and, eq, isNotNull, isNull, or, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { crmTasks } from "@/drizzle/schema";
 import { analyzeLead } from "@/lib/analysis/analyze-lead";
-import { GHL_SALESPERSON_USER_ID } from "@/integrations/ghl/config";
+import { resolveAssigneeUserId } from "@/lib/crm-tasks/assignee";
 import { updateContactTask } from "@/integrations/ghl/client";
 import { syncTaskToGHL } from "@/integrations/ghl/sync";
 import { leads } from "@/drizzle/schema";
@@ -128,7 +128,7 @@ export async function POST(req: NextRequest) {
  * per tick to stay under GHL rate limits; the next tick picks up the rest.
  */
 async function pushUnsyncedTasks(): Promise<{ found: number; pushed: number }> {
-  if (!GHL_SALESPERSON_USER_ID) return { found: 0, pushed: 0 };
+  if (!(await resolveAssigneeUserId())) return { found: 0, pushed: 0 };
   const CAP = 25;
   const rows = await db
     .select({ id: crmTasks.id })
@@ -161,7 +161,8 @@ async function sweepOrphanTasks(): Promise<{
   updated: number;
   ghlPushed: number;
 }> {
-  if (!GHL_SALESPERSON_USER_ID) return { found: 0, updated: 0, ghlPushed: 0 };
+  const assignee = await resolveAssigneeUserId();
+  if (!assignee) return { found: 0, updated: 0, ghlPushed: 0 };
   const rows = await db
     .select({
       id: crmTasks.id,
@@ -182,7 +183,7 @@ async function sweepOrphanTasks(): Promise<{
   if (!rows.length) return { found: 0, updated: 0, ghlPushed: 0 };
   await db
     .update(crmTasks)
-    .set({ assignedTo: GHL_SALESPERSON_USER_ID, updatedAt: new Date() })
+    .set({ assignedTo: assignee, updatedAt: new Date() })
     .where(
       and(
         isNull(crmTasks.completedAt),
@@ -199,7 +200,7 @@ async function sweepOrphanTasks(): Promise<{
         title: r.title,
         dueDate: dueIso,
         completed: r.status === "completed",
-        assignedTo: GHL_SALESPERSON_USER_ID,
+        assignedTo: assignee,
       });
       ghlPushed++;
     } catch (e) {

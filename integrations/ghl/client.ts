@@ -913,3 +913,30 @@ export async function downloadRecording(
   const audio = Buffer.from(await res.arrayBuffer());
   return { audio, contentType };
 }
+
+// ===========================================================================
+// Users
+// ===========================================================================
+
+export interface GHLLocationUser {
+  id: string;
+  name: string;
+  email?: string;
+}
+
+/**
+ * The location's real users (for the "who owns new leads/tasks" picker in
+ * settings). Read-only; keeps the picker in sync with the actual GHL team
+ * instead of hardcoding ids that rot.
+ */
+export async function listLocationUsers(): Promise<GHLLocationUser[]> {
+  const locationId = requireGHLLocationId();
+  const res = await ghlFetch<{
+    users?: { id: string; name?: string; firstName?: string; lastName?: string; email?: string }[];
+  }>("/users/", {}, { locationId });
+  return (res.users ?? []).map((u) => ({
+    id: u.id,
+    name: u.name?.trim() || `${u.firstName ?? ""} ${u.lastName ?? ""}`.trim() || u.email || u.id,
+    email: u.email,
+  }));
+}

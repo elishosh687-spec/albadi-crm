@@ -256,7 +256,8 @@ export async function resyncContact(
     const completedAt = t.completed ? new Date() : null;
     const status = t.completed ? "completed" : "open";
     if (existingTask.length === 0) {
-      const { GHL_SALESPERSON_USER_ID } = await import("@/integrations/ghl/config");
+      const { resolveAssigneeUserId } = await import("@/lib/crm-tasks/assignee");
+      const defaultAssignee = await resolveAssigneeUserId();
       await db.insert(crmTasks).values({
         manychatSubId: sid,
         taskType: "follow_up",
@@ -266,7 +267,7 @@ export async function resyncContact(
         completedAt,
         ghlTaskId: t.id,
         // Default owner = Itay if GHL didn't return one. Per Eli 2026-07-01.
-        assignedTo: t.assignedTo?.trim() || GHL_SALESPERSON_USER_ID || null,
+        assignedTo: t.assignedTo?.trim() || defaultAssignee || null,
       });
     } else {
       await db

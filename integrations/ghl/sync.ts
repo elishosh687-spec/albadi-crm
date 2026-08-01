@@ -15,9 +15,9 @@ import {
   ENABLE_GHL_SYNC,
   GHL_CONVERSATION_PROVIDER_ID,
   GHL_PIPELINE_ID,
-  GHL_SALESPERSON_USER_ID,
   requireGHLLocationId,
 } from "./config";
+import { resolveAssigneeUserId } from "@/lib/crm-tasks/assignee";
 import {
   upsertContact,
   createOpportunity,
@@ -216,20 +216,19 @@ export async function upsertGHLContact(
 
   try {
     const customFields = buildCustomFieldsPayload(lead);
-    // Assign the contact owner to Itay ONLY on the first push (this lead has no
+    // Assign the contact owner ONLY on the first push (this lead has no
     // ghl_contact_id yet). Passing assignedTo on every upsert would stomp a
     // manual reassignment on each message sync — so guard on first-create.
+    // Owner = whoever is configured in settings (Eli or Itay), env as fallback.
     const isFirstPush = !("ghlContactId" in lead) || !lead.ghlContactId;
+    const owner = isFirstPush ? await resolveAssigneeUserId() : null;
     const res = await upsertContact({
       locationId: requireGHLLocationId(),
       name: buildLeadDisplayName(lead),
       phone: lead.phoneE164 ?? undefined,
       source: "whatsapp-bridge",
       customFields,
-      assignedTo:
-        isFirstPush && GHL_SALESPERSON_USER_ID
-          ? GHL_SALESPERSON_USER_ID
-          : undefined,
+      assignedTo: owner ?? undefined,
     });
     const contactId = res.contact.id;
     if ("ghlContactId" in lead && lead.ghlContactId !== contactId) {
@@ -308,11 +307,12 @@ export async function createOrUpdateGHLOpportunity(
       monetaryValue: monetary,
       source: "whatsapp-bridge",
       customFields,
-      // Default owner = Itay so new leads land on his pipeline board, not
-      // unassigned. Create-only (never on update) so a manual reassignment in
-      // GHL is preserved. Per Eli 2026-07-17 (177 legacy leads were ownerless
-      // because only tasks — never opps/contacts — carried assignedTo).
-      assignedTo: GHL_SALESPERSON_USER_ID || undefined,
+      // Default owner = the configured salesperson (settings → Eli or Itay) so
+      // new leads land on a real board, not unassigned. Create-only (never on
+      // update) so a manual reassignment in GHL is preserved. Per Eli 2026-07-17
+      // (177 legacy leads were ownerless because only tasks — never
+      // opps/contacts — carried assignedTo).
+      assignedTo: (await resolveAssigneeUserId()) ?? undefined,
     });
     await cacheOpportunityId(lead.manychatSubId, created.id);
     return created.id;
@@ -422,13 +422,13 @@ export async function syncTaskToGHL(taskId: number): Promise<void> {
     const completed = task.status === "completed";
 
     if (!task.ghlTaskId) {
-      // First push — create. Default owner is Itay (GHL_SALESPERSON_USER_ID)
-      // so tasks land on his GHL board, not unassigned. Per Eli 2026-07-01.
+      // First push — create. Default owner = the configured salesperson so tasks
+      // land on a real GHL board, not unassigned. Per Eli 2026-07-01.
       const created = await createContactTask(contactId, {
         title: task.title,
         dueDate: dueIso,
         completed,
-        assignedTo: GHL_SALESPERSON_USER_ID || undefined,
+        assignedTo: (await resolveAssigneeUserId()) ?? undefined,
       });
       await db
         .update(crmTasks)
@@ -437,13 +437,13 @@ export async function syncTaskToGHL(taskId: number): Promise<void> {
       return;
     }
 
-    // Already in GHL — patch. Also (re-)assign to Itay so any task that
-    // was created before this fix gets a real owner on its next sync.
+    // Already in GHL — patch. Also (re-)assign to the configured salesperson so
+    // any task created before this fix gets a real owner on its next sync.
     await updateContactTask(contactId, task.ghlTaskId, {
       title: task.title,
       dueDate: dueIso,
       completed,
-      assignedTo: GHL_SALESPERSON_USER_ID || undefined,
+      assignedTo: (await resolveAssigneeUserId()) ?? undefined,
     });
   } catch (err) {
     console.error("[ghl.sync] syncTaskToGHL failed", taskId, err);
