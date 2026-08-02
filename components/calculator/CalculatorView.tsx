@@ -20,6 +20,7 @@ import { validateBagGeometry } from "@/lib/factory/bag-geometry";
 import { computeCommission } from "@/lib/factory/commission";
 import { isOverCbmConsolidationThreshold, cbmConsolidationAlert } from "@/lib/factory/sea-carriers";
 import { customerBreakdownIls, customerRoundedTotalIls } from "@/lib/factory/calculator/customer-breakdown";
+import { customerTotalExVat } from "@/lib/factory/customer-total";
 import { DetailedBreakdown } from "./DetailedBreakdown";
 import { SplitShipmentPanel, type SplitReport } from "@/components/factory-flow/SplitShipmentPanel";
 import { CommissionControl } from "@/components/factory-flow/CommissionControl";
@@ -1754,7 +1755,14 @@ function ProposalSummary({
           <div className="flex justify-between items-baseline">
             <span className="lux-sans" style={{ fontSize: 16, fontWeight: 300, color: "var(--lux-ink)" }}>סה״כ הזמנה</span>
             <span className="lux-sans tabular-nums" style={{ fontSize: 30, fontWeight: 300, color: "var(--lux-ink)" }}>
-              ₪{ils(r.totalOrderPriceIls)}
+              {/* Same printed total as the message/PDF — this panel is the
+                  customer price, so it must reconcile with per-bag × qty. */}
+              ₪{ils(customerTotalExVat({
+                unitSellingPrice: r.sellingPricePerUnitIls,
+                quantity: r.quantity,
+                moldsTotalSellingPriceIls: r.moldsTotalSellingPriceIls,
+                totalOrderPriceIls: r.totalOrderPriceIls,
+              }) ?? r.totalOrderPriceIls)}
             </span>
           </div>
           <div className="flex justify-between" style={{ marginTop: 6 }}>
@@ -2059,7 +2067,21 @@ function BreakdownCard({
               { label: "בסיס עמלה (ללא שילוח)", value: `₪${ils(comm.base)}` },
               { label: `עמלת מכירות (${comm.pct}% מהעסקה ללא שילוח · ${Math.round(comm.ofProfitPct)}% מהרווח)`, value: `−₪${ils(comm.commission)}` },
               { label: "רווח נטו (אחרי עמלה)", value: `₪${ils(comm.netProfit)}`, bold: true, green: true },
-              { label: "מחיר ללקוח", value: `₪${ils(r.totalOrderPriceIls)}`, hero: true },
+              // The figure the customer is actually quoted: rounded per-bag ×
+              // qty + molds, exactly like the WhatsApp text and the PDF.
+              // totalOrderPriceIls multiplies the UNROUNDED per-bag price, so
+              // showing it here made this screen read ₪6,342.97 against the
+              // ₪6,325.85 in the message for the same quote (Eli 2026-08-02).
+              {
+                label: "מחיר ללקוח",
+                value: `₪${ils(customerTotalExVat({
+                  unitSellingPrice: r.sellingPricePerUnitIls,
+                  quantity: r.quantity,
+                  moldsTotalSellingPriceIls: r.moldsTotalSellingPriceIls,
+                  totalOrderPriceIls: r.totalOrderPriceIls,
+                }) ?? r.totalOrderPriceIls)}`,
+                hero: true,
+              },
             ]}
           />
         </div>
