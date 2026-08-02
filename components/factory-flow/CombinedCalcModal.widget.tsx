@@ -185,13 +185,21 @@ export function CombinedCalcModalWidget({
         const cfg = data.config as FactoryPricingConfig;
         setConfig(cfg);
         setShippingOptionId((prev) => {
-          if (prev) return prev;
-          const fromRow =
-            rows[0]?.finalPricing?.shippingOptionId ??
-            rows[0]?.productSpec.shippingOptionId ??
-            "";
+          const opts = cfg.shippingOptions as ShippingOption[];
+          const exists = (id?: string | null) => !!id && opts.some((s) => s.id === id);
+          if (exists(prev)) return prev;
+          // A stored id must RESOLVE, not merely exist. Older quotes carry
+          // legacy ids ("s1"/"s2") that were renamed to sea-standard/air-express;
+          // accepting one blindly left the dropdown pointing at nothing, and
+          // combinedShippingIls returns 0 for a missing option — so the combined
+          // offer quoted the customer ZERO freight (Asaf Grinshpan: ₪5,801.70
+          // instead of ₪8,451.70, a fake ₪2,598 "saving"). Eli 2026-08-02.
+          const fromRow = [
+            ...rows.map((r) => r.finalPricing?.shippingOptionId),
+            ...rows.map((r) => r.productSpec.shippingOptionId),
+          ].find(exists);
           if (fromRow) return fromRow;
-          const first = (cfg.shippingOptions as ShippingOption[]).find((s) => s.enabled);
+          const first = opts.find((s) => s.enabled) ?? opts[0];
           return first ? first.id : "";
         });
         setSectionState((prev) => {
