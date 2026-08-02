@@ -19,7 +19,7 @@ import {
   fetchImageDataUri,
   type CombinedQuoteItem,
 } from "@/lib/factory/pdf";
-import { allocateCombined } from "@/lib/factory/combined";
+import { allocateCombined, resolveMergedShippingOption } from "@/lib/factory/combined";
 import { getFactoryConfig } from "@/lib/factory/config";
 import type {
   FactoryProductSpec,
@@ -51,13 +51,16 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
 
-  // Every selected quote must be finalized…
-  const notFinal = rows.find(
-    (r) => r.factoryStatus !== "finalized" || !r.finalPricing
+  // Every selected quote must carry a price — finalized (factory-confirmed) or a
+  // self-calculated DRAFT. Requiring "finalized" locked a customer who only has
+  // estimates out of combined offers entirely (Eli 2026-08-02); the draft's own
+  // price snapshot is exactly what allocateCombined needs.
+  const notPriced = rows.find(
+    (r) => !r.finalPricing || (r.factoryStatus !== "finalized" && r.factoryStatus !== "draft")
   );
-  if (notFinal) {
+  if (notPriced) {
     return NextResponse.json(
-      { error: "not_finalized", message: `Quote ${notFinal.id} is not finalized` },
+      { error: "not_priced", message: `Quote ${notPriced.id} has no price yet` },
       { status: 409 }
     );
   }
@@ -103,8 +106,18 @@ export async function GET(req: NextRequest) {
   // Manual merged-CBM override (grouped orders) — must match the on-screen calc.
   const cbmParam = parseFloat(sp.get("cbm") ?? "");
   const cbmOverride = Number.isFinite(cbmParam) && cbmParam > 0 ? cbmParam : undefined;
-  const singleOpt =
-    config.shippingOptions.find((s) => s.id === (ordered[0]?.finalPricing as FactoryPricingResult)?.shippingOptionId) ?? null;
+  // Resolve with a fallback — a draft's snapshot often has no shippingOptionId,
+  // and a null option prices the merged shipment at ₪0.
+  const singleOpt = resolveMergedShippingOption(
+    ordered.map((r) => ({ pricing: r.finalPricing as FactoryPricingResult })),
+    config
+  );
+  if (!singleOpt) {
+    return NextResponse.json(
+      { error: "no_shipping_option", message: "אין שיטת שילוח פעילה — לא ניתן לתמחר משלוח מאוחד" },
+      { status: 409 }
+    );
+  }
 
   const alloc = allocateCombined(
     ordered.map((r) => ({ id: r.id, pricing: r.finalPricing as FactoryPricingResult })),

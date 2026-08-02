@@ -13,7 +13,7 @@ import { factoryQuoteRequests, leads } from "@/drizzle/schema";
 import { eq, inArray } from "drizzle-orm";
 import { sendBridgeMessage } from "@/lib/bridge/client";
 import { phoneToJid } from "@/lib/bridge/jid";
-import { allocateCombined } from "@/lib/factory/combined";
+import { allocateCombined, resolveMergedShippingOption } from "@/lib/factory/combined";
 import { getFactoryConfig } from "@/lib/factory/config";
 import { notifyItayQuoteSent } from "@/lib/notify/itay";
 import {
@@ -64,7 +64,13 @@ async function combinedTotals(
   cbmOverride?: number
 ): Promise<{ grandTotal: number; airIls?: number; seaIls?: number; airName?: string; seaName?: string }> {
   const config = await getFactoryConfig();
-  const singleOpt = config.shippingOptions.find((s) => s.id === priced[0]?.p.shippingOptionId) ?? null;
+  // Fallback-resolved: a draft snapshot often carries no shippingOptionId, and a
+  // null option would price the merged shipment at ₪0. The caller guards for
+  // null before we get here.
+  const singleOpt = resolveMergedShippingOption(
+    priced.map((x) => ({ pricing: x.p })),
+    config
+  );
   const alloc = allocateCombined(
     priced.map((r) => ({ id: r.id, pricing: r.p })),
     singleOpt,
@@ -102,16 +108,17 @@ export async function sendCombinedQuoteWhatsapp(
     return { ok: false, status: 404, error: "not_found" };
   }
 
-  // Every selected quote must be finalized…
-  const notFinal = rows.find(
-    (r) => r.factoryStatus !== "finalized" || !r.finalPricing
+  // Every selected quote must carry a price — finalized OR a self-calculated
+  // draft (same rule as the combined PDF, so what renders is what can be sent).
+  const notPriced = rows.find(
+    (r) => !r.finalPricing || (r.factoryStatus !== "finalized" && r.factoryStatus !== "draft")
   );
-  if (notFinal) {
+  if (notPriced) {
     return {
       ok: false,
       status: 409,
-      error: "not_finalized",
-      message: `Quote ${notFinal.id} is not finalized`,
+      error: "not_priced",
+      message: `Quote ${notPriced.id} has no price yet`,
     };
   }
   // …and all belong to the same client.
@@ -170,6 +177,17 @@ export async function sendCombinedQuoteWhatsapp(
   const pdfMediaUrl = `${proto}://${host}/api/factory/combine/pdf?ids=${encodeURIComponent(idsParam)}${splitQs}${cbmQs}`;
 
   const priced = rows.map((r) => ({ id: r.id, p: r.finalPricing as FactoryPricingResult }));
+  // Never send a merged offer we cannot price shipping for — combinedShippingIls
+  // returns 0 for a missing option, which would quote the customer free freight.
+  const shipCfg = await getFactoryConfig();
+  if (!resolveMergedShippingOption(priced.map((x) => ({ pricing: x.p })), shipCfg)) {
+    return {
+      ok: false,
+      status: 409,
+      error: "no_shipping_option",
+      message: "אין שיטת שילוח פעילה — לא ניתן לתמחר משלוח מאוחד",
+    };
+  }
   const totals = await combinedTotals(priced, validSplit, cbmOverride);
 
   const greeting = lead.name ? `היי ${lead.name} 👋` : "היי 👋";

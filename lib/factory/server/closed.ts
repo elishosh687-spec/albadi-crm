@@ -19,7 +19,7 @@ import type {
   CombinedDealPricing,
 } from "@/lib/factory/types";
 import { customerTotalExVat } from "@/lib/factory/customer-total";
-import { allocateCombined } from "@/lib/factory/combined";
+import { allocateCombined, resolveMergedShippingOption } from "@/lib/factory/combined";
 import { getFactoryConfig } from "@/lib/factory/config";
 import {
   resolveDealSchedule,
@@ -373,8 +373,10 @@ export async function buildCombinedPricing(
 
   const config = await getFactoryConfig();
   const items = priced.map((r) => ({ id: r.id, pricing: r.finalPricing as FactoryPricingResult }));
-  const singleOpt =
-    config.shippingOptions.find((s) => s.id === items[0].pricing.shippingOptionId) ?? null;
+  // Fallback-resolved: a draft member's snapshot often has no shippingOptionId,
+  // and a null option prices the merged shipment at ₪0 — freezing a deal at a
+  // total with no freight in it.
+  const singleOpt = resolveMergedShippingOption(items, config);
   const split = opts.split ?? undefined;
   const cbmOverride = opts.cbmOverride && opts.cbmOverride > 0 ? opts.cbmOverride : undefined;
   const alloc = allocateCombined(items, singleOpt, config, split, cbmOverride);

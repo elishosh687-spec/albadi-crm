@@ -128,11 +128,18 @@ export function CombinedCalcModalWidget({
   // Which products are part of THIS offer (default: all). Lets the user build a
   // combined offer from a subset right inside the card.
   const [selected, setSelected] = useState<Set<string>>(
-    () => new Set(rows.filter((r) => r.factoryResponse).map((r) => r.id))
+    () => new Set(rows.filter((r) => r.factoryResponse || r.finalPricing).map((r) => r.id))
   );
 
   // Only quotes with a factory response can be priced + included in the PDF.
-  const priceableRows = useMemo(() => rows.filter((r) => r.factoryResponse), [rows]);
+  // A row can join the combined offer if it has ANY price: a factory response
+  // (re-priceable live) or a self-calculated draft's stored finalPricing. Drafts
+  // used to be filtered out, so a customer holding only estimates couldn't be
+  // given a combined offer at all (Eli 2026-08-02).
+  const priceableRows = useMemo(
+    () => rows.filter((r) => r.factoryResponse || r.finalPricing),
+    [rows]
+  );
   const pendingCount = rows.length - priceableRows.length;
   const selectedRows = useMemo(
     () => priceableRows.filter((r) => selected.has(r.id)),
@@ -207,8 +214,15 @@ export function CombinedCalcModalWidget({
     for (const row of rows) {
       const st = sectionState[row.id];
       const resp = row.factoryResponse;
-      if (!config || !st || !resp) {
+      if (!config || !st) {
         out[row.id] = null;
+        continue;
+      }
+      // Draft (self-priced) row: no factory numbers to re-price from, so its
+      // saved snapshot IS its price. It still takes part in the merged-shipment
+      // allocation — that only needs a FactoryPricingResult.
+      if (!resp) {
+        out[row.id] = (row.finalPricing as FactoryPricingResult | null) ?? null;
         continue;
       }
       const qtyNum = Math.max(1, Math.floor(Number(st.qtyStr) || row.productSpec.quantity || 1));
@@ -1044,22 +1058,31 @@ function ProductCalcSection({
             />
           </div>
 
-          {/* Margin slider */}
-          <div>
-            <div className="flex items-center justify-between mb-1">
-              <label className="text-[11px] text-muted-foreground">אחוז רווח</label>
-              <span className="text-sm font-semibold text-primary tabular-nums">{state.margin}%</span>
+          {/* Margin slider — only where there are factory numbers to re-price
+              from. A draft carries a finished price snapshot and nothing to
+              recompute it from, so moving a slider would be a lie. */}
+          {row.factoryResponse ? (
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-[11px] text-muted-foreground">אחוז רווח</label>
+                <span className="text-sm font-semibold text-primary tabular-nums">{state.margin}%</span>
+              </div>
+              <input
+                type="range"
+                min={MARGIN_MIN}
+                max={MARGIN_MAX}
+                step={1}
+                value={state.margin}
+                onChange={(e) => onPatch({ margin: parseInt(e.target.value, 10) })}
+                className="w-full accent-[var(--color-primary,#4A7C59)]"
+              />
             </div>
-            <input
-              type="range"
-              min={MARGIN_MIN}
-              max={MARGIN_MAX}
-              step={1}
-              value={state.margin}
-              onChange={(e) => onPatch({ margin: parseInt(e.target.value, 10) })}
-              className="w-full accent-[var(--color-primary,#4A7C59)]"
-            />
-          </div>
+          ) : (
+            <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-[11px] text-amber-300/90">
+              טיוטה — מתומחרת לפי האומדן השמור. המפעל עוד לא ענה, אז אין כאן
+              סליידר רווח; המחיר משתתף בחישוב המשולב כמו שהוא.
+            </div>
+          )}
 
           {/* Live pricing summary */}
           {pricing && (

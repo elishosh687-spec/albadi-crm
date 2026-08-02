@@ -1224,8 +1224,14 @@ export function QuotesHistoryView({ apiToken }: { apiToken: string }) {
               const canCalc = g.priceableCount > 0;
               // Combined offer = all this customer's FINALIZED quotes (the
               // combined PDF route requires every id to be finalized).
+              // Anything PRICED can form a combined offer — a factory-finalized
+              // quote or a self-calculated draft. Restricting this to finalized
+              // meant a customer holding only estimates could never get a
+              // combined offer (Eli 2026-08-02).
               const finalizedIds = g.rows
-                .filter((r) => r.status === "finalized" && r.finalPricing)
+                .filter(
+                  (r) => r.finalPricing && (r.status === "finalized" || r.status === "draft")
+                )
                 .map((r) => r.id);
               const canSendCombined = finalizedIds.length >= 1;
               const combinedPdfHref = `/api/factory/combine/pdf?ids=${finalizedIds.join(",")}`;

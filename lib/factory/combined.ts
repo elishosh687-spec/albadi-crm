@@ -290,3 +290,27 @@ export function computeCombined(
       productPriceTotal > 0 ? Math.round((totalProfit / productPriceTotal) * 1000) / 10 : 0,
   };
 }
+
+/**
+ * The shipping option to price the MERGED shipment on.
+ *
+ * `combinedShippingIls` returns 0 for a null option, so a caller that derived it
+ * from `items[0].pricing.shippingOptionId` and came up empty would quote a
+ * combined offer with NO shipping at all. That is exactly what happens with
+ * self-priced DRAFTS, whose snapshot often carries no shippingOptionId — on
+ * Asaf Grinshpan's two drafts it turned a real ~₪8.8k offer into ₪5.8k
+ * (Eli 2026-08-02). So: first member that names one, else the first enabled
+ * option in config, else null (and the caller must refuse rather than ship free).
+ */
+export function resolveMergedShippingOption(
+  items: { pricing: FactoryPricingResult }[],
+  config: FactoryPricingConfig
+): ShippingOption | null {
+  for (const it of items) {
+    const id = it.pricing?.shippingOptionId;
+    if (!id) continue;
+    const opt = config.shippingOptions.find((s) => s.id === id);
+    if (opt) return opt;
+  }
+  return config.shippingOptions.find((s) => s.enabled) ?? null;
+}
