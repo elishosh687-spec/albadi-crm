@@ -240,7 +240,15 @@ export function allocateCombined(
     // Override sets the shipping VOLUME; share denominator stays the true summed
     // CBM so per-product allocation still sums to 1.
     const shipCbm = cbmOverride && cbmOverride > 0 ? cbmOverride : cbm;
-    const shipping = combinedShippingIls(shipCbm, gw(items), singleOpt, config);
+    // Merging may only ever HELP the customer. The merged shipment is repriced at
+    // today's rates while each quote carries the freight frozen when it was made,
+    // so a stale-vs-fresh gap could make the combined offer cost MORE than the two
+    // separate quotes already in the customer's hands — ₪100 on Asaf Grinshpan
+    // (Eli 2026-08-02: "איך הגיוני שההצעה המשולבת תהיה יותר גבוהה?"). Cap it at
+    // what they are already paying separately; a real merge saving still flows.
+    const ownShipping = r2(items.reduce((s, i) => s + (i.pricing.totalShipping || 0), 0));
+    const merged = combinedShippingIls(shipCbm, gw(items), singleOpt, config);
+    const shipping = cbmOverride && cbmOverride > 0 ? merged : Math.min(merged, ownShipping);
     groupOf = () => ({ shipping, cbm, count: items.length, name: singleOpt?.name ?? null });
   }
 
@@ -263,12 +271,30 @@ export function allocateCombined(
     return { id, adjusted };
   });
 
-  const grandTotal = r2(
-    perProduct.reduce(
-      (s, { adjusted: a }) => s + r2(a.unitSellingPrice * a.quantity) + (a.moldsTotalSellingPriceIls ?? 0),
-      0
-    )
-  );
+  const sumCustomer = (list: { adjusted: FactoryPricingResult }[]) =>
+    r2(
+      list.reduce(
+        (s, { adjusted: a }) => s + r2(a.unitSellingPrice * a.quantity) + (a.moldsTotalSellingPriceIls ?? 0),
+        0
+      )
+    );
+  const grandTotal = sumCustomer(perProduct);
+
+  // THE INVARIANT: a combined offer never costs more than the quotes it merges.
+  // Even with the merged freight capped, redistributing it by CBM share hands the
+  // bulkier product more freight than it carried alone, and rounding that up to
+  // the agora can lift the total (Asaf Grinshpan: +₪50 —
+  // Eli 2026-08-02 "איך הגיוני שההצעה המשולבת תהיה יותר גבוהה?"). When merging
+  // doesn't actually produce a lower price, the customer simply keeps the prices
+  // he was already quoted. Skipped when the operator deliberately shaped the
+  // shipment (split legs or a manual merged CBM) — there the change is intended.
+  const untouched = items.map(({ id, pricing }) => ({ id, adjusted: pricing }));
+  if (!isSplit && !(cbmOverride && cbmOverride > 0)) {
+    const separateTotal = sumCustomer(untouched);
+    if (grandTotal >= separateTotal) {
+      return { perProduct: untouched, grandTotal: separateTotal, airIls, seaIls, airName, seaName };
+    }
+  }
   return { perProduct, grandTotal, airIls, seaIls, airName, seaName };
 }
 
@@ -287,12 +313,16 @@ export function computeCombined(
   const combinedCbm =
     cbmOverride && cbmOverride > 0 ? r2(cbmOverride) : r2(sum((i) => i.totalCbm));
   const combinedWeightKg = r2(sum((i) => i.totalWeightKg));
-  const combinedShipping = combinedShippingIls(
+  const mergedShipping = combinedShippingIls(
     combinedCbm,
     combinedWeightKg,
     opt,
     config
   );
+  // Same cap as allocateCombined: merging can only help the customer.
+  const ownShippingTotal = r2(sum((i) => i.totalShipping));
+  const combinedShipping =
+    cbmOverride && cbmOverride > 0 ? mergedShipping : Math.min(mergedShipping, ownShippingTotal);
   // Each item priced as its OWN shipment at TODAY's rates — not the sum of the
   // figures frozen in the quotes. Comparing stored-then against computed-now made
   // merging look like it COST money (Asaf Grinshpan: −₪54.76, which is an FX/rate
