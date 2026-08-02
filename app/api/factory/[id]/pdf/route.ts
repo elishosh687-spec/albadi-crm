@@ -41,9 +41,14 @@ export async function GET(
   if (!row) {
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
-  if (row.factoryStatus !== "finalized" || !row.finalPricing) {
+  // A priced DRAFT renders too — sendQuoteWhatsapp already accepts drafts, and this
+  // route is the very URL it hands GreenAPI. Refusing drafts here meant the
+  // caption reached the customer while the attachment silently failed: Eli sent
+  // Asaf Grinshpan two draft quotes, saw them mirrored in GHL, and there was no
+  // PDF in WhatsApp at all (2026-08-02). Same rule as the combined PDF.
+  if (!row.finalPricing || (row.factoryStatus !== "finalized" && row.factoryStatus !== "draft")) {
     return NextResponse.json(
-      { error: "not_finalized", message: "Quote not finalized yet" },
+      { error: "not_priced", message: "Quote has no price yet" },
       { status: 409 }
     );
   }
