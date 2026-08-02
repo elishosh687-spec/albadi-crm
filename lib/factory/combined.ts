@@ -293,7 +293,18 @@ export function computeCombined(
     opt,
     config
   );
-  const separateShipping = r2(sum((i) => i.totalShipping));
+  // Each item priced as its OWN shipment at TODAY's rates — not the sum of the
+  // figures frozen in the quotes. Comparing stored-then against computed-now made
+  // merging look like it COST money (Asaf Grinshpan: −₪54.76, which is an FX/rate
+  // drift between old quotes and the current config, not a real merge penalty).
+  // Eli 2026-08-02: "אבל אין זה הגיוני שיהיה מינוס?" — correct, so both sides of
+  // the comparison are now computed the same way, at the same moment.
+  const separateShipping = r2(
+    items.reduce(
+      (s, i) => s + combinedShippingIls(i.totalCbm, i.totalWeightKg, opt, config),
+      0
+    )
+  );
   const totalProduction = r2(sum((i) => i.totalCost));
   const totalProfit = r2(sum((i) => i.totalProfit));
   const productPriceTotal = r2(totalProduction + totalProfit);
