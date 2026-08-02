@@ -11,6 +11,7 @@
  */
 
 import { priceFactoryQuote } from "./pricing";
+import { customerTotalExVat } from "./customer-total";
 import {
   getActiveSeaCarrier,
   seaPerOrderUsd,
@@ -26,6 +27,29 @@ import type {
 
 function r2(n: number): number {
   return Math.round(n * 100) / 100;
+}
+
+/**
+ * A quote's selling price INCLUDING its own shipping but EXCLUDING the one-time
+ * molds — the base the merged-shipment allocation re-prices.
+ *
+ * It has to detect the convention, because the codebase stores `totalSellingPrice`
+ * two contradictory ways: the engine documents it as a GRAND total (bags + mold,
+ * pricing.ts), while a saved DRAFT writes it BAGS-ONLY (to-pricing.ts). Blindly
+ * subtracting the mold removed it twice from every draft — on Asaf Grinshpan that
+ * quietly cut ₪451.70 off a combined offer and showed up as a ₪400 "saving"
+ * (Eli 2026-08-02: "עיגול זה עדיין לא חיסכון").
+ *
+ * `unitSellingPrice × qty` is bags+shipping by definition in both conventions, so
+ * it is the reference that tells the two apart.
+ */
+function bagsInclShipping(p: FactoryPricingResult): number {
+  const mold = p.moldsTotalSellingPriceIls ?? 0;
+  const gross = p.totalSellingPrice ?? 0;
+  if (mold <= 0) return gross;
+  const ref = (p.unitSellingPrice ?? 0) * (p.quantity ?? 0);
+  const includesMold = Math.abs(gross - mold - ref) <= Math.abs(gross - ref);
+  return includesMold ? gross - mold : gross;
 }
 
 /** Default profit margin for a quantity, using the per-qty matrix (snap-down). */
@@ -224,7 +248,7 @@ export function allocateCombined(
     const share = g.cbm > 0 ? (p.totalCbm || 0) / g.cbm : 1 / g.count;
     const allocShipping = r2(g.shipping * share);
     const mold = p.moldsTotalSellingPriceIls ?? 0;
-    const bags = r2(p.totalSellingPrice - p.totalShipping - mold);
+    const bags = r2(bagsInclShipping(p) - p.totalShipping);
     const newBags = r2(bags + allocShipping);
     const newUnit = p.quantity > 0 ? r2(newBags / p.quantity) : newBags;
     const adjusted: FactoryPricingResult = {
@@ -285,7 +309,13 @@ export function computeCombined(
     totalProfit,
     productPriceTotal,
     grandTotal,
-    separateGrandTotal: r2(sum((i) => i.totalSellingPrice)),
+    // Compared like-for-like with grandTotal: BOTH sides priced the way the
+    // customer is actually quoted (rounded per-bag × qty + molds). Reading the
+    // engine's exact totalSellingPrice here while the combined side rounded per
+    // bag made the comparison manufacture a "saving" out of pure rounding —
+    // ₪400 on Asaf Grinshpan with zero freight benefit (Eli 2026-08-02:
+    // "עיגול זה עדיין לא חיסכון... אני חייב סטנדרט יחיד לכל המערכת").
+    separateGrandTotal: r2(sum((i) => customerTotalExVat(i) ?? i.totalSellingPrice)),
     overallMarginPct:
       productPriceTotal > 0 ? Math.round((totalProfit / productPriceTotal) * 1000) / 10 : 0,
   };

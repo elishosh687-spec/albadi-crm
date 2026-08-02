@@ -656,11 +656,25 @@ export function CombinedCalcModalWidget({
                       combinedResult.separateShipping
                     )})`}
                   />
-                  <PriceRow
-                    label="חיסכון בשילוח ללקוח"
-                    value={formatIls(combinedResult.shippingSaving)}
-                    highlight
-                  />
+                  {/* Say it straight: under the assumed-CBM basis a merge often
+                      saves nothing (or costs more), and a green "saving" there
+                      would invite a discount that isn't funded (Eli 2026-08-02). */}
+                  {combinedResult.shippingSaving > 0 ? (
+                    <PriceRow
+                      label="חיסכון בשילוח ללקוח"
+                      value={formatIls(combinedResult.shippingSaving)}
+                      highlight
+                    />
+                  ) : (
+                    <PriceRow
+                      label="חיסכון בשילוח ללקוח"
+                      value={
+                        combinedResult.shippingSaving === 0
+                          ? "אין חיסכון במיזוג"
+                          : `אין חיסכון — יקר ב-${formatIls(-combinedResult.shippingSaving)}`
+                      }
+                    />
+                  )}
                   <div className="border-t border-success/20 my-1" />
                   <PriceRow
                     label="סה״כ ללקוח (משולב)"
