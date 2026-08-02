@@ -5,6 +5,7 @@
  * switching — albadi-crm is ILS).
  */
 
+import { ceilAgorot } from "@/lib/factory/rounding";
 import type {
   AppConfig,
   ProductVariant,
@@ -192,7 +193,11 @@ export function calculateQuote(
   // changing shipping method does not shift profit via rounding boundaries.
   const sellingPricePerUnitIlsExact =
     marginableBaseIls / (1 - marginFrac) + shippingPerUnitIls;
-  const sellingPricePerUnitIls = r2(sellingPricePerUnitIlsExact);
+  // Customer price rule: round the per-bag price UP to the agora, never down
+  // (Eli 2026-08-02 — "תמיד לעגל כלפי מעלה"). Everything the customer is quoted
+  // derives from THIS number, so the screen, the message, the PDF and the
+  // invoice cannot disagree.
+  const sellingPricePerUnitIls = ceilAgorot(sellingPricePerUnitIlsExact);
 
   // Step 11: One-time mold/tooling, priced as its own line. PASS-THROUGH — we
   // charge the customer exactly what the factory charges us (no margin).
@@ -200,8 +205,11 @@ export function calculateQuote(
   const moldsTotalSellingPriceIlsExact = moldsTotalCostIlsExact;
   const moldsTotalProfitIlsExact = 0;
 
+  // Derived from the ROUNDED per-bag price — so "מחיר × כמות" reconciles on the
+  // customer's own calculator. Multiplying the unrounded price here is what made
+  // the screen read ₪6,342.97 against ₪6,325.85 in the message.
   const totalOrderPriceIls = r2(
-    sellingPricePerUnitIlsExact * quantity + moldsTotalSellingPriceIlsExact
+    sellingPricePerUnitIls * quantity + moldsTotalSellingPriceIlsExact
   );
 
   // Step 10: Profit — derived from exact selling price so profit = factory × margin

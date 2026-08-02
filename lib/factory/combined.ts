@@ -12,6 +12,7 @@
 
 import { priceFactoryQuote } from "./pricing";
 import { customerTotalExVat } from "./customer-total";
+import { ceilAgorot } from "./rounding";
 import {
   getActiveSeaCarrier,
   seaPerOrderUsd,
@@ -250,7 +251,7 @@ export function allocateCombined(
     const mold = p.moldsTotalSellingPriceIls ?? 0;
     const bags = r2(bagsInclShipping(p) - p.totalShipping);
     const newBags = r2(bags + allocShipping);
-    const newUnit = p.quantity > 0 ? r2(newBags / p.quantity) : newBags;
+    const newUnit = p.quantity > 0 ? ceilAgorot(newBags / p.quantity) : newBags;
     const adjusted: FactoryPricingResult = {
       ...p,
       unitShipping: p.quantity > 0 ? r2(allocShipping / p.quantity) : allocShipping,

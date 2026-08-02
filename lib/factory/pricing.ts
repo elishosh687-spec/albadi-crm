@@ -20,6 +20,7 @@
  * totalCost/totalProfit/totalSellingPrice are GRAND totals (bags + mold).
  */
 
+import { ceilAgorot } from "@/lib/factory/rounding";
 import type {
   FactoryPricingConfig,
   FactoryPricingInput,
@@ -184,7 +185,8 @@ export function priceFactoryQuote(
   const unitProductPriceExact = unitCost / (1 - marginFrac);
   const unitSellingPriceExact =
     unitProductPriceExact + unitShipping + platePerUnitIls;
-  const unitSellingPrice = r2(unitSellingPriceExact);
+  // Customer price rule: UP to the agora, never down (Eli 2026-08-02).
+  const unitSellingPrice = ceilAgorot(unitSellingPriceExact);
   const unitProfitExact = unitProductPriceExact - unitCost;
   const unitProfit = r2(unitProfitExact);
 
@@ -198,8 +200,12 @@ export function priceFactoryQuote(
   const plateFeeTotalCostIlsExact = plateFeeTotalCny * cnyToUsd * usdToTarget;
 
   const bagsCost = unitCost * quantity;
-  const bagsProfit = unitProfitExact * quantity;
-  const bagsSellingPrice = unitSellingPriceExact * quantity;
+  // Bags revenue = the ROUNDED-UP per-bag price × qty — the money the customer
+  // is actually asked for. Multiplying the exact price here left every total a
+  // few ₪ off the quote (Eli 2026-08-02: "בסוף הבעיה היא שמתחילה מחיר per יחידה").
+  const bagsSellingPrice = unitSellingPrice * quantity;
+  // The rounding-up goes to margin, so profit still reconciles with price − cost.
+  const bagsProfit = bagsSellingPrice - (unitCost + unitShipping + platePerUnitIls) * quantity;
 
   const totalCost = r2(
     bagsCost + moldsTotalCostIlsExact + plateFeeTotalCostIlsExact

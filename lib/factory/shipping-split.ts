@@ -13,6 +13,7 @@
  * Pure + client-safe (no env, no I/O). Caller supplies the already-computed
  * air/sea shipment costs (each priced on its OWN portion's cartons/CBM).
  */
+import { ceilAgorot } from "@/lib/factory/rounding";
 import type { FactoryPricingResult, ShippingSplit } from "./types";
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
@@ -62,8 +63,9 @@ export interface SplitCustomerView {
 export function splitCustomerView(split: ShippingSplit, moldsIls = 0): SplitCustomerView {
   const airQty = legQuantity(split.airQuantity, split.airLabel);
   const seaQty = legQuantity(split.seaQuantity, split.seaLabel);
-  const airUnit = r2(split.productUnitIls + (airQty > 0 ? split.airIls / airQty : 0));
-  const seaUnit = r2(split.productUnitIls + (seaQty > 0 ? split.seaIls / seaQty : 0));
+  // Per-leg customer price — rounded UP like every other per-bag price.
+  const airUnit = ceilAgorot(split.productUnitIls + (airQty > 0 ? split.airIls / airQty : 0));
+  const seaUnit = ceilAgorot(split.productUnitIls + (seaQty > 0 ? split.seaIls / seaQty : 0));
   const airTotal = r2(airUnit * airQty);
   const seaTotal = r2(seaUnit * seaQty);
   const molds = moldsIls > 0 ? r2(moldsIls) : 0;

@@ -11,6 +11,7 @@
  * finalUnitCostIls / finalUnitCostUsd), so the parts reconcile to the price.
  */
 import type { QuoteResult } from "./types";
+import { ceilAgorot } from "@/lib/factory/rounding";
 
 export interface CustomerBreakdownIls {
   /** Base bag + shipping, folded together (the reconciling line). */
@@ -41,7 +42,9 @@ export function customerRoundedTotalIls(
   oneTimeMoldsIls = 0
 ): number {
   const molds = oneTimeMoldsIls > 0 ? round2(oneTimeMoldsIls) : 0;
-  return round2(round2(unitSellingPriceIls) * quantity + molds);
+  // The per-bag price rounds UP (never down) and the total is derived from it,
+  // so the customer's own "מחיר × כמות" always reconciles (Eli 2026-08-02).
+  return round2(ceilAgorot(unitSellingPriceIls) * quantity + molds);
 }
 
 export function customerBreakdownIls(result: QuoteResult): CustomerBreakdownIls {
