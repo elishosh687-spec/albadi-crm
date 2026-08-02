@@ -21,6 +21,7 @@ import {
 } from "@/lib/factory/pdf";
 import { allocateCombined, resolveMergedShippingOption } from "@/lib/factory/combined";
 import { getFactoryConfig } from "@/lib/factory/config";
+import type { StoredDealPlan } from "@/lib/factory/payment-terms";
 import type {
   FactoryProductSpec,
   FactoryPricingResult,
@@ -140,7 +141,20 @@ export async function GET(req: NextRequest) {
   );
 
   try {
-    const buf = await renderCombinedQuotePdf({ customerName, items });
+    // Payment terms: ?plan= from the send (so caption and PDF match), else the
+    // PRIMARY member's stored plan, else the configured default.
+    const primary = [...ordered].sort((a, b) => +a.createdAt - +b.createdAt)[0];
+    const planParam = sp.get("plan");
+    const cfg = config;
+    const buf = await renderCombinedQuotePdf({
+      customerName,
+      items,
+      paymentPlan: planParam
+        ? null
+        : ((primary?.paymentPlan as StoredDealPlan | null) ?? null),
+      paymentPlanId: planParam ?? cfg.paymentTerms?.defaultPlanId ?? null,
+      vatPct: cfg.paymentTerms?.vatPct,
+    });
     return new NextResponse(new Uint8Array(buf), {
       headers: {
         "Content-Type": "application/pdf",

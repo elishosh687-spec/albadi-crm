@@ -686,9 +686,22 @@ export interface CombinedQuoteItem {
 export interface CombinedQuotePdfProps {
   customerName: string;
   items: CombinedQuoteItem[];
+  /** Payment schedule to print — same contract as the single-quote PDF. Without
+   *  it the combined PDF showed only "המחיר אינו כולל מע״מ" while the WhatsApp
+   *  caption beside it carried VAT, installments and bank details (Eli
+   *  2026-08-02). */
+  paymentPlan?: StoredDealPlan | null;
+  paymentPlanId?: string | null;
+  vatPct?: number;
 }
 
-function CombinedQuotePDF({ customerName, items }: CombinedQuotePdfProps) {
+function CombinedQuotePDF({
+  customerName,
+  items,
+  paymentPlan,
+  paymentPlanId,
+  vatPct,
+}: CombinedQuotePdfProps) {
   const date = rtl(
     new Date().toLocaleDateString("he-IL", {
       day: "numeric",
@@ -755,6 +768,13 @@ function CombinedQuotePDF({ customerName, items }: CombinedQuotePdfProps) {
     }
   }
   const grandTotal = r2(sections.reduce((s, x) => s + x.total, 0));
+  // Same contract as the single-quote PDF: schedule built from the total THIS
+  // document prints.
+  const combinedVatPct = vatPct ?? VAT_PCT;
+  const combinedStoredPlan: StoredDealPlan | null = paymentPlan ?? paymentPlanId ?? null;
+  const combinedSchedule = combinedStoredPlan
+    ? resolveDealSchedule(grandTotal, combinedStoredPlan, combinedVatPct)
+    : null;
 
   return (
     <Document>
@@ -823,6 +843,40 @@ function CombinedQuotePDF({ customerName, items }: CombinedQuotePdfProps) {
         <View style={styles.vatNote}>
           <Text style={styles.vatText}>המחיר אינו כולל מע״מ</Text>
         </View>
+
+        {/* Payment terms — built from the grand total THIS pdf prints, so the
+            combined document and its WhatsApp caption can never disagree. */}
+        {combinedSchedule ? (
+          <View style={styles.bullets}>
+            <Text style={styles.bulletsTitle}>פרטי תשלום</Text>
+            <View style={styles.bulletRow}>
+              <Text style={styles.bulletMark}>•</Text>
+              <Text style={styles.bulletText}>
+                מע״מ {combinedVatPct}%: {formatILS(combinedSchedule.vat)}
+              </Text>
+            </View>
+            <View style={styles.bulletRow}>
+              <Text style={styles.bulletMark}>•</Text>
+              <Text style={[styles.bulletText, { fontWeight: "bold" }]}>
+                סה״כ לתשלום: {formatILS(combinedSchedule.total)}
+              </Text>
+            </View>
+            {combinedSchedule.installments.map((inst, i) => (
+              <View key={i} style={styles.bulletRow}>
+                <Text style={styles.bulletMark}>•</Text>
+                <Text style={styles.bulletText}>
+                  {`תשלום ${i + 1} — ${formatILS(inst.ils)} (${inst.pct}% · ${inst.when})`}
+                </Text>
+              </View>
+            ))}
+            {BANK_DETAILS_LINES.map((b, i) => (
+              <View key={`bank-${i}`} style={styles.bulletRow}>
+                <Text style={styles.bulletMark}>{i === 0 ? "•" : " "}</Text>
+                <Text style={styles.bulletText}>{b}</Text>
+              </View>
+            ))}
+          </View>
+        ) : null}
 
         {/* Measuring guide so the customer understands רוחב/גובה/עומק */}
         {DIMENSIONS_DIAGRAM ? (
