@@ -11,9 +11,10 @@
  * importing the env constant.
  */
 import { db } from "@/lib/db";
-import { appConfig } from "@/drizzle/schema";
+import { appConfig, leads } from "@/drizzle/schema";
 import { eq } from "drizzle-orm";
 import { GHL_SALESPERSON_USER_ID } from "@/integrations/ghl/config";
+import { getContact } from "@/integrations/ghl/client";
 
 const KEY = "crm.assignee";
 
@@ -48,6 +49,44 @@ export async function loadAssignee(): Promise<StoredAssignee | null> {
 export async function resolveAssigneeUserId(): Promise<string | null> {
   const stored = await loadAssignee();
   return stored?.userId || GHL_SALESPERSON_USER_ID || null;
+}
+
+/** The GHL user who OWNS a contact (the pipeline-card owner), or null.
+ *  Best-effort — a GHL hiccup must never block task creation. */
+async function ghlContactOwner(ghlContactId: string | null | undefined): Promise<string | null> {
+  if (!ghlContactId) return null;
+  try {
+    const c = await getContact(ghlContactId);
+    return c?.assignedTo?.trim() || null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Who a TASK on a contact should be assigned to: the contact's ACTUAL GHL owner
+ * (so a task on Itay's lead goes to Itay), falling back to the settings default
+ * only when the lead has no owner yet (a brand-new lead). Eli 2026-08-02: auto
+ * tasks were all landing on the settings person regardless of who owned the lead.
+ */
+export async function resolveTaskAssigneeByContact(
+  ghlContactId: string | null | undefined
+): Promise<string | null> {
+  return (await ghlContactOwner(ghlContactId)) ?? (await resolveAssigneeUserId());
+}
+
+/** Same, resolving the lead's GHL contact id from its sid first. */
+export async function resolveTaskAssigneeForSid(sid: string): Promise<string | null> {
+  try {
+    const [lead] = await db
+      .select({ ghlContactId: leads.ghlContactId })
+      .from(leads)
+      .where(eq(leads.manychatSubId, sid))
+      .limit(1);
+    return resolveTaskAssigneeByContact(lead?.ghlContactId ?? null);
+  } catch {
+    return resolveAssigneeUserId();
+  }
 }
 
 /** Persist the choice made in the settings screen. */

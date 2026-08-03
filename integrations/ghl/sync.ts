@@ -17,7 +17,7 @@ import {
   GHL_PIPELINE_ID,
   requireGHLLocationId,
 } from "./config";
-import { resolveAssigneeUserId } from "@/lib/crm-tasks/assignee";
+import { resolveAssigneeUserId, resolveTaskAssigneeByContact } from "@/lib/crm-tasks/assignee";
 import {
   upsertContact,
   createOpportunity,
@@ -394,6 +394,7 @@ export async function syncTaskToGHL(taskId: number): Promise<void> {
         status: crmTasks.status,
         dueAt: crmTasks.dueAt,
         ghlTaskId: crmTasks.ghlTaskId,
+        assignedTo: crmTasks.assignedTo,
       })
       .from(crmTasks)
       .where(eq(crmTasks.id, taskId))
@@ -421,14 +422,20 @@ export async function syncTaskToGHL(taskId: number): Promise<void> {
       .toISOString();
     const completed = task.status === "completed";
 
+    // Owner: the task's stored assignee (set at creation to the lead's GHL
+    // owner) wins; else resolve the contact's owner, else the settings default.
+    // Eli 2026-08-02 — a task on Itay's lead must land on Itay, not on whoever
+    // is set in settings.
+    const taskOwner =
+      task.assignedTo?.trim() || (await resolveTaskAssigneeByContact(contactId)) || undefined;
+
     if (!task.ghlTaskId) {
-      // First push — create. Default owner = the configured salesperson so tasks
-      // land on a real GHL board, not unassigned. Per Eli 2026-07-01.
+      // First push — create.
       const created = await createContactTask(contactId, {
         title: task.title,
         dueDate: dueIso,
         completed,
-        assignedTo: (await resolveAssigneeUserId()) ?? undefined,
+        assignedTo: taskOwner,
       });
       await db
         .update(crmTasks)
@@ -437,13 +444,12 @@ export async function syncTaskToGHL(taskId: number): Promise<void> {
       return;
     }
 
-    // Already in GHL — patch. Also (re-)assign to the configured salesperson so
-    // any task created before this fix gets a real owner on its next sync.
+    // Already in GHL — patch, keeping the lead-owner assignment (above).
     await updateContactTask(contactId, task.ghlTaskId, {
       title: task.title,
       dueDate: dueIso,
       completed,
-      assignedTo: (await resolveAssigneeUserId()) ?? undefined,
+      assignedTo: taskOwner,
     });
   } catch (err) {
     console.error("[ghl.sync] syncTaskToGHL failed", taskId, err);

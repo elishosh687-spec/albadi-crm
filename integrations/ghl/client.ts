@@ -90,6 +90,9 @@ export interface GHLContact {
   email?: string;
   customFields?: Array<{ id: string; value: unknown }>;
   tags?: string[];
+  /** GHL user id who owns this contact (the pipeline-card owner). Returned by
+   *  the contacts API; used to route a new task to the lead's real owner. */
+  assignedTo?: string;
 }
 
 export interface GHLContactUpsertInput {
