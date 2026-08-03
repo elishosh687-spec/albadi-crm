@@ -25,6 +25,7 @@ function buildConfig(
     adminSettings: {
       globalProfitMargin: marginOverride ?? dbConfig.defaultProfitMargin,
       profitMarginByQuantity: margins,
+      negotiationBufferAgorot: dbConfig.negotiationBufferAgorot,
     },
     shippingOptions: DEFAULT_CONFIG.shippingOptions.map((s) => {
       const dbOpt = dbConfig.shippingOptions.find((d) => d.type === s.type && d.enabled);
