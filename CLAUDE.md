@@ -610,6 +610,20 @@ The 2026-07-01 "every task → Itay" rule evolved twice:
   read by `resolveAssigneeUserId()` in [lib/crm-tasks/assignee.ts], env
   `GHL_SALESPERSON_USER_ID` as the fallback. This sets who OWNS new leads
   (the opportunity/contact owner on first sync — [sync.ts] `createOpportunity`).
+- **2026-08-03 — two assignment MODES.** `crm.assignee` now carries a `mode`:
+  `single` (one person owns all new leads, back-compat with the bare `{userId}`)
+  or `round_robin` (`{rotation:[{userId,name}…], cursor}` — lead #1 → member[0],
+  #2 → member[1], wrapping). The cursor advances **exactly once per new lead**
+  via `assignNextLeadOwner(sid)`, which is idempotent per lead: it stamps the
+  picked owner on `leads.owner_id` (a previously-dead column, nothing else reads
+  it) and reuses it, so the contact + opportunity of ONE lead get the SAME owner
+  and the cursor doesn't double-advance. `resolveAssigneeUserId()` stays PASSIVE
+  (never advances — it's the task-fallback resolver); only the two new-lead owner
+  sites in [sync.ts] (`upsertGHLContact` first push + `createOpportunity` create)
+  call `assignNextLeadOwner`. Atomic advance = one `jsonb_set` UPDATE with modulo
+  (`cursor = (cursor+1) % len`). `setRoundRobin` resets cursor to -1 so the first
+  lead after saving goes to `rotation[0]`. Existing leads are untouched (they
+  already have a contact/opp id → neither owner site fires).
 - **2026-08-02 (the important one):** an **auto-task now goes to the LEAD'S
   ACTUAL GHL owner**, not the settings default — a task on Itay's lead lands on
   Itay. `resolveTaskAssigneeForSid`/`ByContact` fetch the GHL contact's

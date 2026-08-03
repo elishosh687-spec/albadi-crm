@@ -17,7 +17,11 @@ import {
   GHL_PIPELINE_ID,
   requireGHLLocationId,
 } from "./config";
-import { resolveAssigneeUserId, resolveTaskAssigneeByContact } from "@/lib/crm-tasks/assignee";
+import {
+  resolveAssigneeUserId,
+  resolveTaskAssigneeByContact,
+  assignNextLeadOwner,
+} from "@/lib/crm-tasks/assignee";
 import {
   upsertContact,
   createOpportunity,
@@ -219,9 +223,12 @@ export async function upsertGHLContact(
     // Assign the contact owner ONLY on the first push (this lead has no
     // ghl_contact_id yet). Passing assignedTo on every upsert would stomp a
     // manual reassignment on each message sync — so guard on first-create.
-    // Owner = whoever is configured in settings (Eli or Itay), env as fallback.
+    // Owner = the settings default (single mode) OR the next person in the
+    // round-robin. assignNextLeadOwner advances the rotation cursor exactly once
+    // per lead and remembers the pick, so the opportunity below gets the SAME
+    // owner without moving the cursor again.
     const isFirstPush = !("ghlContactId" in lead) || !lead.ghlContactId;
-    const owner = isFirstPush ? await resolveAssigneeUserId() : null;
+    const owner = isFirstPush ? await assignNextLeadOwner(lead.manychatSubId) : null;
     const res = await upsertContact({
       locationId: requireGHLLocationId(),
       name: buildLeadDisplayName(lead),
@@ -307,12 +314,13 @@ export async function createOrUpdateGHLOpportunity(
       monetaryValue: monetary,
       source: "whatsapp-bridge",
       customFields,
-      // Default owner = the configured salesperson (settings → Eli or Itay) so
-      // new leads land on a real board, not unassigned. Create-only (never on
-      // update) so a manual reassignment in GHL is preserved. Per Eli 2026-07-17
-      // (177 legacy leads were ownerless because only tasks — never
-      // opps/contacts — carried assignedTo).
-      assignedTo: (await resolveAssigneeUserId()) ?? undefined,
+      // Default owner = the settings default (single) or the round-robin pick.
+      // Idempotent per lead: upsertGHLContact already ran for a WhatsApp/FB lead
+      // and stamped the owner, so this returns the SAME person and does NOT
+      // advance the rotation cursor. Create-only (never on update) so a manual
+      // reassignment in GHL is preserved. Per Eli 2026-07-17 (177 legacy leads
+      // were ownerless because only tasks — never opps/contacts — carried it).
+      assignedTo: (await assignNextLeadOwner(lead.manychatSubId)) ?? undefined,
     });
     await cacheOpportunityId(lead.manychatSubId, created.id);
     return created.id;
