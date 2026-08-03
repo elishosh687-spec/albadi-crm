@@ -602,20 +602,35 @@ is now called from every stage-write site (setLeadStage, questionnaire
 completion, configurator upsert), so the "נפלו בין הכיסאות" list stays at
 zero for future leads.
 
-## Task ownership — every task defaults to Itay (2026-07-01 rule)
+## Task ownership — auto-tasks follow the LEAD'S GHL owner (2026-08-02 rule)
 
-Every `crm_tasks` row defaults to `assignedTo = GHL_SALESPERSON_USER_ID`
-(Itay's GHL user id). Four sites enforce this:
+The 2026-07-01 "every task → Itay" rule evolved twice:
+- **2026-08-01:** the default owner became **settings-driven** — `crm.assignee`
+  in `app_config` (settings screen → [components/settings/AssigneeSection.tsx]),
+  read by `resolveAssigneeUserId()` in [lib/crm-tasks/assignee.ts], env
+  `GHL_SALESPERSON_USER_ID` as the fallback. This sets who OWNS new leads
+  (the opportunity/contact owner on first sync — [sync.ts] `createOpportunity`).
+- **2026-08-02 (the important one):** an **auto-task now goes to the LEAD'S
+  ACTUAL GHL owner**, not the settings default — a task on Itay's lead lands on
+  Itay. `resolveTaskAssigneeForSid`/`ByContact` fetch the GHL contact's
+  `assignedTo`; the settings default is only the fallback for a lead with no
+  owner yet. `leads.ownerId` is NULL for everyone — ownership lives only in GHL,
+  so we read it live from `getContact(id).assignedTo`. `syncTaskToGHL` mirrors
+  the task's stored assignee (falling back to the contact owner).
 
-| Path | File |
+  Bug it fixed: every auto-task was assigned to whoever sat in `crm.assignee`
+  (Elazar), so tasks on Itay's leads landed on Elazar. Validated on live GHL:
+  10/12 sampled leads are Itay's → their tasks now route to Itay.
+
+| Path | Assignee source |
 |---|---|
-| Auto-task on stage entry | [lib/crm-tasks/auto-task.ts](lib/crm-tasks/auto-task.ts) |
-| Push to GHL (create + update) | [integrations/ghl/sync.ts](integrations/ghl/sync.ts) |
-| Manual UI create | [app/actions/v2.ts](app/actions/v2.ts) `createCrmTaskAction` |
-| Pull from GHL (resync) | [lib/ghl/resync-helper.ts](lib/ghl/resync-helper.ts) |
+| Auto-task on stage entry ([auto-task.ts]) | lead's GHL owner ?? settings |
+| Push to GHL create/update ([sync.ts] `syncTaskToGHL`) | task's stored assignee ?? contact owner ?? settings |
+| New lead's opportunity owner ([sync.ts] `createOpportunity`) | settings default (unchanged) |
+| Manual UI create ([app/actions/v2.ts]) | user-picked ?? settings default |
+| Pull from GHL resync ([resync-helper.ts]) | GHL task's own assignee ?? settings |
 
-The nightly cron sweep (above) catches any row that slipped through. No
-manual "reassign" button in the UI — the fix is automatic.
+The nightly cron sweep catches any row that slipped through.
 
 ## Display labels: use Eli's working vocabulary
 
