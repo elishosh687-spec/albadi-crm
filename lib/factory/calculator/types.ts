@@ -76,6 +76,9 @@ export interface ExchangeRates {
 export interface AdminSettings {
   globalProfitMargin: number;
   profitMarginByQuantity?: Record<string, number>;
+  /** Negotiation cushion added to every per-bag price, in agorot (1/100 ₪).
+   *  Global — the bot auto-quote and the manual calculator both apply it. */
+  negotiationBufferAgorot?: number;
 }
 
 export interface AppConfig {
@@ -158,6 +161,9 @@ export interface QuoteResult {
   profitMargin: number;
   profitPerUnitIls: number;
   totalProfitIls: number;
+
+  /** Negotiation cushion baked into sellingPricePerUnitIls, ILS per bag. 0=off. */
+  negotiationBufferPerUnitIls: number;
 
   currency: string;
 }

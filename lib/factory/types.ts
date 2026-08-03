@@ -147,6 +147,15 @@ export interface FactoryPricingConfig {
    * initial value.
    */
   profitMarginByQuantity?: Record<string, number>;
+  /**
+   * Negotiation cushion added to EVERY customer per-bag price, in agorot
+   * (1/100 ₪). Padding Eli can give away while haggling and still hit his target
+   * margin. Added to the per-bag price BEFORE the round-up, so the whole quote
+   * (bot auto-quote + manual calculator + factory-finalized) derives from it and
+   * the boss breakdown shows a labelled "מרווח מיקוח" line. 0 / missing = off.
+   * Eli 2026-08-03. Applies globally (bot included).
+   */
+  negotiationBufferAgorot?: number;
   /** Currency code for customer display; always "ILS" for now */
   currency: "ILS";
 }
@@ -204,6 +213,10 @@ export interface FactoryPricingResult {
   unitShipping: number;
   unitProfit: number;
   unitSellingPrice: number;
+  /** Negotiation cushion baked into unitSellingPrice, ILS per bag (agorot/100).
+   *  Boss-only display line — it's already part of the price + profit above.
+   *  Optional: quotes priced before 2026-08-03 don't carry it. */
+  negotiationBufferPerUnitIls?: number;
 
   // totals, ILS
   totalCost: number;

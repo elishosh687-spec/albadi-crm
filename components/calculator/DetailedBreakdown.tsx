@@ -398,6 +398,19 @@ export function DetailedBreakdown(props: BreakdownInput & { defaultOpen?: boolea
                 label="רווח נטו (אחרי עמלה)"
                 value={<strong className="text-success">{fmtIls(v.commission.netProfitIls)}</strong>}
               />
+              {v.negotiationBuffer && (
+                <>
+                  <div className="my-1 border-t border-border/40" />
+                  <Row
+                    label={`מרווח מיקוח (${Math.round(v.negotiationBuffer.perUnitIls * 100)} אג׳/שקית)`}
+                    value={
+                      <span className="text-primary" title="מקום לרדת בהתמקחות ועדיין להגיע ליעד — כבר כלול במחיר וברווח">
+                        {fmtIls(v.negotiationBuffer.totalIls)}
+                      </span>
+                    }
+                  />
+                </>
+              )}
             </div>
           </Section>
 

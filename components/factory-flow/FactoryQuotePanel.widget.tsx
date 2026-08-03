@@ -765,6 +765,7 @@ function FinalizedState({
           unitShipping={p.unitShipping}
           unitProfit={p.unitProfit}
           unitSellingPrice={p.unitSellingPrice}
+          negotiationBufferPerUnitIls={p.negotiationBufferPerUnitIls}
           totalCost={p.totalCost}
           moldsInTotalCost
           totalShipping={p.totalShipping}

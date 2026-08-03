@@ -930,6 +930,7 @@ export function CalculatorView({ products, quantityTiers, shippingOptions, initi
                 unitShipping={operatorSplitPricing ? operatorSplitPricing.unitShipping : c.shippingPerUnitIls}
                 unitProfit={r.profitPerUnitIls}
                 unitSellingPrice={operatorSplitPricing ? operatorSplitPricing.unitSellingPrice : r.sellingPricePerUnitIls}
+                negotiationBufferPerUnitIls={r.negotiationBufferPerUnitIls}
                 totalCost={c.productionPerUnitIls * r.quantity}
                 totalShipping={operatorSplitPricing ? operatorSplitPricing.totalShipping : c.shippingPerUnitIls * r.quantity}
                 totalProfit={r.totalProfitIls}
@@ -1595,6 +1596,7 @@ function EstimateTab({ apiToken, shippingOptions, sid, leadName, initialMargins,
             unitShipping={estimateSplitPricing ? estimateSplitPricing.unitShipping : c.shippingPerUnitIls}
             unitProfit={r.profitPerUnitIls}
             unitSellingPrice={estimateSplitPricing ? estimateSplitPricing.unitSellingPrice : r.sellingPricePerUnitIls}
+            negotiationBufferPerUnitIls={r.negotiationBufferPerUnitIls}
             totalCost={c.productionPerUnitIls * r.quantity}
             totalShipping={estimateSplitPricing ? estimateSplitPricing.totalShipping : c.shippingPerUnitIls * r.quantity}
             totalProfit={r.totalProfitIls}

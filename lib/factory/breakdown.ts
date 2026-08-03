@@ -26,6 +26,11 @@ export interface BreakdownInput {
   /** Salesperson commission % of the total sale (boss-only, display-only).
    *  Undefined falls back to the default (10). */
   commissionPct?: number;
+  /** Negotiation cushion baked into unitSellingPrice, ILS per bag. When > 0 the
+   *  boss breakdown renders a "מרווח מיקוח" line = how much Eli can discount and
+   *  still hit target. It's already inside the price + profit above. 0/undefined
+   *  = no line. */
+  negotiationBufferPerUnitIls?: number;
   totalCartons: number;
   totalWeightKg: number;
   totalCbm: number; // raw, post-Math.max if engine already floored — see floorApplied
@@ -150,6 +155,12 @@ export interface BreakdownView {
     netProfitIls: number; // profit − commission
     ofProfitPct: number; // commission as % of profit
   };
+  /** Negotiation cushion — boss-only. How much of the price is padding Eli can
+   *  give away and still hit target. null when no buffer configured. */
+  negotiationBuffer: {
+    perUnitIls: number; // agorot/100 per bag
+    totalIls: number; // per-unit × quantity
+  } | null;
   totals: {
     unitSellingPrice: number;
     totalSellingPrice: number;
@@ -275,6 +286,11 @@ export function buildBreakdownView(input: BreakdownInput): BreakdownView {
         netProfitIls: r2(c.netProfit),
         ofProfitPct: r2(c.ofProfitPct),
       };
+    })(),
+    negotiationBuffer: (() => {
+      const perUnit = r2(input.negotiationBufferPerUnitIls ?? 0);
+      if (!(perUnit > 0)) return null;
+      return { perUnitIls: perUnit, totalIls: r2(perUnit * input.quantity) };
     })(),
     totals: {
       unitSellingPrice: r2(input.unitSellingPrice),

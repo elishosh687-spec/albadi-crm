@@ -293,6 +293,7 @@ export function QuoteHtmlPreviewWidget({ apiToken, row }: { apiToken: string; ro
                 unitShipping={p.unitShipping}
                 unitProfit={p.unitProfit}
                 unitSellingPrice={p.unitSellingPrice}
+                negotiationBufferPerUnitIls={p.negotiationBufferPerUnitIls}
                 totalCost={p.totalCost}
                 moldsInTotalCost
                 totalShipping={p.totalShipping}

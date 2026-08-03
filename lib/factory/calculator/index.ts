@@ -221,6 +221,7 @@ async function buildMergedConfig(): Promise<AppConfig> {
     adminSettings: {
       globalProfitMargin: dbConfig.defaultProfitMargin,
       profitMarginByQuantity: { ...matrix },
+      negotiationBufferAgorot: dbConfig.negotiationBufferAgorot,
     },
     shippingOptions: DEFAULT_CONFIG.shippingOptions.map((s) => {
       const dbOpt = dbConfig.shippingOptions.find(

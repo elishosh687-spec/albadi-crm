@@ -1052,3 +1052,19 @@ carries the payment terms now.
 The עסקאות (deals) tab shows, per product in each closed deal: an inline preview
 of that customer PDF (`?stream=1`, fresh render) PLUS the full "פירוט מלא לבוס"
 breakdown — the sent quote and the internal numbers side by side.
+
+## Negotiation buffer — "מרווח מיקוח" (built 2026-08-03)
+
+Settings knob (רווחיות ועמלות section) `negotiationBufferAgorot` — X **agorot per
+bag** added to EVERY customer per-bag price as room to discount while haggling and
+still hit target. **Global** (Eli: "בוט כן") — applies to the bot auto-quote, the
+manual calculator, AND factory-finalized quotes. Added to the per-bag price BEFORE
+the round-up (`ceilAgorot`) in BOTH pricing engines
+([lib/factory/calculator/engine.ts] via `adminSettings.negotiationBufferAgorot` +
+[lib/factory/pricing.ts] via `config.negotiationBufferAgorot`), so message/PDF/
+invoice/totals all derive from it. It **flows into profit** (price − cost) like the
+round-up gain. The boss breakdown (`buildBreakdownView` → `DetailedBreakdown`)
+shows a labelled "מרווח מיקוח (N אג׳/שקית) = ₪Y" line, threaded via
+`negotiationBufferPerUnitIls` on QuoteResult / FactoryPricingResult / BreakdownInput.
+0 = off. **Stacks** with the older mold padding (¥500/color). See memory
+[[negotiation-buffer]].

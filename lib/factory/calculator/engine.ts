@@ -189,10 +189,16 @@ export function calculateQuote(
   // cheaper than non-lamination ones at high colour counts).
   // Clamp to <100% so a misconfigured value can never divide-by-zero / go negative.
   const marginFrac = Math.min(Math.max(profitMargin, 0), 99.9) / 100;
+  // Negotiation cushion (Eli 2026-08-03): a flat agorot/bag padding added to
+  // EVERY customer price, before the round-up, so Eli has room to discount and
+  // still hit his target. It flows into profit (price − cost) like the round-up
+  // does; the boss breakdown shows it as its own "מרווח מיקוח" line. Global —
+  // the bot auto-quote applies it too (this is the DB-merged config).
+  const negotiationBufferPerUnitIls = Math.max(0, adminSettings.negotiationBufferAgorot ?? 0) / 100;
   // Keep exact (unrounded) for profit and total-order calculations so that
   // changing shipping method does not shift profit via rounding boundaries.
   const sellingPricePerUnitIlsExact =
-    marginableBaseIls / (1 - marginFrac) + shippingPerUnitIls;
+    marginableBaseIls / (1 - marginFrac) + shippingPerUnitIls + negotiationBufferPerUnitIls;
   // Customer price rule: round the per-bag price UP to the agora, never down
   // (Eli 2026-08-02 — "תמיד לעגל כלפי מעלה"). Everything the customer is quoted
   // derives from THIS number, so the screen, the message, the PDF and the
@@ -269,6 +275,7 @@ export function calculateQuote(
     profitMargin,
     profitPerUnitIls,
     totalProfitIls,
+    negotiationBufferPerUnitIls: r2(negotiationBufferPerUnitIls),
     currency: "ILS",
   };
 }

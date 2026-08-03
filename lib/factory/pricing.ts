@@ -183,8 +183,13 @@ export function priceFactoryQuote(
   // sea and air for identical factory cost).
   const marginFrac = Math.min(Math.max(marginPct, 0), 99.9) / 100;
   const unitProductPriceExact = unitCost / (1 - marginFrac);
+  // Negotiation cushion (Eli 2026-08-03): a flat agorot/bag padding on every
+  // customer price, added before the round-up so Eli has room to discount and
+  // still hit target. Global config — mirrors the calculator engine so a
+  // factory-finalized quote and a self-calculated one pad identically.
+  const negotiationBufferPerUnitIls = Math.max(0, config.negotiationBufferAgorot ?? 0) / 100;
   const unitSellingPriceExact =
-    unitProductPriceExact + unitShipping + platePerUnitIls;
+    unitProductPriceExact + unitShipping + platePerUnitIls + negotiationBufferPerUnitIls;
   // Customer price rule: UP to the agora, never down (Eli 2026-08-02).
   const unitSellingPrice = ceilAgorot(unitSellingPriceExact);
   const unitProfitExact = unitProductPriceExact - unitCost;
@@ -223,6 +228,7 @@ export function priceFactoryQuote(
     unitShipping: r2(unitShipping),
     unitProfit,
     unitSellingPrice,
+    negotiationBufferPerUnitIls: r2(negotiationBufferPerUnitIls),
     totalCost,
     totalShipping,
     totalProfit,

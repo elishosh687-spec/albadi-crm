@@ -853,6 +853,7 @@ export function FinalizeModalWidget({
                   unitShipping={livePricing.unitShipping}
                   unitProfit={livePricing.unitProfit}
                   unitSellingPrice={livePricing.unitSellingPrice}
+                  negotiationBufferPerUnitIls={livePricing.negotiationBufferPerUnitIls}
                   totalCost={livePricing.totalCost}
                   moldsInTotalCost
                   totalShipping={livePricing.totalShipping}

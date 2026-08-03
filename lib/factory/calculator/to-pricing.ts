@@ -34,6 +34,7 @@ export function quoteResultToPricing(
     unitShipping: r2(shippingPerUnitIls),
     unitProfit: r2(r.profitPerUnitIls),
     unitSellingPrice: r2(r.sellingPricePerUnitIls),
+    negotiationBufferPerUnitIls: r2(r.negotiationBufferPerUnitIls ?? 0),
     totalCost: r2(productionPerUnitIls * q),
     totalShipping: r2(shippingPerUnitIls * q),
     totalProfit: r2(r.totalProfitIls),

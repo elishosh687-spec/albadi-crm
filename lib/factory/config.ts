@@ -55,6 +55,7 @@ export const DEFAULT_FACTORY_CONFIG: FactoryPricingConfig = {
   defaultProfitMargin: 40,
   profitMarginByQuantity: { "1000": 40, "3000": 40, "5000": 40, "10000": 40 },
   commissionPct: 10,
+  negotiationBufferAgorot: 0,
   currency: "ILS",
   paymentTerms: { defaultPlanId: DEFAULT_PAYMENT_PLAN_ID, vatPct: VAT_PCT },
 };
