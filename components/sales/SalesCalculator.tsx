@@ -65,6 +65,7 @@ export function SalesCalculator({ token }: { token: string }) {
   const [quote, setQuote] = useState<CustomerQuote | null>(null);
   const [pricing, setPricing] = useState(false);
   const [refused, setRefused] = useState(false); // estimate off-grid → use request tab
+  const [preview, setPreview] = useState<string | null>(null); // exact customer message
   const [sendState, setSendState] = useState<"idle" | "sending" | "sent" | "error">("idle");
   const [msg, setMsg] = useState<string | null>(null);
 
@@ -124,6 +125,27 @@ export function SalesCalculator({ token }: { token: string }) {
     }, 250);
     return () => { alive = false; clearTimeout(t); };
   }, [specBody, token, mode, estimateReady]);
+
+  // exact customer message preview (what will be sent) — refreshes with spec,
+  // payment plan and the picked customer's name.
+  useEffect(() => {
+    let alive = true;
+    if (!quote || refused) { setPreview(null); return; }
+    const t = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/sales/preview?token=${encodeURIComponent(token)}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ...specBody(), customerName: lead?.name, paymentPlanId: payPlan }),
+        });
+        const j = await res.json();
+        if (alive) setPreview(j?.ok && j.text ? j.text : null);
+      } catch {
+        if (alive) setPreview(null);
+      }
+    }, 300);
+    return () => { alive = false; clearTimeout(t); };
+  }, [specBody, token, payPlan, lead, quote, refused]);
 
   // customer search (debounced)
   const searchRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -328,6 +350,14 @@ export function SalesCalculator({ token }: { token: string }) {
           <div className="text-sm text-muted-foreground">{pricing ? "מחשב…" : "בחר מפרט לתמחור"}</div>
         )}
       </div>
+
+      {/* Message preview — exactly what the customer will get */}
+      {preview && (
+        <div className="rounded-xl border border-border bg-card/40 p-3">
+          <div className="text-xs text-muted-foreground mb-2 flex items-center gap-1.5"><Send className="size-3.5" /> ההודעה שתישלח ללקוח</div>
+          <pre className="whitespace-pre-wrap break-words text-[13px] leading-relaxed font-sans text-foreground max-h-72 overflow-auto">{preview}</pre>
+        </div>
+      )}
 
       {/* Send */}
       <button type="button" onClick={send} disabled={!lead || !quote || sendState === "sending"} className={cn("w-full h-11 rounded-xl text-sm font-medium flex items-center justify-center gap-2 transition-colors", !lead || !quote ? "bg-card/40 text-muted-foreground/60 border border-border" : "bg-primary text-primary-foreground hover:bg-primary/90")}>

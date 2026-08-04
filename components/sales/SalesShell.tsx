@@ -8,13 +8,14 @@
  * Both run on the sales token; neither surfaces cost/profit/margin/commission.
  */
 import { useState } from "react";
-import { Calculator, FileText } from "lucide-react";
+import { Calculator, FileText, History } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { SalesCalculator } from "./SalesCalculator";
+import { SalesHistory } from "./SalesHistory";
 import { SalesQuoteRequestForm } from "@/components/factory-request/SalesQuoteRequestForm";
 
 export function SalesShell({ token }: { token: string }) {
-  const [tab, setTab] = useState<"calc" | "request">("calc");
+  const [tab, setTab] = useState<"calc" | "request" | "history">("calc");
   return (
     <div dir="rtl" className="mx-auto max-w-xl p-3">
       <div className="mb-3 inline-flex rounded-lg border border-border p-0.5 bg-card/40">
@@ -38,12 +39,24 @@ export function SalesShell({ token }: { token: string }) {
         >
           <FileText className="size-4" /> בקשת הצעה מהמפעל
         </button>
+        <button
+          type="button"
+          onClick={() => setTab("history")}
+          className={cn(
+            "px-3.5 py-2 rounded-md text-sm inline-flex items-center gap-1.5 transition-colors",
+            tab === "history" ? "bg-primary/15 text-foreground" : "text-muted-foreground"
+          )}
+        >
+          <History className="size-4" /> היסטוריה
+        </button>
       </div>
 
       {tab === "calc" ? (
         <SalesCalculator token={token} />
-      ) : (
+      ) : tab === "request" ? (
         <SalesQuoteRequestForm apiToken={token} salesMode />
+      ) : (
+        <SalesHistory token={token} />
       )}
     </div>
   );
