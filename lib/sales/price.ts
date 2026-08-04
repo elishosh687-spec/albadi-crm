@@ -9,6 +9,8 @@ import { calculateQuoteByCodes } from "@/lib/factory/calculator";
 import { quoteResultToPricing } from "@/lib/factory/calculator/to-pricing";
 import { getFactoryConfig } from "@/lib/factory/config";
 import { customerTotalExVat } from "@/lib/factory/customer-total";
+import { GHL_WIDGET_TOKEN } from "@/integrations/ghl/widget-auth";
+import type { QuoteResult } from "@/lib/factory/calculator/types";
 import type { FactoryPricingResult, FactoryProductSpec } from "@/lib/factory/types";
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
@@ -117,4 +119,93 @@ export async function computeCatalogSales(
     currency: "ILS",
   };
   return { full, spec, customer };
+}
+
+export interface SalesEstimateInput {
+  widthCm: number;
+  heightCm: number;
+  depthCm: number;
+  quantity: number;
+  hasHandles: boolean;
+  logoColors: number;
+  hasLamination: boolean;
+  shippingOptionId: string; // s1 | s2
+  moldPerColorCny?: number;
+}
+
+/**
+ * Compute an ESTIMATE (off-catalog dims) for the sales screen by proxying the
+ * exact boss endpoint `/api/factory/estimate` server-side (with the boss token),
+ * then stripping to the customer view. Proxying — rather than re-deriving —
+ * guarantees the sales estimate prices IDENTICALLY to the boss estimate (same
+ * carton model, buffer, plate fee, mold). `origin` = the request origin.
+ *
+ * Returns `{ refused: true }` when the estimator declines (off-grid spec → the
+ * salesperson should use the "בקשת הצעה מהמפעל" tab).
+ */
+export async function computeEstimateSales(
+  input: SalesEstimateInput,
+  origin: string
+): Promise<
+  | { refused: true; reason?: string }
+  | { refused: false; full: FactoryPricingResult; spec: FactoryProductSpec; customer: SalesCustomerQuote }
+> {
+  const colors = Math.max(1, input.logoColors);
+  const perColor =
+    input.moldPerColorCny !== undefined && input.moldPerColorCny >= 0
+      ? input.moldPerColorCny
+      : SALES_DEFAULT_MOLD_CNY_PER_COLOR;
+  const qs = new URLSearchParams({
+    widthCm: String(input.widthCm),
+    heightCm: String(input.heightCm),
+    depthCm: String(input.depthCm || 0),
+    qty: String(Math.max(1, Math.round(input.quantity))),
+    handles: String(input.hasHandles),
+    lamination: String(input.hasLamination),
+    colors: String(colors),
+    shipping: input.shippingOptionId || "s2",
+    moldsCostCny: String(r2(perColor * colors)),
+    widget_token: GHL_WIDGET_TOKEN,
+  });
+  const res = await fetch(`${origin}/api/factory/estimate?${qs}`, { cache: "no-store" });
+  const j = (await res.json()) as {
+    ok?: boolean;
+    result?: QuoteResult;
+    estimate?: { refused?: string; factoryName?: string };
+    computed?: { productionPerUnitIls: number; shippingPerUnitIls: number; commissionPct?: number };
+  };
+  if (!j?.result || !j.computed) {
+    return { refused: true, reason: j?.estimate?.refused };
+  }
+  const r = j.result;
+  const full = quoteResultToPricing(
+    r,
+    j.computed.productionPerUnitIls,
+    j.computed.shippingPerUnitIls,
+    j.computed.commissionPct
+  );
+  const dimensions = `H${input.heightCm}${input.depthCm ? `*D${input.depthCm}` : ""}*W${input.widthCm}`;
+  const spec: FactoryProductSpec = {
+    description: "שקית אלבדי (אומדן)",
+    material: "80g non-woven",
+    widthCm: input.widthCm,
+    heightCm: input.heightCm,
+    depthCm: input.depthCm || 0,
+    quantity: full.quantity,
+    printing: `${colors} colours`,
+    finishing:
+      (input.hasHandles ? "with handles" : "no handles") + (input.hasLamination ? " · laminated" : ""),
+  } as FactoryProductSpec;
+  const totalOrderIls = customerTotalExVat(full) ?? r2(full.totalSellingPrice);
+  const customer: SalesCustomerQuote = {
+    unitSellingPriceIls: full.unitSellingPrice,
+    totalOrderIls: r2(totalOrderIls),
+    quantity: full.quantity,
+    shippingName: r.shippingOption?.name ?? "",
+    shippingDays: r.shippingOption?.deliveryDays ?? null,
+    moldsTotalIls: r2(full.moldsTotalSellingPriceIls ?? 0),
+    dimensions,
+    currency: "ILS",
+  };
+  return { refused: false, full, spec, customer };
 }

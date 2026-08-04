@@ -47,7 +47,11 @@ export function SalesCalculator({ token }: { token: string }) {
   const [lead, setLead] = useState<Lead | null>(null);
 
   // spec
+  const [mode, setMode] = useState<"catalog" | "estimate">("catalog");
   const [productId, setProductId] = useState(PRODUCTS[0]?.id ?? "p1");
+  const [dimH, setDimH] = useState(""); // estimate dims (cm)
+  const [dimD, setDimD] = useState("");
+  const [dimW, setDimW] = useState("");
   const [tierId, setTierId] = useState<string>(TIERS[1]?.id ?? TIERS[0]?.id ?? "q1");
   const [customQty, setCustomQty] = useState<string>("");
   const [handles, setHandles] = useState(true);
@@ -60,36 +64,58 @@ export function SalesCalculator({ token }: { token: string }) {
   // pricing
   const [quote, setQuote] = useState<CustomerQuote | null>(null);
   const [pricing, setPricing] = useState(false);
+  const [refused, setRefused] = useState(false); // estimate off-grid → use request tab
   const [sendState, setSendState] = useState<"idle" | "sending" | "sent" | "error">("idle");
   const [msg, setMsg] = useState<string | null>(null);
 
   const specBody = useCallback(() => {
     const custom = customQty.trim() ? Math.max(1, parseInt(customQty, 10) || 0) : 0;
-    return {
-      productId,
-      quantityTierId: custom ? null : tierId,
-      quantityOverride: custom || null,
+    const tierQty = TIERS.find((t) => t.id === tierId)?.quantity ?? 3000;
+    const common = {
       hasHandles: handles,
       logoColors: colors,
       hasLamination: lamination,
       shippingOptionId: shippingId,
       moldPerColorCny: moldPerColor.trim() === "" ? undefined : Math.max(0, parseInt(moldPerColor, 10) || 0),
     };
-  }, [productId, tierId, customQty, handles, colors, lamination, shippingId, moldPerColor]);
+    if (mode === "estimate") {
+      return {
+        mode: "estimate" as const,
+        widthCm: Number(dimW) || 0,
+        heightCm: Number(dimH) || 0,
+        depthCm: Number(dimD) || 0,
+        quantity: custom || tierQty,
+        ...common,
+      };
+    }
+    return {
+      mode: "catalog" as const,
+      productId,
+      quantityTierId: custom ? null : tierId,
+      quantityOverride: custom || null,
+      ...common,
+    };
+  }, [mode, productId, dimH, dimD, dimW, tierId, customQty, handles, colors, lamination, shippingId, moldPerColor]);
+
+  const estimateReady = mode !== "estimate" || (Number(dimW) > 0 && Number(dimH) > 0);
 
   // live customer price (debounced)
   useEffect(() => {
     let alive = true;
+    if (!estimateReady) { setQuote(null); setRefused(false); return; }
     setPricing(true);
     const t = setTimeout(async () => {
       try {
-        const res = await fetch(`/api/sales/quote?token=${encodeURIComponent(token)}`, {
+        const url = mode === "estimate" ? "/api/sales/estimate" : "/api/sales/quote";
+        const res = await fetch(`${url}?token=${encodeURIComponent(token)}`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(specBody()),
         });
         const j = await res.json();
-        if (alive) setQuote(j?.ok ? j.quote : null);
+        if (!alive) return;
+        if (j?.ok && j.refused) { setRefused(true); setQuote(null); }
+        else { setRefused(false); setQuote(j?.ok ? j.quote : null); }
       } catch {
         if (alive) setQuote(null);
       } finally {
@@ -97,7 +123,7 @@ export function SalesCalculator({ token }: { token: string }) {
       }
     }, 250);
     return () => { alive = false; clearTimeout(t); };
-  }, [specBody, token]);
+  }, [specBody, token, mode, estimateReady]);
 
   // customer search (debounced)
   const searchRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -181,13 +207,30 @@ export function SalesCalculator({ token }: { token: string }) {
         )}
       </div>
 
-      {/* Product */}
-      <div className="space-y-2">
-        <label className="text-xs text-muted-foreground">מוצר</label>
-        <select value={productId} onChange={(e) => setProductId(e.target.value)} className="w-full h-10 rounded-lg border border-border bg-card/40 px-3 text-sm">
-          {PRODUCTS.map((p) => (<option key={p.id} value={p.id}>{p.dimensions} — {p.description}</option>))}
-        </select>
+      {/* Mode: catalog vs estimate */}
+      <div className="inline-flex rounded-lg border border-border p-0.5 bg-card/40">
+        <button type="button" onClick={() => setMode("catalog")} className={cn("px-3 py-1.5 rounded-md text-xs transition-colors", mode === "catalog" ? "bg-primary/15 text-foreground" : "text-muted-foreground")}>מוצר מקטלוג</button>
+        <button type="button" onClick={() => setMode("estimate")} className={cn("px-3 py-1.5 rounded-md text-xs transition-colors", mode === "estimate" ? "bg-primary/15 text-foreground" : "text-muted-foreground")}>אומדן (מידות חופשיות)</button>
       </div>
+
+      {/* Product / Dimensions */}
+      {mode === "catalog" ? (
+        <div className="space-y-2">
+          <label className="text-xs text-muted-foreground">מוצר</label>
+          <select value={productId} onChange={(e) => setProductId(e.target.value)} className="w-full h-10 rounded-lg border border-border bg-card/40 px-3 text-sm">
+            {PRODUCTS.map((p) => (<option key={p.id} value={p.id}>{p.dimensions} — {p.description}</option>))}
+          </select>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          <label className="text-xs text-muted-foreground">מידות (ס״מ)</label>
+          <div className="grid grid-cols-3 gap-2">
+            <input type="number" min={1} value={dimH} onChange={(e) => setDimH(e.target.value)} placeholder="גובה H" className="h-10 rounded-lg border border-border bg-card/40 px-3 text-sm text-center" />
+            <input type="number" min={1} value={dimW} onChange={(e) => setDimW(e.target.value)} placeholder="רוחב W" className="h-10 rounded-lg border border-border bg-card/40 px-3 text-sm text-center" />
+            <input type="number" min={0} value={dimD} onChange={(e) => setDimD(e.target.value)} placeholder="עומק D" className="h-10 rounded-lg border border-border bg-card/40 px-3 text-sm text-center" />
+          </div>
+        </div>
+      )}
 
       {/* Quantity */}
       <div className="space-y-2">
@@ -253,6 +296,13 @@ export function SalesCalculator({ token }: { token: string }) {
           ))}
         </div>
       </div>
+
+      {/* Refused (estimate off-grid) */}
+      {refused && (
+        <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-500">
+          המידות האלה צריכות תמחור מהמפעל — עבור ללשונית <b>בקשת הצעה מהמפעל</b> ושלח את המפרט לאלי.
+        </div>
+      )}
 
       {/* Price */}
       <div className="rounded-xl border border-primary/40 bg-primary/10 p-4">

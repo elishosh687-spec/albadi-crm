@@ -11,6 +11,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { salesAuthed } from "@/lib/widget/sales-auth";
 import { computeCatalogSales, type SalesCatalogInput } from "@/lib/sales/price";
+import { computeEstimateSales, type SalesEstimateInput } from "@/lib/sales/price";
 import { createFactoryDraft } from "@/lib/factory/create-request";
 import { sendQuoteWhatsapp } from "@/lib/factory/server/sendWhatsapp";
 import { sendEliDM } from "@/lib/notify/eli";
@@ -18,7 +19,8 @@ import { sendEliDM } from "@/lib/notify/eli";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-interface Body extends Partial<SalesCatalogInput> {
+interface Body extends Partial<SalesCatalogInput>, Partial<SalesEstimateInput> {
+  mode?: "catalog" | "estimate";
   sid?: string;
   customerName?: string;
   paymentPlanId?: string | null;
@@ -36,21 +38,45 @@ export async function POST(req: NextRequest) {
   }
   const sid = (body.sid ?? "").trim();
   if (!sid) return NextResponse.json({ ok: false, error: "missing_sid" }, { status: 400 });
-  if (!body.productId || !body.shippingOptionId) {
+  const isEstimate = body.mode === "estimate";
+  if (isEstimate ? !(body.widthCm && body.heightCm && body.quantity) : !(body.productId && body.shippingOptionId)) {
     return NextResponse.json({ ok: false, error: "missing_spec" }, { status: 400 });
   }
 
   try {
-    const priced = await computeCatalogSales({
-      productId: String(body.productId),
-      quantityTierId: body.quantityTierId ?? null,
-      quantityOverride: body.quantityOverride ?? null,
-      hasHandles: !!body.hasHandles,
-      logoColors: Number(body.logoColors) || 1,
-      hasLamination: !!body.hasLamination,
-      shippingOptionId: String(body.shippingOptionId),
-      moldPerColorCny: typeof body.moldPerColorCny === "number" ? body.moldPerColorCny : undefined,
-    });
+    const moldPerColorCny = typeof body.moldPerColorCny === "number" ? body.moldPerColorCny : undefined;
+    let priced: { full: import("@/lib/factory/types").FactoryPricingResult; spec: import("@/lib/factory/types").FactoryProductSpec; customer: { totalOrderIls: number } } | null;
+    if (isEstimate) {
+      const est = await computeEstimateSales(
+        {
+          widthCm: Number(body.widthCm),
+          heightCm: Number(body.heightCm),
+          depthCm: Number(body.depthCm) || 0,
+          quantity: Number(body.quantity),
+          hasHandles: !!body.hasHandles,
+          logoColors: Number(body.logoColors) || 1,
+          hasLamination: !!body.hasLamination,
+          shippingOptionId: String(body.shippingOptionId || "s2"),
+          moldPerColorCny,
+        },
+        req.nextUrl.origin
+      );
+      if (est.refused) {
+        return NextResponse.json({ ok: false, error: "estimate_refused", reason: est.reason ?? null }, { status: 422 });
+      }
+      priced = est;
+    } else {
+      priced = await computeCatalogSales({
+        productId: String(body.productId),
+        quantityTierId: body.quantityTierId ?? null,
+        quantityOverride: body.quantityOverride ?? null,
+        hasHandles: !!body.hasHandles,
+        logoColors: Number(body.logoColors) || 1,
+        hasLamination: !!body.hasLamination,
+        shippingOptionId: String(body.shippingOptionId),
+        moldPerColorCny,
+      });
+    }
     if (!priced) return NextResponse.json({ ok: false, error: "cannot_price" }, { status: 422 });
 
     // 1+2) Store the full pricing as a draft under the lead (boss sees all).
