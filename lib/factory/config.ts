@@ -108,6 +108,13 @@ function normalizeConfig(raw: FactoryPricingConfig): FactoryPricingConfig {
     out = { ...out, paymentTerms: { defaultPlanId: DEFAULT_PAYMENT_PLAN_ID, vatPct: VAT_PCT } };
   }
 
+  // Global lamination plate fee (added 2026-08-04) — rows written before it get
+  // the ¥500/colour default so a laminated quote uses the flat fee, not the
+  // legacy per-product catalog values.
+  if (out.laminationPlateFeePerColorCny === undefined) {
+    out = { ...out, laminationPlateFeePerColorCny: 500 };
+  }
+
   return out;
 }
 
