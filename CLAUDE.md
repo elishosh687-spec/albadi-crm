@@ -1068,3 +1068,25 @@ shows a labelled "מרווח מיקוח (N אג׳/שקית) = ₪Y" line, thread
 `negotiationBufferPerUnitIls` on QuoteResult / FactoryPricingResult / BreakdownInput.
 0 = off. **Stacks** with the older mold padding (¥500/color). See memory
 [[negotiation-buffer]].
+
+## Send quotes WITH or WITHOUT payment terms (built 2026-08-03)
+
+Eli confirms payment terms per-call and doesn't want them auto-attached. A quote
+can now be sent with or without the payment block:
+- **Sentinel** `NO_PAYMENT_PLAN_ID = "none"` + `resolveEffectivePlanId(explicit, cfg.paymentTerms)`
+  in [payment-terms.ts] — explicit `"none"` → null (no terms); explicit id → that id;
+  no pick → the settings default ONLY when `paymentTerms.includeByDefault` is on.
+  **Default OFF** — a quote goes out clean unless a plan is chosen.
+- **Every manual builder** gates its payment block on the resolved plan and reverts
+  its header to a plain `*הצעת מחיר*` when omitted: `sendWhatsapp`, `sendCombinedWhatsapp`,
+  `sendEstimateToCustomer`, the calculator caption ([CalculatorView]), and the single +
+  combined PDF routes (`/api/factory/[id]/pdf`, `/api/factory/combine/pdf`).
+- **Picker** ([CalculatorView] `PaymentPlanPicker`) gains "⛔ ללא תנאי תשלום" and
+  defaults to it. **Settings** toggle "צרף תנאי תשלום להצעות כברירת מחדל"
+  (`paymentTerms.includeByDefault`, persisted).
+- **The bot is UNCHANGED** — `buildQuoteMessage` never sends payment terms, independent
+  of this setting (a cold lead must not get bank details).
+- Deals keep THEIR own stored terms (`row.paymentPlan`) on an ad-hoc PDF view —
+  the "off" default only governs fresh manual sends.
+- **Rule:** any hand-built engine/send path that attaches payment MUST route the plan
+  through `resolveEffectivePlanId`. See memory [[payment-details-template]].
