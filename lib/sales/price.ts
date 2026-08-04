@@ -13,6 +13,10 @@ import type { FactoryPricingResult, FactoryProductSpec } from "@/lib/factory/typ
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
 
+/** Same default as the boss calculator (CalculatorView MOLD_CNY_PER_COLOR) so a
+ *  sales quote prices IDENTICALLY: one-time printing mold ¥500 per logo colour. */
+const MOLD_CNY_PER_COLOR = 500;
+
 export interface SalesCatalogInput {
   productId: string; // p1..p13
   quantityTierId?: string | null; // q0..q3
@@ -68,14 +72,18 @@ function buildSpec(
 export async function computeCatalogSales(
   input: SalesCatalogInput
 ): Promise<{ full: FactoryPricingResult; spec: FactoryProductSpec; customer: SalesCustomerQuote } | null> {
+  const colors = Math.max(1, input.logoColors);
   const calc = await calculateQuoteByCodes({
     productId: input.productId,
     quantityTierId: input.quantityTierId ?? "",
     quantityOverride: input.quantityOverride ?? null,
     hasHandles: input.hasHandles,
-    logoColors: Math.max(1, input.logoColors),
+    logoColors: colors,
     hasLamination: input.hasLamination,
     shippingOptionId: input.shippingOptionId,
+    // Match the manual calculator's default (¥500 × colours) so the customer
+    // price is identical to what the boss calculator would produce.
+    moldsCostCny: MOLD_CNY_PER_COLOR * colors,
   });
   if (!calc?.result) return null;
   const r = calc.result;

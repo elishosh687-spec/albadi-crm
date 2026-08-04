@@ -242,6 +242,12 @@ export function SalesCalculator({ token }: { token: string }) {
               <span className="text-3xl font-medium">{ils(quote.unitSellingPriceIls)}</span>
               <span className="text-xs text-muted-foreground">כולל שילוח</span>
             </div>
+            {quote.moldsTotalIls > 0 && (
+              <div className="mt-2 pt-2 border-t border-primary/20 flex justify-between text-xs text-muted-foreground">
+                <span>תבניות / מולד ({colors} צבעים · חד-פעמי)</span>
+                <span>{ils(quote.moldsTotalIls)}</span>
+              </div>
+            )}
             <div className="mt-2 pt-2 border-t border-primary/30 flex justify-between text-sm">
               <span>סה״כ הזמנה ({quote.quantity.toLocaleString()} יח׳)</span>
               <span className="font-medium">{ils(quote.totalOrderIls)}</span>

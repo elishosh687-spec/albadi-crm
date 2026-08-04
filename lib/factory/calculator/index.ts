@@ -189,6 +189,10 @@ export interface CalculateByCodesInput {
   logoColors: number;
   hasLamination: boolean;
   shippingOptionId: string; // s1 | s2
+  /** One-time mold/tooling fee in CNY. The manual calculator defaults it to
+   *  ¥500 × colours; the bot auto-quote leaves it 0. Forwarded to the engine so
+   *  a caller (e.g. the sales screen) can price IDENTICALLY to quote-preview. */
+  moldsCostCny?: number;
 }
 
 export interface CalculateByCodesOutput {
@@ -250,6 +254,7 @@ export async function calculateQuoteByCodes(
     logoColors: input.logoColors,
     shippingOptionId: input.shippingOptionId,
     selectedFeatureIds: input.hasLamination ? ["f1"] : [],
+    moldsCostCny: input.moldsCostCny,
   };
 
   const cfg = await buildMergedConfig();
