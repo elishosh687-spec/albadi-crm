@@ -11,12 +11,13 @@ import { db } from "@/lib/db";
 import { leads } from "@/drizzle/schema";
 import { desc, or, ilike, sql } from "drizzle-orm";
 import { widgetAuthed } from "@/lib/widget/auth";
+import { salesAuthed } from "@/lib/widget/sales-auth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest) {
-  if (!widgetAuthed(req)) {
+  if (!widgetAuthed(req) && !salesAuthed(req)) {
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
   const url = new URL(req.url);

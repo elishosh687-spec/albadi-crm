@@ -12,6 +12,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { widgetAuthed } from "@/lib/widget/auth";
+import { salesAuthed } from "@/lib/widget/sales-auth";
 import { createFactoryDraft } from "@/lib/factory/create-request";
 import { getFactoryConfig } from "@/lib/factory/config";
 import { sendEliDM } from "@/lib/notify/eli";
@@ -86,7 +87,7 @@ async function resolveShippingLabel(
 }
 
 export async function POST(req: NextRequest) {
-  if (!widgetAuthed(req)) {
+  if (!widgetAuthed(req) && !salesAuthed(req)) {
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
   let body: z.infer<typeof BodySchema>;

@@ -6,7 +6,7 @@
  * which return customer-facing numbers only (no cost/profit/margin/commission).
  */
 import { WIDGET_SALES_TOKEN } from "@/lib/widget/sales-auth";
-import { SalesCalculator } from "@/components/sales/SalesCalculator";
+import { SalesShell } from "@/components/sales/SalesShell";
 
 export const dynamic = "force-dynamic";
 
@@ -26,5 +26,5 @@ export default async function SalesPage({
       </div>
     );
   }
-  return <SalesCalculator token={token} />;
+  return <SalesShell token={token} />;
 }

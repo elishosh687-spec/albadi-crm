@@ -71,7 +71,7 @@ const EMPTY_SPEC = {
   notes: "",
 };
 
-export function SalesQuoteRequestForm({ apiToken }: { apiToken: string }) {
+export function SalesQuoteRequestForm({ apiToken, salesMode = false }: { apiToken: string; salesMode?: boolean }) {
   // --- customer picker state ---
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<LeadOption[]>([]);
@@ -99,11 +99,17 @@ export function SalesQuoteRequestForm({ apiToken }: { apiToken: string }) {
 
   useEffect(() => {
     let alive = true;
-    fetch(widgetUrl("/api/widget/factory/config", apiToken))
+    // Sales tab pulls ONLY the shipping option identity (no margins/commission/FX
+    // leak); boss tab reads the full config. Both shapes handled below.
+    const url = salesMode
+      ? widgetUrl("/api/sales/shipping-options", apiToken)
+      : widgetUrl("/api/widget/factory/config", apiToken);
+    fetch(url)
       .then((r) => r.json())
       .then((data) => {
-        if (!alive || !data?.ok || !data?.config?.shippingOptions) return;
-        const opts = data.config.shippingOptions as Array<{
+        const raw = salesMode ? data?.shippingOptions : data?.config?.shippingOptions;
+        if (!alive || !data?.ok || !raw) return;
+        const opts = raw as Array<{
           id: string;
           name: string;
           type: "sea" | "air";
@@ -120,7 +126,7 @@ export function SalesQuoteRequestForm({ apiToken }: { apiToken: string }) {
     return () => {
       alive = false;
     };
-  }, [apiToken]);
+  }, [apiToken, salesMode]);
 
   const set = <K extends keyof typeof EMPTY_SPEC>(key: K, val: (typeof EMPTY_SPEC)[K]) =>
     setF((prev) => ({ ...prev, [key]: val }));

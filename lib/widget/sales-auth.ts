@@ -35,9 +35,14 @@ function verify(token: string | null | undefined): boolean {
 /** True when the request carries a valid sales token (query `token`/`sales_token`
  *  or `Authorization: Bearer`). */
 export function salesAuthed(req: NextRequest): boolean {
+  const p = req.nextUrl.searchParams;
+  // Accept the sales token under `token`, `sales_token`, OR `widget_token` — the
+  // last lets shared components (e.g. the factory-request form's widgetUrl helper,
+  // which always emits `widget_token`) reuse their existing plumbing with the
+  // sales token. It can never grant boss access: `widgetAuthed` compares
+  // `widget_token` against GHL_WIDGET_TOKEN, a different secret.
   const fromQuery =
-    req.nextUrl.searchParams.get("sales_token") ??
-    req.nextUrl.searchParams.get("token");
+    p.get("sales_token") ?? p.get("token") ?? p.get("widget_token");
   const fromHeader = req.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
   return verify(fromQuery) || verify(fromHeader);
 }
