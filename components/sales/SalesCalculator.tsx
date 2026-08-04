@@ -100,6 +100,12 @@ export function SalesCalculator({ token }: { token: string }) {
 
   const estimateReady = mode !== "estimate" || (Number(dimW) > 0 && Number(dimH) > 0);
 
+  // 3+ colours REQUIRE lamination (factory rule, Eli 2026-07-22) — auto-turn on.
+  const laminationForced = colors >= 3;
+  useEffect(() => {
+    if (laminationForced && !lamination) setLamination(true);
+  }, [laminationForced, lamination]);
+
   // live customer price (debounced)
   useEffect(() => {
     let alive = true;
@@ -268,7 +274,13 @@ export function SalesCalculator({ token }: { token: string }) {
       {/* Spec toggles */}
       <div className="flex flex-wrap gap-2">
         <Toggle on={handles} set={setHandles} label="ידיות" />
-        <Toggle on={lamination} set={setLamination} label="למינציה" />
+        {laminationForced ? (
+          <span className="px-3 py-2 rounded-lg border border-primary/50 bg-primary/10 text-sm text-primary" title="3 צבעים ומעלה מחייבים למינציה">
+            למינציה: חובה (3+ צבעים)
+          </span>
+        ) : (
+          <Toggle on={lamination} set={setLamination} label="למינציה" />
+        )}
         <div className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-border bg-card/40">
           <span className="text-sm text-muted-foreground">צבעים</span>
           <select value={colors} onChange={(e) => setColors(Number(e.target.value))} className="bg-transparent text-sm outline-none">
