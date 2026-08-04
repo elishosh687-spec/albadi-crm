@@ -26,6 +26,7 @@ function buildConfig(
       globalProfitMargin: marginOverride ?? dbConfig.defaultProfitMargin,
       profitMarginByQuantity: margins,
       negotiationBufferAgorot: dbConfig.negotiationBufferAgorot,
+      laminationPlateFeePerColorCny: dbConfig.laminationPlateFeePerColorCny,
     },
     shippingOptions: DEFAULT_CONFIG.shippingOptions.map((s) => {
       const dbOpt = dbConfig.shippingOptions.find((d) => d.type === s.type && d.enabled);

@@ -79,6 +79,9 @@ export interface AdminSettings {
   /** Negotiation cushion added to every per-bag price, in agorot (1/100 ₪).
    *  Global — the bot auto-quote and the manual calculator both apply it. */
   negotiationBufferAgorot?: number;
+  /** Global lamination plate fee ¥/colour (settings default ¥500) — wins over
+   *  the per-product catalog value when set. */
+  laminationPlateFeePerColorCny?: number;
 }
 
 export interface AppConfig {

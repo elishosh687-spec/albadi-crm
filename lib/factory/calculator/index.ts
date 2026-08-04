@@ -226,6 +226,7 @@ async function buildMergedConfig(): Promise<AppConfig> {
       globalProfitMargin: dbConfig.defaultProfitMargin,
       profitMarginByQuantity: { ...matrix },
       negotiationBufferAgorot: dbConfig.negotiationBufferAgorot,
+      laminationPlateFeePerColorCny: dbConfig.laminationPlateFeePerColorCny,
     },
     shippingOptions: DEFAULT_CONFIG.shippingOptions.map((s) => {
       const dbOpt = dbConfig.shippingOptions.find(

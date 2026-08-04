@@ -84,9 +84,12 @@ export function calculateQuote(
     ? findClosestPrice(variant.laminationPrices ?? {}, quantityKey)
     : basePriceCny;
 
-  // Lamination: plate fee per print color, not logo addon
+  // Lamination: plate fee per print color, not logo addon. Eli 2026-08-04 — a
+  // single global default (¥500/colour, settings-editable) replaces the varying
+  // per-product catalog values; the per-product value is only a legacy fallback.
+  const platePerColorCny = adminSettings.laminationPlateFeePerColorCny ?? product.laminationColorPlateFee ?? 0;
   const laminationColorCostCny = hasLamination
-    ? ((product.laminationColorPlateFee ?? 0) * formData.logoColors) / quantity
+    ? (platePerColorCny * formData.logoColors) / quantity
     : 0;
 
   // Color addon per unit CNY (regular bags only — logo colors)

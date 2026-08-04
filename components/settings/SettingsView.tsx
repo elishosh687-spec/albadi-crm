@@ -116,7 +116,7 @@ export function SettingsView({ apiToken }: { apiToken: string }) {
   };
 
   const updateNumber = (
-    key: "usdToIls" | "usdToCny" | "ilsToCny" | "defaultProfitMargin" | "commissionPct" | "negotiationBufferAgorot",
+    key: "usdToIls" | "usdToCny" | "ilsToCny" | "defaultProfitMargin" | "commissionPct" | "negotiationBufferAgorot" | "laminationPlateFeePerColorCny",
     v: string
   ) => {
     const num = Number(v);
@@ -430,6 +430,7 @@ export function SettingsView({ apiToken }: { apiToken: string }) {
           <NumField label="רווח ברירת מחדל" suffix="%" hint="נופל-חזרה כשאין ערך בטבלת הכמויות (לכמויות חופשיות)" value={state.defaultProfitMargin} step={1} onChange={(v) => updateNumber("defaultProfitMargin", v)} error={errors.defaultProfitMargin as string | undefined} />
           <NumField label="עמלת מכירות" suffix="%" badge="לבוס בלבד" accent hint="אחוז מסכום העסקה הכולל — לא משפיע על מחיר הלקוח." value={state.commissionPct ?? 10} step={0.5} onChange={(v) => updateNumber("commissionPct", v)} error={errors.commissionPct as string | undefined} />
           <NumField label="מרווח מיקוח" suffix="אג׳/שקית" hint="מתווסף למחיר כל שקית (בוט + ידני) כמקום לרדת בהתמקחות. 0 = כבוי." value={state.negotiationBufferAgorot ?? 0} step={1} onChange={(v) => updateNumber("negotiationBufferAgorot", v)} error={errors.negotiationBufferAgorot as string | undefined} />
+          <NumField label="עמלת למינציה (פלייט)" suffix="¥/צבע" hint="עלות המפעל לפלייט למינציה, פר צבע (חד-פעמי, רק על שקיות עם למינציה). ברירת מחדל ¥500." value={state.laminationPlateFeePerColorCny ?? 500} step={50} onChange={(v) => updateNumber("laminationPlateFeePerColorCny", v)} error={errors.laminationPlateFeePerColorCny as string | undefined} />
         </div>
         <div className="mt-4 rounded-lg border border-border/60 bg-background/30 p-3">
           <h3 className="text-xs font-medium mb-0.5">אחוזי רווחיות לפי כמות</h3>
@@ -762,6 +763,8 @@ function validate(s: FactoryPricingConfig): Record<string, unknown> {
     errors.commissionPct = "חובה 0–100";
   if (s.negotiationBufferAgorot !== undefined && !(s.negotiationBufferAgorot >= 0 && s.negotiationBufferAgorot <= 1000))
     errors.negotiationBufferAgorot = "חובה 0–1000";
+  if (s.laminationPlateFeePerColorCny !== undefined && !(s.laminationPlateFeePerColorCny >= 0))
+    errors.laminationPlateFeePerColorCny = "חובה ≥ 0";
   if (s.profitMarginByQuantity) {
     for (const [qty, pct] of Object.entries(s.profitMarginByQuantity)) {
       if (!(pct >= 0)) errors[`margin:${qty}`] = "חובה ≥ 0";

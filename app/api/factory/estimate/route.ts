@@ -30,7 +30,7 @@ function buildConfig(dbConfig: Awaited<ReturnType<typeof getFactoryConfig>>, cus
     activeSeaCarrierId: dbConfig.activeSeaCarrierId ?? DEFAULT_CONFIG.activeSeaCarrierId,
     assumedShipmentCbm: dbConfig.assumedShipmentCbm ?? DEFAULT_CONFIG.assumedShipmentCbm,
     exchangeRates: { usdToIls: dbConfig.usdToIls, usdToCny: dbConfig.usdToCny },
-    adminSettings: { globalProfitMargin: marginOverride ?? dbConfig.defaultProfitMargin, profitMarginByQuantity: margins, negotiationBufferAgorot: dbConfig.negotiationBufferAgorot },
+    adminSettings: { globalProfitMargin: marginOverride ?? dbConfig.defaultProfitMargin, profitMarginByQuantity: margins, negotiationBufferAgorot: dbConfig.negotiationBufferAgorot, laminationPlateFeePerColorCny: dbConfig.laminationPlateFeePerColorCny },
     shippingOptions: DEFAULT_CONFIG.shippingOptions.map((s) => {
       const dbOpt = dbConfig.shippingOptions.find((d) => d.type === s.type && d.enabled);
       return dbOpt ? { ...s, enabled: dbOpt.enabled, seaRate: dbOpt.seaRate ?? s.seaRate, airRates: dbOpt.airRates ?? s.airRates } : s;

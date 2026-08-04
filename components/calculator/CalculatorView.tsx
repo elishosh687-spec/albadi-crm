@@ -85,7 +85,7 @@ interface PreviewResult {
 
 // Default one-time mold/tooling fee per logo colour (¥ CNY). Each colour needs
 // its own printing mold, so the calculator pre-fills ¥500 × colours (Eli 2026-07-23).
-const MOLD_CNY_PER_COLOR = 500;
+const MOLD_CNY_PER_COLOR = 1000;
 // Max selectable logo colours across every calculator surface (Eli 2026-07-23).
 const MAX_LOGO_COLORS = 6;
 

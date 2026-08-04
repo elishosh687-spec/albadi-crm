@@ -164,6 +164,13 @@ export interface FactoryPricingConfig {
    * Eli 2026-08-03. Applies globally (bot included).
    */
   negotiationBufferAgorot?: number;
+  /**
+   * Factory lamination plate fee, ¥ PER COLOUR (one-time), charged only on
+   * laminated bags. Eli 2026-08-04: a single global default (¥500) editable in
+   * settings, replacing the varying per-product catalog values. Optional —
+   * missing falls back to the per-product catalog value.
+   */
+  laminationPlateFeePerColorCny?: number;
   /** Currency code for customer display; always "ILS" for now */
   currency: "ILS";
 }
