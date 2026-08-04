@@ -49,6 +49,7 @@ export async function POST(req: NextRequest) {
       logoColors: Number(body.logoColors) || 1,
       hasLamination: !!body.hasLamination,
       shippingOptionId: String(body.shippingOptionId),
+      moldPerColorCny: typeof body.moldPerColorCny === "number" ? body.moldPerColorCny : undefined,
     });
     if (!priced) return NextResponse.json({ ok: false, error: "cannot_price" }, { status: 422 });
 

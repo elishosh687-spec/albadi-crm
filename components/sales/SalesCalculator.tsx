@@ -54,6 +54,7 @@ export function SalesCalculator({ token }: { token: string }) {
   const [colors, setColors] = useState(1);
   const [lamination, setLamination] = useState(false);
   const [shippingId, setShippingId] = useState(SHIPPING.find((s) => s.id === "s2")?.id ?? SHIPPING[0]?.id ?? "s2");
+  const [moldPerColor, setMoldPerColor] = useState<string>("1000"); // ¥ per colour, editable, 0 = none
   const [payPlan, setPayPlan] = useState<string>(NO_PAYMENT_PLAN_ID);
 
   // pricing
@@ -72,8 +73,9 @@ export function SalesCalculator({ token }: { token: string }) {
       logoColors: colors,
       hasLamination: lamination,
       shippingOptionId: shippingId,
+      moldPerColorCny: moldPerColor.trim() === "" ? undefined : Math.max(0, parseInt(moldPerColor, 10) || 0),
     };
-  }, [productId, tierId, customQty, handles, colors, lamination, shippingId]);
+  }, [productId, tierId, customQty, handles, colors, lamination, shippingId, moldPerColor]);
 
   // live customer price (debounced)
   useEffect(() => {
@@ -219,6 +221,25 @@ export function SalesCalculator({ token }: { token: string }) {
               {s.name} <span className="text-xs opacity-70">{s.description}</span>
             </button>
           ))}
+        </div>
+      </div>
+
+      {/* Mold (editable — negotiation room) */}
+      <div className="space-y-2">
+        <label className="text-xs text-muted-foreground">מולד / תבנית (חד-פעמי)</label>
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-muted-foreground">¥</span>
+          <input
+            type="number"
+            min={0}
+            value={moldPerColor}
+            onChange={(e) => setMoldPerColor(e.target.value)}
+            className="w-24 h-9 rounded-lg border border-border bg-card/40 px-3 text-sm text-center"
+          />
+          <span className="text-sm text-muted-foreground">לצבע · × {colors} צבעים</span>
+          {moldPerColor.trim() !== "0" && (
+            <button type="button" onClick={() => setMoldPerColor("0")} className="text-xs text-muted-foreground underline">בטל מולד</button>
+          )}
         </div>
       </div>
 

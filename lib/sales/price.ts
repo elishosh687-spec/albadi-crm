@@ -13,9 +13,12 @@ import type { FactoryPricingResult, FactoryProductSpec } from "@/lib/factory/typ
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
 
-/** Same default as the boss calculator (CalculatorView MOLD_CNY_PER_COLOR) so a
- *  sales quote prices IDENTICALLY: one-time printing mold ¥500 per logo colour. */
-const MOLD_CNY_PER_COLOR = 500;
+/** Default one-time printing mold the sales screen pre-fills, in ¥ per logo
+ *  colour. Eli 2026-08-04 wants the salesperson's default at ¥1000/colour (more
+ *  room to discount), editable per quote down to 0. NOTE: the boss calculator's
+ *  default is ¥500/colour — a sales quote left at this default prices slightly
+ *  higher than a boss one until/unless the two defaults are aligned. */
+const SALES_DEFAULT_MOLD_CNY_PER_COLOR = 1000;
 
 export interface SalesCatalogInput {
   productId: string; // p1..p13
@@ -25,6 +28,9 @@ export interface SalesCatalogInput {
   logoColors: number;
   hasLamination: boolean;
   shippingOptionId: string; // s1 | s2 (or catalog ids)
+  /** One-time mold in ¥ PER COLOUR — the salesperson can lower it (down to 0) as
+   *  negotiation room. Undefined → the sales default (¥1000/colour). */
+  moldPerColorCny?: number;
 }
 
 /** The ONLY shape the sales client ever receives for a price. */
@@ -73,6 +79,11 @@ export async function computeCatalogSales(
   input: SalesCatalogInput
 ): Promise<{ full: FactoryPricingResult; spec: FactoryProductSpec; customer: SalesCustomerQuote } | null> {
   const colors = Math.max(1, input.logoColors);
+  // Salesperson's mold, ¥ per colour (default ¥1000, editable to 0). × colours.
+  const perColor =
+    input.moldPerColorCny !== undefined && input.moldPerColorCny >= 0
+      ? input.moldPerColorCny
+      : SALES_DEFAULT_MOLD_CNY_PER_COLOR;
   const calc = await calculateQuoteByCodes({
     productId: input.productId,
     quantityTierId: input.quantityTierId ?? "",
@@ -81,9 +92,7 @@ export async function computeCatalogSales(
     logoColors: colors,
     hasLamination: input.hasLamination,
     shippingOptionId: input.shippingOptionId,
-    // Match the manual calculator's default (¥500 × colours) so the customer
-    // price is identical to what the boss calculator would produce.
-    moldsCostCny: MOLD_CNY_PER_COLOR * colors,
+    moldsCostCny: r2(perColor * colors),
   });
   if (!calc?.result) return null;
   const r = calc.result;
