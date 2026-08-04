@@ -89,6 +89,34 @@ export const PAYMENT_PRESETS: PaymentPlan[] = [
 
 export const DEFAULT_PAYMENT_PLAN_ID = "50_50";
 
+/** Sentinel plan id meaning "send WITHOUT any payment terms" — the salesperson
+ *  picked "⛔ ללא תנאי תשלום" (Eli 2026-08-03: he confirms terms per-call, doesn't
+ *  want them auto-attached to a quote). Threaded through the same paymentPlanId
+ *  slot as a real plan; every builder skips its payment block when it resolves
+ *  to null. */
+export const NO_PAYMENT_PLAN_ID = "none";
+
+/**
+ * The effective payment plan id for a send, or `null` = attach NO payment block.
+ *
+ * - explicit "none"  → null (salesperson chose to omit terms this send).
+ * - explicit real id → that id.
+ * - no explicit pick → the settings default ONLY when `includeByDefault` is on;
+ *   otherwise null. Eli's default (2026-08-03) is OFF — a quote goes out clean
+ *   and terms are added deliberately per-send. The BOT never calls this (it is
+ *   permanently without terms, unrelated to this setting).
+ */
+export function resolveEffectivePlanId(
+  explicit: string | null | undefined,
+  cfg: { includeByDefault?: boolean; defaultPlanId?: string } | null | undefined
+): string | null {
+  const id = (explicit ?? "").trim();
+  if (id === NO_PAYMENT_PLAN_ID) return null;
+  if (id) return id;
+  if (cfg?.includeByDefault) return cfg.defaultPlanId || DEFAULT_PAYMENT_PLAN_ID;
+  return null;
+}
+
 /** A two-stage plan with an arbitrary deposit % (the "אחוז חופשי" field). */
 export function customDepositPlan(depositPct: number): PaymentPlan {
   const dep = Math.min(100, Math.max(1, Math.round(depositPct)));

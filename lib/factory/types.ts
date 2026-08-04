@@ -138,7 +138,15 @@ export interface FactoryPricingConfig {
    * quote. Optional for back-compat — `normalizeConfig` backfills it.
    * See lib/factory/payment-terms.ts. Added 2026-07-28.
    */
-  paymentTerms?: { defaultPlanId: string; vatPct: number };
+  paymentTerms?: {
+    defaultPlanId: string;
+    vatPct: number;
+    /** Whether a manual quote (calculator/estimate/combined/finalized send)
+     *  attaches the payment block by default when the sender doesn't pick a plan.
+     *  Eli 2026-08-03: default OFF — the salesperson confirms terms per-call and
+     *  adds them deliberately. Does NOT affect the bot (permanently no terms). */
+    includeByDefault?: boolean;
+  };
   /**
    * Profit margin % per quantity tier. Keys are quantity strings matching
    * `quantityTiers[].quantity` (e.g. "1000","3000","5000","10000"). Falls back

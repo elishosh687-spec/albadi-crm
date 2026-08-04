@@ -15,6 +15,7 @@ import { eq } from "drizzle-orm";
 import { renderCustomerQuotePdf, fetchImageDataUri } from "@/lib/factory/pdf";
 import { getFactoryConfig } from "@/lib/factory/config";
 import type { StoredDealPlan } from "@/lib/factory/payment-terms";
+import { resolveEffectivePlanId } from "@/lib/factory/payment-terms";
 import type {
   FactoryProductSpec,
   FactoryPricingResult,
@@ -61,9 +62,21 @@ export async function GET(
   // the PDF prints VAT + amount due + installments + bank. Fall back to the stale
   // Blob only when there is genuinely no plan (legacy configs with no default).
   const cfg = await getFactoryConfig();
-  const planId = req.nextUrl.searchParams.get("plan") ?? cfg.paymentTerms?.defaultPlanId ?? null;
+  const planParam = req.nextUrl.searchParams.get("plan");
+  // The settings-resolved plan for this render: the ?plan= choice ("none" → no
+  // terms), or the settings default only when include-by-default is on (Eli
+  // 2026-08-03 → OFF). null = no payment block.
+  const settingsPlanId = resolveEffectivePlanId(planParam, cfg.paymentTerms);
+  // What the fresh render actually prints: an explicit send choice wins; an
+  // ad-hoc view (no ?plan=) falls back to the DEAL's own stored terms, else the
+  // settings-resolved plan. So a closed deal always keeps ITS agreed terms.
+  const renderPlan: StoredDealPlan | null = planParam
+    ? settingsPlanId
+    : ((row.paymentPlan as StoredDealPlan | null) ?? settingsPlanId);
 
-  if (row.pdfUrl && !planId) {
+  // Serve the stale finalize Blob only when there is genuinely nothing to render
+  // (no plan at all) AND no explicit re-render was requested.
+  if (row.pdfUrl && !renderPlan && !planParam) {
     if (!stream) return NextResponse.redirect(row.pdfUrl);
     try {
       const upstream = await fetch(row.pdfUrl);
@@ -106,14 +119,9 @@ export async function GET(
       customerNotes: spec.customerNotes,
       picDataUri,
       quotationNo: row.quotationNo ?? id.slice(-8).toUpperCase(),
-      // ?plan= is set by the WhatsApp send so the attached PDF prints the SAME
-      // VAT + payment schedule as the caption (Eli 2026-07-28). Absent → the
-      // deal's own stored plan (row.paymentPlan), else the operator's configured
-      // default — so a deal with custom terms prints its own schedule and an
-      // ad-hoc download still shows payment terms rather than a bare ex-VAT quote.
-      paymentPlan: req.nextUrl.searchParams.get("plan")
-        ? planId
-        : ((row.paymentPlan as StoredDealPlan | null) ?? planId),
+      // renderPlan (above): the send's ?plan= choice ("none" → null → no block),
+      // else the deal's own stored terms, else the settings-resolved default.
+      paymentPlan: renderPlan,
       vatPct: cfg.paymentTerms?.vatPct,
     });
 

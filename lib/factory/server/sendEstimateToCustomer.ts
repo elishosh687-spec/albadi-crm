@@ -22,6 +22,7 @@ import { applyShippingSplit, splitCustomerView } from "@/lib/factory/shipping-sp
 import {
   VAT_PCT,
   resolvePaymentPlan,
+  resolveEffectivePlanId,
   computePaymentSchedule,
   buildPaymentBlock,
   type PaymentPlan,
@@ -34,7 +35,7 @@ function buildEstimateCaption(
   name: string,
   spec: FactoryProductSpec,
   pricing: FactoryPricingResult,
-  plan: PaymentPlan,
+  plan: PaymentPlan | null,
   vatPct: number
 ): string {
   const dims = [spec.widthCm, spec.depthCm, spec.heightCm].filter((n) => n && n > 0).join("×");
@@ -66,7 +67,7 @@ function buildEstimateCaption(
             v.moldsIls > 0 ? `🧩 תבניות / מולדים (חד פעמי): ${fmtIls(v.moldsIls)}` : null,
             `*💵 סה״כ משוער: ${fmtIls(v.grandTotalIls)}*`,
             "_(לא כולל מע״מ)_",
-            ...buildPaymentBlock(computePaymentSchedule(v.grandTotalIls, plan, vatPct), vatPct),
+            ...(plan ? buildPaymentBlock(computePaymentSchedule(v.grandTotalIls, plan, vatPct), vatPct) : []),
           ];
         })()
       : (() => {
@@ -81,7 +82,7 @@ function buildEstimateCaption(
             pricing.shippingOptionName ? `🚚 שיטת שילוח: ${pricing.shippingOptionName}` : null,
             `*💵 סה״כ משוער: ${fmtIls(total)}*`,
             "_(לא כולל מע״מ)_",
-            ...buildPaymentBlock(computePaymentSchedule(total, plan, vatPct), vatPct),
+            ...(plan ? buildPaymentBlock(computePaymentSchedule(total, plan, vatPct), vatPct) : []),
           ];
         })()),
     "",
@@ -190,14 +191,20 @@ export async function sendEstimateToCustomer(input: SendEstimateInput): Promise<
 
   const customerName = input.customerName ?? lead.name ?? "";
   const vatPct = config.paymentTerms?.vatPct ?? VAT_PCT;
-  const plan = resolvePaymentPlan(input.paymentPlanId ?? config.paymentTerms?.defaultPlanId);
+  // Effective plan: the picked id, "none" → no terms, or settings default only
+  // when include-by-default is on (Eli 2026-08-03 → OFF).
+  const planId = resolveEffectivePlanId(input.paymentPlanId, config.paymentTerms);
+  const plan = planId ? resolvePaymentPlan(planId) : null;
   const caption = buildEstimateCaption(customerName, productSpec, pricing, plan, vatPct);
 
   // Render PDF + upload to Blob (estimate has no DB id → timestamped key). GreenAPI needs a
   // direct-download URL; the Blob URL is one. Without a Blob token we send text-only.
   let pdfUrl: string | undefined;
   try {
-    const buf = await renderCustomerQuotePdf({ customerName, spec: productSpec, pricing, breakdown: null, isEstimate: true });
+    // Pass the resolved plan so the PDF matches the caption (adds terms when a
+    // plan is chosen, none by default). Previously the estimate PDF never got a
+    // plan — a silent mismatch with its caption.
+    const buf = await renderCustomerQuotePdf({ customerName, spec: productSpec, pricing, breakdown: null, isEstimate: true, paymentPlan: planId, vatPct });
     if (process.env.BLOB_READ_WRITE_TOKEN) {
       const { put } = await import("@vercel/blob");
       const blob = await put(`factory-estimates/${input.sid}-${Date.now()}.pdf`, buf, {

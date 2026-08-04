@@ -18,7 +18,9 @@ import { getFactoryConfig } from "@/lib/factory/config";
 import { notifyItayQuoteSent } from "@/lib/notify/itay";
 import {
   VAT_PCT,
+  NO_PAYMENT_PLAN_ID,
   resolveDealSchedule,
+  resolveEffectivePlanId,
   buildPaymentBlock,
   type StoredDealPlan,
 } from "@/lib/factory/payment-terms";
@@ -174,7 +176,11 @@ export async function sendCombinedQuoteWhatsapp(
   // Manual merged-CBM override → the attached PDF must price shipping on the same
   // volume, else the caption total and the PDF total diverge.
   const cbmQs = cbmOverride && cbmOverride > 0 ? `&cbm=${encodeURIComponent(String(cbmOverride))}` : "";
-  const pdfMediaUrl = `${proto}://${host}/api/factory/combine/pdf?ids=${encodeURIComponent(idsParam)}${splitQs}${cbmQs}`;
+  // Pass the send's explicit plan choice (a preset id or "none") so the attached
+  // PDF matches the caption. Omitted when no explicit choice → the PDF route
+  // falls back to the primary's stored plan / settings default, same as the caption.
+  const planQs = paymentPlanId ? `&plan=${encodeURIComponent(paymentPlanId)}` : "";
+  const pdfMediaUrl = `${proto}://${host}/api/factory/combine/pdf?ids=${encodeURIComponent(idsParam)}${splitQs}${cbmQs}${planQs}`;
 
   const priced = rows.map((r) => ({ id: r.id, p: r.finalPricing as FactoryPricingResult }));
   // Never send a merged offer we cannot price shipping for — combinedShippingIls
@@ -212,19 +218,27 @@ export async function sendCombinedQuoteWhatsapp(
   // payment_plan (oldest member — where the deal's custom terms live) → config
   // default. resolveDealSchedule handles both preset ids and custom objects.
   const primaryRow = [...rows].sort((a, b) => +a.createdAt - +b.createdAt)[0];
+  // Effective plan: explicit "none" → no terms; explicit id → that; else the
+  // deal PRIMARY's own stored terms, else the settings default ONLY when
+  // include-by-default is on (Eli 2026-08-03 → OFF).
   const storedPlan: StoredDealPlan | null =
-    paymentPlanId ??
-    ((primaryRow?.paymentPlan as StoredDealPlan | null) ?? cfg.paymentTerms?.defaultPlanId ?? null);
+    paymentPlanId === NO_PAYMENT_PLAN_ID
+      ? null
+      : (paymentPlanId ??
+        ((primaryRow?.paymentPlan as StoredDealPlan | null) ??
+          resolveEffectivePlanId(undefined, cfg.paymentTerms)));
   const caption = [
     greeting,
     "",
-    "*פרטי תשלום ופירוט חשבון*",
+    storedPlan ? "*פרטי תשלום ופירוט חשבון*" : "*הצעת מחיר משולבת*",
     title,
     "",
     ...splitLines,
     `*💵 סה״כ: ${formatIls(totals.grandTotal)}*`,
     validSplit ? "_(לא כולל מע״מ)_" : "_(כולל שילוח, לא כולל מע״מ)_",
-    ...buildPaymentBlock(resolveDealSchedule(totals.grandTotal, storedPlan, vatPct), vatPct),
+    ...(storedPlan
+      ? buildPaymentBlock(resolveDealSchedule(totals.grandTotal, storedPlan, vatPct), vatPct)
+      : []),
   ].join("\n");
 
   const pdfFilename = `הצעת-מחיר-משולבת-${ids.length}-מוצרים.pdf`;

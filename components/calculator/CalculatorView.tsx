@@ -11,6 +11,7 @@ import {
   VAT_PCT,
   PAYMENT_PRESETS,
   DEFAULT_PAYMENT_PLAN_ID,
+  NO_PAYMENT_PLAN_ID,
   customDepositPlan,
   resolvePaymentPlan,
   computePaymentSchedule,
@@ -102,7 +103,9 @@ export function CalculatorView({ products, quantityTiers, shippingOptions, initi
   const [splitMode, setSplitMode] = useState(false);
   const [operatorSplit, setOperatorSplit] = useState<SplitReport | null>(null);
   // Payment schedule quoted at the end of the customer message.
-  const [payPlanId, setPayPlanId] = useState<string>(DEFAULT_PAYMENT_PLAN_ID);
+  // Default OFF (Eli 2026-08-03): a quote goes out WITHOUT payment terms; the
+  // salesperson picks a plan here only when he wants to attach them.
+  const [payPlanId, setPayPlanId] = useState<string>(NO_PAYMENT_PLAN_ID);
   const hasAirAndSea =
     shippingOptions.some((s) => s.type === "air" && s.enabled) &&
     shippingOptions.some((s) => s.type === "sea" && s.enabled);
@@ -1149,7 +1152,9 @@ function EstimateTab({ apiToken, shippingOptions, sid, leadName, initialMargins,
   const [shippingId, setShippingId] = useState(shippingOptions.find((s) => s.type === "sea")?.id ?? shippingOptions[0]?.id ?? "s2");
   const [splitMode, setSplitMode] = useState(false);
   const [estimateSplit, setEstimateSplit] = useState<SplitReport | null>(null);
-  const [payPlanId, setPayPlanId] = useState<string>(DEFAULT_PAYMENT_PLAN_ID);
+  // Default OFF (Eli 2026-08-03): a quote goes out WITHOUT payment terms; the
+  // salesperson picks a plan here only when he wants to attach them.
+  const [payPlanId, setPayPlanId] = useState<string>(NO_PAYMENT_PLAN_ID);
   const hasAirAndSea =
     shippingOptions.some((s) => s.type === "air" && s.enabled) &&
     shippingOptions.some((s) => s.type === "sea" && s.enabled);
@@ -2233,11 +2238,14 @@ function buildQuoteText(opts: {
   // The ex-VAT total this text PRINTS — the payment block builds on it, never
   // on a recomputed figure.
   let printedTotalIls = 0;
+  // "ללא תנאי תשלום" (or unset) → send a plain quote with NO payment block.
+  const includePayment =
+    !!opts.paymentPlanId && opts.paymentPlanId !== NO_PAYMENT_PLAN_ID;
 
   const lines: (string | null)[] = [
     greeting,
     "",
-    "*פרטי תשלום ופירוט חשבון*",
+    includePayment ? "*פרטי תשלום ופירוט חשבון*" : "*הצעת מחיר*",
     "",
     "📦 *פרטי המוצר*",
     productDesc ? `מוצר: ${productDesc}` : null,
@@ -2294,14 +2302,17 @@ function buildQuoteText(opts: {
     printedTotalIls = total;
   }
 
-  // VAT → amount due → payment schedule → bank details (Eli 2026-07-28).
+  // VAT → amount due → payment schedule → bank details (Eli 2026-07-28) — only
+  // when the sender attached a plan (default is "ללא", Eli 2026-08-03).
   const vatPct = opts.vatPct ?? VAT_PCT;
-  lines.push(
-    ...buildPaymentBlock(
-      computePaymentSchedule(printedTotalIls, resolvePaymentPlan(opts.paymentPlanId), vatPct),
-      vatPct
-    )
-  );
+  if (includePayment) {
+    lines.push(
+      ...buildPaymentBlock(
+        computePaymentSchedule(printedTotalIls, resolvePaymentPlan(opts.paymentPlanId), vatPct),
+        vatPct
+      )
+    );
+  }
   return lines.filter((l) => l !== null).join("\n");
 }
 
@@ -2641,6 +2652,20 @@ function PaymentPlanPicker({
   return (
     <div className="flex items-center gap-2 flex-wrap" dir="rtl">
       <span className="text-[11px] text-muted-foreground">פריסת תשלומים:</span>
+      {/* "ללא" — send the quote WITHOUT any payment terms (Eli 2026-08-03, the
+          default): the salesperson confirms terms per-call, adds them here only
+          when he wants. */}
+      <button
+        type="button"
+        onClick={() => onChange(NO_PAYMENT_PLAN_ID)}
+        className={`text-[11px] px-2.5 py-1 rounded-md border transition-colors ${
+          planId === NO_PAYMENT_PLAN_ID
+            ? "bg-primary text-primary-foreground border-primary"
+            : "border-border bg-background/40 text-muted-foreground hover:bg-secondary"
+        }`}
+      >
+        ⛔ ללא תנאי תשלום
+      </button>
       {PAYMENT_PRESETS.map((p) => (
         <button
           key={p.id}
@@ -2724,7 +2749,7 @@ function QuoteShareCard(props: {
 
       {props.onPaymentPlanChange && (
         <PaymentPlanPicker
-          planId={props.paymentPlanId ?? DEFAULT_PAYMENT_PLAN_ID}
+          planId={props.paymentPlanId ?? NO_PAYMENT_PLAN_ID}
           onChange={props.onPaymentPlanChange}
         />
       )}

@@ -333,6 +333,36 @@ export function SettingsView({ apiToken }: { apiToken: string }) {
 
       <FormSection icon={Percent} title="תנאי תשלום" desc="מה הלקוח רואה בסוף ההצעה בוואטסאפ — מע״מ, סה״כ לתשלום ופריסה">
         <div className="space-y-3">
+          {/* Master toggle: attach payment terms to a quote by default. Eli
+              2026-08-03 default OFF — the salesperson confirms terms per-call and
+              turns them on per-send. Does NOT affect the bot (never sends terms). */}
+          <label className="flex items-center justify-between gap-3 rounded-lg border border-border/70 bg-background/30 p-3 cursor-pointer">
+            <div>
+              <div className="text-xs font-medium">צרף תנאי תשלום להצעות כברירת מחדל</div>
+              <div className="text-[11px] text-muted-foreground">
+                כבוי (מומלץ) → הצעה נשלחת בלי פרטי בנק/פריסה, ואיש המכירות מוסיף אותם ידנית בשליחה. לא משפיע על הבוט.
+              </div>
+            </div>
+            <input
+              type="checkbox"
+              checked={state.paymentTerms?.includeByDefault ?? false}
+              onChange={(e) =>
+                setState((prev) =>
+                  prev
+                    ? {
+                        ...prev,
+                        paymentTerms: {
+                          defaultPlanId: prev.paymentTerms?.defaultPlanId ?? DEFAULT_PAYMENT_PLAN_ID,
+                          vatPct: prev.paymentTerms?.vatPct ?? VAT_PCT,
+                          includeByDefault: e.target.checked,
+                        },
+                      }
+                    : prev
+                )
+              }
+              className="size-4 accent-primary"
+            />
+          </label>
           <div>
             <div className="text-xs font-medium mb-2">פריסת תשלומים — ברירת מחדל</div>
             <div className="flex flex-wrap gap-2">
@@ -350,6 +380,7 @@ export function SettingsView({ apiToken }: { apiToken: string }) {
                               paymentTerms: {
                                 defaultPlanId: p.id,
                                 vatPct: prev.paymentTerms?.vatPct ?? VAT_PCT,
+                                includeByDefault: prev.paymentTerms?.includeByDefault ?? false,
                               },
                             }
                           : prev
@@ -384,6 +415,7 @@ export function SettingsView({ apiToken }: { apiToken: string }) {
                       paymentTerms: {
                         defaultPlanId: prev.paymentTerms?.defaultPlanId ?? DEFAULT_PAYMENT_PLAN_ID,
                         vatPct: Number(v) || VAT_PCT,
+                        includeByDefault: prev.paymentTerms?.includeByDefault ?? false,
                       },
                     }
                   : prev

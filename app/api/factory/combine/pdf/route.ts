@@ -22,6 +22,7 @@ import {
 import { allocateCombined, resolveMergedShippingOption } from "@/lib/factory/combined";
 import { getFactoryConfig } from "@/lib/factory/config";
 import type { StoredDealPlan } from "@/lib/factory/payment-terms";
+import { resolveEffectivePlanId } from "@/lib/factory/payment-terms";
 import type {
   FactoryProductSpec,
   FactoryPricingResult,
@@ -146,13 +147,15 @@ export async function GET(req: NextRequest) {
     const primary = [...ordered].sort((a, b) => +a.createdAt - +b.createdAt)[0];
     const planParam = sp.get("plan");
     const cfg = config;
+    const primaryStored = (primary?.paymentPlan as StoredDealPlan | null) ?? null;
+    // none → no terms; explicit id → that; else the primary's stored plan, else
+    // the settings default ONLY when include-by-default is on (Eli 2026-08-03 → OFF).
+    const effectivePlanId = resolveEffectivePlanId(planParam, cfg.paymentTerms);
     const buf = await renderCombinedQuotePdf({
       customerName,
       items,
-      paymentPlan: planParam
-        ? null
-        : ((primary?.paymentPlan as StoredDealPlan | null) ?? null),
-      paymentPlanId: planParam ?? cfg.paymentTerms?.defaultPlanId ?? null,
+      paymentPlan: planParam ? null : primaryStored,
+      paymentPlanId: planParam ? effectivePlanId : primaryStored ? null : effectivePlanId,
       vatPct: cfg.paymentTerms?.vatPct,
     });
     return new NextResponse(new Uint8Array(buf), {

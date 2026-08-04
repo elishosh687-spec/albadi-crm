@@ -21,7 +21,9 @@ import { getFactoryConfig } from "@/lib/factory/config";
 import {
   VAT_PCT,
   DEFAULT_PAYMENT_PLAN_ID,
+  NO_PAYMENT_PLAN_ID,
   resolvePaymentPlan,
+  resolveEffectivePlanId,
   computePaymentSchedule,
   buildPaymentBlock,
   type PaymentPlan,
@@ -38,12 +40,13 @@ export function buildCaption(opts: {
   spec: FactoryProductSpec;
   pricing: FactoryPricingResult;
   quotationNo: string;
-  /** Payment schedule to quote. Falls back to the 50/50 default. */
-  plan?: PaymentPlan;
+  /** Payment schedule to quote, or `null` to send WITHOUT any payment terms
+   *  (no VAT/installments/bank block). `undefined` → the 50/50 default. */
+  plan?: PaymentPlan | null;
   vatPct?: number;
 }): string {
   const { name, spec, pricing, quotationNo } = opts;
-  const plan = opts.plan ?? resolvePaymentPlan(DEFAULT_PAYMENT_PLAN_ID);
+  const plan = opts.plan === undefined ? resolvePaymentPlan(DEFAULT_PAYMENT_PLAN_ID) : opts.plan;
   const vatPct = opts.vatPct ?? VAT_PCT;
   const greeting = name ? `היי ${name} 👋` : "היי 👋";
   const dims = [spec.widthCm, spec.depthCm, spec.heightCm]
@@ -59,9 +62,10 @@ export function buildCaption(opts: {
   const lines: (string | null)[] = [
     greeting,
     "",
-    // Payment-details template (Eli 2026-07-28) — replaced the plain quote
-    // header. The quote number stays on its own line for traceability.
-    "*פרטי תשלום ופירוט חשבון*",
+    // Payment-details template (Eli 2026-07-28) — but only when we actually
+    // attach payment terms; without them it's a plain quote header (Eli
+    // 2026-08-03). The quote number stays on its own line for traceability.
+    plan ? "*פרטי תשלום ופירוט חשבון*" : "*הצעת מחיר*",
     `_הצעה #${quotationNo}_`,
     "",
     "📦 *פרטי המוצר*",
@@ -105,8 +109,11 @@ export function buildCaption(opts: {
     lines.push(`*💵 סה״כ: ${formatIls(total)}*`, "_(לא כולל מע״מ)_");
     printedTotalIls = total;
   }
-  // VAT → amount due → payment schedule → bank details.
-  lines.push(...buildPaymentBlock(computePaymentSchedule(printedTotalIls, plan, vatPct), vatPct));
+  // VAT → amount due → payment schedule → bank details — only when a plan is
+  // attached (null = the sender chose "ללא תנאי תשלום").
+  if (plan) {
+    lines.push(...buildPaymentBlock(computePaymentSchedule(printedTotalIls, plan, vatPct), vatPct));
+  }
   return lines.filter((l) => l !== null).join("\n");
 }
 
@@ -158,13 +165,15 @@ export async function sendQuoteWhatsapp(
   // Payment schedule for this send — resolved BEFORE the PDF url so the
   // attachment and the caption quote the same figures.
   const cfg = await getFactoryConfig();
-  const planId = paymentPlanId ?? cfg.paymentTerms?.defaultPlanId ?? DEFAULT_PAYMENT_PLAN_ID;
+  // Effective plan for this send: the picked id, "none" → no terms, or the
+  // settings default only when include-by-default is on (Eli 2026-08-03 → OFF).
+  const planId = resolveEffectivePlanId(paymentPlanId, cfg.paymentTerms);
   // A stored Blob PDF was rendered at finalize time, BEFORE any payment plan was
   // chosen — so it has no payment block, and reusing it would attach an ex-VAT
   // PDF to a VAT-inclusive caption. Always re-render through the proxy (which
   // returns the bytes directly — GreenAPI doesn't follow redirects) so the PDF
   // carries the same schedule as the message (Eli 2026-07-28).
-  const pdfMediaUrl = `${proto}://${host}/api/factory/${id}/pdf?stream=1&plan=${encodeURIComponent(planId)}`;
+  const pdfMediaUrl = `${proto}://${host}/api/factory/${id}/pdf?stream=1&plan=${encodeURIComponent(planId ?? NO_PAYMENT_PLAN_ID)}`;
 
   const leadRows = await db
     .select({
@@ -196,7 +205,7 @@ export async function sendQuoteWhatsapp(
     spec: row.productSpec as FactoryProductSpec,
     pricing: row.finalPricing as FactoryPricingResult,
     quotationNo,
-    plan: resolvePaymentPlan(planId),
+    plan: planId ? resolvePaymentPlan(planId) : null,
     vatPct: cfg.paymentTerms?.vatPct ?? VAT_PCT,
   });
   const pdfFilename = `הצעת-מחיר-${quotationNo}.pdf`;
