@@ -16,6 +16,7 @@ export interface LocalLeadSnapshot {
   name?: string | null;
   phoneE164?: string | null;
   waJid?: string | null;
+  email?: string | null;
   pipelineStage?: string | null;
   pipelineFlag?: string | null;
   botSummary?: string | null;

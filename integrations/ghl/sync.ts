@@ -134,6 +134,7 @@ const LOAD_LEAD_COLS = {
   name: leads.name,
   phoneE164: leads.phoneE164,
   waJid: leads.waJid,
+  email: leads.email,
   pipelineStage: leads.pipelineStage,
   pipelineFlag: leads.pipelineFlag,
   botSummary: leads.botSummary,
@@ -213,7 +214,8 @@ async function cacheOpportunityId(
  * @returns the GHL contact id, or null on failure / sync disabled.
  */
 export async function upsertGHLContact(
-  lead: LoadedLead | LocalLeadSnapshot
+  lead: LoadedLead | LocalLeadSnapshot,
+  opts: { pushEmail?: boolean } = {}
 ): Promise<string | null> {
   if (!ENABLE_GHL_SYNC) return null;
   if (!lead.phoneE164 && !lead.waJid) return null;
@@ -229,10 +231,21 @@ export async function upsertGHLContact(
     // owner without moving the cursor again.
     const isFirstPush = !("ghlContactId" in lead) || !lead.ghlContactId;
     const owner = isFirstPush ? await assignNextLeadOwner(lead.manychatSubId) : null;
+    // Email is normally GHL-owned: Eli edits it in the contact card and the
+    // resync webhook pulls it back into `leads.email` (lib/ghl/resync-helper.ts).
+    // Pushing DB → GHL on every sync would let a stale DB value overwrite an
+    // edit made in the UI, so only push it when we genuinely know better:
+    //   - first push: the contact doesn't exist yet, nothing to overwrite;
+    //   - opts.pushEmail: the caller just took the address from the customer
+    //     directly (the website form), so it is newer than whatever GHL holds.
+    // Never send an empty value — that would blank out a good address.
+    const email = lead.email?.trim() || undefined;
+    const sendEmail = email && (isFirstPush || opts.pushEmail) ? email : undefined;
     const res = await upsertContact({
       locationId: requireGHLLocationId(),
       name: buildLeadDisplayName(lead),
       phone: lead.phoneE164 ?? undefined,
+      email: sendEmail,
       source: "whatsapp-bridge",
       customFields,
       assignedTo: owner ?? undefined,
@@ -347,18 +360,26 @@ export async function createOrUpdateGHLOpportunity(
  *
  * Never throws. Errors logged and swallowed so the WhatsApp hot path
  * keeps running if GHL is down.
+ *
+ * `opts.pushEmail` forces `leads.email` onto the GHL contact even when it
+ * already exists. Only pass it when the caller just collected the address from
+ * the customer (the website lead form) — otherwise leave email GHL-owned so a
+ * stale DB value can't overwrite an edit made in the contact card.
  */
-export async function syncLeadToGHL(sid: string): Promise<void> {
+export async function syncLeadToGHL(
+  sid: string,
+  opts: { pushEmail?: boolean } = {}
+): Promise<void> {
   if (!ENABLE_GHL_SYNC) return;
   try {
     const lead = await loadLead(sid);
     if (!lead) return;
     const contactId =
-      lead.ghlContactId ?? (await upsertGHLContact(lead));
+      lead.ghlContactId ?? (await upsertGHLContact(lead, opts));
     if (!contactId) return;
     // Always re-push fields on every sync (cheap; keeps GHL hot).
     if (lead.ghlContactId) {
-      await upsertGHLContact(lead);
+      await upsertGHLContact(lead, opts);
     }
     await createOrUpdateGHLOpportunity(
       { ...lead, ghlContactId: contactId },
