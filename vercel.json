@@ -15,6 +15,10 @@
     {
       "path": "/api/cron/refresh-fx",
       "schedule": "0 5 * * *"
+    },
+    {
+      "path": "/api/cron/expense-reminder",
+      "schedule": "0 9 1 * *"
     }
   ],
   "functions": {
