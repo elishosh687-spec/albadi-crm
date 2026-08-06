@@ -1,16 +1,34 @@
 /**
  * POST /api/ghl/app-webhook
  *
- * Receives native webhook events from the GHL Marketplace App. Single
- * endpoint, signed with HMAC-SHA256 using GHL_APP_WEBHOOK_SECRET. Routes
- * to existing sync helpers based on event type.
+ * Receives native webhook events from the GHL Marketplace App. Routes to
+ * existing sync helpers based on event type.
+ *
+ * AUTHENTICATION — asymmetric, no shared secret.
+ *
+ * This previously expected an HMAC-SHA256 shared secret in
+ * GHL_APP_WEBHOOK_SECRET, and accepted every unsigned request while that was
+ * unset — which it always was, because GHL does not issue such a secret and
+ * never did. The endpoint was effectively open: anything that could reach the
+ * URL could drive resyncContact / softDeleteContact / restartQuestionnaire,
+ * i.e. overwrite lead records and make the bot message real customers.
+ *
+ * GHL signs the raw request body with its own private key and publishes the
+ * public half, so there is nothing to configure:
+ *   - `x-ghl-signature` → Ed25519      (current)
+ *   - `x-wh-signature`  → RSA-SHA256   (legacy, sunsets 2026-09-01)
+ * Both are base64 over the raw body. Verify Ed25519 first and only fall back
+ * to RSA when the newer header is absent.
+ * Ref: https://marketplace.gohighlevel.com/docs/webhook/WebhookIntegrationGuide/
+ *
+ * Rollout: GHL_WEBHOOK_ENFORCE=0 (default) verifies and logs the outcome but
+ * still accepts, so a mistake here can't sever a live integration that carries
+ * ~500 events/day. Confirm "signature ok" in the logs, then set it to 1.
  *
  * Setup (one-time, in GHL Marketplace dev portal):
  *   1. App settings → Webhooks → Add URL
  *      URL: https://albadi-crm.vercel.app/api/ghl/app-webhook
- *   2. Copy the signing secret GHL generates → paste into env as
- *      GHL_APP_WEBHOOK_SECRET
- *   3. Subscribe to events:
+ *   2. Subscribe to events:
  *      ContactCreate, ContactUpdate, ContactDelete, ContactTagUpdate,
  *      OpportunityCreate, OpportunityUpdate, OpportunityDelete,
  *      NoteCreate, NoteUpdate, NoteDelete,
@@ -76,30 +94,74 @@ interface AppWebhookEvent {
   [k: string]: unknown;
 }
 
-function verifySignature(rawBody: string, signature: string | null, secret: string): boolean {
-  if (!signature) return false;
-  const expected = crypto.createHmac("sha256", secret).update(rawBody).digest("base64");
-  try {
-    return crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected));
-  } catch {
-    return false;
+// GHL's published verification keys. Public by design — these are not secrets
+// and are identical for every marketplace app.
+const GHL_ED25519_PUBLIC_KEY = `-----BEGIN PUBLIC KEY-----
+MCowBQYDK2VwAyEAi2HR1srL4o18O8BRa7gVJY7G7bupbN3H9AwJrHCDiOg=
+-----END PUBLIC KEY-----`;
+
+const GHL_RSA_PUBLIC_KEY = `-----BEGIN PUBLIC KEY-----
+MIICIjANBgkqhkiG9w0BAQEFAAOCAg8AMIICCgKCAgEAokvo/r9tVgcfZ5DysOSC
+Frm602qYV0MaAiNnX9O8KxMbiyRKWeL9JpCpVpt4XHIcBOK4u3cLSqJGOLaPuXw6
+dO0t6Q/ZVdAV5Phz+ZtzPL16iCGeK9po6D6JHBpbi989mmzMryUnQJezlYJ3DVfB
+csedpinheNnyYeFXolrJvcsjDtfAeRx5ByHQmTnSdFUzuAnC9/GepgLT9SM4nCpv
+uxmZMxrJt5Rw+VUaQ9B8JSvbMPpez4peKaJPZHBbU3OdeCVx5klVXXZQGNHOs8gF
+3kvoV5rTnXV0IknLBXlcKKAQLZcY/Q9rG6Ifi9c+5vqlvHPCUJFT5XUGG5RKgOKU
+J062fRtN+rLYZUV+BjafxQauvC8wSWeYja63VSUruvmNj8xkx2zE/Juc+yjLjTXp
+IocmaiFeAO6fUtNjDeFVkhf5LNb59vECyrHD2SQIrhgXpO4Q3dVNA5rw576PwTzN
+h/AMfHKIjE4xQA1SZuYJmNnmVZLIZBlQAF9Ntd03rfadZ+yDiOXCCs9FkHibELhC
+HULgCsnuDJHcrGNd5/Ddm5hxGQ0ASitgHeMZ0kcIOwKDOzOU53lDza6/Y09T7sYJ
+PQe7z0cvj7aE4B+Ax1ZoZGPzpJlZtGXCsu9aTEGEnKzmsFqwcSsnw3JB31IGKAyk
+T1hhTiaCeIY/OwwwNUY2yvcCAwEAAQ==
+-----END PUBLIC KEY-----`;
+
+/** Reject unsigned/forged events rather than only logging them. */
+const ENFORCE_SIGNATURE = (process.env.GHL_WEBHOOK_ENFORCE ?? "0").trim() === "1";
+
+type SignatureCheck = { scheme: "ed25519" | "rsa" | "none"; valid: boolean };
+
+function verifySignature(rawBody: string, req: NextRequest): SignatureCheck {
+  const body = Buffer.from(rawBody, "utf8");
+
+  // Ed25519 is the current scheme; algorithm must be null for it.
+  const ed = req.headers.get("x-ghl-signature");
+  if (ed) {
+    try {
+      const valid = crypto.verify(null, body, GHL_ED25519_PUBLIC_KEY, Buffer.from(ed, "base64"));
+      return { scheme: "ed25519", valid };
+    } catch {
+      return { scheme: "ed25519", valid: false };
+    }
   }
+
+  // Legacy RSA, only while GHL still sends it.
+  const rsa = req.headers.get("x-wh-signature");
+  if (rsa) {
+    try {
+      const valid = crypto.verify("sha256", body, GHL_RSA_PUBLIC_KEY, Buffer.from(rsa, "base64"));
+      return { scheme: "rsa", valid };
+    } catch {
+      return { scheme: "rsa", valid: false };
+    }
+  }
+
+  return { scheme: "none", valid: false };
 }
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
   const rawBody = await req.text();
-  const secret = process.env.GHL_APP_WEBHOOK_SECRET || "";
-  const signature = req.headers.get("x-wh-signature") || req.headers.get("x-ghl-signature");
 
-  // If secret not configured yet, log + accept (so we can debug payload shape
-  // before locking down). Remove this branch once secret is in env.
-  if (secret) {
-    if (!verifySignature(rawBody, signature, secret)) {
-      console.warn("[ghl.app-webhook] invalid signature", { signature: signature?.slice(0, 12) });
+  const sig = verifySignature(rawBody, req);
+  if (sig.valid) {
+    console.log(`[ghl.app-webhook] signature ok (${sig.scheme})`);
+  } else {
+    console.warn("[ghl.app-webhook] signature check FAILED", {
+      scheme: sig.scheme,
+      enforcing: ENFORCE_SIGNATURE,
+    });
+    if (ENFORCE_SIGNATURE) {
       return NextResponse.json({ error: "invalid_signature" }, { status: 401 });
     }
-  } else {
-    console.warn("[ghl.app-webhook] GHL_APP_WEBHOOK_SECRET not set — accepting unsigned (DEV ONLY)");
   }
 
   let event: AppWebhookEvent;
