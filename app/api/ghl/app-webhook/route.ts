@@ -115,8 +115,15 @@ PQe7z0cvj7aE4B+Ax1ZoZGPzpJlZtGXCsu9aTEGEnKzmsFqwcSsnw3JB31IGKAyk
 T1hhTiaCeIY/OwwwNUY2yvcCAwEAAQ==
 -----END PUBLIC KEY-----`;
 
-/** Reject unsigned/forged events rather than only logging them. */
-const ENFORCE_SIGNATURE = (process.env.GHL_WEBHOOK_ENFORCE ?? "0").trim() === "1";
+/**
+ * Reject unsigned/forged events rather than only logging them.
+ *
+ * Enabled by default after the verify-only rollout confirmed real GHL traffic
+ * validates: four consecutive live events (ContactUpdate ×2, OpportunityUpdate
+ * ×2) logged "signature ok (ed25519)" on 2026-08-06. Set GHL_WEBHOOK_ENFORCE=0
+ * to fall back to verify-and-log if GHL ever rotates keys unexpectedly.
+ */
+const ENFORCE_SIGNATURE = (process.env.GHL_WEBHOOK_ENFORCE ?? "1").trim() === "1";
 
 type SignatureCheck = { scheme: "ed25519" | "rsa" | "none"; valid: boolean };
 
