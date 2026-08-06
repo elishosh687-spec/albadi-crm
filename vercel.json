@@ -18,7 +18,7 @@
     },
     {
       "path": "/api/cron/expense-reminder",
-      "schedule": "0 9 1 * *"
+      "schedule": "0 9 3 * *"
     }
   ],
   "functions": {
