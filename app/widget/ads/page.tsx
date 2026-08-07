@@ -153,9 +153,22 @@ export default async function AdsWidgetPage({
               {report.rows.map((r) => (
                 <tr key={r.adName}>
                   <td style={{ ...td, whiteSpace: "normal", maxWidth: 260 }}>
-                    {r.adName}
+                    {/* Ad names are Latin/technical ("07_chain_cut") — inside an
+                        RTL table they render mangled ("chain_cut_07") unless the
+                        run is isolated. */}
+                    <span style={{ unicodeBidi: "isolate", direction: "ltr", display: "inline-block" }}>
+                      {r.adName}
+                    </span>
                     {r.campaignName ? (
-                      <div style={{ fontSize: 11, color: MUTED }}>{r.campaignName}</div>
+                      <div
+                        style={{
+                          fontSize: 11,
+                          color: MUTED,
+                          unicodeBidi: "isolate",
+                        }}
+                      >
+                        {r.campaignName}
+                      </div>
                     ) : null}
                   </td>
                   <td style={td}>{r.leads}</td>
