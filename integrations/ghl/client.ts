@@ -751,6 +751,31 @@ export async function removeContactTags(
   });
 }
 
+/**
+ * Contacts carrying a given tag. Used by the Meta good-lead poller: Eli tags a
+ * contact "ליד טוב" in the GHL UI and we report a Qualified conversion — no
+ * Workflow/webhook needed on the GHL side (tag→lead_tags sync is not reliably
+ * in use). Verified live: POST /contacts/search with a tags filter → 200.
+ */
+export async function searchContactsByTag(
+  tag: string,
+  limit = 100
+): Promise<{ id: string; tags?: string[] }[]> {
+  const locationId = requireGHLLocationId();
+  const res = await ghlFetch<{ contacts?: { id: string; tags?: string[] }[] }>(
+    "/contacts/search",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        locationId,
+        pageLimit: limit,
+        filters: [{ field: "tags", operator: "eq", value: tag }],
+      }),
+    }
+  );
+  return res.contacts ?? [];
+}
+
 // ===========================================================================
 // Call recordings — list calls + download audio for the
 // /api/bot/process-recordings pipeline.

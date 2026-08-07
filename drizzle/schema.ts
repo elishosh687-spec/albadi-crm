@@ -89,6 +89,10 @@ export const leads = pgTable("leads", {
   metaCampaignId: text("meta_campaign_id"),
   metaCampaignName: text("meta_campaign_name"),
   metaFormEmail: text("meta_form_email"),
+  // Stamped when a Meta "Qualified" event has been reported for this lead, so
+  // the good-lead poller doesn't re-send on every tick. See memory
+  // meta-conversion-loop.
+  metaQualifiedSentAt: timestamp("meta_qualified_sent_at", { withTimezone: true }),
 
   // GoHighLevel CRM ids. Populated by integrations/ghl/sync.ts on first sync.
   ghlContactId: text("ghl_contact_id"),

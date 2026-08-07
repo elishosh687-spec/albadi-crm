@@ -9,6 +9,7 @@
  */
 import { NextRequest, NextResponse } from "next/server";
 import { enrichMetaAttribution } from "@/lib/sheets/meta-attribution";
+import { pollGoodLeads } from "@/lib/meta/good-lead-poll";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -30,8 +31,19 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
   try {
+    // 1. Fill leadgen ids from the Meta form sheets (past + new leads).
     const result = await enrichMetaAttribution();
-    return NextResponse.json({ ok: true, ...result });
+    // 2. Report leads Eli tagged "ליד טוב" in GHL as Meta Qualified. Runs after
+    //    enrichment so a lead tagged the same day it arrived already has its id.
+    //    Non-fatal — enrichment must still report success if this trips.
+    let goodLeads: unknown = null;
+    try {
+      goodLeads = await pollGoodLeads();
+    } catch (e) {
+      console.warn("[enrich-meta-attribution] good-lead poll failed", e);
+      goodLeads = { error: e instanceof Error ? e.message : String(e) };
+    }
+    return NextResponse.json({ ok: true, ...result, goodLeads });
   } catch (e) {
     console.error("[enrich-meta-attribution] failed", e);
     return NextResponse.json(
