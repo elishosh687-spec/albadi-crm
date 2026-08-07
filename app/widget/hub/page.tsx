@@ -16,6 +16,7 @@ import {
   Bot,
   Receipt,
   BarChart3,
+  Megaphone,
   Calculator,
   Swords,
   Box,
@@ -87,6 +88,12 @@ const TABS: TabDef[] = [
     label: "מחשבון",
     icon: Calculator,
     url: (t, sid) => withSid(`/widget/calculator?widget_token=${encodeURIComponent(t)}`, sid),
+  },
+  {
+    id: "ads",
+    label: "מודעות",
+    icon: Megaphone,
+    url: (t) => `/widget/ads?widget_token=${encodeURIComponent(t)}`,
   },
   {
     id: "competitors",
