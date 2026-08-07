@@ -93,6 +93,11 @@ export const leads = pgTable("leads", {
   // the good-lead poller doesn't re-send on every tick. See memory
   // meta-conversion-loop.
   metaQualifiedSentAt: timestamp("meta_qualified_sent_at", { withTimezone: true }),
+  // Meta click id + pixel cookie for WEBSITE-sourced leads (Instant-Form leads
+  // use metaLeadgenId instead). Captured by the site, POSTed to
+  // /api/leads/website-import — the site never needs DB or Meta credentials.
+  metaFbclid: text("meta_fbclid"),
+  metaFbp: text("meta_fbp"),
 
   // GoHighLevel CRM ids. Populated by integrations/ghl/sync.ts on first sync.
   ghlContactId: text("ghl_contact_id"),

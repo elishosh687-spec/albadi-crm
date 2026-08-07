@@ -52,6 +52,11 @@ const BodySchema = z.object({
   quantity: z.string().optional(),
   delivery: z.string().optional(),
   gclid: z.string().optional(),
+  // Meta click id (+ browser pixel cookie). The site captures these on landing;
+  // the CRM stores them and is the ONE place that talks to Meta's CAPI, so the
+  // website never needs a Meta token or DB access. See memory meta-conversion-loop.
+  fbclid: z.string().optional(),
+  fbp: z.string().optional(),
   gbraid: z.string().optional(),
   wbraid: z.string().optional(),
   utmSource: z.string().optional(),
@@ -101,6 +106,8 @@ function normalisePhone(raw: string): string | null {
 /** `leadSource` is the attribution label Eli filters on in the dashboard. */
 function pickLeadSource(body: Body): string {
   if (body.gclid || body.gbraid || body.wbraid) return "google";
+  // An fbclid means the visitor arrived from a Meta ad click.
+  if (body.fbclid) return "facebook";
   if (body.utmSource) return body.utmSource.toLowerCase();
   return "website";
 }
@@ -112,7 +119,9 @@ function buildAttributionNote(body: Body): string {
   if (campaign) lines.push(`קמפיין: ${campaign}`);
   if (body.utmTerm) lines.push(`מילת חיפוש: ${body.utmTerm}`);
   const clickId = body.gclid ?? body.gbraid ?? body.wbraid;
-  lines.push(clickId ? `gclid: ${clickId}` : "ללא click ID (תנועה אורגנית)");
+  if (clickId) lines.push(`gclid: ${clickId}`);
+  if (body.fbclid) lines.push(`fbclid: ${body.fbclid}`);
+  if (!clickId && !body.fbclid) lines.push("ללא click ID (תנועה אורגנית)");
   if (body.business) lines.push(`עסק: ${body.business}`);
   if (body.quantity) lines.push(`כמות מבוקשת: ${body.quantity}`);
   if (body.delivery) lines.push(`אספקה: ${body.delivery}`);
@@ -236,6 +245,10 @@ export async function POST(req: NextRequest) {
       // null = pre-questionnaire; pickStageId maps this to the INTAKE column so
       // the lead is visible in the GHL kanban straight away.
       pipelineStage: null,
+      // Meta click attribution — lets the CAPI sender report web-sourced leads
+      // back to the right ad even though they never touched an Instant Form.
+      metaFbclid: body.fbclid ?? null,
+      metaFbp: body.fbp ?? null,
     });
   } catch (err) {
     return NextResponse.json(

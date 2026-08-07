@@ -59,6 +59,10 @@ interface LeadRow {
   phone: string | null;
   leadgenId: string | null;
   email: string | null;
+  /** Website-sourced leads have no leadgen id — Meta matches them on fbc/fbp. */
+  fbclid: string | null;
+  fbp: string | null;
+  createdAtMs: number | null;
 }
 
 async function loadLeadForMeta(sid: string): Promise<LeadRow | null> {
@@ -68,12 +72,18 @@ async function loadLeadForMeta(sid: string): Promise<LeadRow | null> {
     leadgen: string | null;
     email: string | null;
     lead_email: string | null;
+    fbclid: string | null;
+    fbp: string | null;
+    created_ms: number | null;
   }>(sql`
     SELECT manychat_sub_id AS sid,
            phone_e164 AS phone,
            meta_leadgen_id AS leadgen,
            meta_form_email AS email,
-           email AS lead_email
+           email AS lead_email,
+           meta_fbclid AS fbclid,
+           meta_fbp AS fbp,
+           (EXTRACT(EPOCH FROM created_at) * 1000)::bigint AS created_ms
     FROM leads
     WHERE trim(manychat_sub_id) = ${sid.trim()}
     LIMIT 1`);
@@ -84,6 +94,9 @@ async function loadLeadForMeta(sid: string): Promise<LeadRow | null> {
     phone: r.phone,
     leadgenId: r.leadgen,
     email: r.email || r.lead_email,
+    fbclid: r.fbclid,
+    fbp: r.fbp,
+    createdAtMs: r.created_ms ? Number(r.created_ms) : null,
   };
 }
 
@@ -106,15 +119,26 @@ export async function sendMetaCrmEvent(
     return { ok: false, error: `load_failed: ${e instanceof Error ? e.message : e}` };
   }
   if (!lead) return { ok: false, skipped: "lead_not_found" };
-  if (!lead.leadgenId) return { ok: false, skipped: "no_leadgen_id" };
+  // Two attribution routes: Instant-Form leads carry a leadgen id; website
+  // leads carry an fbclid (→ `fbc`). Either is enough for Meta to attribute.
+  if (!lead.leadgenId && !lead.fbclid) {
+    return { ok: false, skipped: "no_leadgen_id_or_fbclid" };
+  }
 
   const userData: Record<string, unknown> = {};
-  // Defensive: strip any leftover "l:" prefix (Meta's sheet format) → bare id.
-  const leadgenClean = lead.leadgenId.replace(/^\s*l:/i, "").trim();
-  // Meta lead_id: numeric when it fits, else string (both accepted).
-  userData.lead_id = /^\d+$/.test(leadgenClean)
-    ? Number(leadgenClean)
-    : leadgenClean;
+  if (lead.leadgenId) {
+    // Defensive: strip any leftover "l:" prefix (Meta's sheet format) → bare id.
+    const leadgenClean = lead.leadgenId.replace(/^\s*l:/i, "").trim();
+    // Meta lead_id: numeric when it fits, else string (both accepted).
+    userData.lead_id = /^\d+$/.test(leadgenClean)
+      ? Number(leadgenClean)
+      : leadgenClean;
+  }
+  if (lead.fbclid) {
+    // Meta's click-id format: fb.<subdomainIndex>.<creationMs>.<fbclid>
+    userData.fbc = `fb.1.${lead.createdAtMs ?? Date.now()}.${lead.fbclid}`;
+  }
+  if (lead.fbp) userData.fbp = lead.fbp;
   if (lead.phone) userData.ph = [sha256(normPhone(lead.phone))];
   if (lead.email) userData.em = [sha256(normEmail(lead.email))];
 
