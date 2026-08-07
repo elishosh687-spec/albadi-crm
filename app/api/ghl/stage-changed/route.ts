@@ -227,6 +227,21 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     sid: result[0].sid,
     pipelineStage: localStage,
   });
+  // Report lead-quality progression to Meta (CAPI-for-CRM), so the ad algorithm
+  // optimizes for quality leads. DISCAVERY = qualified, CONSIDERATION = quote in
+  // customer's hands. Purchase is reported separately on deal close (it carries
+  // the money value). Fire-and-forget + soft-fail. See memory meta-conversion-loop.
+  if (localStage === "DISCAVERY" || localStage === "CONSIDERATION") {
+    try {
+      const { sendMetaCrmEvent } = await import("@/lib/meta/capi");
+      void sendMetaCrmEvent(
+        result[0].sid,
+        localStage === "DISCAVERY" ? "Qualified" : "QuoteSent",
+      );
+    } catch (e) {
+      console.warn("[ghl.stage-changed] meta capi report failed", e);
+    }
+  }
   // Re-evaluate signal-derived tasks (e.g. big_quote_close at CONSIDERATION,
   // idle_active_lead set cleared when moving to WON/LOST) + flip owner tag.
   try {

@@ -417,6 +417,13 @@ export async function closeDealGroup(
         .update(factoryQuoteRequests)
         .set({ combinedPricing: combined, updatedAt: new Date() })
         .where(eq(factoryQuoteRequests.id, primaryId));
+      // One Purchase event for the whole combined deal (frozen grand total).
+      const [prow] = await db
+        .select({ sid: factoryQuoteRequests.manychatSubId })
+        .from(factoryQuoteRequests)
+        .where(eq(factoryQuoteRequests.id, primaryId))
+        .limit(1);
+      if (prow?.sid) void reportPurchaseToMeta(prow.sid, combined.grandTotalIls);
     }
   } catch (err) {
     console.warn("[closeDealGroup] combined pricing snapshot failed (non-fatal)", err);
@@ -511,6 +518,24 @@ export async function savePaymentsReceived(
  * "סגור עסקה" — pull a finalized quote into the עסקאות tab (or push it back
  * out). Sets/clears closed_deal_at. Independent of the lead's pipeline stage.
  */
+/**
+ * Report a closed deal to Meta as a Purchase conversion (CAPI-for-CRM), so the
+ * ad algorithm learns which ads produce paying customers. Fire-and-forget +
+ * soft-fail: a lead without a meta_leadgen_id is silently skipped inside
+ * sendMetaCrmEvent. Value = the customer-facing ex-VAT total (what they agreed
+ * to pay). See memory meta-conversion-loop.
+ */
+async function reportPurchaseToMeta(sid: string, valueIls: number): Promise<void> {
+  const clean = (sid ?? "").trim();
+  if (!clean) return;
+  try {
+    const { sendMetaCrmEvent } = await import("@/lib/meta/capi");
+    void sendMetaCrmEvent(clean, "Purchase", { valueIls });
+  } catch (e) {
+    console.warn("[closed] meta purchase report failed (non-fatal)", e);
+  }
+}
+
 export async function setDealClosed(id: string, closed: boolean): Promise<void> {
   await db
     .update(factoryQuoteRequests)
@@ -521,6 +546,23 @@ export async function setDealClosed(id: string, closed: boolean): Promise<void> 
       updatedAt: new Date(),
     })
     .where(eq(factoryQuoteRequests.id, id));
+
+  if (closed) {
+    const [row] = await db
+      .select({
+        sid: factoryQuoteRequests.manychatSubId,
+        fp: factoryQuoteRequests.finalPricing,
+      })
+      .from(factoryQuoteRequests)
+      .where(eq(factoryQuoteRequests.id, id))
+      .limit(1);
+    if (row?.sid) {
+      const value = row.fp
+        ? memberDisplayTotalExVat(row.fp as FactoryPricingResult)
+        : 0;
+      void reportPurchaseToMeta(row.sid, value);
+    }
+  }
 }
 
 /**
