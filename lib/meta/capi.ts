@@ -109,10 +109,12 @@ export async function sendMetaCrmEvent(
   if (!lead.leadgenId) return { ok: false, skipped: "no_leadgen_id" };
 
   const userData: Record<string, unknown> = {};
+  // Defensive: strip any leftover "l:" prefix (Meta's sheet format) → bare id.
+  const leadgenClean = lead.leadgenId.replace(/^\s*l:/i, "").trim();
   // Meta lead_id: numeric when it fits, else string (both accepted).
-  userData.lead_id = /^\d+$/.test(lead.leadgenId)
-    ? Number(lead.leadgenId)
-    : lead.leadgenId;
+  userData.lead_id = /^\d+$/.test(leadgenClean)
+    ? Number(leadgenClean)
+    : leadgenClean;
   if (lead.phone) userData.ph = [sha256(normPhone(lead.phone))];
   if (lead.email) userData.em = [sha256(normEmail(lead.email))];
 

@@ -18,9 +18,14 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 function authorized(req: NextRequest): boolean {
-  const secret = (process.env.BOT_SECRET ?? "").trim();
-  if (!secret) return false;
-  return (req.headers.get("authorization") ?? "") === `Bearer ${secret}`;
+  const accepted = [
+    process.env.BOT_SECRET,
+    process.env.CALL_TRIGGER_SECRET,
+    process.env.CRON_SECRET,
+  ].filter((s): s is string => Boolean(s));
+  if (accepted.length === 0) return false;
+  const header = req.headers.get("authorization") ?? "";
+  return accepted.some((s) => header === `Bearer ${s}`);
 }
 
 const VALID: MetaEventName[] = ["Qualified", "QuoteSent", "Purchase"];

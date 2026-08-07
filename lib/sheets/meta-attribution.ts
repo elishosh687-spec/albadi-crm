@@ -129,7 +129,9 @@ export async function enrichMetaAttribution(): Promise<EnrichResult> {
     const rows = parseCsv(text).slice(1); // drop header
     for (const r of rows) {
       const ph = digits(r[COL_PHONE] ?? "");
-      const leadgenId = (r[COL_LEADGEN] ?? "").trim();
+      // Meta writes the leadgen id with an "l:" prefix in the sheet (like the
+      // phone's "p:"). Strip it — the CAPI lead_id must be the bare number.
+      const leadgenId = (r[COL_LEADGEN] ?? "").replace(/^\s*l:/i, "").trim();
       if (ph.length < 9 || !leadgenId) continue;
       const rec: MetaRec = {
         leadgenId,
