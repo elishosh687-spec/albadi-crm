@@ -57,6 +57,35 @@ export async function POST(req: NextRequest) {
   const dry = url.searchParams.get("dry") === "1";
   const testCode = url.searchParams.get("testCode") || null;
 
+  // ?names=a,b — send Qualified for leads matched by name (Eli hand-picking the
+  // ones he knows were good). Uses the canonical event_id so it can't double
+  // count against the automatic pass.
+  const namesParam = url.searchParams.get("names");
+  if (namesParam) {
+    const patterns = namesParam.split(",").map((s) => `%${s.trim()}%`).filter((s) => s.length > 2);
+    if (patterns.length === 0) {
+      return NextResponse.json({ ok: false, error: "no usable names" }, { status: 400 });
+    }
+    const res = await db.execute<{ sid: string; name: string; ts: number | null }>(sql`
+      SELECT manychat_sub_id AS sid, name,
+             EXTRACT(EPOCH FROM COALESCE(last_response_at, updated_at, created_at)) AS ts
+      FROM leads
+      WHERE meta_leadgen_id IS NOT NULL AND name ILIKE ANY(${patterns})`);
+    if (dry) {
+      return NextResponse.json({ ok: true, dry: true, matched: res.rows.map((r) => r.name) });
+    }
+    const out: { name: string; ok: boolean; err?: string }[] = [];
+    for (const r of res.rows) {
+      const s = await sendMetaCrmEvent(r.sid, "Qualified", {
+        eventTime: clampTs(r.ts ? Number(r.ts) : null),
+        testEventCode: testCode,
+        eventId: `${r.sid.trim()}:Qualified`,
+      });
+      out.push({ name: r.name, ok: s.ok, err: s.error });
+    }
+    return NextResponse.json({ ok: true, mode: "names", sent: out.filter((o) => o.ok).length, results: out });
+  }
+
   // 1. Qualified candidates.
   const qRes = await db.execute<{ sid: string; ts: number | null }>(sql`
     SELECT manychat_sub_id AS sid,

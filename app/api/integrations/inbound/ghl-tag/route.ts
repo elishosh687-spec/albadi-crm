@@ -71,8 +71,26 @@ const RESTART_QUESTIONNAIRE_TAG_NAMES = new Set([
   "שלח שאלון",
 ]);
 
+// Eli's manual "this is a quality lead" marker. Adding it in GHL reports a
+// Qualified conversion to Meta (CAPI-for-CRM), teaching the ad algorithm which
+// leads are worth finding more of — INDEPENDENT of whether the deal closes.
+// See memory meta-conversion-loop.
+const GOOD_LEAD_TAG_NAMES = new Set([
+  "ליד טוב",
+  "ליד_טוב",
+  "good lead",
+  "good_lead",
+  "goodlead",
+  "qualified",
+  "איכותי",
+]);
+
 function normalize(s: string): string {
   return s.trim().toLowerCase();
+}
+
+function isGoodLeadTag(tag: string): boolean {
+  return GOOD_LEAD_TAG_NAMES.has(normalize(tag));
 }
 
 function isBotPauseTag(tag: string): boolean {
@@ -151,6 +169,22 @@ export async function POST(req: NextRequest) {
     await db
       .delete(leadTags)
       .where(and(sql`trim(${leadTags.manychatSubId}) = ${sid.trim()}`, eq(leadTags.tag, tag)));
+  }
+
+  // "ליד טוב" — Eli's manual quality marker. Report Qualified to Meta so the
+  // ad algorithm learns from leads that were good even if they never closed.
+  // Removing the tag can't un-send an event, so removal is a no-op (the tag
+  // row is already mirrored above). Fire-and-forget; leads without a
+  // meta_leadgen_id are skipped inside sendMetaCrmEvent.
+  if (isGoodLeadTag(tag) && action === "added") {
+    try {
+      const { sendMetaCrmEvent } = await import("@/lib/meta/capi");
+      void sendMetaCrmEvent(sid, "Qualified");
+      console.log(`[ghl-tag] good-lead → Meta Qualified for ${sid}`);
+    } catch (e) {
+      console.warn("[ghl-tag] meta qualified report failed", e);
+    }
+    return NextResponse.json({ ok: true, sid, tag, action, metaEvent: "Qualified" });
   }
 
   // Apply special semantics for known control tags.
