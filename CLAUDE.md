@@ -210,6 +210,37 @@ The loop **fails silently** — nothing errors, it just stops teaching Meta. The
    are the record of who was good and what they were worth. Meta is a consumer;
    if it loses the data we can always re-send from here.
 
+### Website leads — fbclid comes through the CRM, never by sharing credentials
+
+The site dev asked for the **production Neon connection string + a Meta access
+token** to "close fbclid + CAPI in one shot" (2026-08-07). Neither is needed, and
+that string is full read/write over every customer, message and deal — don't send
+it. `/api/leads/website-import` already carries `gclid`/`gbraid`/`utm_*` behind
+`WEBSITE_IMPORT_SECRET`, so **`fbclid` + `fbp` just join the same POST**
+(→ `leads.meta_fbclid` / `meta_fbp`; an fbclid also sets `leadSource=facebook`).
+`sendMetaCrmEvent` attributes on **either** route: a leadgen id (Instant Forms)
+or `fbc` built as `fb.1.<createdAtMs>.<fbclid>` plus `fbp` (website). The CRM
+stays the only holder of `META_CAPI_TOKEN`. If someone ever does need data
+access, cut a read-only Neon user — never the prod string, and never over chat.
+
+### "מודעות" tab — which ad brings money
+
+[app/widget/ads](app/widget/ads/page.tsx) + [lib/analysis/ad-performance.ts](lib/analysis/ad-performance.ts):
+per ad — leads · progressed (DISCAVERY+) · % (colour-coded; grey under 5 leads)
+· marked-good · won · revenue, filterable 30/90/all. Deterministic, no LLM.
+
+- **Revenue MUST come from `listClosedQuotes().grandTotalExVat`.** The first cut
+  summed `final_pricing->>'totalSellingPrice'` and drifted (₪6,793 vs the real
+  ₪6,820; one deal read ₪0) — the same trap the "one customer total" section
+  above documents.
+- Latin ad names need `unicodeBidi:"isolate"` or RTL renders `07_chain_cut` as
+  `chain_cut_07`.
+- **Cost columns** (עלות / עלות לליד איכותי / רווח) come from
+  [lib/meta/ads-insights.ts](lib/meta/ads-insights.ts) — Graph Insights at
+  `level=ad`, joined **by `ad_id`, never by name**. They render only when
+  `META_ADS_TOKEN` is set, and it must be a **System User token** (a plain user
+  token expires in ~1h). `META_AD_ACCOUNT_ID` defaults to `1995170681032178`.
+
 **Caveats worth knowing.** (a) All GHL *Workflows* are in **Draft**, so the
 `/api/ghl/stage-changed` webhook likely never fires — the stage-triggered
 `Qualified`/`QuoteSent` are effectively dormant; the tag is the real mechanism.
