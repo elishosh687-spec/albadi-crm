@@ -78,6 +78,18 @@ export const leads = pgTable("leads", {
   // the current code but kept to avoid losing historical mapping.
   kommoLeadId: text("kommo_lead_id"),
 
+  // Meta Lead Ads attribution (for the CAPI-for-CRM conversion loop). The
+  // leadgen id is the key Meta needs to attribute a conversion back to the ad.
+  // NOT carried by the FB-import path (phone+name only) — backfilled from the
+  // Meta form Google Sheets by phone, and captured forward via Apps Script.
+  // See memory meta-conversion-loop + docs. Added via direct DDL (push hangs).
+  metaLeadgenId: text("meta_leadgen_id"),
+  metaAdId: text("meta_ad_id"),
+  metaAdName: text("meta_ad_name"),
+  metaCampaignId: text("meta_campaign_id"),
+  metaCampaignName: text("meta_campaign_name"),
+  metaFormEmail: text("meta_form_email"),
+
   // GoHighLevel CRM ids. Populated by integrations/ghl/sync.ts on first sync.
   ghlContactId: text("ghl_contact_id"),
   ghlOpportunityId: text("ghl_opportunity_id"),

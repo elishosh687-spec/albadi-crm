@@ -34,7 +34,22 @@ export const maxDuration = 30;
 const BodySchema = z.object({
   phone: z.string().min(7),
   fullName: z.string().min(1),
+  // Meta Lead Ads attribution (optional — older Apps Script versions don't send
+  // these). The leadgen id is what Meta needs to attribute a CAPI conversion
+  // back to the ad. See memory meta-conversion-loop.
+  leadgenId: z.string().optional(),
+  adId: z.string().optional(),
+  adName: z.string().optional(),
+  campaignId: z.string().optional(),
+  campaignName: z.string().optional(),
+  email: z.string().optional(),
 });
+
+/** Trim to a non-empty string or null (drops "", whitespace, undefined). */
+function clean(v: string | undefined): string | null {
+  const t = (v ?? "").trim();
+  return t.length ? t : null;
+}
 
 const FB_LEAD_TAG = "ליד_חדש";
 const FB_LEAD_SOURCE = "facebook";
@@ -80,6 +95,16 @@ export async function POST(req: NextRequest) {
   const jid = jidFromPhone(phone);
   const name = body.fullName.trim();
 
+  const meta = {
+    leadgenId: clean(body.leadgenId),
+    adId: clean(body.adId),
+    adName: clean(body.adName),
+    campaignId: clean(body.campaignId),
+    campaignName: clean(body.campaignName),
+    email: clean(body.email),
+  };
+  const hasMeta = Object.values(meta).some((v) => v !== null);
+
   // 1. Check existing lead. WhatsApp leads come in via the bridge as a @lid
   //    or @s.whatsapp.net JID — match either, and also by stored phone.
   const existing = await db
@@ -123,6 +148,21 @@ export async function POST(req: NextRequest) {
         .set({ leadSource: FB_LEAD_SOURCE, updatedAt: new Date() })
         .where(sql`trim(${leads.manychatSubId}) = ${row.sid.trim()}`);
     }
+    // Backfill Meta attribution where still empty — COALESCE preserves any
+    // value already stored (e.g. from the sheet backfill). Idempotent.
+    if (hasMeta) {
+      await db
+        .update(leads)
+        .set({
+          metaLeadgenId: sql`COALESCE(${leads.metaLeadgenId}, ${meta.leadgenId})`,
+          metaAdId: sql`COALESCE(${leads.metaAdId}, ${meta.adId})`,
+          metaAdName: sql`COALESCE(${leads.metaAdName}, ${meta.adName})`,
+          metaCampaignId: sql`COALESCE(${leads.metaCampaignId}, ${meta.campaignId})`,
+          metaCampaignName: sql`COALESCE(${leads.metaCampaignName}, ${meta.campaignName})`,
+          metaFormEmail: sql`COALESCE(${leads.metaFormEmail}, ${meta.email})`,
+        })
+        .where(sql`trim(${leads.manychatSubId}) = ${row.sid.trim()}`);
+    }
     return NextResponse.json({
       status: "tagged_only",
       sid: row.sid,
@@ -145,6 +185,13 @@ export async function POST(req: NextRequest) {
       active: true,
       // null = pre-questionnaire; the bot will run intake on first inbound.
       pipelineStage: null,
+      // Meta Lead Ads attribution (null when the Apps Script doesn't send it).
+      metaLeadgenId: meta.leadgenId,
+      metaAdId: meta.adId,
+      metaAdName: meta.adName,
+      metaCampaignId: meta.campaignId,
+      metaCampaignName: meta.campaignName,
+      metaFormEmail: meta.email,
     });
   } catch (err) {
     return NextResponse.json(
