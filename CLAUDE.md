@@ -151,6 +151,74 @@ re-import silently re-corrupts what you just fixed:**
 **Prevention idea (not built):** parse by header-name lookup on row 5 instead
 of hardcoded indices → shift-proof. Deferred; the fix is ~10 min when it recurs.
 
+## Meta conversion loop — CRM → Meta (built 2026-08-07)
+
+Reports lead OUTCOMES back to Meta (Conversions API for CRM) so the ad algorithm
+optimizes for **quality** leads instead of cheap form-fills. Dataset **"GHL
+albadi" `1989217432035920`**; env `META_CAPI_TOKEN` / `META_DATASET_ID` /
+`META_GRAPH_VERSION` (+ optional `META_ADS_TOKEN` for spend).
+
+**The whole loop depends on ONE key: the Meta leadgen id.** It is NOT in GHL and
+NOT in the FB-import payload — it lives only in the two Meta Instant-Form Google
+Sheets. `enrichMetaAttribution` ([lib/sheets/meta-attribution.ts](lib/sheets/meta-attribution.ts))
+reads those sheets daily and fills `leads.meta_*` by phone. **Match on phone,
+wa_jid AND sid** — a lead's `phone_e164` can be a different number than the form
+captured (bit us 2026-08-07: דגא מנשה looked "missing from the CRM" but was
+there under a second number).
+
+| Event | Fired by | Value |
+|---|---|---|
+| `Qualified` | Eli tags the GHL contact **"good lead"** → daily poller | — |
+| `QuoteSent` | stage → CONSIDERATION (⚠ see caveat) | — |
+| `Purchase` | "סגור עסקה" (single + combined) | `grandTotalExVat` |
+
+**`Qualified` is Eli's judgement — never derive it.** "Was sent a quote" is a
+pipeline step (nearly every lead gets one), not quality. He marks a real business
+that wanted serious volume and talked straight. Tag aliases: `good lead` /
+`ליד טוב` / `ליד_טוב` / `qualified`.
+
+**No GHL Workflow is involved.** `pollGoodLeads` ([lib/meta/good-lead-poll.ts](lib/meta/good-lead-poll.ts))
+asks GHL directly (`POST /contacts/search` with a tags filter), maps by
+`ghl_contact_id`, sends once, stamps `leads.meta_qualified_sent_at`. Runs inside
+the daily `/api/cron/enrich-meta-attribution` (06:00 UTC).
+
+### ⚠️ Where to look when "we can't tell which leads are good"
+
+The loop **fails silently** — nothing errors, it just stops teaching Meta. The
+מודעות tab ([app/widget/ads](app/widget/ads/page.tsx)) shows a health strip
+([lib/meta/health.ts](lib/meta/health.ts)) — read it first. Then, in order:
+
+1. **Health strip red on "שיוך לידים למודעה"** → the daily cron isn't running, or
+   the sheets moved/lost public access. Kick it:
+   `POST /api/cron/enrich-meta-attribution` with `Bearer $BOT_SECRET`. It returns
+   `{sheets, sheetRows, updated, goodLeads:{tagged,matched,sent}}` — `sheets:0`
+   means the Google Sheets aren't readable (sharing or a rotated id in
+   `GOOGLE_SHEETS_FB_LEADS_IDS`).
+2. **Red on 'תגית "ליד טוב"'** → tagged in GHL but not reported. Usually the GHL
+   OAuth token or the same cron. Reset one lead by clearing its
+   `meta_qualified_sent_at` and re-running the cron.
+3. **Nothing arrives at Meta** → fire one event by hand:
+   `POST /api/admin/meta-send-test {sid, eventName, testEventCode?}`. A healthy
+   reply is `{"ok":true,"eventsReceived":1,...}`. `meta_400 Invalid parameter`
+   = a bad/foreign leadgen id for that lead; an auth error = the token expired
+   (regenerate in Events Manager → the dataset → Conversions API).
+4. **Re-report history at any time** — `POST /api/admin/meta-backfill-events`
+   (`?dry=1` to preview, `?names=a,b` to hand-pick). `event_id` is always
+   `<sid>:<eventName>`, so Meta dedups and re-runs can't double count.
+5. **Ground truth lives in the DB, not in Meta.** `leads.meta_leadgen_id /
+   meta_ad_name / meta_campaign_name / meta_qualified_sent_at` + the deals table
+   are the record of who was good and what they were worth. Meta is a consumer;
+   if it loses the data we can always re-send from here.
+
+**Caveats worth knowing.** (a) All GHL *Workflows* are in **Draft**, so the
+`/api/ghl/stage-changed` webhook likely never fires — the stage-triggered
+`Qualified`/`QuoteSent` are effectively dormant; the tag is the real mechanism.
+(b) Meta's conversion-leads window is **28 days** from lead creation (not the
+7 days generic CAPI articles quote), and the optimized stage must convert at
+1–40%. (c) The lead campaigns still optimize for `Maximize number of leads` —
+until a NEW campaign is built with **conversion leads** (Meta won't let an
+existing ad set switch), Meta only records these events.
+
 ## Deploy
 
 Push to `main` → Vercel **usually** auto-deploys via GitHub integration.

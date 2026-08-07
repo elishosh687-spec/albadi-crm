@@ -9,6 +9,7 @@
  */
 import { verifyWidgetToken } from "@/integrations/ghl/widget-auth";
 import { buildAdPerformance } from "@/lib/analysis/ad-performance";
+import { checkMetaHealth } from "@/lib/meta/health";
 import Link from "next/link";
 
 export const dynamic = "force-dynamic";
@@ -46,7 +47,10 @@ export default async function AdsWidgetPage({
   }
 
   const sinceDays = days === "30" ? 30 : days === "90" ? 90 : undefined;
-  const report = await buildAdPerformance({ sinceDays });
+  const [report, health] = await Promise.all([
+    buildAdPerformance({ sinceDays }),
+    checkMetaHealth().catch(() => null),
+  ]);
   const { totals } = report;
   // Phase B columns only appear once Meta spend is actually available.
   const showSpend = report.totalSpendIls !== null;
@@ -237,6 +241,34 @@ export default async function AdsWidgetPage({
           </table>
         </div>
       )}
+
+      {/* Health strip — the loop fails silently, so surface it here. */}
+      {health ? (
+        <div
+          style={{
+            marginTop: 18,
+            padding: "10px 12px",
+            border: `1px solid ${health.ok ? LINE : "rgba(224,138,138,0.35)"}`,
+            borderRadius: 8,
+            background: health.ok ? "transparent" : "rgba(224,138,138,0.06)",
+          }}
+        >
+          <div style={{ fontSize: 12.5, fontWeight: 600, marginBottom: 6 }}>
+            {health.ok ? "✓ החיבור למטא תקין" : "⚠ יש בעיה בדיווח למטא"}
+          </div>
+          {health.checks.map((c) => (
+            <div
+              key={c.key}
+              style={{ fontSize: 11.5, color: MUTED, lineHeight: 1.7 }}
+            >
+              <span style={{ color: c.ok ? "#7dd3a0" : "#e08a8a" }}>
+                {c.ok ? "●" : "●"}
+              </span>{" "}
+              {c.label}: {c.detail}
+            </div>
+          ))}
+        </div>
+      ) : null}
 
       {!showSpend && report.spendUnavailable ? (
         <p style={{ marginTop: 12, fontSize: 12, color: MUTED }}>

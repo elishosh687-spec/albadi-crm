@@ -148,9 +148,16 @@ export async function enrichMetaAttribution(): Promise<EnrichResult> {
     }
   }
 
-  // FB leads still missing a leadgen id.
-  const res = await db.execute<{ sid: string; phone: string | null }>(sql`
-    SELECT manychat_sub_id AS sid, phone_e164 AS phone
+  // FB leads still missing a leadgen id. We pull wa_jid/sid too: a lead's
+  // phone_e164 can differ from the number the form captured (seen 2026-08-07 —
+  // דגא מנשה's phone_e164 was a second number while the form's number lived in
+  // his wa_jid), so matching on phone alone silently misses real leads.
+  const res = await db.execute<{
+    sid: string;
+    phone: string | null;
+    jid: string | null;
+  }>(sql`
+    SELECT manychat_sub_id AS sid, phone_e164 AS phone, wa_jid AS jid
     FROM leads
     WHERE (source = 'facebook_import' OR lead_source = 'facebook')
       AND meta_leadgen_id IS NULL`);
@@ -158,8 +165,16 @@ export async function enrichMetaAttribution(): Promise<EnrichResult> {
 
   let updated = 0;
   for (const l of rows) {
-    const ph = digits(l.phone ?? "");
-    const rec = byPhone.get(ph) || byLast9.get(last9(l.phone ?? ""));
+    // Every number this lead is known by: stored phone, WhatsApp JID, and the
+    // sid (bridge-origin sids are "<number>@s.whatsapp.net").
+    const candidates = [l.phone ?? "", l.jid ?? "", l.sid ?? ""]
+      .map((v) => digits(v))
+      .filter((v) => v.length >= 9);
+    let rec: MetaRec | undefined;
+    for (const c of candidates) {
+      rec = byPhone.get(c) || byLast9.get(last9(c));
+      if (rec) break;
+    }
     if (!rec) continue;
     await db
       .update(leads)
