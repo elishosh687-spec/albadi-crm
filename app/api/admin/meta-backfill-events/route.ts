@@ -66,11 +66,17 @@ export async function POST(req: NextRequest) {
     if (patterns.length === 0) {
       return NextResponse.json({ ok: false, error: "no usable names" }, { status: 400 });
     }
+    // Build explicit OR clauses — passing a JS array to ILIKE ANY() leaves
+    // Postgres unable to infer the element type (500s).
+    const nameClauses = sql.join(
+      patterns.map((p) => sql`name ILIKE ${p}`),
+      sql` OR `,
+    );
     const res = await db.execute<{ sid: string; name: string; ts: number | null }>(sql`
       SELECT manychat_sub_id AS sid, name,
              EXTRACT(EPOCH FROM COALESCE(last_response_at, updated_at, created_at)) AS ts
       FROM leads
-      WHERE meta_leadgen_id IS NOT NULL AND name ILIKE ANY(${patterns})`);
+      WHERE meta_leadgen_id IS NOT NULL AND (${nameClauses})`);
     if (dry) {
       return NextResponse.json({ ok: true, dry: true, matched: res.rows.map((r) => r.name) });
     }
