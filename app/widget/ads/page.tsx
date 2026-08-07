@@ -48,6 +48,8 @@ export default async function AdsWidgetPage({
   const sinceDays = days === "30" ? 30 : days === "90" ? 90 : undefined;
   const report = await buildAdPerformance({ sinceDays });
   const { totals } = report;
+  // Phase B columns only appear once Meta spend is actually available.
+  const showSpend = report.totalSpendIls !== null;
 
   const periods: { id: string; label: string }[] = [
     { id: "", label: "הכל" },
@@ -123,6 +125,15 @@ export default async function AdsWidgetPage({
           { k: "סומנו טובים", v: String(totals.markedGood) },
           { k: "נסגרו", v: String(totals.won) },
           { k: "הכנסה", v: ils(totals.revenueIls) },
+          ...(report.totalSpendIls !== null
+            ? [
+                { k: "עלות פרסום", v: ils(report.totalSpendIls) },
+                {
+                  k: "רווח גולמי",
+                  v: ils(totals.revenueIls - report.totalSpendIls),
+                },
+              ]
+            : []),
         ].map((s) => (
           <div key={s.k}>
             <div style={{ fontSize: 11.5, color: MUTED }}>{s.k}</div>
@@ -147,6 +158,13 @@ export default async function AdsWidgetPage({
                 <th style={th}>סומנו טובים</th>
                 <th style={th}>נסגרו</th>
                 <th style={th}>הכנסה</th>
+                {showSpend ? (
+                  <>
+                    <th style={th}>עלות</th>
+                    <th style={th}>עלות/ליד איכותי</th>
+                    <th style={th}>רווח</th>
+                  </>
+                ) : null}
               </tr>
             </thead>
             <tbody>
@@ -187,12 +205,46 @@ export default async function AdsWidgetPage({
                   <td style={{ ...td, fontWeight: r.revenueIls ? 600 : 400 }}>
                     {r.revenueIls ? ils(r.revenueIls) : "—"}
                   </td>
+                  {showSpend ? (
+                    <>
+                      <td style={td}>
+                        {r.spendIls !== null ? ils(r.spendIls) : "—"}
+                      </td>
+                      <td style={td}>
+                        {r.costPerQualityLeadIls !== null
+                          ? ils(r.costPerQualityLeadIls)
+                          : "—"}
+                      </td>
+                      <td
+                        style={{
+                          ...td,
+                          fontWeight: 600,
+                          color:
+                            r.roiIls === null
+                              ? INK
+                              : r.roiIls > 0
+                                ? "#7dd3a0"
+                                : "#e08a8a",
+                        }}
+                      >
+                        {r.roiIls !== null ? ils(r.roiIls) : "—"}
+                      </td>
+                    </>
+                  ) : null}
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
       )}
+
+      {!showSpend && report.spendUnavailable ? (
+        <p style={{ marginTop: 12, fontSize: 12, color: MUTED }}>
+          עלויות פרסום לא מוצגות — {report.spendUnavailable}. להצגת עלות לליד
+          איכותי ורווח, צריך <code>META_ADS_TOKEN</code> (System User token עם
+          ads_read, כזה שלא פג).
+        </p>
+      ) : null}
 
       {report.unattributed > 0 ? (
         <p style={{ marginTop: 12, fontSize: 12, color: MUTED }}>

@@ -13,9 +13,11 @@
  */
 import { db } from "@/lib/db";
 import { sql } from "drizzle-orm";
+import { fetchAdSpend } from "@/lib/meta/ads-insights";
 
 export interface AdPerformanceRow {
   adName: string;
+  adId: string | null;
   campaignName: string | null;
   leads: number;
   /** Reached an engaged pipeline stage (DISCAVERY / FACTORY_WAIT / CONSIDERATION / WON). */
@@ -27,6 +29,15 @@ export interface AdPerformanceRow {
   revenueIls: number;
   /** engaged / leads, 0..100. */
   engagedPct: number;
+  // ---- phase B (only when META_ADS_TOKEN is set) ----
+  /** What Meta charged for this ad in the period, ₪. Null = no spend data. */
+  spendIls: number | null;
+  /** spend / leads. */
+  costPerLeadIls: number | null;
+  /** spend / engaged — the number that actually ranks ads. Null when engaged=0. */
+  costPerQualityLeadIls: number | null;
+  /** revenue − spend. */
+  roiIls: number | null;
 }
 
 export interface AdPerformanceReport {
@@ -40,6 +51,10 @@ export interface AdPerformanceReport {
   };
   /** Leads with no ad attribution (no leadgen id matched). */
   unattributed: number;
+  /** Total ad spend for the period, ₪. Null when spend data isn't available. */
+  totalSpendIls: number | null;
+  /** Why spend is missing (missing/expired token, no data) — shown in the UI. */
+  spendUnavailable: string | null;
 }
 
 const ENGAGED = sql`pipeline_stage IN ('DISCAVERY','FACTORY_WAIT','CONSIDERATION','WON')`;
@@ -54,6 +69,7 @@ export async function buildAdPerformance(
 
   const res = await db.execute<{
     ad: string;
+    ad_id: string | null;
     campaign: string | null;
     leads: number;
     engaged: number;
@@ -61,6 +77,7 @@ export async function buildAdPerformance(
     won: number;
   }>(sql`
     SELECT l.meta_ad_name AS ad,
+           MAX(l.meta_ad_id) AS ad_id,
            MAX(l.meta_campaign_name) AS campaign,
            count(*)::int AS leads,
            count(*) FILTER (WHERE ${ENGAGED})::int AS engaged,
@@ -99,20 +116,38 @@ export async function buildAdPerformance(
     if (ad) revByAd.set(ad, (revByAd.get(ad) ?? 0) + rev);
   }
 
+  // Phase B: ad spend from Meta, joined by ad_id. Soft-fails to nulls so the
+  // report still renders exactly as phase A when no token is configured.
+  const spend = await fetchAdSpend(since ?? undefined);
+  const hasSpend = spend.byAdId.size > 0;
+
   const rows: AdPerformanceRow[] = res.rows
-    .map((r) => ({
-      adName: r.ad,
-      campaignName: r.campaign,
-      leads: Number(r.leads),
-      engaged: Number(r.engaged),
-      markedGood: Number(r.marked_good),
-      won: Number(r.won),
-      revenueIls: Math.round(revByAd.get(r.ad) ?? 0),
-      engagedPct:
-        Number(r.leads) > 0
-          ? Math.round((100 * Number(r.engaged)) / Number(r.leads))
-          : 0,
-    }))
+    .map((r) => {
+      const leads = Number(r.leads);
+      const engaged = Number(r.engaged);
+      const revenueIls = Math.round(revByAd.get(r.ad) ?? 0);
+      const s = r.ad_id ? spend.byAdId.get(r.ad_id) : undefined;
+      const spendIls = s ? Math.round(s.spendIls) : null;
+      return {
+        adName: r.ad,
+        adId: r.ad_id,
+        campaignName: r.campaign,
+        leads,
+        engaged,
+        markedGood: Number(r.marked_good),
+        won: Number(r.won),
+        revenueIls,
+        engagedPct: leads > 0 ? Math.round((100 * engaged) / leads) : 0,
+        spendIls,
+        costPerLeadIls:
+          spendIls !== null && leads > 0 ? Math.round(spendIls / leads) : null,
+        costPerQualityLeadIls:
+          spendIls !== null && engaged > 0
+            ? Math.round(spendIls / engaged)
+            : null,
+        roiIls: spendIls !== null ? revenueIls - spendIls : null,
+      };
+    })
     .sort(
       (a, b) =>
         b.revenueIls - a.revenueIls ||
@@ -138,5 +173,7 @@ export async function buildAdPerformance(
       { leads: 0, engaged: 0, markedGood: 0, won: 0, revenueIls: 0 },
     ),
     unattributed: Number(unattrRes.rows[0]?.n ?? 0),
+    totalSpendIls: hasSpend ? Math.round(spend.totalSpendIls) : null,
+    spendUnavailable: spend.unavailable,
   };
 }
