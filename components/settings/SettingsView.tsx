@@ -26,6 +26,7 @@ import { SeaCarriersSection } from "@/components/settings/SeaCarriersSection";
 import { TemplatesManager } from "@/components/settings/TemplatesManager";
 import { LuxShell, LuxTitle, LuxAccent } from "@/components/widget-ui/lux";
 import { AssigneeSection } from "@/components/settings/AssigneeSection";
+import { QuoteNotifySection } from "@/components/settings/QuoteNotifySection";
 
 function widgetUrl(path: string, token: string): string {
   const u = new URL(path, "http://placeholder.local");
@@ -288,6 +289,7 @@ export function SettingsView({ apiToken }: { apiToken: string }) {
       <section className="space-y-6" dir="rtl">
 
       <AssigneeSection apiToken={apiToken} />
+      <QuoteNotifySection apiToken={apiToken} />
 
       <FormSection icon={ArrowLeftRight} title="שערי המרה" desc="המרות מטבע לחישוב עלות והצעה">
         {/* Live auto-update controls */}
