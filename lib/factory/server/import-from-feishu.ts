@@ -12,7 +12,7 @@
 
 import { db } from "@/lib/db";
 import { factoryQuoteRequests, leads } from "@/drizzle/schema";
-import { eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import {
   readAllRows,
   readRow,
@@ -83,10 +83,15 @@ export interface ImportFromFeishuResult {
 export async function importFromFeishu(): Promise<ImportFromFeishuResult> {
   const rows = await readAllRows(500);
 
-  // Quotation numbers already present in the DB — skip those (not deleted).
+  // Quotation numbers already present in the DB — skip those. A SOFT-DELETED
+  // row must NOT block a re-import: deleting a quote and re-importing it from
+  // Feishu is the documented recovery path (the screen literally offers it),
+  // and without this filter the import silently reported "already exists" and
+  // did nothing. Bug hit on VIHFR5BJ, 2026-08-11.
   const existing = await db
     .select({ q: factoryQuoteRequests.quotationNo })
-    .from(factoryQuoteRequests);
+    .from(factoryQuoteRequests)
+    .where(isNull(factoryQuoteRequests.deletedAt));
   const existingNos = new Set(
     existing.map((r) => (r.q ?? "").trim()).filter(Boolean)
   );
@@ -172,10 +177,16 @@ export async function assignImportedQuote(
   const sid = leadSid.trim();
   if (!qNo || !sid) return { ok: false, error: "missing_params" };
 
+  // Same rule as the bulk import: a trashed quote doesn't own its number.
   const existing = await db
     .select({ id: factoryQuoteRequests.id })
     .from(factoryQuoteRequests)
-    .where(eq(factoryQuoteRequests.quotationNo, qNo))
+    .where(
+      and(
+        eq(factoryQuoteRequests.quotationNo, qNo),
+        isNull(factoryQuoteRequests.deletedAt)
+      )
+    )
     .limit(1);
   if (existing.length > 0) return { ok: false, error: "already_exists" };
 
