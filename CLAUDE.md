@@ -138,6 +138,15 @@ and **deriving the end column from `values.length`** so the next inserted column
 can't silently truncate the payload. Symptom to watch for: **column K empty on
 new request rows**, or the sheet's qty disagreeing with `product_spec.quantity`.
 
+**Soft-deleted quotes don't own their quotation number (fixed 2026-08-11).**
+"Delete the quote, then re-import it from Feishu with the same number" is the
+documented recovery path and the screen offers it — but both existence checks in
+[import-from-feishu.ts](lib/factory/server/import-from-feishu.ts) queried without
+a `deleted_at` filter, so a trashed row blocked its own re-import and the import
+silently reported "already exists". If a quote "won't import", first check
+`SELECT deleted_at FROM factory_quote_requests WHERE quotation_no = '…'` — and
+remember the **סל מיחזור** button on the quotes screen restores it directly.
+
 **Fix recipe when it shifts again:**
 1. Dump raw rows incl. row 5 (`readRow` + print each cell with its column
    letter) to see the new layout.
