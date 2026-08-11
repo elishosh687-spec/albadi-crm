@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useMemo } from "react";
-import { ExternalLink, Search, Loader2, Eye, Download, Trash2, Trash, X, MessageCircle, Calculator, Pencil, ChevronDown, Check, Send, Sparkles, FolderOpen, RotateCcw, CheckCircle2 } from "lucide-react";
+import { ExternalLink, Search, Loader2, Eye, Download, Trash2, Trash, X, MessageCircle, Calculator, Pencil, ChevronDown, Check, Send, Sparkles, FolderOpen, RotateCcw, CheckCircle2, RefreshCw } from "lucide-react";
 import { QuoteHtmlPreview } from "@/app/dashboard/v3/_components/factory/QuoteHtmlPreview";
 import { splitCustomerView } from "@/lib/factory/shipping-split";
 import { customerTotalExVat } from "@/lib/factory/customer-total";
@@ -295,6 +295,59 @@ export function QuotesHistoryView({ apiToken }: { apiToken: string }) {
         return;
       }
       await loadTrash();
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  // "רענן מהמפעל" — re-pull ONE quote's Feishu row even when finalized (the
+  // scheduled refresh skips finalized rows so it can't overwrite a priced
+  // quote). The factory does edit rows after we've priced them, so this is the
+  // manual escape hatch. Updates the factory data only — never re-prices.
+  async function handleForceRefresh(r: ApiQuoteRow) {
+    setBusyId(r.id);
+    try {
+      const res = await fetch(
+        `/api/widget/factory/force-refresh/${r.id}?widget_token=${encodeURIComponent(apiToken)}`,
+        { method: "POST" }
+      );
+      const j = await res.json().catch(() => ({}));
+      if (!j?.ok) {
+        alert(
+          j?.error === "row_not_found_in_sheet"
+            ? "השורה לא נמצאה בגיליון המפעל."
+            : j?.error === "sheet_row_has_no_factory_data"
+              ? "המפעל עדיין לא מילא נתונים בשורה."
+              : `שגיאה: ${j?.error ?? res.status}`
+        );
+        return;
+      }
+      const changes: { field: string; from: unknown; to: unknown }[] = j.changes ?? [];
+      if (changes.length === 0) {
+        alert("אין שינוי — הנתונים במפעל זהים למה שכבר שמור.");
+      } else {
+        const LABELS: Record<string, string> = {
+          unitCostCny: "מחיר יחידה ¥",
+          cartonQty: "כמות בקרטון",
+          cartonCbm: "CBM",
+          weightKg: 'משקל ק"ג',
+          cartonLengthCm: "אורך",
+          cartonWidthCm: "רוחב",
+          cartonHeightCm: "גובה",
+          supplier: "ספק",
+          notes: "הערות",
+        };
+        const lines = changes
+          .map((c) => `• ${LABELS[c.field] ?? c.field}: ${String(c.from ?? "—")} ← ${String(c.to)}`)
+          .join("\n");
+        alert(
+          `עודכן מהמפעל:\n${lines}` +
+            (j.pricingStale
+              ? "\n\n⚠️ עלות המפעל השתנתה וההצעה כבר מתומחרת — המחיר ללקוח לא עודכן אוטומטית. אם צריך, חשב מחדש."
+              : "")
+        );
+      }
+      await refresh();
     } finally {
       setBusyId(null);
     }
@@ -775,6 +828,17 @@ export function QuotesHistoryView({ apiToken }: { apiToken: string }) {
               className="size-7 rounded grid place-items-center text-primary hover:bg-primary/10 disabled:opacity-50"
             >
               <Calculator className="size-3.5" />
+            </button>
+          )}
+          {(r.status === "finalized" || r.status === "received") && (
+            <button
+              type="button"
+              onClick={() => handleForceRefresh(r)}
+              disabled={busyId === r.id}
+              title="רענן מהמפעל — משוך שוב את נתוני הגיליון (גם להצעה סופית)"
+              className="size-7 rounded grid place-items-center text-muted-foreground hover:text-primary hover:bg-primary/10 disabled:opacity-50"
+            >
+              {busyId === r.id ? <Loader2 className="size-3.5 animate-spin" /> : <RefreshCw className="size-3.5" />}
             </button>
           )}
           {r.status === "finalized" && (
