@@ -127,6 +127,17 @@ re-import silently re-corrupts what you just fixed:**
    FinalizeModal derives logoColors from `productSpec.printing` via `/(\d+)/`,
    so "H35*..." → "35 colours" and the plate fee explodes (¥350 × 35 = ¥12,250).
 
+**Third occurrence — 2026-08-11, the WRITE side this time.** The factory added a
+**`Type` column at F**, but `buildFactoryRow` still emitted 10 values into a
+hardcoded `A..J` range. So from F on every field landed one column LEFT of its
+header and **Quantity was never written to K at all** — the factory quoted
+against a blank/echoed qty (APA1WK7G: 5,000 in the CRM vs 10,000 in the sheet).
+A request (SGYNW572) also went missing from the sheet entirely while the DB
+recorded `feishu_row_index=58`. Fixed by adding `type` (F, `DEFAULT_FACTORY_TYPE`)
+and **deriving the end column from `values.length`** so the next inserted column
+can't silently truncate the payload. Symptom to watch for: **column K empty on
+new request rows**, or the sheet's qty disagreeing with `product_spec.quantity`.
+
 **Fix recipe when it shifts again:**
 1. Dump raw rows incl. row 5 (`readRow` + print each cell with its column
    letter) to see the new layout.
