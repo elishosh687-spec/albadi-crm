@@ -1,13 +1,19 @@
 /**
  * Feishu Sheets v2 API wrapper — matches Albadi's "non-woven Quotation" sheet layout.
  *
- * Column layout (real sheet — header row 8 of the CSV):
- *   Eli fills A..I:
- *     A Customer | B Quotation# | C Pic | D Description | E Material | F Size
- *     G Printing | H Finishing | I Quantity
- *   Factory fills J..R:
- *     J Price¥  | K Carton Qty | L Length cm | M Width cm | N Height cm
- *     O CBM     | P Weight kg  | Q Supplier  | R Remark
+ * Column layout — VERIFIED against the live header (row 4 EN / row 5 中文) on
+ * 2026-08-11. The factory edits this sheet, so re-verify before trusting it:
+ *   Our side, A..K:
+ *     A Customer | B Quotation# | C Date | D Pic | E Description | F Type
+ *     G Material | H Size | I Printing | J Finishing | K Quantity
+ *   Factory side, L..U:
+ *     L Price¥ | M Carton Qty | N Length | O Width | P Height | Q CBM
+ *     R Weight kg | S Supplier | T Remark | U (unlabeled) plate fee
+ *
+ * ⚠️ This block used to document A..I / J..R — a layout that hasn't been true
+ * for a long time. Three readers/writers use these indices (buildFactoryRow,
+ * parseFactoryRequestRow, parseFactoryResponseRow) and they MUST move together.
+ * See the column-shift section in CLAUDE.md.
  *
  * Spreadsheet token = the URL segment after `/sheets/`.
  *
@@ -74,7 +80,8 @@ export async function findLastDataRow(): Promise<number> {
 }
 
 /**
- * Appends a row of values (A..J) to the sheet. Returns the 1-based row index.
+ * Appends a row of values (A..K for a request) to the sheet. Returns the
+ * 1-based row index. The end column is derived from `values.length`.
  *
  * We do NOT use Feishu's `values_append` here. On this sheet it mis-detects
  * the table's end and inserts the new row in the MIDDLE (~row 7-8) instead of
@@ -92,7 +99,12 @@ export async function appendRow(values: (string | number)[]): Promise<string> {
   const sheetId = await getSheetId();
 
   const target = (await findLastDataRow()) + 1;
-  const range = `${sheetId}!A${target}:J${target}`;
+  // Derive the end column from the payload instead of hardcoding "J": the
+  // request block grew from A..J to A..K when the factory added `Type`, and a
+  // hardcoded letter silently truncates the last value (Quantity) when that
+  // happens. Now the range always matches what we're actually writing.
+  const endCol = String.fromCharCode(65 + Math.max(0, values.length - 1));
+  const range = `${sheetId}!A${target}:${endCol}${target}`;
 
   await feishuFetch(`/open-apis/sheets/v2/spreadsheets/${token}/values`, {
     method: "PUT",
@@ -148,7 +160,8 @@ export async function setCellDateFormat(
 
 /**
  * Write a value into a single cell (e.g. the Remark column S of a just-appended
- * request row). `appendRow` only writes A..J, so anything past J needs its own
+ * request row). `appendRow` only writes the request block (A..K), so anything
+ * past K needs its own
  * targeted write. Non-fatal callers should wrap in try/catch.
  *
  * Feishu API: PUT /open-apis/sheets/v2/spreadsheets/{token}/values
@@ -305,18 +318,37 @@ export async function readAllRows(
 // collapses if the formula is removed.)
 // ------------------------------------------------------------
 
+/**
+ * Request-side layout, verified against the live header (row 4 EN / row 5 中文)
+ * on 2026-08-11:
+ *   A Customer 联系人 · B Quotation No. 报价单号 · C Quotation date ·
+ *   D Pic 图片 · E Description 描述 · F Type 类型 · G Material 材质及克重 ·
+ *   H Size 尺寸 · I Printing logo印刷 · J Finishing 表面处理 · K Quantity 数量
+ *
+ * ⚠️ `Type` (F) was added by the factory and the writer didn't know about it,
+ * so every field from F on was written one column LEFT of where it belonged and
+ * **Quantity never reached K at all** — the factory quoted off a blank/echoed
+ * qty. Fixed 2026-08-11. `parseFactoryRequestRow` already reads this layout
+ * (material←G, size←H, printing←I, finishing←J, quantity←K, skip F) — the two
+ * MUST stay in sync; see the column-shift section in CLAUDE.md.
+ */
 export interface FactoryRequestColumns {
   customer: string;       // A
   quotationNo: string;    // B
                           // C = date (auto, added by buildFactoryRow)
   pic: string;            // D (URL or "")
   description: string;    // E
-  material: string;       // F
-  size: string;           // G  e.g. "H20*D8*W25"
-  printing: string;       // H  e.g. "3 color(s)"
-  finishing: string;      // I  e.g. "Handles / not laminated"
-  quantity: number | string; // J
+  /** F — bag type as the factory labels it. Defaults to the house product. */
+  type?: string;          // F
+  material: string;       // G
+  size: string;           // H  e.g. "H20*D8*W25"
+  printing: string;       // I  e.g. "3 color(s)"
+  finishing: string;      // J  e.g. "Handles / not laminated"
+  quantity: number | string; // K
 }
+
+/** What column F carries for every standard Albadi request. */
+export const DEFAULT_FACTORY_TYPE = "Albadi non-woven bag";
 
 /**
  * Today's date as an Excel-style serial number (days since 1899-12-30).
@@ -340,6 +372,7 @@ export function buildFactoryRow(cols: FactoryRequestColumns): (string | number)[
     todayExcelSerial(),
     cols.pic ?? "",
     cols.description ?? "",
+    cols.type ?? DEFAULT_FACTORY_TYPE,
     cols.material ?? "",
     cols.size ?? "",
     cols.printing ?? "",
