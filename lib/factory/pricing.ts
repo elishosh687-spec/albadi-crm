@@ -102,6 +102,46 @@ export function marginPctFromUnitPrice(
   return productPrice > 0 ? ((productPrice - unitCost) / productPrice) * 100 : 0;
 }
 
+/**
+ * Two shipping-id namespaces exist and they leak into each other:
+ * the CALCULATOR engine uses `s1` (אקספרס / air) and `s2` (רגיל / sea), while
+ * the factory pricing config uses `air-express` / `sea-standard`. A quote built
+ * on the calculator side stores `s2`, and the factory engine used to look that
+ * up, find nothing, and price shipping at **₪0** — silently under-charging by
+ * ~₪1,900 on a 3,000-bag order (PUGPA6BQ, 2026-08-11).
+ *
+ * So: translate the legacy ids, and NEVER fall through to "no shipping". An
+ * unknown id falls back to the cheapest sea option — visibly wrong-but-sane
+ * beats invisibly free.
+ */
+const LEGACY_SHIPPING_IDS: Record<string, "air" | "sea"> = {
+  s1: "air", // אקספרס
+  s2: "sea", // רגיל
+};
+
+export function resolveShippingOption(
+  id: string,
+  config: FactoryPricingConfig
+): FactoryPricingConfig["shippingOptions"][number] | null {
+  const opts = config.shippingOptions ?? [];
+  const exact = opts.find((s) => s.id === id);
+  if (exact) return exact;
+
+  const kind = LEGACY_SHIPPING_IDS[id.trim()];
+  if (kind) {
+    const match = opts.find((s) =>
+      kind === "air"
+        ? /air|אוויר|אקספרס/i.test(`${s.id} ${s.name ?? ""}`)
+        : /sea|ים|רגיל/i.test(`${s.id} ${s.name ?? ""}`)
+    );
+    if (match) return match;
+  }
+  console.warn(
+    `[pricing] unknown shippingOptionId "${id}" — falling back to a sea option instead of zero shipping`
+  );
+  return opts.find((s) => /sea|ים/i.test(`${s.id} ${s.name ?? ""}`)) ?? opts[0] ?? null;
+}
+
 export function priceFactoryQuote(
   input: FactoryPricingInput,
   config: FactoryPricingConfig
@@ -133,7 +173,7 @@ export function priceFactoryQuote(
       : (perCartonCbm ?? 0) * totalCartons;
 
   const shipping = input.shippingOptionId
-    ? config.shippingOptions.find((s) => s.id === input.shippingOptionId) ?? null
+    ? resolveShippingOption(input.shippingOptionId, config)
     : null;
 
   // One-time mold/tooling fee (CNY) — treated as a SEPARATE one-time line item.
