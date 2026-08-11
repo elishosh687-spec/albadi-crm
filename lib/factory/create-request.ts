@@ -26,9 +26,15 @@ import type { FactoryProductSpec, FactoryPricingResult } from "./types";
 // description is forced to English. Custom English text the operator typed is
 // kept; any Hebrew (incl. the "שקית אלבדי" default) → a fixed English label.
 const HAS_HEBREW = /[֐-׿]/;
+/**
+ * Column E (Description) — free text for the factory. Hebrew is unreadable to
+ * them, so it's dropped. It used to fall back to "Albadi non-woven bag", but
+ * that product name now lives in its own `Type` column (F), so the fallback
+ * would just duplicate it — leave E empty instead, matching the existing rows.
+ */
 function factoryDescription(desc: string | undefined | null): string {
   const d = (desc ?? "").trim();
-  if (!d || HAS_HEBREW.test(d)) return "Albadi non-woven bag";
+  if (!d || HAS_HEBREW.test(d)) return "";
   return d;
 }
 
