@@ -74,33 +74,37 @@ export async function buildAdPerformance(
     leads: number;
     engaged: number;
     marked_good: number;
-    won: number;
   }>(sql`
     SELECT l.meta_ad_name AS ad,
            MAX(l.meta_ad_id) AS ad_id,
            MAX(l.meta_campaign_name) AS campaign,
            count(*)::int AS leads,
            count(*) FILTER (WHERE ${ENGAGED})::int AS engaged,
-           count(*) FILTER (WHERE l.meta_qualified_sent_at IS NOT NULL)::int AS marked_good,
-           count(*) FILTER (WHERE l.pipeline_stage = 'WON')::int AS won
+           count(*) FILTER (WHERE l.meta_qualified_sent_at IS NOT NULL)::int AS marked_good
     FROM leads l
     WHERE l.meta_ad_name IS NOT NULL ${timeFilter}
     GROUP BY l.meta_ad_name`);
 
-  // Revenue comes from listClosedQuotes' canonical grandTotalExVat — the ONE
-  // customer total (split/combined aware). Deriving it from final_pricing here
-  // would re-create the very drift CLAUDE.md warns about (totalSellingPrice is
-  // the unrounded engine figure, not what the customer was billed).
+  // Revenue AND the closed-deal count both come from listClosedQuotes — the
+  // canonical grandTotalExVat (split/combined aware). Deriving revenue from
+  // final_pricing would re-create the drift CLAUDE.md warns about.
+  //
+  // ⚠️ "Closed" is `closed_deal_at`, NOT `pipeline_stage='WON'`. Closing a deal
+  // is deliberately decoupled from the pipeline stage, so counting WON leads
+  // under-reports: דור אוריאלי is a real ₪8,793 deal sitting at CONSIDERATION
+  // and was missing from this column until 2026-08-11.
   const revBySid = new Map<string, number>();
+  const dealsBySid = new Map<string, number>();
   try {
     const { listClosedQuotes } = await import("@/lib/factory/server/closed");
     for (const d of await listClosedQuotes()) {
       const sid = (d.leadSid ?? "").trim();
       if (!sid) continue;
       revBySid.set(sid, (revBySid.get(sid) ?? 0) + (d.grandTotalExVat ?? 0));
+      dealsBySid.set(sid, (dealsBySid.get(sid) ?? 0) + 1);
     }
   } catch (e) {
-    console.warn("[ad-performance] revenue lookup failed (showing 0)", e);
+    console.warn("[ad-performance] closed-deal lookup failed (showing 0)", e);
   }
   // Which ad each revenue-carrying lead came from.
   const adBySid = new Map<string, string>();
@@ -111,9 +115,14 @@ export async function buildAdPerformance(
     sidRows.rows.forEach((r) => adBySid.set(r.sid.trim(), r.ad));
   }
   const revByAd = new Map<string, number>();
+  const dealsByAd = new Map<string, number>();
   for (const [sid, rev] of revBySid) {
     const ad = adBySid.get(sid);
     if (ad) revByAd.set(ad, (revByAd.get(ad) ?? 0) + rev);
+  }
+  for (const [sid, n] of dealsBySid) {
+    const ad = adBySid.get(sid);
+    if (ad) dealsByAd.set(ad, (dealsByAd.get(ad) ?? 0) + n);
   }
 
   // Phase B: ad spend from Meta, joined by ad_id. Soft-fails to nulls so the
@@ -135,7 +144,7 @@ export async function buildAdPerformance(
         leads,
         engaged,
         markedGood: Number(r.marked_good),
-        won: Number(r.won),
+        won: dealsByAd.get(r.ad) ?? 0,
         revenueIls,
         engagedPct: leads > 0 ? Math.round((100 * engaged) / leads) : 0,
         spendIls,
