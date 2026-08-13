@@ -27,6 +27,10 @@ export interface AdPerformanceRow {
   won: number;
   /** Sum of closed-deal customer totals (ex-VAT) attributed to this ad. */
   revenueIls: number;
+  /** Names of the customers whose deals closed on this ad. */
+  dealCustomers: string[];
+  /** Names Eli marked "ליד טוב" on this ad. */
+  goodLeadNames: string[];
   /** engaged / leads, 0..100. */
   engagedPct: number;
   // ---- phase B (only when META_ADS_TOKEN is set) ----
@@ -95,6 +99,7 @@ export async function buildAdPerformance(
   // and was missing from this column until 2026-08-11.
   const revBySid = new Map<string, number>();
   const dealsBySid = new Map<string, number>();
+  const dealNameBySid = new Map<string, string>();
   try {
     const { listClosedQuotes } = await import("@/lib/factory/server/closed");
     for (const d of await listClosedQuotes()) {
@@ -102,6 +107,8 @@ export async function buildAdPerformance(
       if (!sid) continue;
       revBySid.set(sid, (revBySid.get(sid) ?? 0) + (d.grandTotalExVat ?? 0));
       dealsBySid.set(sid, (dealsBySid.get(sid) ?? 0) + 1);
+      const nm = (d.customerName ?? "").trim();
+      if (nm && !dealNameBySid.has(sid)) dealNameBySid.set(sid, nm);
     }
   } catch (e) {
     console.warn("[ad-performance] closed-deal lookup failed (showing 0)", e);
@@ -113,6 +120,32 @@ export async function buildAdPerformance(
       SELECT manychat_sub_id AS sid, meta_ad_name AS ad
       FROM leads WHERE meta_ad_name IS NOT NULL`);
     sidRows.rows.forEach((r) => adBySid.set(r.sid.trim(), r.ad));
+  }
+
+  // Names, so each ad shows WHO it actually brought — the deals it closed and
+  // the leads Eli marked good. Far more actionable than a bare count.
+  const dealNamesByAd = new Map<string, string[]>();
+  for (const [sid] of dealsBySid) {
+    const ad = adBySid.get(sid);
+    if (!ad) continue;
+    const nm = dealNameBySid.get(sid);
+    if (!nm) continue;
+    const list = dealNamesByAd.get(ad) ?? [];
+    if (!list.includes(nm)) list.push(nm);
+    dealNamesByAd.set(ad, list);
+  }
+  const goodNamesByAd = new Map<string, string[]>();
+  {
+    const gRows = await db.execute<{ ad: string; name: string | null }>(sql`
+      SELECT meta_ad_name AS ad, name FROM leads
+      WHERE meta_ad_name IS NOT NULL AND meta_qualified_sent_at IS NOT NULL`);
+    for (const g of gRows.rows) {
+      const nm = (g.name ?? "").trim();
+      if (!nm) continue;
+      const list = goodNamesByAd.get(g.ad) ?? [];
+      if (!list.includes(nm)) list.push(nm);
+      goodNamesByAd.set(g.ad, list);
+    }
   }
   const revByAd = new Map<string, number>();
   const dealsByAd = new Map<string, number>();
@@ -146,6 +179,8 @@ export async function buildAdPerformance(
         markedGood: Number(r.marked_good),
         won: dealsByAd.get(r.ad) ?? 0,
         revenueIls,
+        dealCustomers: dealNamesByAd.get(r.ad) ?? [],
+        goodLeadNames: goodNamesByAd.get(r.ad) ?? [],
         engagedPct: leads > 0 ? Math.round((100 * engaged) / leads) : 0,
         spendIls,
         costPerLeadIls:

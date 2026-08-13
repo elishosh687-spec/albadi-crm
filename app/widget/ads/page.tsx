@@ -192,6 +192,17 @@ export default async function AdsWidgetPage({
                         {r.campaignName}
                       </div>
                     ) : null}
+                    {/* WHO the ad actually brought — far more actionable than a count. */}
+                    {r.dealCustomers.length > 0 ? (
+                      <div style={{ fontSize: 11, color: "#7dd3a0", marginTop: 3 }}>
+                        💰 {r.dealCustomers.join(" · ")}
+                      </div>
+                    ) : null}
+                    {r.goodLeadNames.length > 0 ? (
+                      <div style={{ fontSize: 11, color: "#e0c68a", marginTop: 2 }}>
+                        ⭐ {r.goodLeadNames.map((n) => n.split("|")[0].trim()).join(" · ")}
+                      </div>
+                    ) : null}
                   </td>
                   <td style={td}>{r.leads}</td>
                   <td style={td}>{r.engaged}</td>
