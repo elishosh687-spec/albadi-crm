@@ -1,5 +1,5 @@
 /**
- * GET /api/cron/expense-reminder — monthly Vercel cron (1st of each month).
+ * GET /api/cron/expense-reminder — monthly Vercel cron (3rd of each month; statement arrives on the 2nd).
  * WhatsApps Eli a reminder to upload last month's credit-card statement so the
  * month's business expenses get entered into Zoho. Auth: Bearer CRON_SECRET /
  * BOT_SECRET (same as the other crons).
@@ -22,8 +22,8 @@ function authed(req: NextRequest): boolean {
 
 const REMINDER =
   "📋 תזכורת חודשית — הוצאות\n\n" +
-  "הגיע ה-1 לחודש. תעלה ל-Claude את פירוט האשראי של החודש שעבר, " +
-  "ונזין יחד את ההוצאות בזוהו — פריט-פריט, עסקי/פרטי.";
+  "הגיע ה-3 לחודש. תעלה ל-Claude את פירוט האשראי של החודש שעבר, " +
+  "ונזין יחד את ההוצאות בזוהו — פריט-פריט, עסקי/פרטי (סקיל: monthly-expenses).";
 
 async function run(req: NextRequest) {
   if (!authed(req)) {
