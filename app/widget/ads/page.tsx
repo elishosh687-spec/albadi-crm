@@ -55,6 +55,14 @@ export default async function AdsWidgetPage({
   // Phase B columns only appear once Meta spend is actually available.
   const showSpend = report.totalSpendIls !== null;
 
+  // Only the ads that DID something stay on screen; the dead weight collapses
+  // into a dropdown so the table stays readable as the ad count grows.
+  const isLeading = (r: (typeof report.rows)[number]) =>
+    r.revenueIls > 0 || r.won > 0 || r.markedGood > 0 || r.engaged > 0;
+  const leadingRows = report.rows.filter(isLeading);
+  const restRows = report.rows.filter((r) => !isLeading(r));
+  const restLeads = restRows.reduce((a, r) => a + r.leads, 0);
+
   const periods: { id: string; label: string }[] = [
     { id: "", label: "הכל" },
     { id: "90", label: "90 יום" },
@@ -78,80 +86,8 @@ export default async function AdsWidgetPage({
     whiteSpace: "nowrap",
   };
 
-  return (
-    <div dir="rtl" style={{ padding: 16, color: INK }}>
-      <div
-        style={{
-          display: "flex",
-          alignItems: "baseline",
-          gap: 12,
-          flexWrap: "wrap",
-          marginBottom: 4,
-        }}
-      >
-        <h2 style={{ margin: 0, fontSize: 17, fontWeight: 600 }}>
-          איכות לידים לפי מודעה
-        </h2>
-        <div style={{ display: "flex", gap: 6, marginInlineStart: "auto" }}>
-          {periods.map((p) => {
-            const active = (days ?? "") === p.id;
-            return (
-              <Link
-                key={p.id || "all"}
-                href={`/widget/ads?widget_token=${encodeURIComponent(token)}${
-                  p.id ? `&days=${p.id}` : ""
-                }`}
-                style={{
-                  padding: "4px 10px",
-                  borderRadius: 6,
-                  fontSize: 12,
-                  textDecoration: "none",
-                  border: `1px solid ${LINE}`,
-                  background: active ? "rgba(230,225,224,0.08)" : "transparent",
-                  color: active ? INK : MUTED,
-                }}
-              >
-                {p.label}
-              </Link>
-            );
-          })}
-        </div>
-      </div>
-      <p style={{ margin: "0 0 14px", fontSize: 12.5, color: MUTED }}>
-        לא כמה לידים — כמה מהם באמת התקדמו וסגרו. ״התקדמו״ = הגיעו לאפיון ומעלה.
-      </p>
-
-      {/* totals */}
-      <div style={{ display: "flex", gap: 18, flexWrap: "wrap", marginBottom: 14 }}>
-        {[
-          { k: "לידים", v: String(totals.leads) },
-          { k: "התקדמו", v: String(totals.engaged) },
-          { k: "סומנו טובים", v: String(totals.markedGood) },
-          { k: "נסגרו", v: String(totals.won) },
-          { k: "הכנסה", v: ils(totals.revenueIls) },
-          ...(report.totalSpendIls !== null
-            ? [
-                { k: "עלות פרסום", v: ils(report.totalSpendIls) },
-                {
-                  k: "רווח גולמי",
-                  v: ils(totals.revenueIls - report.totalSpendIls),
-                },
-              ]
-            : []),
-        ].map((s) => (
-          <div key={s.k}>
-            <div style={{ fontSize: 11.5, color: MUTED }}>{s.k}</div>
-            <div style={{ fontSize: 18, fontWeight: 600 }}>{s.v}</div>
-          </div>
-        ))}
-      </div>
-
-      {report.rows.length === 0 ? (
-        <p style={{ color: MUTED, fontSize: 13 }}>
-          אין עדיין נתוני מודעות לתקופה הזו.
-        </p>
-      ) : (
-        <div style={{ overflowX: "auto" }}>
+  const renderTable = (rows: typeof report.rows) => (
+      <div style={{ overflowX: "auto" }}>
           <table style={{ borderCollapse: "collapse", width: "100%", minWidth: 620 }}>
             <thead>
               <tr>
@@ -172,7 +108,7 @@ export default async function AdsWidgetPage({
               </tr>
             </thead>
             <tbody>
-              {report.rows.map((r) => (
+              {rows.map((r) => (
                 <tr key={r.adName}>
                   <td style={{ ...td, whiteSpace: "normal", maxWidth: 260 }}>
                     {/* Ad names are Latin/technical ("07_chain_cut") — inside an
@@ -250,7 +186,101 @@ export default async function AdsWidgetPage({
               ))}
             </tbody>
           </table>
+      </div>
+  );
+
+  return (
+    <div dir="rtl" style={{ padding: 16, color: INK }}>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "baseline",
+          gap: 12,
+          flexWrap: "wrap",
+          marginBottom: 4,
+        }}
+      >
+        <h2 style={{ margin: 0, fontSize: 17, fontWeight: 600 }}>
+          איכות לידים לפי מודעה
+        </h2>
+        <div style={{ display: "flex", gap: 6, marginInlineStart: "auto" }}>
+          {periods.map((p) => {
+            const active = (days ?? "") === p.id;
+            return (
+              <Link
+                key={p.id || "all"}
+                href={`/widget/ads?widget_token=${encodeURIComponent(token)}${
+                  p.id ? `&days=${p.id}` : ""
+                }`}
+                style={{
+                  padding: "4px 10px",
+                  borderRadius: 6,
+                  fontSize: 12,
+                  textDecoration: "none",
+                  border: `1px solid ${LINE}`,
+                  background: active ? "rgba(230,225,224,0.08)" : "transparent",
+                  color: active ? INK : MUTED,
+                }}
+              >
+                {p.label}
+              </Link>
+            );
+          })}
         </div>
+      </div>
+      <p style={{ margin: "0 0 14px", fontSize: 12.5, color: MUTED }}>
+        לא כמה לידים — כמה מהם באמת התקדמו וסגרו. ״התקדמו״ = הגיעו לאפיון ומעלה.
+      </p>
+
+      {/* totals */}
+      <div style={{ display: "flex", gap: 18, flexWrap: "wrap", marginBottom: 14 }}>
+        {[
+          { k: "לידים", v: String(totals.leads) },
+          { k: "התקדמו", v: String(totals.engaged) },
+          { k: "סומנו טובים", v: String(totals.markedGood) },
+          { k: "נסגרו", v: String(totals.won) },
+          { k: "הכנסה", v: ils(totals.revenueIls) },
+          ...(report.totalSpendIls !== null
+            ? [
+                { k: "עלות פרסום", v: ils(report.totalSpendIls) },
+                {
+                  k: "רווח גולמי",
+                  v: ils(totals.revenueIls - report.totalSpendIls),
+                },
+              ]
+            : []),
+        ].map((s) => (
+          <div key={s.k}>
+            <div style={{ fontSize: 11.5, color: MUTED }}>{s.k}</div>
+            <div style={{ fontSize: 18, fontWeight: 600 }}>{s.v}</div>
+          </div>
+        ))}
+      </div>
+
+      {report.rows.length === 0 ? (
+        <p style={{ color: MUTED, fontSize: 13 }}>
+          אין עדיין נתוני מודעות לתקופה הזו.
+        </p>
+      ) : (
+        <>
+          {renderTable(leadingRows)}
+          {restRows.length > 0 ? (
+            <details style={{ marginTop: 10 }}>
+              <summary
+                style={{
+                  cursor: "pointer",
+                  fontSize: 12.5,
+                  color: MUTED,
+                  padding: "6px 2px",
+                  userSelect: "none",
+                }}
+              >
+                מודעות ללא התקדמות — {restRows.length} מודעות · {restLeads} לידים
+              </summary>
+              <div style={{ marginTop: 6, opacity: 0.75 }}>{renderTable(restRows)}</div>
+            </details>
+          ) : null}
+        </>
       )}
 
       {/* Health strip — the loop fails silently, so surface it here. */}
