@@ -20,14 +20,6 @@ const LINE = "rgba(230,225,224,0.08)";
 
 const ils = (n: number) => `₪${n.toLocaleString("he-IL")}`;
 
-/** Colour the progression rate: the whole point of the screen. */
-function rateColor(pct: number, leads: number): string {
-  if (leads < 5) return MUTED; // too small to judge
-  if (pct >= 10) return "#7dd3a0";
-  if (pct >= 5) return "#e0c68a";
-  return "#e08a8a";
-}
-
 export default async function AdsWidgetPage({
   searchParams,
 }: {
@@ -55,10 +47,10 @@ export default async function AdsWidgetPage({
   // Phase B columns only appear once Meta spend is actually available.
   const showSpend = report.totalSpendIls !== null;
 
-  // Only the ads that DID something stay on screen; the dead weight collapses
-  // into a dropdown so the table stays readable as the ad count grows.
+  // Only the ads that produced something stay on screen — a deal, revenue, or
+  // a lead Eli marked good. The rest collapse into a dropdown.
   const isLeading = (r: (typeof report.rows)[number]) =>
-    r.revenueIls > 0 || r.won > 0 || r.markedGood > 0 || r.engaged > 0;
+    r.revenueIls > 0 || r.won > 0 || r.markedGood > 0;
   const leadingRows = report.rows.filter(isLeading);
   const restRows = report.rows.filter((r) => !isLeading(r));
   const restLeads = restRows.reduce((a, r) => a + r.leads, 0);
@@ -93,8 +85,6 @@ export default async function AdsWidgetPage({
               <tr>
                 <th style={th}>מודעה</th>
                 <th style={th}>לידים</th>
-                <th style={th}>התקדמו</th>
-                <th style={th}>%</th>
                 <th style={th}>סומנו טובים</th>
                 <th style={th}>נסגרו</th>
                 <th style={th}>הכנסה</th>
@@ -141,16 +131,6 @@ export default async function AdsWidgetPage({
                     ) : null}
                   </td>
                   <td style={td}>{r.leads}</td>
-                  <td style={td}>{r.engaged}</td>
-                  <td
-                    style={{
-                      ...td,
-                      color: rateColor(r.engagedPct, r.leads),
-                      fontWeight: 600,
-                    }}
-                  >
-                    {r.engagedPct}%
-                  </td>
                   <td style={td}>{r.markedGood || "—"}</td>
                   <td style={td}>{r.won || "—"}</td>
                   <td style={{ ...td, fontWeight: r.revenueIls ? 600 : 400 }}>
@@ -229,14 +209,13 @@ export default async function AdsWidgetPage({
         </div>
       </div>
       <p style={{ margin: "0 0 14px", fontSize: 12.5, color: MUTED }}>
-        לא כמה לידים — כמה מהם באמת התקדמו וסגרו. ״התקדמו״ = הגיעו לאפיון ומעלה.
+        לא כמה לידים — כמה מהם סומנו כטובים וכמה סגרו עסקה.
       </p>
 
       {/* totals */}
       <div style={{ display: "flex", gap: 18, flexWrap: "wrap", marginBottom: 14 }}>
         {[
           { k: "לידים", v: String(totals.leads) },
-          { k: "התקדמו", v: String(totals.engaged) },
           { k: "סומנו טובים", v: String(totals.markedGood) },
           { k: "נסגרו", v: String(totals.won) },
           { k: "הכנסה", v: ils(totals.revenueIls) },
@@ -275,7 +254,7 @@ export default async function AdsWidgetPage({
                   userSelect: "none",
                 }}
               >
-                מודעות ללא התקדמות — {restRows.length} מודעות · {restLeads} לידים
+                מודעות ללא תוצאות — {restRows.length} מודעות · {restLeads} לידים
               </summary>
               <div style={{ marginTop: 6, opacity: 0.75 }}>{renderTable(restRows)}</div>
             </details>

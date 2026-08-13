@@ -38,7 +38,9 @@ export interface AdPerformanceRow {
   spendIls: number | null;
   /** spend / leads. */
   costPerLeadIls: number | null;
-  /** spend / engaged — the number that actually ranks ads. Null when engaged=0. */
+  /** spend / marked-good — cost of a lead ELI called good. That's his quality
+   *  definition (not a pipeline stage), so it's the number that ranks ads.
+   *  Null when nothing on this ad was marked. */
   costPerQualityLeadIls: number | null;
   /** revenue − spend. */
   roiIls: number | null;
@@ -167,6 +169,7 @@ export async function buildAdPerformance(
     .map((r) => {
       const leads = Number(r.leads);
       const engaged = Number(r.engaged);
+      const markedGood = Number(r.marked_good);
       const revenueIls = Math.round(revByAd.get(r.ad) ?? 0);
       const s = r.ad_id ? spend.byAdId.get(r.ad_id) : undefined;
       const spendIls = s ? Math.round(s.spendIls) : null;
@@ -176,7 +179,7 @@ export async function buildAdPerformance(
         campaignName: r.campaign,
         leads,
         engaged,
-        markedGood: Number(r.marked_good),
+        markedGood,
         won: dealsByAd.get(r.ad) ?? 0,
         revenueIls,
         dealCustomers: dealNamesByAd.get(r.ad) ?? [],
@@ -186,8 +189,8 @@ export async function buildAdPerformance(
         costPerLeadIls:
           spendIls !== null && leads > 0 ? Math.round(spendIls / leads) : null,
         costPerQualityLeadIls:
-          spendIls !== null && engaged > 0
-            ? Math.round(spendIls / engaged)
+          spendIls !== null && markedGood > 0
+            ? Math.round(spendIls / markedGood)
             : null,
         roiIls: spendIls !== null ? revenueIls - spendIls : null,
       };
