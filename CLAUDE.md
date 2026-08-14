@@ -328,7 +328,17 @@ so grepping the name gives the complete blast radius, forever):
 | `lux-stack-sm` | `grid-template-columns: 1fr` | a hard multi-column grid |
 | `lux-scroll-x` | wrapper scrolls sideways | **flat** grids that would scramble if stacked |
 | `lux-wrap-sm` | `flex-wrap: wrap` | a row that must stay one line on desktop |
+| `lux-tap` | `min-height: 34px` | a small TEXT button (`הסר` was 21×18 and destructive) |
 | `size-7` | 28px → 36px | icon buttons (36, not 44 — quote rows carry several) |
+
+Don't replace `lux-tap` with a blanket `.mfit button { min-height }` — the inline
+18px payment checkboxes are deliberately small and would stretch into tall thin
+boxes (`min-height` beats an inline `height`).
+
+**`flexShrink: 0` + no width cap = clipped, not wrapped.** `LuxTitle`'s `aside`
+took its max-content width (a 4-tile KPI row is ~445px) and spilled off the
+start edge even after the header wrapped. It carries `maxWidth: 100%` now. Watch
+for the same shape anywhere a non-shrinking flex item holds a row of tiles.
 
 **`grid-cols-N` / `1fr` tracks never overflow — they shrink.** Only grids with a
 **fixed px track** actually push the page sideways. So a mechanical "add `md:`
@@ -356,6 +366,20 @@ than the viewport on a phone.
 **Verify with the probe, not the eye:** per tab, inside the iframe,
 `document.documentElement.scrollWidth <= clientWidth + 1`, and
 `[...d.querySelectorAll('input,select,textarea')].filter(e => parseFloat(getComputedStyle(e).fontSize) < 16).length === 0`.
+When listing overflowing elements, **skip anything inside a scrollable
+ancestor** (`overflowX auto/scroll` && `scrollWidth > clientWidth`) — otherwise
+a deliberately side-scrolling table reports as 28 breaks.
+
+**How to check a DATA screen locally.** You can't: `vercel env pull` masks
+`DATABASE_URL` to `""`, and this project's **Vercel previews cannot build at
+all** because `DATABASE_URL` is scoped to Production only. Instead, add a
+throwaway `app/widget/<name>/page.tsx` that patches `window.fetch` at MODULE
+scope (runs before any child mounts) and renders the real component against
+fixtures. Two gotchas: an `_`-prefixed folder is a **private** folder and won't
+route, and a fixture missing one numeric field throws
+`undefined.toLocaleString` inside render, which React retries until the renderer
+dies — that reads as "the page won't load", not as a bad fixture. Delete the
+route when done.
 
 **Footgun while developing:** Turbopack serves a **stale CSS chunk** — edits to
 globals.css silently don't appear, and restarting the dev server is not enough.
