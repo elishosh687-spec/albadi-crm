@@ -722,7 +722,7 @@ export function QuotesHistoryView({ apiToken }: { apiToken: string }) {
             </span>
           )}
         </div>
-        <div className="flex items-center gap-0.5 shrink-0">
+        <div className="flex flex-wrap items-center gap-0.5 shrink-0 max-w-full">
           <button
             type="button"
             onClick={() => (r.finalPricing ? setOpened(r) : setSpecRow(r))}
@@ -760,7 +760,7 @@ export function QuotesHistoryView({ apiToken }: { apiToken: string }) {
               onClick={() => handleCloseDeal(r, true)}
               disabled={busyId === r.id}
               title={r.status === "draft" ? "סגור עסקה מהאומדן — הלקוח קיבל את המחיר" : "סגור עסקה — העבר ללשונית עסקאות"}
-              className="shrink-0 inline-flex items-center gap-1 text-[10px] rounded-full border border-amber-500/40 bg-amber-500/10 text-amber-400 px-2 py-0.5 hover:bg-amber-500/20 disabled:opacity-50"
+              className="lux-tap shrink-0 inline-flex items-center gap-1 text-[10px] rounded-full border border-amber-500/40 bg-amber-500/10 text-amber-400 px-2 py-0.5 hover:bg-amber-500/20 disabled:opacity-50"
             >
               {busyId === r.id ? <Loader2 className="size-3 animate-spin" /> : <CheckCircle2 className="size-3" />}
               {r.status === "draft" ? "סגור עסקה (אומדן)" : "סגור עסקה"}
@@ -956,7 +956,7 @@ export function QuotesHistoryView({ apiToken }: { apiToken: string }) {
                 {trash.map((r) => (
                   <li
                     key={r.id}
-                    className="flex items-center justify-between gap-2 rounded-md border border-border/60 bg-background/40 px-2.5 py-1.5"
+                    className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border/60 bg-background/40 px-2.5 py-1.5"
                   >
                     <div className="flex items-center gap-2 min-w-0 flex-1 flex-wrap">
                       <span className="text-[11px] text-muted-foreground tabular-nums shrink-0">
@@ -972,7 +972,7 @@ export function QuotesHistoryView({ apiToken }: { apiToken: string }) {
                         {r.name ?? r.leadSid.slice(0, 20)}
                       </span>
                     </div>
-                    <div className="flex items-center gap-0.5 shrink-0">
+                    <div className="flex flex-wrap items-center gap-0.5 shrink-0 max-w-full">
                       <button
                         type="button"
                         onClick={() => handleRestore(r)}
@@ -1049,7 +1049,7 @@ export function QuotesHistoryView({ apiToken }: { apiToken: string }) {
               {needsPricing.slice(0, 12).map((r) => (
                 <li
                   key={r.id}
-                  className="flex items-center justify-between gap-2 rounded-md border border-border/60 bg-background/40 px-2.5 py-1.5"
+                  className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border/60 bg-background/40 px-2.5 py-1.5"
                 >
                   <div className="flex items-center gap-2 min-w-0 flex-1 flex-wrap">
                     <span className="text-[11px] text-muted-foreground tabular-nums shrink-0">
@@ -1067,7 +1067,7 @@ export function QuotesHistoryView({ apiToken }: { apiToken: string }) {
                       </span>
                     )}
                   </div>
-                  <div className="flex items-center gap-0.5 shrink-0">
+                  <div className="flex flex-wrap items-center gap-0.5 shrink-0 max-w-full">
                     <button
                       type="button"
                       onClick={() => setSpecRow(r)}
@@ -1114,7 +1114,7 @@ export function QuotesHistoryView({ apiToken }: { apiToken: string }) {
               {needsSending.slice(0, 12).map((r) => (
                 <li
                   key={r.id}
-                  className="flex items-center justify-between gap-2 rounded-md border border-border/60 bg-background/40 px-2.5 py-1.5"
+                  className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border/60 bg-background/40 px-2.5 py-1.5"
                 >
                   <div className="flex items-center gap-2 min-w-0 flex-1 flex-wrap">
                     {r.status === "finalized" && (
@@ -1151,7 +1151,7 @@ export function QuotesHistoryView({ apiToken }: { apiToken: string }) {
                       {r.status === "finalized" ? "סופי — מוכן לשליחה" : "התקבל — צריך לתמחר"}
                     </span>
                   </div>
-                  <div className="flex items-center gap-0.5 shrink-0">
+                  <div className="flex flex-wrap items-center gap-0.5 shrink-0 max-w-full">
                     <button
                       type="button"
                       onClick={() => (r.finalPricing ? setOpened(r) : setSpecRow(r))}
@@ -1200,7 +1200,7 @@ export function QuotesHistoryView({ apiToken }: { apiToken: string }) {
               {unsentDrafts.slice(0, 12).map((r) => (
                 <li
                   key={r.id}
-                  className="flex items-center justify-between gap-2 rounded-md border border-border/60 bg-background/40 px-2.5 py-1.5"
+                  className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border/60 bg-background/40 px-2.5 py-1.5"
                 >
                   <div className="flex items-center gap-2 min-w-0 flex-1 flex-wrap">
                     <label
@@ -1229,7 +1229,7 @@ export function QuotesHistoryView({ apiToken }: { apiToken: string }) {
                       ~{fmtMoney(displayTotal(r.finalPricing as Record<string, unknown>))}
                     </span>
                   </div>
-                  <div className="flex items-center gap-0.5 shrink-0">
+                  <div className="flex flex-wrap items-center gap-0.5 shrink-0 max-w-full">
                     <button
                       type="button"
                       onClick={() => (r.finalPricing ? setOpened(r) : setSpecRow(r))}
@@ -1310,11 +1310,11 @@ export function QuotesHistoryView({ apiToken }: { apiToken: string }) {
                   key={g.leadSid}
                   className="rounded-lg border border-border/60 bg-card/30 overflow-hidden"
                 >
-                  <div className="flex items-center justify-between gap-2 px-3 py-2">
+                  <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2">
                     <button
                       type="button"
                       onClick={() => toggleCard(g.leadSid)}
-                      className="flex items-center gap-2 min-w-0 flex-1 text-right"
+                      className="flex items-center gap-2 min-w-0 flex-1 text-right lux-tap"
                     >
                       <ChevronDown
                         className={`size-4 shrink-0 text-muted-foreground transition-transform ${open ? "" : "-rotate-90"}`}
@@ -1347,7 +1347,7 @@ export function QuotesHistoryView({ apiToken }: { apiToken: string }) {
                         ))}
                       </span>
                     </button>
-                    <div className="flex items-center gap-0.5 shrink-0">
+                    <div className="flex flex-wrap items-center gap-0.5 shrink-0 max-w-full">
                       {/* Combined-offer toolbar — same actions a single quote has.
                           Eye opens the FULL combined view (boss breakdown of both
                           quotes + customer-PDF link inside), matching the single-
@@ -1406,7 +1406,7 @@ export function QuotesHistoryView({ apiToken }: { apiToken: string }) {
                           onClick={() => handleCloseDealGroup(g.leadSid, finalizedIds)}
                           disabled={busyId === `closegroup:${g.leadSid}`}
                           title={`סגור עסקה משולבת (${finalizedIds.length} מוצרים → עסקה אחת)`}
-                          className="shrink-0 inline-flex items-center gap-1 text-[10px] rounded-full border border-amber-500/40 bg-amber-500/10 text-amber-400 px-2 py-0.5 hover:bg-amber-500/20 disabled:opacity-50"
+                          className="lux-tap shrink-0 inline-flex items-center gap-1 text-[10px] rounded-full border border-amber-500/40 bg-amber-500/10 text-amber-400 px-2 py-0.5 hover:bg-amber-500/20 disabled:opacity-50"
                         >
                           {busyId === `closegroup:${g.leadSid}` ? <Loader2 className="size-3 animate-spin" /> : <CheckCircle2 className="size-3" />}
                           סגור עסקה משולבת
