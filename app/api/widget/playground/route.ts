@@ -32,6 +32,7 @@ import {
 } from "@/lib/autoresponder/callback-request";
 import { sendBridgeMessage } from "@/lib/bridge/client";
 import { markCallbackAskedForPlayground } from "@/lib/bot-playground/session";
+import { runSetter } from "@/lib/setter";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 120;
@@ -88,6 +89,15 @@ export async function POST(req: NextRequest) {
     await recordCaptured(sends);
     const [transcript, lead] = await Promise.all([loadTranscript(), loadLeadState()]);
     return NextResponse.json({ ok: true, transcript, lead, routedTo: "callback" });
+  }
+
+  // Setter preview — runs the sales-brain pipeline on the CURRENT playground
+  // conversation and returns the full decision trail. Nothing is sent; this is
+  // how the setter gets reviewed before it ever touches a customer.
+  if (body.action === "setter_preview") {
+    await ensurePlaygroundLead();
+    const run = await runSetter(PLAYGROUND_SID, "playground", { mode: "preview" });
+    return NextResponse.json({ ok: run.ok, setter: run });
   }
 
   const text = (body.text ?? "").trim();

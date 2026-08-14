@@ -830,3 +830,36 @@ export const competitorPrices = pgTable(
     ),
   })
 );
+
+// Setter layer decision log — one row per pipeline run, everything needed to
+// answer "why did the setter say that?" and, later, to join outcomes
+// (meeting booked / showed / sale) back to the decisions that produced them.
+// Created via direct DDL (scripts/_create-setter-decisions.ts) — drizzle-kit
+// push hangs on this repo (see CLAUDE.md).
+export const setterDecisions = pgTable(
+  "setter_decisions",
+  {
+    id: serial("id").primaryKey(),
+    manychatSubId: text("manychat_sub_id").notNull(),
+    trigger: text("trigger").notNull(), // e.g. 'playground' | 'inbound_shadow'
+    mode: text("mode").notNull(), // 'shadow' | 'preview' | 'draft' | 'live'
+    stage: text("stage"),
+    intent: text("intent"),
+    objectionType: text("objection_type"),
+    buyingSignal: text("buying_signal"),
+    meetingReadiness: text("meeting_readiness"),
+    goal: text("goal"),
+    skills: text("skills"), // comma-joined SkillIds
+    draftText: text("draft_text"),
+    validation: jsonb("validation"),
+    context: jsonb("context"),
+    // Outcome joins, stamped later by feedback/outcome tracking.
+    humanFeedback: text("human_feedback"), // 'good' | 'bad' | null
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (t) => ({
+    sidIdx: index("setter_decisions_sid_idx").on(t.manychatSubId, t.createdAt),
+  })
+);

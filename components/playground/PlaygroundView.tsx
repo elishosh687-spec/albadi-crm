@@ -124,6 +124,28 @@ export default function PlaygroundView({ apiToken }: { apiToken: string }) {
     }
   }
 
+  const [setter, setSetter] = useState<Record<string, unknown> | null>(null);
+
+  async function setterPreview() {
+    if (busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "setter_preview" }),
+      });
+      const json = await res.json();
+      if (json.ok) setSetter(json.setter);
+      else setError(json.error ?? "setter failed");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function askCallback() {
     if (busy) return;
     setBusy(true);
@@ -251,6 +273,14 @@ export default function PlaygroundView({ apiToken }: { apiToken: string }) {
             {showEnv ? "סגור" : "מצב המערכת"}
           </button>
           <button
+            onClick={setterPreview}
+            disabled={busy}
+            style={btnGhost}
+            title="מריץ את מוח המכירות על השיחה הנוכחית ומראה מה הוא היה עונה — בלי לשלוח"
+          >
+            🧠 מה הסטר היה עונה
+          </button>
+          <button
             onClick={askCallback}
             disabled={busy}
             style={btnGhost}
@@ -276,6 +306,12 @@ export default function PlaygroundView({ apiToken }: { apiToken: string }) {
           >
             שגיאה: {error}
           </div>
+        )}
+
+        {setter && (
+          <Panel title="🧠 ניתוח הסטר (לא נשלח)">
+            <SetterPanel run={setter} onClose={() => setSetter(null)} />
+          </Panel>
         )}
 
         {showState && (
@@ -466,6 +502,79 @@ function Bubble({
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+function SetterPanel({
+  run,
+  onClose,
+}: {
+  run: Record<string, unknown>;
+  onClose: () => void;
+}) {
+  const cls = (run.classification ?? {}) as Record<string, string | null>;
+  const strat = (run.strategy ?? {}) as {
+    goal?: string;
+    skills?: string[];
+    moves?: string[];
+    informationToRequest?: string[];
+  };
+  const msg = (run.message ?? null) as {
+    text?: string;
+    validation?: { ok: boolean; violations: string[]; wordCount: number };
+  } | null;
+
+  const HE_GOAL: Record<string, string> = {
+    book_call: "לקבוע שיחה",
+    answer_and_advance: "לענות ולקדם",
+    explore_objection: "לחקור התנגדות",
+    revive: "להחיות ליד שקט",
+    hold_back: "לא לדחוף",
+  };
+
+  return (
+    <div style={{ fontSize: 13 }}>
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 10 }}>
+        <Chip label="כוונה" value={String(cls.intent ?? "?")} />
+        <Chip label="סימן קנייה" value={String(cls.buyingSignal ?? "?")} />
+        <Chip label="מוכנות לשיחה" value={String(cls.meetingReadiness ?? "?")} />
+        {cls.objectionType && <Chip label="התנגדות" value={String(cls.objectionType)} tone="warn" />}
+        <Chip label="יעד" value={HE_GOAL[strat.goal ?? ""] ?? String(strat.goal ?? "?")} />
+      </div>
+      <div style={{ color: C.dim, fontSize: 12, marginBottom: 8 }}>
+        טקטיקות: {(strat.skills ?? []).join(" · ") || "—"}
+        {strat.informationToRequest?.length ? ` | חסר ללקוח: ${strat.informationToRequest.join(", ")}` : ""}
+      </div>
+      {msg?.text ? (
+        <div
+          style={{
+            background: C.outBubble,
+            border: `1px solid ${C.border}`,
+            borderRadius: 12,
+            padding: "10px 12px",
+            whiteSpace: "pre-wrap",
+            lineHeight: 1.65,
+            marginBottom: 6,
+          }}
+        >
+          {msg.text}
+        </div>
+      ) : (
+        <div style={{ color: C.dim, marginBottom: 6 }}>
+          הסטר בחר לא לשלוח כלום בתור הזה.
+        </div>
+      )}
+      {msg?.validation && (
+        <div style={{ fontSize: 11.5, color: msg.validation.ok ? "#7fb894" : "#e88" }}>
+          {msg.validation.ok
+            ? `✓ עבר ולידציה (${msg.validation.wordCount} מילים)`
+            : `⚠️ נפסל: ${msg.validation.violations.join("; ")}`}
+        </div>
+      )}
+      <button onClick={onClose} style={{ ...btnGhost, marginTop: 8 }}>
+        סגור
+      </button>
     </div>
   );
 }
