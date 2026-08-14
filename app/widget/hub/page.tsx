@@ -25,6 +25,7 @@ import {
   Search,
   CircleCheckBig,
   Wand2,
+  FlaskConical,
   type LucideIcon,
 } from "lucide-react";
 import { verifyWidgetToken } from "@/integrations/ghl/widget-auth";
@@ -64,6 +65,12 @@ const TABS: TabDef[] = [
     label: "בוט",
     icon: Bot,
     url: (t, sid) => withSid(`/widget/bot-decisions?widget_token=${encodeURIComponent(t)}`, sid),
+  },
+  {
+    id: "playground",
+    label: "מגרש בדיקות",
+    icon: FlaskConical,
+    url: (t) => `/widget/playground?widget_token=${encodeURIComponent(t)}`,
   },
   {
     id: "factory",

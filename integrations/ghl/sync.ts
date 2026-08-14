@@ -371,6 +371,10 @@ export async function syncLeadToGHL(
   opts: { pushEmail?: boolean } = {}
 ): Promise<void> {
   if (!ENABLE_GHL_SYNC) return;
+  // Bot-playground leads are local test fixtures — never create a GHL contact
+  // or opportunity for them. Nothing on the playground path calls this today;
+  // the guard is here so a future caller can't leak one in.
+  if (sid.startsWith("playground:")) return;
   try {
     const lead = await loadLead(sid);
     if (!lead) return;

@@ -24,6 +24,7 @@ import {
 } from "../../drizzle/schema";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { BridgeError, bridgeFetch } from "./http";
+import { captureSend, playgroundMessageId } from "../bot-playground/capture";
 import {
   BRIDGE_BASE,
   FIELD_IDS,
@@ -259,6 +260,23 @@ export async function sendBridgeMessage(
   // business side of the conversation inside GHL.
   opts?: { skipGhlMirror?: boolean }
 ): Promise<BridgeSendResult> {
+  // Bot playground — request-scoped interception (lib/bot-playground/capture.ts).
+  // Must stay ahead of every other branch: this is the single choke point that
+  // keeps a playground run off the wire, including the Green delegation below.
+  if (
+    captureSend({
+      kind: poll ? "poll" : mediaPath ? "media" : "message",
+      text: poll ? poll.question : message,
+      options: poll?.options,
+      buttons: buttons?.map((b) => b.title),
+      mediaPath,
+      mediaFilename,
+      sender,
+      recipient,
+    })
+  ) {
+    return { wa_message_id: playgroundMessageId(), status: "playground" };
+  }
   // Test-only escape hatch — skips the actual WhatsApp send and returns a
   // fake message id. Set BRIDGE_DRY_RUN=1 in local test scripts (see
   // scripts/test-stage*.ts). NEVER set this in Vercel/prod.
@@ -423,6 +441,18 @@ const COMPANY_BODY_TEXT =
   "🌐 https://albadi.ecobrotherss.com";
 
 export async function sendCompanyTemplate(jid: string): Promise<void> {
+  // Playground interception — this path builds its own request and never goes
+  // through sendBridgeMessage, so it needs its own guard.
+  if (
+    captureSend({
+      kind: "template",
+      text: "[כרטיס חברה — וידאו + קישור לאינסטגרם]",
+      sender: "bot",
+      recipient: jid,
+    })
+  ) {
+    return;
+  }
   if (useGreenApi()) {
     const { sendGreenCompanyTemplate } = await import("../greenapi/client");
     return sendGreenCompanyTemplate(jid);
