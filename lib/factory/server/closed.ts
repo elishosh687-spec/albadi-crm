@@ -13,6 +13,7 @@ import type {
   DealMilestones,
   FactoryPricingResult,
   QuoteActualCosts,
+  DealAddon,
   FactoryProductSpec,
   FactoryResponse,
   FactoryQuoteStatus,
@@ -64,6 +65,11 @@ export interface ClosedQuoteRow {
   finalPricing: FactoryPricingResult | null;
   actualCosts: QuoteActualCosts | null;
   dealMilestones: DealMilestones | null;
+  /** Amounts added after the deal closed — included in grandTotalExVat. */
+  dealAddons: DealAddon[];
+  addonsTotalIls: number;
+  /** grandTotalExVat minus the addons — what the quoted products alone came to. */
+  productsTotalExVat: number;
   sentToCustomerAt: string | null;
   updatedAt: string;
   explicitlyClosed: boolean;
@@ -191,6 +197,7 @@ export async function listClosedQuotes(): Promise<ClosedQuoteRow[]> {
       combinedPricing: factoryQuoteRequests.combinedPricing,
       actualCosts: factoryQuoteRequests.actualCosts,
       dealMilestones: factoryQuoteRequests.dealMilestones,
+      dealAddons: factoryQuoteRequests.dealAddons,
       sentToCustomerAt: factoryQuoteRequests.sentToCustomerAt,
       createdAt: factoryQuoteRequests.createdAt,
       updatedAt: factoryQuoteRequests.updatedAt,
@@ -301,8 +308,19 @@ export async function listClosedQuotes(): Promise<ClosedQuoteRow[]> {
               0
             )
           );
+    // Ad-hoc amounts Eli added after the deal closed ("the customer asked for
+    // 500 more"). They are customer-facing charges, so they belong INSIDE the
+    // deal's one total — which is what the payment schedule and the Zoho
+    // invoice both read. Adding them anywhere else would split the numbers.
+    const addons = ((primary.dealAddons ?? []) as DealAddon[]).filter(
+      (a) => a && Number.isFinite(Number(a.amountIls))
+    );
+    const addonsTotalIls = r2(
+      addons.reduce((sum, a) => sum + Number(a.amountIls), 0)
+    );
+    const dealTotalWithAddons = r2(dealGrandTotalExVat + addonsTotalIls);
     const paymentSchedule = storedPlan
-      ? resolveDealSchedule(dealGrandTotalExVat, storedPlan)
+      ? resolveDealSchedule(dealTotalWithAddons, storedPlan)
       : null;
 
     deals.push({
@@ -316,6 +334,8 @@ export async function listClosedQuotes(): Promise<ClosedQuoteRow[]> {
       finalPricing,
       actualCosts: (primary.actualCosts ?? null) as QuoteActualCosts | null,
       dealMilestones: (primary.dealMilestones ?? null) as DealMilestones | null,
+      dealAddons: addons,
+      addonsTotalIls,
       sentToCustomerAt: primary.sentToCustomerAt ? primary.sentToCustomerAt.toISOString() : null,
       updatedAt: newest.updatedAt.toISOString(),
       explicitlyClosed: members.some((m) => m.closedDealAt != null),
@@ -327,7 +347,9 @@ export async function listClosedQuotes(): Promise<ClosedQuoteRow[]> {
       paymentPlanId: typeof storedPlan === "string" ? storedPlan : null,
       paymentsReceived: (primary.paymentsReceived ?? null) as { paidIls: number }[] | null,
       combinedPricing: combinedSnap,
-      grandTotalExVat: dealGrandTotalExVat,
+      grandTotalExVat: dealTotalWithAddons,
+      /** The products' own total, before any post-close additions. */
+      productsTotalExVat: dealGrandTotalExVat,
     });
   }
   deals.sort((a, b) => (a.updatedAt > b.updatedAt ? -1 : 1));

@@ -377,6 +377,21 @@ export interface CombinedDealPricing {
   computedAt: string;
 }
 
+/**
+ * An amount added to an already-closed deal — a repeat order, an extra service,
+ * anything agreed after the quote went out. Eli writes what it is and how much;
+ * it is a CUSTOMER-FACING charge, so it must reach grandTotalExVat, the payment
+ * schedule and the invoice, not just an internal note.
+ */
+export interface DealAddon {
+  /** What it is, in Eli's words — shown to the customer. */
+  label: string;
+  /** Ex-VAT amount in ILS. */
+  amountIls: number;
+  /** ISO timestamp, for the deal history. */
+  addedAt: string;
+}
+
 export interface QuoteActualCosts {
   /** Real factory cost paid, total ₪ (production all-in). Undefined → use planned. */
   factoryTotalIls?: number;

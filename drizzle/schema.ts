@@ -319,6 +319,11 @@ export const factoryQuoteRequests = pgTable("factory_quote_requests", {
   // הקובע"). Null on single-quote deals and on groups closed before this change.
   // Added via direct DDL (scripts/_add-combined-pricing.ts) — push hangs (CLAUDE.md).
   combinedPricing: jsonb("combined_pricing"),
+  // Ad-hoc amounts added to a CLOSED deal after the fact — "the customer asked
+  // for 500 more at the price I gave him". Free-form {label, amountIls} lines
+  // so Eli doesn't have to rebuild a whole quote. Flows into the deal's
+  // grandTotalExVat, the payment schedule and the Zoho invoice.
+  dealAddons: jsonb("deal_addons"),
   // Internal payment tracking: how much the customer actually paid per
   // installment. Array parallel to the deal's payment schedule installments —
   // { paidIls } (0/absent = not yet paid). Boss-only, never customer-facing.

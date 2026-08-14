@@ -74,6 +74,7 @@ export async function POST(req: NextRequest) {
       productSpec: factoryQuoteRequests.productSpec,
       finalPricing: factoryQuoteRequests.finalPricing,
       actualCosts: factoryQuoteRequests.actualCosts,
+      dealAddons: factoryQuoteRequests.dealAddons,
       customerName: leads.name,
     })
     .from(factoryQuoteRequests)
@@ -124,6 +125,22 @@ export async function POST(req: NextRequest) {
       quantity: fp.quantity,
       targetTotalIls: customerTotalExVat(fp) ?? fp.totalSellingPrice,
     }];
+  }
+
+  // Post-close additions ("the customer asked for 500 more") are customer-facing
+  // charges already counted in the deal's grandTotalExVat — so they must be
+  // billed too, or the invoice comes out short of the quote and the payment
+  // schedule stops summing to the total.
+  const addonRows = (row.dealAddons ?? []) as { label?: string; amountIls?: number }[];
+  for (const a of addonRows) {
+    const amt = Number(a?.amountIls);
+    if (!a?.label || !Number.isFinite(amt) || amt === 0) continue;
+    lineItems.push({
+      name: String(a.label).slice(0, 100),
+      description: "תוספת שסוכמה לאחר ההצעה",
+      quantity: 1,
+      targetTotalIls: amt,
+    });
   }
 
   try {

@@ -41,6 +41,10 @@ interface ClosedQuote {
   isCombined?: boolean;
   fromEstimate?: boolean;
   paymentSchedule?: PaymentSchedule | null;
+  /** Amounts added after the deal closed — already inside grandTotalExVat. */
+  dealAddons?: { label: string; amountIls: number; addedAt: string }[];
+  addonsTotalIls?: number;
+  productsTotalExVat?: number;
   paymentPlanLabel?: string | null;
   paymentsReceived?: { paidIls: number }[] | null;
   /** THE deal's customer total ex-VAT (combined offer's grand total when the
@@ -594,6 +598,43 @@ function ClosedQuoteCard({
     }
   }
 
+  // "תוספות לעסקה" — amounts agreed after the deal closed (a repeat order, an
+  // extra service). Customer-facing: they are already inside grandTotalExVat, so
+  // the payment schedule and the Zoho invoice pick them up automatically.
+  const [addons, setAddons] = useState<{ label: string; amountIls: number; addedAt: string }[]>(
+    () => quote.dealAddons ?? []
+  );
+  const [addonLabel, setAddonLabel] = useState("");
+  const [addonAmount, setAddonAmount] = useState("");
+  const [savingAddon, setSavingAddon] = useState(false);
+  async function persistAddons(next: { label: string; amountIls: number; addedAt: string }[]) {
+    setSavingAddon(true);
+    try {
+      const res = await fetch(widgetUrl(`/api/widget/factory/deal-addons/${quote.id}`, apiToken), {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ addons: next }),
+      });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok || !j.ok) { alert(`שגיאה: ${j?.error ?? res.status}`); return; }
+      setAddons(j.addons ?? next);
+      onSaved();
+    } finally {
+      setSavingAddon(false);
+    }
+  }
+  function addAddon() {
+    const amt = parseFloat(addonAmount);
+    if (!addonLabel.trim() || !Number.isFinite(amt) || amt === 0) {
+      alert("צריך תיאור וסכום");
+      return;
+    }
+    const next = [...addons, { label: addonLabel.trim(), amountIls: amt, addedAt: new Date().toISOString() }];
+    setAddonLabel("");
+    setAddonAmount("");
+    void persistAddons(next);
+  }
+
   const spec =
     (quote.productSpec?.["productName"] as string) ||
     (quote.productSpec?.["description"] as string) ||
@@ -826,6 +867,63 @@ function ClosedQuoteCard({
           })}
         </div>
       )}
+
+      {/* תוספות לעסקה — customer-facing amounts agreed after the close. */}
+      <div style={{ marginTop: 14, padding: 12, border: "1px solid var(--lux-line)", borderRadius: 10 }}>
+        <div style={{ fontSize: 12.5, color: "var(--lux-ink)", fontWeight: 500, marginBottom: 2 }}>
+          תוספות לעסקה
+        </div>
+        <div style={{ fontSize: 11.5, color: "var(--lux-muted)", marginBottom: 8 }}>
+          סכום שסוכם אחרי סגירת העסקה (למשל עוד 500 יח׳ במחיר שנתת). נכנס לסה״כ, לפריסת התשלומים ולחשבונית.
+        </div>
+        {addons.length > 0 ? (
+          <div style={{ marginBottom: 8 }}>
+            {addons.map((a, i) => (
+              <div
+                key={`${a.addedAt}-${i}`}
+                style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12.5, padding: "3px 0" }}
+              >
+                <span style={{ flex: 1 }}>{a.label}</span>
+                <span style={{ fontWeight: 600 }}>{ils(a.amountIls)}</span>
+                <button
+                  type="button"
+                  disabled={savingAddon}
+                  onClick={() => void persistAddons(addons.filter((_, j) => j !== i))}
+                  style={{ background: "none", border: "none", color: "#e08a8a", cursor: "pointer", fontSize: 12 }}
+                >
+                  הסר
+                </button>
+              </div>
+            ))}
+            <div style={{ borderTop: "1px solid var(--lux-line)", marginTop: 6, paddingTop: 6, fontSize: 12.5 }}>
+              סה״כ תוספות: <strong>{ils(addons.reduce((s2, a) => s2 + a.amountIls, 0))}</strong>
+            </div>
+          </div>
+        ) : null}
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+          <input
+            value={addonLabel}
+            onChange={(e) => setAddonLabel(e.target.value)}
+            placeholder="על מה התוספת (יופיע ללקוח)"
+            style={{ flex: "2 1 200px", padding: "6px 8px", borderRadius: 6, border: "1px solid var(--lux-line)", background: "transparent", color: "var(--lux-ink)", fontSize: 12.5 }}
+          />
+          <input
+            value={addonAmount}
+            onChange={(e) => setAddonAmount(e.target.value)}
+            placeholder="₪ ללא מע״מ"
+            inputMode="decimal"
+            style={{ flex: "1 1 110px", padding: "6px 8px", borderRadius: 6, border: "1px solid var(--lux-line)", background: "transparent", color: "var(--lux-ink)", fontSize: 12.5 }}
+          />
+          <button
+            type="button"
+            onClick={addAddon}
+            disabled={savingAddon}
+            style={{ padding: "6px 14px", borderRadius: 6, border: "1px solid var(--lux-line)", background: "rgba(230,225,224,0.06)", color: "var(--lux-ink)", fontSize: 12.5, cursor: "pointer" }}
+          >
+            {savingAddon ? "שומר…" : "הוסף"}
+          </button>
+        </div>
+      </div>
 
       {/* מעקב תשלומים — internal record of how much the customer actually paid
           per installment. The customer-facing terms live in the PDF (pulled from
