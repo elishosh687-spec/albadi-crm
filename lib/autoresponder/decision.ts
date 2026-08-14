@@ -408,6 +408,7 @@ export interface DecisionResult {
     | "canned_reply"
     | "sub_state_advanced"
     | "escalated"
+    | "setter_replied"
     | "logo_received"
     | "logo_reasked"
     | "won_routed";
@@ -457,6 +458,68 @@ export async function handleDecisionInbound(input: {
     return handleFinalStage(ctx, input.text);
   }
   return { action: "no_op", detail: `stage=${stage} subFlow=${subFlow}` };
+}
+
+
+// ---------------------------------------------------------------------------
+// Setter live mode — the talking turns
+// ---------------------------------------------------------------------------
+
+/** Intents the setter may answer live. Deliberately EXCLUDES accept (logo/WON
+ *  state transitions) and custom_size (real requote) — those need hands, not
+ *  words. */
+const SETTER_TALK_INTENTS = new Set([
+  "negotiating",
+  "reject",
+  "samples_request",
+  "question_delivery",
+  "question_inclusive",
+  "question_payment",
+  "question_meeting",
+  "question_format",
+  "question_company",
+  "question_other",
+  "other",
+]);
+
+/**
+ * When live mode is on and this is a talking turn, let the setter answer.
+ * Returns null to hand the turn back to the scripted branches.
+ */
+async function maybeSetterReply(
+  ctx: LeadCtx,
+  intent: string
+): Promise<DecisionResult | null> {
+  if (!SETTER_TALK_INTENTS.has(intent)) return null;
+  try {
+    const { getBotSettings } = await import("../bot-settings/store");
+    if (!(await getBotSettings()).setterLiveEnabled) return null;
+
+    const { runSetter } = await import("../setter");
+    const run = await runSetter(ctx.sid, `live:${intent}`, { mode: "live" });
+    const msg = run.ok ? run.message : null;
+    if (!msg?.text || !msg.validation.ok) return null; // scripted fallback
+
+    await sendBridgeMessage(ctx.jid, msg.text);
+
+    // Money-moment visibility: Eli still hears about objections, without the
+    // conversation waiting on him.
+    if (run.classification?.intent === "objecting" || intent === "negotiating" || intent === "reject") {
+      await sendEliDM(
+        `🧠 הסטר ענה ל-${ctx.name ?? ctx.phone ?? "ליד"} על התנגדות.\n` +
+          `לקוח: "${(run.context?.lastCustomerMessage ?? "").slice(0, 120)}"\n` +
+          `סטר: "${msg.text.slice(0, 200)}"`
+      );
+    }
+    return {
+      action: "setter_replied",
+      intent: intent as DecisionResult["intent"],
+      detail: `goal=${run.strategy?.goal}`,
+    };
+  } catch (e) {
+    console.error("[decision] setter live path failed, falling back to scripted", e);
+    return null;
+  }
 }
 
 async function handleDecisionStage(
@@ -696,6 +759,15 @@ async function handleDecisionStage(
       detail: "pause reason captured, cadence will follow up",
     };
   }
+
+  // --- Setter live mode -----------------------------------------------------
+  // The sales brain takes the TALKING turns (objections, negotiation,
+  // questions); the state machine keeps its HANDS — accept (logo flow), spec
+  // changes (real requote), media, and every sub-state continuation stay
+  // deterministic. Any setter failure falls through to the scripted branches
+  // below, so the customer always gets an answer.
+  const setterOutcome = await maybeSetterReply(ctx, classification.intent);
+  if (setterOutcome) return setterOutcome;
 
   // --- Fresh inbound (no sub-state) ---
   switch (classification.intent) {
@@ -1093,6 +1165,9 @@ async function handleFinalStage(
       detail: "haggle reply",
     };
   }
+
+  const setterFinalOutcome = await maybeSetterReply(ctx, classification.intent);
+  if (setterFinalOutcome) return setterFinalOutcome;
 
   switch (classification.intent) {
     case "accept": {

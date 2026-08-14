@@ -54,6 +54,7 @@ export interface BotSettings {
 
   // --- sales brain ---
   setterDraftsEnabled: boolean;
+  setterLiveEnabled: boolean;
   setterModel: string;
   setterMaxWords: number;
   setterStyle: string;
@@ -114,6 +115,7 @@ export const DEFAULT_BOT_SETTINGS: BotSettings = {
   callbackPrepIntro: "כדי שהשיחה תהיה יעילה, שווה שיהיה מולכם:",
 
   setterDraftsEnabled: true,
+  setterLiveEnabled: false,
   setterModel: "gpt-5.6-terra",
   setterMaxWords: 60,
   setterStyle:
@@ -438,6 +440,15 @@ export const BOT_SETTING_FIELDS: BotSettingField[] = [
   },
 
   // ---------- מוח מכירות ----------
+  {
+    key: "setterLiveEnabled",
+    group: "מוח מכירות",
+    label: "🔴 הסטר עונה ללקוחות בשיחה החיה",
+    description:
+      "המתג הגדול. כשדולק — בשלב שאחרי ההצעה, תשובות מדוברות (התנגדויות, מו״מ, שאלות) נכתבות ונשלחות על ידי הסטר ישירות ללקוח, במקום המשפטים הכתובים-מראש של הבוט הישן. פעולות שמשנות מצב נשארות אצל הבוט הישן תמיד: לקוח שמאשר (→ בקשת לוגו), שינוי מפרט (→ תמחור מחדש אמיתי), קבלת קבצים, והשאלון כולו. אם הסטר נכשל או פוסל את עצמו — הבוט הישן עונה, אז ללקוח תמיד יש תשובה. כיבוי מחזיר הכל להתנהגות הישנה מיידית.",
+    where: "כל הודעת לקוח אחרי הצעת מחיר",
+    type: "toggle",
+  },
   {
     key: "setterDraftsEnabled",
     group: "מוח מכירות",
