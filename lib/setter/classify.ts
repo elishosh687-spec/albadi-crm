@@ -7,6 +7,7 @@
  * buckets are honest and routable.
  */
 import { callLLM } from "../autoresponder/openai-client";
+import { getBotSettings } from "../bot-settings/store";
 import type { SalesContext } from "./context";
 
 export type ObjectionType =
@@ -82,9 +83,10 @@ export async function classifySalesState(
   // customer has been quiet for half a day+ — that's gone_quiet regardless of
   // what their final message said. Skips the LLM entirely on the exact runs
   // (follow-up sweeps) that happen in bulk.
+  const goneQuietHours = (await getBotSettings()).setterGoneQuietHours;
   if (
     ctx.timing.turn === "customer" &&
-    (ctx.timing.hoursSinceLastCustomerMessage ?? 0) >= 12
+    (ctx.timing.hoursSinceLastCustomerMessage ?? 0) >= goneQuietHours
   ) {
     return { ...FALLBACK, intent: "gone_quiet" };
   }

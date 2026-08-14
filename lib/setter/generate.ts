@@ -12,7 +12,7 @@ import { getBotSettings } from "../bot-settings/store";
 import type { SalesContext } from "./context";
 import type { SalesClassification } from "./classify";
 import type { SalesStrategy } from "./strategy";
-import { SKILLS } from "./skills";
+import { SKILLS, SKILL_SETTING_KEY } from "./skills";
 
 export interface ValidationReport {
   ok: boolean;
@@ -26,19 +26,18 @@ export interface GeneratedMessage {
   attempts: number;
 }
 
-const MAX_WORDS = 60; // hard cap; the prompt aims for 40
-
 export function validateMessage(
   text: string,
   ctx: SalesContext,
-  strategy: SalesStrategy
+  strategy: SalesStrategy,
+  maxWords = 60
 ): ValidationReport {
   const violations: string[] = [];
   const trimmed = text.trim();
   const words = trimmed.split(/\s+/).filter(Boolean);
 
   if (!trimmed) violations.push("הודעה ריקה");
-  if (words.length > MAX_WORDS) violations.push(`ארוכה מדי (${words.length} מילים, מקסימום ${MAX_WORDS})`);
+  if (words.length > maxWords) violations.push(`ארוכה מדי (${words.length} מילים, מקסימום ${maxWords})`);
   if (!/[֐-׿]/.test(trimmed)) violations.push("לא בעברית");
 
   const questions = (trimmed.match(/\?/g) ?? []).length;
@@ -100,16 +99,24 @@ export async function generateMessage(
   strategy: SalesStrategy
 ): Promise<GeneratedMessage | null> {
   const S = await getBotSettings();
+  // Guidance comes from the settings screen (Eli edits tactics live); the
+  // constants in skills.ts are the defaults the store falls back to.
+  const settingsBag = S as unknown as Record<string, unknown>;
   const skillBlocks = strategy.skills
-    .map((id) => `### ${SKILLS[id].title}\n${SKILLS[id].guidance}`)
+    .map((id) => {
+      const override = settingsBag[SKILL_SETTING_KEY[id]];
+      const guidance =
+        typeof override === "string" && override.trim() ? override : SKILLS[id].guidance;
+      return `### ${SKILLS[id].title}\n${guidance}`;
+    })
     .join("\n\n");
 
+  const aimWords = Math.max(15, Math.round((S.setterMaxWords * 2) / 3));
   const system =
     "אתה כותב הודעת WhatsApp אחת בעברית עבור אלבדי — שקיות ממותגות לעסקים. " +
     "אתה לא סוגר עסקאות בצ'אט; ההצלחה שלך היא שיחת טלפון קבועה. " +
-    "כללי ברזל: עברית ישראלית טבעית של WhatsApp, לא מתורגמת ולא תאגידית. עד 40 מילים. " +
-    "רעיון אחד, שאלה אחת לכל היותר, בלי רשימות, אימוג'י אחד לכל היותר. " +
-    "אסור להמציא מחירים, הנחות, מלאי או עובדות. אל תהיה מתחנף ואל תלחץ.\n\n" +
+    `כללי סגנון: ${S.setterStyle} עד ${aimWords} מילים. ` +
+    "אסור להמציא מחירים, הנחות, מלאי או עובדות.\n\n" +
     `## הטקטיקות שלך לתור הזה:\n${skillBlocks}`;
 
   const user =
@@ -127,13 +134,13 @@ export async function generateMessage(
       jsonMode: true,
       temperature: 0.5,
       timeoutMs: 15000,
-      model: S.analysisModel,
+      model: S.setterModel,
       system,
       user: user + feedback,
     });
     const text = res?.message?.trim();
     if (!text) continue;
-    const validation = validateMessage(text, ctx, strategy);
+    const validation = validateMessage(text, ctx, strategy, S.setterMaxWords);
     if (validation.ok) return { text, validation, attempts };
     feedback = `\n\nהניסיון הקודם נפסל: ${validation.violations.join("; ")}. תקן וכתוב מחדש.`;
     if (attempts === 2) return { text, validation, attempts };

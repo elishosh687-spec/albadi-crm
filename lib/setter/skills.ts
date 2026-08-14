@@ -93,3 +93,18 @@ export const SKILLS: Record<SkillId, { title: string; guidance: string }> = {
       "דחיפה לשיחה פעמיים ברצף אחרי היסוס נקראת לחץ. עדיף צעד קטן (ראה התחייבות קטנה) או שתיקה מכבדת.",
   },
 };
+
+/** Which BotSettings field overrides each skill's guidance. The settings
+ *  screen is the live source; these constants are the defaults + fallback. */
+export const SKILL_SETTING_KEY: Record<SkillId, string> = {
+  appointment_booking: "skillAppointmentBooking",
+  buying_signal_amplification: "skillBuyingSignal",
+  objection_explore: "skillObjectionExplore",
+  objection_price_aer: "skillObjectionPriceAer",
+  micro_commitment: "skillMicroCommitment",
+  ghost_recovery: "skillGhostRecovery",
+  callback_scheduling: "skillCallbackScheduling",
+  flow_management: "skillFlowManagement",
+  follow_up_discipline: "skillFollowUpDiscipline",
+  pause_intelligence: "skillPauseIntelligence",
+};

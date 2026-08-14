@@ -1,3 +1,5 @@
+import { SKILLS, type SkillId } from "../setter/skills";
+
 /**
  * Bot settings — one metadata table that drives BOTH the settings UI and the
  * runtime, so a description can never drift from what the setting actually does.
@@ -52,6 +54,20 @@ export interface BotSettings {
 
   // --- sales brain ---
   setterDraftsEnabled: boolean;
+  setterModel: string;
+  setterMaxWords: number;
+  setterStyle: string;
+  setterGoneQuietHours: number;
+  skillAppointmentBooking: string;
+  skillBuyingSignal: string;
+  skillObjectionExplore: string;
+  skillObjectionPriceAer: string;
+  skillMicroCommitment: string;
+  skillGhostRecovery: string;
+  skillCallbackScheduling: string;
+  skillFlowManagement: string;
+  skillFollowUpDiscipline: string;
+  skillPauseIntelligence: string;
 
   // --- models ---
   intentModel: string;
@@ -98,6 +114,21 @@ export const DEFAULT_BOT_SETTINGS: BotSettings = {
   callbackPrepIntro: "כדי שהשיחה תהיה יעילה, שווה שיהיה מולכם:",
 
   setterDraftsEnabled: true,
+  setterModel: "gpt-4o",
+  setterMaxWords: 60,
+  setterStyle:
+    "עברית ישראלית טבעית של WhatsApp, לא מתורגמת ולא תאגידית. רעיון אחד, שאלה אחת לכל היותר, בלי רשימות, אימוג'י אחד לכל היותר. אל תהיה מתחנף ואל תלחץ.",
+  setterGoneQuietHours: 12,
+  skillAppointmentBooking: SKILLS.appointment_booking.guidance,
+  skillBuyingSignal: SKILLS.buying_signal_amplification.guidance,
+  skillObjectionExplore: SKILLS.objection_explore.guidance,
+  skillObjectionPriceAer: SKILLS.objection_price_aer.guidance,
+  skillMicroCommitment: SKILLS.micro_commitment.guidance,
+  skillGhostRecovery: SKILLS.ghost_recovery.guidance,
+  skillCallbackScheduling: SKILLS.callback_scheduling.guidance,
+  skillFlowManagement: SKILLS.flow_management.guidance,
+  skillFollowUpDiscipline: SKILLS.follow_up_discipline.guidance,
+  skillPauseIntelligence: SKILLS.pause_intelligence.guidance,
 
   intentModel: "gpt-4o-mini",
   analysisModel: "gpt-4o",
@@ -130,6 +161,7 @@ export const GROUPS = [
   "מידות מותאמות",
   "תיאום שיחות",
   "מוח מכירות",
+  "טקטיקות המכירה",
   "מודלים",
 ] as const;
 
@@ -413,6 +445,132 @@ export const BOT_SETTING_FIELDS: BotSettingField[] = [
       "כשדולק — ברגעי הכסף (מו״מ, סירוב, שינוי מפרט) ובפולו-אפים, הטיוטה שמחכה לאישורך נכתבת על ידי מוח המכירות: ניתוח מצב → טקטיקה → ניסוח → ולידציה. כשכבוי — המנסח הישן. בשני המצבים שום דבר לא נשלח בלי האישור שלך; המתג קובע רק מי כותב את ההצעה.",
     where: "תור הטיוטות",
     type: "toggle",
+  },
+
+  // ---------- מוח מכירות + טקטיקות ----------
+
+  {
+    key: "setterModel",
+    group: "מוח מכירות",
+    label: "המודל שכותב",
+    description:
+      "המודל שמנסח את הודעות הסטר. חזק יותר = עברית טבעית יותר, יקר יותר לקריאה. הניתוח (סיווג המצב) רץ על מודל השיחה הזול מקבוצת המודלים.",
+    type: "select",
+    options: [
+      { value: "gpt-4o", label: "gpt-4o — מומלץ לניסוח" },
+      { value: "gpt-4o-mini", label: "gpt-4o-mini — זול, עברית פשוטה יותר" },
+      { value: "gpt-4.1", label: "gpt-4.1" },
+    ],
+  },
+  {
+    key: "setterMaxWords",
+    group: "מוח מכירות",
+    label: "אורך מקסימלי להודעה",
+    description:
+      "תקרת מילים קשיחה — הודעה ארוכה יותר נפסלת בולידציה ונכתבת מחדש. המנסח מכוון לשני-שליש מהתקרה.",
+    type: "number",
+    min: 25,
+    max: 100,
+    unit: "מילים",
+  },
+  {
+    key: "setterStyle",
+    group: "מוח מכירות",
+    label: "סגנון הכתיבה",
+    description:
+      "כללי הטון שהמנסח מקבל בכל הודעה. זה המקום לכוון את ה'קול' — ישיר יותר, רך יותר, עם/בלי אימוג'י. חוקי הכסף (בלי מחירים מומצאים, בלי הנחות) נאכפים בנפרד ואי אפשר לבטל אותם מכאן.",
+    type: "longtext",
+  },
+  {
+    key: "setterGoneQuietHours",
+    group: "מוח מכירות",
+    label: "אחרי כמה שעות שקט הלקוח נחשב 'נעלם'",
+    description:
+      "כשאנחנו דיברנו אחרונים והלקוח שותק מעל הסף — הסטר עובר למצב החייאה (עיגון בהצעה + הצעת שיחה) בלי לשאול מודל. סף נמוך = החייאה מוקדמת ואגרסיבית יותר.",
+    type: "number",
+    min: 2,
+    max: 72,
+    unit: "שעות",
+  },
+  {
+    key: "skillAppointmentBooking",
+    group: "טקטיקות המכירה",
+    label: "קביעת שיחה",
+    description: "ההנחיה המרכזית של הסטר — איך מציעים שיחה: חלונות קונקרטיים, מסגור קליל, מה להכין.",
+    where: "בכל יעד של קביעת שיחה — לקוח חם, בקשת שיחה, החייאה",
+    type: "longtext",
+  },
+  {
+    key: "skillObjectionPriceAer",
+    group: "טקטיקות המכירה",
+    label: "התנגדות מחיר (הכר-חקור-כוון)",
+    description: "הטיפול ב'יקר לי': להכיר ברגש, לברר בשאלה אחת מה מאחורי ההתנגדות, ולכוון לפתרון בטלפון. בלי הצדקות מחיר ובלי הנחות.",
+    where: "כשהלקוח מתנגד על מחיר או משווה למתחרה",
+    type: "longtext",
+  },
+  {
+    key: "skillObjectionExplore",
+    group: "טקטיקות המכירה",
+    label: "חקירת התנגדות כללית",
+    description: "התנגדות שאינה מחיר (תזמון, אישור, אמון) — איך מבררים אותה בשאלה מכבדת אחת.",
+    where: "התנגדות לא-מחירית או לא ברורה",
+    type: "longtext",
+  },
+  {
+    key: "skillGhostRecovery",
+    group: "טקטיקות המכירה",
+    label: "החייאת לקוח שנעלם",
+    description: "ההודעה ללקוח שקיבל הצעה ושתק: עיגון בהצעה הספציפית, ערך אחד, הצעת שיחה. בלי 'רק מוודא שקיבלת'.",
+    where: "לקוח ששתק אחרי הצעה",
+    type: "longtext",
+  },
+  {
+    key: "skillCallbackScheduling",
+    group: "טקטיקות המכירה",
+    label: "קיבוע דחייה לזמן",
+    description: "מה עושים עם 'דבר איתי שבוע הבא' — מקבלים, ומקבעים לתאריך ושעה.",
+    where: "כשהלקוח דוחה למועד עתידי",
+    type: "longtext",
+  },
+  {
+    key: "skillBuyingSignal",
+    group: "טקטיקות המכירה",
+    label: "הגברת סימן קנייה",
+    description: "איך מתרגמים רגע של עניין ('נשמע טוב', שאלה עניינית) לצעד קדימה במקום לעוד מידע.",
+    where: "לקוח ששידר עניין",
+    type: "longtext",
+  },
+  {
+    key: "skillMicroCommitment",
+    group: "טקטיקות המכירה",
+    label: "התחייבות קטנה",
+    description: "הצעד הקטן שמבקשים מלקוח מהוסס לפני שמבקשים שיחה.",
+    where: "לקוח פושר או אחרי בירור התנגדות",
+    type: "longtext",
+  },
+  {
+    key: "skillFlowManagement",
+    group: "טקטיקות המכירה",
+    label: "ניהול זרימה",
+    description: "הכלל הבסיסי של כל תשובה: לענות קצר על מה שנשאל ולקדם צעד אחד, בלי להשאיר את הכדור באוויר.",
+    where: "כל שאלה של לקוח",
+    type: "longtext",
+  },
+  {
+    key: "skillFollowUpDiscipline",
+    group: "טקטיקות המכירה",
+    label: "משמעת פולו-אפ",
+    description: "החוקים של הודעת מעקב: אזכור ההצעה, דבר אחד חדש, צעד אחד, קצר.",
+    where: "הודעות מעקב",
+    type: "longtext",
+  },
+  {
+    key: "skillPauseIntelligence",
+    group: "טקטיקות המכירה",
+    label: "מתי לא לדחוף",
+    description: "הבלם: מתי הפעולה הנכונה היא לענות ולחכות במקום לדחוף לשיחה.",
+    where: "לקוח מהוסס או אחרי דחיפה קודמת",
+    type: "longtext",
   },
 
   // ---------- מודלים ----------
