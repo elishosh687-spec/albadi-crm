@@ -26,6 +26,7 @@ import { and, eq, or, sql } from "drizzle-orm";
 import { z } from "zod";
 import { sendBridgeMessage } from "@/lib/bridge/client";
 import { OPENING, kickstartQuestionnaire } from "@/lib/autoresponder/questionnaire";
+import { getBotSettings } from "@/lib/bot-settings/store";
 import { syncLeadToGHL } from "@/integrations/ghl/sync";
 
 export const runtime = "nodejs";
@@ -217,7 +218,12 @@ export async function POST(req: NextRequest) {
   );
 
   try {
-    await sendBridgeMessage(jid, OPENING, undefined, "bot");
+    await sendBridgeMessage(
+      jid,
+      (await getBotSettings()).openingMessage,
+      undefined,
+      "bot"
+    );
     await kickstartQuestionnaire(jid);
   } catch (err) {
     // Bridge send failure: lead row + tag are persisted, but the customer

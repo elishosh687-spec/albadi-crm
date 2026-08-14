@@ -40,6 +40,10 @@ export interface QuoteMessageParams {
     pricePerUnit: number;
     totalOrder: number;
   } | null;
+  /** Bot setting — false hides the "💡 חלופה" block. Default true. */
+  showAlternative?: boolean;
+  /** Bot setting — empty string omits the booking invitation entirely. */
+  bookingUrl?: string;
 }
 
 export function buildQuoteMessage(params: QuoteMessageParams): string {
@@ -54,8 +58,13 @@ export function buildQuoteMessage(params: QuoteMessageParams): string {
     pricePerUnit,
     currency,
     appUrl,
-    alt,
+    alt: altRaw,
+    showAlternative = true,
+    bookingUrl = "https://calendly.com/elishosh687/30min",
   } = params;
+  // Settings can suppress the alternative-shipping block; the caller still
+  // passes it so the DB/quote log keeps the full picture.
+  const alt = showAlternative ? altRaw : undefined;
 
   const fp = (n: number) => formatPrice(n, currency);
   // Show a total that equals the rounded per-unit × qty (not the precise
@@ -86,8 +95,9 @@ export function buildQuoteMessage(params: QuoteMessageParams): string {
     `המחיר לא כולל מעמ\n` +
     `* ההצעה כפופה לאישור הסופי של החברה שלנו\n` +
     `\n---\n` +
-    `קבע שיחה קצרה – נסביר הכל ב־10 דקות\n` +
-    `https://calendly.com/elishosh687/30min\n\n` +
+    (bookingUrl
+      ? `קבע שיחה קצרה – נסביר הכל ב־10 דקות\n${bookingUrl}\n\n`
+      : "") +
     `אלבדי – אריזה ממותגת לסביבה שלך\n` +
     `דף הבית: ${appUrl}`
   );

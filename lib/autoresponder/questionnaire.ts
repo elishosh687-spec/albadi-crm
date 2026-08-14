@@ -16,7 +16,7 @@
  * Note: steps 6 (handles) and 7 (lamination) were retired — data showed 100%
  * answered "with handles" and customers can override the "without lamination"
  * default at the step-9 free-text revision. Defaults are injected on the
- * transition to step 9 (see HANDLES_DEFAULT / LAMINATION_DEFAULT).
+ * transition to step 9 (handlesDefault / laminationDefault in bot settings).
  *
  * Custom branches set q_state.pendingCustomField — on the next inbound the
  * text is stored in q_state.{field}Custom and the flow advances normally.
@@ -29,6 +29,8 @@ import { sendBridgeMessage, sendCompanyTemplate } from "../bridge/client";
 import { sendEliDM } from "../notify/eli";
 import { calculateQuoteByCodes } from "../factory/calculator";
 import { buildQuoteMessage } from "../factory/calculator/message";
+import { getBotSettings } from "../bot-settings/store";
+import { BotSettings, DEFAULT_BOT_SETTINGS } from "../bot-settings/schema";
 import {
   isOverCbmConsolidationThreshold,
   cbmConsolidationAlert,
@@ -59,6 +61,22 @@ interface Question {
 
 export const OPENING =
   "שלום! 👋 אני אעזור לך לקבל הצעת מחיר מיידית לשקיות ממותגות. זה ייקח כ-2 דקות 😊";
+
+/**
+ * Live bot settings, refreshed at the top of every entry point.
+ *
+ * Module-level rather than threaded through every call because the poll
+ * helpers below (buildPoll/formatQuestion) are synchronous and are reached
+ * from a dozen places. Settings are global, not per-lead, so the worst a
+ * concurrent request can see is a value up to the store's 5s cache older —
+ * harmless. Starts as the defaults so any path that runs before a refresh
+ * behaves exactly as it did when these were hardcoded.
+ */
+let S: BotSettings = DEFAULT_BOT_SETTINGS;
+
+async function refreshSettings(): Promise<void> {
+  S = await getBotSettings();
+}
 
 const QUESTIONS: Question[] = [
   {
@@ -156,19 +174,14 @@ function findNextQuestion(currentStep: number): Question | undefined {
 // Defaults injected when the questionnaire transitions to step 9 (confirmation
 // gate). Customers who want a different value can say so in the "רוצה לשנות"
 // free-text revision — spec-extractor parses it and merges back into qState.
-const HANDLES_DEFAULT = "true"; // 100% of past customers chose "with handles"
-const LAMINATION_DEFAULT = "false"; // business choice — cheaper default; customer can upgrade in revision
-
 function applyRetiredFieldDefaults(state: QState): QState {
   return {
     ...state,
-    handles: state.handles ?? HANDLES_DEFAULT,
-    lamination: state.lamination ?? LAMINATION_DEFAULT,
+    handles: state.handles ?? (S.handlesDefault ? "true" : "false"),
+    lamination: state.lamination ?? (S.laminationDefault ? "true" : "false"),
   };
 }
 
-const DECISION_PROMPT =
-  "מה דעתכם על ההצעה?\n\n✅ מתאים → שלחו לנו את הלוגו ונמשיך.\n🔧 רוצים לשנות משהו?";
 
 // Sent immediately after the quote so the customer has trust-building
 // context (who we are, where to verify us) before they decide. Also
@@ -182,22 +195,10 @@ export const COMPANY_TEMPLATE =
   "🌐 https://packiure.com\n\n" +
   "🌐 https://albadi.ecobrotherss.com\n\n" +
   "📸 אינסטגרם: https://www.instagram.com/simonsostri";
-const FACTORY_HOLD_MSG =
-  "תודה, קיבלתי את המפרט. חוזר אליכם תוך 24-48 שעות עם המחיר.";
-const BAIL_REPLY =
-  "רגע, נראה לי שעדיף שננהל את זה בטלפון. אחזור אליכם תוך 24 שעות עם המחיר.";
-const REASK_REPLIES = [
-  // attempt #1 (unmatched=1)
-  "🤔 לא הצלחתי להבין. אפשר לבחור מספר מהרשימה?",
-  // attempt #2 (unmatched=2) — softer, blames Eli's phrasing
-  "אני עדיין לא קולט — אולי הניסוח שלי לא ברור. תכתבו מספר מהרשימה, או רק את שם האפשרות.",
-];
 
 // Step-9 confirmation copy. The flow: customer sees a summary of every
 // field they answered, then chooses to proceed or revise. "רוצה לשנות"
 // opens free-text capture that spec-extractor LLM parses back into qState.
-const CONFIRM_FREETEXT_PROMPT =
-  "תכתוב מה תרצה לשנות או להוסיף — אפשר חופשי, בעברית.\nלמשל: 'במקום 5000 תהיה 2000', 'מידה אחרת', 'הערה לתערוכה'.";
 const CONFIRM_NOTHING_EXTRACTED =
   "לא הצלחתי להבין מה לשנות. אפשר לכתוב שוב? לדוגמה: 'כמות 2000', '30×40 ס\"מ', 'בלי ידיות'.";
 const CONFIRM_AFTER_CHANGE_NOTE =
@@ -280,7 +281,7 @@ function formatQuestion(q: Question): string {
   // When polls are enabled, send only the prompt — the poll renders the
   // option chips itself. Same for legacy buttons. Otherwise render the full
   // numbered list so the customer can reply with a number or substring.
-  if (POLLS_ENABLED || (!BUTTONS_DISABLED && q.buttons)) {
+  if (S.pollsEnabled || (!BUTTONS_DISABLED && q.buttons)) {
     return q.prompt;
   }
   const lines = [q.prompt, ""];
@@ -297,7 +298,6 @@ function formatQuestion(q: Question): string {
 // flow sees the option label as if the customer typed it. Single-select
 // (selectable_count=1). Free-text follow-up still triggers when the customer
 // picks "אחר".
-const POLLS_ENABLED = true;
 
 // Legacy interactive buttons kill-switch — kept for fallback if polls ever
 // regress. Taps via `type=buttons` do not round-trip on iOS, so this stays
@@ -305,7 +305,7 @@ const POLLS_ENABLED = true;
 const BUTTONS_DISABLED = true;
 
 function buildPoll(q: Question): { question: string; options: string[] } | null {
-  if (!POLLS_ENABLED) return null;
+  if (!S.pollsEnabled) return null;
   if (q.options.length < 2 || q.options.length > 12) return null;
   // Strip leading emojis from labels — WhatsApp shows them but they crowd
   // the poll UI on small screens. matchAnswer accepts the cleaned label
@@ -401,7 +401,7 @@ function buildConfirmationMessage(state: QState): string {
   // poll itself, so the body stays summary-only. When polls AND buttons are
   // both off, fall back to the legacy numbered tail so the customer knows
   // what to type.
-  if (POLLS_ENABLED) {
+  if (S.pollsEnabled) {
     return lines.join("\n");
   }
   lines.push("", "הכל בסדר, או רוצים לשנות משהו?");
@@ -543,7 +543,7 @@ export function shouldRouteToFactory(state: QState): boolean {
   if (state.product === "custom") return true;
   if (state.quantity === "custom") {
     const n = parseCustomQuantity(state.quantityCustom);
-    if (n === null || n < 3000) return true;
+    if (n === null || n < S.minQuantity) return true;
   }
   return false;
 }
@@ -610,6 +610,8 @@ async function fetchQuote(state: QState): Promise<QuoteCalcOutput> {
           totalOrder: calc.altResult.totalOrderPriceIls,
         }
       : null,
+    showAlternative: S.showAlternativeShipping,
+    bookingUrl: S.showBookingLink ? S.bookingUrl : "",
   });
   return {
     text,
@@ -641,6 +643,7 @@ interface LeadCtx {
  * question without re-sending OPENING.
  */
 export async function kickstartQuestionnaire(sid: string): Promise<void> {
+  await refreshSettings();
   const ctx = await loadLeadCtx(sid);
   if (!ctx) return;
   if (ctx.qState) return; // already started — don't overwrite
@@ -662,6 +665,7 @@ export async function resetLeadAndRestart(
   sid: string,
   transitionText?: string
 ): Promise<void> {
+  await refreshSettings();
   const ctx = await loadLeadCtx(sid);
   if (!ctx) throw new Error("lead not found");
   await db
@@ -698,6 +702,7 @@ export async function restartQuestionnaire(
   sid: string,
   transitionText?: string
 ): Promise<void> {
+  await refreshSettings();
   const ctx = await loadLeadCtx(sid);
   if (!ctx) throw new Error("lead not found");
   const recipient =
@@ -731,7 +736,7 @@ export async function restartQuestionnaire(
     "סליחה על הבלבול קודם 🙏 בואו נתחיל את השאלון מההתחלה.";
   await sendBridgeMessage(recipient, transition);
   await new Promise((r) => setTimeout(r, 800));
-  await sendBridgeMessage(recipient, OPENING);
+  await sendBridgeMessage(recipient, S.openingMessage);
   await new Promise((r) => setTimeout(r, 800));
   await askQuestion(recipient, first);
 }
@@ -826,7 +831,7 @@ async function routeToFactory(
     })
     .where(sql`trim(${leads.manychatSubId}) = ${ctx.sid.trim()}`);
   await ensureAutoTaskForStage(ctx.sid.trim(), "INTAKE").catch(() => {});
-  await sendBridgeMessage(ctx.jid, FACTORY_HOLD_MSG);
+  await sendBridgeMessage(ctx.jid, S.factoryHoldMessage);
   await sendEliDM(summarizeForFactory(state, ctx.name, ctx.phone));
 }
 
@@ -869,8 +874,8 @@ async function routeToQuoted(
       altTotalIls: quote.altTotalIls,
     });
     await sendBridgeMessage(ctx.jid, quote.text);
-    await sendCompanyTemplate(ctx.jid);
-    await sendBridgeMessage(ctx.jid, DECISION_PROMPT);
+    if (S.sendCompanyCard) await sendCompanyTemplate(ctx.jid);
+    if (S.sendDecisionPrompt) await sendBridgeMessage(ctx.jid, S.decisionPrompt);
     if (overCbm) {
       // INTERNAL alert — push to Eli so he can revise the offer on cheap freight.
       await sendEliDM(
@@ -892,7 +897,7 @@ async function routeToQuoted(
       })
       .where(sql`trim(${leads.manychatSubId}) = ${ctx.sid.trim()}`);
     await ensureAutoTaskForStage(ctx.sid.trim(), "INTAKE").catch(() => {});
-    await sendBridgeMessage(ctx.jid, FACTORY_HOLD_MSG);
+    await sendBridgeMessage(ctx.jid, S.factoryHoldMessage);
     await sendEliDM(
       `⚠️ calc API נכשל ל-${ctx.name ?? ctx.phone ?? "ליד"} (${(e as Error).message}). השאלון הסתיים — צריך מחיר ידני.`
     );
@@ -905,7 +910,7 @@ async function routeToQuoted(
  * decision.ts `awaiting_spec_change` once the LLM has merged the new
  * fields into qState. Pre-condition: `shouldRouteToFactory(state) === false`.
  *
- * Sends the new quote text + DECISION_PROMPT — the customer is back in
+ * Sends the new quote text + the decision prompt — the customer is back in
  * the "decide on this quote" gate, just with updated numbers. Returns
  * `false` if the calculator failed; caller should escalate.
  */
@@ -914,6 +919,7 @@ export async function requoteWithUpdatedSpec(input: {
   jid: string;
   state: QState;
 }): Promise<boolean> {
+  await refreshSettings();
   try {
     const quote = await fetchQuote(input.state);
     const next: QState = {
@@ -946,8 +952,8 @@ export async function requoteWithUpdatedSpec(input: {
       altTotalIls: quote.altTotalIls,
     });
     await sendBridgeMessage(input.jid, quote.text);
-    await sendCompanyTemplate(input.jid);
-    await sendBridgeMessage(input.jid, DECISION_PROMPT);
+    if (S.sendCompanyCard) await sendCompanyTemplate(input.jid);
+    if (S.sendDecisionPrompt) await sendBridgeMessage(input.jid, S.decisionPrompt);
     return true;
   } catch (e) {
     console.error(
@@ -982,6 +988,7 @@ export async function handleInbound(input: {
     | "confirmation_nothing_extracted";
   detail?: string;
 }> {
+  await refreshSettings();
   const ctx = await loadLeadCtx(input.sid);
   if (!ctx) return { action: "no_op", detail: "no lead row" };
 
@@ -1018,7 +1025,7 @@ export async function handleInbound(input: {
     const first = QUESTIONS[0];
     const newState: QState = { step: first.step };
     await saveState(ctx.sid, newState);
-    await sendBridgeMessage(recipient, OPENING);
+    await sendBridgeMessage(recipient, S.openingMessage);
     await askQuestion(recipient, first);
     return { action: "started" };
   }
@@ -1095,7 +1102,7 @@ export async function handleInbound(input: {
 
   if (!match) {
     const unmatched = (ctx.qState.unmatchedAt ?? 0) + 1;
-    if (unmatched >= 3) {
+    if (unmatched >= S.reaskAttempts) {
       // Per CUSTOMER-FLOW.md v2 §1.1/1.2: reask × 3 → escalate.
       const bailed: QState = { ...ctx.qState, bailed: true, unmatchedAt: unmatched };
       await saveState(ctx.sid, bailed);
@@ -1106,7 +1113,7 @@ export async function handleInbound(input: {
           updatedAt: new Date(),
         })
         .where(sql`trim(${leads.manychatSubId}) = ${ctx.sid.trim()}`);
-      await sendBridgeMessage(recipient, BAIL_REPLY);
+      await sendBridgeMessage(recipient, S.bailReply);
       await sendEliDM(
         `⚠️ ${ctx.name ?? ctx.phone ?? "ליד"} — לא הצליח בשאלון האוטומטי (שלב ${currentQ.field}).\n📞 שיחה ידנית — אולי לקוח רציני שזקוק לעזרה.`
       );
@@ -1114,11 +1121,12 @@ export async function handleInbound(input: {
     }
     const reasked: QState = { ...ctx.qState, unmatchedAt: unmatched };
     await saveState(ctx.sid, reasked);
-    const reaskIdx = Math.min(unmatched - 1, REASK_REPLIES.length - 1);
+    const reasks = [S.reask1, S.reask2];
+    const reaskIdx = Math.min(unmatched - 1, reasks.length - 1);
     const reaskText =
       currentQ.field === "shipping" && unmatched >= 2
         ? "אני שואל קודם כל על שיטת המשלוח (זמן האספקה). תבחרו: אקספרס (~25 יום) או רגיל (~90 יום). על המידות ושאר הפרטים נגיע אחר כך."
-        : REASK_REPLIES[reaskIdx];
+        : reasks[reaskIdx];
     await sendBridgeMessage(recipient, reaskText);
     await askQuestion(recipient, currentQ);
     return { action: "reasked" };
@@ -1215,7 +1223,7 @@ export async function handleInbound(input: {
 
 async function askConfirmation(ctx: LeadCtx, state: QState): Promise<void> {
   const body = buildConfirmationMessage(state);
-  if (POLLS_ENABLED) {
+  if (S.pollsEnabled) {
     // Summary first (poll question maxLen ~255 — summary exceeds), then the
     // proceed/change poll. Two outbound messages but a single UX step from
     // the customer's perspective — they see the summary above the poll in
@@ -1382,7 +1390,7 @@ async function handleConfirmationStep(
   if (isChange) {
     const next: QState = { ...state, confirmationStep: "awaiting_freetext" };
     await saveState(ctx.sid, next);
-    await sendBridgeMessage(ctx.jid, CONFIRM_FREETEXT_PROMPT);
+    await sendBridgeMessage(ctx.jid, S.confirmFreetextPrompt);
     return { action: "confirmation_freetext_prompt" };
   }
 

@@ -23,6 +23,7 @@
 import { db } from "../db";
 import { messages as messagesTable, leads } from "../../drizzle/schema";
 import { sql } from "drizzle-orm";
+import { getBotSettings } from "../bot-settings/store";
 
 const API_URL = (process.env.GREEN_API_API_URL ?? "").replace(/\/$/, "");
 const ID_INSTANCE = process.env.GREEN_API_ID_INSTANCE ?? "";
@@ -371,14 +372,20 @@ const COMPANY_BUTTONS_BODY =
   "🌐 packiure.com\n" +
   "🌐 albadi.ecobrotherss.com";
 
-const COMPANY_TEXT_ONLY_FALLBACK =
-  COMPANY_VIDEO_CAPTION +
-  "\n\n" +
-  COMPANY_BUTTONS_BODY +
-  "\n\n📸 אינסטגרם: https://www.instagram.com/simonsostri";
+function companyTextOnlyFallback(caption: string): string {
+  return (
+    caption +
+    "\n\n" +
+    COMPANY_BUTTONS_BODY +
+    "\n\n📸 אינסטגרם: https://www.instagram.com/simonsostri"
+  );
+}
 
 export async function sendGreenCompanyTemplate(recipient: string): Promise<void> {
   const chatId = await recipientToChatId(recipient);
+  // Caption is editable from the bot-settings screen; the video URL, the site
+  // links and the Instagram button stay in code.
+  const { companyCardText: caption } = await getBotSettings();
 
   // 1. Video with short caption.
   let videoSent = false;
@@ -389,13 +396,13 @@ export async function sendGreenCompanyTemplate(recipient: string): Promise<void>
         chatId,
         urlFile: COMPANY_VIDEO_URL,
         fileName: "albadi-company.mp4",
-        caption: COMPANY_VIDEO_CAPTION,
+        caption,
       },
       { media: true }
     );
     await insertGreenOutbound({
       chatId,
-      text: COMPANY_VIDEO_CAPTION,
+      text: caption,
       waMessageId: res.idMessage,
       sender: "bot",
       payload: { from: "sendGreenCompanyTemplate", kind: "video+caption" },
@@ -442,7 +449,7 @@ export async function sendGreenCompanyTemplate(recipient: string): Promise<void>
   //    so we don't repeat the caption.
   const fallbackText = videoSent
     ? `${COMPANY_BUTTONS_BODY}\n\n📸 אינסטגרם: https://www.instagram.com/simonsostri`
-    : COMPANY_TEXT_ONLY_FALLBACK;
+    : companyTextOnlyFallback(caption);
   const res = await greenPost<{ idMessage: string }>("sendMessage", {
     chatId,
     message: fallbackText,

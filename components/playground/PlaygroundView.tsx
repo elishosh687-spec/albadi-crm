@@ -7,6 +7,7 @@
  * No server-only imports (see the client-bundle rule in CLAUDE.md).
  */
 import { useCallback, useEffect, useRef, useState } from "react";
+import BotSettingsPanel from "./BotSettingsPanel";
 
 interface PlaygroundMessage {
   id: number;
@@ -73,6 +74,7 @@ export default function PlaygroundView({ apiToken }: { apiToken: string }) {
   const [lastRoute, setLastRoute] = useState<string | null>(null);
   const [showState, setShowState] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [showEnv, setShowEnv] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
 
   const url = `/api/widget/playground?widget_token=${encodeURIComponent(apiToken)}`;
@@ -202,8 +204,23 @@ export default function PlaygroundView({ apiToken }: { apiToken: string }) {
           <button onClick={() => setShowState((v) => !v)} style={btnGhost}>
             {showState ? "הסתר מצב" : "מצב הבוט"}
           </button>
-          <button onClick={() => setShowSettings((v) => !v)} style={btnGhost}>
-            {showSettings ? "הסתר הגדרות" : "הגדרות"}
+          <button
+            onClick={() => {
+              setShowSettings((v) => !v);
+              setShowEnv(false);
+            }}
+            style={btnGhost}
+          >
+            {showSettings ? "סגור הגדרות" : "⚙️ הגדרות הבוט"}
+          </button>
+          <button
+            onClick={() => {
+              setShowEnv((v) => !v);
+              setShowSettings(false);
+            }}
+            style={btnGhost}
+          >
+            {showEnv ? "סגור" : "מצב המערכת"}
           </button>
           <button onClick={reset} disabled={busy} style={btnDanger}>
             התחל מחדש
@@ -243,10 +260,16 @@ export default function PlaygroundView({ apiToken }: { apiToken: string }) {
         )}
 
         {showSettings && (
-          <Panel title="ההגדרות שהבוט רץ איתן כרגע">
+          <Panel title="">
+            <BotSettingsPanel apiToken={apiToken} />
+          </Panel>
+        )}
+
+        {showEnv && (
+          <Panel title="מצב המערכת (לא ניתן לעריכה מכאן)">
             <p style={{ margin: "0 0 10px", color: C.dim, fontSize: 12, lineHeight: 1.6 }}>
-              לקריאה בלבד — היום רוב ההתנהגות קבועה בקוד או במשתני סביבה. כל
-              שורה שתהפוך לניתנת לעריכה תעבור לכאן כשדה אמיתי.
+              אלה משתני סביבה וקבועים שנקבעים בפריסה, לא בהגדרות. מוצגים כדי
+              שתדע מול מה אתה בודק.
             </p>
             {settings.map((g) => (
               <div key={g.title} style={{ marginBottom: 14 }}>

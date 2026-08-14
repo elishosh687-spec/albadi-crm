@@ -9,8 +9,11 @@
  *   - JSON mode by default (response_format: json_object). Pass jsonMode=false
  *     for free-text replies.
  *   - Single retry on 5xx / network / empty / non-JSON. No retry on 4xx.
- *   - Honors OPENAI_MODEL env var (defaults to gpt-4o-mini).
+ *   - Model comes from bot settings (intentModel); OPENAI_MODEL env is the
+ *     fallback, then gpt-4o-mini.
  */
+
+import { getBotSettings } from "../bot-settings/store";
 
 const OPENAI_URL = "https://api.openai.com/v1/chat/completions";
 const DEFAULT_TIMEOUT_MS = 10000;
@@ -52,7 +55,18 @@ export async function callLLM<T = unknown>(input: CallLLMInput): Promise<T | nul
     console.warn("[openai-client] OPENAI_API_KEY missing — returning null");
     return null;
   }
-  const model = input.model ?? (readEnv("OPENAI_MODEL") || DEFAULT_MODEL);
+  // Settings win over env so the model can be swapped from the bot-settings
+  // screen without a redeploy. An explicit per-call model still wins over both.
+  let settingsModel = "";
+  if (!input.model) {
+    try {
+      settingsModel = (await getBotSettings()).intentModel;
+    } catch {
+      // fall through to env/default — never let a settings read break an LLM call
+    }
+  }
+  const model =
+    input.model ?? (settingsModel || readEnv("OPENAI_MODEL") || DEFAULT_MODEL);
   const timeoutMs = input.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const maxRetries = input.retries ?? 1;
   const jsonMode = input.jsonMode ?? true;

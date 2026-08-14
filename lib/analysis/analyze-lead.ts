@@ -18,6 +18,7 @@ import { db } from "@/lib/db";
 import { leadAnalyses } from "@/drizzle/schema";
 import { and, desc, eq, sql } from "drizzle-orm";
 import { callLLM } from "@/lib/autoresponder/openai-client";
+import { getBotSettings } from "@/lib/bot-settings/store";
 import { addContactNote, listContactNotes } from "@/integrations/ghl/client";
 import {
   OBJECTION_KEYS,
@@ -170,9 +171,12 @@ export async function analyzeLead(
     return { verdict, cached: false };
   }
 
-  // 4. LLM judge.
+  // 4. LLM judge. Env vars still win so a one-off override doesn't need a UI
+  // change; otherwise the analysisModel from the bot-settings screen decides.
   const model =
-    readEnv("LEAD_ANALYSIS_MODEL") || readEnv("OPENAI_ANALYSIS_MODEL") || "gpt-4o";
+    readEnv("LEAD_ANALYSIS_MODEL") ||
+    readEnv("OPENAI_ANALYSIS_MODEL") ||
+    (await getBotSettings().then((s) => s.analysisModel).catch(() => "gpt-4o"));
   const raw = await callLLM<RawJudge>({
     system: SYSTEM_PROMPT,
     user: renderDossierText(dossier),
