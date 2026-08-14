@@ -64,7 +64,11 @@ export default function LuxTitle({
           </div>
         ) : null}
       </div>
-      {aside ? <div style={{ flexShrink: 0 }}>{aside}</div> : null}
+      {/* maxWidth caps the aside at the container once the header wraps —
+          without it a flexShrink:0 item takes its max-content width (a 4-tile
+          KPI row is ~445px) and spills off the start edge, clipped and
+          unreachable. No effect on desktop, where it never reaches 100%. */}
+      {aside ? <div style={{ flexShrink: 0, maxWidth: "100%" }}>{aside}</div> : null}
     </div>
   );
 }

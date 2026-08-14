@@ -670,6 +670,16 @@
     height: 36px;
   }
 
+  /* Opt-in: small TEXT buttons ("הסר", "הוסף עלות אחרת") render 18-25px tall —
+     under half a fingertip, and one of them deletes a line. Applied per button
+     rather than to every `button`, because the inline 18px payment checkboxes
+     are deliberately small and a blanket min-height would stretch them into
+     tall thin boxes. */
+  .mfit .lux-tap {
+    min-height: 34px;
+    padding-block: 6px;
+  }
+
   /* long unbreakable strings — phone numbers, latin ad names, URLs */
   .mfit {
     overflow-wrap: anywhere;

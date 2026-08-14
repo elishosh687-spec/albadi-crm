@@ -254,7 +254,9 @@ export function ClosedQuotesView({ apiToken }: { apiToken: string }) {
           }
           aside={
             quotes && totals.count > 0 ? (
-              <div style={{ display: "flex", gap: 10 }}>
+              // up to 4 KPI tiles = ~445px; unwrapped they spilled off the
+              // start edge of a 346px header and were clipped unreachable
+              <div className="lux-wrap-sm" style={{ display: "flex", gap: 10 }}>
                 <LuxStat value={totals.count} label="עסקאות" />
                 <LuxStat value={ils(totals.actualProfit)} label="רווח בפועל סה״כ" tone="success" />
                 {totals.commission >= 1 && (
@@ -787,6 +789,7 @@ function ClosedQuoteCard({
             onClick={(e) => { e.stopPropagation(); handleRemove(); }}
             disabled={removing}
             title="הסר מלשונית עסקאות — הפיך; ההצעה נשארת ב«הצעות מפעל»"
+            className="lux-tap"
             style={{
               marginTop: 8, display: "inline-flex", alignItems: "center", gap: 5,
               fontSize: 11, color: "var(--lux-muted)", background: "transparent",
@@ -920,6 +923,7 @@ function ClosedQuoteCard({
                   type="button"
                   disabled={savingAddon}
                   onClick={() => void persistAddons(addons.filter((_, j) => j !== i))}
+                  className="lux-tap"
                   style={{ background: "none", border: "none", color: "#e08a8a", cursor: "pointer", fontSize: 12 }}
                 >
                   הסר
@@ -1097,7 +1101,7 @@ function ClosedQuoteCard({
                   style={{ width: "100%", background: "transparent", border: 0, textAlign: "right", color: "var(--lux-ink)", fontSize: 14, outline: "none" }}
                 />
               </div>
-              <button type="button" onClick={() => setOther((prev) => prev.filter((_, j) => j !== i))} style={{ color: "var(--lux-muted)", padding: 4 }} aria-label="הסר">
+              <button type="button" onClick={() => setOther((prev) => prev.filter((_, j) => j !== i))} className="lux-tap" style={{ color: "var(--lux-muted)", padding: 4 }} aria-label="הסר">
                 <Trash2 className="size-4" />
               </button>
             </div>
@@ -1107,6 +1111,7 @@ function ClosedQuoteCard({
             <button
               type="button"
               onClick={() => setOther((prev) => [...prev, { label: "", amount: "" }])}
+              className="lux-tap"
               style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 12.5, color: "var(--lux-cool)" }}
             >
               <Plus className="size-3.5" /> הוסף עלות אחרת
