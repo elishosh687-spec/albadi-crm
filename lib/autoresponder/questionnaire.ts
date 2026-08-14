@@ -29,7 +29,7 @@ import { sendBridgeMessage, sendCompanyTemplate } from "../bridge/client";
 import { sendEliDM } from "../notify/eli";
 import { calculateQuoteByCodes } from "../factory/calculator";
 import { buildQuoteMessage } from "../factory/calculator/message";
-import { quoteCustomSize } from "./custom-size-quote";
+import { quoteCustomSize, validateCustomDimsInput } from "./custom-size-quote";
 import { DEFAULT_CONFIG } from "../factory/calculator/constants";
 import { getBotSettings } from "../bot-settings/store";
 import { BotSettings, DEFAULT_BOT_SETTINGS } from "../bot-settings/schema";
@@ -75,6 +75,11 @@ export const OPENING =
  * behaves exactly as it did when these were hardcoded.
  */
 let S: BotSettings = DEFAULT_BOT_SETTINGS;
+
+/** How many times we push back on an unusable free-text answer before giving
+ *  up and sending the lead to a human. Low on purpose — two corrections is
+ *  helpful, five is an interrogation. */
+const CUSTOM_ANSWER_MAX_REASKS = 2;
 
 async function refreshSettings(): Promise<void> {
   S = await getBotSettings();
@@ -240,6 +245,8 @@ export interface QState {
   quantityCustom?: string;
   productCustom?: string;
   pendingCustomField?: "quantity" | "product" | null;
+  /** Re-asks spent on the current free-text custom answer (dims / quantity). */
+  customAttempts?: number;
   quoteResult?: string;
   bailed?: boolean;
   unmatchedAt?: number;
@@ -1074,6 +1081,7 @@ export async function handleInbound(input: {
     | "answered"
     | "custom_prompt"
     | "custom_captured"
+    | "custom_reasked"
     | "size_page_2"
     | "reasked"
     | "bailed"
@@ -1140,9 +1148,34 @@ export async function handleInbound(input: {
       return { action: "no_op", detail: "empty custom answer" };
     }
     const field = ctx.qState.pendingCustomField;
+
+    // Validate the free-text answer HERE. Accepting anything and discovering
+    // the problem at quote time meant the customer answered every remaining
+    // question before being told we can't price it.
+    const attempts = ctx.qState.customAttempts ?? 0;
+    if (attempts < CUSTOM_ANSWER_MAX_REASKS) {
+      const complaint =
+        field === "product"
+          ? (() => {
+              const check = validateCustomDimsInput(text);
+              return check.ok ? null : check.message;
+            })()
+          : parseCustomQuantity(text) === null
+            ? "לא הצלחתי לזהות כמות. תכתבו מספר יחידות בלבד — למשל 7500."
+            : null;
+      if (complaint) {
+        await saveState(ctx.sid, { ...ctx.qState, customAttempts: attempts + 1 });
+        await sendBridgeMessage(recipient, complaint);
+        return { action: "custom_reasked", detail: `${field}: ${text}` };
+      }
+    }
+    // Out of re-asks — keep the raw text and let the end-of-flow fallback route
+    // it to a human rather than trapping the customer in a loop.
+
     const captured: QState = {
       ...ctx.qState,
       pendingCustomField: null,
+      customAttempts: 0,
       unmatchedAt: 0,
     };
     if (field === "quantity") captured.quantityCustom = text;

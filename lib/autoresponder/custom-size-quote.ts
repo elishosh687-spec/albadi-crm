@@ -60,6 +60,63 @@ export function parseCustomDims(
   return null;
 }
 
+export type DimsCheck =
+  | { ok: true; dims: { h: number; d: number; w: number } }
+  | { ok: false; message: string };
+
+/**
+ * Validate what the customer typed for a custom size, AT THE MOMENT THEY TYPE IT.
+ *
+ * Without this the questionnaire accepted any text — "גובה 45" was taken as a
+ * complete answer, the customer answered every remaining question, and only at
+ * the very end did the missing dimensions surface as a 24-48h holding message.
+ * The complaint belongs next to the mistake, and it should name what's missing
+ * rather than repeat the format blurb.
+ */
+export function validateCustomDimsInput(raw: string): DimsCheck {
+  const nums = ((raw ?? "").match(/\d+(?:\.\d+)?/g) ?? []).map(Number).filter((n) => n > 0);
+
+  if (nums.length === 0) {
+    return {
+      ok: false,
+      message:
+        "לא הצלחתי לזהות מידות בהודעה 🙂\nתכתבו גובה, עומק ורוחב בס״מ — למשל H40*D15*W50, או פשוט: 40 15 50.\nלשקית שטוחה בלי עומק — גובה ורוחב בלבד, למשל H30*W40.",
+    };
+  }
+  if (nums.length === 1) {
+    return {
+      ok: false,
+      message:
+        `קיבלתי ${nums[0]} ס״מ — אבל אני צריך את כל המידות כדי לתמחר.\n` +
+        "גובה, עומק ורוחב — למשל H40*D15*W50 (או: 40 15 50).\n" +
+        "אם השקית שטוחה בלי עומק — גובה ורוחב בלבד, למשל H30*W40.",
+    };
+  }
+
+  const dims = parseCustomDims(raw);
+  if (!dims) {
+    return {
+      ok: false,
+      message:
+        "לא הצלחתי לקרוא את המידות. אפשר לכתוב אותן בפורמט H40*D15*W50 (גובה, עומק, רוחב בס״מ)?",
+    };
+  }
+
+  // Catch an unmakeable bag now, while the customer is still thinking about
+  // dimensions — not after they've answered everything else.
+  const geometryErrors = validateBagGeometry(dims.w, dims.d, dims.h);
+  if (geometryErrors.length > 0) {
+    return {
+      ok: false,
+      message:
+        `המידות האלה מחוץ לטווח שהמפעל מייצר:\n${geometryErrors.map((e) => `• ${e}`).join("\n")}\n` +
+        "אפשר לכתוב מידות מעודכנות?",
+    };
+  }
+
+  return { ok: true, dims };
+}
+
 export async function quoteCustomSize(
   input: CustomSizeInput
 ): Promise<CustomSizeOutcome> {
