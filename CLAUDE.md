@@ -1004,6 +1004,61 @@ strip data until removed (slightly pollutes aggregates).
 
 See "Zoho Books integration" below for the money side.
 
+## Post-close deal edits — "תוספות לעסקה" (built 2026-08-14)
+
+A customer asks for 500 more at the price already agreed. Rebuilding a whole
+quote for that is absurd, so a CLOSED deal takes free-form `{label, amountIls}`
+lines — `factory_quote_requests.deal_addons` (jsonb, direct DDL, on the PRIMARY
+member like every deal-level field).
+
+**The amount goes INSIDE `grandTotalExVat`** ([closed.ts](lib/factory/server/closed.ts)),
+which is the single definition of what the customer owes — so the payment
+schedule and the Zoho invoice pick it up with no extra wiring. `productsTotalExVat`
+is exposed alongside it (the products' own total, before additions). Verified:
+₪6,820 + ₪1,080 → grand ₪7,900, and the 30/40/30 schedule sums to ₪9,322 =
+7,900 × 1.18 exactly. The invoice gets a line per addon, so the bill can't come
+out short of the quote.
+
+**Telling the customer:** the original quote PDF is a historical document and
+stays as sent — the delta goes out as a WhatsApp via **"שלח עדכון ללקוח"**
+([sendDealUpdate.ts](lib/factory/server/sendDealUpdate.ts), `POST
+/api/widget/factory/deal-update-whatsapp/[id]`, `?dry=1` previews). It states the
+additions, the original total, the updated ex-VAT total and the recomputed
+schedule, all from the same `payment-terms` module the quotes and the invoice
+use. The UI ALWAYS previews and confirms first — it lands on a customer's phone.
+Sent as `sender='eli'`, which also pauses the bot on that lead.
+
+Endpoint: `PUT /api/widget/factory/deal-addons/[id]` (replaces the whole array).
+
+## Factory quote — two more footguns fixed 2026-08-11
+
+**Shipping-id namespaces leak, and the miss cost ₪0 shipping.** The calculator
+engine uses `s1` (אקספרס/air) / `s2` (רגיל/sea); the factory config uses
+`air-express` / `sea-standard`. A quote built on the calculator side stores `s2`,
+`priceFactoryQuote` looked it up, found nothing, and charged **zero shipping** —
+under-quoting ~₪1,874 on 3,000 bags. `resolveShippingOption`
+([pricing.ts](lib/factory/pricing.ts)) now translates the legacy ids and falls
+back to a sea option **with a warning, never to no shipping**. Symptom to watch
+for: a quote whose shipping line is ₪0.
+
+**Finalized quotes never re-read the sheet.** `refreshFromFeishu` skips
+`finalized` rows on purpose (a sweep must not overwrite a priced quote), but the
+factory does edit rows after we price them (VIHFR5BJ moved ¥1.65 → ¥1.75
+unnoticed). The 🔄 **"רענן מהמפעל"** button on finalized/received rows
+([force-refresh.ts](lib/factory/server/force-refresh.ts)) force-pulls one quote,
+shows the diff in Hebrew, and updates `factory_response` **only** — it never
+re-prices, because `final_pricing` is what the customer was quoted; a changed
+cost is surfaced as "pricing is stale, recalculate if needed".
+
+## Quote-sent notification is settings-driven (2026-08-10)
+
+Itay used to be pinged on WhatsApp for every quote sent, hardwired to
+`ITAY_NOTIFY_JID`. The recipient now lives in `app_config` key `crm.quoteNotify`
+`{enabled, phone, name}` ([quote-notify-config.ts](lib/notify/quote-notify-config.ts)),
+edited from the settings screen ("התראה על שליחת הצעה ללקוח"). **Currently
+DISABLED.** The env var is only the legacy fallback; the JID cache is per-target
+so re-pointing takes effect without a redeploy.
+
 ## Zoho Books integration — read + write (built 2026-07-23)
 
 Creds reused from Eli's local project `/Users/eli/Projects/zoho/`
