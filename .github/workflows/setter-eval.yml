@@ -1,0 +1,24 @@
+# Runs the setter's offline evaluation suite against production and prints the
+# full report (including every generated Hebrew message) into the run log.
+#
+# Manual-only (workflow_dispatch) — this spends real LLM calls, so it runs when
+# someone asks for it, not on a schedule. The repo's BOT_SECRET carries auth,
+# which is also what lets Claude trigger and read evals without holding the
+# secret locally.
+name: setter-eval
+on:
+  workflow_dispatch:
+    inputs:
+      only:
+        description: "Comma-separated scenario slugs (empty = all)"
+        required: false
+        default: ""
+jobs:
+  eval:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Run setter evaluation
+        run: |
+          curl -sS -X POST "https://albadi-crm.vercel.app/api/admin/setter-eval?only=${{ inputs.only }}" \
+            -H "Authorization: Bearer ${{ secrets.BOT_SECRET }}" \
+            --max-time 290 | python3 -m json.tool
