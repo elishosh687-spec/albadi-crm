@@ -12,7 +12,11 @@ export interface LuxShellProps {
   /** extra classes appended to the shell */
   className?: string;
   style?: CSSProperties;
-  /** page padding (mockup default: 26px 32px 40px) */
+  /**
+   * page padding. Left undefined the shell uses the `.lux-shell` class, whose
+   * padding is 26px 32px 40px on desktop and tightens on a phone — an inline
+   * default would beat the media query and cost every screen 64px of width.
+   */
   padding?: string;
 }
 
@@ -20,16 +24,18 @@ export default function LuxShell({
   children,
   className = "",
   style,
-  padding = "26px 32px 40px",
+  padding,
 }: LuxShellProps) {
   return (
     <div
-      className={`lux-theme hubscroll ${className}`}
+      className={`lux-theme hubscroll lux-shell ${className}`}
       dir="rtl"
       style={{
-        minHeight: "100vh",
+        // dvh, not vh: mobile Safari's collapsing toolbar makes 100vh taller
+        // than the visible viewport, which clips the bottom of every screen.
+        minHeight: "100dvh",
         overflowY: "auto",
-        padding,
+        ...(padding ? { padding } : null),
         ...style,
       }}
     >

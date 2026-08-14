@@ -41,6 +41,12 @@ export default function LuxTitle({
         alignItems: "flex-end",
         justifyContent: "space-between",
         gap: 16,
+        // Wrap so the title and its `aside` (counts, filters, actions) drop to
+        // separate lines instead of colliding on a phone. A no-op whenever the
+        // row already fits, so desktop is unchanged. This one edit covers the
+        // header of every Lux screen.
+        flexWrap: "wrap",
+        rowGap: 10,
         marginBottom: 18,
         ...style,
       }}

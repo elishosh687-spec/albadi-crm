@@ -886,7 +886,10 @@ function ClosedQuoteCard({
                   )}
                 </div>
                 {isOpen && (
-                  <div style={{ height: 620, display: "flex", flexDirection: "column", borderTop: "1px solid var(--lux-line)" }}>
+                  // 620px is taller than a 375x667 phone screen on its own, so
+                  // the embedded quote filled the viewport with no way to see
+                  // the card around it. Cap to most of the viewport instead.
+                  <div style={{ height: "min(620px, 70dvh)", display: "flex", flexDirection: "column", borderTop: "1px solid var(--lux-line)" }}>
                     <QuoteHtmlPreviewWidget apiToken={apiToken} row={p} />
                   </div>
                 )}
@@ -978,7 +981,9 @@ function ClosedQuoteCard({
               {sched.installments.map((inst, i, arr) => {
                 const isPaid = (parseFloat(paid[i] ?? "") || 0) > 0;
                 return (
-                  <div key={i} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  // checkbox + a long Hebrew instalment caption + a 120px money
+                  // input: wraps rather than squeezing the caption to nothing
+                  <div key={i} className="lux-wrap-sm" style={{ display: "flex", alignItems: "center", gap: 8 }}>
                     <button
                       type="button"
                       onClick={() => setPaid((prev) => prev.map((v, j) => j === i ? (isPaid ? "" : String(inst.ils)) : v))}
@@ -1026,12 +1031,19 @@ function ClosedQuoteCard({
       )}
 
       {/* Body: tidy planned↔actual table */}
-      <div style={{ padding: "16px 20px" }}>
+      <div className="lux-scroll-x" style={{ padding: "16px 20px" }}>
         <div
+          // NOT lux-stack-sm. The children here are FLAT grid items — the
+          // header cells and each CostRow's four cells are siblings — so
+          // collapsing to one column would interleave labels, planned values,
+          // inputs and deltas into one meaningless list. It needs ~456px, so
+          // on a phone the wrapper scrolls sideways and the table stays a
+          // table. (Deliberate exception to the stacking rule.)
           style={{
             display: "grid",
             gridTemplateColumns: "minmax(90px,1fr) 96px 150px minmax(120px,1fr)",
             columnGap: 14, rowGap: 12, alignItems: "center",
+            minWidth: 440,
           }}
         >
           {/* column headers */}
@@ -1068,7 +1080,9 @@ function ClosedQuoteCard({
 
           {/* other cost lines span the row */}
           {other.map((c, i) => (
-            <div key={i} style={{ gridColumn: "1 / -1", display: "flex", gap: 8, alignItems: "center" }}>
+            // wrap: label input + ₪120px amount + delete button do not fit one
+            // phone line, and without wrapping the label collapsed to nothing
+            <div key={i} className="lux-wrap-sm" style={{ gridColumn: "1 / -1", display: "flex", gap: 8, alignItems: "center" }}>
               <input
                 value={c.label}
                 onChange={(e) => setOther((prev) => prev.map((x, j) => j === i ? { ...x, label: e.target.value } : x))}
@@ -1402,7 +1416,10 @@ function DealTimeline({
                     : <Circle className="size-4 shrink-0" style={{ color: "var(--lux-muted)" }} />}
                   <span style={{ fontSize: 13, color: stamped ? "var(--lux-ink)" : "var(--lux-muted)" }}>{s.label}</span>
                   {stamped && <span style={{ fontSize: 11.5, color: "var(--lux-muted)" }}>{fmtDate(stamped)}</span>}
-                  <span style={{ marginInlineStart: "auto", display: "flex", gap: 6, alignItems: "center" }}>
+                  {/* Zoho-invoice + attach + mark buttons. This inner cluster
+                      did not wrap even though its parent did, so it pushed
+                      past the card edge on a phone. */}
+                  <span className="lux-wrap-sm" style={{ marginInlineStart: "auto", display: "flex", gap: 6, alignItems: "center" }}>
                     {s.key === "invoiceSentAt" && milestones.invoiceZohoId && (
                       <span style={{ fontSize: 10.5, color: "var(--lux-cool,#9db4d6)" }}>
                         Zoho {milestones.invoiceZohoId}
@@ -1715,7 +1732,7 @@ function ZohoMatchModal({
       <div
         dir="rtl"
         style={{
-          width: "100%", maxWidth: 620, maxHeight: "85vh", overflowY: "auto",
+          width: "100%", maxWidth: 620, maxHeight: "85dvh", overflowY: "auto",
           background: "#1b1917", border: "1px solid var(--lux-line)", borderRadius: 12, padding: "18px 20px",
           boxShadow: "0 24px 60px rgba(0,0,0,0.6)",
         }}
@@ -1790,7 +1807,7 @@ const modalShell: React.CSSProperties = {
 // SOLID opaque panel — --lux-card is rgba(...,0.03) (near-transparent) so the
 // card behind bleeds through; a modal must be fully opaque.
 const modalBox: React.CSSProperties = {
-  width: "100%", maxWidth: 520, maxHeight: "85vh", overflowY: "auto",
+  width: "100%", maxWidth: 520, maxHeight: "85dvh", overflowY: "auto",
   background: "#1b1917", border: "1px solid var(--lux-line)",
   borderRadius: 12, padding: "18px 20px",
   boxShadow: "0 24px 60px rgba(0,0,0,0.6)",

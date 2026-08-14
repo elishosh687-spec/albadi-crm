@@ -3,8 +3,11 @@
 //
 // Notes:
 //   - Auth is per-route via verifyWidgetToken().
-//   - Iframe embedding allowed via middleware/global headers + this layout's
-//     metadata sets a wide viewport for small panels.
+//   - Iframe embedding allowed via middleware/global headers.
+//   - This layout sets NO viewport. The only viewport in the app is
+//     app/layout.tsx (`width=device-width, initial-scale=1`) and it applies
+//     here. (An older comment claimed a "wide viewport" was set here — it
+//     never was.)
 //   - Hebrew RTL preserved (calculator components depend on it).
 
 import type { Metadata } from "next";
@@ -25,10 +28,16 @@ export default function WidgetLayout({
 }) {
   return (
     <div
-      className="gg-theme"
+      className="gg-theme mfit"
       style={{
-        minHeight: "100vh",
-        padding: "12px",
+        // dvh, not vh — mobile Safari's collapsing toolbar makes 100vh taller
+        // than the visible viewport, which clips the bottom of every screen.
+        minHeight: "100dvh",
+        // `.mfit` marks this subtree as a widget screen for the mobile layer
+        // in globals.css. It is NOT `.gg-theme`-scoped there: the dashboard
+        // carries .gg-theme too, and must not be restyled as a side effect.
+        // Fluid padding: identical 12px at >=600px, 6px on a phone.
+        padding: "clamp(6px, 2vw, 12px)",
       }}
     >
       {children}

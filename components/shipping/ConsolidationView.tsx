@@ -118,6 +118,11 @@ export function ConsolidationView({
         </div>
       ) : (
         <div
+          // lux-stack-sm: the 320px summary rail is a FIXED track, so on a
+          // phone it leaves the candidate list negative width and the page
+          // scrolls sideways. This is one of only two grids here that truly
+          // overflow rather than merely crowd.
+          className="lux-stack-sm"
           style={{
             display: "grid",
             gridTemplateColumns: "1fr 320px",

@@ -160,7 +160,7 @@ function ModalShell({ title, subtitle, onClose, children, footer }: {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" onClick={onClose}>
       <div
-        className="relative w-full max-w-lg max-h-[90vh] rounded-lg border border-border bg-card flex flex-col overflow-hidden"
+        className="relative w-full max-w-lg max-h-[90dvh] rounded-lg border border-border bg-card flex flex-col overflow-hidden"
         onClick={(e) => e.stopPropagation()}
         dir="rtl"
       >

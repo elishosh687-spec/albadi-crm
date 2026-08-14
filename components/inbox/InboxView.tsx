@@ -287,7 +287,13 @@ export default function InboxView({
         .inbox-split ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.10); border-radius: 8px; }
         .inbox-split ::-webkit-scrollbar-thumb:hover { background: rgba(205,169,120,0.35); }
         .inbox-split { scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.14) transparent; }
-        @media (max-width: 760px) { .inbox-split { grid-template-columns: 1fr; height: calc(100dvh - 40px); } .inbox-listcol { display: none; } }
+        @media (max-width: 767px) {
+          .inbox-split { grid-template-columns: 1fr; height: calc(100dvh - 40px); }
+          /* the list is reachable via the "כל השיחות" back link above */
+          .inbox-listcol { display: none; }
+          /* give the thread the whole width — see the note at the panel */
+          .inbox-contextcol { display: none; }
+        }
       `}</style>
       <div className={threadSid ? "inbox-split" : undefined}>
       <div className={threadSid ? "inbox-listcol" : undefined}>
@@ -942,8 +948,13 @@ function ThreadView({
       )}
       </div>{/* /thread column */}
 
-      {/* CONTEXT panel (left) — lead at a glance + actions */}
+      {/* CONTEXT panel (left) — lead at a glance + actions.
+          Hidden on a phone: at 220px non-shrinking it left the message thread
+          about 110px wide, which is narrower than the messages themselves. The
+          existing ≤760px rule only collapsed the LIST column and never touched
+          this one, so the thread was unusable on mobile. */}
       <div
+        className="inbox-contextcol"
         style={{
           width: 220,
           flexShrink: 0,

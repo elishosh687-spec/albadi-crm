@@ -287,6 +287,9 @@ export default function AnalysisScreen({ token }: { token: string }) {
               </div>
 
               <div
+                // two long Hebrew pattern lists side by side end up ~150px
+                // each on a phone — unreadable, so they stack
+                className="lux-stack-sm"
                 style={{
                   display: "grid",
                   gridTemplateColumns: "1.2fr 1fr",

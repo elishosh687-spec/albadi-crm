@@ -93,45 +93,18 @@ export default function BotSettingsPanel({ apiToken }: { apiToken: string }) {
   }
 
   return (
-    <div>
-      {/* sticky header — save bar + group tabs travel together so the group
-          you are editing is always visible while scrolling a long list */}
-      <div
+    <div style={{ display: "flex", gap: 16, alignItems: "flex-start", flexWrap: "wrap" }}>
+      {/* ===== group nav (sidenav, standard settings layout) ===== */}
+      <nav
         style={{
+          flex: "0 0 200px",
           position: "sticky",
-          top: 0,
-          zIndex: 3,
-          background: C.panel,
-          borderBottom: `1px solid ${C.border}`,
-          margin: "0 0 12px",
-          paddingBottom: 8,
-        }}
-      >
-      <div
-        style={{
+          top: 90,
           display: "flex",
-          gap: 8,
-          alignItems: "center",
-          padding: "10px 2px 8px",
+          flexDirection: "column",
+          gap: 2,
         }}
       >
-        <div style={{ fontSize: 13, fontWeight: 600 }}>הגדרות הבוט</div>
-        <div style={{ fontSize: 12, color: C.dim }}>
-          {dirtyKeys.length > 0 ? `${dirtyKeys.length} שינויים לא שמורים` : "הכל שמור"}
-        </div>
-        <div style={{ flex: 1 }} />
-        {dirtyKeys.length > 0 && (
-          <button onClick={() => setValues(saved)} disabled={busy} style={btnGhost}>
-            בטל שינויים
-          </button>
-        )}
-        <button onClick={save} disabled={busy || dirtyKeys.length === 0} style={btnPrimary}>
-          {busy ? "שומר…" : "שמור"}
-        </button>
-      </div>
-
-      {/* group tabs */}
-      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", padding: "0 2px" }}>
         {GROUPS.map((g) => {
           const count = BOT_SETTING_FIELDS.filter((f) => f.group === g).length;
           const dirty = BOT_SETTING_FIELDS.some(
@@ -143,51 +116,96 @@ export default function BotSettingsPanel({ apiToken }: { apiToken: string }) {
               key={g}
               onClick={() => setOpenGroup(g)}
               style={{
-                background: active ? "rgba(201,162,39,0.14)" : "rgba(255,255,255,0.04)",
-                border: `1px solid ${active ? "rgba(201,162,39,0.45)" : C.border}`,
-                color: active ? "#e0c46a" : C.text,
-                borderRadius: 999,
-                padding: "6px 13px",
+                textAlign: "start",
+                background: active ? "rgba(201,162,39,0.10)" : "transparent",
+                borderWidth: 0,
+                borderInlineStart: `2px solid ${active ? C.accent : "transparent"}`,
+                color: active ? C.text : C.dim,
+                borderRadius: 6,
+                padding: "8px 12px",
                 fontSize: 13,
+                fontWeight: active ? 600 : 400,
                 cursor: "pointer",
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
               }}
             >
-              {g}
-              <span style={{ color: C.faint, fontSize: 11 }}> · {count}</span>
-              {dirty && <span style={{ color: C.accent }}> •</span>}
+              <span>
+                {g}
+                {dirty && <span style={{ color: C.accent }}> •</span>}
+              </span>
+              <span style={{ fontSize: 11, color: C.faint }}>{count}</span>
             </button>
           );
         })}
-      </div>
-      </div>
+      </nav>
 
-      {note && (
+      {/* ===== content ===== */}
+      <div style={{ flex: "1 1 460px", minWidth: 300 }}>
+        {/* save bar */}
         <div
           style={{
-            background: "rgba(78,161,114,0.10)",
-            border: "1px solid rgba(78,161,114,0.35)",
-            borderRadius: 8,
-            padding: "8px 12px",
+            position: "sticky",
+            top: 90,
+            zIndex: 3,
+            display: "flex",
+            gap: 8,
+            alignItems: "center",
+            background: C.panel,
+            border: `1px solid ${C.border}`,
+            borderRadius: 10,
+            padding: "9px 12px",
             marginBottom: 12,
-            fontSize: 13,
-            color: "#9fd3b4",
           }}
         >
-          {note}
+          <div style={{ fontSize: 13.5, fontWeight: 600 }}>{openGroup}</div>
+          <div style={{ fontSize: 12, color: dirtyKeys.length ? "#e0c46a" : C.dim }}>
+            {dirtyKeys.length > 0 ? `${dirtyKeys.length} שינויים לא שמורים` : "הכל שמור"}
+          </div>
+          <div style={{ flex: 1 }} />
+          {dirtyKeys.length > 0 && (
+            <button onClick={() => setValues(saved)} disabled={busy} style={btnGhost}>
+              בטל שינויים
+            </button>
+          )}
+          <button
+            onClick={save}
+            disabled={busy || dirtyKeys.length === 0}
+            style={btnPrimary}
+          >
+            {busy ? "שומר…" : "שמור"}
+          </button>
         </div>
-      )}
 
-      {BOT_SETTING_FIELDS.filter((f) => f.group === openGroup).map((f) => (
-        <SettingCard
-          key={f.key}
-          field={f}
-          value={values[f.key]}
-          isDefault={values[f.key] === DEFAULT_BOT_SETTINGS[f.key]}
-          dirty={values[f.key] !== saved[f.key]}
-          onChange={(v) => set(f.key, v as never)}
-          onReset={() => set(f.key, DEFAULT_BOT_SETTINGS[f.key] as never)}
-        />
-      ))}
+        {note && (
+          <div
+            style={{
+              background: "rgba(78,161,114,0.10)",
+              border: "1px solid rgba(78,161,114,0.35)",
+              borderRadius: 8,
+              padding: "8px 12px",
+              marginBottom: 12,
+              fontSize: 13,
+              color: "#9fd3b4",
+            }}
+          >
+            {note}
+          </div>
+        )}
+
+        {BOT_SETTING_FIELDS.filter((f) => f.group === openGroup).map((f) => (
+          <SettingCard
+            key={f.key}
+            field={f}
+            value={values[f.key]}
+            isDefault={values[f.key] === DEFAULT_BOT_SETTINGS[f.key]}
+            dirty={values[f.key] !== saved[f.key]}
+            onChange={(v) => set(f.key, v as never)}
+            onReset={() => set(f.key, DEFAULT_BOT_SETTINGS[f.key] as never)}
+          />
+        ))}
+      </div>
     </div>
   );
 }

@@ -144,18 +144,29 @@ export default async function HubWidgetPage({
       style={{
         display: "flex",
         flexDirection: "column",
-        height: "100vh",
-        margin: "-12px",
+        // dvh, not vh: on mobile Safari 100vh includes the collapsing toolbar,
+        // so the shell is taller than the visible viewport and the sticky nav
+        // scrolls away with no way back. Identical to vh on desktop.
+        height: "100dvh",
+        // Cancel the widget layout's padding exactly. It is fluid now, so this
+        // must be the same expression negated — a hardcoded -12px left the page
+        // 4px wider than the viewport on a phone and scrolled sideways.
+        margin: "calc(-1 * clamp(6px, 2vw, 12px))",
+        // keep a tab's inner scroller from rubber-banding the shell behind it
+        overscrollBehavior: "contain",
         background: "#0d0c0b",
       }}
     >
       <nav
+        className="hub-nav"
         style={{
           display: "flex",
           flexWrap: "nowrap",
           alignItems: "center",
           gap: 4,
-          padding: "8px 14px",
+          // fluid: unchanged 8/14px on desktop, tighter on a phone where every
+          // pixel of the nav is width the tabs don't get
+          padding: "8px clamp(8px, 3vw, 14px)",
           background: "rgba(255,255,255,0.045)",
           borderBottom: "1px solid rgba(230,225,224,0.08)",
           backdropFilter: "blur(30px) saturate(1.4)",
@@ -208,6 +219,7 @@ export default async function HubWidgetPage({
           const style: CSSProperties = {
             gap: 6,
             padding: "0 11px",
+            scrollSnapAlign: "center",
             fontSize: 13,
             fontWeight: isActive ? 600 : 500,
             height: 32,
@@ -223,16 +235,23 @@ export default async function HubWidgetPage({
             flexShrink: 0,
           };
           return (
-            <Link key={t.id} href={href} style={style}>
+            <Link
+              key={t.id}
+              href={href}
+              style={style}
+              data-active={isActive ? "1" : undefined}
+            >
               <Icon size={15} strokeWidth={1.75} style={{ flexShrink: 0 }} />
               {t.label}
             </Link>
           );
         })}
 
-        {/* search affordance — visual only this phase */}
+        {/* search affordance — visual only this phase. Hidden on a phone: it is
+            aria-hidden and non-functional, so it is pure width tax there. */}
         <div
           aria-hidden
+          className="hub-search"
           style={{
             marginInlineStart: "auto",
             display: "flex",
@@ -268,6 +287,18 @@ export default async function HubWidgetPage({
           </span>
         </div>
       </nav>
+
+      {/* Only 3 of 11 tabs fit on a phone, so on load the active one may be
+          off-screen with nothing indicating the strip scrolls. This keeps the
+          hub a server component — no "use client", no hydration — and is a
+          no-op when the tab is already visible. */}
+      <script
+        dangerouslySetInnerHTML={{
+          __html:
+            "document.querySelector('.hub-nav [data-active]')" +
+            "?.scrollIntoView({block:'nearest',inline:'center'});",
+        }}
+      />
 
       <iframe
         key={`${active.id}-${sid}`}

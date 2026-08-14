@@ -8,8 +8,13 @@ export const metadata = {
 
 export default function ConfiguratorPage() {
   return (
-    <Suspense fallback={<div style={{ minHeight: "100vh", background: "#f0e9dc" }} />}>
-      <ProductConfigurator />
-    </Suspense>
+    // `.mfit` opts this route into the mobile layer in globals.css. The 3D tab
+    // renders here, OUTSIDE app/widget/, so it never sees the widget layout's
+    // scope class and would otherwise miss the iOS input-zoom fix.
+    <div className="mfit">
+      <Suspense fallback={<div style={{ minHeight: "100dvh", background: "#f0e9dc" }} />}>
+        <ProductConfigurator />
+      </Suspense>
+    </div>
   );
 }

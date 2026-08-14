@@ -282,7 +282,9 @@ export function SplitShipmentPanel(props: {
             </div>
           </div>
 
-          <div className="grid gap-3" style={{ gridTemplateColumns: "1fr 1fr" }}>
+          {/* two selects whose Hebrew options ("שיטת אוויר ✈️ (10,000 יח׳)")
+              are much wider than half a phone screen */}
+          <div className="grid gap-3 lux-stack-sm" style={{ gridTemplateColumns: "1fr 1fr" }}>
             <div className="flex flex-col gap-1">
               <label className="text-xs text-muted-foreground">שיטת אוויר ✈️ ({splitValid ? airQty.toLocaleString("he-IL") : "—"} יח׳)</label>
               <select

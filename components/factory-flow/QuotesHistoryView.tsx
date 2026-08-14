@@ -684,9 +684,13 @@ export function QuotesHistoryView({ apiToken }: { apiToken: string }) {
   // One quote row — rendered inside its customer card (unchanged behaviour).
   function renderQuoteRow(r: ApiQuoteRow) {
     return (
+      // flex-wrap: this row carries up to 13 icon buttons in a shrink-0 rail
+      // (~380px on its own), which on a phone pushed the customer name out of
+      // the card entirely. Wrapping drops the rail onto its own line instead
+      // of hiding actions behind a menu. No-op at desktop width.
       <li
         key={r.id}
-        className="flex items-center justify-between gap-2 rounded-md border border-border/60 bg-background/40 px-3 py-2"
+        className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border/60 bg-background/40 px-3 py-2"
       >
         <div className="flex items-center gap-2 min-w-0 flex-1 flex-wrap">
           {r.sentToCustomerAt && (
@@ -1785,7 +1789,7 @@ function QuoteModal({ row, onClose, widgetToken }: { row: ApiQuoteRow; onClose: 
       onClick={onClose}
     >
       <div
-        className="relative w-full max-w-3xl max-h-[90vh] rounded-lg border border-border bg-card flex flex-col overflow-hidden"
+        className="relative w-full max-w-3xl max-h-[90dvh] rounded-lg border border-border bg-card flex flex-col overflow-hidden"
         onClick={(e) => e.stopPropagation()}
         dir="rtl"
       >

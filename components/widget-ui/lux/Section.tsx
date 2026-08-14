@@ -31,7 +31,8 @@ export default function Section({
         background: "var(--lux-card)",
         borderRadius: 8,
         boxShadow: "inset 0 0 0 1px var(--lux-line)",
-        padding: "18px 20px",
+        // fluid: identical 18/20px at >=500px, tighter on a phone
+        padding: "clamp(14px, 4vw, 18px) clamp(12px, 4vw, 20px)",
         ...style,
       }}
     >
@@ -56,6 +57,9 @@ export default function Section({
             alignItems: "baseline",
             justifyContent: "space-between",
             gap: 12,
+            // same reasoning as LuxTitle — a no-op when the row fits
+            flexWrap: "wrap",
+            rowGap: 8,
             marginBottom: 14,
             position: "relative",
           }}

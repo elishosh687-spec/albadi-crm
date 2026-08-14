@@ -489,7 +489,7 @@ export function CombinedCalcModalWidget({
       onClick={onClose}
     >
       <div
-        className="w-full max-w-2xl max-h-[90vh] overflow-auto rounded-2xl border border-border bg-background shadow-2xl"
+        className="w-full max-w-2xl max-h-[90dvh] overflow-auto rounded-2xl border border-border bg-background shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}

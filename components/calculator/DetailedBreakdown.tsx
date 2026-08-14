@@ -68,7 +68,9 @@ export function DetailedBreakdown(props: BreakdownInput & { defaultOpen?: boolea
       {open && (
         <div className="border-t border-border px-3 py-3 space-y-2.5 text-xs tabular-nums">
           {/* Bottom-line hero — the three numbers the boss cares about, up front */}
-          <div className="grid grid-cols-3 gap-2">
+          {/* the three hero money figures — a six-digit ₪ total does not fit a
+              third of a phone screen, and these are the numbers Eli reads */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
             <Stat label="סה״כ הזמנה" value={fmtIls(v.totals.totalSellingPrice)} tone="primary" />
             <Stat label="רווח" value={fmtIls(v.margin.ilsTotalProfit)} tone="success" />
             <Stat

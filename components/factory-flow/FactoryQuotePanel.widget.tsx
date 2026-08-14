@@ -795,7 +795,9 @@ function FinalizedState({
         />
       )}
 
-      <div className="grid grid-cols-3 gap-2">
+      {/* three Hebrew-labelled CTAs — at a third of a phone screen the labels
+          wrap mid-word, so they stack here and stay a row from md up */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
         <button
           type="button"
           onClick={() => setPdfPreviewOpen(true)}

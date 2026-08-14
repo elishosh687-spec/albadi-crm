@@ -580,3 +580,124 @@
 :is(.calc-lux, .lux-theme) .hubscroll {
   scrollbar-width: none;
 }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   MOBILE LAYER — everything below 768px.
+
+   Eli works the widget from a phone browser directly (not the GHL app), and
+   the tree was built for a desktop iframe: ~95% inline style={{}}, and only
+   4 @media queries across 90 files.
+
+   SCOPE: `.mfit`, a class that exists solely to mark "this subtree is a
+   widget screen". NOT `.gg-theme` — app/dashboard/v3/layout.tsx carries
+   .gg-theme too, and middleware rewrites "/" to it, so a .gg-theme-scoped
+   rule would silently restyle the dashboard as a side effect.
+
+   Everything lives in ONE max-width query, so the desktop view is unchanged
+   by construction: a rule that isn't in here cannot have moved anything.
+
+   `!important` appears only where it must beat an inline style, and only on
+   classes we invented — so grepping the class name gives the complete blast
+   radius, permanently. That's the existing precedent here
+   (CalculatorView.tsx:915, InboxView.tsx:290).
+   ══════════════════════════════════════════════════════════════════════ */
+
+/* page shell padding — desktop keeps the mockup's generous frame. LuxShell
+   renders .lux-shell rather than hardcoding padding inline, which is what
+   makes it reachable from CSS at all. */
+:is(.calc-lux, .lux-theme) .lux-shell,
+:is(.calc-lux, .lux-theme).lux-shell {
+  padding: 26px 32px 40px;
+}
+
+@media (max-width: 767px) {
+  /* ---- the single highest-impact rule in this file ----------------------
+     iOS Safari zooms the page whenever a control with font-size < 16px takes
+     focus, and never zooms back. There are 163 form controls here, nearly all
+     11-14px. Because tabs render in an iframe, that zoom scales the TOP
+     document — the nav scrolls away and only a pinch brings it back. */
+  .mfit :is(input, select, textarea) {
+    font-size: 16px !important;
+    max-width: 100%;
+  }
+
+  /* 26px/32px of frame is 64px of a 375px screen. This one declaration is
+     what turns most two-column layouts from "cramped" into "fits". */
+  :is(.calc-lux, .lux-theme) .lux-shell,
+  :is(.calc-lux, .lux-theme).lux-shell {
+    padding: 14px 14px 28px;
+  }
+
+  /* a fixed 32px Hebrew title wraps to three lines at this width */
+  :is(.calc-lux, .lux-theme) .lux-title {
+    font-size: clamp(21px, 6.2vw, 32px);
+  }
+
+  /* Opt-in: collapse a hard multi-column grid to one column. !important
+     beats the inline gridTemplateColumns; inert without the class. */
+  .mfit .lux-stack-sm {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* Opt-in: for grids whose children are FLAT items (headers interleaved
+     with values, e.g. the planned-vs-actual table), stacking scrambles the
+     content — those scroll sideways instead. */
+  .mfit .lux-scroll-x {
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+  }
+  /* keep the child at its natural width so the parent actually has something
+     to scroll; an explicit inline min-width still wins where one is set */
+  .mfit .lux-scroll-x > * {
+    min-width: max-content;
+  }
+
+  /* Opt-in: let a row that must stay on one line on desktop wrap here. */
+  .mfit .lux-wrap-sm {
+    flex-wrap: wrap !important;
+  }
+
+  /* row actions revealed only on :hover are unreachable on touch */
+  .mfit .dt-actions {
+    opacity: 1 !important;
+  }
+
+  /* 28px icon buttons -> comfortable targets. 36px rather than the 44px
+     guideline on purpose: the quote rows carry several side by side and 44
+     would wrap them into a wall. */
+  .mfit .size-7 {
+    width: 36px;
+    height: 36px;
+  }
+
+  /* long unbreakable strings — phone numbers, latin ad names, URLs */
+  .mfit {
+    overflow-wrap: anywhere;
+  }
+
+  /* the ⌘K block is aria-hidden and non-functional — pure width tax here */
+  .hub-search {
+    display: none !important;
+  }
+}
+
+/* ── hub tab strip ──────────────────────────────────────────────────────
+   11 tabs never fit a phone. The strip already scrolled, but with the
+   scrollbar hidden there was nothing to say so, and which tabs you could
+   reach depended on their order in TABS. A mask fades the last tab at the
+   scrollable edge, so it reads as "there is more this way".
+   RTL-safe: the mask uses logical `to left`/`to right` per direction.    */
+.hub-nav {
+  scroll-snap-type: x proximity;
+  scroll-behavior: smooth;
+}
+@media (max-width: 767px) {
+  .hub-nav {
+    -webkit-mask-image: linear-gradient(to left, transparent 0, #000 22px);
+    mask-image: linear-gradient(to left, transparent 0, #000 22px);
+  }
+  .hub-nav:dir(ltr) {
+    -webkit-mask-image: linear-gradient(to right, transparent 0, #000 22px);
+    mask-image: linear-gradient(to right, transparent 0, #000 22px);
+  }
+}

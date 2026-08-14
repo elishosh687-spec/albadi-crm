@@ -130,7 +130,10 @@ export default async function BotPreviewWidget({ searchParams }: { searchParams:
         {data.upcoming.length === 0 ? (
           <div style={{ color: "#9ca3af" }}>אין פולואפים מתוכננים ב-36 שעות הקרובות</div>
         ) : (
-          <>
+          // 470px of fixed tracks. Header and value cells are separate rows of
+          // a column-aligned table, so this scrolls sideways rather than
+          // stacking — stacked, the header would become four loose labels.
+          <div className="lux-scroll-x">
             <div style={{ ...ROW_STYLE, fontWeight: "bold", color: "#9ca3af", borderBottom: "2px solid #374151" }}>
               <span>מתי</span>
               <span>ניסיון</span>
@@ -148,7 +151,7 @@ export default async function BotPreviewWidget({ searchParams }: { searchParams:
                 </div>
               );
             })}
-          </>
+          </div>
         )}
       </section>
 

@@ -547,8 +547,9 @@ export function CalculatorView({ products, quantityTiers, shippingOptions, initi
                 {/* dimensions + unit cost (read-only, derived from selection/result) */}
                 {(() => {
                   const dims = parseDims(selectedProduct?.dimensions);
+                  // 4 across is ~74px a cell on a phone — 2x2 instead
                   return (
-                    <div className="grid grid-cols-4 gap-3">
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                       <ReadField label="גובה H" value={dims.H} suffix="cm" />
                       <ReadField label="רוחב W" value={dims.W} suffix="cm" />
                       <ReadField label="עומק D" value={dims.D} suffix="cm" />

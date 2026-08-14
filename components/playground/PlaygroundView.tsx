@@ -1,10 +1,18 @@
 "use client";
 
 /**
- * Bot playground — chat with the real bot, see its state, see its settings.
+ * Bot playground — chat with the real bot, tools to test it, settings to tune it.
  *
- * Client-safe by construction: everything arrives over /api/widget/playground.
- * No server-only imports (see the client-bundle rule in CLAUDE.md).
+ * Layout follows standard dev-tool conventions (rebuilt 14.8 after Eli's
+ * feedback that the button-soup was unreadable):
+ *   - Three TABS switch context: שיחה (the test chat) / הגדרות / מצב מערכת.
+ *   - The chat tab is a two-column split: conversation on one side, a
+ *     labelled tool rail on the other (test actions grouped under headings,
+ *     one-line captions instead of hover-only tooltips).
+ *   - The setter's analysis renders in the tool rail next to the chat it
+ *     analysed — not as a panel that shoves the conversation off-screen.
+ *
+ * Client-safe: data arrives via /api/widget/playground only.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import BotSettingsPanel from "./BotSettingsPanel";
@@ -58,23 +66,25 @@ const C = {
   border: "rgba(255,255,255,0.08)",
   text: "#e8e4de",
   dim: "#9a938a",
+  faint: "#6b645c",
   accent: "#c9a227",
   inBubble: "#26302a",
   outBubble: "#22201d",
   alert: "#3a2a1a",
 };
 
+type Tab = "chat" | "settings" | "system";
+
 export default function PlaygroundView({ apiToken }: { apiToken: string }) {
+  const [tab, setTab] = useState<Tab>("chat");
   const [transcript, setTranscript] = useState<PlaygroundMessage[]>([]);
   const [lead, setLead] = useState<LeadState | null>(null);
-  const [settings, setSettings] = useState<SettingsGroup[]>([]);
+  const [systemInfo, setSystemInfo] = useState<SettingsGroup[]>([]);
   const [input, setInput] = useState("");
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [lastRoute, setLastRoute] = useState<string | null>(null);
-  const [showState, setShowState] = useState(false);
-  const [showSettings, setShowSettings] = useState(false);
-  const [showEnv, setShowEnv] = useState(false);
+  const [setter, setSetter] = useState<Record<string, unknown> | null>(null);
+  const [showQState, setShowQState] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
 
   const url = `/api/widget/playground?widget_token=${encodeURIComponent(apiToken)}`;
@@ -86,7 +96,7 @@ export default function PlaygroundView({ apiToken }: { apiToken: string }) {
       if (!json.ok) throw new Error(json.error || "load failed");
       setTranscript(json.transcript ?? []);
       setLead(json.lead ?? null);
-      setSettings(json.settings ?? []);
+      setSystemInfo(json.settings ?? []);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     }
@@ -100,113 +110,34 @@ export default function PlaygroundView({ apiToken }: { apiToken: string }) {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [transcript.length]);
 
+  async function post(body: Record<string, unknown>, busyKey: string) {
+    if (busy) return null;
+    setBusy(busyKey);
+    setError(null);
+    try {
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const json = await res.json();
+      if (json.transcript) setTranscript(json.transcript);
+      if (json.lead !== undefined) setLead(json.lead);
+      if (json.error) setError(json.error);
+      return json;
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+      return null;
+    } finally {
+      setBusy(null);
+    }
+  }
+
   async function send(text: string) {
     const body = text.trim();
-    if (!body || busy) return;
-    setBusy(true);
-    setError(null);
+    if (!body) return;
     setInput("");
-    try {
-      const res = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "send", text: body }),
-      });
-      const json = await res.json();
-      setTranscript(json.transcript ?? []);
-      setLead(json.lead ?? null);
-      setLastRoute(json.routedTo ?? null);
-      if (json.error) setError(json.error);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  const [setter, setSetter] = useState<Record<string, unknown> | null>(null);
-
-  async function setterPreview() {
-    if (busy) return;
-    setBusy(true);
-    setError(null);
-    try {
-      const res = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "setter_preview" }),
-      });
-      const json = await res.json();
-      if (json.ok) setSetter(json.setter);
-      else setError(json.error ?? "setter failed");
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function timeTravel(hours: number) {
-    if (busy) return;
-    setBusy(true);
-    setError(null);
-    try {
-      const res = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "time_travel", hours }),
-      });
-      const json = await res.json();
-      setTranscript(json.transcript ?? []);
-      setLead(json.lead ?? null);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function askCallback() {
-    if (busy) return;
-    setBusy(true);
-    setError(null);
-    try {
-      const res = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "ask_callback" }),
-      });
-      const json = await res.json();
-      setTranscript(json.transcript ?? []);
-      setLead(json.lead ?? null);
-      setLastRoute("callback");
-      if (json.error) setError(json.error);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function reset() {
-    if (busy) return;
-    setBusy(true);
-    setError(null);
-    try {
-      const res = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "reset" }),
-      });
-      const json = await res.json();
-      setTranscript(json.transcript ?? []);
-      setLead(json.lead ?? null);
-      setLastRoute(null);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setBusy(false);
-    }
+    await post({ action: "send", text: body }, "send");
   }
 
   const stageLabel = lead?.pipelineStage
@@ -218,6 +149,9 @@ export default function PlaygroundView({ apiToken }: { apiToken: string }) {
   return (
     <div
       dir="rtl"
+      // `.mfit` opts this screen into the mobile layer in globals.css (chiefly
+      // the 16px input rule that stops iOS zooming the page on focus).
+      className="mfit"
       style={{
         // Fixed inset rather than minHeight: the widget lives in a GHL iframe,
         // and a taller-than-viewport page let the (light) document background
@@ -228,106 +162,63 @@ export default function PlaygroundView({ apiToken }: { apiToken: string }) {
         background: C.bg,
         color: C.text,
         fontFamily: "system-ui, -apple-system, 'Segoe UI', sans-serif",
-        padding: 16,
       }}
     >
-      <div style={{ maxWidth: 860, margin: "0 auto" }}>
-        <header style={{ marginBottom: 12 }}>
-          <h1 style={{ margin: 0, fontSize: 20, fontWeight: 600 }}>
-            מגרש בדיקות לבוט
-          </h1>
-          <p style={{ margin: "6px 0 0", color: C.dim, fontSize: 13, lineHeight: 1.6 }}>
-            כאן אתה הלקוח. הבוט האמיתי עונה — אותו קוד, אותו תמחור, אותם מודלים.
-            <strong style={{ color: C.accent }}> שום הודעה לא יוצאת ל-WhatsApp</strong>,
-            ולא נוצר כלום ב-GHL.
-          </p>
-        </header>
-
-        {/* status bar */}
+      {/* ===== header: title + tabs ===== */}
+      <header
+        style={{
+          position: "sticky",
+          top: 0,
+          zIndex: 5,
+          background: C.bg,
+          borderBottom: `1px solid ${C.border}`,
+          padding: "12px clamp(10px, 3vw, 20px) 0",
+        }}
+      >
         <div
           style={{
             display: "flex",
-            gap: 8,
+            alignItems: "baseline",
+            gap: 12,
             flexWrap: "wrap",
-            alignItems: "center",
-            marginBottom: 12,
+            maxWidth: 1100,
+            margin: "0 auto",
           }}
         >
-          <Chip label="שלב" value={stageLabel} />
-          {typeof step === "number" && <Chip label="שאלה" value={String(step)} />}
-          {subFlow && <Chip label="מצב" value={subFlow} />}
-          {lead?.pipelineFlag && <Chip label="דגל" value={lead.pipelineFlag} tone="warn" />}
-          {lead?.botPaused && <Chip label="הבוט" value="מושהה" tone="warn" />}
-          {lastRoute && lastRoute !== "none" && (
-            <Chip
-              label="טופל ע״י"
-              value={
-                lastRoute === "questionnaire"
-                  ? "שאלון"
-                  : lastRoute === "callback"
-                    ? "תיאום שיחה"
-                    : "החלטות"
-              }
-            />
-          )}
-          <div style={{ flex: 1 }} />
-          <button onClick={() => setShowState((v) => !v)} style={btnGhost}>
-            {showState ? "הסתר מצב" : "מצב הבוט"}
-          </button>
-          <button
-            onClick={() => {
-              setShowSettings((v) => !v);
-              setShowEnv(false);
-            }}
-            style={btnGhost}
-          >
-            {showSettings ? "סגור הגדרות" : "⚙️ הגדרות הבוט"}
-          </button>
-          <button
-            onClick={() => {
-              setShowEnv((v) => !v);
-              setShowSettings(false);
-            }}
-            style={btnGhost}
-          >
-            {showEnv ? "סגור" : "מצב המערכת"}
-          </button>
-          <button
-            onClick={setterPreview}
-            disabled={busy}
-            style={btnGhost}
-            title="מריץ את מוח המכירות על השיחה הנוכחית ומראה מה הוא היה עונה — בלי לשלוח"
-          >
-            🧠 מה הסטר היה עונה
-          </button>
-          <button
-            onClick={askCallback}
-            disabled={busy}
-            style={btnGhost}
-            title="מריץ את הבקשה האמיתית לתיאום שיחה, כולל רשימת ההכנה שנבנית מהנתונים"
-          >
-            📞 בקש זמן לשיחה
-          </button>
-          <span
-            style={{ display: "inline-flex", gap: 4, alignItems: "center" }}
-            title="מזיז את כל השיחה אחורה בזמן — כדי לבדוק התנהגות של שקט (פולו-אפים, החייאה) בלי לחכות"
-          >
-            <span style={{ fontSize: 12, color: "#9a938a" }}>⏩ קדם זמן:</span>
-            <button onClick={() => timeTravel(3)} disabled={busy} style={btnGhost}>
-              3ש׳
-            </button>
-            <button onClick={() => timeTravel(24)} disabled={busy} style={btnGhost}>
-              יום
-            </button>
-            <button onClick={() => timeTravel(72)} disabled={busy} style={btnGhost}>
-              3 ימים
-            </button>
+          <h1 style={{ margin: 0, fontSize: 18, fontWeight: 600 }}>מגרש בדיקות לבוט</h1>
+          <span style={{ fontSize: 12.5, color: C.dim }}>
+            הבוט האמיתי, בלי לקוחות — שום הודעה לא יוצאת ל-WhatsApp
           </span>
-          <button onClick={reset} disabled={busy} style={btnDanger}>
-            התחל מחדש
-          </button>
         </div>
+        <nav style={{ display: "flex", gap: 2, maxWidth: 1100, margin: "8px auto 0" }}>
+          {(
+            [
+              ["chat", "💬 שיחה"],
+              ["settings", "⚙️ הגדרות הבוט"],
+              ["system", "🖥 מצב מערכת"],
+            ] as [Tab, string][]
+          ).map(([id, label]) => (
+            <button
+              key={id}
+              onClick={() => setTab(id)}
+              style={{
+                background: "transparent",
+                border: "none",
+                borderBottom: `2px solid ${tab === id ? C.accent : "transparent"}`,
+                color: tab === id ? C.text : C.dim,
+                padding: "8px 14px",
+                fontSize: 13.5,
+                fontWeight: tab === id ? 600 : 400,
+                cursor: "pointer",
+              }}
+            >
+              {label}
+            </button>
+          ))}
+        </nav>
+      </header>
 
+      <main style={{ maxWidth: 1100, margin: "0 auto", padding: "clamp(10px, 3vw, 16px)" }}>
         {error && (
           <div
             style={{
@@ -343,134 +234,371 @@ export default function PlaygroundView({ apiToken }: { apiToken: string }) {
           </div>
         )}
 
-        {setter && (
-          <Panel title="🧠 הסטר — מוח עתידי, תצוגה בלבד. מה שבשיחה למטה נשלח ע״י הבוט הנוכחי.">
-            <SetterPanel run={setter} onClose={() => setSetter(null)} />
-          </Panel>
-        )}
+        {tab === "settings" && <BotSettingsPanel apiToken={apiToken} />}
 
-        {showState && (
-          <Panel title="מצב פנימי (qState)">
-            <pre
-              style={{
-                margin: 0,
-                fontSize: 12,
-                overflowX: "auto",
-                color: C.dim,
-                whiteSpace: "pre-wrap",
-                wordBreak: "break-word",
-              }}
-            >
-              {JSON.stringify(lead?.qState ?? {}, null, 2)}
-            </pre>
-          </Panel>
-        )}
+        {tab === "system" && <SystemTab groups={systemInfo} />}
 
-        {showSettings && (
-          <Panel title="">
-            <BotSettingsPanel apiToken={apiToken} />
-          </Panel>
-        )}
+        {tab === "chat" && (
+          <div style={{ display: "flex", gap: 14, alignItems: "flex-start", flexWrap: "wrap" }}>
+            {/* ===== chat column ===== */}
+            <section style={{ flex: "1 1 480px", minWidth: 300 }}>
+              {/* status strip */}
+              <div
+                style={{
+                  display: "flex",
+                  gap: 6,
+                  flexWrap: "wrap",
+                  alignItems: "center",
+                  marginBottom: 8,
+                }}
+              >
+                <Chip label="שלב" value={stageLabel} />
+                {typeof step === "number" && <Chip label="שאלה" value={String(step)} />}
+                {subFlow && <Chip label="מצב" value={subFlow} />}
+                {lead?.pipelineFlag && <Chip label="דגל" value={lead.pipelineFlag} tone="warn" />}
+                {lead?.botPaused && <Chip label="הבוט" value="מושהה" tone="warn" />}
+                <div style={{ flex: 1 }} />
+                <button onClick={() => setShowQState((v) => !v)} style={linkBtn}>
+                  {showQState ? "הסתר qState" : "qState"}
+                </button>
+              </div>
 
-        {showEnv && (
-          <Panel title="מצב המערכת (לא ניתן לעריכה מכאן)">
-            <p style={{ margin: "0 0 10px", color: C.dim, fontSize: 12, lineHeight: 1.6 }}>
-              אלה משתני סביבה וקבועים שנקבעים בפריסה, לא בהגדרות. מוצגים כדי
-              שתדע מול מה אתה בודק.
-            </p>
-            {settings.map((g) => (
-              <div key={g.title} style={{ marginBottom: 14 }}>
-                <div
+              {showQState && (
+                <pre
                   style={{
-                    fontSize: 12,
-                    color: C.accent,
-                    marginBottom: 6,
-                    fontWeight: 600,
+                    background: C.panel,
+                    border: `1px solid ${C.border}`,
+                    borderRadius: 10,
+                    padding: 10,
+                    margin: "0 0 8px",
+                    fontSize: 11.5,
+                    color: C.dim,
+                    whiteSpace: "pre-wrap",
+                    wordBreak: "break-word",
+                    maxHeight: 180,
+                    overflowY: "auto",
                   }}
                 >
-                  {g.title}
-                </div>
-                {g.items.map((it) => (
+                  {JSON.stringify(lead?.qState ?? {}, null, 2)}
+                </pre>
+              )}
+
+              {/* thread */}
+              <div
+                style={{
+                  background: C.panel,
+                  border: `1px solid ${C.border}`,
+                  borderRadius: 12,
+                  padding: 14,
+                  height: "52vh",
+                  minHeight: 300,
+                  overflowY: "auto",
+                }}
+              >
+                {transcript.length === 0 && (
                   <div
-                    key={it.label}
                     style={{
-                      display: "flex",
-                      gap: 8,
-                      alignItems: "baseline",
-                      padding: "5px 0",
-                      borderBottom: `1px solid ${C.border}`,
+                      color: C.dim,
                       fontSize: 13,
+                      textAlign: "center",
+                      marginTop: 48,
+                      lineHeight: 1.8,
                     }}
                   >
-                    <span style={{ minWidth: 190, color: C.dim }}>{it.label}</span>
-                    <span style={{ flex: 1 }}>{it.value}</span>
-                    <span style={{ fontSize: 11, color: "#6b645c" }}>
-                      {SOURCE_LABELS[it.source]}
-                      {it.hint ? ` · ${it.hint}` : ""}
-                    </span>
+                    <div style={{ fontSize: 26, marginBottom: 6 }}>💬</div>
+                    אתה הלקוח. כתוב הודעה ראשונה —<br />
+                    למשל <b>&quot;היי, אני צריך שקיות&quot;</b> — והבוט האמיתי יענה.
                   </div>
+                )}
+                {transcript.map((m) => (
+                  <Bubble key={m.id} msg={m} onPick={send} disabled={!!busy} />
                 ))}
+                {busy === "send" && (
+                  <div style={{ color: C.dim, fontSize: 12, padding: "6px 2px" }}>הבוט חושב…</div>
+                )}
+                <div ref={endRef} />
               </div>
-            ))}
-          </Panel>
-        )}
 
-        {/* thread */}
+              {/* composer */}
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  void send(input);
+                }}
+                style={{ display: "flex", gap: 8, marginTop: 10 }}
+              >
+                <input
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  placeholder="מה הלקוח כותב…"
+                  disabled={!!busy}
+                  style={{
+                    flex: 1,
+                    minWidth: 0,
+                    background: C.panel,
+                    border: `1px solid ${C.border}`,
+                    borderRadius: 10,
+                    padding: "10px 12px",
+                    color: C.text,
+                    fontSize: 16,
+                  }}
+                />
+                <button type="submit" disabled={!!busy || !input.trim()} style={btnPrimary}>
+                  שלח
+                </button>
+              </form>
+            </section>
+
+            {/* ===== tool rail ===== */}
+            <aside
+              style={{
+                flex: "1 1 280px",
+                maxWidth: 360,
+                minWidth: 250,
+                display: "flex",
+                flexDirection: "column",
+                gap: 10,
+              }}
+            >
+              <ToolCard
+                icon="🧠"
+                title="מוח המכירות (סטר)"
+                caption="מנתח את השיחה הנוכחית ומראה מה הוא היה עונה — בלי לשלוח."
+              >
+                <button
+                  onClick={async () => {
+                    const json = await post({ action: "setter_preview" }, "setter");
+                    if (json?.setter) setSetter(json.setter);
+                  }}
+                  disabled={!!busy}
+                  style={{ ...btnSecondary, width: "100%" }}
+                >
+                  {busy === "setter" ? "מנתח…" : "מה הסטר היה עונה?"}
+                </button>
+                {setter && <SetterResult run={setter} onClose={() => setSetter(null)} />}
+              </ToolCard>
+
+              <ToolCard
+                icon="⏩"
+                title="מכונת זמן"
+                caption="מזיז את השיחה אחורה בזמן — לבדוק פולו-אפים בלי לחכות ימים."
+              >
+                <div style={{ display: "flex", gap: 6 }}>
+                  {(
+                    [
+                      [3, "3 שעות"],
+                      [24, "יום"],
+                      [72, "3 ימים"],
+                    ] as [number, string][]
+                  ).map(([h, label]) => (
+                    <button
+                      key={h}
+                      onClick={() => void post({ action: "time_travel", hours: h }, "time")}
+                      disabled={!!busy}
+                      style={{ ...btnSecondary, flex: 1, padding: "8px 4px" }}
+                    >
+                      +{label}
+                    </button>
+                  ))}
+                </div>
+              </ToolCard>
+
+              <ToolCard
+                icon="📞"
+                title="בקשת זמן לשיחה"
+                caption="מדמה את הודעת תיאום השיחה האמיתית, כולל רשימת ההכנה של הלקוח."
+              >
+                <button
+                  onClick={() => void post({ action: "ask_callback" }, "callback")}
+                  disabled={!!busy}
+                  style={{ ...btnSecondary, width: "100%" }}
+                >
+                  {busy === "callback" ? "שולח…" : "בקש זמן לשיחה"}
+                </button>
+              </ToolCard>
+
+              <ToolCard icon="↺" title="איפוס" caption="מוחק את השיחה ואת כל מצב הבוט — התחלה נקייה.">
+                <button
+                  onClick={async () => {
+                    setSetter(null);
+                    await post({ action: "reset" }, "reset");
+                  }}
+                  disabled={!!busy}
+                  style={{ ...btnDanger, width: "100%" }}
+                >
+                  {busy === "reset" ? "מאפס…" : "התחל מחדש"}
+                </button>
+              </ToolCard>
+            </aside>
+          </div>
+        )}
+      </main>
+    </div>
+  );
+}
+
+/* ================= sub-components ================= */
+
+function ToolCard({
+  icon,
+  title,
+  caption,
+  children,
+}: {
+  icon: string;
+  title: string;
+  caption: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div
+      style={{
+        background: C.panel,
+        border: `1px solid ${C.border}`,
+        borderRadius: 12,
+        padding: 12,
+      }}
+    >
+      <div style={{ fontSize: 13.5, fontWeight: 600, marginBottom: 2 }}>
+        {icon} {title}
+      </div>
+      <p style={{ margin: "0 0 9px", fontSize: 11.5, color: C.dim, lineHeight: 1.55 }}>{caption}</p>
+      {children}
+    </div>
+  );
+}
+
+function SetterResult({ run, onClose }: { run: Record<string, unknown>; onClose: () => void }) {
+  const cls = (run.classification ?? {}) as Record<string, string | null>;
+  const strat = (run.strategy ?? {}) as {
+    goal?: string;
+    skills?: string[];
+    informationToRequest?: string[];
+  };
+  const msg = (run.message ?? null) as {
+    text?: string;
+    validation?: { ok: boolean; violations: string[]; wordCount: number };
+  } | null;
+
+  const HE: Record<string, string> = {
+    book_call: "לקבוע שיחה",
+    answer_and_advance: "לענות ולקדם",
+    explore_objection: "לחקור התנגדות",
+    revive: "להחיות ליד שקט",
+    hold_back: "לא לדחוף",
+    interested: "מתעניין",
+    considering: "שוקל",
+    objecting: "מתנגד",
+    asking_question: "שואל",
+    ready_to_proceed: "מוכן להתקדם",
+    postponing: "דוחה",
+    gone_quiet: "נעלם",
+    not_interested: "לא מעוניין",
+    unclear: "לא ברור",
+  };
+
+  return (
+    <div style={{ marginTop: 10, borderTop: `1px solid ${C.border}`, paddingTop: 10 }}>
+      <table style={{ fontSize: 12, color: C.dim, borderSpacing: 0, marginBottom: 8 }}>
+        <tbody>
+          <Row k="כוונת הלקוח" v={HE[String(cls.intent)] ?? String(cls.intent ?? "—")} />
+          {cls.objectionType && <Row k="התנגדות" v={String(cls.objectionType)} />}
+          <Row k="החלטת הסטר" v={HE[strat.goal ?? ""] ?? String(strat.goal ?? "—")} strong />
+          {!!strat.informationToRequest?.length && (
+            <Row k="חסר ללקוח" v={strat.informationToRequest.join(", ")} />
+          )}
+        </tbody>
+      </table>
+      {msg?.text ? (
         <div
+          style={{
+            background: C.outBubble,
+            border: `1px solid ${C.border}`,
+            borderRadius: 10,
+            padding: "9px 11px",
+            fontSize: 13,
+            lineHeight: 1.6,
+            whiteSpace: "pre-wrap",
+          }}
+        >
+          {msg.text}
+        </div>
+      ) : (
+        <div style={{ fontSize: 12.5, color: C.dim }}>הסטר בחר לא לשלוח כלום בתור הזה.</div>
+      )}
+      {msg?.validation && (
+        <div
+          style={{
+            fontSize: 11,
+            marginTop: 5,
+            color: msg.validation.ok ? "#7fb894" : "#e88",
+          }}
+        >
+          {msg.validation.ok
+            ? `✓ עבר ולידציה · ${msg.validation.wordCount} מילים`
+            : `⚠️ נפסל: ${msg.validation.violations.join("; ")}`}
+        </div>
+      )}
+      <button onClick={onClose} style={{ ...linkBtn, marginTop: 6 }}>
+        נקה
+      </button>
+    </div>
+  );
+}
+
+function Row({ k, v, strong }: { k: string; v: string; strong?: boolean }) {
+  return (
+    <tr>
+      <td style={{ paddingLeft: 10, whiteSpace: "nowrap", verticalAlign: "top" }}>{k}</td>
+      <td style={{ color: strong ? C.accent : C.text, fontWeight: strong ? 600 : 400 }}>{v}</td>
+    </tr>
+  );
+}
+
+function SystemTab({ groups }: { groups: SettingsGroup[] }) {
+  return (
+    <div style={{ maxWidth: 760 }}>
+      <p style={{ margin: "4px 0 14px", fontSize: 13, color: C.dim, lineHeight: 1.6 }}>
+        לקריאה בלבד — ערכים שנקבעים בפריסה (משתני סביבה וקבועים בקוד), לא בהגדרות. מוצג כדי
+        שתדע מול מה אתה בודק.
+      </p>
+      {groups.map((g) => (
+        <div
+          key={g.title}
           style={{
             background: C.panel,
             border: `1px solid ${C.border}`,
             borderRadius: 12,
             padding: 14,
-            minHeight: 320,
-            maxHeight: "56vh",
-            overflowY: "auto",
+            marginBottom: 10,
           }}
         >
-          {transcript.length === 0 && (
-            <p style={{ color: C.dim, fontSize: 13, textAlign: "center", marginTop: 40 }}>
-              כתוב הודעה ראשונה כדי להתחיל — למשל &quot;היי, אני צריך שקיות&quot;.
-            </p>
-          )}
-          {transcript.map((m) => (
-            <Bubble key={m.id} msg={m} onPick={send} disabled={busy} />
-          ))}
-          {busy && (
-            <div style={{ color: C.dim, fontSize: 12, padding: "6px 2px" }}>
-              הבוט חושב…
+          <div style={{ fontSize: 13, color: C.accent, fontWeight: 600, marginBottom: 6 }}>
+            {g.title}
+          </div>
+          {g.items.map((it) => (
+            <div
+              key={it.label}
+              style={{
+                display: "flex",
+                gap: 8,
+                alignItems: "baseline",
+                flexWrap: "wrap",
+                padding: "5px 0",
+                borderBottom: `1px solid ${C.border}`,
+                fontSize: 13,
+              }}
+            >
+              <span style={{ minWidth: 190, color: C.dim }}>{it.label}</span>
+              <span style={{ flex: 1 }}>{it.value}</span>
+              <span style={{ fontSize: 11, color: C.faint }}>
+                {SOURCE_LABELS[it.source]}
+                {it.hint ? ` · ${it.hint}` : ""}
+              </span>
             </div>
-          )}
-          <div ref={endRef} />
+          ))}
         </div>
-
-        {/* composer */}
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            void send(input);
-          }}
-          style={{ display: "flex", gap: 8, marginTop: 10 }}
-        >
-          <input
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            placeholder="מה הלקוח כותב…"
-            disabled={busy}
-            style={{
-              flex: 1,
-              background: C.panel,
-              border: `1px solid ${C.border}`,
-              borderRadius: 10,
-              padding: "10px 12px",
-              color: C.text,
-              fontSize: 14,
-            }}
-          />
-          <button type="submit" disabled={busy || !input.trim()} style={btnPrimary}>
-            שלח
-          </button>
-        </form>
-      </div>
+      ))}
     </div>
   );
 }
@@ -494,7 +622,7 @@ function Bubble({
         marginBottom: 10,
       }}
     >
-      <div style={{ maxWidth: "82%" }}>
+      <div style={{ maxWidth: "85%" }}>
         {isAlert && (
           <div style={{ fontSize: 11, color: "#d6a44c", marginBottom: 3 }}>
             🔔 התראה פנימית לאלי (הלקוח לא רואה)
@@ -541,95 +669,14 @@ function Bubble({
   );
 }
 
-function SetterPanel({
-  run,
-  onClose,
-}: {
-  run: Record<string, unknown>;
-  onClose: () => void;
-}) {
-  const cls = (run.classification ?? {}) as Record<string, string | null>;
-  const strat = (run.strategy ?? {}) as {
-    goal?: string;
-    skills?: string[];
-    moves?: string[];
-    informationToRequest?: string[];
-  };
-  const msg = (run.message ?? null) as {
-    text?: string;
-    validation?: { ok: boolean; violations: string[]; wordCount: number };
-  } | null;
-
-  const HE_GOAL: Record<string, string> = {
-    book_call: "לקבוע שיחה",
-    answer_and_advance: "לענות ולקדם",
-    explore_objection: "לחקור התנגדות",
-    revive: "להחיות ליד שקט",
-    hold_back: "לא לדחוף",
-  };
-
-  return (
-    <div style={{ fontSize: 13 }}>
-      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 10 }}>
-        <Chip label="כוונה" value={String(cls.intent ?? "?")} />
-        <Chip label="סימן קנייה" value={String(cls.buyingSignal ?? "?")} />
-        <Chip label="מוכנות לשיחה" value={String(cls.meetingReadiness ?? "?")} />
-        {cls.objectionType && <Chip label="התנגדות" value={String(cls.objectionType)} tone="warn" />}
-        <Chip label="יעד" value={HE_GOAL[strat.goal ?? ""] ?? String(strat.goal ?? "?")} />
-      </div>
-      <div style={{ color: C.dim, fontSize: 12, marginBottom: 8 }}>
-        טקטיקות: {(strat.skills ?? []).join(" · ") || "—"}
-        {strat.informationToRequest?.length ? ` | חסר ללקוח: ${strat.informationToRequest.join(", ")}` : ""}
-      </div>
-      {msg?.text ? (
-        <div
-          style={{
-            background: C.outBubble,
-            border: `1px solid ${C.border}`,
-            borderRadius: 12,
-            padding: "10px 12px",
-            whiteSpace: "pre-wrap",
-            lineHeight: 1.65,
-            marginBottom: 6,
-          }}
-        >
-          {msg.text}
-        </div>
-      ) : (
-        <div style={{ color: C.dim, marginBottom: 6 }}>
-          הסטר בחר לא לשלוח כלום בתור הזה.
-        </div>
-      )}
-      {msg?.validation && (
-        <div style={{ fontSize: 11.5, color: msg.validation.ok ? "#7fb894" : "#e88" }}>
-          {msg.validation.ok
-            ? `✓ עבר ולידציה (${msg.validation.wordCount} מילים)`
-            : `⚠️ נפסל: ${msg.validation.violations.join("; ")}`}
-        </div>
-      )}
-      <button onClick={onClose} style={{ ...btnGhost, marginTop: 8 }}>
-        סגור
-      </button>
-    </div>
-  );
-}
-
-function Chip({
-  label,
-  value,
-  tone,
-}: {
-  label: string;
-  value: string;
-  tone?: "warn";
-}) {
+function Chip({ label, value, tone }: { label: string; value: string; tone?: "warn" }) {
   return (
     <span
       style={{
         background: tone === "warn" ? "rgba(214,164,76,0.12)" : "rgba(255,255,255,0.04)",
         border: `1px solid ${tone === "warn" ? "rgba(214,164,76,0.35)" : C.border}`,
         borderRadius: 999,
-        padding: "4px 10px",
+        padding: "3px 10px",
         fontSize: 12,
         color: tone === "warn" ? "#e0c46a" : C.text,
       }}
@@ -640,33 +687,18 @@ function Chip({
   );
 }
 
-function Panel({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <div
-      style={{
-        background: C.panel,
-        border: `1px solid ${C.border}`,
-        borderRadius: 12,
-        padding: 14,
-        marginBottom: 12,
-      }}
-    >
-      <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>{title}</div>
-      {children}
-    </div>
-  );
-}
+/* ================= shared styles ================= */
 
 const btnBase: React.CSSProperties = {
   borderRadius: 9,
-  padding: "7px 13px",
+  padding: "8px 13px",
   fontSize: 13,
   cursor: "pointer",
   border: "1px solid transparent",
 };
-const btnGhost: React.CSSProperties = {
+const btnSecondary: React.CSSProperties = {
   ...btnBase,
-  background: "rgba(255,255,255,0.04)",
+  background: "rgba(255,255,255,0.05)",
   border: `1px solid ${C.border}`,
   color: C.text,
 };
@@ -681,5 +713,14 @@ const btnPrimary: React.CSSProperties = {
   background: "rgba(201,162,39,0.16)",
   border: "1px solid rgba(201,162,39,0.45)",
   color: "#e0c46a",
-  padding: "10px 20px",
+  padding: "10px 22px",
+};
+const linkBtn: React.CSSProperties = {
+  background: "transparent",
+  border: "none",
+  color: C.faint,
+  fontSize: 11.5,
+  cursor: "pointer",
+  textDecoration: "underline",
+  padding: 0,
 };

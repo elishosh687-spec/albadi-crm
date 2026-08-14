@@ -84,7 +84,7 @@ export function HistoryDetailModalWidget({
       onClick={onClose}
     >
       <div
-        className="w-full max-w-md max-h-[85vh] overflow-y-auto rounded-xl border border-border bg-card shadow-2xl"
+        className="w-full max-w-md max-h-[85dvh] overflow-y-auto rounded-xl border border-border bg-card shadow-2xl"
         onClick={(e) => e.stopPropagation()}
         dir="rtl"
       >

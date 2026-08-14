@@ -497,7 +497,7 @@ export function FinalizeModalWidget({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
       <div
-        className="w-full max-w-md max-h-[90vh] overflow-auto rounded-2xl border border-border bg-background shadow-2xl"
+        className="w-full max-w-md max-h-[90dvh] overflow-auto rounded-2xl border border-border bg-background shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between border-b border-border px-5 py-3">

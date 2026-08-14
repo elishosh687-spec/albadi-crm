@@ -6,6 +6,9 @@ import "./globals.css";
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
+  // Let content reach the edges on notched phones; screens that need to keep
+  // clear of the home indicator use env(safe-area-inset-*).
+  viewportFit: "cover",
 };
 
 const display = Frank_Ruhl_Libre({

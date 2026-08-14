@@ -477,7 +477,8 @@ export function SalesQuoteRequestForm({ apiToken, salesMode = false }: { apiToke
 
           <Field label={`כמות (מינימום ${MOQ.toLocaleString("he-IL")})`} value={f.quantity} onChange={(v) => set("quantity", v)} type="number" />
 
-          <div className="grid grid-cols-3 gap-2">
+          {/* selects whose Hebrew options are far wider than a third of a phone */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
             <SelectField
               label="צבעי לוגו"
               value={String(f.logoColors)}

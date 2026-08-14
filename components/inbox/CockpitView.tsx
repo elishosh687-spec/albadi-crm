@@ -204,7 +204,10 @@ export default function CockpitView({
       style={{
         maxWidth: 1040,
         margin: "0 auto",
-        padding: "26px 28px 36px",
+        // This is the DEFAULT tab and it does not use LuxShell, so it needs its
+        // own fluid padding. Fixed 28px sides cost 56px of a 375px screen;
+        // identical to before at >=700px.
+        padding: "clamp(14px, 4vw, 26px) clamp(12px, 4vw, 28px) 36px",
         color: INK,
       }}
     >

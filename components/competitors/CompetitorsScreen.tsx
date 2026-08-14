@@ -520,7 +520,7 @@ export default function CompetitorsScreen({
           }}
         >
           <div style={{ display: "grid", gap: 14 }}>
-            <div style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr", gap: 12 }}>
+            <div className="lux-stack-sm" style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr", gap: 12 }}>
               <Field label="מוצר (משפחה — למשל: תיק אל-בד שחור)">
                 <input style={inputStyle} value={form.product} onChange={set("product")} placeholder="שם המוצר" />
               </Field>
@@ -531,6 +531,7 @@ export default function CompetitorsScreen({
 
             {/* structured spec — same features we price by */}
             <div
+              className="lux-stack-sm"
               style={{
                 display: "grid",
                 gridTemplateColumns: "1fr 1fr",
@@ -571,6 +572,7 @@ export default function CompetitorsScreen({
 
             {/* our side */}
             <div
+              className="lux-stack-sm"
               style={{
                 display: "grid",
                 gridTemplateColumns: "1fr 1fr 1fr",
@@ -597,6 +599,7 @@ export default function CompetitorsScreen({
 
             {/* competitor side */}
             <div
+              className="lux-stack-sm"
               style={{
                 display: "grid",
                 gridTemplateColumns: "1fr 1fr 1fr",

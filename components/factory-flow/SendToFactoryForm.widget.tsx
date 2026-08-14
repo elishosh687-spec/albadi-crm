@@ -378,7 +378,8 @@ export function SendToFactoryFormWidget({
 
       <Field label="כמות" value={quantity} onChange={setQuantity} type="number" />
 
-      <div className="grid grid-cols-3 gap-2">
+      {/* selects whose Hebrew options are far wider than a third of a phone */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
         <SelectField
           label="צבעי לוגו"
           value={String(logoColors)}
