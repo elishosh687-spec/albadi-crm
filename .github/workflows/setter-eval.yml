@@ -13,12 +13,16 @@ on:
         description: "Comma-separated scenario slugs (empty = all)"
         required: false
         default: ""
+      livepath:
+        description: "1 = test the live decision-handler path instead"
+        required: false
+        default: ""
 jobs:
   eval:
     runs-on: ubuntu-latest
     steps:
       - name: Run setter evaluation
         run: |
-          curl -sS -X POST "https://albadi-crm.vercel.app/api/admin/setter-eval?only=${{ inputs.only }}" \
+          curl -sS -X POST "https://albadi-crm.vercel.app/api/admin/setter-eval?only=${{ inputs.only }}&livepath=${{ inputs.livepath }}" \
             -H "Authorization: Bearer ${{ secrets.BOT_SECRET }}" \
             --max-time 290 | python3 -m json.tool

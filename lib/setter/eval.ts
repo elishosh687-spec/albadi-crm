@@ -334,3 +334,36 @@ export async function runSetterEval(opts?: {
     results,
   };
 }
+
+/**
+ * Live-path check — exercises the ACTUAL decision handler (not runSetter
+ * directly) so the setter-live switch itself is what's under test. Outbounds
+ * are captured, never sent.
+ */
+export async function runLivePathCheck(): Promise<{
+  action: string;
+  answeredBy: "setter" | "scripted" | "none";
+  sent: { kind: string; text: string }[];
+}> {
+  const { runCaptured } = await import("../bot-playground/capture");
+  const { handleDecisionInbound } = await import("../autoresponder/decision");
+  const sc = SCENARIOS.find((s) => s.slug === "price")!;
+  const sid = await seedLead("livepath", sc);
+  try {
+    const { result, sends } = await runCaptured(() =>
+      handleDecisionInbound({ sid, text: sc.customerText, hasMedia: false })
+    );
+    return {
+      action: (result as { action?: string }).action ?? "?",
+      answeredBy:
+        (result as { action?: string }).action === "setter_replied"
+          ? "setter"
+          : sends.some((s) => s.kind === "message")
+            ? "scripted"
+            : "none",
+      sent: sends.map((s) => ({ kind: s.kind, text: s.text.slice(0, 200) })),
+    };
+  } finally {
+    await cleanup();
+  }
+}

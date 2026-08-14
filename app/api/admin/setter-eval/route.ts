@@ -10,7 +10,7 @@
  * auth) or by hand.
  */
 import { NextRequest, NextResponse } from "next/server";
-import { runSetterEval } from "@/lib/setter/eval";
+import { runLivePathCheck, runSetterEval } from "@/lib/setter/eval";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -30,6 +30,10 @@ export async function POST(req: NextRequest) {
     .filter(Boolean);
 
   try {
+    if (req.nextUrl.searchParams.get("livepath") === "1") {
+      const live = await runLivePathCheck();
+      return NextResponse.json({ ok: true, live });
+    }
     const report = await runSetterEval({ only });
     return NextResponse.json({ ok: true, ...report });
   } catch (e) {
