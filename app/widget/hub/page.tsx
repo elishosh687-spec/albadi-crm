@@ -2,8 +2,8 @@
  * Hub widget — unified entry point for all sub-widgets.
  *
  * Single GHL Custom Menu Link points here. Tabs swap which sub-widget
- * iframe renders below: inbox / bot / factory / calculator / order /
- * settings.
+ * iframe renders below: inbox / playground / quotes / deals / analysis /
+ * calculator / ads / competitors / 3D / shipping / settings.
  *
  * URL template:
  *   https://<host>/widget/hub?widget_token=<T>&tab=<tab>
@@ -13,7 +13,6 @@ import Link from "next/link";
 import type { CSSProperties } from "react";
 import {
   MessagesSquare,
-  Bot,
   Receipt,
   BarChart3,
   Megaphone,
@@ -24,7 +23,6 @@ import {
   Settings,
   Search,
   CircleCheckBig,
-  Wand2,
   FlaskConical,
   type LucideIcon,
 } from "lucide-react";
@@ -43,10 +41,6 @@ interface TabDef {
   label: string;
   icon: LucideIcon;
   url: (token: string, sid: string) => string;
-  /** When set, the nav item opens this URL in a NEW TAB instead of swapping the
-   *  hub iframe. Used for the local Bag Studio (localhost, Eli's Mac only) — it
-   *  gets the widget token + current lead sid so it works without env setup. */
-  external?: (token: string, sid: string) => string;
 }
 
 function withSid(base: string, sid: string): string {
@@ -59,12 +53,6 @@ const TABS: TabDef[] = [
     label: "שיחות",
     icon: MessagesSquare,
     url: (t, sid) => withSid(`/widget/inbox?widget_token=${encodeURIComponent(t)}`, sid),
-  },
-  {
-    id: "bot",
-    label: "בוט",
-    icon: Bot,
-    url: (t, sid) => withSid(`/widget/bot-decisions?widget_token=${encodeURIComponent(t)}`, sid),
   },
   {
     id: "playground",
@@ -113,17 +101,6 @@ const TABS: TabDef[] = [
     label: "מעצב 3D",
     icon: Box,
     url: (t) => `/configurator?widget_token=${encodeURIComponent(t)}`,
-  },
-  {
-    id: "studio",
-    label: "סטודיו",
-    icon: Wand2,
-    url: () => "",
-    // Local Bag Studio — runs on Eli's Mac (needs the skills + keys). Opens in a
-    // new tab, carrying the widget token + current lead sid so it can pull/send
-    // without env setup. Only reachable while `npm start` is running in studio/.
-    external: (t, sid) =>
-      `http://localhost:4747/?token=${encodeURIComponent(t)}${sid ? `&sid=${encodeURIComponent(sid)}` : ""}`,
   },
   {
     id: "shipping",
@@ -245,22 +222,6 @@ export default async function HubWidgetPage({
             touchAction: "manipulation",
             flexShrink: 0,
           };
-          // External (local studio) opens a new tab; regular tabs swap the iframe.
-          if (t.external) {
-            return (
-              <a
-                key={t.id}
-                href={t.external(token, sid)}
-                target="_blank"
-                rel="noopener noreferrer"
-                title="נפתח בטאב חדש — רץ מקומית על ה-Mac (studio: npm start)"
-                style={style}
-              >
-                <Icon size={15} strokeWidth={1.75} style={{ flexShrink: 0 }} />
-                {t.label}
-              </a>
-            );
-          }
           return (
             <Link key={t.id} href={href} style={style}>
               <Icon size={15} strokeWidth={1.75} style={{ flexShrink: 0 }} />
