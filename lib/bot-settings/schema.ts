@@ -114,7 +114,7 @@ export const DEFAULT_BOT_SETTINGS: BotSettings = {
   callbackPrepIntro: "כדי שהשיחה תהיה יעילה, שווה שיהיה מולכם:",
 
   setterDraftsEnabled: true,
-  setterModel: "gpt-4o",
+  setterModel: "gpt-5.6-terra",
   setterMaxWords: 60,
   setterStyle:
     "עברית ישראלית טבעית של WhatsApp, לא מתורגמת ולא תאגידית. רעיון אחד, שאלה אחת לכל היותר, בלי רשימות, אימוג'י אחד לכל היותר. אל תהיה מתחנף ואל תלחץ.",
@@ -130,8 +130,8 @@ export const DEFAULT_BOT_SETTINGS: BotSettings = {
   skillFollowUpDiscipline: SKILLS.follow_up_discipline.guidance,
   skillPauseIntelligence: SKILLS.pause_intelligence.guidance,
 
-  intentModel: "gpt-4o-mini",
-  analysisModel: "gpt-4o",
+  intentModel: "gpt-5.6-luna",
+  analysisModel: "gpt-5.6-terra",
 };
 
 export type FieldType = "toggle" | "number" | "text" | "longtext" | "select";
@@ -166,10 +166,11 @@ export const GROUPS = [
 ] as const;
 
 const MODEL_OPTIONS = [
-  { value: "gpt-4o-mini", label: "gpt-4o-mini — מהיר וזול (ברירת מחדל היום)" },
-  { value: "gpt-4o", label: "gpt-4o — חזק יותר, יקר יותר" },
-  { value: "gpt-4.1", label: "gpt-4.1" },
-  { value: "gpt-4.1-mini", label: "gpt-4.1-mini" },
+  { value: "gpt-5.6-luna", label: "GPT-5.6 Luna — זול מאוד ($0.20/M), מהיר" },
+  { value: "gpt-5.6-terra", label: "GPT-5.6 Terra — מאוזן ($2/M)" },
+  { value: "gpt-5.6-sol", label: "GPT-5.6 Sol — הדגל ($5/M), יקר" },
+  { value: "gpt-4o-mini", label: "gpt-4o-mini — הדור הקודם (גיבוי)" },
+  { value: "gpt-4o", label: "gpt-4o — הדור הקודם (גיבוי)" },
 ];
 
 export const BOT_SETTING_FIELDS: BotSettingField[] = [
@@ -456,11 +457,7 @@ export const BOT_SETTING_FIELDS: BotSettingField[] = [
     description:
       "המודל שמנסח את הודעות הסטר. חזק יותר = עברית טבעית יותר, יקר יותר לקריאה. הניתוח (סיווג המצב) רץ על מודל השיחה הזול מקבוצת המודלים.",
     type: "select",
-    options: [
-      { value: "gpt-4o", label: "gpt-4o — מומלץ לניסוח" },
-      { value: "gpt-4o-mini", label: "gpt-4o-mini — זול, עברית פשוטה יותר" },
-      { value: "gpt-4.1", label: "gpt-4.1" },
-    ],
+    options: MODEL_OPTIONS,
   },
   {
     key: "setterMaxWords",

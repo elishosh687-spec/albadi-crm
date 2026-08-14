@@ -176,7 +176,7 @@ export async function analyzeLead(
   const model =
     readEnv("LEAD_ANALYSIS_MODEL") ||
     readEnv("OPENAI_ANALYSIS_MODEL") ||
-    (await getBotSettings().then((s) => s.analysisModel).catch(() => "gpt-4o"));
+    (await getBotSettings().then((s) => s.analysisModel).catch(() => "gpt-5.6-terra"));
   const raw = await callLLM<RawJudge>({
     system: SYSTEM_PROMPT,
     user: renderDossierText(dossier),
