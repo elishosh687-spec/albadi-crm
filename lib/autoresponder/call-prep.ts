@@ -16,7 +16,7 @@ import { leads, factoryQuoteRequests } from "../../drizzle/schema";
 import { sql } from "drizzle-orm";
 import type { QState } from "./questionnaire";
 
-export type PrepItem = "size" | "logo" | "quantity" | "usage";
+export type PrepItem = "size" | "size_confirm" | "logo" | "quantity" | "usage";
 
 export interface CallPrep {
   /** Items the customer still needs to bring. Empty = they're ready. */
@@ -27,6 +27,8 @@ export interface CallPrep {
 
 const PREP_LABELS: Record<PrepItem, string> = {
   size: "מידות השקית (גובה × עומק × רוחב בס״מ) — או דוגמה של שקית שאתם אוהבים",
+  size_confirm:
+    "אישור מידות סופיות — נבחרה מידה מהקטלוג; כדאי למדוד ולוודא שזו בדיוק המידה שצריך",
   logo: "קובץ הלוגו (רצוי וקטורי — AI / EPS / PDF)",
   quantity: "כמה יחידות אתם צריכים",
   usage: "למה השקית משמשת (מוצר, אירוע, חנות)",
@@ -70,9 +72,18 @@ export async function computeCallPrep(sid: string): Promise<CallPrep> {
 
   const missing: PrepItem[] = [];
 
-  const hasSize =
-    !!q?.product || !!q?.productCustom || !!(spec?.size && String(spec.size).trim());
-  if (!hasSize) missing.push("size");
+  // Three levels of "has a size":
+  //  - a factory-request spec or customer-typed dims = real, exact dimensions;
+  //  - a catalog pick = a price anchor, NOT a commitment (Eli, 14.8: customers
+  //    pick a catalog size to see prices — the exact size still needs
+  //    confirming before production, and that's a call topic);
+  //  - nothing = missing entirely.
+  const hasExactSize =
+    !!q?.productCustom || !!(spec?.size && String(spec.size).trim());
+  const hasCatalogPick = !!q?.product && q.product !== "custom";
+  if (!hasExactSize) {
+    missing.push(hasCatalogPick ? "size_confirm" : "size");
+  }
 
   const hasQuantity =
     !!q?.quantity || !!q?.quantityCustom || Number(spec?.quantity ?? 0) > 0;
@@ -96,6 +107,7 @@ export function prepForSalesperson(prep: CallPrep): string {
   if (prep.missing.length === 0) return "יש מפרט מלא — אפשר לתמחר בשיחה.";
   const short: Record<PrepItem, string> = {
     size: "מידות",
+    size_confirm: "אישור מידות סופיות",
     logo: "לוגו",
     quantity: "כמות",
     usage: "שימוש",

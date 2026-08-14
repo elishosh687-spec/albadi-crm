@@ -46,3 +46,11 @@ for (const [label, text] of checks) {
 console.log("\n=== הבאג מהמגרש: יקר לי + asked_for_call ===");
 const buggy = planStrategy(ctx, { intent: "objecting", objectionType: "price_absolute", buyingSignal: "weak", meetingReadiness: "asked_for_call" });
 console.log(`objecting+asked_for_call → ${buggy.goal} [${buggy.skills.join(", ")}]`);
+
+console.log("\n=== אחרי הצעה: שאלה קרה חייבת לכוון לשיחה ===");
+const postQuoteCold = planStrategy(ctx, { ...base, intent: "asking_question", buyingSignal: "weak", meetingReadiness: "not_ready" });
+console.log(`post-quote question → ${postQuoteCold.goal} [${postQuoteCold.skills.join(", ")}]`);
+console.log("moves:", postQuoteCold.moves);
+const preQuoteCtx = { ...ctx, quote: { sent: false, totalIls: null, sentAtIso: null } };
+const preQuoteCold = planStrategy(preQuoteCtx, { ...base, intent: "asking_question", buyingSignal: "weak", meetingReadiness: "not_ready" });
+console.log(`pre-quote question  → ${preQuoteCold.goal} [${preQuoteCold.skills.join(", ")}]`);

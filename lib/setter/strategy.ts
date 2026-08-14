@@ -23,6 +23,7 @@ export interface SalesStrategy {
 
 const PREP_HE: Record<string, string> = {
   size: "מידות",
+  size_confirm: "מידות סופיות (נבחרה מידת קטלוג — לאשר)",
   logo: "קובץ לוגו",
   quantity: "כמות",
   usage: "ייעוד השקית",
@@ -106,16 +107,27 @@ export function planStrategy(
     };
   }
 
-  // Question / lukewarm engagement → answer, advance one step, don't shove.
+  // Question / lukewarm engagement → answer, advance one step.
+  // POST-QUOTE this always advances toward the call (Eli, 14.8: once a quote
+  // is out, the setter's job is to raise the lead to a call with exact
+  // dimensions, logo and clear details — the quote is the anchor, the call is
+  // the sale). Pre-quote, a cold question just gets a small step.
   if (cls.intent === "asking_question" || cls.intent === "interested" || cls.intent === "considering") {
-    const warm = cls.meetingReadiness === "ready" || cls.buyingSignal === "medium";
+    const warm =
+      ctx.quote.sent || cls.meetingReadiness === "ready" || cls.buyingSignal === "medium";
     return {
       ...base,
       goal: "answer_and_advance",
       skills: warm
         ? ["flow_management", "buying_signal_amplification", "appointment_booking"]
         : ["flow_management", "micro_commitment"],
-      moves: ["ענה ישירות על מה שנשאל", warm ? "סיים בהצעת שיחה" : "סיים בצעד קטן אחד"],
+      moves: [
+        "ענה ישירות על מה שנשאל",
+        warm ? "סיים בהצעת שיחה" : "סיים בצעד קטן אחד",
+        ...(ctx.quote.sent && info.length
+          ? [`בשיחה נסגור סופית — בקש שיהיו מוכנים: ${info.join(", ")}`]
+          : []),
+      ],
     };
   }
 
