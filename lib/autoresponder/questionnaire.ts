@@ -29,6 +29,8 @@ import { sendBridgeMessage, sendCompanyTemplate } from "../bridge/client";
 import { sendEliDM } from "../notify/eli";
 import { calculateQuoteByCodes } from "../factory/calculator";
 import { buildQuoteMessage } from "../factory/calculator/message";
+import { quoteCustomSize } from "./custom-size-quote";
+import { DEFAULT_CONFIG } from "../factory/calculator/constants";
 import { getBotSettings } from "../bot-settings/store";
 import { BotSettings, DEFAULT_BOT_SETTINGS } from "../bot-settings/schema";
 import {
@@ -540,7 +542,10 @@ export function parseCustomQuantity(raw?: string | null): number | null {
  *     was retired from customer selection.)
  */
 export function shouldRouteToFactory(state: QState): boolean {
-  if (state.product === "custom") return true;
+  // A custom size used to always mean "a human prices this". It now only does
+  // when custom-size pricing is switched off in settings — otherwise fetchQuote
+  // runs it through the estimator, and falls back here if that can't price it.
+  if (state.product === "custom") return S.customSizeMode === "off";
   if (state.quantity === "custom") {
     const n = parseCustomQuantity(state.quantityCustom);
     if (n === null || n < S.minQuantity) return true;
@@ -556,6 +561,81 @@ export interface QuoteCalcOutput {
   cbm: number;
 }
 
+/** Thrown by fetchQuote when a custom size can't be estimated — the caller
+ *  catches it and falls back to the factory/human path. */
+class CustomSizeUnpriceable extends Error {
+  constructor() {
+    super("custom size not priceable");
+    this.name = "CustomSizeUnpriceable";
+  }
+}
+
+/**
+ * Price an off-catalog size and render it as a customer quote.
+ * Returns null when the estimator can't stand behind a number.
+ */
+async function fetchCustomSizeQuote(
+  state: QState,
+  hasLamination: boolean
+): Promise<QuoteCalcOutput | null> {
+  const qty =
+    state.quantity === "custom"
+      ? parseCustomQuantity(state.quantityCustom)
+      : (DEFAULT_CONFIG.quantityTiers.find((t) => t.id === state.quantity)?.quantity ?? null);
+  if (!qty) return null;
+
+  const outcome = await quoteCustomSize({
+    dimsText: state.productCustom ?? "",
+    quantity: qty,
+    hasHandles: state.handles === "true",
+    hasLamination,
+    logoColors: Number(state.colors) || 1,
+    shippingOptionId: state.shipping ?? "s1",
+  });
+  if (!outcome.ok) {
+    console.warn("[questionnaire] custom size not priceable", outcome.reason, outcome.detail);
+    return null;
+  }
+
+  const { result, altResult } = outcome;
+  const showAlt = S.showAlternativeShipping && !!altResult;
+  const text = buildQuoteMessage({
+    dimensions: outcome.dims,
+    hasHandles: result.hasHandles,
+    hasLamination,
+    quantity: result.quantity,
+    logoColors: result.logoColors,
+    shippingName: result.shippingOption?.name ?? "",
+    shippingDays: result.shippingOption?.deliveryDays ?? "",
+    pricePerUnit: result.sellingPricePerUnitIls,
+    totalOrder: result.totalOrderPriceIls,
+    currency: result.currency,
+    appUrl: "https://albadi.ecobrotherss.com",
+    alt:
+      showAlt && altResult
+        ? {
+            shippingName: altResult.shippingOption?.name ?? "",
+            shippingDays: altResult.shippingOption?.deliveryDays ?? "",
+            pricePerUnit: altResult.sellingPricePerUnitIls,
+            totalOrder: altResult.totalOrderPriceIls,
+          }
+        : null,
+    showAlternative: S.showAlternativeShipping,
+    bookingUrl: S.showBookingLink ? S.bookingUrl : "",
+    // Custom sizes are an ESTIMATE — say so, and optionally widen the number
+    // into a range so we aren't held to a figure the factory hasn't confirmed.
+    priceRangePct: S.customSizeMode === "range" ? S.customSizeRangePct : 0,
+    estimateNote: S.customSizeNote,
+  });
+
+  return {
+    text,
+    totalIls: result.totalOrderPriceIls,
+    altTotalIls: altResult?.totalOrderPriceIls ?? null,
+    cbm: result.totalCbm ?? 0,
+  };
+}
+
 async function fetchQuote(state: QState): Promise<QuoteCalcOutput> {
   // Local calculator (ported from bag-quote-app). No HTTP roundtrip.
   if (!state.product || !state.quantity || !state.shipping) {
@@ -564,6 +644,16 @@ async function fetchQuote(state: QState): Promise<QuoteCalcOutput> {
     );
   }
   const hasLamination = state.lamination === "true";
+
+  // Off-catalog size → estimator. Returns null when it can't be priced
+  // (unparseable text, geometry the factory can't make, outside the trained
+  // envelope); the caller then falls back to the factory/human path.
+  if (state.product === "custom") {
+    const custom = await fetchCustomSizeQuote(state, hasLamination);
+    if (custom) return custom;
+    throw new CustomSizeUnpriceable();
+  }
+
   // For custom quantity inside the tier range, pass the literal number as
   // `quantityOverride`. The engine snaps the unit price down to the nearest
   // tier via findClosestPrice but multiplies by the actual customer quantity.
@@ -892,14 +982,21 @@ async function routeToQuoted(
         // Per Eli 2026-07-01: no auto-stage-transitions on the bot side.
         pipelineStage: "INTAKE",
         pipelineFlag: "NEEDS_ELI",
-        botSummary: `calc API failed: ${(e as Error).message}`,
+        botSummary:
+          e instanceof CustomSizeUnpriceable
+            ? "custom size could not be estimated → manual factory quote"
+            : `calc API failed: ${(e as Error).message}`,
         updatedAt: new Date(),
       })
       .where(sql`trim(${leads.manychatSubId}) = ${ctx.sid.trim()}`);
     await ensureAutoTaskForStage(ctx.sid.trim(), "INTAKE").catch(() => {});
     await sendBridgeMessage(ctx.jid, S.factoryHoldMessage);
+    // A custom size we couldn't estimate is a normal outcome, not a fault —
+    // send the spec so it can be priced, rather than an error report.
     await sendEliDM(
-      `⚠️ calc API נכשל ל-${ctx.name ?? ctx.phone ?? "ליד"} (${(e as Error).message}). השאלון הסתיים — צריך מחיר ידני.`
+      e instanceof CustomSizeUnpriceable
+        ? summarizeForFactory(state, ctx.name, ctx.phone)
+        : `⚠️ calc API נכשל ל-${ctx.name ?? ctx.phone ?? "ליד"} (${(e as Error).message}). השאלון הסתיים — צריך מחיר ידני.`
     );
   }
 }

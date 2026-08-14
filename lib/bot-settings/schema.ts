@@ -38,6 +38,11 @@ export interface BotSettings {
   showBookingLink: boolean;
   bookingUrl: string;
 
+  // --- custom (off-catalog) sizes ---
+  customSizeMode: string;
+  customSizeRangePct: number;
+  customSizeNote: string;
+
   // --- scheduling a call ---
   callbackEnabled: boolean;
   callbackSilenceMinMinutes: number;
@@ -79,6 +84,10 @@ export const DEFAULT_BOT_SETTINGS: BotSettings = {
   showBookingLink: true,
   bookingUrl: "https://calendly.com/elishosh687/30min",
 
+  customSizeMode: "exact",
+  customSizeRangePct: 8,
+  customSizeNote: "* המחיר למידה מותאמת הוא אומדן וכפוף לאישור סופי מול המפעל.",
+
   callbackEnabled: false,
   callbackSilenceMinMinutes: 30,
   callbackSilenceMaxMinutes: 360,
@@ -113,6 +122,7 @@ export const GROUPS = [
   "הודעות ללקוח",
   "התנהגות השאלון",
   "אחרי ההצעה",
+  "מידות מותאמות",
   "תיאום שיחות",
   "מודלים",
 ] as const;
@@ -296,6 +306,42 @@ export const BOT_SETTING_FIELDS: BotSettingField[] = [
     label: "קישור קביעת השיחה",
     description:
       "הכתובת שאליה הלקוח נשלח לקביעת שיחה. משמש רק כשהמתג שמעל דולק.",
+    type: "text",
+  },
+
+  // ---------- מידות מותאמות ----------
+  {
+    key: "customSizeMode",
+    group: "מידות מותאמות",
+    label: "מה לעשות כשלקוח נותן מידה שלא בקטלוג",
+    description:
+      "עד היום כל מידה מותאמת נשלחה אליך לתמחור ידני והלקוח חיכה 24-48 שעות. עכשיו המחשבון המשוער יודע לתמחר כל מידה (דיוק ~±10%). בחר איך הלקוח מקבל את זה.",
+    where: "בסוף השאלון, כשנבחרה מידה חופשית",
+    type: "select",
+    options: [
+      { value: "exact", label: "מחיר מדויק + הסתייגות (מומלץ)" },
+      { value: "range", label: "טווח מחירים — פחות מחייב" },
+      { value: "off", label: "כבוי — לשלוח אליך לתמחור ידני (ההתנהגות הישנה)" },
+    ],
+  },
+  {
+    key: "customSizeRangePct",
+    group: "מידות מותאמות",
+    label: "רוחב הטווח",
+    description:
+      "כמה אחוזים למעלה ולמטה סביב האומדן כשנבחר מצב 'טווח מחירים'. 8% על אומדן של ₪6,000 יציג בערך ₪5,520–₪6,480. לא רלוונטי במצבים האחרים.",
+    type: "number",
+    min: 3,
+    max: 25,
+    unit: "%",
+  },
+  {
+    key: "customSizeNote",
+    group: "מידות מותאמות",
+    label: "הסתייגות שמצורפת לאומדן",
+    description:
+      "שורה שנוספת להצעה על מידה מותאמת בלבד — הצעות מהקטלוג לא מקבלות אותה. זה מה שמשאיר לך מקום לתקן אם המפעל יחזיר מספר אחר.",
+    where: "בתחתית ההצעה, לפני פרטי החברה",
     type: "text",
   },
 

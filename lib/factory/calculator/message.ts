@@ -44,6 +44,11 @@ export interface QuoteMessageParams {
   showAlternative?: boolean;
   /** Bot setting — empty string omits the booking invitation entirely. */
   bookingUrl?: string;
+  /** Off-catalog sizes only: widen the printed price into a ±N% range so we
+   *  aren't held to a figure the factory hasn't confirmed. 0 = exact number. */
+  priceRangePct?: number;
+  /** Off-catalog sizes only: the "this is an estimate" line. */
+  estimateNote?: string;
 }
 
 export function buildQuoteMessage(params: QuoteMessageParams): string {
@@ -61,6 +66,8 @@ export function buildQuoteMessage(params: QuoteMessageParams): string {
     alt: altRaw,
     showAlternative = true,
     bookingUrl = "https://calendly.com/elishosh687/30min",
+    priceRangePct = 0,
+    estimateNote = "",
   } = params;
   // Settings can suppress the alternative-shipping block; the caller still
   // passes it so the DB/quote log keeps the full picture.
@@ -73,13 +80,20 @@ export function buildQuoteMessage(params: QuoteMessageParams): string {
   const altTotalShown = alt ? customerRoundedTotalIls(alt.pricePerUnit, quantity) : 0;
   const savings = alt && altTotalShown < totalShown ? totalShown - altTotalShown : 0;
 
+  // A range reads as an estimate; an exact number reads as a commitment. Which
+  // one a custom size gets is a settings decision, not a code decision.
+  const band = (n: number) =>
+    priceRangePct > 0
+      ? `${fp(n * (1 - priceRangePct / 100))}–${fp(n * (1 + priceRangePct / 100))}`
+      : fp(n);
+
   const handlesText = hasHandles ? "עם ידיות" : "ללא ידיות";
   // 3+ logo colours are always laminated (factory rule) — reflect it in the text
   // even if the flag wasn't set upstream, so the quote never contradicts pricing.
   const laminationText = hasLamination || logoColors >= 3 ? "עם למינציה" : "ללא למינציה";
   const altBlock = alt
     ? `\n💡 חלופה — משלוח ${alt.shippingName} (~${alt.shippingDays} ימים):\n` +
-      `   ליחידה: ${fp(alt.pricePerUnit)} | סה״כ: ${fp(altTotalShown)}\n` +
+      `   ליחידה: ${band(alt.pricePerUnit)} | סה״כ: ${band(altTotalShown)}\n` +
       (savings > 0 ? `   חיסכון פוטנציאלי: ${fp(savings)}\n` : "")
     : "";
 
@@ -90,10 +104,11 @@ export function buildQuoteMessage(params: QuoteMessageParams): string {
     `למינציה: ${laminationText}\n` +
     `כמות: ${quantity.toLocaleString()} | ${logoColors} צבעי הדפסה\n` +
     `משלוח: ${shippingName} (~${shippingDays} ימים)\n` +
-    `💰 ליחידה: ${fp(pricePerUnit)} | סה״כ: ${fp(totalShown)}\n` +
+    `💰 ליחידה: ${band(pricePerUnit)} | סה״כ: ${band(totalShown)}\n` +
     altBlock +
     `המחיר לא כולל מעמ\n` +
     `* ההצעה כפופה לאישור הסופי של החברה שלנו\n` +
+    (estimateNote ? `${estimateNote}\n` : "") +
     `\n---\n` +
     (bookingUrl
       ? `קבע שיחה קצרה – נסביר הכל ב־10 דקות\n${bookingUrl}\n\n`
