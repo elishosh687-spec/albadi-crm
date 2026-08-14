@@ -29,7 +29,13 @@ import { sendBridgeMessage, sendCompanyTemplate } from "../bridge/client";
 import { sendEliDM } from "../notify/eli";
 import { calculateQuoteByCodes } from "../factory/calculator";
 import { buildQuoteMessage } from "../factory/calculator/message";
-import { quoteCustomSize, validateCustomDimsInput } from "./custom-size-quote";
+import {
+  quoteCustomSize,
+  validateCustomDimsInput,
+  depthQuestion,
+  resolveDepthAnswer,
+  DEPTH_REASK,
+} from "./custom-size-quote";
 import { DEFAULT_CONFIG } from "../factory/calculator/constants";
 import { getBotSettings } from "../bot-settings/store";
 import { BotSettings, DEFAULT_BOT_SETTINGS } from "../bot-settings/schema";
@@ -247,6 +253,8 @@ export interface QState {
   pendingCustomField?: "quantity" | "product" | null;
   /** Re-asks spent on the current free-text custom answer (dims / quantity). */
   customAttempts?: number;
+  /** Two-number size answer awaiting the depth clarification ("34 על 40"). */
+  customDimsPartial?: { h: number; w: number } | null;
   quoteResult?: string;
   bailed?: boolean;
   unmatchedAt?: number;
@@ -1148,38 +1156,72 @@ export async function handleInbound(input: {
       return { action: "no_op", detail: "empty custom answer" };
     }
     const field = ctx.qState.pendingCustomField;
+    let captureText = text;
 
     // Validate the free-text answer HERE. Accepting anything and discovering
     // the problem at quote time meant the customer answered every remaining
     // question before being told we can't price it.
     const attempts = ctx.qState.customAttempts ?? 0;
-    if (attempts < CUSTOM_ANSWER_MAX_REASKS) {
-      const complaint =
-        field === "product"
-          ? (() => {
-              const check = validateCustomDimsInput(text);
-              return check.ok ? null : check.message;
-            })()
-          : parseCustomQuantity(text) === null
-            ? "לא הצלחתי לזהות כמות. תכתבו מספר יחידות בלבד — למשל 7500."
-            : null;
-      if (complaint) {
+
+    // Depth clarification round-trip: the customer gave two numbers ("34 על
+    // 40") and we asked whether the bag has a gusset. NEVER invent the third
+    // dimension — that quoted a bag the customer didn't ask for (caught by
+    // Eli in the playground, 14.8).
+    const partial = ctx.qState.customDimsPartial;
+    if (field === "product" && partial) {
+      const resolved = resolveDepthAnswer(captureText, partial);
+      if (resolved) {
+        const check = validateCustomDimsInput(resolved);
+        if (!check.ok && attempts < CUSTOM_ANSWER_MAX_REASKS) {
+          // e.g. depth outside the machine range — complain, keep waiting.
+          await saveState(ctx.sid, { ...ctx.qState, customAttempts: attempts + 1 });
+          await sendBridgeMessage(recipient, check.message || DEPTH_REASK);
+          return { action: "custom_reasked", detail: `depth invalid: ${captureText}` };
+        }
+        captureText = resolved;
+      } else if (attempts < CUSTOM_ANSWER_MAX_REASKS) {
         await saveState(ctx.sid, { ...ctx.qState, customAttempts: attempts + 1 });
-        await sendBridgeMessage(recipient, complaint);
-        return { action: "custom_reasked", detail: `${field}: ${text}` };
+        await sendBridgeMessage(recipient, DEPTH_REASK);
+        return { action: "custom_reasked", detail: `depth unclear: ${captureText}` };
+      }
+      // Out of re-asks → keep the raw text; the end-of-flow fallback routes it
+      // to a human rather than trapping the customer in a loop.
+    } else if (attempts < CUSTOM_ANSWER_MAX_REASKS) {
+      if (field === "product") {
+        const check = validateCustomDimsInput(captureText);
+        if (!check.ok) {
+          if (check.needsDepth) {
+            await saveState(ctx.sid, {
+              ...ctx.qState,
+              customAttempts: attempts + 1,
+              customDimsPartial: check.needsDepth,
+            });
+            await sendBridgeMessage(recipient, depthQuestion(check.needsDepth));
+            return { action: "custom_reasked", detail: `needs depth: ${captureText}` };
+          }
+          await saveState(ctx.sid, { ...ctx.qState, customAttempts: attempts + 1 });
+          await sendBridgeMessage(recipient, check.message);
+          return { action: "custom_reasked", detail: `product: ${captureText}` };
+        }
+      } else if (parseCustomQuantity(captureText) === null) {
+        await saveState(ctx.sid, { ...ctx.qState, customAttempts: attempts + 1 });
+        await sendBridgeMessage(
+          recipient,
+          "לא הצלחתי לזהות כמות. תכתבו מספר יחידות בלבד — למשל 7500."
+        );
+        return { action: "custom_reasked", detail: `quantity: ${captureText}` };
       }
     }
-    // Out of re-asks — keep the raw text and let the end-of-flow fallback route
-    // it to a human rather than trapping the customer in a loop.
 
     const captured: QState = {
       ...ctx.qState,
       pendingCustomField: null,
       customAttempts: 0,
+      customDimsPartial: null,
       unmatchedAt: 0,
     };
-    if (field === "quantity") captured.quantityCustom = text;
-    if (field === "product") captured.productCustom = text;
+    if (field === "quantity") captured.quantityCustom = captureText;
+    if (field === "product") captured.productCustom = captureText;
     const currentQ = getCurrentQuestion(ctx.qState!);
     const nextQ = currentQ ? findNextQuestion(currentQ.step) : undefined;
     if (nextQ) {

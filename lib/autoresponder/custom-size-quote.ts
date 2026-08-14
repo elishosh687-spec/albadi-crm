@@ -45,6 +45,12 @@ export function parseCustomDims(
 
   // Canonical / near-canonical first (handles ×, x and spacing).
   const normalised = text.replace(/[×xX]/g, "*").replace(/\s*\*\s*/g, "*");
+  // Explicit flat format (H34*W40) → a real flat bag, depth 0. The old code
+  // borrowed the 3D-model picker's d=0.35·min heuristic here, which INVENTED
+  // a gusset the customer never asked for (Eli caught it: "34 על 40" was
+  // quoted as H34*D12*W40).
+  const flat = normalised.match(/^H(\d+(?:\.\d+)?)\*W(\d+(?:\.\d+)?)$/i);
+  if (flat) return { h: Number(flat[1]), d: 0, w: Number(flat[2]) };
   const canonical = parseFactoryDimensions(normalised);
   if (canonical) return canonical;
 
@@ -53,16 +59,17 @@ export function parseCustomDims(
   const nums = (text.match(/\d+(?:\.\d+)?/g) ?? []).map(Number).filter((n) => n > 0);
   if (nums.length >= 3) return { h: nums[0], d: nums[1], w: nums[2] };
   if (nums.length === 2) {
-    const [h, w] = nums;
-    // Same flat-bag convention parseFactoryDimensions uses.
-    return { h, d: Math.min(h, w) * 0.35, w };
+    // Two bare numbers are AMBIGUOUS (flat? or depth omitted?). Never guess —
+    // validateCustomDimsInput turns this into one clarifying question, so by
+    // the time pricing runs the string is either H*D*W or explicit H*W.
+    return { h: nums[0], d: 0, w: nums[1] };
   }
   return null;
 }
 
 export type DimsCheck =
   | { ok: true; dims: { h: number; d: number; w: number } }
-  | { ok: false; message: string };
+  | { ok: false; message: string; needsDepth?: { h: number; w: number } };
 
 /**
  * Validate what the customer typed for a custom size, AT THE MOMENT THEY TYPE IT.
@@ -91,6 +98,15 @@ export function validateCustomDimsInput(raw: string): DimsCheck {
         "גובה, עומק ורוחב — למשל H40*D15*W50 (או: 40 15 50).\n" +
         "אם השקית שטוחה בלי עומק — גובה ורוחב בלבד, למשל H30*W40.",
     };
+  }
+
+  // Two bare numbers ("34 על 40") — ambiguous: flat bag, or depth omitted?
+  // Never invent the third dimension; ask ONE clarifying question. Explicit
+  // flat notation (H34*W40) or a שטוח/flat word means the customer already
+  // answered it.
+  const explicitFlat = /H\s*\d+\s*[*×xX]\s*W\s*\d+/i.test(raw) || /שטוח/.test(raw);
+  if (nums.length === 2 && !explicitFlat) {
+    return { ok: false, message: "", needsDepth: { h: nums[0], w: nums[1] } };
   }
 
   const dims = parseCustomDims(raw);
@@ -156,4 +172,34 @@ export async function quoteCustomSize(
     dims: `H${dims.h}${dims.d ? `*D${Math.round(dims.d)}` : ""}*W${dims.w}`,
     confidence: out.estimate.confidence ?? "medium",
   };
+}
+
+/** The one clarifying question for two-number input. */
+export function depthQuestion(p: { h: number; w: number }): string {
+  return (
+    `קיבלתי ${p.h}×${p.w} ס״מ ✔️\n` +
+    "יש לשקית גם עומק (מכפל בצדדים)? אם כן — תכתבו רק את מספר העומק בס״מ (למשל 12).\n" +
+    'אם היא שטוחה בלי עומק — תכתבו "שטוחה".'
+  );
+}
+
+export const DEPTH_REASK =
+  'רק כדי לסגור את המידה — תכתבו את מספר העומק בס״מ (למשל 12), או "שטוחה" אם אין עומק.';
+
+/**
+ * Interpret the customer's answer to the depth question. Returns the full
+ * canonical dims string, or null when the answer is neither a depth nor a
+ * flat-bag confirmation.
+ */
+export function resolveDepthAnswer(
+  raw: string,
+  partial: { h: number; w: number }
+): string | null {
+  const t = (raw ?? "").trim();
+  if (/שטוח|בלי עומק|אין עומק|^אין$|^לא$/.test(t)) return `H${partial.h}*W${partial.w}`;
+  const nums = (t.match(/\d+(?:\.\d+)?/g) ?? []).map(Number).filter((n) => n > 0);
+  if (nums.length === 1) return `H${partial.h}*D${nums[0]}*W${partial.w}`;
+  // Customer re-sent all three dims — take them wholesale.
+  if (nums.length >= 3) return `H${nums[0]}*D${nums[1]}*W${nums[2]}`;
+  return null;
 }
