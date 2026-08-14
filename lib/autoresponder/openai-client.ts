@@ -71,6 +71,11 @@ export async function callLLM<T = unknown>(input: CallLLMInput): Promise<T | nul
   const maxRetries = input.retries ?? 1;
   const jsonMode = input.jsonMode ?? true;
   const temperature = input.temperature ?? 0;
+  // GPT-5-family (and o-series) models reject a temperature parameter — the
+  // whole request 400s. Bit us 2026-08-14 on the gpt-5.6 switch: every call
+  // soft-failed to null and the bot quietly fell back to its deterministic
+  // paths, which read as "the classifier stopped working".
+  let sendTemperature = !/^(gpt-5|o\d)/.test(model);
 
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     let abortedBy: "timeout" | null = null;
@@ -89,7 +94,7 @@ export async function callLLM<T = unknown>(input: CallLLMInput): Promise<T | nul
         },
         body: JSON.stringify({
           model,
-          temperature,
+          ...(sendTemperature ? { temperature } : {}),
           ...(jsonMode ? { response_format: { type: "json_object" } } : {}),
           messages: [
             { role: "system", content: input.system },
@@ -106,7 +111,17 @@ export async function callLLM<T = unknown>(input: CallLLMInput): Promise<T | nul
           `[openai-client] non-2xx ${res.status} (attempt ${attempt + 1}/${maxRetries + 1})`,
           txt.slice(0, 200)
         );
-        // Retry on 5xx; fail fast on 4xx.
+        // Unknown-parameter 400 → drop the offending param and retry once,
+        // so a future model family can't silently kill every LLM call again.
+        if (
+          res.status === 400 &&
+          sendTemperature &&
+          /temperature|unsupported/i.test(txt)
+        ) {
+          sendTemperature = false;
+          if (attempt < maxRetries) continue;
+        }
+        // Retry on 5xx; fail fast on other 4xx.
         if (res.status >= 500 && attempt < maxRetries) continue;
         return null;
       }
