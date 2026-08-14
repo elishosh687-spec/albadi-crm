@@ -124,6 +124,28 @@ export default function PlaygroundView({ apiToken }: { apiToken: string }) {
     }
   }
 
+  async function askCallback() {
+    if (busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "ask_callback" }),
+      });
+      const json = await res.json();
+      setTranscript(json.transcript ?? []);
+      setLead(json.lead ?? null);
+      setLastRoute("callback");
+      if (json.error) setError(json.error);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function reset() {
     if (busy) return;
     setBusy(true);
@@ -197,7 +219,13 @@ export default function PlaygroundView({ apiToken }: { apiToken: string }) {
           {lastRoute && lastRoute !== "none" && (
             <Chip
               label="טופל ע״י"
-              value={lastRoute === "questionnaire" ? "שאלון" : "החלטות"}
+              value={
+                lastRoute === "questionnaire"
+                  ? "שאלון"
+                  : lastRoute === "callback"
+                    ? "תיאום שיחה"
+                    : "החלטות"
+              }
             />
           )}
           <div style={{ flex: 1 }} />
@@ -221,6 +249,14 @@ export default function PlaygroundView({ apiToken }: { apiToken: string }) {
             style={btnGhost}
           >
             {showEnv ? "סגור" : "מצב המערכת"}
+          </button>
+          <button
+            onClick={askCallback}
+            disabled={busy}
+            style={btnGhost}
+            title="מריץ את הבקשה האמיתית לתיאום שיחה, כולל רשימת ההכנה שנבנית מהנתונים"
+          >
+            📞 בקש זמן לשיחה
           </button>
           <button onClick={reset} disabled={busy} style={btnDanger}>
             התחל מחדש

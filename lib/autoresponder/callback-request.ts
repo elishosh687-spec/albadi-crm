@@ -25,17 +25,24 @@ import { sendBridgeMessage } from "@/lib/bridge/client";
 import { callLLM } from "./openai-client";
 import { syncTaskToGHL } from "@/integrations/ghl/sync";
 import { resolveAssigneeUserId } from "@/lib/crm-tasks/assignee";
+import { clampToWorkWindow } from "@/lib/clock/callback-window";
+import { getBotSettings } from "@/lib/bot-settings/store";
+import { computeCallPrep, prepForSalesperson } from "./call-prep";
 import type { QState } from "./questionnaire";
 
-export const CALLBACK_REQUESTS_ENABLED =
-  (process.env.CALLBACK_REQUESTS_ENABLED ?? "").replace(/^﻿/, "") === "1";
+/**
+ * Kill switch. The env var still forces it off so an emergency stop doesn't
+ * depend on the DB, but the day-to-day control is the bot-settings toggle —
+ * this flow messages real customers, so it stays OFF until deliberately
+ * switched on from the settings screen.
+ */
+const ENV_DISABLED =
+  (process.env.CALLBACK_REQUESTS_ENABLED ?? "").replace(/^﻿/, "").trim() === "0";
 
-/** Minutes of customer silence before the bot asks for a callback time. */
-const SILENCE_MIN = 30;
-/** Upper bound — only nudge leads that went quiet RECENTLY (not the whole
- *  months-old backlog). A lead silent longer than this is left to the normal
- *  re-engagement cadence, not this "just went quiet → let's schedule a call" flow. */
-const SILENCE_MAX_MIN = 360; // 6h
+export async function callbackRequestsEnabled(): Promise<boolean> {
+  if (ENV_DISABLED) return false;
+  return (await getBotSettings()).callbackEnabled;
+}
 /** Don't step on a fresh manual/bot reply — skip if ANY message (in or out)
  *  landed in the last few minutes. */
 const RECENT_ACTIVITY_MIN = 15;
@@ -88,6 +95,9 @@ function parseQ(raw: unknown): QState | null {
  * A lead is skipped if it already carries a callbackFlow (asked/answered/declined).
  */
 export async function findCallbackCandidates(): Promise<CallbackCandidate[]> {
+  const S = await getBotSettings();
+  const silenceMin = S.callbackSilenceMinMinutes;
+  const silenceMax = S.callbackSilenceMaxMinutes;
   // Stage/state-based triggers (quote_sent / questionnaire_incomplete /
   // new_lead_no_reply). One query with last-inbound/last-any + minutes silent.
   const rows = (
@@ -147,7 +157,7 @@ export async function findCallbackCandidates(): Promise<CallbackCandidate[]> {
     if (q?.callbackFlow) continue;
     const silent = r.silent_min == null ? null : Number(r.silent_min);
     // Only leads that went quiet RECENTLY (30 min .. 6h) — not the old backlog.
-    if (silent == null || silent < SILENCE_MIN || silent > SILENCE_MAX_MIN) continue;
+    if (silent == null || silent < silenceMin || silent > silenceMax) continue;
     // Don't step on a fresh manual/bot reply.
     const sinceAny = r.since_any_min == null ? null : Number(r.since_any_min);
     if (sinceAny != null && sinceAny < RECENT_ACTIVITY_MIN) continue;
@@ -226,8 +236,17 @@ export async function findCallbackCandidates(): Promise<CallbackCandidate[]> {
   return out.slice(0, MAX_PER_RUN);
 }
 
-/** Context-aware "when's good to talk?" message (LLM, with a safe fallback). */
+/**
+ * Context-aware "when's good to talk?" message.
+ *
+ * The LLM writes only the opening ask; the prep list underneath is appended
+ * verbatim from computeCallPrep, because what the customer is missing is a
+ * fact the DB knows and must not be improvised. This list is the whole point
+ * of the flow — a scheduled call with a customer who has no dimensions and no
+ * logo is the call Eli is trying to stop making.
+ */
 export async function composeCallbackMessage(c: CallbackCandidate): Promise<string> {
+  const S = await getBotSettings();
   const first = (c.name ?? "").trim().split(/\s+/)[0] || "";
   const fallback =
     `${first ? `היי ${first} 👋` : "היי 👋"}\n` +
@@ -248,8 +267,12 @@ export async function composeCallbackMessage(c: CallbackCandidate): Promise<stri
       (c.lastInboundText ? `ההודעה האחרונה של הלקוח: "${c.lastInboundText}"\n` : "") +
       `כתוב הודעה אחת שמבקשת שעה נוחה לשיחה.`,
   });
-  const msg = llm?.message?.trim();
-  return msg && msg.length > 4 ? msg : fallback;
+  const ask = llm?.message?.trim() || fallback;
+
+  if (!S.callbackSendPrepList) return ask;
+  const prep = await computeCallPrep(c.sid);
+  if (!prep.text) return ask;
+  return `${ask}\n\n${S.callbackPrepIntro}\n${prep.text}`;
 }
 
 export interface RunReport {
@@ -265,9 +288,17 @@ export interface RunReport {
  * requires CALLBACK_REQUESTS_ENABLED=1.
  */
 export async function runCallbackRequests(opts: { dry: boolean }): Promise<RunReport> {
+  const enabled = await callbackRequestsEnabled();
   const candidates = await findCallbackCandidates();
   const items: RunReport["items"] = [];
-  const willSend = opts.dry ? false : CALLBACK_REQUESTS_ENABLED;
+  const willSend = opts.dry ? false : enabled;
+
+  // Off and not a dry run → report the candidates but don't compose. The
+  // trigger runs every half hour whether or not the flow is on, and composing
+  // is an LLM call per candidate; there is nobody to read the drafts.
+  if (!enabled && !opts.dry) {
+    return { enabled, dry: opts.dry, count: candidates.length, items };
+  }
 
   for (const c of candidates) {
     const message = await composeCallbackMessage(c);
@@ -284,7 +315,7 @@ export async function runCallbackRequests(opts: { dry: boolean }): Promise<RunRe
     items.push({ sid: c.sid, name: c.name, reason: c.reason, message, sent });
   }
 
-  return { enabled: CALLBACK_REQUESTS_ENABLED, dry: opts.dry, count: candidates.length, items };
+  return { enabled, dry: opts.dry, count: candidates.length, items };
 }
 
 /** Merge qState.callbackFlow="awaiting_reply" onto a lead (jsonb merge). */
@@ -372,17 +403,29 @@ export async function handleCallbackReply(input: {
   }
 
   // Open a task for the salesperson with the requested time.
+  const S = await getBotSettings();
   const timeText = verdict.timeText ?? input.text.trim().slice(0, 60);
+  const prep = await computeCallPrep(input.sid);
+
+  // Clamp into the Sun–Thu 09:00–21:00 window (skips holidays, never in the
+  // past). Without this a parsed "מחר ב-2 בלילה" — or a time the LLM read off
+  // by a day — lands on the task exactly as given.
+  let dueAt: Date | null = null;
+  if (verdict.dueAtIso && Number.isFinite(new Date(verdict.dueAtIso).getTime())) {
+    dueAt = await clampToWorkWindow(new Date(verdict.dueAtIso));
+  }
+
   const [task] = await db
     .insert(crmTasks)
     .values({
       manychatSubId: input.sid.trim(),
-      title: `📞 לתאם שיחה — הלקוח ביקש: ${timeText}`,
+      // The salesperson needs to know what the customer will (not) have in
+      // hand before dialling — that's the difference between a real call and
+      // another "send me your dimensions" call.
+      title: `📞 לתאם שיחה — הלקוח ביקש: ${timeText} · ${prepForSalesperson(prep)}`,
       taskType: "callback_time",
       status: "open",
-      dueAt: verdict.dueAtIso && Number.isFinite(new Date(verdict.dueAtIso).getTime())
-        ? new Date(verdict.dueAtIso)
-        : null,
+      dueAt,
       assignedTo: (await resolveAssigneeUserId()) ?? null,
     })
     .returning({ id: crmTasks.id });
@@ -392,10 +435,13 @@ export async function handleCallbackReply(input: {
   // Confirm to the customer + push the task to GHL (best-effort).
   try {
     const first = (input.name ?? "").trim().split(/\s+/)[0];
-    await sendBridgeMessage(
-      input.recipient,
-      `מעולה${first ? ` ${first}` : ""} 🙏 רשמנו — ${timeText}. ניצור קשר בזמן הזה.`
-    );
+    let confirm = `מעולה${first ? ` ${first}` : ""} 🙏 רשמנו — ${timeText}. ניצור קשר בזמן הזה.`;
+    // Repeat the prep list at the moment they commit to a time — this is when
+    // it actually gets read and acted on.
+    if (S.callbackSendPrepList && prep.text) {
+      confirm += `\n\n${S.callbackPrepIntro}\n${prep.text}`;
+    }
+    await sendBridgeMessage(input.recipient, confirm);
   } catch (e) {
     console.error("[callback-request] confirm send failed", input.sid, e);
   }

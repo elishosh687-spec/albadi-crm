@@ -1,0 +1,32 @@
+# Asks recently-silent leads when it's a good time to talk, every 30 minutes.
+#
+# WHY GitHub Actions and not vercel.json crons: the Vercel plan only runs crons
+# once/day, so any sub-daily schedule there never fires (see
+# process-recordings.yml for the incident that established this).
+#
+# SAFE TO RUN WHILE OFF. The endpoint is a no-op unless the "לבקש מלקוחות
+# שקטים זמן לשיחה" toggle is on in the bot settings — with it off the run
+# reports how many leads WOULD be contacted and sends nothing (it doesn't even
+# compose, so it costs no LLM calls). Turning the flow on is therefore a
+# settings change, not a deploy.
+#
+# Every half hour rather than every few minutes: the detector only fires on
+# leads silent 30+ minutes, so a tighter schedule would add load without
+# reaching anyone sooner.
+name: callback-requests
+on:
+  schedule:
+    - cron: "*/30 * * * *"
+  workflow_dispatch: {}
+concurrency:
+  group: callback-requests
+  cancel-in-progress: false
+jobs:
+  trigger:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ask silent leads for a callback time
+        run: |
+          curl -sS -X POST "https://albadi-crm.vercel.app/api/bot/callback-requests" \
+            -H "Authorization: Bearer ${{ secrets.BOT_SECRET }}" \
+            --max-time 120 -w "\nHTTP:%{http_code} time:%{time_total}s\n" || true

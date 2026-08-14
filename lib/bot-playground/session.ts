@@ -158,3 +158,22 @@ export async function loadLeadState(): Promise<PlaygroundLeadState> {
     qState: (row?.qState as Record<string, unknown> | null) ?? null,
   };
 }
+
+/**
+ * Put the playground lead into "waiting for a callback time" so the reply
+ * handler can be exercised. Mirrors markCallbackAsked in callback-request.ts,
+ * which is module-private there.
+ */
+export async function markCallbackAskedForPlayground(): Promise<void> {
+  const patch = JSON.stringify({
+    callbackFlow: "awaiting_reply",
+    callbackAskedAt: new Date().toISOString(),
+  });
+  await db
+    .update(leads)
+    .set({
+      qState: sql`COALESCE(${leads.qState}, '{}'::jsonb) || ${patch}::jsonb`,
+      updatedAt: new Date(),
+    })
+    .where(eq(leads.manychatSubId, PLAYGROUND_SID));
+}

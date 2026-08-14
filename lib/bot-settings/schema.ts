@@ -38,6 +38,13 @@ export interface BotSettings {
   showBookingLink: boolean;
   bookingUrl: string;
 
+  // --- scheduling a call ---
+  callbackEnabled: boolean;
+  callbackSilenceMinMinutes: number;
+  callbackSilenceMaxMinutes: number;
+  callbackSendPrepList: boolean;
+  callbackPrepIntro: string;
+
   // --- models ---
   intentModel: string;
   analysisModel: string;
@@ -72,6 +79,12 @@ export const DEFAULT_BOT_SETTINGS: BotSettings = {
   showBookingLink: true,
   bookingUrl: "https://calendly.com/elishosh687/30min",
 
+  callbackEnabled: false,
+  callbackSilenceMinMinutes: 30,
+  callbackSilenceMaxMinutes: 360,
+  callbackSendPrepList: true,
+  callbackPrepIntro: "כדי שהשיחה תהיה יעילה, שווה שיהיה מולכם:",
+
   intentModel: "gpt-4o-mini",
   analysisModel: "gpt-4o",
 };
@@ -100,6 +113,7 @@ export const GROUPS = [
   "הודעות ללקוח",
   "התנהגות השאלון",
   "אחרי ההצעה",
+  "תיאום שיחות",
   "מודלים",
 ] as const;
 
@@ -282,6 +296,59 @@ export const BOT_SETTING_FIELDS: BotSettingField[] = [
     label: "קישור קביעת השיחה",
     description:
       "הכתובת שאליה הלקוח נשלח לקביעת שיחה. משמש רק כשהמתג שמעל דולק.",
+    type: "text",
+  },
+
+  // ---------- תיאום שיחות ----------
+  {
+    key: "callbackEnabled",
+    group: "תיאום שיחות",
+    label: "לבקש מלקוחות שקטים זמן לשיחה",
+    description:
+      "המנוע שמזהה לקוח ששתק וכותב לו 'מתי נוח שנתקשר?'. כשהלקוח עונה בזמן — נפתחת אוטומטית משימה עם השעה, והוא מקבל אישור. ⚠️ זה שולח הודעות ללקוחות אמיתיים — הדליקו רק כשאתם מוכנים.",
+    where: "רץ ברקע על לידים ששתקו; התשובה מטופלת מיד",
+    type: "toggle",
+  },
+  {
+    key: "callbackSilenceMinMinutes",
+    group: "תיאום שיחות",
+    label: "אחרי כמה זמן שקט לפנות",
+    description:
+      "כמה דקות של שתיקה מצד הלקוח לפני שהבוט מבקש זמן לשיחה. קצר מדי מרגיש נודניק; ארוך מדי והלקוח כבר התקרר.",
+    type: "number",
+    min: 10,
+    max: 1440,
+    step: 5,
+    unit: "דקות",
+  },
+  {
+    key: "callbackSilenceMaxMinutes",
+    group: "תיאום שיחות",
+    label: "עד כמה זמן שקט עוד רלוונטי",
+    description:
+      "גבול עליון שמונע מהבוט לפנות לכל הלידים הישנים בבת אחת. ליד ששתק יותר מזה נחשב 'צונן' ומטופל במעקב הרגיל, לא בפלואו הזה.",
+    where: "הגנה מפני פיצוץ הודעות בהדלקה הראשונה",
+    type: "number",
+    min: 60,
+    max: 10080,
+    step: 30,
+    unit: "דקות",
+  },
+  {
+    key: "callbackSendPrepList",
+    group: "תיאום שיחות",
+    label: "לצרף רשימת הכנה לשיחה",
+    description:
+      "מוסיף להודעה רשימה של מה שחסר ללקוח הזה ספציפית — מידות, לוגו, כמות — לפי מה שכבר ידוע עליו במערכת. הרשימה נשלחת פעמיים: בבקשת הזמן, ושוב באישור אחרי שנקבעה שעה. זה מה שמונע שיחות של 'תביאו לי מידות'.",
+    where: "בסוף בקשת הזמן ובאישור",
+    type: "toggle",
+  },
+  {
+    key: "callbackPrepIntro",
+    group: "תיאום שיחות",
+    label: "משפט הפתיחה של רשימת ההכנה",
+    description:
+      "השורה שמופיעה מעל רשימת ההכנה. הרשימה עצמה נבנית אוטומטית מהנתונים של הלקוח ולא נערכת כאן.",
     type: "text",
   },
 

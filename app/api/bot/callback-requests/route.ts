@@ -2,9 +2,14 @@
  * POST /api/bot/callback-requests
  *
  * Detector for the "מתי נוח לכם לדבר?" callback-time flow. Finds silent leads
- * in the trigger states, composes a context-aware message, and (when
- * CALLBACK_REQUESTS_ENABLED=1) sends it + flags the lead. When the customer
- * replies with a time, the greenapi webhook opens a task for the salesperson.
+ * in the trigger states and — when the "לבקש מלקוחות שקטים זמן לשיחה" bot
+ * setting is on — sends each a context-aware ask plus a prep list computed
+ * from what that lead is actually missing, then flags them. When the customer
+ * replies with a time, the greenapi webhook opens a task for the salesperson
+ * (clamped into work hours) and confirms back.
+ *
+ * Off (the default) → this reports the candidate count and sends nothing, so
+ * the every-30-min trigger is safe to leave running.
  *
  * Auth: Bearer BOT_SECRET / CRON_SECRET (same as the other bot crons).
  *

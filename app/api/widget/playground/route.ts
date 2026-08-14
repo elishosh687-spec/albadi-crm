@@ -26,6 +26,12 @@ import {
 import { loadEffectiveSettings } from "@/lib/bot-playground/settings";
 import { handleInbound } from "@/lib/autoresponder/questionnaire";
 import { handleDecisionInbound } from "@/lib/autoresponder/decision";
+import {
+  composeCallbackMessage,
+  handleCallbackReply,
+} from "@/lib/autoresponder/callback-request";
+import { sendBridgeMessage } from "@/lib/bridge/client";
+import { markCallbackAskedForPlayground } from "@/lib/bot-playground/session";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 120;
@@ -62,6 +68,28 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, transcript, lead });
   }
 
+  // "ask for a callback time" — runs the real composer against the playground
+  // lead so the message (including the computed prep list) can be reviewed
+  // before this flow is ever pointed at a customer.
+  if (body.action === "ask_callback") {
+    await ensurePlaygroundLead();
+    const { sends } = await runCaptured(async () => {
+      const message = await composeCallbackMessage({
+        sid: PLAYGROUND_SID,
+        name: "לקוח בדיקה",
+        recipient: PLAYGROUND_SID,
+        reason: "quote_sent",
+        silentMinutes: 45,
+        lastInboundText: null,
+      });
+      await sendBridgeMessage(PLAYGROUND_SID, message);
+      await markCallbackAskedForPlayground();
+    });
+    await recordCaptured(sends);
+    const [transcript, lead] = await Promise.all([loadTranscript(), loadLeadState()]);
+    return NextResponse.json({ ok: true, transcript, lead, routedTo: "callback" });
+  }
+
   const text = (body.text ?? "").trim();
   if (!text) {
     return NextResponse.json({ ok: false, error: "empty_text" }, { status: 400 });
@@ -69,6 +97,32 @@ export async function POST(req: NextRequest) {
 
   await ensurePlaygroundLead();
   await recordInbound(text);
+
+  // Mirror the webhook: a lead awaiting a callback time gets that handler first.
+  const pre = await loadLeadState();
+  const preQ = (pre.qState ?? {}) as Record<string, unknown>;
+  if (preQ.callbackFlow === "awaiting_reply") {
+    const { result: handled, sends } = await runCaptured(() =>
+      handleCallbackReply({
+        sid: PLAYGROUND_SID,
+        text,
+        recipient: PLAYGROUND_SID,
+        name: "לקוח בדיקה",
+        qState: preQ as never,
+      })
+    );
+    await recordCaptured(sends);
+    if (handled) {
+      const [transcript, lead] = await Promise.all([loadTranscript(), loadLeadState()]);
+      return NextResponse.json({
+        ok: true,
+        routedTo: "callback",
+        transcript,
+        lead,
+        sentCount: sends.length,
+      });
+    }
+  }
 
   // Decide which handler owns this turn — same rule as the webhook.
   const before = await loadLeadState();
