@@ -146,6 +146,26 @@ export default function PlaygroundView({ apiToken }: { apiToken: string }) {
     }
   }
 
+  async function timeTravel(hours: number) {
+    if (busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "time_travel", hours }),
+      });
+      const json = await res.json();
+      setTranscript(json.transcript ?? []);
+      setLead(json.lead ?? null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function askCallback() {
     if (busy) return;
     setBusy(true);
@@ -288,6 +308,21 @@ export default function PlaygroundView({ apiToken }: { apiToken: string }) {
           >
             📞 בקש זמן לשיחה
           </button>
+          <span
+            style={{ display: "inline-flex", gap: 4, alignItems: "center" }}
+            title="מזיז את כל השיחה אחורה בזמן — כדי לבדוק התנהגות של שקט (פולו-אפים, החייאה) בלי לחכות"
+          >
+            <span style={{ fontSize: 12, color: "#9a938a" }}>⏩ קדם זמן:</span>
+            <button onClick={() => timeTravel(3)} disabled={busy} style={btnGhost}>
+              3ש׳
+            </button>
+            <button onClick={() => timeTravel(24)} disabled={busy} style={btnGhost}>
+              יום
+            </button>
+            <button onClick={() => timeTravel(72)} disabled={busy} style={btnGhost}>
+              3 ימים
+            </button>
+          </span>
           <button onClick={reset} disabled={busy} style={btnDanger}>
             התחל מחדש
           </button>

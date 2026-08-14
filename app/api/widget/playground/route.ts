@@ -31,7 +31,10 @@ import {
   handleCallbackReply,
 } from "@/lib/autoresponder/callback-request";
 import { sendBridgeMessage } from "@/lib/bridge/client";
-import { markCallbackAskedForPlayground } from "@/lib/bot-playground/session";
+import {
+  markCallbackAskedForPlayground,
+  shiftPlaygroundTime,
+} from "@/lib/bot-playground/session";
 import { runSetter } from "@/lib/setter";
 
 export const dynamic = "force-dynamic";
@@ -89,6 +92,16 @@ export async function POST(req: NextRequest) {
     await recordCaptured(sends);
     const [transcript, lead] = await Promise.all([loadTranscript(), loadLeadState()]);
     return NextResponse.json({ ok: true, transcript, lead, routedTo: "callback" });
+  }
+
+  // Time travel — age the conversation by N hours so silence-driven behaviour
+  // (follow-ups, revive, callback windows) can be tested without waiting.
+  if (body.action === "time_travel") {
+    const hours = Number((body as { hours?: unknown }).hours) || 24;
+    await ensurePlaygroundLead();
+    await shiftPlaygroundTime(hours);
+    const [transcript, lead] = await Promise.all([loadTranscript(), loadLeadState()]);
+    return NextResponse.json({ ok: true, transcript, lead, shiftedHours: hours });
   }
 
   // Setter preview — runs the sales-brain pipeline on the CURRENT playground

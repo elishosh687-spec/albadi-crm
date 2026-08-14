@@ -50,6 +50,9 @@ export interface BotSettings {
   callbackSendPrepList: boolean;
   callbackPrepIntro: string;
 
+  // --- sales brain ---
+  setterDraftsEnabled: boolean;
+
   // --- models ---
   intentModel: string;
   analysisModel: string;
@@ -94,6 +97,8 @@ export const DEFAULT_BOT_SETTINGS: BotSettings = {
   callbackSendPrepList: true,
   callbackPrepIntro: "כדי שהשיחה תהיה יעילה, שווה שיהיה מולכם:",
 
+  setterDraftsEnabled: true,
+
   intentModel: "gpt-4o-mini",
   analysisModel: "gpt-4o",
 };
@@ -124,6 +129,7 @@ export const GROUPS = [
   "אחרי ההצעה",
   "מידות מותאמות",
   "תיאום שיחות",
+  "מוח מכירות",
   "מודלים",
 ] as const;
 
@@ -396,6 +402,17 @@ export const BOT_SETTING_FIELDS: BotSettingField[] = [
     description:
       "השורה שמופיעה מעל רשימת ההכנה. הרשימה עצמה נבנית אוטומטית מהנתונים של הלקוח ולא נערכת כאן.",
     type: "text",
+  },
+
+  // ---------- מוח מכירות ----------
+  {
+    key: "setterDraftsEnabled",
+    group: "מוח מכירות",
+    label: "הסטר כותב את הטיוטות",
+    description:
+      "כשדולק — ברגעי הכסף (מו״מ, סירוב, שינוי מפרט) ובפולו-אפים, הטיוטה שמחכה לאישורך נכתבת על ידי מוח המכירות: ניתוח מצב → טקטיקה → ניסוח → ולידציה. כשכבוי — המנסח הישן. בשני המצבים שום דבר לא נשלח בלי האישור שלך; המתג קובע רק מי כותב את ההצעה.",
+    where: "תור הטיוטות",
+    type: "toggle",
   },
 
   // ---------- מודלים ----------

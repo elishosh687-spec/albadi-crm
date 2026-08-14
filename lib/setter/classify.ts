@@ -78,6 +78,17 @@ export async function classifySalesState(
     return { ...FALLBACK, intent: "gone_quiet" };
   }
 
+  // Long silence is a DB fact, not a judgment call: we spoke last and the
+  // customer has been quiet for half a day+ — that's gone_quiet regardless of
+  // what their final message said. Skips the LLM entirely on the exact runs
+  // (follow-up sweeps) that happen in bulk.
+  if (
+    ctx.timing.turn === "customer" &&
+    (ctx.timing.hoursSinceLastCustomerMessage ?? 0) >= 12
+  ) {
+    return { ...FALLBACK, intent: "gone_quiet" };
+  }
+
   const transcript = ctx.recentMessages
     .map((m) => `${m.from === "customer" ? "לקוח" : "אנחנו"}: ${m.text}`)
     .join("\n");

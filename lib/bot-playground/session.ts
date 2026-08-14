@@ -177,3 +177,22 @@ export async function markCallbackAskedForPlayground(): Promise<void> {
     })
     .where(eq(leads.manychatSubId, PLAYGROUND_SID));
 }
+
+/**
+ * Time travel — shift the playground conversation into the past by N hours.
+ *
+ * Follow-up behaviour is driven by message timestamps, so testing "customer
+ * silent for 3 days" used to require waiting 3 days. This rewrites the
+ * playground rows' received_at backwards; every consumer (setter context,
+ * callback detector, follow-up logic) then sees a genuinely old conversation.
+ * Playground-only by construction — it touches only the playground sid.
+ */
+export async function shiftPlaygroundTime(hours: number): Promise<void> {
+  const h = Math.max(1, Math.min(24 * 30, Math.round(hours)));
+  await db.execute(
+    sql`UPDATE messages SET received_at = received_at - make_interval(hours => ${h}) WHERE manychat_sub_id = ${PLAYGROUND_SID}`
+  );
+  await db.execute(
+    sql`UPDATE leads SET updated_at = updated_at - make_interval(hours => ${h}), created_at = created_at - make_interval(hours => ${h}) WHERE manychat_sub_id = ${PLAYGROUND_SID}`
+  );
+}

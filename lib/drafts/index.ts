@@ -285,6 +285,35 @@ export async function generateAndQueueDraft(input: {
 }): Promise<number | null> {
   if (!isDraftQueueEnabled()) return null;
 
+  // Setter-first: when the sales brain is on draft duty, IT writes the draft —
+  // classification → tactic → validated Hebrew — and the legacy money-reply
+  // generator becomes the fallback. Same queue, same approval flow; only the
+  // brain behind the text changes, and every message still passes Eli.
+  try {
+    const [{ getBotSettings }, { runSetter }] = await Promise.all([
+      import("@/lib/bot-settings/store"),
+      import("@/lib/setter"),
+    ]);
+    if ((await getBotSettings()).setterDraftsEnabled) {
+      const run = await runSetter(input.manychatSubId, `draft:${input.moneyReason}`, {
+        mode: "draft",
+      });
+      if (run.ok && run.message?.validation.ok && run.message.text) {
+        const draft = await createDraft({
+          manychatSubId: input.manychatSubId,
+          draftText: run.message.text,
+          moneyReason: input.moneyReason,
+          pipelineStageAtGen: input.pipelineStage,
+          triggerMessageId: input.triggerMessageId ?? null,
+        });
+        return draft.id;
+      }
+      // Setter declined or failed validation → fall through to the legacy path.
+    }
+  } catch (e) {
+    console.warn("[generateAndQueueDraft] setter path failed, falling back", e);
+  }
+
   try {
     // Dynamic imports keep the LLM module out of the cold-start path for
     // builds that don't need it.

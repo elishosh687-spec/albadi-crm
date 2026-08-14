@@ -27,7 +27,7 @@ export interface SetterRun {
 export async function runSetter(
   sid: string,
   trigger: string,
-  opts?: { mode?: "shadow" | "preview" }
+  opts?: { mode?: "shadow" | "preview" | "draft" }
 ): Promise<SetterRun> {
   const mode = opts?.mode ?? "shadow";
 
