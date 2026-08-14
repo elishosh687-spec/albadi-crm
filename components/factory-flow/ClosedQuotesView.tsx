@@ -623,6 +623,34 @@ function ClosedQuoteCard({
       setSavingAddon(false);
     }
   }
+  // Send the customer the delta. ALWAYS previews first — this leaves the system
+  // and lands on a customer's phone, so Eli sees the exact text and confirms.
+  const [sendingUpdate, setSendingUpdate] = useState(false);
+  async function sendDealUpdateToCustomer() {
+    setSendingUpdate(true);
+    try {
+      const base = `/api/widget/factory/deal-update-whatsapp/${quote.id}`;
+      const pre = await fetch(widgetUrl(`${base}?dry=1`, apiToken), { method: "POST" });
+      const pj = await pre.json().catch(() => ({}));
+      if (!pj?.ok) {
+        alert(
+          pj?.error === "no_addons_to_report"
+            ? "אין תוספות לשלוח."
+            : `שגיאה: ${pj?.error ?? pre.status}`
+        );
+        return;
+      }
+      if (!confirm(`לשלוח ללקוח את ההודעה הזו?\n\n${pj.preview}`)) return;
+      const res = await fetch(widgetUrl(base, apiToken), { method: "POST" });
+      const j = await res.json().catch(() => ({}));
+      if (!j?.ok) { alert(`שגיאה בשליחה: ${j?.error ?? res.status}`); return; }
+      alert("נשלח ללקוח ✓");
+      onSaved();
+    } finally {
+      setSendingUpdate(false);
+    }
+  }
+
   function addAddon() {
     const amt = parseFloat(addonAmount);
     if (!addonLabel.trim() || !Number.isFinite(amt) || amt === 0) {
@@ -895,8 +923,16 @@ function ClosedQuoteCard({
                 </button>
               </div>
             ))}
-            <div style={{ borderTop: "1px solid var(--lux-line)", marginTop: 6, paddingTop: 6, fontSize: 12.5 }}>
-              סה״כ תוספות: <strong>{ils(addons.reduce((s2, a) => s2 + a.amountIls, 0))}</strong>
+            <div style={{ borderTop: "1px solid var(--lux-line)", marginTop: 6, paddingTop: 6, fontSize: 12.5, display: "flex", alignItems: "center", gap: 10 }}>
+              <span>סה״כ תוספות: <strong>{ils(addons.reduce((s2, a) => s2 + a.amountIls, 0))}</strong></span>
+              <button
+                type="button"
+                onClick={sendDealUpdateToCustomer}
+                disabled={sendingUpdate || savingAddon}
+                style={{ marginInlineStart: "auto", padding: "5px 12px", borderRadius: 6, border: "1px solid var(--lux-line)", background: "rgba(125,211,160,0.10)", color: "#7dd3a0", fontSize: 12, cursor: "pointer" }}
+              >
+                {sendingUpdate ? "שולח…" : "שלח עדכון ללקוח"}
+              </button>
             </div>
           </div>
         ) : null}
