@@ -309,7 +309,7 @@ export default function PlaygroundView({ apiToken }: { apiToken: string }) {
         )}
 
         {setter && (
-          <Panel title="🧠 ניתוח הסטר (לא נשלח)">
+          <Panel title="🧠 הסטר — מוח עתידי, תצוגה בלבד. מה שבשיחה למטה נשלח ע״י הבוט הנוכחי.">
             <SetterPanel run={setter} onClose={() => setSetter(null)} />
           </Panel>
         )}

@@ -42,3 +42,7 @@ for (const [label, text] of checks) {
   const v = validateMessage(text, ctx, strat);
   console.log(`${label.padEnd(14)} → ${v.ok ? "✓ עבר" : "✗ " + v.violations.join("; ")}`);
 }
+
+console.log("\n=== הבאג מהמגרש: יקר לי + asked_for_call ===");
+const buggy = planStrategy(ctx, { intent: "objecting", objectionType: "price_absolute", buyingSignal: "weak", meetingReadiness: "asked_for_call" });
+console.log(`objecting+asked_for_call → ${buggy.goal} [${buggy.skills.join(", ")}]`);

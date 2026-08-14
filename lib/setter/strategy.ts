@@ -42,17 +42,11 @@ export function planStrategy(
     ],
   };
 
-  // Explicit call request wins over everything.
-  if (cls.meetingReadiness === "asked_for_call") {
-    return {
-      ...base,
-      goal: "book_call",
-      skills: ["appointment_booking", "callback_scheduling"],
-      moves: ["אשר מיד", "הצע שני חלונות זמן קונקרטיים", "אמור מה להכין"],
-    };
-  }
-
-  // Objection → explore before redirecting; price objections get the AER frame.
+  // An open objection outranks everything, including an apparent call request.
+  // Booking a call with an unexplored objection just moves the objection to
+  // the phone — and in practice the classifier sometimes reads OUR booking
+  // links as the customer asking for a call (caught in playground shadow,
+  // 14.8: "יקר לי" arrived classified asked_for_call).
   if (cls.intent === "objecting") {
     return {
       ...base,
@@ -63,6 +57,16 @@ export function planStrategy(
           : ["objection_explore", "pause_intelligence"],
       moves: ["הכר בקצרה", "שאלה אחת שמבררת את מקור ההתנגדות"],
       avoid: [...base.avoid, "אל תצדיק את המחיר", "אל תציע הנחה"],
+    };
+  }
+
+  // Explicit call request (and no open objection) → book it.
+  if (cls.meetingReadiness === "asked_for_call") {
+    return {
+      ...base,
+      goal: "book_call",
+      skills: ["appointment_booking", "callback_scheduling"],
+      moves: ["אשר מיד", "הצע שני חלונות זמן קונקרטיים", "אמור מה להכין"],
     };
   }
 

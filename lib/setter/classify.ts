@@ -98,7 +98,8 @@ export async function classifySalesState(
       JSON.stringify(ALLOWED.meetingReadiness) +
       "}. " +
       'הנחיות: "יקר לי" בלי פירוט = objecting עם objection_type לפי ההקשר (unclear אם אין רמז). ' +
-      'שאלות על פרטים (משלוח, צבעים) הן סימן קנייה weak-medium. בקשת שיחה/טלפון = asked_for_call. ' +
+      'שאלות על פרטים (משלוח, צבעים) הן סימן קנייה weak-medium. ' +
+      'asked_for_call רק אם הלקוח עצמו ביקש שיחה/טלפון במילים שלו — אף פעם לא בגלל שאנחנו הצענו שיחה או שלחנו קישור. ' +
       "אם ספק — בחר את הערך השמרני.",
     user:
       `שלב: ${ctx.stage ?? "שאלון"} | הצעה נשלחה: ${ctx.quote.sent ? `כן (₪${ctx.quote.totalIls ?? "?"})` : "לא"} | ` +
