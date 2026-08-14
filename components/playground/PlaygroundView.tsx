@@ -83,6 +83,7 @@ export default function PlaygroundView({ apiToken }: { apiToken: string }) {
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [setter, setSetter] = useState<Record<string, unknown> | null>(null);
   const [showQState, setShowQState] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
@@ -219,6 +220,27 @@ export default function PlaygroundView({ apiToken }: { apiToken: string }) {
       </header>
 
       <main style={{ maxWidth: 1100, margin: "0 auto", padding: "clamp(10px, 3vw, 16px)" }}>
+        {notice && (
+          <div
+            style={{
+              background: "rgba(201,162,39,0.10)",
+              border: "1px solid rgba(201,162,39,0.35)",
+              borderRadius: 8,
+              padding: "8px 12px",
+              marginBottom: 12,
+              fontSize: 13,
+              color: "#e0c46a",
+              display: "flex",
+              gap: 8,
+            }}
+          >
+            <span style={{ flex: 1 }}>{notice}</span>
+            <button onClick={() => setNotice(null)} style={linkBtn}>
+              ✕
+            </button>
+          </div>
+        )}
+
         {error && (
           <div
             style={{
@@ -393,7 +415,12 @@ export default function PlaygroundView({ apiToken }: { apiToken: string }) {
                   ).map(([h, label]) => (
                     <button
                       key={h}
-                      onClick={() => void post({ action: "time_travel", hours: h }, "time")}
+                      onClick={async () => {
+                        await post({ action: "time_travel", hours: h }, "time");
+                        setNotice(
+                          `⏪ השיחה הוזזה ${label} אחורה (תראה את השעות על ההודעות). עכשיו לחץ "מה הסטר היה עונה?" כדי לראות את הפולו-אפ.`
+                        );
+                      }}
                       disabled={!!busy}
                       style={{ ...btnSecondary, flex: 1, padding: "8px 4px" }}
                     >
@@ -536,7 +563,7 @@ function SetterResult({ run, onClose }: { run: Record<string, unknown>; onClose:
         >
           {msg.validation.ok
             ? `✓ עבר ולידציה · ${msg.validation.wordCount} מילים`
-            : `⚠️ נפסל: ${msg.validation.violations.join("; ")}`}
+            : `⛔ ההודעה נפסלה ולא הייתה נשלחת — ${msg.validation.violations.join("; ")}`}
         </div>
       )}
       <button onClick={onClose} style={{ ...linkBtn, marginTop: 6 }}>
@@ -614,6 +641,14 @@ function Bubble({
 }) {
   const isIn = msg.direction === "in";
   const isAlert = msg.kind === "eli_dm";
+  const ts = new Date(msg.receivedAt);
+  const ageMs = Date.now() - ts.getTime();
+  // Time label makes the time machine visible — without it, aging the
+  // conversation looks like a button that does nothing.
+  const timeLabel =
+    ageMs > 20 * 3600_000
+      ? ts.toLocaleString("he-IL", { day: "numeric", month: "numeric", hour: "2-digit", minute: "2-digit" })
+      : ts.toLocaleTimeString("he-IL", { hour: "2-digit", minute: "2-digit" });
   return (
     <div
       style={{
@@ -641,6 +676,16 @@ function Bubble({
           }}
         >
           {msg.text}
+        </div>
+        <div
+          style={{
+            fontSize: 10,
+            color: "#6b645c",
+            marginTop: 2,
+            textAlign: isIn ? "start" : "end",
+          }}
+        >
+          {timeLabel}
         </div>
         {msg.options && msg.options.length > 0 && (
           <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 6 }}>
