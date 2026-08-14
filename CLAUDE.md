@@ -296,6 +296,71 @@ To actually query the DB or call GHL from local:
 - **GHL API:** the OAuth access tokens live in `ghl_oauth_tokens` table — pull from the DB connection above (`SELECT access_token, location_id FROM ghl_oauth_tokens ORDER BY updated_at DESC LIMIT 1`) and hit `services.leadconnectorhq.com` directly.
 - **Vercel env writes:** `vercel env add NAME production` reads value from stdin (`echo VALUE | vercel env add ...`). `vercel env rm NAME production --yes` for removal. Production writes require explicit user authorization in this harness — auto-approve is blocked.
 
+## Mobile layer — `.mfit` (READ BEFORE ADDING RESPONSIVE CSS)
+
+Eli works the widget from a **phone browser directly** (not the GHL app), so
+every hub tab has to survive ~390px. The tree was built for a desktop iframe:
+~95% inline `style={{}}`, and before 2026-08-14 there were **4 `@media` queries
+across 90 UI files**.
+
+**All mobile rules live in ONE block at the end of [app/globals.css](app/globals.css),
+inside `@media (max-width: 767px)`.** That is deliberate: desktop is unchanged
+*by construction*, because a rule that isn't in that block cannot have moved
+anything. Verified — at 1440px the shell padding is still exactly
+`26px 32px 40px`, `.lux-title` still `32px`, hub margin still `-12px`.
+
+**⚠️ Scope with `.mfit`, NEVER `.gg-theme`.** `.gg-theme` looks like the widget
+scope but [app/dashboard/v3/layout.tsx](app/dashboard/v3/layout.tsx) also carries
+it, and `middleware.ts` rewrites `/` → `/dashboard/v3` — so a `.gg-theme`-scoped
+rule silently restyles the dashboard too. `.mfit` is a marker class that means
+"this is a widget screen" and nothing else. It is applied in three places, and
+**two of the eleven tabs are NOT under the widget layout**, so they set it
+themselves:
+- [app/widget/layout.tsx](app/widget/layout.tsx) — covers 9 tabs
+- [app/configurator/page.tsx](app/configurator/page.tsx) — מעצב 3D lives outside `app/widget/`
+- [components/playground/PlaygroundView.tsx](components/playground/PlaygroundView.tsx) — has no theme class of its own
+
+**The four opt-in hooks** (`!important` only ever lands on a class we invented,
+so grepping the name gives the complete blast radius, forever):
+
+| class | effect | when |
+|---|---|---|
+| `lux-stack-sm` | `grid-template-columns: 1fr` | a hard multi-column grid |
+| `lux-scroll-x` | wrapper scrolls sideways | **flat** grids that would scramble if stacked |
+| `lux-wrap-sm` | `flex-wrap: wrap` | a row that must stay one line on desktop |
+| `size-7` | 28px → 36px | icon buttons (36, not 44 — quote rows carry several) |
+
+**`grid-cols-N` / `1fr` tracks never overflow — they shrink.** Only grids with a
+**fixed px track** actually push the page sideways. So a mechanical "add `md:`
+everywhere" sweep is churn; fix the fixed-track ones and stack the rest only
+where a cell becomes unreadable.
+
+**Stacking is wrong for a flat grid.** [ClosedQuotesView.tsx](components/factory-flow/ClosedQuotesView.tsx)'s
+planned↔actual table interleaves header cells with each `CostRow`'s four cells as
+**siblings** — collapsing it to `1fr` yields 16 unlabelled rows. It uses
+`lux-scroll-x`. Check whether children are flat before reaching for `lux-stack-sm`.
+
+**The two bugs worth knowing:**
+1. **iOS zooms the page on focus of any control under 16px** and never zooms
+   back — and since tabs are in an iframe, it scales the *top* document, so the
+   nav scrolls away with no way back. 163 controls were 11–14px. One rule fixes
+   it; don't undo it.
+2. **`100vh` ≠ the visible viewport on mobile Safari.** Use `dvh` — the hub
+   shell, `LuxShell`, and every modal `max-h` are on `dvh` now.
+
+**The layout padding and the hub's negative margin must stay in sync.** The hub
+cancels the widget layout's padding with a negative margin; both are
+`clamp(6px, 2vw, 12px)` now. Hardcoding one of them makes the page 4px wider
+than the viewport on a phone.
+
+**Verify with the probe, not the eye:** per tab, inside the iframe,
+`document.documentElement.scrollWidth <= clientWidth + 1`, and
+`[...d.querySelectorAll('input,select,textarea')].filter(e => parseFloat(getComputedStyle(e).fontSize) < 16).length === 0`.
+
+**Footgun while developing:** Turbopack serves a **stale CSS chunk** — edits to
+globals.css silently don't appear, and restarting the dev server is not enough.
+`rm -rf .next/dev .next/cache` and restart. Two rounds were lost to this.
+
 ## Client-bundle import rule (READ BEFORE TOUCHING SHARED CONSTANTS)
 
 `"use client"` components must NEVER import from server-only modules that
