@@ -37,15 +37,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { bridgeEvents, leads, messages as messagesTable } from "@/drizzle/schema";
-import { eq, sql } from "drizzle-orm";
+import { and, eq, gt, ne, sql } from "drizzle-orm";
 import { handleInbound, type QState } from "@/lib/autoresponder/questionnaire";
 import { handleDecisionInbound } from "@/lib/autoresponder/decision";
 import { handleCallbackReply } from "@/lib/autoresponder/callback-request";
 import {
   isStopWord,
+  isHumanHandoffRequest,
   eliEscalationTemplate,
   STOP_WORD_REPLY,
 } from "@/lib/messaging/templates";
+import { getBotSettings } from "@/lib/bot-settings/store";
 import { sendEliDM } from "@/lib/notify/eli";
 import { sendBridgeMessage } from "@/lib/bridge/client";
 import { dispatchSupervisor } from "@/lib/supervisor/server/dispatch";
@@ -280,6 +282,51 @@ async function insertGreenMessage(input: {
   return row;
 }
 
+/**
+ * Has this exact poll vote already arrived from this lead moments ago?
+ *
+ * Scoped to poll votes ON PURPOSE, and the scope is the whole safety argument.
+ * Over 60 days of production traffic the identical-inbound-within-90s pairs
+ * were: 48 poll votes (the bug — WhatsApp re-delivers a vote update with a
+ * fresh message id), 11 voice notes (NOT duplicates — every voice note is
+ * stored as the literal text "[audio]", so two different ones look identical),
+ * and 3 typed messages (customers genuinely saying "היי" twice). Deduping on
+ * text alone would have swallowed those 14 real messages. A poll vote is safe
+ * because the options within one questionnaire are always distinct strings, so
+ * the same option twice can only be the same answer twice.
+ */
+const DUPLICATE_INBOUND_WINDOW_SECONDS = 90;
+
+async function isDuplicatePollVote(
+  sid: string,
+  text: string,
+  selfMessageId: number | null
+): Promise<boolean> {
+  try {
+    const conditions = [
+      eq(messagesTable.manychatSubId, sid),
+      eq(messagesTable.direction, "in"),
+      eq(messagesTable.text, text),
+      sql`${messagesTable.payload}->'messageData'->>'typeMessage' = 'pollUpdateMessage'`,
+      gt(
+        messagesTable.receivedAt,
+        sql`now() - (${DUPLICATE_INBOUND_WINDOW_SECONDS} || ' seconds')::interval`
+      ),
+    ];
+    if (selfMessageId !== null) conditions.push(ne(messagesTable.id, selfMessageId));
+    const prior = await db
+      .select({ id: messagesTable.id })
+      .from(messagesTable)
+      .where(and(...conditions))
+      .limit(1);
+    return prior.length > 0;
+  } catch (e) {
+    // A failure here must never swallow a customer's message.
+    console.error("[greenapi.webhook] duplicate check failed, routing anyway", e);
+    return false;
+  }
+}
+
 async function handleIncoming(evt: GreenWebhook): Promise<void> {
   const sender = evt.senderData ?? {};
   const chatId = sender.chatId;
@@ -344,6 +391,28 @@ async function handleIncoming(evt: GreenWebhook): Promise<void> {
   });
   const inboundMessageId = insertedMessage?.id ?? null;
 
+  // Duplicate poll-vote guard — the same answer reaching us twice.
+  //
+  // A WhatsApp poll vote arrives repeatedly with a DIFFERENT message id each
+  // time, so the wa_message_id dedupe above can't see it. The first copy
+  // advances the questionnaire; the second then lands on the NEXT question,
+  // matches nothing, and fires "לא הצלחתי להבין" + a re-ask — so the customer
+  // is asked the same thing twice and reads the bot as broken (Eli
+  // 2026-08-16: "שולח את הסקר שוב ושוב"). Only ROUTING is skipped: the row is
+  // already stored and mirrored, so the record keeps everything.
+  if (
+    typeMessage === "pollUpdateMessage" &&
+    textForRouting?.trim() &&
+    (await isDuplicatePollVote(canonicalSid, textForRouting, inboundMessageId))
+  ) {
+    console.log("[greenapi.webhook] duplicate poll vote — stored but not routed", {
+      sid: canonicalSid,
+      waMessageId,
+      text: textForRouting.slice(0, 60),
+    });
+    return;
+  }
+
   // Mirror to GHL Inbox (Phase 1F). Deferred via Next 16 `after()` so we
   // don't block the inbound handler — the lambda stays alive past the HTTP
   // response just long enough to finish the mirror, while the customer's
@@ -375,6 +444,47 @@ async function handleIncoming(evt: GreenWebhook): Promise<void> {
   // Otherwise we feed empty text into handleInbound and trigger the cold-
   // start path (re-sends OPENING + first question).
   if (typeMessage === "pollUpdateMessage" && !textForRouting) {
+    return;
+  }
+
+  // "Give me a human" — checked BEFORE the stop word, because some of these
+  // phrases contain stop-word substrings ("תפסיק עם הבוט") and the outcomes
+  // are opposite: this customer is still buying, they just don't want a bot.
+  // Silence the bot, tell Eli, leave the stage exactly where it was.
+  if (textForRouting && isHumanHandoffRequest(textForRouting)) {
+    try {
+      const [snap] = await db
+        .select({
+          name: leads.name,
+          phone: leads.phoneE164,
+          stage: leads.pipelineStage,
+        })
+        .from(leads)
+        .where(sql`trim(${leads.manychatSubId}) = ${canonicalSid.trim()}`)
+        .limit(1);
+      await db
+        .update(leads)
+        .set({ botPaused: true, pipelineFlag: "NEEDS_ELI", updatedAt: new Date() })
+        .where(sql`trim(${leads.manychatSubId}) = ${canonicalSid.trim()}`);
+      try {
+        const settings = await getBotSettings();
+        await sendBridgeMessage(canonicalSid, settings.humanHandoffReply);
+      } catch (e) {
+        console.error("[green.webhook] human-handoff reply failed", e);
+      }
+      await sendEliDM(
+        `🙋 ${snap?.name ?? snap?.phone ?? "ליד"} ביקש לדבר עם בן אדם — הבוט הושתק.\n` +
+          `לקוח: "${textForRouting.slice(0, 120)}"\n` +
+          `שלב: ${snap?.stage ?? "קליטה"} · הליד פעיל, צריך מענה אנושי.`
+      );
+      try {
+        await syncLeadToGHL(canonicalSid);
+      } catch (e) {
+        console.warn("[green.webhook] sync after human handoff failed", e);
+      }
+    } catch (e) {
+      console.error("[green.webhook] human-handoff handling failed", e);
+    }
     return;
   }
 

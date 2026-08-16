@@ -225,6 +225,49 @@ const STOP_PATTERNS_LOWER: string[] = [
   "unsubscribe",
 ];
 
+/**
+ * "Give me a human" — distinct from a stop word, and it must stay distinct.
+ *
+ * A stop word means "stop contacting me" and ends the lead (LOST + opt_out).
+ * This means the opposite: the customer is still interested, they just want a
+ * person instead of a bot. Treating it as an opt-out would throw away a live
+ * lead. So this only silences the bot and pings Eli — the stage never moves.
+ *
+ * The phrases are deliberately explicit. A bare "בוט" or "נציג" appears in
+ * ordinary sentences ("יש לכם נציג באזור?"), and silencing the bot on those
+ * would strand customers mid-questionnaire.
+ */
+const HUMAN_HANDOFF_PATTERNS: string[] = [
+  "כבה בוט",
+  "כבה את הבוט",
+  "תכבה בוט",
+  "תכבה את הבוט",
+  "לכבות את הבוט",
+  "בלי בוט",
+  "לא רוצה בוט",
+  "לא עם בוט",
+  "מספיק עם הבוט",
+  "תפסיק עם הבוט",
+  "לדבר עם בן אדם",
+  "לדבר עם אדם",
+  "לדבר עם נציג",
+  "לדבר עם מישהו",
+  "רוצה בן אדם",
+  "רוצה נציג",
+  "תעבירו אותי לנציג",
+  "תעביר אותי לנציג",
+  "נציג אנושי",
+  "בן אדם אמיתי",
+  "אפשר לדבר עם",
+];
+
+export function isHumanHandoffRequest(text: string | null | undefined): boolean {
+  if (!text) return false;
+  const t = text.trim().toLowerCase();
+  if (!t) return false;
+  return HUMAN_HANDOFF_PATTERNS.some((p) => t.includes(p));
+}
+
 export function isStopWord(text: string | null | undefined): boolean {
   if (!text) return false;
   const t = text.trim().toLowerCase();

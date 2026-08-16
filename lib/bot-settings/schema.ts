@@ -26,6 +26,11 @@ export interface BotSettings {
   decisionPrompt: string;
   companyCardText: string;
 
+  // --- talking to a human instead of the bot ---
+  humanHandoffHintEnabled: boolean;
+  humanHandoffHint: string;
+  humanHandoffReply: string;
+
   // --- questionnaire behaviour ---
   pollsEnabled: boolean;
   reaskAttempts: number;
@@ -91,6 +96,11 @@ export const DEFAULT_BOT_SETTINGS: BotSettings = {
   companyCardText:
     "👋 *קצת עלינו — אלבדי*\n\n" +
     "חברת אריזות עם 20+ שנה בענף. שותפים במפעל ייצור בסין. מתמחים בשקיות ממותגות לעסקים.",
+
+  humanHandoffHintEnabled: true,
+  humanHandoffHint: 'רוצים לדבר עם בן אדם במקום? פשוט תכתבו "כבה בוט" ואחזור אליכם.',
+  humanHandoffReply:
+    "בסדר גמור, כיביתי את הבוט 🙂 בן אדם מאלבדי יחזור אליכם בהקדם. אפשר לכתוב כאן בינתיים כל מה שחשוב.",
 
   pollsEnabled: true,
   reaskAttempts: 3,
@@ -247,6 +257,34 @@ export const BOT_SETTING_FIELDS: BotSettingField[] = [
     description:
       "הכיתוב שמלווה את סרטון ההיכרות של אלבדי. הסרטון עצמו והקישורים לאתרים ולאינסטגרם נשלחים בנפרד ולא נערכים כאן.",
     where: "אחרי הצעת המחיר, וגם כשלקוח שואל 'מי אתם'",
+    type: "longtext",
+  },
+
+  {
+    key: "humanHandoffHintEnabled",
+    group: "הודעות ללקוח",
+    label: 'להציע ללקוח לכבות את הבוט',
+    description:
+      "כשדולק — הבוט מספר ללקוח שאפשר לעבור לבן אדם: פעם אחת בתחילת השיחה, ושוב אם הוא לא מצליח להבין את התשובות. הלקוח שכותב \"כבה בוט\" מקבל שקט מיידי ואתה מקבל התראה — הליד לא הולך לאיבוד ולא מסומן כאבוד.",
+    where: "בהודעת הפתיחה, ובניסיון ההבהרה השני",
+    type: "toggle",
+  },
+  {
+    key: "humanHandoffHint",
+    group: "הודעות ללקוח",
+    label: "המשפט שמציע לכבות את הבוט",
+    description:
+      "השורה שנוספת בסוף הודעת הפתיחה וכשהבוט מתקשה להבין. שווה שתישאר קצרה ותכיל את המילים שהלקוח אמור לכתוב.",
+    where: "מתווסף להודעות קיימות, לא נשלח כהודעה נפרדת",
+    type: "longtext",
+  },
+  {
+    key: "humanHandoffReply",
+    group: "הודעות ללקוח",
+    label: 'התשובה ל"כבה בוט"',
+    description:
+      "מה הלקוח מקבל ברגע שביקש לעבור לבן אדם. מיד אחרי זה הבוט שותק בשיחה הזו ואתה מקבל התראה ב-WhatsApp.",
+    where: 'כשהלקוח כותב "כבה בוט", "לדבר עם נציג" וכדומה',
     type: "longtext",
   },
 

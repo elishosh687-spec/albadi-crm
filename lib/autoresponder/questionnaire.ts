@@ -91,6 +91,22 @@ async function refreshSettings(): Promise<void> {
   S = await getBotSettings();
 }
 
+/**
+ * Append the "you can switch to a human" line to a message.
+ *
+ * Told to the customer at the two moments it matters: the opening, so they
+ * know from the start they aren't trapped with a bot, and the second failed
+ * re-ask, which is exactly where a customer decides the thing is broken. It
+ * rides on an existing message on purpose — a separate message would be one
+ * more thing the bot says unprompted, which is the complaint, not the fix.
+ */
+function withHandoffHint(text: string): string {
+  if (!S.humanHandoffHintEnabled) return text;
+  const hint = S.humanHandoffHint?.trim();
+  if (!hint) return text;
+  return `${text}\n\n${hint}`;
+}
+
 const QUESTIONS: Question[] = [
   {
     step: 3,
@@ -257,7 +273,10 @@ export interface QState {
   customDimsPartial?: { h: number; w: number } | null;
   quoteResult?: string;
   bailed?: boolean;
+  /** Consecutive misses on the CURRENT question. Reset by a good answer. */
   unmatchedAt?: number;
+  /** Misses across the whole questionnaire. Never reset — the endless-re-ask guard. */
+  unmatchedTotal?: number;
   doneAt?: string;
   routedToFactory?: boolean;
   // Page index inside step 5 (product). 1 = popular 6 sizes + "more". 2 =
@@ -841,7 +860,7 @@ export async function restartQuestionnaire(
     "סליחה על הבלבול קודם 🙏 בואו נתחיל את השאלון מההתחלה.";
   await sendBridgeMessage(recipient, transition);
   await new Promise((r) => setTimeout(r, 800));
-  await sendBridgeMessage(recipient, S.openingMessage);
+  await sendBridgeMessage(recipient, withHandoffHint(S.openingMessage));
   await new Promise((r) => setTimeout(r, 800));
   await askQuestion(recipient, first);
 }
@@ -1138,7 +1157,7 @@ export async function handleInbound(input: {
     const first = QUESTIONS[0];
     const newState: QState = { step: first.step };
     await saveState(ctx.sid, newState);
-    await sendBridgeMessage(recipient, S.openingMessage);
+    await sendBridgeMessage(recipient, withHandoffHint(S.openingMessage));
     await askQuestion(recipient, first);
     return { action: "started" };
   }
@@ -1274,9 +1293,21 @@ export async function handleInbound(input: {
 
   if (!match) {
     const unmatched = (ctx.qState.unmatchedAt ?? 0) + 1;
-    if (unmatched >= S.reaskAttempts) {
+    // unmatchedAt resets to 0 on every successful answer, so a customer who
+    // stumbles once per question never reaches the bail — the bot just keeps
+    // re-asking, forever, which is what made it feel broken. unmatchedTotal
+    // counts across the WHOLE questionnaire and never resets, so persistent
+    // confusion reaches a human even when it never repeats on one question.
+    const unmatchedTotal = (ctx.qState.unmatchedTotal ?? 0) + 1;
+    const totalLimit = S.reaskAttempts * 2;
+    if (unmatched >= S.reaskAttempts || unmatchedTotal >= totalLimit) {
       // Per CUSTOMER-FLOW.md v2 §1.1/1.2: reask × 3 → escalate.
-      const bailed: QState = { ...ctx.qState, bailed: true, unmatchedAt: unmatched };
+      const bailed: QState = {
+        ...ctx.qState,
+        bailed: true,
+        unmatchedAt: unmatched,
+        unmatchedTotal,
+      };
       await saveState(ctx.sid, bailed);
       await db
         .update(leads)
@@ -1289,16 +1320,21 @@ export async function handleInbound(input: {
       await sendEliDM(
         `⚠️ ${ctx.name ?? ctx.phone ?? "ליד"} — לא הצליח בשאלון האוטומטי (שלב ${currentQ.field}).\n📞 שיחה ידנית — אולי לקוח רציני שזקוק לעזרה.`
       );
-      return { action: "bailed", detail: "three unmatched answers" };
+      return {
+        action: "bailed",
+        detail: `unmatched=${unmatched} total=${unmatchedTotal}`,
+      };
     }
-    const reasked: QState = { ...ctx.qState, unmatchedAt: unmatched };
+    const reasked: QState = { ...ctx.qState, unmatchedAt: unmatched, unmatchedTotal };
     await saveState(ctx.sid, reasked);
     const reasks = [S.reask1, S.reask2];
     const reaskIdx = Math.min(unmatched - 1, reasks.length - 1);
-    const reaskText =
+    const baseReask =
       currentQ.field === "shipping" && unmatched >= 2
         ? "אני שואל קודם כל על שיטת המשלוח (זמן האספקה). תבחרו: אקספרס (~25 יום) או רגיל (~90 יום). על המידות ושאר הפרטים נגיע אחר כך."
         : reasks[reaskIdx];
+    // From the second miss the customer is entitled to know there's a way out.
+    const reaskText = unmatched >= 2 ? withHandoffHint(baseReask) : baseReask;
     await sendBridgeMessage(recipient, reaskText);
     await askQuestion(recipient, currentQ);
     return { action: "reasked" };

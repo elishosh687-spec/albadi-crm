@@ -57,6 +57,21 @@ function extractText(p: GHLOutboundPayload): string | null {
   return v ? v.trim() || null : null;
 }
 
+// The labels forwardMessage() prefixes onto every mirrored message so the GHL
+// Inbox shows who spoke. They exist ONLY inside GHL — a real human typing in
+// the Inbox never produces them, so their presence is proof this payload is
+// our own mirror coming back through the delivery callback.
+const MIRROR_LABELS = ["🤖 בוט", "📤 אלי", "📥 לקוח"];
+
+function stripMirrorLabel(text: string): { body: string; wasLabelled: boolean } {
+  for (const label of MIRROR_LABELS) {
+    if (text.startsWith(label)) {
+      return { body: text.slice(label.length).replace(/^\n/, "").trim(), wasLabelled: true };
+    }
+  }
+  return { body: text, wasLabelled: false };
+}
+
 export async function POST(req: NextRequest): Promise<NextResponse> {
   const rawBody = await req.text();
   const headerSnapshot: Record<string, string> = {};
@@ -177,6 +192,31 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     }
   }
 
+  // Layer 1b: the payload still carries our Inbox label ("🤖 בוט\n…").
+  //
+  // This is the layer that was missing, and it let the loop through for two
+  // months: Layer 1 needs GHL to echo back the same messageId (it often
+  // doesn't) and Layer 2 compared the RAW text — which never matched, because
+  // the mirror had prefixed a label onto it. So every labelled bot message was
+  // re-sent to the customer, arriving a second time with "🤖 בוט" stuck on
+  // top. 76 such messages reached 39 real customers before this check existed
+  // (Eli 2026-08-16: "שולח את הסקר שוב ושוב"). A label is unambiguous — no
+  // human types one — so it alone is enough to drop the payload.
+  if (text) {
+    const { wasLabelled } = stripMirrorLabel(text);
+    if (wasLabelled) {
+      console.log("[ghl.outbound] dedup skip — payload carries our mirror label", {
+        sid: lead.manychatSubId,
+        preview: text.slice(0, 60),
+      });
+      return NextResponse.json({
+        ok: true,
+        skipped: "dedup_mirror_label",
+        lead_sid: lead.manychatSubId,
+      });
+    }
+  }
+
   // Layer 2 (fallback for text-only sends if Layer 1 misses): match recent
   // outbound row text in the messages table.
   if (text) {
@@ -187,7 +227,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         and(
           eq(messages.manychatSubId, lead.manychatSubId),
           eq(messages.direction, "out"),
-          eq(messages.text, text),
+          eq(messages.text, stripMirrorLabel(text).body),
           gt(messages.receivedAt, sql`now() - interval '60 seconds'`)
         )
       )
