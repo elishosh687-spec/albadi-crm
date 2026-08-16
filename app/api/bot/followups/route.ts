@@ -279,9 +279,30 @@ async function processCustomerLead(row: {
   // serves as a fallback if the LLM is unavailable.
   let candidateText: string;
   if (rule.template === "RE_ENGAGEMENT") {
-    const { buildReEngagementMessage } = await import("@/lib/autoresponder/re-engagement");
-    const built = await buildReEngagementMessage(row.sid);
-    candidateText = built.text;
+    // Re-engagement had its own LLM writer, predating the sales brain. Two
+    // separate writers for the same job means two sets of guardrails and two
+    // places to tune, so the setter gets first refusal here as well — it is
+    // the one carrying the ghost-recovery tactic and the mechanical validator.
+    // The older writer stays as the fallback beneath it.
+    const { buildReEngagementMessage, RE_ENGAGEMENT_OPT_OUT_FOOTER } = await import(
+      "@/lib/autoresponder/re-engagement"
+    );
+    const authored = await composeSetterFollowup({
+      sid: row.sid,
+      stage: rule.template,
+      attempt,
+    });
+    if (authored) {
+      // The opt-out line is not the writer's to omit — this is cold outreach
+      // to someone who has already stopped replying.
+      candidateText = authored.text.includes("הסר")
+        ? authored.text
+        : authored.text + RE_ENGAGEMENT_OPT_OUT_FOOTER;
+      setterAuthored = true;
+    } else {
+      const built = await buildReEngagementMessage(row.sid);
+      candidateText = built.text;
+    }
   } else {
     // The canned line is resolved FIRST and always — it is the floor. The
     // setter is then given a chance to write something that actually reflects
