@@ -55,6 +55,14 @@ export const leads = pgTable("leads", {
   followUpCount: integer("follow_up_count").default(0).notNull(),
   lastFollowUpAt: timestamp("last_follow_up_at", { withTimezone: true }),
   botPaused: boolean("bot_paused").default(false).notNull(),
+  // When and why the bot went quiet, so a temporary pause can expire on its own.
+  // See lib/autoresponder/bot-pause.ts — a bare boolean left 81/117 active
+  // leads muted forever with no way to tell a "handling it now" pause from an
+  // opt-out.
+  botPausedAt: timestamp("bot_paused_at", { withTimezone: true }),
+  botPauseReason: text("bot_pause_reason"),
+  /** "Don't touch this lead" — exempts it from auto-resume no matter the reason. */
+  botPauseSticky: boolean("bot_pause_sticky").default(false).notNull(),
   // Currently single-flag scalar (e.g. 'NEEDS_ELI'). Migrate to array later if needed.
   pipelineFlag: text("pipeline_flag"),
 

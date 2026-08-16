@@ -142,6 +142,7 @@ export default async function InboxWidgetPage({
       phone: leads.phoneE164,
       stage: leads.pipelineStage,
       botPaused: leads.botPaused,
+      botPauseSticky: leads.botPauseSticky,
       ghlContactId: leads.ghlContactId,
       updatedAt: leads.updatedAt,
       // Additive reads for the cockpit assembly below (presentation only).
@@ -219,6 +220,7 @@ export default async function InboxWidgetPage({
       phone: lead.phone,
       stage: lead.stage,
       botPaused: lead.botPaused,
+      botPauseSticky: lead.botPauseSticky,
       lastText: last?.text ?? null,
       lastSender: sender,
       lastAt: last?.receivedAt

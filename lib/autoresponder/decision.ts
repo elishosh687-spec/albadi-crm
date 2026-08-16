@@ -50,6 +50,7 @@ import {
   eliLogoReceivedTemplate,
 } from "../messaging/templates";
 import { generateAndQueueDraft, type MoneyReason } from "../drafts";
+import { pauseFields } from "./bot-pause";
 
 const ESCALATION_KIND_TO_MONEY_REASON: Partial<
   Record<"reject" | "negotiating" | "spec_change" | "question" | "generic", MoneyReason>
@@ -245,7 +246,7 @@ async function escalateToEli(
     .update(leads)
     .set({
       pipelineFlag: "NEEDS_ELI",
-      botPaused: true,
+      ...pauseFields("escalation"),
       botSummary,
       qState: cleared as any,
       updatedAt: new Date(),
@@ -996,7 +997,7 @@ async function handleLogoStage(
         // stage stays קליטה, Eli moves it manually after reviewing the DM.
         pipelineStage: "INTAKE",
         pipelineFlag: "NEEDS_ELI",
-        botPaused: true,
+        ...pauseFields("logo_received"),
         botSummary: "logo received — Eli to send final price within 24h",
         followUpCount: 0,
         updatedAt: new Date(),
@@ -1033,7 +1034,7 @@ async function handleLogoStage(
         // Per Eli 2026-07-01: keep stage at קליטה, Eli decides.
         pipelineStage: "INTAKE",
         pipelineFlag: "NEEDS_ELI",
-        botPaused: true,
+        ...pauseFields("logo_received"),
         botSummary: "logo link received — Eli to send final price within 24h",
         followUpCount: 0,
         updatedAt: new Date(),
@@ -1181,7 +1182,7 @@ async function handleFinalStage(
         .set({
           pipelineStage: "WON",
           pipelineFlag: "NEEDS_ELI",
-          botPaused: true,
+          ...pauseFields("deal_won"),
           botSummary: "customer accepted final price — close deal",
           qState: cleared as any,
           followUpCount: 0,

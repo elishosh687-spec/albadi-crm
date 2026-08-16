@@ -17,6 +17,7 @@ import { leads, messages } from "../../drizzle/schema";
 import { desc, eq, sql } from "drizzle-orm";
 import { callLLM } from "./openai-client";
 import { sendEliDM } from "../notify/eli";
+import { pauseFields } from "./bot-pause";
 
 export const RE_ENGAGEMENT_OPT_OUT_FOOTER =
   "\n\n_אם אינך מעוניין/ת לקבל הודעות נוספות, השב/י 'הסר' ולא אטריד שוב._";
@@ -234,10 +235,7 @@ export async function handleReengagementInbound(input: {
   // re-engagement nudge while we wait for Eli to act.
   await db
     .update(leads)
-    .set({
-      botPaused: true,
-      updatedAt: new Date(),
-    })
+    .set(pauseFields("reengagement_reply"))
     .where(sql`trim(${leads.manychatSubId}) = ${sid}`);
 
   const who = snap.name?.trim() || snap.phone || sid;

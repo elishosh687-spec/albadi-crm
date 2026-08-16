@@ -59,6 +59,7 @@ import {
 } from "@/lib/drafts";
 import { attachEliFeedback } from "@/lib/supervisor/log";
 import { logLeadEvent, loadLeadEvents, type LeadEventRow } from "@/lib/events/lead-events";
+import { pauseFields, resumeFields } from "@/lib/autoresponder/bot-pause";
 
 export interface SimpleResult {
   ok: boolean;
@@ -518,13 +519,14 @@ export async function sendManualReply(
     // is needed here.
     await sendBridgeMessage(recipient, cleanText, undefined, "eli");
 
-    // Pause bot so cron doesn't pile on; Eli is now driving.
+    // Pause bot so cron doesn't pile on; Eli is now driving. Recorded as
+    // `human_reply` so it expires on its own — this pause means "I've got this
+    // one right now", and left permanent it was muting most of the pipeline.
     await db
       .update(leads)
       .set({
-        botPaused: true,
+        ...pauseFields("human_reply"),
         lastFollowUpAt: new Date(),
-        updatedAt: new Date(),
       })
       .where(sql`trim(${leads.manychatSubId}) = ${cleanSid}`);
 
@@ -989,18 +991,21 @@ export async function setBotPaused(
     const cleanSid = manychatSubId.trim();
     if (!cleanSid) return { ok: false, error: "missing subscriberId" };
     if (paused) {
+      // Deliberate flip of the switch — `manual_toggle` never auto-resumes.
       await db
         .update(leads)
-        .set({ botPaused: true, updatedAt: new Date() })
+        .set(pauseFields("manual_toggle"))
         .where(sql`trim(${leads.manychatSubId}) = ${cleanSid}`);
     } else {
+      // Turning the bot back on also clears the "don't touch" exception —
+      // otherwise a lead re-paused later would silently stay exempt forever.
       await db
         .update(leads)
         .set({
-          botPaused: false,
+          ...resumeFields(),
+          botPauseSticky: false,
           pipelineFlag: null,
           followUpCount: 0,
-          updatedAt: new Date(),
         })
         .where(sql`trim(${leads.manychatSubId}) = ${cleanSid}`);
     }

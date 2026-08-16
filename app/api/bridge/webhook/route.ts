@@ -54,6 +54,7 @@ import {
   forwardMessage as ghlForwardMessage,
   syncLeadToGHL,
 } from "@/integrations/ghl/sync";
+import { pauseFields } from "@/lib/autoresponder/bot-pause";
 
 export const runtime = "nodejs";
 export const maxDuration = 15;
@@ -303,11 +304,10 @@ async function handleMessageReceived(evt: BridgeEnvelope): Promise<void> {
       await db
         .update(leads)
         .set({
-          botPaused: true,
+          ...pauseFields("opt_out"),
           pipelineStage: "LOST",
           pipelineFlag: null,
           lossReason: "opt_out",
-          updatedAt: new Date(),
         })
         .where(sql`trim(${leads.manychatSubId}) = ${sid.trim()}`);
       try {

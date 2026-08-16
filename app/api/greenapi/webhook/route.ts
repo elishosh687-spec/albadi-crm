@@ -49,6 +49,7 @@ import {
   STOP_WORD_REPLY,
 } from "@/lib/messaging/templates";
 import { getBotSettings } from "@/lib/bot-settings/store";
+import { pauseFields } from "@/lib/autoresponder/bot-pause";
 import { sendEliDM } from "@/lib/notify/eli";
 import { sendBridgeMessage } from "@/lib/bridge/client";
 import { dispatchSupervisor } from "@/lib/supervisor/server/dispatch";
@@ -488,7 +489,7 @@ async function handleIncoming(evt: GreenWebhook): Promise<void> {
         .limit(1);
       await db
         .update(leads)
-        .set({ botPaused: true, pipelineFlag: "NEEDS_ELI", updatedAt: new Date() })
+        .set({ ...pauseFields("human_handoff"), pipelineFlag: "NEEDS_ELI" })
         .where(sql`trim(${leads.manychatSubId}) = ${canonicalSid.trim()}`);
       try {
         const settings = await getBotSettings();
@@ -532,11 +533,10 @@ async function handleIncoming(evt: GreenWebhook): Promise<void> {
       await db
         .update(leads)
         .set({
-          botPaused: true,
+          ...pauseFields("opt_out"),
           pipelineStage: "LOST",
           pipelineFlag: null,
           lossReason: "opt_out",
-          updatedAt: new Date(),
         })
         .where(sql`trim(${leads.manychatSubId}) = ${canonicalSid.trim()}`);
       try {
@@ -818,7 +818,7 @@ async function handleOutgoingManual(evt: GreenWebhook): Promise<void> {
   try {
     const paused = await db
       .update(leads)
-      .set({ botPaused: true, updatedAt: new Date() })
+      .set(pauseFields("human_reply"))
       .where(
         sql`trim(${leads.manychatSubId}) = ${canonicalSid.trim()} AND ${leads.botPaused} IS DISTINCT FROM TRUE`
       )

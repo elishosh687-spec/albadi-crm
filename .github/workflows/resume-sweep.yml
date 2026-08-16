@@ -1,0 +1,44 @@
+# Hands the keys back to the bot on leads a human paused and never un-paused.
+#
+# WHY GitHub Actions and not vercel.json: the Vercel plan only runs crons once
+# a day, so any sub-daily schedule there never fires (see
+# process-recordings.yml for the incident that established this).
+#
+# Hourly, not every few minutes: the shortest pause anyone would configure is
+# measured in hours, so a tighter schedule adds load without waking a single
+# lead sooner.
+#
+# SAFE TO RUN WHILE OFF. With "להחזיר את הבוט לעבודה אוטומטית" switched off in
+# the bot settings the endpoint reports how many leads WOULD have resumed and
+# changes nothing — so turning the feature on is a settings change, not a
+# deploy. It never touches an opt-out, a "give me a human", a closed deal, a
+# manual toggle, or a lead marked "don't touch".
+name: resume-sweep
+on:
+  schedule:
+    - cron: "17 * * * *"
+  workflow_dispatch:
+    inputs:
+      dry:
+        description: "Preview only (change nothing)"
+        type: boolean
+        default: false
+      include_legacy:
+        description: "ALSO release the pre-tracking backlog (one-off, deliberate)"
+        type: boolean
+        default: false
+
+jobs:
+  sweep:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Expire temporary bot pauses
+        run: |
+          Q=""
+          if [ "${{ inputs.dry }}" = "true" ]; then Q="?dry=1"; fi
+          if [ "${{ inputs.include_legacy }}" = "true" ]; then
+            if [ -z "$Q" ]; then Q="?includeLegacy=1"; else Q="$Q&includeLegacy=1"; fi
+          fi
+          curl -sS -X POST "https://albadi-crm.vercel.app/api/bot/resume-sweep$Q" \
+            -H "Authorization: Bearer ${{ secrets.BOT_SECRET }}" \
+            --max-time 60 | python3 -m json.tool

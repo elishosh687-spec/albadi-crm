@@ -36,6 +36,7 @@ import { superviseFollowup } from "@/lib/supervisor/followup-supervisor";
 import { logDecision } from "@/lib/supervisor/log";
 import { generateAndQueueDraft } from "@/lib/drafts";
 import { syncLeadToGHL } from "@/integrations/ghl/sync";
+import { pauseFields } from "@/lib/autoresponder/bot-pause";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -130,8 +131,9 @@ async function escalateLead(input: {
     .update(leads)
     .set({
       pipelineFlag: "NEEDS_ELI",
-      botPaused: true,
-      updatedAt: new Date(),
+      // stop_word is an opt-out and must never expire; the other two mean the
+      // customer went cold, and resuming would just restart the nagging.
+      ...pauseFields(input.reason === "stop_word" ? "opt_out" : "no_reply"),
     })
     .where(sql`trim(${leads.manychatSubId}) = ${input.sid.trim()}`);
   await sendEliDM(

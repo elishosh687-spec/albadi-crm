@@ -31,6 +31,10 @@ export interface BotSettings {
   humanHandoffHint: string;
   humanHandoffReply: string;
 
+  // --- handing the keys back to the bot ---
+  autoResumeEnabled: boolean;
+  autoResumeHours: number;
+
   // --- questionnaire behaviour ---
   pollsEnabled: boolean;
   reaskAttempts: number;
@@ -101,6 +105,9 @@ export const DEFAULT_BOT_SETTINGS: BotSettings = {
   humanHandoffHint: 'רוצים לדבר עם בן אדם במקום? פשוט תכתבו "כבה בוט" ואחזור אליכם.',
   humanHandoffReply:
     "בסדר גמור, כיביתי את הבוט 🙂 בן אדם מאלבדי יחזור אליכם בהקדם. אפשר לכתוב כאן בינתיים כל מה שחשוב.",
+
+  autoResumeEnabled: true,
+  autoResumeHours: 48,
 
   pollsEnabled: true,
   reaskAttempts: 3,
@@ -286,6 +293,28 @@ export const BOT_SETTING_FIELDS: BotSettingField[] = [
       "מה הלקוח מקבל ברגע שביקש לעבור לבן אדם. מיד אחרי זה הבוט שותק בשיחה הזו ואתה מקבל התראה ב-WhatsApp.",
     where: 'כשהלקוח כותב "כבה בוט", "לדבר עם נציג" וכדומה',
     type: "longtext",
+  },
+
+  {
+    key: "autoResumeEnabled",
+    group: "הודעות ללקוח",
+    label: "להחזיר את הבוט לעבודה אוטומטית",
+    description:
+      "ברגע שאתה עונה ללקוח בעצמו, הבוט משתתק בשיחה הזו — וזה נכון, אתה מנהל אותה. הבעיה היא שההשתקה נשארה לנצח: נמדד שב-81 מתוך 117 לידים פעילים הבוט היה מושתק לצמיתות, כך שהשאלון, המעקבים ומוח המכירות לא פעלו כמעט על אף שיחה חיה. כשדולק — השתקה כזו פגה מעצמה אחרי הזמן שלמטה.\n\nלא נוגע בלקוח שביקש להסיר, בלקוח שביקש בן אדם, בעסקה שנסגרה, או בליד שסימנת ידנית — אלה נשארים שקטים תמיד.",
+    where: "רץ כל שעה ברקע",
+    type: "toggle",
+  },
+  {
+    key: "autoResumeHours",
+    group: "הודעות ללקוח",
+    label: "אחרי כמה שעות הבוט חוזר",
+    description:
+      "נספר מרגע ההשתקה. קצר מדי — הבוט יתפרץ לשיחה שאתה עוד מנהל; ארוך מדי — לידים ממשיכים ליפול בין הכיסאות. 48 שעות זה יומיים עסקים.",
+    where: "רלוונטי רק כשהמתג למעלה דלוק",
+    type: "number",
+    min: 2,
+    max: 336,
+    unit: "שעות",
   },
 
   // ---------- התנהגות השאלון ----------

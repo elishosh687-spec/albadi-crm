@@ -24,6 +24,7 @@ export interface InboxRow {
   phone: string | null;
   stage: string | null;
   botPaused: boolean;
+  botPauseSticky?: boolean;
   lastText: string | null;
   lastSender: "lead" | "bot" | "eli";
   lastAt: string | null;
@@ -111,6 +112,7 @@ function buildRowActions(
     quickTemplates: QuickTemplate[];
     openQuotes: () => void;
     openAnalyze: () => void;
+    keepPaused: (sid: string) => void;
   }
 ): RowActionItem[] {
   const leadName = r.name || r.phone || r.sid;
@@ -120,6 +122,16 @@ function buildRowActions(
       tone: r.botPaused ? "warn" : "neutral",
       onClick: () => h.toggle(r.sid, r.botPaused),
     },
+    // The bot now wakes itself after the configured time, so a silence that
+    // must LAST needs to say so explicitly. Only offered while paused —
+    // there is nothing to exempt on a live lead.
+    ...(r.botPaused && !r.botPauseSticky
+      ? [{
+          label: "אל תיגע בליד הזה",
+          tone: "warn" as const,
+          onClick: () => h.keepPaused(r.sid),
+        }]
+      : []),
     { label: "הצעות מחיר", tone: "champagne", onClick: h.openQuotes },
     { label: "נתח ליד", tone: "neutral", onClick: h.openAnalyze },
     ...h.quickTemplates.map((tpl) => ({
@@ -185,6 +197,36 @@ export default function InboxView({
     } catch (e) {
       // revert
       setRows((rs) => rs.map((r) => (r.sid === sid ? { ...r, botPaused: current } : r)));
+      alert(`שגיאה: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  /** Exempt this lead from the automatic wake-up, permanently. */
+  async function keepPaused(sid: string) {
+    if (
+      !window.confirm(
+        "הבוט לא יחזור לדבר בשיחה הזו לעולם, גם אחרי הזמן שהוגדר בהגדרות.\n" +
+          'להחזיר אותו בהמשך — "הפעל בוט".\n\nלסמן?'
+      )
+    )
+      return;
+    setBusy(sid);
+    setRows((rs) => rs.map((r) => (r.sid === sid ? { ...r, botPauseSticky: true } : r)));
+    try {
+      const res = await fetch(
+        `/api/widget/toggle-pause?widget_token=${encodeURIComponent(apiToken)}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ sid, paused: true, sticky: true }),
+        }
+      );
+      const json = await res.json();
+      if (!json.ok) throw new Error(json.error || "failed");
+    } catch (e) {
+      setRows((rs) => rs.map((r) => (r.sid === sid ? { ...r, botPauseSticky: false } : r)));
       alert(`שגיאה: ${e instanceof Error ? e.message : String(e)}`);
     } finally {
       setBusy(null);
@@ -382,6 +424,7 @@ export default function InboxView({
           const stage = stageMeta(r.stage);
           const actionItems = buildRowActions(r, {
             toggle,
+            keepPaused,
             sendTemplate,
             quickTemplates,
             openQuotes: () =>
