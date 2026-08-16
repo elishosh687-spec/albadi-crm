@@ -30,7 +30,15 @@ export async function POST(req: NextRequest) {
   if (!authorized(req)) {
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
+  // ?dry=1 — answer "did my tagging reach Meta?" WITHOUT sending anything.
+  // Diagnosing the loop should never fire real conversion events at Meta, and
+  // before this the only way to inspect it was to run it for real.
+  const dry = new URL(req.url).searchParams.get("dry") === "1";
   try {
+    if (dry) {
+      const goodLeads = await pollGoodLeads({ dry: true });
+      return NextResponse.json({ ok: true, dry: true, goodLeads });
+    }
     // 1. Fill leadgen ids from the Meta form sheets (past + new leads).
     const result = await enrichMetaAttribution();
     // 2. Report leads Eli tagged "ליד טוב" in GHL as Meta Qualified. Runs after
