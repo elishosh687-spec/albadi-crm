@@ -74,6 +74,7 @@ export interface BotSettings {
   setterDraftsEnabled: boolean;
   setterLiveEnabled: boolean;
   setterWritesFollowups: boolean;
+  setterPhrasesStateReplies: boolean;
   followupSupervisorEnabled: boolean;
   setterModel: string;
   setterMaxWords: number;
@@ -153,6 +154,7 @@ export const DEFAULT_BOT_SETTINGS: BotSettings = {
   setterDraftsEnabled: true,
   setterLiveEnabled: false,
   setterWritesFollowups: true,
+  setterPhrasesStateReplies: true,
   followupSupervisorEnabled: false,
   setterModel: "gpt-5.6-terra",
   setterMaxWords: 60,
@@ -623,6 +625,15 @@ export const BOT_SETTING_FIELDS: BotSettingField[] = [
     description:
       "כשדולק — כל תזכורת נכתבת מחדש לפי השיחה הספציפית של הלקוח, במקום אחד מ-13 המשפטים הקבועים. לקוח שהתווכח על מחיר ולקוח שנעלם באמצע השאלון מקבלים דברים שונים.\n\nהקוד עדיין מחליט מתי לשלוח ולמי — הקצב, מספר הניסיונות, שעות השקט. מוח המכירות רק מנסח. אם הניסוח נכשל או נפסל בבדיקות, נשלח הטקסט הקבוע כרגיל, אז אין מצב שלקוח לא יקבל תזכורת בגלל זה.",
     where: "כל תזכורת ללקוח שלא ענה",
+    type: "toggle",
+  },
+  {
+    key: "setterPhrasesStateReplies",
+    group: "מוח מכירות",
+    label: "מוח המכירות מנסח גם את רגעי ההחלטה",
+    description:
+      "הרגעים שבהם הלקוח אומר \"מתאים לי\", שולח לוגו, או מבקש לשנות מפרט — 14 משפטים שכל לקוח שמע בדיוק אותו דבר. **הפעולה נשארת בקוד** (הליד מתקדם, הבוט משתתק, המחיר מחושב מחדש) ורק הניסוח עובר למוח המכירות.\n\nהבקשה עצמה מוגנת: אם ההודעה החדשה לא מבקשת את הלוגו כשצריך לבקש לוגו — היא נזרקת ונשלח המשפט הקבוע. עדיף לאבד ניסוח אישי מאשר לשבור את הזרימה.\n\nדורש שגם \"הסטר עונה בשיחה החיה\" יהיה דלוק.",
+    where: "כשהלקוח מאשר, שולח לוגו, או משנה מפרט",
     type: "toggle",
   },
   {

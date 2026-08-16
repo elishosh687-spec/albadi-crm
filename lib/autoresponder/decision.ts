@@ -51,6 +51,7 @@ import {
 } from "../messaging/templates";
 import { generateAndQueueDraft, type MoneyReason } from "../drafts";
 import { pauseFields } from "./bot-pause";
+import { phraseStateReply } from "../setter/phrase";
 
 const ESCALATION_KIND_TO_MONEY_REASON: Partial<
   Record<"reject" | "negotiating" | "spec_change" | "question" | "generic", MoneyReason>
@@ -587,7 +588,15 @@ async function handleDecisionStage(
     //   • else → escalate (ambiguous answer)
     if (hasDigits(t) || classification.intent === "negotiating") {
       // §2.4.2 — customer gave a competitor price. Acknowledge politely, then escalate.
-      await sendBridgeMessage(ctx.jid, REPLY_COMPETITOR_ESCALATE_REPLY);
+      await sendBridgeMessage(
+      ctx.jid,
+      await phraseStateReply({
+        sid: ctx.sid,
+        trigger: 'competitor_escalate',
+        situation: 'הלקוח מסר מחיר של מתחרה. אתה קונה זמן לבדוק מולו — בלי להתחייב למחיר או להנחה.',
+        fallback: REPLY_COMPETITOR_ESCALATE_REPLY,
+      })
+    );
       await escalateToEli(
         ctx,
         "הלקוח נתן מחיר/הצעה מתחרה",
@@ -602,7 +611,15 @@ async function handleDecisionStage(
     }
     if (classification.intent === "reject") {
       await setDecisionState(ctx.sid, "awaiting_pause_reason", ctx.qState);
-      await sendBridgeMessage(ctx.jid, REPLY_PAUSE_PROMPT);
+      await sendBridgeMessage(
+      ctx.jid,
+      await phraseStateReply({
+        sid: ctx.sid,
+        trigger: 'pause_prompt',
+        situation: 'הלקוח אמר שהוא צריך לחשוב. אתה מנסה להבין על מה בדיוק, כדי שתוכל לעזור.',
+        fallback: REPLY_PAUSE_PROMPT,
+      })
+    );
       return {
         action: "sub_state_advanced",
         intent: classification.intent,
@@ -678,7 +695,15 @@ async function handleDecisionStage(
         .update(leads)
         .set({ qState: bumped as any, updatedAt: new Date() })
         .where(sql`trim(${leads.manychatSubId}) = ${ctx.sid.trim()}`);
-      await sendBridgeMessage(ctx.jid, REPLY_SPEC_CHANGE_REPROMPT);
+      await sendBridgeMessage(
+      ctx.jid,
+      await phraseStateReply({
+        sid: ctx.sid,
+        trigger: 'spec_change_reprompt',
+        situation: 'הלקוח ביקש לשנות משהו אבל לא הצלחנו להבין מה. בקש ממנו לומר איזה פרמטר ואיזה ערך.',
+        fallback: REPLY_SPEC_CHANGE_REPROMPT,
+      })
+    );
       return {
         action: "sub_state_advanced",
         intent: classification.intent,
@@ -707,7 +732,15 @@ async function handleDecisionStage(
         .where(sql`trim(${leads.manychatSubId}) = ${ctx.sid.trim()}`);
 
       const changedSummary = describeSpecChange(extracted!);
-      await sendBridgeMessage(ctx.jid, REPLY_SPEC_CHANGE_ACK);
+      await sendBridgeMessage(
+      ctx.jid,
+      await phraseStateReply({
+        sid: ctx.sid,
+        trigger: 'spec_change_ack',
+        situation: 'קיבלת מהלקוח שינוי מפרט שדורש תמחור ידני. אשר שקיבלת ואמור שתחזור עם הצעה מעודכנת.',
+        fallback: REPLY_SPEC_CHANGE_ACK,
+      })
+    );
       await escalateToEli(ctx, "spec change requires manual pricing", {
         kind: "spec_change",
         llmAnalysis: `הלקוח ביקש לשנות: ${changedSummary}`,
@@ -722,7 +755,15 @@ async function handleDecisionStage(
     }
 
     // Auto-requote — new spec is inside the calculator's range.
-    await sendBridgeMessage(ctx.jid, REPLY_SPEC_CHANGE_AUTO_QUOTE);
+    await sendBridgeMessage(
+      ctx.jid,
+      await phraseStateReply({
+        sid: ctx.sid,
+        trigger: 'spec_change_auto_quote',
+        situation: 'עדכנת את המפרט וההצעה המחודשת נשלחת מיד אחרי המשפט הזה. משפט קצר מאוד שמוביל אליה.',
+        fallback: REPLY_SPEC_CHANGE_AUTO_QUOTE,
+      })
+    );
     const ok = await requoteWithUpdatedSpec({
       sid: ctx.sid,
       jid: ctx.jid,
@@ -753,7 +794,15 @@ async function handleDecisionStage(
     // §2.4.4A — customer answered "what's blocking?". Acknowledge politely;
     // clear sub-state so cadence can pick up at the normal 24/36/72h.
     await setDecisionState(ctx.sid, null, ctx.qState);
-    await sendBridgeMessage(ctx.jid, REPLY_PAUSE_ACK);
+    await sendBridgeMessage(
+      ctx.jid,
+      await phraseStateReply({
+        sid: ctx.sid,
+        trigger: 'pause_ack',
+        situation: 'הלקוח הסביר על מה הוא צריך לחשוב. תן לו מרחב, והשאר את הדלת פתוחה.',
+        fallback: REPLY_PAUSE_ACK,
+      })
+    );
     return {
       action: "sub_state_advanced",
       intent: classification.intent,
@@ -792,7 +841,15 @@ async function handleDecisionStage(
           updatedAt: new Date(),
         })
         .where(sql`trim(${leads.manychatSubId}) = ${ctx.sid.trim()}`);
-      await sendBridgeMessage(ctx.jid, ACCEPT_REPLY);
+      await sendBridgeMessage(
+      ctx.jid,
+      await phraseStateReply({
+        sid: ctx.sid,
+        trigger: 'accept',
+        situation: 'הלקוח אישר את ההצעה! זה הרגע הכי חשוב במשפך. אתה חייב לבקש ממנו את הלוגו כתמונה בוואטסאפ כדי להתקדם.',
+        fallback: ACCEPT_REPLY, mustMention: ['לוגו'],
+      })
+    );
       return { action: "accept_routed", intent: classification.intent };
     }
 
@@ -1017,7 +1074,15 @@ async function handleLogoStage(
         quotePrice: row?.quoteTotal ?? null,
       })
     );
-    await sendBridgeMessage(ctx.jid, LOGO_ESCALATE_REPLY);
+    await sendBridgeMessage(
+      ctx.jid,
+      await phraseStateReply({
+        sid: ctx.sid,
+        trigger: 'logo_received',
+        situation: 'הלקוח שלח קובץ. אשר שקיבלת ואמור שתחזור אליו בקרוב. בלי להבטיח מחיר.',
+        fallback: LOGO_ESCALATE_REPLY,
+      })
+    );
     return { action: "logo_received" };
   }
 
@@ -1052,13 +1117,29 @@ async function handleLogoStage(
         quotePrice: row?.quoteTotal ?? null,
       })
     );
-    await sendBridgeMessage(ctx.jid, LOGO_LINK_REPLY);
+    await sendBridgeMessage(
+      ctx.jid,
+      await phraseStateReply({
+        sid: ctx.sid,
+        trigger: 'logo_link',
+        situation: 'הלקוח שלח קישור ללוגו. אשר שקיבלת ואמור שתשלח מחיר סופי תוך 24 שעות.',
+        fallback: LOGO_LINK_REPLY,
+      })
+    );
     return { action: "logo_received", detail: "logo link detected" };
   }
 
   // §3.3 — "אין לי לוגו" / "תכין אתה" / "תיקח מהאתר" — escalate immediately.
   if (t && /אין לי לוגו|תכין אתה|תיקח מהאתר|אין לוגו|לוגו אין/i.test(t)) {
-    await sendBridgeMessage(ctx.jid, LOGO_NO_LOGO_REPLY);
+    await sendBridgeMessage(
+      ctx.jid,
+      await phraseStateReply({
+        sid: ctx.sid,
+        trigger: 'no_logo',
+        situation: 'ללקוח אין לוגו מוכן. הרגע אותו ואמור שתתקשר לסגור אפשרויות.',
+        fallback: LOGO_NO_LOGO_REPLY,
+      })
+    );
     await escalateToEli(
       ctx,
       "אין ללקוח לוגו — צריך להציע אופציות בטלפון",
@@ -1098,7 +1179,15 @@ async function handleLogoStage(
       updatedAt: new Date(),
     })
     .where(sql`trim(${leads.manychatSubId}) = ${ctx.sid.trim()}`);
-  await sendBridgeMessage(ctx.jid, LOGO_REASK);
+  await sendBridgeMessage(
+      ctx.jid,
+      await phraseStateReply({
+        sid: ctx.sid,
+        trigger: 'logo_reask',
+        situation: 'הלקוח כתב משהו אבל עדיין לא שלח לוגו. אתה חייב לבקש ממנו לשלוח את הלוגו כתמונה.',
+        fallback: LOGO_REASK, mustMention: ['לוגו'],
+      })
+    );
   return { action: "logo_reasked", detail: `attempt ${attempt}` };
 }
 
@@ -1153,7 +1242,15 @@ async function handleFinalStage(
 
   if (finalState === "awaiting_haggle_detail") {
     // §4.2.3 — customer replied to "מה בדיוק?". Ack politely; escalate.
-    await sendBridgeMessage(ctx.jid, FINAL_DISCOUNT_ESCALATE_REPLY);
+    await sendBridgeMessage(
+      ctx.jid,
+      await phraseStateReply({
+        sid: ctx.sid,
+        trigger: 'final_haggle',
+        situation: 'הלקוח מתמקח על המחיר הסופי. אתה בודק מה אפשר לעשות — בלי להבטיח הנחה.',
+        fallback: FINAL_DISCOUNT_ESCALATE_REPLY,
+      })
+    );
     await escalateToEli(
       ctx,
       "הלקוח נתן פירוט / הצעת מחיר על המחיר הסופי",
@@ -1189,7 +1286,15 @@ async function handleFinalStage(
           updatedAt: new Date(),
         })
         .where(sql`trim(${leads.manychatSubId}) = ${ctx.sid.trim()}`);
-      await sendBridgeMessage(ctx.jid, FINAL_ACCEPT_REPLY);
+      await sendBridgeMessage(
+      ctx.jid,
+      await phraseStateReply({
+        sid: ctx.sid,
+        trigger: 'final_accept',
+        situation: 'הלקוח אישר את המחיר הסופי — העסקה נסגרת! אמור שתתקשר בקרוב עם פרטי תשלום ולוחות זמנים.',
+        fallback: FINAL_ACCEPT_REPLY,
+      })
+    );
       const who = ctx.name?.trim() || ctx.phone || ctx.sid;
       await sendEliDM(
         `✅ ${who} אישר את המחיר הסופי. צריך לסגור עסקה (תשלום + הזמנה).`
@@ -1212,7 +1317,15 @@ async function handleFinalStage(
       // §4.3 — spec change after final price. Ack with the "back to questionnaire"
       // message per BOT-COPY.md; escalate so Eli decides which fields changed
       // (true loopback is deferred — Eli re-quotes manually).
-      await sendBridgeMessage(ctx.jid, FINAL_SPEC_CHANGE_REPLY);
+      await sendBridgeMessage(
+      ctx.jid,
+      await phraseStateReply({
+        sid: ctx.sid,
+        trigger: 'final_spec_change',
+        situation: 'הלקוח רוצה לשנות מפרט אחרי המחיר הסופי. אמור שתעברו על הפרטים שוב לעדכון מחיר.',
+        fallback: FINAL_SPEC_CHANGE_REPLY,
+      })
+    );
       await escalateToEli(
         ctx,
         "הלקוח רוצה לשנות מפרט אחרי שקיבל מחיר סופי",
