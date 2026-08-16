@@ -177,6 +177,8 @@ interface ProcessedLead {
   preview?: string;
   /** Dry-run only: the canned line it replaced, when the setter wrote one. */
   cannedInstead?: string;
+  /** Dry-run only: who actually wrote what would go out. */
+  author?: "setter" | "supervisor" | "template";
 }
 
 async function escalateLead(input: {
@@ -270,6 +272,8 @@ async function processCustomerLead(row: {
 
   const recipient = row.jid || row.sid;
   const attempt = row.followUpCount + 1;
+  /** Did the sales brain write this one? Decides whether the supervisor may rewrite it. */
+  let setterAuthored = false;
   // Re-engagement loop bodies are LLM-built per send so the message reflects
   // each lead's specific history + notes; the static template here only
   // serves as a fallback if the LLM is unavailable.
@@ -290,7 +294,10 @@ async function processCustomerLead(row: {
       stage: rule.template,
       attempt,
     });
-    if (authored) candidateText = authored.text;
+    if (authored) {
+      candidateText = authored.text;
+      setterAuthored = true;
+    }
   }
 
   // Load recent thread for supervisor context.
@@ -429,12 +436,30 @@ async function processCustomerLead(row: {
   }
 
   // approve_template or override_with_text — actually send.
+  //
+  // The supervisor's rewrite power exists to rescue a GENERIC canned template.
+  // Once the sales brain has written the message against this lead's own
+  // conversation there is no generic template left to rescue, and a rewrite
+  // becomes one LLM second-guessing another — with the weaker guardrails
+  // winning: the setter's output is mechanically validated (no price that
+  // isn't in the DB, no discount language, at most one question, word cap, no
+  // URLs) and the supervisor's override is not. Measured on a live dry run,
+  // the supervisor was replacing 6 of 8 setter-written nudges, and one of its
+  // rewrites quoted a per-unit price at the customer.
+  //
+  // So when the setter authored the text the supervisor keeps every SAFETY
+  // power — it can still silence the send or escalate to Eli, which is a
+  // judgement about whether to speak at all — but no longer rewrites the
+  // words. Those are the setter's job now.
   let textToSend: string;
   let decidedBy: "code" | "llm_override";
-  if (verdict.recommended === "override_with_text" && verdict.overrideText) {
+  if (verdict.recommended === "override_with_text" && verdict.overrideText && !setterAuthored) {
     textToSend = verdict.overrideText;
     decidedBy = "llm_override";
   } else {
+    if (verdict.recommended === "override_with_text" && setterAuthored) {
+      console.log("[followups] supervisor rewrite declined — setter authored", row.sid);
+    }
     textToSend = candidateText;
     decidedBy = "code";
   }
@@ -446,8 +471,9 @@ async function processCustomerLead(row: {
     return {
       sid: row.sid,
       action: "would_send",
-      detail: `${rule.template} #${attempt}${decidedBy === "llm_override" ? " (מפקח)" : ""}`,
+      detail: `${rule.template} #${attempt}`,
       preview: textToSend,
+      author: setterAuthored ? "setter" : decidedBy === "llm_override" ? "supervisor" : "template",
       cannedInstead:
         rule.template !== "RE_ENGAGEMENT" ? followupTemplate(rule.template, attempt) : undefined,
     };

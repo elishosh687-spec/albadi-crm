@@ -52,7 +52,8 @@ jobs:
               print()
               for r in (d.get('details', {}).get('customer') or []):
                   if r.get('action') != 'would_send': continue
-                  print('—', r['sid'], '·', r.get('detail'))
+                  who = {'setter': 'מוח מכירות', 'supervisor': 'מפקח', 'template': 'טקסט קבוע'}.get(r.get('author'), '?')
+                  print('—', r['sid'], '·', r.get('detail'), '· כתב:', who)
                   if r.get('cannedInstead'):
                       print('   קבוע:', r['cannedInstead'])
                   print('   ישלח:', r.get('preview'))
