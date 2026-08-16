@@ -32,6 +32,35 @@ export interface SalesContext {
   /** Last few messages, oldest first — the classifier's raw material. */
   recentMessages: { from: "customer" | "us"; text: string }[];
   lastCustomerMessage: string | null;
+  /**
+   * What is already known about this lead outside the WhatsApp thread.
+   *
+   * Measured 2026-08-16 across the 119 active leads: 88 had analysed PHONE
+   * CALLS, 114 had a stored sales verdict and 105 carried Eli's own notes —
+   * and the setter read none of it. It was writing to someone whose objection
+   * had been named on a call the week before, holding only the last twelve
+   * chat messages. All of this is already computed and stored; not reading it
+   * was the omission.
+   */
+  dossier: {
+    /** Eli's notes on the contact, trimmed. */
+    notes: string | null;
+    /** The bot's own running summary of where this lead stands. */
+    botSummary: string | null;
+    /** Latest lead-analysis verdict — why this deal is stuck. */
+    verdict: {
+      rootCause: string | null;
+      primaryBlocker: string | null;
+      commitment: string | null;
+    } | null;
+    /** Most recent analysed phone call. */
+    lastCall: {
+      whenIso: string | null;
+      summary: string | null;
+      objections: string[];
+      nextSteps: string[];
+    } | null;
+  };
 }
 
 const RECENT_LIMIT = 12;
@@ -43,6 +72,9 @@ export async function buildSalesContext(sid: string): Promise<SalesContext | nul
       stage: leads.pipelineStage,
       qState: leads.qState,
       quoteTotal: leads.quoteTotal,
+      notes: leads.notes,
+      botSummary: leads.botSummary,
+      ghlContactId: leads.ghlContactId,
     })
     .from(leads)
     .where(sql`trim(${leads.manychatSubId}) = ${sid.trim()}`)
@@ -76,6 +108,7 @@ export async function buildSalesContext(sid: string): Promise<SalesContext | nul
     d ? Math.round(((Date.now() - d.getTime()) / 36e5) * 10) / 10 : null;
 
   const prep = await computeCallPrep(sid);
+  const dossier = await loadDossier(sid, lead.ghlContactId, lead.notes, lead.botSummary);
 
   return {
     sid: sid.trim(),
@@ -100,5 +133,103 @@ export async function buildSalesContext(sid: string): Promise<SalesContext | nul
         text: (m.text ?? "").slice(0, 400),
       })),
     lastCustomerMessage: lastIn?.text ?? null,
+    dossier,
   };
+}
+
+/**
+ * Markers our own pipelines stamp on the notes they write into GHL.
+ *
+ * `leads.notes` is a concatenation of EVERY note on the contact, and three of
+ * our machines write there: the call analyser, the lead analyser and the deal
+ * file. Passing the field raw would feed the generator its own earlier output
+ * — the same verdict and call summary it already receives as structured
+ * fields, wrapped in headers, burning tokens to say it twice. Only what a
+ * human actually typed is useful here.
+ */
+const MACHINE_NOTE_MARKERS = [
+  "[LEAD-ANALYSIS",
+  "[CALL-ANALYSIS",
+  "[CALLBACK",
+  "[תיק עסקה]",
+];
+
+function humanNotesOnly(notes: string | null): string | null {
+  if (!notes?.trim()) return null;
+  const kept = notes
+    .split(/\n(?=\[)/)
+    .filter((block) => !MACHINE_NOTE_MARKERS.some((m) => block.trimStart().startsWith(m)))
+    .join("\n")
+    .trim();
+  return kept ? kept.slice(0, 700) : null;
+}
+
+/**
+ * Pull the already-computed knowledge about this lead.
+ *
+ * Deliberately compact: the verdict's root cause, the last call's summary and
+ * what was agreed on it — not whole transcripts. The point is to stop writing
+ * blind, not to bury the generator in context it has to wade through. Every
+ * read is defensive; a missing dossier must never cost the lead its message.
+ */
+async function loadDossier(
+  sid: string,
+  ghlContactId: string | null,
+  notes: string | null,
+  botSummary: string | null
+): Promise<SalesContext["dossier"]> {
+  const base = {
+    notes: humanNotesOnly(notes),
+    botSummary: botSummary?.trim() || null,
+    verdict: null as SalesContext["dossier"]["verdict"],
+    lastCall: null as SalesContext["dossier"]["lastCall"],
+  };
+
+  try {
+    const v = await db.execute(sql`
+      SELECT verdict->>'root_cause' AS root_cause,
+             verdict->>'primary_blocker' AS blocker,
+             verdict->'commitment_scorecard'->>'score_1_5' AS commitment
+      FROM lead_analyses
+      WHERE trim(manychat_sub_id) = ${sid.trim()}
+      ORDER BY created_at DESC LIMIT 1`);
+    const row = (((v as any).rows ?? v) as any[])[0];
+    if (row) {
+      base.verdict = {
+        rootCause: row.root_cause ? String(row.root_cause).slice(0, 400) : null,
+        primaryBlocker: row.blocker ?? null,
+        commitment: row.commitment ?? null,
+      };
+    }
+  } catch (e) {
+    console.warn("[setter.context] verdict read failed", e);
+  }
+
+  if (ghlContactId) {
+    try {
+      const c = await db.execute(sql`
+        SELECT call_started_at,
+               analysis->>'call_summary' AS summary,
+               analysis->'objections' AS objections,
+               analysis->'next_steps' AS next_steps
+        FROM call_recording_imports
+        WHERE ghl_contact_id = ${ghlContactId} AND analysis IS NOT NULL
+        ORDER BY call_started_at DESC LIMIT 1`);
+      const row = (((c as any).rows ?? c) as any[])[0];
+      if (row) {
+        const list = (x: unknown): string[] =>
+          Array.isArray(x) ? x.map(String).filter(Boolean).slice(0, 3) : [];
+        base.lastCall = {
+          whenIso: row.call_started_at ? new Date(row.call_started_at).toISOString() : null,
+          summary: row.summary ? String(row.summary).slice(0, 400) : null,
+          objections: list(row.objections),
+          nextSteps: list(row.next_steps),
+        };
+      }
+    } catch (e) {
+      console.warn("[setter.context] call read failed", e);
+    }
+  }
+
+  return base;
 }

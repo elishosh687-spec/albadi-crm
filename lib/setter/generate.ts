@@ -86,11 +86,49 @@ function renderContext(ctx: SalesContext, strategy: SalesStrategy): string {
     strategy.informationToRequest.length
       ? `חסר ללקוח לשיחה: ${strategy.informationToRequest.join(", ")}`
       : "יש לו את כל הפרטים",
+    ...renderDossier(ctx),
     "",
     "שיחה אחרונה:",
     ...ctx.recentMessages.slice(-6).map((m) => `${m.from === "customer" ? "לקוח" : "אנחנו"}: ${m.text}`),
   ];
   return lines.join("\n");
+}
+
+/**
+ * Everything known about this lead beyond the chat thread.
+ *
+ * A phone call where the customer named their objection, Eli's own note, and
+ * the stored verdict on why the deal is stuck — all of it already existed and
+ * none of it reached the writer. Rendered only when present, so a bare lead
+ * costs nothing.
+ */
+function renderDossier(ctx: SalesContext): string[] {
+  const d = ctx.dossier;
+  if (!d) return [];
+  const out: string[] = [];
+  if (d.botSummary) out.push(`סטטוס: ${d.botSummary}`);
+  if (d.notes) out.push(`הערות של אלי: ${d.notes}`);
+  if (d.verdict?.rootCause) {
+    out.push(
+      `למה העסקה תקועה: ${d.verdict.rootCause}` +
+        (d.verdict.primaryBlocker ? ` (חסם: ${d.verdict.primaryBlocker})` : "") +
+        (d.verdict.commitment ? ` · מחויבות ${d.verdict.commitment}/5` : "")
+    );
+  }
+  if (d.lastCall?.summary) {
+    const when = d.lastCall.whenIso
+      ? new Date(d.lastCall.whenIso).toLocaleDateString("he-IL")
+      : "";
+    out.push(`שיחת טלפון ${when}: ${d.lastCall.summary}`);
+    if (d.lastCall.objections.length) {
+      out.push(`  התנגדויות שנאמרו בשיחה: ${d.lastCall.objections.join(" · ")}`);
+    }
+    if (d.lastCall.nextSteps.length) {
+      out.push(`  מה סוכם בשיחה: ${d.lastCall.nextSteps.join(" · ")}`);
+    }
+  }
+  if (out.length) out.unshift("");
+  return out;
 }
 
 export async function generateMessage(
