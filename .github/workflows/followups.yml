@@ -1,0 +1,44 @@
+# Sends the customer follow-up nudges.
+#
+# WHY THIS EXISTS: the follow-up engine is written for a 15-minute tick — the
+# cadence is "2h after the quote, then 12h, then 23h" — but it was scheduled
+# only in vercel.json, and the Vercel plan runs crons once a day. So the rhythm
+# was fiction. Measured over two months: of 65 leads that got any follow-up at
+# all, 56 got exactly one, and a single lead ever reached three.
+#
+# vercel.json still points at the same endpoint once a day as a safety net for
+# the case GitHub disables this workflow (it does that after 60 days without
+# repo activity). Double-firing is safe: the route claims a row in app_config
+# for the length of a run, so an overlapping trigger returns
+# `skipped: already_running` instead of nudging anyone twice.
+#
+# SAFE TO RUN WHILE OFF. With "תזכורות ללקוחות שלא ענו" switched off in the bot
+# settings the endpoint returns `skipped: followups_disabled` and sends nothing.
+# Quiet hours (21:00–09:00) and Sabbath/holiday gates still apply on top.
+name: followups
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch: {}
+
+jobs:
+  followups:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send due follow-ups
+        run: |
+          curl -sS -X POST "https://albadi-crm.vercel.app/api/bot/followups" \
+            -H "Authorization: Bearer ${{ secrets.BOT_SECRET }}" \
+            --max-time 90 | python3 -c "
+          import json,sys
+          d = json.load(sys.stdin)
+          if d.get('skipped'):
+              print('skipped:', d['skipped']); raise SystemExit(0)
+          cfg = d.get('config', {})
+          print('max attempts:', cfg.get('maxFollowups'))
+          for stage, c in (cfg.get('cadences') or {}).items():
+              warn = ('  ⚠ ' + '; '.join(c['warnings'])) if c.get('warnings') else ''
+              print(f\"  {stage}: {c['hours']}h{warn}\")
+          print('customer:', json.dumps(d.get('customer', {}), ensure_ascii=False))
+          print('factory :', json.dumps(d.get('factory', {}), ensure_ascii=False))
+          "

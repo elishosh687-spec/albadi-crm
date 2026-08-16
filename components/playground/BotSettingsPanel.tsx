@@ -16,6 +16,7 @@ import {
   type BotSettingField,
   type BotSettings,
 } from "@/lib/bot-settings/schema";
+import { parseCadence, describeCadence } from "@/lib/autoresponder/followup-cadence";
 
 const C = {
   panel: "#1b1917",
@@ -381,6 +382,32 @@ function Control({
         <div style={{ fontSize: 11, color: C.faint, marginTop: 3 }}>
           {text.length} תווים · שורה חדשה = שורה חדשה אצל הלקוח
         </div>
+      </div>
+    );
+  }
+
+  // A cadence reads as a bare list of numbers, so show what it actually means
+  // in time — "2,12,23" is only obviously 37 hours of nudging once something
+  // says so. Clamps are surfaced here too, so a corrected typo is never silent.
+  if (field.key.startsWith("followupCadence")) {
+    const parsed = parseCadence(String(value), []);
+    return (
+      <div>
+        <input
+          value={String(value)}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder="2,12,23"
+          inputMode="text"
+          style={{ ...inputStyle, width: "100%", maxWidth: 480 }}
+        />
+        <div style={{ fontSize: 11, color: C.faint, marginTop: 4 }}>
+          {parsed.hours.length > 0 ? describeCadence(parsed.hours) : "שעות מופרדות בפסיקים"}
+        </div>
+        {parsed.warnings.map((w, i) => (
+          <div key={i} style={{ fontSize: 11, color: "#D0A03C", marginTop: 2 }}>
+            ⚠ {w}
+          </div>
+        ))}
       </div>
     );
   }

@@ -35,6 +35,15 @@ export interface BotSettings {
   autoResumeEnabled: boolean;
   autoResumeHours: number;
 
+  // --- follow-up rhythm ---
+  followupsEnabled: boolean;
+  followupMaxAttempts: number;
+  followupCadenceMidQuestionnaire: string;
+  followupCadenceIntake: string;
+  followupCadenceAwaitingLogo: string;
+  followupCadenceConsideration: string;
+  followupCadenceReengage: string;
+
   // --- questionnaire behaviour ---
   pollsEnabled: boolean;
   reaskAttempts: number;
@@ -109,6 +118,14 @@ export const DEFAULT_BOT_SETTINGS: BotSettings = {
   autoResumeEnabled: true,
   autoResumeHours: 48,
 
+  followupsEnabled: true,
+  followupMaxAttempts: 3,
+  followupCadenceMidQuestionnaire: "1,1,1",
+  followupCadenceIntake: "2,12,23",
+  followupCadenceAwaitingLogo: "2,12,23",
+  followupCadenceConsideration: "2,12,23",
+  followupCadenceReengage: "72",
+
   pollsEnabled: true,
   reaskAttempts: 3,
   minQuantity: 3000,
@@ -175,6 +192,7 @@ export interface BotSettingField {
 
 export const GROUPS = [
   "הודעות ללקוח",
+  "קצב התזכורות",
   "התנהגות השאלון",
   "אחרי ההצעה",
   "מידות מותאמות",
@@ -315,6 +333,72 @@ export const BOT_SETTING_FIELDS: BotSettingField[] = [
     min: 2,
     max: 336,
     unit: "שעות",
+  },
+
+  // ---------- קצב התזכורות ----------
+  {
+    key: "followupsEnabled",
+    group: "קצב התזכורות",
+    label: "תזכורות ללקוחות שלא ענו",
+    description:
+      "כשכבוי — הבוט לא שולח אף תזכורת לאף לקוח. ההסלמות אליך והתזכורת היומית על המפעל ממשיכות לעבוד.",
+    where: "רץ כל רבע שעה ברקע",
+    type: "toggle",
+  },
+  {
+    key: "followupMaxAttempts",
+    group: "קצב התזכורות",
+    label: "כמה תזכורות לפני שמוותרים",
+    description:
+      "אחרי המספר הזה הבוט מפסיק לנדנד, משתיק את עצמו בשיחה ושולח לך התראה — הליד עובר אליך. לא חל על שלב חידוש הקשר, שם התזכורות נמשכות עד שהלקוח עונה.",
+    where: "נספר פר ליד",
+    type: "number",
+    min: 1,
+    max: 8,
+    unit: "תזכורות",
+  },
+  {
+    key: "followupCadenceIntake",
+    group: "קצב התזכורות",
+    label: "אחרי שנשלחה הצעה",
+    description:
+      "כמה שעות להמתין לפני כל תזכורת, מופרד בפסיקים. \"2,12,23\" = תזכורת אחרי שעתיים, עוד אחת 12 שעות אחריה, ועוד אחת 23 שעות אחריה.\n\nזה השלב הכי חשוב — כאן הלקוח מחזיק הצעה ומחליט.",
+    where: "שלב קליטה, אחרי שהבוט שלח מחיר",
+    type: "text",
+  },
+  {
+    key: "followupCadenceMidQuestionnaire",
+    group: "קצב התזכורות",
+    label: "נטש באמצע השאלון",
+    description:
+      "לקוח שהתחיל לענות והפסיק. כאן שווה להיות מהיר — הוא עדיין באמצע משהו.",
+    where: "לפני שנשלחה הצעה",
+    type: "text",
+  },
+  {
+    key: "followupCadenceAwaitingLogo",
+    group: "קצב התזכורות",
+    label: "מחכים ללוגו",
+    description: "הלקוח אמר שההצעה מתאימה ולא שלח את הלוגו.",
+    where: "אחרי אישור ההצעה",
+    type: "text",
+  },
+  {
+    key: "followupCadenceConsideration",
+    group: "קצב התזכורות",
+    label: "אחרי המחיר הסופי",
+    description: "הלקוח מחזיק את המחיר הסופי ושוקל.",
+    where: "שלב שוקל / משא ומתן",
+    type: "text",
+  },
+  {
+    key: "followupCadenceReengage",
+    group: "קצב התזכורות",
+    label: "חידוש קשר עם ליד קר",
+    description:
+      "לידים שגררת ידנית ל״חידוש קשר״. ערך אחד — הוא חוזר על עצמו ללא הגבלה עד שהלקוח עונה או מבקש להסיר. 72 שעות = כל 3 ימים.",
+    where: "רק בשלב חידוש קשר",
+    type: "text",
   },
 
   // ---------- התנהגות השאלון ----------

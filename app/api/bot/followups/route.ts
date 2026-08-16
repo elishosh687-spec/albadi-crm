@@ -1,21 +1,32 @@
 /**
- * Follow-up cron. Designed for Vercel cron at `every 15 minutes`.
+ * Follow-up cron — the nudges a customer gets when they go quiet.
+ *
+ * TRIGGER: `.github/workflows/followups.yml`, every 15 minutes. vercel.json
+ * also points here once a day as a safety net. It used to be Vercel ONLY, and
+ * because that plan runs crons once a day the cadence below could never
+ * actually happen — 56 of the 65 leads ever followed up got exactly one nudge.
+ * Overlapping triggers are safe: the run claims a row in app_config first.
+ *
+ * CADENCE AND CAP ARE SETTINGS (`followupCadence*`, `followupMaxAttempts`) —
+ * see lib/autoresponder/followup-cadence.ts, which clamps every value so a
+ * typo like "0" can't turn a nudge into a spam loop. The match predicates stay
+ * in code: they encode which pipeline state a lead is in, which is structure,
+ * not policy.
  *
  * Per docs/CUSTOMER-FLOW.md (8-stage model):
- *   - Gates: quiet hours (21:00-09:00 Asia/Jerusalem), no-send days
- *     (Fri/Sat/holiday-eve/holiday via Hebcal).
- *   - Customer-side cadence by stage:
- *       (pre-quote, mid-questionnaire abandoned)         → 1h, 1h, 1h
- *       INTAKE                               → 2h, 12h, 23h
- *       FACTORY_WAIT (subFlow=awaiting_logo)            → 2h, 12h, 23h
- *       CONSIDERATION                                 → 2h, 12h, 23h
+ *   - Gates: master toggle, quiet hours (21:00-09:00 Asia/Jerusalem), no-send
+ *     days (Fri/Sat/holiday-eve/holiday via Hebcal).
+ *   - Customer-side cadence by stage, defaults in hours:
+ *       (pre-quote, mid-questionnaire abandoned)  → 1, 1, 1
+ *       INTAKE                                    → 2, 12, 23
+ *       FACTORY_WAIT (subFlow=awaiting_logo)      → 2, 12, 23
+ *       CONSIDERATION                             → 2, 12, 23
+ *       NO_RESPONSE_REENGAGE                      → 72, repeating, uncapped
  *   - FACTORY_WAIT (subFlow=awaiting_factory_estimate) → Eli-only daily reminder.
- *   - After 3 unanswered attempts → escalate (NEEDS_ELI + bot_paused + Eli DM).
+ *   - After the configured attempts → escalate (NEEDS_ELI + bot_paused + DM).
  *   - Skips leads where bot_paused=true.
  *
- * Auth: Bearer BOT_SECRET. Vercel cron passes the header automatically if you
- * configure `crons` in vercel.json + a `CRON_SECRET` env (we re-use BOT_SECRET
- * here for consistency with /api/bot/cron).
+ * Auth: Bearer BOT_SECRET / CRON_SECRET.
  */
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
@@ -37,13 +48,17 @@ import { logDecision } from "@/lib/supervisor/log";
 import { generateAndQueueDraft } from "@/lib/drafts";
 import { syncLeadToGHL } from "@/integrations/ghl/sync";
 import { pauseFields } from "@/lib/autoresponder/bot-pause";
+import { getBotSettings } from "@/lib/bot-settings/store";
+import type { BotSettings } from "@/lib/bot-settings/schema";
+import { parseCadence, toMs } from "@/lib/autoresponder/followup-cadence";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
 const HOUR_MS = 60 * 60 * 1000;
 const DAY_MS = 24 * HOUR_MS;
-const MAX_FOLLOWUPS = 3;
+/** Fallback only — the live value comes from settings (followupMaxAttempts). */
+const MAX_FOLLOWUPS_FALLBACK = 3;
 
 interface StageRule {
   match: (pipelineStage: string | null, qState: any) => boolean;
@@ -58,7 +73,30 @@ interface StageRule {
   unbounded?: boolean;
 }
 
-const STAGE_RULES: StageRule[] = [
+/**
+ * The cadences are settings now, so the rule table is built per request rather
+ * than frozen at module load — otherwise a warm lambda would keep serving the
+ * cadence that was current when it booted, and an edit would appear to do
+ * nothing for as long as that instance lived.
+ *
+ * The `match` predicates stay hardcoded: they encode which pipeline state a
+ * lead is in, which is structure, not policy.
+ */
+function buildStageRules(S: BotSettings): StageRule[] {
+  const cad = (raw: string, fallbackHours: number[]) =>
+    toMs(parseCadence(raw, fallbackHours).hours);
+  return STAGE_RULE_SHAPES.map((shape) => ({
+    ...shape,
+    cadences: cad(S[shape.settingKey] as string, shape.fallbackHours),
+  }));
+}
+
+type StageRuleShape = Omit<StageRule, "cadences"> & {
+  settingKey: keyof BotSettings;
+  fallbackHours: number[];
+};
+
+const STAGE_RULE_SHAPES: StageRuleShape[] = [
   {
     // Pre-quote (pipeline_stage IS NULL) + questionnaire in-flight (started, not done, not bailed).
     match: (stage, q) => {
@@ -68,14 +106,16 @@ const STAGE_RULES: StageRule[] = [
       if (q.bailed || q.doneAt) return false;
       return typeof q.step === "number" && q.step >= 2 && q.step <= 7;
     },
-    cadences: [1 * HOUR_MS, 1 * HOUR_MS, 1 * HOUR_MS],
+    settingKey: "followupCadenceMidQuestionnaire",
+    fallbackHours: [1, 1, 1],
     template: "MID_QUESTIONNAIRE",
   },
   {
     // INTAKE — bot waiting on customer reply to estimated quote.
     // Cadence per Eli: 2h → 12h → 23h. 3 nudges spread over ~37h total.
     match: (stage) => (stage || "").toUpperCase() === "INTAKE",
-    cadences: [2 * HOUR_MS, 12 * HOUR_MS, 23 * HOUR_MS],
+    settingKey: "followupCadenceIntake",
+    fallbackHours: [2, 12, 23],
     template: "INTAKE",
   },
   {
@@ -83,13 +123,15 @@ const STAGE_RULES: StageRule[] = [
     match: (stage, q) =>
       (stage || "").toUpperCase() === "FACTORY_WAIT" &&
       (q?.subFlow === "awaiting_logo" || !q?.subFlow),
-    cadences: [2 * HOUR_MS, 12 * HOUR_MS, 23 * HOUR_MS],
+    settingKey: "followupCadenceAwaitingLogo",
+    fallbackHours: [2, 12, 23],
     template: "AWAITING_LOGO",
   },
   {
     // CONSIDERATION — bot waiting on customer reply to final price.
     match: (stage) => (stage || "").toUpperCase() === "CONSIDERATION",
-    cadences: [2 * HOUR_MS, 12 * HOUR_MS, 23 * HOUR_MS],
+    settingKey: "followupCadenceConsideration",
+    fallbackHours: [2, 12, 23],
     template: "CONSIDERATION",
   },
   {
@@ -101,14 +143,19 @@ const STAGE_RULES: StageRule[] = [
     // word ("הסר" etc → webhook moves stage to LOST), or Eli moves the
     // opp himself.
     match: (stage) => (stage || "").toUpperCase() === "NO_RESPONSE_REENGAGE",
-    cadences: [3 * DAY_MS],
+    settingKey: "followupCadenceReengage",
+    fallbackHours: [72],
     template: "RE_ENGAGEMENT",
     unbounded: true,
   },
 ];
 
-function pickRule(pipelineStage: string | null, qState: any): StageRule | null {
-  for (const r of STAGE_RULES) {
+function pickRule(
+  rules: StageRule[],
+  pipelineStage: string | null,
+  qState: any
+): StageRule | null {
+  for (const r of rules) {
     if (r.match(pipelineStage, qState)) return r;
   }
   return null;
@@ -158,20 +205,24 @@ async function processCustomerLead(row: {
   botPaused: boolean;
   notes: string | null;
   botSummary: string | null;
+}, cfg: {
+  rules: StageRule[];
+  maxFollowups: number;
 }): Promise<ProcessedLead> {
   if (row.botPaused) {
     return { sid: row.sid, action: "skipped_paused" };
   }
 
-  const rule = pickRule(row.pipelineStage, row.qState);
+  const maxFollowups = cfg.maxFollowups;
+  const rule = pickRule(cfg.rules, row.pipelineStage, row.qState);
   if (!rule) {
     return { sid: row.sid, action: "no_rule" };
   }
 
-  // HARD LIMIT — 3 attempts max, supervisor cannot override. Skipped for
-  // rules that opted into `unbounded` (re-engagement loop, runs forever
-  // until customer replies or Eli moves the lead).
-  if (!rule.unbounded && row.followUpCount >= MAX_FOLLOWUPS) {
+  // HARD LIMIT — the configured attempt cap; the supervisor cannot override
+  // it. Skipped for rules that opted into `unbounded` (re-engagement loop,
+  // runs forever until the customer replies or Eli moves the lead).
+  if (!rule.unbounded && row.followUpCount >= maxFollowups) {
     await escalateLead({
       sid: row.sid,
       name: row.name,
@@ -185,7 +236,7 @@ async function processCustomerLead(row: {
       decidedBy: "code",
       action: "escalated",
       escalationKind: "max_followups",
-      metadata: { attempt: row.followUpCount, max: MAX_FOLLOWUPS },
+      metadata: { attempt: row.followUpCount, max: maxFollowups },
     });
     return { sid: row.sid, action: "escalated", detail: "count>=max" };
   }
@@ -398,9 +449,9 @@ async function processCustomerLead(row: {
     metadata: { ...replayMeta, rawJson: verdict.rawJson },
   });
 
-  // HARD LIMIT — if this was the 3rd attempt, escalate now. Skipped for
+  // HARD LIMIT — if this was the final attempt, escalate now. Skipped for
   // unbounded rules (re-engagement loop).
-  if (!rule.unbounded && attempt >= MAX_FOLLOWUPS) {
+  if (!rule.unbounded && attempt >= maxFollowups) {
     await escalateLead({
       sid: row.sid,
       name: row.name,
@@ -467,6 +518,54 @@ export async function POST(req: NextRequest) {
   // local cadence tests can run at any time. NEVER set in Vercel/prod.
   const bypassGates = process.env.FOLLOWUPS_BYPASS_GATES === "1";
 
+  // Cadence + attempt cap are settings now. Read once per run so every lead in
+  // this tick is judged by the same rules, and report them back in the
+  // response — a cron whose behaviour is configurable should say what it was
+  // configured with, or a bad edit is invisible until customers notice.
+  const S = await getBotSettings();
+  const rules = buildStageRules(S);
+  const maxFollowups = Math.max(
+    1,
+    Math.min(8, S.followupMaxAttempts || MAX_FOLLOWUPS_FALLBACK)
+  );
+
+  // Gate 0: the master switch. Customer nudges stop; the factory reminder and
+  // the FB-gap ping to Eli are internal and keep running.
+  if (!S.followupsEnabled) {
+    return NextResponse.json({ ok: true, skipped: "followups_disabled" });
+  }
+
+  // Gate 0.5: one run at a time.
+  //
+  // Two triggers point here now (a 15-minute GitHub Action plus the daily
+  // Vercel cron as a safety net), and this route decides what to send by
+  // reading `last_follow_up_at` and writing it back at the end. Two overlapping
+  // runs would both read the pre-send value and both send — the customer gets
+  // the identical nudge twice, which is exactly the "the bot repeats itself"
+  // complaint that started this work.
+  //
+  // NOT a pg advisory lock: Neon's serverless driver sends each query as its
+  // own HTTP request, so a session-scoped lock is dropped the moment the query
+  // returns. Verified against production — `pg_try_advisory_lock` returned
+  // true twice in a row for the same key, i.e. it would have protected
+  // nothing. This claims a row instead, which survives between queries.
+  //
+  // The claim self-expires after 5 minutes (maxDuration is 60s), so a lambda
+  // killed mid-run cannot wedge follow-ups shut.
+  const claim = await db.execute(sql`
+    INSERT INTO app_config (key, value, updated_at)
+    VALUES ('followups.lock', jsonb_build_object('at', now()), now())
+    ON CONFLICT (key) DO UPDATE
+      SET value = jsonb_build_object('at', now()), updated_at = now()
+      WHERE (app_config.value->>'at')::timestamptz < now() - interval '5 minutes'
+    RETURNING key`);
+  const gotLock = (((claim as any).rows ?? claim) as unknown[]).length > 0;
+  if (!gotLock) {
+    console.log("[followups] another run is in flight — skipping");
+    return NextResponse.json({ ok: true, skipped: "already_running" });
+  }
+
+  try {
   // Gate 1: quiet hours.
   if (!bypassGates && isQuietNow()) {
     return NextResponse.json({ ok: true, skipped: "quiet_hours" });
@@ -533,7 +632,7 @@ export async function POST(req: NextRequest) {
       botPaused: row.botPaused,
       notes: row.notes,
       botSummary: row.botSummary,
-    });
+    }, { rules, maxFollowups });
     customerResults.push(r);
   }
 
@@ -562,10 +661,41 @@ export async function POST(req: NextRequest) {
 
   return NextResponse.json({
     ok: true,
+    // Echo the live configuration. A cron whose rhythm is editable has to
+    // state what it ran with, or a bad edit stays invisible until customers
+    // feel it. `warnings` carries anything a cadence box had to clamp.
+    config: {
+      maxFollowups,
+      cadences: Object.fromEntries(
+        STAGE_RULE_SHAPES.map((shape) => {
+          const parsed = parseCadence(
+            S[shape.settingKey] as string,
+            shape.fallbackHours
+          );
+          return [
+            shape.template,
+            { hours: parsed.hours, warnings: parsed.warnings },
+          ];
+        })
+      ),
+    },
     customer: { total: customerResults.length, by: summarize(customerResults) },
     factory: { total: factoryResults.length, by: summarize(factoryResults) },
     details: { customer: customerResults, factory: factoryResults },
   });
+  } finally {
+    // Every early return above sits inside the try, so the claim is released
+    // on the quiet-hours path and the error path too — not just the happy one.
+    // Backdating rather than deleting keeps the row (and its updated_at) as a
+    // record of when follow-ups last ran.
+    await db
+      .execute(
+        sql`UPDATE app_config
+            SET value = jsonb_build_object('at', now() - interval '1 hour')
+            WHERE key = 'followups.lock'`
+      )
+      .catch((e) => console.warn("[followups] lock release failed", e));
+  }
 }
 
 export async function GET(req: NextRequest) {
