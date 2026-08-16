@@ -73,6 +73,7 @@ export interface BotSettings {
   // --- sales brain ---
   setterDraftsEnabled: boolean;
   setterLiveEnabled: boolean;
+  setterWritesFollowups: boolean;
   setterModel: string;
   setterMaxWords: number;
   setterStyle: string;
@@ -150,6 +151,7 @@ export const DEFAULT_BOT_SETTINGS: BotSettings = {
 
   setterDraftsEnabled: true,
   setterLiveEnabled: false,
+  setterWritesFollowups: true,
   setterModel: "gpt-5.6-terra",
   setterMaxWords: 60,
   setterStyle:
@@ -612,6 +614,15 @@ export const BOT_SETTING_FIELDS: BotSettingField[] = [
 
   // ---------- מוח מכירות + טקטיקות ----------
 
+  {
+    key: "setterWritesFollowups",
+    group: "מוח מכירות",
+    label: "מוח המכירות כותב את התזכורות",
+    description:
+      "כשדולק — כל תזכורת נכתבת מחדש לפי השיחה הספציפית של הלקוח, במקום אחד מ-13 המשפטים הקבועים. לקוח שהתווכח על מחיר ולקוח שנעלם באמצע השאלון מקבלים דברים שונים.\n\nהקוד עדיין מחליט מתי לשלוח ולמי — הקצב, מספר הניסיונות, שעות השקט. מוח המכירות רק מנסח. אם הניסוח נכשל או נפסל בבדיקות, נשלח הטקסט הקבוע כרגיל, אז אין מצב שלקוח לא יקבל תזכורת בגלל זה.",
+    where: "כל תזכורת ללקוח שלא ענה",
+    type: "toggle",
+  },
   {
     key: "setterModel",
     group: "מוח מכירות",

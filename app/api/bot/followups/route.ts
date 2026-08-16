@@ -51,6 +51,7 @@ import { pauseFields } from "@/lib/autoresponder/bot-pause";
 import { getBotSettings } from "@/lib/bot-settings/store";
 import type { BotSettings } from "@/lib/bot-settings/schema";
 import { parseCadence, toMs } from "@/lib/autoresponder/followup-cadence";
+import { composeSetterFollowup } from "@/lib/setter/followup";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -262,7 +263,18 @@ async function processCustomerLead(row: {
     const built = await buildReEngagementMessage(row.sid);
     candidateText = built.text;
   } else {
+    // The canned line is resolved FIRST and always — it is the floor. The
+    // setter is then given a chance to write something that actually reflects
+    // this lead's conversation, and anything short of a valid message leaves
+    // the floor in place. A customer never misses a nudge because the LLM had
+    // a bad minute.
     candidateText = followupTemplate(rule.template, attempt);
+    const authored = await composeSetterFollowup({
+      sid: row.sid,
+      stage: rule.template,
+      attempt,
+    });
+    if (authored) candidateText = authored.text;
   }
 
   // Load recent thread for supervisor context.

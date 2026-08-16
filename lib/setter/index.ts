@@ -27,7 +27,16 @@ export interface SetterRun {
 export async function runSetter(
   sid: string,
   trigger: string,
-  opts?: { mode?: "shadow" | "preview" | "draft" | "live" }
+  opts?: {
+    mode?: "shadow" | "preview" | "draft" | "live";
+    /** Speak even when the strategy would hold back — the caller already
+     *  decided this lead is due (a scheduled follow-up). */
+    force?: boolean;
+    /** What this turn is for, when the caller knows more than the thread. */
+    situation?: string;
+    /** Which nudge in the sequence this is, for the log. */
+    attempt?: number;
+  }
 ): Promise<SetterRun> {
   const mode = opts?.mode ?? "shadow";
 
@@ -39,10 +48,12 @@ export async function runSetter(
 
   // hold_back with nothing to answer = the right move is silence; don't spend
   // a generation call writing a message we wouldn't want sent.
+  const holdBack =
+    strategy.goal === "hold_back" && classification.intent === "gone_quiet";
   const message =
-    strategy.goal === "hold_back" && classification.intent === "gone_quiet"
+    holdBack && !opts?.force
       ? null
-      : await generateMessage(context, classification, strategy);
+      : await generateMessage(context, classification, strategy, opts?.situation);
 
   let decisionId: number | undefined;
   try {

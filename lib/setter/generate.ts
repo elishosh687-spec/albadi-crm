@@ -96,7 +96,10 @@ function renderContext(ctx: SalesContext, strategy: SalesStrategy): string {
 export async function generateMessage(
   ctx: SalesContext,
   cls: SalesClassification,
-  strategy: SalesStrategy
+  strategy: SalesStrategy,
+  /** What this particular turn is FOR, when the caller knows better than the
+   *  classifier — a scheduled follow-up has a purpose the thread can't show. */
+  situation?: string
 ): Promise<GeneratedMessage | null> {
   const S = await getBotSettings();
   // Guidance comes from the settings screen (Eli edits tactics live); the
@@ -123,7 +126,9 @@ export async function generateMessage(
     renderContext(ctx, strategy) +
     `\n\nניתוח: כוונה=${cls.intent}, סימן קנייה=${cls.buyingSignal}, מוכנות לשיחה=${cls.meetingReadiness}` +
     (cls.objectionType ? `, התנגדות=${cls.objectionType}` : "") +
-    `\nיעד: ${strategy.goal}\nעשה: ${strategy.moves.join(" · ")}\nאל תעשה: ${strategy.avoid.join(" · ")}\n\n` +
+    `\nיעד: ${strategy.goal}\nעשה: ${strategy.moves.join(" · ")}\nאל תעשה: ${strategy.avoid.join(" · ")}\n` +
+    (situation ? `\nההקשר של ההודעה הזו: ${situation}\n` : "") +
+    "\n" +
     'כתוב את ההודעה בלבד. החזר JSON: {"message": "..."}';
 
   let attempts = 0;
