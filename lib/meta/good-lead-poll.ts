@@ -32,6 +32,15 @@ export interface GoodLeadPollResult {
    *  fbclid. Surfaced so they don't masquerade as "the cron didn't run". */
   unattributable: number;
   unattributableNames: string[];
+  /**
+   * Dry runs only: every tagged contact with what we did about it. Without
+   * this "12 tagged, all reported" is unfalsifiable — you cannot tell whether
+   * the lead you just tagged is one of the 12, or whether its tag spelling
+   * simply isn't one we search for.
+   */
+  breakdown?: { name: string; status: "sent" | "pending" | "no_meta_id" }[];
+  /** Tagged GHL contacts with no matching lead row in our DB at all. */
+  noLeadRow?: number;
 }
 
 export async function pollGoodLeads(
@@ -92,6 +101,11 @@ export async function pollGoodLeads(
       errors: pending.map((p) => p.name ?? p.sid),
       unattributable,
       unattributableNames,
+      noLeadRow,
+      breakdown: res.rows.map((r) => ({
+        name: r.name ?? r.sid,
+        status: r.already_sent ? "sent" : r.attributable ? "pending" : "no_meta_id",
+      })),
     };
   }
 

@@ -39,11 +39,23 @@ function authorized(req: NextRequest): boolean {
 }
 
 const nowSec = () => Math.floor(Date.now() / 1000);
-// Clamp an epoch to [not future, not absurdly old]. Meta rejects future times.
+/**
+ * Clamp an epoch into the window Meta will actually accept.
+ *
+ * Meta rejects `event_time` in the future AND older than 7 days — and the
+ * second half was missing here, so a backfill of anything older than a week
+ * was rejected on arrival while the run still looked successful. We floor at
+ * 6 days to keep a margin for clock skew and slow runs.
+ *
+ * The floor does misdate genuinely older conversions, which is the trade Meta
+ * forces: a slightly-late timestamp inside the window, or no signal at all.
+ */
+const MAX_AGE_SEC = 6 * 24 * 60 * 60;
 function clampTs(sec: number | null | undefined): number {
   const n = nowSec();
+  const floor = n - MAX_AGE_SEC;
   if (!sec || !Number.isFinite(sec) || sec > n) return n;
-  return Math.floor(sec);
+  return Math.max(Math.floor(sec), floor);
 }
 
 export async function POST(req: NextRequest) {
