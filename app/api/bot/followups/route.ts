@@ -164,8 +164,19 @@ function pickRule(
 
 interface ProcessedLead {
   sid: string;
-  action: "sent" | "escalated" | "skipped_paused" | "skipped_cadence" | "no_rule" | "error";
+  action:
+    | "sent"
+    | "would_send"
+    | "escalated"
+    | "skipped_paused"
+    | "skipped_cadence"
+    | "no_rule"
+    | "error";
   detail?: string;
+  /** Dry-run only: the exact text this lead would have received. */
+  preview?: string;
+  /** Dry-run only: the canned line it replaced, when the setter wrote one. */
+  cannedInstead?: string;
 }
 
 async function escalateLead(input: {
@@ -209,6 +220,8 @@ async function processCustomerLead(row: {
 }, cfg: {
   rules: StageRule[];
   maxFollowups: number;
+  /** Compose everything, send nothing, write nothing. */
+  dryRun?: boolean;
 }): Promise<ProcessedLead> {
   if (row.botPaused) {
     return { sid: row.sid, action: "skipped_paused" };
@@ -224,6 +237,9 @@ async function processCustomerLead(row: {
   // it. Skipped for rules that opted into `unbounded` (re-engagement loop,
   // runs forever until the customer replies or Eli moves the lead).
   if (!rule.unbounded && row.followUpCount >= maxFollowups) {
+    if (cfg.dryRun) {
+      return { sid: row.sid, action: "escalated", detail: "count>=max (יבש)" };
+    }
     await escalateLead({
       sid: row.sid,
       name: row.name,
@@ -423,6 +439,20 @@ async function processCustomerLead(row: {
     decidedBy = "code";
   }
 
+  // A dry run stops exactly here: everything above (rule match, cadence,
+  // setter composition, supervisor verdict) has already happened, so the
+  // preview is the real message — not an approximation of it.
+  if (cfg.dryRun) {
+    return {
+      sid: row.sid,
+      action: "would_send",
+      detail: `${rule.template} #${attempt}${decidedBy === "llm_override" ? " (מפקח)" : ""}`,
+      preview: textToSend,
+      cannedInstead:
+        rule.template !== "RE_ENGAGEMENT" ? followupTemplate(rule.template, attempt) : undefined,
+    };
+  }
+
   try {
     await sendBridgeMessage(recipient, textToSend);
   } catch (e) {
@@ -529,6 +559,9 @@ export async function POST(req: NextRequest) {
   // Test-only escape hatch — bypasses quiet hours + no-send-day gates so
   // local cadence tests can run at any time. NEVER set in Vercel/prod.
   const bypassGates = process.env.FOLLOWUPS_BYPASS_GATES === "1";
+  // ?dry=1 — compose the real messages and return them without sending. Quiet
+  // hours are skipped too, or a preview would only ever work office hours.
+  const dryRun = req.nextUrl.searchParams.get("dry") === "1";
 
   // Cadence + attempt cap are settings now. Read once per run so every lead in
   // this tick is judged by the same rules, and report them back in the
@@ -579,11 +612,11 @@ export async function POST(req: NextRequest) {
 
   try {
   // Gate 1: quiet hours.
-  if (!bypassGates && isQuietNow()) {
+  if (!bypassGates && !dryRun && isQuietNow()) {
     return NextResponse.json({ ok: true, skipped: "quiet_hours" });
   }
   // Gate 2: no-send day (Fri/Sat/holiday eve/holiday).
-  if (!bypassGates && (await isNoSendDay())) {
+  if (!bypassGates && !dryRun && (await isNoSendDay())) {
     return NextResponse.json({ ok: true, skipped: "no_send_day" });
   }
 
@@ -644,7 +677,7 @@ export async function POST(req: NextRequest) {
       botPaused: row.botPaused,
       notes: row.notes,
       botSummary: row.botSummary,
-    }, { rules, maxFollowups });
+    }, { rules, maxFollowups, dryRun });
     customerResults.push(r);
   }
 
@@ -673,6 +706,7 @@ export async function POST(req: NextRequest) {
 
   return NextResponse.json({
     ok: true,
+    dryRun,
     // Echo the live configuration. A cron whose rhythm is editable has to
     // state what it ran with, or a bad edit stays invisible until customers
     // feel it. `warnings` carries anything a cadence box had to clamp.

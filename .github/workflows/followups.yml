@@ -19,7 +19,12 @@ name: followups
 on:
   schedule:
     - cron: "*/15 * * * *"
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      dry:
+        description: "Preview only — compose the real messages, send nothing"
+        type: boolean
+        default: false
 
 jobs:
   followups:
@@ -27,7 +32,9 @@ jobs:
     steps:
       - name: Send due follow-ups
         run: |
-          curl -sS -X POST "https://albadi-crm.vercel.app/api/bot/followups" \
+          Q=""
+          if [ "${{ inputs.dry }}" = "true" ]; then Q="?dry=1"; fi
+          curl -sS -X POST "https://albadi-crm.vercel.app/api/bot/followups$Q" \
             -H "Authorization: Bearer ${{ secrets.BOT_SECRET }}" \
             --max-time 90 | python3 -c "
           import json,sys
@@ -41,4 +48,12 @@ jobs:
               print(f\"  {stage}: {c['hours']}h{warn}\")
           print('customer:', json.dumps(d.get('customer', {}), ensure_ascii=False))
           print('factory :', json.dumps(d.get('factory', {}), ensure_ascii=False))
+          if d.get('dryRun'):
+              print()
+              for r in (d.get('details', {}).get('customer') or []):
+                  if r.get('action') != 'would_send': continue
+                  print('—', r['sid'], '·', r.get('detail'))
+                  if r.get('cannedInstead'):
+                      print('   קבוע:', r['cannedInstead'])
+                  print('   ישלח:', r.get('preview'))
           "
