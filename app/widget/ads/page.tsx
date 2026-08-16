@@ -10,7 +10,8 @@
 import { verifyWidgetToken } from "@/integrations/ghl/widget-auth";
 import { buildAdPerformance } from "@/lib/analysis/ad-performance";
 import { checkMetaHealth } from "@/lib/meta/health";
-import { getMetaReportingStatus, type ReportedLead } from "@/lib/meta/reporting-status";
+import { getMetaReportingStatus } from "@/lib/meta/reporting-status";
+import { MetaReportPanel } from "@/components/ads/MetaReportPanel";
 import Link from "next/link";
 
 export const dynamic = "force-dynamic";
@@ -295,29 +296,7 @@ export default async function AdsWidgetPage({
       {/* Per-lead proof. The counters above can say "all reported" while a
           specific deal never reached Meta — that is exactly how the ₪13,475
           gap went unnoticed. This names every row and its state. */}
-      {reporting ? (
-        <div style={{ marginTop: 14 }}>
-          <div style={{ fontSize: 12.5, fontWeight: 600, marginBottom: 6 }}>
-            מה עבר למטא — שורה אחר שורה
-          </div>
-          {reporting.unreportedRevenueIls > 0 ? (
-            <div
-              style={{
-                fontSize: 12,
-                color: "#e08a8a",
-                marginBottom: 8,
-                lineHeight: 1.6,
-              }}
-            >
-              ₪{reporting.unreportedRevenueIls.toLocaleString("he-IL")} מלקוחות
-              שהגיעו ממטא לא דווחו — חסר להם מזהה, אז אי אפשר לשייך אותם
-              למודעה. (לקוחות שלא הגיעו ממודעה לא נספרים כאן.)
-            </div>
-          ) : null}
-          <MetaReportList title="עסקאות (Purchase)" rows={reporting.purchases} />
-          <MetaReportList title='לידים מתויגים "ליד טוב" (Qualified)' rows={reporting.qualified} />
-        </div>
-      ) : null}
+      {reporting ? <MetaReportPanel reporting={reporting} /> : null}
 
       {!showSpend && report.spendUnavailable ? (
         <p style={{ marginTop: 12, fontSize: 12, color: MUTED }}>
@@ -332,59 +311,6 @@ export default async function AdsWidgetPage({
           {report.unattributed} לידים מפייסבוק ללא שיוך למודעה (לא נמצאה התאמה
           בגיליון הטופס).
         </p>
-      ) : null}
-    </div>
-  );
-}
-
-/** One reporting list — named rows with their Meta state. */
-function MetaReportList({ title, rows }: { title: string; rows: ReportedLead[] }) {
-  if (rows.length === 0) return null;
-  const STATE: Record<string, { dot: string; label: string }> = {
-    sent: { dot: "#7dd3a0", label: "דווח" },
-    pending: { dot: "#e7cba6", label: "ממתין לדיווח" },
-    no_meta_id: { dot: "#e08a8a", label: "אין מזהה מטא" },
-    // Neutral grey on purpose: a customer who never came from an ad is not a
-    // fault, and colouring it red made the panel cry wolf.
-    not_from_meta: { dot: MUTED, label: "לא ממודעה" },
-    failed: { dot: "#e08a8a", label: "נכשל" },
-  };
-  return (
-    <div style={{ marginBottom: 10 }}>
-      <div style={{ fontSize: 11, color: MUTED, letterSpacing: "0.06em", marginBottom: 4 }}>
-        {title}
-      </div>
-      {rows.map((r, i) => {
-        const s = STATE[r.state] ?? STATE.pending;
-        return (
-          <div
-            key={`${r.name}-${i}`}
-            className="lux-wrap-sm"
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 8,
-              fontSize: 12,
-              lineHeight: 1.9,
-              borderBottom: `1px solid ${LINE}`,
-              padding: "1px 0",
-            }}
-          >
-            <span style={{ color: s.dot }}>●</span>
-            <span style={{ flex: 1, minWidth: 0 }}>{r.name}</span>
-            {typeof r.valueIls === "number" ? (
-              <span className="tabular-nums" style={{ color: MUTED }}>
-                ₪{Math.round(r.valueIls).toLocaleString("he-IL")}
-              </span>
-            ) : null}
-            <span style={{ color: s.dot, whiteSpace: "nowrap" }}>{s.label}</span>
-          </div>
-        );
-      })}
-      {rows.some((r) => r.note) ? (
-        <div style={{ fontSize: 11, color: MUTED, marginTop: 3 }}>
-          {rows.find((r) => r.note)?.note}
-        </div>
       ) : null}
     </div>
   );
