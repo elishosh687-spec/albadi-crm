@@ -226,6 +226,32 @@ const STOP_PATTERNS_LOWER: string[] = [
 ];
 
 /**
+ * The canned greeting WhatsApp sends on behalf of a Meta lead-form submission.
+ *
+ * It arrives a second or two AFTER our own opening, so the questionnaire reads
+ * it as the answer to whatever it just asked, rejects it, and fires
+ * "לא הצלחתי להבין" + a re-ask. Measured over 60 days it was the single
+ * largest source of that message — 73 of ~200 — and it hits Facebook leads,
+ * which is the main lead source. It is not an answer to anything; it is the
+ * customer saying hello.
+ *
+ * Matched on the leading sentence only: the body carries Full name / Phone /
+ * Email / Company name, which vary per lead.
+ */
+const LEAD_FORM_GREETING_PATTERNS: string[] = [
+  "השלמתי את הטופס שלך",
+  "i filled out your form",
+  "i filled in your form",
+];
+
+export function isLeadFormGreeting(text: string | null | undefined): boolean {
+  if (!text) return false;
+  const t = text.trim().toLowerCase();
+  if (!t) return false;
+  return LEAD_FORM_GREETING_PATTERNS.some((p) => t.includes(p));
+}
+
+/**
  * "Give me a human" — distinct from a stop word, and it must stay distinct.
  *
  * A stop word means "stop contacting me" and ends the lead (LOST + opt_out).

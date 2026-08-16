@@ -44,6 +44,7 @@ import { handleCallbackReply } from "@/lib/autoresponder/callback-request";
 import {
   isStopWord,
   isHumanHandoffRequest,
+  isLeadFormGreeting,
   eliEscalationTemplate,
   STOP_WORD_REPLY,
 } from "@/lib/messaging/templates";
@@ -445,6 +446,29 @@ async function handleIncoming(evt: GreenWebhook): Promise<void> {
   // start path (re-sends OPENING + first question).
   if (typeMessage === "pollUpdateMessage" && !textForRouting) {
     return;
+  }
+
+  // Meta lead-form greeting — a hello, not an answer.
+  //
+  // WhatsApp sends it on the customer's behalf a beat AFTER our opening, so
+  // the questionnaire treated it as the answer to the question it had just
+  // asked, rejected it, and re-asked. It caused 73 of ~200 "לא הצלחתי להבין"
+  // messages over 60 days, on Facebook leads specifically — the main lead
+  // source. Only skipped once the questionnaire is already running: with no
+  // qState this could be the lead's first contact, and swallowing it would
+  // mean the bot never opens at all.
+  if (textForRouting && isLeadFormGreeting(textForRouting)) {
+    const [existing] = await db
+      .select({ qState: leads.qState })
+      .from(leads)
+      .where(sql`trim(${leads.manychatSubId}) = ${canonicalSid.trim()}`)
+      .limit(1);
+    if (existing?.qState) {
+      console.log("[greenapi.webhook] lead-form greeting — stored, not treated as an answer", {
+        sid: canonicalSid,
+      });
+      return;
+    }
   }
 
   // "Give me a human" — checked BEFORE the stop word, because some of these
