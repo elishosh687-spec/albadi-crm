@@ -16,6 +16,7 @@
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import BotSettingsPanel from "./BotSettingsPanel";
+import BotMapPanel from "./BotMapPanel";
 
 interface PlaygroundMessage {
   id: number;
@@ -73,10 +74,16 @@ const C = {
   alert: "#3a2a1a",
 };
 
-type Tab = "chat" | "settings" | "system";
+type Tab = "chat" | "map" | "settings" | "system";
 
 export default function PlaygroundView({ apiToken }: { apiToken: string }) {
-  const [tab, setTab] = useState<Tab>("chat");
+  // ?tab=settings lets the bot map link straight at a knob instead of telling
+  // the reader where to go looking for it.
+  const [tab, setTab] = useState<Tab>(() => {
+    if (typeof window === "undefined") return "chat";
+    const t = new URLSearchParams(window.location.search).get("tab");
+    return t === "settings" || t === "system" || t === "map" ? t : "chat";
+  });
   const [transcript, setTranscript] = useState<PlaygroundMessage[]>([]);
   const [lead, setLead] = useState<LeadState | null>(null);
   const [systemInfo, setSystemInfo] = useState<SettingsGroup[]>([]);
@@ -199,6 +206,7 @@ export default function PlaygroundView({ apiToken }: { apiToken: string }) {
           {(
             [
               ["chat", "💬 שיחה"],
+              ["map", "🗺 מפת הבוט"],
               ["settings", "⚙️ הגדרות הבוט"],
               ["system", "🖥 מצב מערכת"],
             ] as [Tab, string][]
@@ -258,6 +266,10 @@ export default function PlaygroundView({ apiToken }: { apiToken: string }) {
           >
             שגיאה: {error}
           </div>
+        )}
+
+        {tab === "map" && (
+          <BotMapPanel apiToken={apiToken} onEdit={() => setTab("settings")} />
         )}
 
         {tab === "settings" && <BotSettingsPanel apiToken={apiToken} />}
