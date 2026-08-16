@@ -19,7 +19,8 @@
  */
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { sql } from "drizzle-orm";
+import { sql, eq } from "drizzle-orm";
+import { factoryQuoteRequests } from "@/drizzle/schema";
 import { sendMetaCrmEvent, metaCapiConfigured } from "@/lib/meta/capi";
 import { listClosedQuotes } from "@/lib/factory/server/closed";
 
@@ -121,6 +122,9 @@ export async function POST(req: NextRequest) {
   const purchases = deals
     .filter((d) => d.leadSid && d.grandTotalExVat > 0)
     .map((d) => ({
+      // carried so a successful send can be STAMPED on the deal — without it
+      // the ads tab reports a reported deal as "ממתין לדיווח" forever
+      id: d.id,
       sid: d.leadSid as string,
       value: d.grandTotalExVat,
       ts: clampTs(Math.floor(Date.parse(d.updatedAt) / 1000)),
@@ -157,6 +161,17 @@ export async function POST(req: NextRequest) {
       testEventCode: testCode,
       eventId: `${p.sid.trim()}:Purchase`,
     });
+    // Stamp the outcome, exactly as the live close path does. The backfill used
+    // to send without recording it, so the ads tab kept showing reported deals
+    // as pending — the panel contradicting reality is worse than no panel.
+    await db
+      .update(factoryQuoteRequests)
+      .set(
+        r.ok
+          ? { metaPurchaseSentAt: new Date(), metaPurchaseValueIls: p.value, metaPurchaseError: null }
+          : { metaPurchaseError: r.error ?? r.skipped ?? "unknown" },
+      )
+      .where(eq(factoryQuoteRequests.id, p.id));
     if (r.ok) pSent++;
     else {
       pSkip++;
