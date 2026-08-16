@@ -276,7 +276,7 @@ async function processCustomerLead(row: {
   const attempt = row.followUpCount + 1;
   /** Did the sales brain write this one? Decides whether the supervisor may rewrite it. */
   let setterAuthored = false;
-  /** The sales brain's own "leave this lead alone this cycle" read. */
+  /** The sales brain's own read; logged for tuning, not used to gate the send. */
   let setterHoldBack = false;
   // Re-engagement loop bodies are LLM-built per send so the message reflects
   // each lead's specific history + notes; the static template here only
@@ -375,13 +375,24 @@ async function processCustomerLead(row: {
     notes: row.notes,
     botSummary: row.botSummary,
       })
-    : // Supervisor retired: approve what the sales brain wrote, and let its own
-      // hold_back stand in for the "stay quiet this cycle" verdict.
+    : // Supervisor retired: send what the sales brain wrote.
+      //
+      // Deliberately NOT gated on the setter's hold_back. That verdict is the
+      // fall-through when the classifier can't place a lead ("unclear cold
+      // state"), not a considered "leave this one alone" — and silencing on it
+      // would strand exactly the leads nobody understands: a silence does not
+      // consume an attempt, so they would defer forever and never reach the
+      // escalation either. That is the falling-between-the-chairs failure this
+      // work exists to undo. It is still recorded for tuning.
+      //
+      // The cadence already decided this lead is due. What protects the
+      // customer stays deterministic: cadence, attempt cap, quiet hours,
+      // no-send days, bot_paused.
       {
-        recommended: setterHoldBack
-          ? ("silence" as const)
-          : ("approve_template" as const),
-        reason: setterHoldBack ? "setter hold_back" : "supervisor disabled",
+        recommended: "approve_template" as const,
+        reason: setterHoldBack
+          ? "supervisor disabled — setter authored (hold_back noted)"
+          : "supervisor disabled — setter authored",
         overrideText: null,
         promptVersion: "none",
         model: null,
