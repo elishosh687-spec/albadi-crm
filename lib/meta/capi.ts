@@ -24,6 +24,13 @@ export interface MetaSendOpts {
   testEventCode?: string | null;
   /** Overrides event_id (dedup key). Defaults to `<sid>:<eventName>`. */
   eventId?: string;
+  /**
+   * Build the payload and return it WITHOUT sending. The only way to answer
+   * "which parameters are we actually sending Meta?" without reading it back
+   * out of Events Manager, which reports its own view and started this
+   * argument in the first place.
+   */
+  preview?: boolean;
 }
 
 export interface MetaSendResult {
@@ -32,6 +39,10 @@ export interface MetaSendResult {
   eventsReceived?: number;
   fbtraceId?: string;
   error?: string;
+  /** Populated only when `preview` is set — the exact event we would POST. */
+  payload?: Record<string, unknown>;
+  /** Which user_data matching keys are present, for a quick eyeball. */
+  matchKeys?: string[];
 }
 
 function sha256(v: string): string {
@@ -141,6 +152,10 @@ export async function sendMetaCrmEvent(
   if (lead.fbp) userData.fbp = lead.fbp;
   if (lead.phone) userData.ph = [sha256(normPhone(lead.phone))];
   if (lead.email) userData.em = [sha256(normEmail(lead.email))];
+  // external_id — a stable, hashed per-person id. Meta uses it both for match
+  // quality and to tie Qualified/Purchase back to the SAME person, and unlike
+  // em/ph we always have it. Hashed like the rest (Meta requires it hashed).
+  userData.external_id = [sha256(lead.sid.trim().toLowerCase())];
 
   const customData: Record<string, unknown> = {
     event_source: "crm",
@@ -149,6 +164,18 @@ export async function sendMetaCrmEvent(
   if (typeof opts.valueIls === "number" && opts.valueIls > 0) {
     customData.value = Math.round(opts.valueIls * 100) / 100;
     customData.currency = "ILS";
+  } else if (eventName === "Purchase") {
+    // A Purchase with no value is worse than useless: Meta counts the
+    // conversion, reports ROAS against nothing, and flags the dataset as
+    // "all your Purchase events send the same price data" — which is what a
+    // run of value-less events looks like from its side. If we get here the
+    // caller failed to resolve the deal total, so say so loudly rather than
+    // shipping a silent placeholder.
+    console.error(
+      `[meta] Purchase for ${sid} has no value (got ${String(opts.valueIls)}) — ` +
+        "reporting it would corrupt ROAS. Fix the caller's total lookup.",
+    );
+    return { ok: false, skipped: "purchase_without_value" };
   }
 
   const event = {
@@ -162,6 +189,10 @@ export async function sendMetaCrmEvent(
 
   const body: Record<string, unknown> = { data: [event] };
   if (opts.testEventCode) body.test_event_code = opts.testEventCode;
+
+  if (opts.preview) {
+    return { ok: true, skipped: "preview", payload: event, matchKeys: Object.keys(userData) };
+  }
 
   const url = `https://graph.facebook.com/${version}/${datasetId}/events?access_token=${encodeURIComponent(
     token,

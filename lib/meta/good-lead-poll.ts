@@ -28,6 +28,10 @@ export interface GoodLeadPollResult {
   sent: number;
   failed: number;
   errors: string[];
+  /** Tagged contacts we can never report: no DB lead, or no leadgen id AND no
+   *  fbclid. Surfaced so they don't masquerade as "the cron didn't run". */
+  unattributable: number;
+  unattributableNames: string[];
 }
 
 export async function pollGoodLeads(
@@ -44,20 +48,40 @@ export async function pollGoodLeads(
     }
   }
   if (contactIds.size === 0) {
-    return { tagged: 0, matched: 0, sent: 0, failed: 0, errors: [] };
+    return { tagged: 0, matched: 0, sent: 0, failed: 0, errors: [], unattributable: 0, unattributableNames: [] };
   }
 
-  // 2. Map to our leads — only those with a leadgen id and not already reported.
+  // 2. Map to our leads.
+  //
+  // Attribution needs a leadgen id (Instant Forms) OR an fbclid (website) —
+  // `sendMetaCrmEvent` accepts either. Requiring a leadgen id here, as this
+  // used to, silently dropped every website-sourced good lead: it was tagged,
+  // it was never reported, and nothing said so.
   const ids = [...contactIds];
-  const res = await db.execute<{ sid: string; name: string | null }>(sql`
-    SELECT manychat_sub_id AS sid, name
+  const idArray = sql.raw(
+    `ARRAY[${ids.map((i) => `'${i.replace(/'/g, "''")}'`).join(",")}]::text[]`
+  );
+  // One pass, every tagged contact classified — so the caller can distinguish
+  // "still to send" from "can never be sent" instead of inferring from counts.
+  const res = await db.execute<{
+    sid: string;
+    name: string | null;
+    attributable: boolean;
+    already_sent: boolean;
+  }>(sql`
+    SELECT manychat_sub_id AS sid,
+           name,
+           (meta_leadgen_id IS NOT NULL OR meta_fbclid IS NOT NULL) AS attributable,
+           (meta_qualified_sent_at IS NOT NULL) AS already_sent
     FROM leads
-    WHERE ghl_contact_id = ANY(${sql.raw(
-      `ARRAY[${ids.map((i) => `'${i.replace(/'/g, "''")}'`).join(",")}]::text[]`
-    )})
-      AND meta_leadgen_id IS NOT NULL
-      AND meta_qualified_sent_at IS NULL`);
-  const pending = res.rows;
+    WHERE ghl_contact_id = ANY(${idArray})`);
+
+  const pending = res.rows.filter((r) => !r.already_sent && r.attributable);
+  const noKey = res.rows.filter((r) => !r.already_sent && !r.attributable);
+  // A tagged GHL contact with no DB lead row at all is equally unreportable.
+  const noLeadRow = Math.max(0, ids.length - res.rows.length);
+  const unattributable = noKey.length + noLeadRow;
+  const unattributableNames = noKey.map((r) => r.name ?? r.sid).slice(0, 10);
 
   if (opts.dry) {
     return {
@@ -66,6 +90,8 @@ export async function pollGoodLeads(
       sent: 0,
       failed: 0,
       errors: pending.map((p) => p.name ?? p.sid),
+      unattributable,
+      unattributableNames,
     };
   }
 
@@ -88,5 +114,13 @@ export async function pollGoodLeads(
     }
   }
 
-  return { tagged: contactIds.size, matched: pending.length, sent, failed, errors: errors.slice(0, 10) };
+  return {
+    tagged: contactIds.size,
+    matched: pending.length,
+    sent,
+    failed,
+    errors: errors.slice(0, 10),
+    unattributable,
+    unattributableNames,
+  };
 }

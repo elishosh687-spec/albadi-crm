@@ -9,8 +9,7 @@
 import { db } from "@/lib/db";
 import { sql } from "drizzle-orm";
 import { metaCapiConfigured } from "@/lib/meta/capi";
-import { searchContactsByTag } from "@/integrations/ghl/client";
-import { GOOD_LEAD_TAGS } from "@/lib/meta/good-lead-poll";
+import { pollGoodLeads } from "@/lib/meta/good-lead-poll";
 
 export interface MetaHealthCheck {
   key: string;
@@ -62,31 +61,36 @@ export async function checkMetaHealth(): Promise<MetaHealth> {
 
   // 3. Does the good-lead tag actually reach us, and did everything tagged get
   //    reported? A tagged-but-unsent backlog is the classic silent failure.
-  let tagged = 0;
+  // This used to compare the tagged count against the ALL-TIME sent count,
+  // which is not the same population — so a lead that can never be reported
+  // (no leadgen id and no fbclid) showed up as "the cron didn't run" and sent
+  // you chasing the wrong thing. Ask the poller itself instead: it knows what
+  // is genuinely pending versus what is unreportable, and why.
   let tagError: string | null = null;
+  let poll: Awaited<ReturnType<typeof pollGoodLeads>> | null = null;
   try {
-    const ids = new Set<string>();
-    for (const t of GOOD_LEAD_TAGS) {
-      (await searchContactsByTag(t)).forEach((x) => x.id && ids.add(x.id));
-    }
-    tagged = ids.size;
+    poll = await pollGoodLeads({ dry: true });
   } catch (e) {
     tagError = e instanceof Error ? e.message : String(e);
   }
-  const sentRes = await db.execute<{ n: number }>(sql`
-    SELECT count(*)::int AS n FROM leads WHERE meta_qualified_sent_at IS NOT NULL`);
-  const sent = Number(sentRes.rows[0]?.n ?? 0);
+  const tagged = poll?.tagged ?? 0;
+  const waiting = poll?.matched ?? 0;
+  const stuck = poll?.unattributable ?? 0;
   checks.push({
     key: "goodlead",
     label: 'תגית "ליד טוב" → מטא',
-    ok: tagError === null && tagged <= sent,
+    // Unreportable leads are a data gap to know about, not a broken pipe, so
+    // they don't turn the strip red on their own — a real backlog does.
+    ok: tagError === null && waiting === 0,
     detail: tagError
       ? `לא הצלחנו לשאול את GHL: ${tagError}`
       : tagged === 0
         ? "אין לידים מתויגים כרגע"
-        : tagged <= sent
-          ? `${tagged} מתויגים, כולם דווחו`
-          : `${tagged} מתויגים אך רק ${sent} דווחו — ה-cron כנראה לא רץ`,
+        : waiting > 0
+          ? `${waiting} מתויגים ממתינים לדיווח — הפעל את ה-cron היומי`
+          : stuck > 0
+            ? `${tagged} מתויגים דווחו · ${stuck} ללא מזהה מטא (לא ניתנים לדיווח): ${(poll?.unattributableNames ?? []).slice(0, 3).join(", ")}`
+            : `${tagged} מתויגים, כולם דווחו`,
   });
 
   // 4. Is anything flowing at all lately? Silence for weeks = look into it.

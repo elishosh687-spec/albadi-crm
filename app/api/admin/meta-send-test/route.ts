@@ -46,11 +46,16 @@ export async function POST(req: NextRequest) {
   const eventName: MetaEventName = VALID.includes(body.eventName)
     ? body.eventName
     : "Purchase";
+  // ?preview=1 (or {preview:true}) builds the payload and returns it WITHOUT
+  // sending — use it to see exactly which matching parameters we attach.
+  const preview =
+    new URL(req.url).searchParams.get("preview") === "1" || body.preview === true;
   const result = await sendMetaCrmEvent(sid, eventName, {
     valueIls: typeof body.valueIls === "number" ? body.valueIls : null,
     testEventCode: body.testEventCode ? String(body.testEventCode) : null,
     // Unique per test call so Meta doesn't dedup repeat verifications.
     eventId: `test:${sid}:${eventName}:${body.testEventCode ?? "live"}`,
+    preview,
   });
   return NextResponse.json(result, { status: result.ok ? 200 : 502 });
 }
