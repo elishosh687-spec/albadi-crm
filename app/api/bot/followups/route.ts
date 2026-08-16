@@ -436,6 +436,12 @@ async function processCustomerLead(row: {
   }
 
   if (verdict.recommended === "silence") {
+    // A dry run must not move the clock. This branch writes lastFollowUpAt,
+    // which is what the cadence reads — so without this guard a "preview"
+    // silently postponed the next real nudge by a whole cadence period.
+    if (cfg.dryRun) {
+      return { sid: row.sid, action: "skipped_cadence", detail: "silence (יבש)" };
+    }
     // Skip this cycle. Don't consume attempt — bump lastFollowUpAt so we don't
     // immediately retry on the next cron tick, but DO NOT increment followUpCount.
     await db
@@ -455,6 +461,11 @@ async function processCustomerLead(row: {
   }
 
   if (verdict.recommended === "escalate_to_eli") {
+    // Same reasoning: escalating queues a draft, DMs Eli and MUTES the lead.
+    // None of that belongs in a preview.
+    if (cfg.dryRun) {
+      return { sid: row.sid, action: "escalated", detail: "supervisor_escalation (יבש)" };
+    }
     let draftId: number | null = null;
     try {
       draftId = await generateAndQueueDraft({
