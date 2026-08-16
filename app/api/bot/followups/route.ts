@@ -224,6 +224,8 @@ async function processCustomerLead(row: {
   maxFollowups: number;
   /** Compose everything, send nothing, write nothing. */
   dryRun?: boolean;
+  /** Run the legacy supervisor layer on top of the message. */
+  supervisorEnabled: boolean;
 }): Promise<ProcessedLead> {
   if (row.botPaused) {
     return { sid: row.sid, action: "skipped_paused" };
@@ -274,6 +276,8 @@ async function processCustomerLead(row: {
   const attempt = row.followUpCount + 1;
   /** Did the sales brain write this one? Decides whether the supervisor may rewrite it. */
   let setterAuthored = false;
+  /** The sales brain's own "leave this lead alone this cycle" read. */
+  let setterHoldBack = false;
   // Re-engagement loop bodies are LLM-built per send so the message reflects
   // each lead's specific history + notes; the static template here only
   // serves as a fallback if the LLM is unavailable.
@@ -299,6 +303,7 @@ async function processCustomerLead(row: {
         ? authored.text
         : authored.text + RE_ENGAGEMENT_OPT_OUT_FOOTER;
       setterAuthored = true;
+      setterHoldBack = authored.holdBack;
     } else {
       const built = await buildReEngagementMessage(row.sid);
       candidateText = built.text;
@@ -318,6 +323,7 @@ async function processCustomerLead(row: {
     if (authored) {
       candidateText = authored.text;
       setterAuthored = true;
+      setterHoldBack = authored.holdBack;
     }
   }
 
@@ -345,7 +351,15 @@ async function processCustomerLead(row: {
     ? (now - row.lastFollowUpAt.getTime()) / (60 * 60 * 1000)
     : null;
 
-  const verdict = await superviseFollowup({
+  // The supervisor is a pre-setter layer: it existed to rescue a generic
+  // canned template, and its judgement carries no mechanical guardrails.
+  // Measured over 90 days it rewrote 303 of 380 messages and escalated 234
+  // leads — each escalation muting that lead and pinging Eli, at four times
+  // the rate of the deterministic attempt cap. With the sales brain writing
+  // (and validating) every nudge, it is off by default; the setter's own
+  // hold_back read replaces its "stay quiet" call.
+  const verdict = cfg.supervisorEnabled
+    ? await superviseFollowup({
     sid: row.sid,
     jid: recipient,
     leadName: row.name,
@@ -360,7 +374,22 @@ async function processCustomerLead(row: {
     candidateTemplate: candidateText,
     notes: row.notes,
     botSummary: row.botSummary,
-  });
+      })
+    : // Supervisor retired: approve what the sales brain wrote, and let its own
+      // hold_back stand in for the "stay quiet this cycle" verdict.
+      {
+        recommended: setterHoldBack
+          ? ("silence" as const)
+          : ("approve_template" as const),
+        reason: setterHoldBack ? "setter hold_back" : "supervisor disabled",
+        overrideText: null,
+        promptVersion: "none",
+        model: null,
+        latencyMs: 0,
+        rawJson: null,
+        confidence: null,
+        riskFlags: [] as string[],
+      };
 
   const replayMeta = {
     prompt_version: verdict.promptVersion,
@@ -724,7 +753,7 @@ export async function POST(req: NextRequest) {
       botPaused: row.botPaused,
       notes: row.notes,
       botSummary: row.botSummary,
-    }, { rules, maxFollowups, dryRun });
+    }, { rules, maxFollowups, dryRun, supervisorEnabled: S.followupSupervisorEnabled });
     customerResults.push(r);
   }
 

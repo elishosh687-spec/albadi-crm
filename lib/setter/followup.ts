@@ -36,6 +36,13 @@ export interface FollowupComposition {
   text: string;
   /** For the decision log / debugging — which run produced this. */
   decisionId?: number;
+  /**
+   * The setter's own read that this lead should be left alone this cycle.
+   * The cadence still decides WHETHER a lead is due; this is the sales
+   * judgement on top, and it replaces the separate supervisor that used to
+   * make the same call with fewer guardrails.
+   */
+  holdBack: boolean;
 }
 
 /**
@@ -66,7 +73,11 @@ export async function composeSetterFollowup(input: {
     // The validator's verdict is authoritative; a rejected message is exactly
     // the case the canned fallback exists for.
     if (run.message && run.message.validation?.ok === false) return null;
-    return { text, decisionId: run.decisionId };
+    return {
+      text,
+      decisionId: run.decisionId,
+      holdBack: run.strategy?.goal === "hold_back",
+    };
   } catch (e) {
     console.warn("[setter.followup] compose failed, falling back to template", e);
     return null;

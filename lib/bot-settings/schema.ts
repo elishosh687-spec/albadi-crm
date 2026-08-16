@@ -74,6 +74,7 @@ export interface BotSettings {
   setterDraftsEnabled: boolean;
   setterLiveEnabled: boolean;
   setterWritesFollowups: boolean;
+  followupSupervisorEnabled: boolean;
   setterModel: string;
   setterMaxWords: number;
   setterStyle: string;
@@ -152,6 +153,7 @@ export const DEFAULT_BOT_SETTINGS: BotSettings = {
   setterDraftsEnabled: true,
   setterLiveEnabled: false,
   setterWritesFollowups: true,
+  followupSupervisorEnabled: false,
   setterModel: "gpt-5.6-terra",
   setterMaxWords: 60,
   setterStyle:
@@ -621,6 +623,15 @@ export const BOT_SETTING_FIELDS: BotSettingField[] = [
     description:
       "כשדולק — כל תזכורת נכתבת מחדש לפי השיחה הספציפית של הלקוח, במקום אחד מ-13 המשפטים הקבועים. לקוח שהתווכח על מחיר ולקוח שנעלם באמצע השאלון מקבלים דברים שונים.\n\nהקוד עדיין מחליט מתי לשלוח ולמי — הקצב, מספר הניסיונות, שעות השקט. מוח המכירות רק מנסח. אם הניסוח נכשל או נפסל בבדיקות, נשלח הטקסט הקבוע כרגיל, אז אין מצב שלקוח לא יקבל תזכורת בגלל זה.",
     where: "כל תזכורת ללקוח שלא ענה",
+    type: "toggle",
+  },
+  {
+    key: "followupSupervisorEnabled",
+    group: "מוח מכירות",
+    label: "שכבת מפקח נוספת על התזכורות",
+    description:
+      "שכבה ישנה יותר שנבנתה כדי לשפר את הטקסט הקבוע לפני שמוח המכירות היה קיים. **כבויה כברירת מחדל** — היא כותבת מחדש 80% מההודעות בלי הבדיקות המכניות של מוח המכירות (אחת מהן ציטטה מחיר ליחידה ללקוח), והיא זו שהשתיקה 234 לידים והעבירה אותם אליך.\n\nכשכבויה — מוח המכירות מחליט מה נאמר, ואם הוא סבור שעדיף לא לדבר בסבב הזה הליד פשוט מדולג בלי לשרוף ניסיון. הוויתור אחרי מספר הניסיונות שהגדרת ממשיך לעבוד כרגיל.",
+    where: "בכל תזכורת, לפני השליחה",
     type: "toggle",
   },
   {
