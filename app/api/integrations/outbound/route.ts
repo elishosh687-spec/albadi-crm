@@ -16,11 +16,21 @@
  *      through GreenAPI when USE_GREEN_API=1; the helper inserts the
  *      outbound row in `messages` with sender='eli' automatically.
  *
- * TODO auth: GHL Conversation Provider webhooks do not carry a Bearer we can
- * preset. Need HMAC verification with GHL_OAUTH_CLIENT_SECRET once header
- * format is known. For now we accept any POST that maps to an existing lead,
- * and reject unknown contactIds with 404. Risk: attacker who knows a
- * ghl_contact_id can trigger sends. Mitigation pending.
+ * AUTH (added 2026-08-16 — this endpoint sends a real WhatsApp message to a
+ * real customer, and until now it accepted any POST that mapped to an existing
+ * lead; anyone who knew a ghl_contact_id could make us message that customer).
+ *
+ * GHL Custom Provider webhooks carry no signature we can verify, but the
+ * delivery URL is ours to define, so the secret rides in it:
+ *   https://…/api/integrations/outbound?secret=<GHL_OUTBOUND_SECRET>
+ * `Authorization: Bearer <secret>` is accepted too.
+ *
+ * It fails OPEN while GHL_OUTBOUND_SECRET is unset, because this path carries
+ * live traffic (tens of Eli's Inbox replies a day) and a hard requirement
+ * shipped ahead of the configuration would silently stop his replies reaching
+ * customers. Unauthenticated hits are logged loudly and audited to
+ * `bridge_events` so the gap is visible rather than assumed closed. Setting
+ * the env var and appending the query param closes it, in either order.
  */
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
@@ -52,6 +62,30 @@ function normalizePhone(raw: string): string {
   return raw.replace(/[^\d+]/g, "");
 }
 
+/** Constant-time compare — the secret travels in a URL, so don't leak length-wise. */
+function secretMatches(given: string, expected: string): boolean {
+  if (given.length !== expected.length) return false;
+  let diff = 0;
+  for (let i = 0; i < given.length; i++) {
+    diff |= given.charCodeAt(i) ^ expected.charCodeAt(i);
+  }
+  return diff === 0;
+}
+
+type AuthOutcome = { ok: true; mode: "verified" | "unconfigured" } | { ok: false };
+
+function checkAuth(req: NextRequest): AuthOutcome {
+  const expected = process.env.GHL_OUTBOUND_SECRET?.trim();
+  if (!expected) return { ok: true, mode: "unconfigured" };
+  const fromQuery = req.nextUrl.searchParams.get("secret")?.trim() ?? "";
+  const fromHeader = (req.headers.get("authorization") ?? "")
+    .replace(/^Bearer\s+/i, "")
+    .trim();
+  const given = fromQuery || fromHeader;
+  if (given && secretMatches(given, expected)) return { ok: true, mode: "verified" };
+  return { ok: false };
+}
+
 function extractText(p: GHLOutboundPayload): string | null {
   const v = p.message ?? p.body ?? p.text;
   return v ? v.trim() || null : null;
@@ -73,6 +107,12 @@ function stripMirrorLabel(text: string): { body: string; wasLabelled: boolean } 
 }
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
+  const auth = checkAuth(req);
+  if (!auth.ok) {
+    console.warn("[ghl.outbound] rejected — bad or missing secret");
+    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  }
+
   const rawBody = await req.text();
   const headerSnapshot: Record<string, string> = {};
   req.headers.forEach((v, k) => {
@@ -95,6 +135,41 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     payload = JSON.parse(rawBody) as GHLOutboundPayload;
   } catch {
     return NextResponse.json({ error: "invalid json" }, { status: 400 });
+  }
+
+  // Free extra check, no configuration needed: a delivery for our provider
+  // always carries our own location. It is weaker than the secret (a location
+  // id is semi-public), but it costs nothing and narrows the window while the
+  // secret is still unset.
+  const ourLocation = process.env.GHL_LOCATION_ID?.trim();
+  if (ourLocation && payload.locationId && payload.locationId.trim() !== ourLocation) {
+    console.warn("[ghl.outbound] rejected — foreign locationId", payload.locationId);
+    return NextResponse.json({ error: "unknown location" }, { status: 403 });
+  }
+
+  // Make the unauthenticated state visible instead of assumed-closed. One row
+  // per hit, so "is anyone still calling this without the secret?" is a query,
+  // not a guess.
+  if (auth.mode === "unconfigured") {
+    console.warn(
+      "[ghl.outbound] UNAUTHENTICATED HIT — GHL_OUTBOUND_SECRET is not set; " +
+        "this endpoint sends real WhatsApp messages. Set the env var and append " +
+        "?secret=… to the provider delivery URL in GHL."
+    );
+    try {
+      await db.insert(bridgeEvents).values({
+        evtId: `ghl_outbound_open:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`,
+        type: "ghl_outbound.unauthenticated",
+        occurredAt: new Date(),
+        payload: {
+          contactId: payload.contactId ?? null,
+          locationId: payload.locationId ?? null,
+          userAgent: headerSnapshot["user-agent"] ?? null,
+        } as unknown as Record<string, unknown>,
+      });
+    } catch {
+      // Auditing must never block a legitimate reply from reaching a customer.
+    }
   }
 
   const contactId = payload.contactId?.trim();

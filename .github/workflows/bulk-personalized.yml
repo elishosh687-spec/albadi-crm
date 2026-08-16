@@ -1,18 +1,31 @@
 name: Bulk Personalized Outreach
 
-# Runs once daily at 08:00 UTC (= 11:00 IL summer / 10:00 IL winter).
-# Iterates eligible leads with a 5-min gap between sends.
-# Also triggerable manually from the Actions tab (workflow_dispatch).
+# ⛔ THE DAILY SCHEDULE IS DELIBERATELY REMOVED (2026-08-16). Manual only.
+#
+# This job composes an LLM-written marketing message per lead and WhatsApps it,
+# up to 60 customers a day, with no toggle in the bot settings screen. It had
+# been failing every morning for 8+ days on `bridge /v1/messages 401 invalid
+# bearer token` — production sends go through GreenAPI now, and the bridge
+# token is dead — so it aborted after 3 consecutive failures and reached
+# nobody. It still burned an OpenAI call per attempt, every day.
+#
+# The danger was the asymmetry: it delivered zero value while broken, but the
+# moment anyone renewed BRIDGE_TENANT_TOKEN for an unrelated reason it would
+# have silently begun mass-messaging the customer base, unreviewed.
+#
+# BEFORE RE-ENABLING: (1) point it at GreenAPI instead of the bridge, (2) put
+# it behind a bot-settings toggle like every other customer-facing sender, and
+# (3) dry-run it first — the dry_run input below sends nothing and writes
+# nothing. The eligibility rules live in scripts/cron-bulk-personalized.ts and
+# currently skip only WON / LOST / factory-wait / bot-paused leads.
 
 on:
-  schedule:
-    - cron: "0 8 * * *"
   workflow_dispatch:
     inputs:
       dry_run:
         description: "Dry run (no sends, no DB writes)"
         type: boolean
-        default: false
+        default: true
 
 jobs:
   outreach:
