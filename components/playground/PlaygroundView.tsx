@@ -138,7 +138,11 @@ export default function PlaygroundView({ apiToken }: { apiToken: string }) {
     const body = text.trim();
     if (!body) return;
     setInput("");
-    await post({ action: "send", text: body }, "send");
+    const json = await post({ action: "send", text: body }, "send");
+    // Some turns do something the transcript can't show — a real conversation
+    // would pause the bot and alert Eli, but the playground lead is not a
+    // customer, so the handler says so instead of silently doing nothing.
+    if (json?.note) setNotice(json.note as string);
   }
 
   const stageLabel = lead?.pipelineStage

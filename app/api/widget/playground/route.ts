@@ -36,6 +36,8 @@ import {
   shiftPlaygroundTime,
 } from "@/lib/bot-playground/session";
 import { runSetter } from "@/lib/setter";
+import { isHumanHandoffRequest } from "@/lib/messaging/templates";
+import { getBotSettings } from "@/lib/bot-settings/store";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 120;
@@ -145,6 +147,29 @@ export async function POST(req: NextRequest) {
         sentCount: sends.length,
       });
     }
+  }
+
+  // "כבה בוט" / "לדבר עם בן אדם" — the webhook intercepts this before any
+  // handler, so the playground has to as well or the one thing Eli will
+  // actually try here would silently fall through to the questionnaire and
+  // look broken. Nothing is paused for real: the playground lead is not a
+  // customer, so we show the reply the customer would get and say what would
+  // have happened to the live lead.
+  if (isHumanHandoffRequest(text)) {
+    const settings = await getBotSettings();
+    const { sends } = await runCaptured(async () => {
+      await sendBridgeMessage(PLAYGROUND_SID, settings.humanHandoffReply);
+    });
+    await recordCaptured(sends);
+    const [transcript, lead] = await Promise.all([loadTranscript(), loadLeadState()]);
+    return NextResponse.json({
+      ok: true,
+      routedTo: "human_handoff",
+      note: "בשיחה אמיתית: הבוט מושתק, הליד מסומן שצריך מענה אנושי, ואתה מקבל התראה ב-WhatsApp. השלב בצנרת לא זז.",
+      transcript,
+      lead,
+      sentCount: sends.length,
+    });
   }
 
   // Decide which handler owns this turn — same rule as the webhook.
