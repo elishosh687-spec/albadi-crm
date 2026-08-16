@@ -445,7 +445,7 @@ export async function closeDealGroup(
         .from(factoryQuoteRequests)
         .where(eq(factoryQuoteRequests.id, primaryId))
         .limit(1);
-      if (prow?.sid) void reportPurchaseToMeta(prow.sid, combined.grandTotalIls);
+      if (prow?.sid) void reportPurchaseToMeta(prow.sid, combined.grandTotalIls, primaryId);
     }
   } catch (err) {
     console.warn("[closeDealGroup] combined pricing snapshot failed (non-fatal)", err);
@@ -547,14 +547,41 @@ export async function savePaymentsReceived(
  * sendMetaCrmEvent. Value = the customer-facing ex-VAT total (what they agreed
  * to pay). See memory meta-conversion-loop.
  */
-async function reportPurchaseToMeta(sid: string, valueIls: number): Promise<void> {
+async function reportPurchaseToMeta(
+  sid: string,
+  valueIls: number,
+  /** Deal (primary quote) id — where the outcome is stamped. */
+  dealId?: string,
+): Promise<void> {
   const clean = (sid ?? "").trim();
   if (!clean) return;
+  // Awaited, not fire-and-forget: the whole point is to record the OUTCOME.
+  // Still non-fatal — a Meta problem must never block closing a deal.
   try {
     const { sendMetaCrmEvent } = await import("@/lib/meta/capi");
-    void sendMetaCrmEvent(clean, "Purchase", { valueIls });
+    const r = await sendMetaCrmEvent(clean, "Purchase", { valueIls });
+    if (!dealId) return;
+    await db
+      .update(factoryQuoteRequests)
+      .set(
+        r.ok
+          ? {
+              metaPurchaseSentAt: new Date(),
+              metaPurchaseValueIls: valueIls,
+              metaPurchaseError: null,
+            }
+          : { metaPurchaseError: r.error ?? r.skipped ?? "unknown" },
+      )
+      .where(eq(factoryQuoteRequests.id, dealId));
   } catch (e) {
     console.warn("[closed] meta purchase report failed (non-fatal)", e);
+    if (dealId) {
+      await db
+        .update(factoryQuoteRequests)
+        .set({ metaPurchaseError: e instanceof Error ? e.message : String(e) })
+        .where(eq(factoryQuoteRequests.id, dealId))
+        .catch(() => {});
+    }
   }
 }
 
@@ -582,7 +609,7 @@ export async function setDealClosed(id: string, closed: boolean): Promise<void> 
       const value = row.fp
         ? memberDisplayTotalExVat(row.fp as FactoryPricingResult)
         : 0;
-      void reportPurchaseToMeta(row.sid, value);
+      void reportPurchaseToMeta(row.sid, value, id);
     }
   }
 }

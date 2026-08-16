@@ -332,6 +332,14 @@ export const factoryQuoteRequests = pgTable("factory_quote_requests", {
   // so Eli doesn't have to rebuild a whole quote. Flows into the deal's
   // grandTotalExVat, the payment schedule and the Zoho invoice.
   dealAddons: jsonb("deal_addons"),
+  // Did this deal's Purchase conversion actually reach Meta? Qualified has had
+  // `leads.meta_qualified_sent_at` from the start; Purchase had NOTHING, so a
+  // failed report was invisible — which is how a whole deal went unreported
+  // without anyone noticing. Stamped deal-level (one lead can close several).
+  // `error` holds the last failure reason so the ads tab can say WHY.
+  metaPurchaseSentAt: timestamp("meta_purchase_sent_at", { withTimezone: true }),
+  metaPurchaseValueIls: doublePrecision("meta_purchase_value_ils"),
+  metaPurchaseError: text("meta_purchase_error"),
   // Internal payment tracking: how much the customer actually paid per
   // installment. Array parallel to the deal's payment schedule installments —
   // { paidIls } (0/absent = not yet paid). Boss-only, never customer-facing.
