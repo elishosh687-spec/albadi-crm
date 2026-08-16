@@ -230,6 +230,42 @@ The loop **fails silently** — nothing errors, it just stops teaching Meta. The
    are the record of who was good and what they were worth. Meta is a consumer;
    if it loses the data we can always re-send from here.
 
+### ⚠️ "Fix it in the GHL workflow" is WRONG advice for this system
+
+Anyone reading Events Manager will eventually be told the fix belongs in a GHL
+workflow/automation action. **It does not — no GHL Workflow is involved**, and
+all of them are in Draft anyway (see Caveats). Every event is POSTed by
+`sendMetaCrmEvent` ([lib/meta/capi.ts](lib/meta/capi.ts)) from this codebase.
+Editing GHL changes nothing.
+
+**To see what we actually send** (Events Manager shows its own view of it, and
+its per-event "parameters" panel lists `custom_data`, not the matching keys —
+which reads as "only `lead_event_source` is sent"):
+
+```bash
+curl -X POST "$CRM/api/admin/meta-send-test?preview=1" -H "Authorization: Bearer $BOT_SECRET" \
+  -H 'Content-Type: application/json' -d '{"sid":"<sid>","eventName":"Purchase"}'
+```
+
+It returns the exact event plus `matchKeys` — the `user_data` keys attached.
+We send `lead_id` (Instant Forms) or `fbc`/`fbp` (website), hashed `ph`/`em`
+when the lead has them, and always a hashed `external_id` (the sid).
+
+**Three bugs fixed 2026-08-14, worth recognising if they recur:**
+- `pollGoodLeads` filtered on `meta_leadgen_id IS NOT NULL` while the sender
+  accepts a leadgen id **OR** an fbclid → every website good lead was tagged and
+  never reported. Keep the two rules in sync.
+- The health strip compared tagged-count vs **all-time** sent-count (different
+  populations), so one unreportable lead rendered as "the cron didn't run". It
+  now asks `pollGoodLeads({dry:true})`, which separates pending from
+  unreportable-and-why.
+- A Purchase whose total resolved to 0 was sent **with no `value`**. Meta still
+  counts it and computes ROAS against nothing — and a run of value-less events
+  is what its *"all your Purchase events send the same price data"* warning
+  actually describes. Value-less Purchases are now refused + logged. The amount
+  was never a placeholder: single → `memberDisplayTotalExVat`, combined → the
+  frozen combined grand total.
+
 ### Website leads — fbclid comes through the CRM, never by sharing credentials
 
 The site dev asked for the **production Neon connection string + a Meta access
