@@ -309,9 +309,9 @@ export default async function AdsWidgetPage({
                 lineHeight: 1.6,
               }}
             >
-              ₪{reporting.unreportedRevenueIls.toLocaleString("he-IL")} בעסקאות
-              סגורות לא דווחו למטא — ללידים האלה אין מזהה מטא, אז אי אפשר לשייך
-              אותם למודעה.
+              ₪{reporting.unreportedRevenueIls.toLocaleString("he-IL")} מלקוחות
+              שהגיעו ממטא לא דווחו — חסר להם מזהה, אז אי אפשר לשייך אותם
+              למודעה. (לקוחות שלא הגיעו ממודעה לא נספרים כאן.)
             </div>
           ) : null}
           <MetaReportList title="עסקאות (Purchase)" rows={reporting.purchases} />
@@ -344,6 +344,9 @@ function MetaReportList({ title, rows }: { title: string; rows: ReportedLead[] }
     sent: { dot: "#7dd3a0", label: "דווח" },
     pending: { dot: "#e7cba6", label: "ממתין לדיווח" },
     no_meta_id: { dot: "#e08a8a", label: "אין מזהה מטא" },
+    // Neutral grey on purpose: a customer who never came from an ad is not a
+    // fault, and colouring it red made the panel cry wolf.
+    not_from_meta: { dot: MUTED, label: "לא ממודעה" },
     failed: { dot: "#e08a8a", label: "נכשל" },
   };
   return (

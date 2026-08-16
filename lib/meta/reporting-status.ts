@@ -11,10 +11,14 @@
  */
 import { db } from "@/lib/db";
 import { sql } from "drizzle-orm";
-import { customerTotalExVat } from "@/lib/factory/customer-total";
-import type { FactoryPricingResult } from "@/lib/factory/types";
+import { listClosedQuotes } from "@/lib/factory/server/closed";
 
-export type ReportState = "sent" | "pending" | "no_meta_id" | "failed";
+export type ReportState =
+  | "sent"
+  | "pending"
+  | "no_meta_id"
+  | "not_from_meta"
+  | "failed";
 
 export interface ReportedLead {
   name: string;
@@ -28,84 +32,71 @@ export interface ReportedLead {
 export interface MetaReportingStatus {
   qualified: ReportedLead[];
   purchases: ReportedLead[];
-  /** Deals whose money never reached Meta — the number that actually matters. */
+  /**
+   * Revenue from leads that DID come from Meta but carry no attribution key —
+   * a real gap. Customers who never came from an ad are excluded: there is
+   * nothing to report for them, and counting them made the panel cry wolf.
+   */
   unreportedRevenueIls: number;
 }
 
-/**
- * Closed deals and whether their Purchase conversion reached Meta.
- *
- * A deal is reportable only if its lead carries a Meta attribution key — a
- * leadgen id (Instant Form) or an fbclid (website). Without one Meta cannot tie
- * the sale to an ad, and no amount of retrying will change that; it is a data
- * gap to fix upstream, not a transient error, so it is labelled distinctly.
- */
 export async function getMetaReportingStatus(): Promise<MetaReportingStatus> {
-  const dealRows = await db.execute<{
-    name: string | null;
+  // Source of truth = listClosedQuotes(), the SAME set the backfill reports on.
+  // Querying closed_deal_at directly used a narrower definition of "deal" (it
+  // misses a quote whose lead is WON), so a genuinely-reported customer —
+  // איציק חודידה — was absent from the panel entirely.
+  const deals = await listClosedQuotes();
+
+  const attrRows = await db.execute<{
     sid: string;
-    sent_at: string | null;
-    err: string | null;
-    value_ils: number | null;
-    final_pricing: unknown;
-    combined_pricing: { grandTotalIls?: number } | null;
+    from_meta: boolean;
     has_key: boolean;
   }>(sql`
-    SELECT l.name,
-           f.manychat_sub_id           AS sid,
-           f.meta_purchase_sent_at::text AS sent_at,
-           f.meta_purchase_error       AS err,
-           f.meta_purchase_value_ils   AS value_ils,
-           f.final_pricing             AS final_pricing,
-           f.combined_pricing          AS combined_pricing,
-           (l.meta_leadgen_id IS NOT NULL OR l.meta_fbclid IS NOT NULL) AS has_key
-    FROM factory_quote_requests f
-    LEFT JOIN leads l ON trim(l.manychat_sub_id) = trim(f.manychat_sub_id)
-    WHERE f.closed_deal_at IS NOT NULL
-      AND f.deleted_at IS NULL
-      -- combined deals stamp on the primary; members would double-count
-      AND (f.deal_group_id IS NULL OR f.deal_group_id = concat('dg_', f.id))
-    ORDER BY f.closed_deal_at DESC`);
+    SELECT trim(manychat_sub_id) AS sid,
+           (lead_source = 'facebook' OR source = 'facebook_import'
+            OR meta_ad_name IS NOT NULL) AS from_meta,
+           (meta_leadgen_id IS NOT NULL OR meta_fbclid IS NOT NULL) AS has_key
+    FROM leads`);
+  const attr = new Map(attrRows.rows.map((r) => [r.sid, r]));
 
-  // The stamped value exists only on a SUCCESSFUL send, so an unreported deal
-  // would read ₪0 — precisely the figure we need to be right. Fall back to the
-  // deal's own total: the frozen combined offer, else the member's printed total.
-  const dealValue = (r: {
-    value_ils: number | null;
-    combined_pricing: { grandTotalIls?: number } | null;
-    final_pricing: unknown;
-  }): number | undefined => {
-    if (r.value_ils != null) return Number(r.value_ils);
-    if (r.combined_pricing?.grandTotalIls != null) return Number(r.combined_pricing.grandTotalIls);
-    if (r.final_pricing) {
-      return customerTotalExVat(r.final_pricing as FactoryPricingResult) ?? undefined;
-    }
-    return undefined;
-  };
+  const stampRows = await db.execute<{
+    id: string;
+    sent_at: string | null;
+    err: string | null;
+  }>(sql`
+    SELECT id, meta_purchase_sent_at::text AS sent_at, meta_purchase_error AS err
+    FROM factory_quote_requests`);
+  const stamps = new Map(stampRows.rows.map((r) => [r.id, r]));
 
-  const purchases: ReportedLead[] = dealRows.rows.map((r) => {
-    const name = r.name ?? r.sid;
-    const value = dealValue(r);
-    if (r.sent_at) return { name, state: "sent", valueIls: value };
-    if (!r.has_key) {
+  let unreportedRevenueIls = 0;
+  const purchases: ReportedLead[] = deals.map((d) => {
+    const name = d.customerName ?? d.leadSid ?? "—";
+    const value = d.grandTotalExVat;
+    const a = attr.get((d.leadSid ?? "").trim());
+    const st = stamps.get(d.id);
+
+    if (st?.sent_at) return { name, state: "sent", valueIls: value };
+    if (!a?.has_key) {
+      // Never came from an ad → nothing to report, and not a fault.
+      if (!a?.from_meta) {
+        return {
+          name,
+          state: "not_from_meta",
+          note: "הלקוח לא הגיע ממודעה — אין מה לדווח",
+          valueIls: value,
+        };
+      }
+      unreportedRevenueIls += value;
       return {
         name,
         state: "no_meta_id",
-        note: "אין מזהה מטא לליד — לא ניתן לשייך למודעה",
+        note: "הגיע ממטא אך חסר מזהה — לא ניתן לשייך למודעה",
         valueIls: value,
       };
     }
-    if (r.err) return { name, state: "failed", note: r.err, valueIls: value };
+    if (st?.err) return { name, state: "failed", note: st.err, valueIls: value };
     return { name, state: "pending", valueIls: value };
   });
-
-  // Only deals that CAN'T be reported count as lost revenue signal; a pending
-  // one is simply waiting for the next run.
-  const unreportedRevenueIls = Math.round(
-    dealRows.rows
-      .filter((r) => !r.sent_at && !r.has_key)
-      .reduce((s, r) => s + (dealValue(r) ?? 0), 0),
-  );
 
   // Good-lead side: ask the poller (dry) rather than re-implementing its rules,
   // so this panel can never disagree with what the cron will actually do.
@@ -132,5 +123,5 @@ export async function getMetaReportingStatus(): Promise<MetaReportingStatus> {
     // GHL unreachable — the deals half is still worth showing.
   }
 
-  return { qualified, purchases, unreportedRevenueIls };
+  return { qualified, purchases, unreportedRevenueIls: Math.round(unreportedRevenueIls) };
 }
