@@ -70,7 +70,17 @@ export async function transcribeAudio(
   }
 
   // `||` not `??`: readEnv returns "" for unset, and "" must fall back too.
-  const model = opts.model || readEnv("OPENAI_TRANSCRIBE_MODEL") || DEFAULT_MODEL;
+  // Settings first so the dropdown actually governs it; env stays as an
+  // override for one-off experiments.
+  let settingsModel: string | undefined;
+  try {
+    const { getBotSettings } = await import("../bot-settings/store");
+    settingsModel = (await getBotSettings()).transcribeModel || undefined;
+  } catch {
+    /* settings unavailable — fall through */
+  }
+  const model =
+    opts.model || readEnv("OPENAI_TRANSCRIBE_MODEL") || settingsModel || DEFAULT_MODEL;
   const timeoutMs = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const contentType = opts.contentType ?? "audio/mpeg";
   // Whisper inspects the filename extension to detect audio format. If the

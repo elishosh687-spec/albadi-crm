@@ -11,6 +11,7 @@
  * Callers should mark the row as failed and let the cron retry on next tick.
  */
 import { callLLM } from "./openai-client";
+import { getBotSettings } from "../bot-settings/store";
 
 const BOM = "﻿";
 function readEnv(key: string): string {
@@ -125,7 +126,16 @@ export async function analyzeCall(
 ): Promise<CallAnalysis | null> {
   if (!transcript || transcript.trim().length === 0) return null;
 
-  const model = readEnv("OPENAI_ANALYSIS_MODEL") || undefined;
+  // Analysing a call IS analysis, so it follows the "מודל ניתוח" setting like
+  // the lead analyser does. Before this it read only the env var — which is
+  // unset in production — and fell through to the CONVERSATION model, the
+  // cheapest one in the list. Nobody chose that; the settings screen simply
+  // had no effect here, which made the control a lie.
+  const model =
+    readEnv("OPENAI_ANALYSIS_MODEL") ||
+    (await getBotSettings()
+      .then((s) => s.analysisModel)
+      .catch(() => undefined));
 
   const anchor = opts?.callStartedAt ?? new Date();
   const user = [

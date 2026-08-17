@@ -18,6 +18,8 @@ const OPENAI_URL = "https://api.openai.com/v1/chat/completions";
 const TIMEOUT_MS = 12000;
 
 const BOM = "﻿";
+import { getBotSettings } from "../bot-settings/store";
+
 function readEnv(key: string): string {
   const raw = process.env[key] ?? "";
   return raw.startsWith(BOM) ? raw.slice(1) : raw;
@@ -62,7 +64,10 @@ export async function suggestReplies(
     console.warn("[suggest-reply] OPENAI_API_KEY missing");
     return [];
   }
-  const model = readEnv("OPENAI_MODEL") || "gpt-4o-mini";
+  // Follow the "מודל שיחה" setting. This used to hardcode a previous-
+  // generation model, so switching the dropdown left reply suggestions behind
+  // on gpt-4o-mini with no indication anywhere.
+  const model = await resolveConversationModel();
 
   const ctxLines: string[] = [];
   if (input.leadName) ctxLines.push(`שם הלקוח: ${input.leadName}`);
@@ -183,7 +188,10 @@ export async function draftMoneyReply(
     console.warn("[draft-money-reply] OPENAI_API_KEY missing");
     return null;
   }
-  const model = readEnv("OPENAI_MODEL") || "gpt-4o-mini";
+  // Follow the "מודל שיחה" setting. This used to hardcode a previous-
+  // generation model, so switching the dropdown left reply suggestions behind
+  // on gpt-4o-mini with no indication anywhere.
+  const model = await resolveConversationModel();
 
   const ctxLines: string[] = [];
   if (input.leadName) ctxLines.push(`שם הלקוח: ${input.leadName}`);
@@ -251,4 +259,16 @@ export async function draftMoneyReply(
     console.error("[draft-money-reply] error", e);
     return null;
   }
+}
+
+
+/** The conversation model from settings, env as the fallback. */
+async function resolveConversationModel(): Promise<string> {
+  try {
+    const s = await getBotSettings();
+    if (s.intentModel) return s.intentModel;
+  } catch {
+    /* settings unavailable — fall through to env */
+  }
+  return readEnv("OPENAI_MODEL") || "gpt-4o-mini";
 }

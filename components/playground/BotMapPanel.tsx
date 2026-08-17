@@ -213,6 +213,47 @@ export default function BotMapPanel({
         הלידים בלבד, לא על סיכומי השיחות.
       </p>
 
+      {/* ---------- models ---------- */}
+      <H sub="ארבע עבודות שונות, ארבעה מודלים. כולן נבחרות מההגדרות.">מי עושה מה</H>
+      <div style={card}>
+        <ModelRow
+          job="עונה ללקוחות"
+          what="מנסח כל תשובה ותזכורת — זה שמדבר בפועל"
+          model={S.setterModel}
+          onEdit={onEdit}
+        />
+        <ModelRow
+          job="מתמלל שיחות טלפון"
+          what="ממיר הקלטה לטקסט"
+          model={S.transcribeModel}
+          onEdit={onEdit}
+        />
+        <ModelRow
+          job="מנתח את התמלול"
+          what="סיכום השיחה, התנגדויות, מה סוכם, מועד חזרה"
+          model={S.analysisModel}
+          onEdit={onEdit}
+        />
+        <ModelRow
+          job="כותב מה הצעד הבא"
+          what="למה הליד תקוע, מה החסם, מה לעשות"
+          model={S.analysisModel}
+          onEdit={onEdit}
+        />
+        <ModelRow
+          job="מבין מה הלקוח אמר"
+          what="סיווג כוונות וחילוץ מידות וכמויות מהשאלון"
+          model={S.intentModel}
+          onEdit={onEdit}
+          last
+        />
+      </div>
+      <p style={foot}>
+        המודל היקר לא תמיד עדיף: הבנת כוונות היא משימה פשוטה שרצה על כל הודעה,
+        וניסוח מכירתי הוא לא. אם סיכומי השיחות מרגישים שטחיים — זה "מנתח את
+        התמלול".
+      </p>
+
       {/* ---------- locked ---------- */}
       <H sub="דורש מתכנת. לפי סדר הכדאיות לשחרר.">מה עדיין לא ניתן לשינוי</H>
       <div style={{ ...card, marginBottom: 30 }}>
@@ -278,6 +319,54 @@ function Cadence({ title, text, onEdit }: { title: string; text: string; onEdit:
     >
       <span style={{ fontSize: 12.5, fontWeight: 600 }}>{title}</span>
       <span style={{ fontSize: 11.5, color: C.accent }}>{text}</span>
+    </button>
+  );
+}
+
+function ModelRow({
+  job,
+  what,
+  model,
+  onEdit,
+  last,
+}: {
+  job: string;
+  what: string;
+  model: string;
+  onEdit: () => void;
+  last?: boolean;
+}) {
+  return (
+    <button
+      onClick={onEdit}
+      className="lux-tap lux-wrap-sm"
+      style={{
+        ...btnReset,
+        display: "flex",
+        gap: 10,
+        alignItems: "baseline",
+        justifyContent: "space-between",
+        textAlign: "start",
+        padding: "7px 0",
+        background: "transparent",
+        border: "none",
+        borderBottom: last ? "none" : `1px solid rgba(255,255,255,0.05)`,
+      }}
+    >
+      <span style={{ flex: 1, minWidth: 0 }}>
+        <span style={{ fontSize: 12.5, fontWeight: 600, display: "block" }}>{job}</span>
+        <span style={{ fontSize: 11, color: C.faint }}>{what}</span>
+      </span>
+      <span
+        style={{
+          fontSize: 11,
+          color: C.accent,
+          whiteSpace: "nowrap",
+          fontFamily: "ui-monospace, Menlo, monospace",
+        }}
+      >
+        {model}
+      </span>
     </button>
   );
 }

@@ -94,6 +94,7 @@ export interface BotSettings {
   // --- models ---
   intentModel: string;
   analysisModel: string;
+  transcribeModel: string;
 }
 
 export const DEFAULT_BOT_SETTINGS: BotSettings = {
@@ -174,6 +175,7 @@ export const DEFAULT_BOT_SETTINGS: BotSettings = {
 
   intentModel: "gpt-5.6-luna",
   analysisModel: "gpt-5.6-terra",
+  transcribeModel: "whisper-1",
 };
 
 export type FieldType = "toggle" | "number" | "text" | "longtext" | "select";
@@ -785,6 +787,20 @@ export const BOT_SETTING_FIELDS: BotSettingField[] = [
     where: "לשונית ניתוח + הערות ב-GHL",
     type: "select",
     options: MODEL_OPTIONS,
+  },
+  {
+    key: "transcribeModel",
+    group: "מודלים",
+    label: "מודל תמלול שיחות",
+    description:
+      "ממיר את הקלטות הטלפון לטקסט. whisper-1 הוא הוותיק והזול; דגמי gpt-4o מתמללים עברית מדויק יותר ועולים יותר. משפיע רק על איכות התמלול — הסיכום נכתב אחר כך ע\"י מודל הניתוח.",
+    where: "כל שיחת טלפון שנענתה",
+    type: "select",
+    options: [
+      { value: "whisper-1", label: "whisper-1 — ותיק וזול (ברירת מחדל)" },
+      { value: "gpt-4o-mini-transcribe", label: "gpt-4o-mini-transcribe — מדויק יותר" },
+      { value: "gpt-4o-transcribe", label: "gpt-4o-transcribe — הכי מדויק, הכי יקר" },
+    ],
   },
 ];
 
