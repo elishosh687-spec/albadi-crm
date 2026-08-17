@@ -38,7 +38,9 @@ export async function checkMetaHealth(): Promise<MetaHealth> {
     label: "חיבור למטא (CAPI)",
     ok: ping.ok,
     detail: ping.ok
-      ? `מחובר לדאטהסט "${ping.datasetName ?? "?"}" — נבדק עכשיו`
+      ? ping.datasetName
+        ? `מחובר לדאטהסט "${ping.datasetName}" — נבדק עכשיו`
+        : "הטוקן תקף — נבדק מול מטא עכשיו"
       : ping.authFailed
         ? `הטוקן נדחה על ידי מטא (${ping.error}) — צריך לחדש את META_CAPI_TOKEN ב-Events Manager`
         : `אין תשובה ממטא: ${ping.error}`,

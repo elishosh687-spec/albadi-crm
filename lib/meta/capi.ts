@@ -74,38 +74,58 @@ export interface MetaPingResult {
   authFailed?: boolean;
 }
 
+async function graphGet(
+  path: string,
+  version: string,
+  token: string,
+): Promise<{ status: number; json: { name?: string; id?: string; error?: { message?: string; code?: number } } }> {
+  // Bounded: a slow Meta must not hang the ads page behind it.
+  const resp = await fetch(
+    `https://graph.facebook.com/${version}/${path}${path.includes("?") ? "&" : "?"}access_token=${encodeURIComponent(token)}`,
+    { signal: AbortSignal.timeout(6000), cache: "no-store" },
+  );
+  return { status: resp.status, json: await resp.json().catch(() => ({})) };
+}
+
 /**
  * Actually talk to Meta.
  *
  * `metaCapiConfigured()` only proves two env vars are non-empty, so a health
- * check built on it stays green through an expired or revoked token — the
- * exact failure it exists to catch. This reads the dataset back over the Graph
- * API: it needs the token to be valid AND to have access to that dataset, and
- * it sends no events, so it can run on every page load without polluting data.
+ * check built on it stays green through an expired or revoked token — the exact
+ * failure it exists to catch. This makes a real Graph call and sends no events,
+ * so it can run on every page load without polluting data.
+ *
+ * ⚠️ Reading the dataset back is the nicer proof, but a CAPI token scoped to
+ * SEND events does not necessarily have permission to READ that dataset's
+ * metadata — ours returns "(#100) Missing Permission" while sending works
+ * perfectly. Treating that as a failure would paint the strip red over a
+ * healthy pipe, so #100 falls through to verifying the token itself, which is
+ * what actually expires.
  */
 export async function pingMetaDataset(): Promise<MetaPingResult> {
   const { token, datasetId, version } = config();
   if (!token || !datasetId) {
     return { ok: false, error: "חסר META_CAPI_TOKEN או META_DATASET_ID" };
   }
-  const url = `https://graph.facebook.com/${version}/${datasetId}?fields=name&access_token=${encodeURIComponent(token)}`;
+  // 190 = invalid/expired token; 10/200 = permission denied on the object.
+  const isAuth = (code?: number) => code === 190 || code === 10 || code === 200;
   try {
-    // Bounded: a slow Meta must not hang the ads page behind it.
-    const resp = await fetch(url, { signal: AbortSignal.timeout(6000), cache: "no-store" });
-    const json: {
-      name?: string;
-      error?: { message?: string; code?: number };
-    } = await resp.json().catch(() => ({}));
-    if (!resp.ok || json.error) {
-      const code = json.error?.code;
+    const ds = await graphGet(`${datasetId}?fields=name`, version, token);
+    if (!ds.json.error) return { ok: true, datasetName: ds.json.name };
+    if (isAuth(ds.json.error.code)) {
+      return { ok: false, authFailed: true, error: ds.json.error.message };
+    }
+    // #100 and friends: the token may still be perfectly able to send. Fall
+    // back to proving the token is alive at all.
+    const me = await graphGet("me?fields=id", version, token);
+    if (me.json.error) {
       return {
         ok: false,
-        // 190 = invalid/expired access token; 10/200 = permission denied.
-        authFailed: code === 190 || code === 10 || code === 200,
-        error: json.error?.message ?? `HTTP ${resp.status}`,
+        authFailed: isAuth(me.json.error.code),
+        error: me.json.error.message,
       };
     }
-    return { ok: true, datasetName: json.name };
+    return { ok: true, datasetName: undefined };
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     return { ok: false, error: msg.includes("timeout") ? "מטא לא הגיבה בזמן" : msg };
