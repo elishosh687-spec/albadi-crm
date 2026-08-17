@@ -93,21 +93,17 @@ function readEnv(key: string): string {
   return process.env[key] ?? "";
 }
 
-const SYSTEM_PROMPT = `אתה אנליסט מכירות בכיר של "אלבדי" — חברה ישראלית שמוכרת שקיות בד אלבד ממותגות (הדפסת לוגו), מיוצרות בסין. יש 128 לידים ומכירה אחת. תפקידך: לנתח ליד אחד בלבד לפי תיק-הליד שמצורף, ולמצוא את שורש התקיעה — לא רק את ההתנגדות השטחית.
+/**
+ * The analyst's brief — Eli's to change. Same split as the call analyser: this
+ * half is business judgement (what a root cause is, how to read "expensive",
+ * the vocabulary of the trade), the schema below is a machine contract read
+ * field-by-field downstream.
+ */
+import { DEFAULT_LEAD_ANALYSIS_GUIDANCE } from "../bot-settings/analysis-defaults";
+export { DEFAULT_LEAD_ANALYSIS_GUIDANCE };
 
-חוקי-ברזל:
-1. אתה שופט מובנה, לא כותב חופשי. החזר JSON תקין בלבד לפי הסכמה.
-2. כל ציטוט (quote) חייב להיות מועתק **מילה במילה** מתוך תיק-הליד. אסור להמציא או לנסח מחדש. אם אין ציטוט מתאים — אל תכלול את ההתנגדות.
-3. כל ציטוט וכל טענה מתייחסים אך ורק לליד הזה. אין לך מידע על לידים אחרים.
-4. הבחן בין שטח לשורש: "יקר" מול כמות קטנה (MOQ), או מול השוואה לשקית לא-ממותגת, או מול גלופה שכבר שולמה — זה לרוב לא הפסד-מחיר אמיתי.
-5. אם אין מספיק דאטה (אין שיחות ומעט הודעות) — החזר insufficient_data=true ושאר השדות מינימליים.
-
-מונחים: "אלבד" = החומר. "גלופה" = עלות חד-פעמית של לוח הדפסה. "שקית/סקית" = המוצר.
-
-מפה כל התנגדות ל-taxonomy_key אחד מהרשימה הסגורה הזו בלבד:
-${OBJECTION_KEYS.join(", ")}
-
-החזר JSON במבנה:
+/** The machine contract. Not configurable. */
+const RESPONSE_SCHEMA = `החזר JSON במבנה:
 {
   "insufficient_data": false,
   "root_cause": "מה באמת תקע את העסקה, משפט-שניים בעברית",
@@ -122,6 +118,18 @@ ${OBJECTION_KEYS.join(", ")}
   "confidence": "low|medium|high"
 }
 price_forensics / followup_verdict / sample = null אם לא רלוונטי.`;
+
+async function buildSystemPrompt(): Promise<string> {
+  let guidance = DEFAULT_LEAD_ANALYSIS_GUIDANCE;
+  try {
+    const { getBotSettings } = await import("../bot-settings/store");
+    const custom = (await getBotSettings()).leadAnalysisGuidance?.trim();
+    if (custom) guidance = custom;
+  } catch {
+    /* settings unavailable — the default brief still analyses correctly */
+  }
+  return `${guidance}\n\n${RESPONSE_SCHEMA}`;
+}
 
 export interface RawJudge {
   insufficient_data?: boolean;
@@ -178,7 +186,7 @@ export async function analyzeLead(
     readEnv("OPENAI_ANALYSIS_MODEL") ||
     (await getBotSettings().then((s) => s.analysisModel).catch(() => "gpt-5.6-terra"));
   const raw = await callLLM<RawJudge>({
-    system: SYSTEM_PROMPT,
+    system: await buildSystemPrompt(),
     user: renderDossierText(dossier),
     model,
     jsonMode: true,

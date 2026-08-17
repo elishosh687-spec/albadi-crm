@@ -91,6 +91,10 @@ export interface BotSettings {
   skillFollowUpDiscipline: string;
   skillPauseIntelligence: string;
 
+  // --- what the analysts are asked to look for ---
+  callAnalysisGuidance: string;
+  leadAnalysisGuidance: string;
+
   // --- models ---
   intentModel: string;
   analysisModel: string;
@@ -174,6 +178,9 @@ export const DEFAULT_BOT_SETTINGS: BotSettings = {
   skillFollowUpDiscipline: SKILLS.follow_up_discipline.guidance,
   skillPauseIntelligence: SKILLS.pause_intelligence.guidance,
 
+  callAnalysisGuidance: "",
+  leadAnalysisGuidance: "",
+
   intentModel: "gpt-5.6-luna",
   analysisModel: "gpt-5.6-terra",
   transcribeProvider: "openai",
@@ -209,6 +216,7 @@ export const GROUPS = [
   "תיאום שיחות",
   "מוח מכירות",
   "טקטיקות המכירה",
+  "הנחיות לניתוח",
   "מודלים",
 ] as const;
 
@@ -790,6 +798,26 @@ export const BOT_SETTING_FIELDS: BotSettingField[] = [
     type: "select",
     options: MODEL_OPTIONS,
   },
+  // ---------- הנחיות לניתוח ----------
+  {
+    key: "callAnalysisGuidance",
+    group: "הנחיות לניתוח",
+    label: "מה לחפש בשיחת טלפון",
+    description:
+      "ההנחיות שהמנתח מקבל על כל שיחה: מה נחשב התנגדות, איך להתייחס לתא קולי, ואיך להפוך \"תחזור אליי מחר\" למועד אמיתי שפותח משימה.\n\nאם תשאיר ריק — נעשה שימוש בהנחיות ברירת המחדל. **מבנה ה-JSON שהמנתח מחזיר לא נמצא כאן ולא ניתן לשבירה** — הוא נוסף אוטומטית אחרי מה שתכתוב.",
+    where: "כל שיחת טלפון שנענתה ותומללה",
+    type: "longtext",
+  },
+  {
+    key: "leadAnalysisGuidance",
+    group: "הנחיות לניתוח",
+    label: "מה לחפש בניתוח ליד",
+    description:
+      "ההנחיות לניתוח העמוק שכותב \"למה העסקה תקועה\" ומה הצעד הבא. כאן נקבע מה נחשב שורש התקיעה מול התנגדות שטחית, ואיך לקרוא \"יקר\" — האם זה באמת מחיר או כמות מינימום.\n\nריק = ברירת המחדל. גם כאן מבנה ה-JSON מוגן ונוסף אוטומטית.",
+    where: "ניתוח ליד — הכפתור והריצה הלילית",
+    type: "longtext",
+  },
+
   {
     key: "transcribeProvider",
     group: "מודלים",

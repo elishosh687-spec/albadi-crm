@@ -17,6 +17,10 @@ import {
   type BotSettings,
 } from "@/lib/bot-settings/schema";
 import { parseCadence, describeCadence } from "@/lib/autoresponder/followup-cadence";
+import {
+  DEFAULT_CALL_ANALYSIS_GUIDANCE,
+  DEFAULT_LEAD_ANALYSIS_GUIDANCE,
+} from "@/lib/bot-settings/analysis-defaults";
 
 const C = {
   panel: "#1b1917",
@@ -371,6 +375,43 @@ function Control({
 
   if (field.type === "longtext") {
     const text = String(value);
+    // An empty analyst brief means "use the default" — but an empty textarea
+    // shows nothing to react to, so offer the default to load and edit rather
+    // than making Eli guess what he is replacing.
+    const builtIn =
+      field.key === "callAnalysisGuidance"
+        ? DEFAULT_CALL_ANALYSIS_GUIDANCE
+        : field.key === "leadAnalysisGuidance"
+          ? DEFAULT_LEAD_ANALYSIS_GUIDANCE
+          : null;
+    if (builtIn && !text.trim()) {
+      return (
+        <div>
+          <div
+            style={{
+              ...inputStyle,
+              width: "100%",
+              maxHeight: 220,
+              overflowY: "auto",
+              whiteSpace: "pre-wrap",
+              color: C.dim,
+              fontSize: 12.5,
+              lineHeight: 1.7,
+            }}
+          >
+            {builtIn}
+          </div>
+          <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 6 }}>
+            <button onClick={() => onChange(builtIn)} style={btnGhost} className="lux-tap">
+              טען לעריכה
+            </button>
+            <span style={{ fontSize: 11, color: C.faint }}>
+              אלה ההנחיות שרצות עכשיו. עריכה תחליף אותן.
+            </span>
+          </div>
+        </div>
+      );
+    }
     return (
       <div>
         <textarea

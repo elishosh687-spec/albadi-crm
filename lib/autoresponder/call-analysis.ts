@@ -53,22 +53,24 @@ export interface CallAnalysis {
   callback_reason: string | null;
 }
 
-const SYSTEM_PROMPT = `אתה אנליסט שיחות מכירה לחברת אלבדי (אריזות + שקיות ממותגות).
-מקבל תמלול של שיחה בין נציג מכירות לבין לקוח פוטנציאלי.
+/**
+ * What the analyst is asked to look for — Eli's to change.
+ *
+ * The prompt splits in two on purpose. THIS half is business judgement: what
+ * counts as an objection, how to treat a voicemail, how to resolve "call me
+ * tomorrow" into a real time. It moves to the settings screen so refining what
+ * a call summary contains stops requiring a developer.
+ *
+ * The JSON schema below does NOT move. It is a machine contract: every field
+ * is read by name downstream — the note builder, the callback task, the
+ * setter's dossier. An edited schema would not degrade the analysis, it would
+ * end it, silently, for every call.
+ */
+import { DEFAULT_CALL_ANALYSIS_GUIDANCE } from "../bot-settings/analysis-defaults";
+export { DEFAULT_CALL_ANALYSIS_GUIDANCE };
 
-חוקים:
-- כל מה שאתה לא בטוח בו - שים null או רשימה ריקה. אל תמציא.
-- ציטוטים קצרים מהשיחה (עד 10 מילים) רק כשתומך בטענה.
-- עברית בלבד בכל השדות הטקסטואליים.
-- אם השיחה היא תא קולי או שיחה קצרה מאוד (פחות מ-20 מילים), החזר call_summary בלבד ושאר השדות ריקים.
-
-חוקי callback (מתי לחזור ללקוח):
-- אם בשיחה סוכם שנחזור ללקוח (או שהלקוח ביקש שנחזור) במועד כלשהו — חשב את המועד המוחלט ביחס ל"זמן תחילת השיחה" שמופיע למעלה, והחזר אותו ב-callback_at בפורמט ISO 8601 עם אזור זמן ישראל (למשל "2026-06-12T16:30:00+03:00").
-- "בעוד שעה/שעתיים/X דקות" → חשב מזמן תחילת השיחה. "מחר" בלי שעה → 09:00. "ביום ראשון" → 09:00 באותו יום.
-- אם המועד מעורפל ואי אפשר לחשב שעה ("בהמשך", "מתישהו", "כשיתפנה", "אחר כך") → callback_at = null.
-- אם לא סוכמה חזרה בכלל → callback_at = null וגם callback_reason = null.
-
-החזר JSON בדיוק בפורמט הבא:
+/** The machine contract. Not configurable — see above. */
+const RESPONSE_SCHEMA = `החזר JSON בדיוק בפורמט הבא:
 {
   "call_summary": "1-2 משפטים על מה קרה בשיחה",
   "customer_needs": ["..."],
@@ -83,6 +85,18 @@ const SYSTEM_PROMPT = `אתה אנליסט שיחות מכירה לחברת אל
   "callback_at": "ISO 8601 עם offset ישראל אם סוכם מועד חזרה, אחרת null",
   "callback_reason": "משפט קצר בעברית על מה סוכם לגבי החזרה, אחרת null"
 }`;
+
+async function buildSystemPrompt(): Promise<string> {
+  let guidance = DEFAULT_CALL_ANALYSIS_GUIDANCE;
+  try {
+    const { getBotSettings } = await import("../bot-settings/store");
+    const custom = (await getBotSettings()).callAnalysisGuidance?.trim();
+    if (custom) guidance = custom;
+  } catch {
+    /* settings unavailable — the default guidance still analyses correctly */
+  }
+  return `${guidance}\n\n${RESPONSE_SCHEMA}`;
+}
 
 /** Format the call-start anchor for the prompt, in Israel local time. */
 function jerusalemAnchor(at: Date): string {
@@ -148,7 +162,7 @@ export async function analyzeCall(
   ].join("\n");
 
   const result = await callLLM<CallAnalysis>({
-    system: SYSTEM_PROMPT,
+    system: await buildSystemPrompt(),
     user,
     model,
     jsonMode: true,
