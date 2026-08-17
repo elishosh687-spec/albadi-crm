@@ -20,7 +20,7 @@ const MAX_BYTES = 25 * 1024 * 1024; // OpenAI hard limit
 const DEFAULT_TIMEOUT_MS = 120_000; // long audio + slow networks
 
 const BOM = "﻿";
-function readEnv(key: string): string {
+export function readEnv(key: string): string {
   const raw = process.env[key] ?? "";
   return raw.startsWith(BOM) ? raw.slice(1) : raw;
 }
@@ -58,6 +58,35 @@ export async function transcribeAudio(
   audio: Buffer,
   opts: TranscribeOptions = {},
 ): Promise<string> {
+  // Speaker separation lives with ElevenLabs Scribe — no OpenAI transcription
+  // model does diarization, so this is a provider choice, not a model choice.
+  // Any failure falls through to OpenAI below rather than losing the call: a
+  // transcript without speaker labels beats no transcript.
+  let provider = "openai";
+  try {
+    const { getBotSettings } = await import("../bot-settings/store");
+    provider = (await getBotSettings()).transcribeProvider || "openai";
+  } catch {
+    /* settings unavailable — stay on OpenAI */
+  }
+  if (provider === "elevenlabs") {
+    try {
+      const { transcribeWithScribe } = await import("./elevenlabs-stt");
+      const text = await transcribeWithScribe(
+        audio.buffer.slice(audio.byteOffset, audio.byteOffset + audio.byteLength) as ArrayBuffer,
+        {
+          filename: opts.filename,
+          contentType: opts.contentType,
+          timeoutMs: opts.timeoutMs,
+        }
+      );
+      if (text) return text;
+      console.warn("[transcribe] scribe returned nothing — falling back to OpenAI");
+    } catch (e) {
+      console.warn("[transcribe] scribe failed, falling back to OpenAI", e);
+    }
+  }
+
   const apiKey = readEnv("OPENAI_API_KEY");
   if (!apiKey) {
     throw new TranscribeError("no_api_key", "OPENAI_API_KEY is not set");

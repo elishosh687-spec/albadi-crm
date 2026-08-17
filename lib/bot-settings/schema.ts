@@ -94,6 +94,7 @@ export interface BotSettings {
   // --- models ---
   intentModel: string;
   analysisModel: string;
+  transcribeProvider: string;
   transcribeModel: string;
 }
 
@@ -175,6 +176,7 @@ export const DEFAULT_BOT_SETTINGS: BotSettings = {
 
   intentModel: "gpt-5.6-luna",
   analysisModel: "gpt-5.6-terra",
+  transcribeProvider: "openai",
   transcribeModel: "whisper-1",
 };
 
@@ -789,11 +791,24 @@ export const BOT_SETTING_FIELDS: BotSettingField[] = [
     options: MODEL_OPTIONS,
   },
   {
+    key: "transcribeProvider",
+    group: "מודלים",
+    label: "מי מתמלל את השיחות",
+    description:
+      "**הפרדת דוברים קיימת רק אצל ElevenLabs.** אף מודל תמלול של OpenAI לא יודע להפריד בין מי שמדבר, אז שיחת מכירה חוזרת כגוש טקסט אחד ומי שמנתח אותה צריך לנחש מי התנגד ומי הבטיח.\n\nElevenLabs מחזיר תמלול מסומן — \"דובר 1 / דובר 2\" — וגם מקבל קבצים גדולים בהרבה, מה שפותר שיחות ארוכות שהיום נופלות בגלל מגבלת הגודל. משתמש במפתח שכבר קיים אצלך לסוכן הקולי.\n\nאם ElevenLabs נכשל מסיבה כלשהי — התמלול חוזר אוטומטית ל-OpenAI. עדיף תמלול בלי שמות דוברים מאשר בלי תמלול.",
+    where: "כל שיחת טלפון שנענתה",
+    type: "select",
+    options: [
+      { value: "openai", label: "OpenAI — בלי הפרדת דוברים (ברירת מחדל)" },
+      { value: "elevenlabs", label: "ElevenLabs Scribe — עם הפרדת דוברים" },
+    ],
+  },
+  {
     key: "transcribeModel",
     group: "מודלים",
     label: "מודל תמלול שיחות",
     description:
-      "ממיר את הקלטות הטלפון לטקסט. whisper-1 הוא הוותיק והזול; דגמי gpt-4o מתמללים עברית מדויק יותר ועולים יותר. משפיע רק על איכות התמלול — הסיכום נכתב אחר כך ע\"י מודל הניתוח.",
+      "רלוונטי רק כשהמתמלל הוא OpenAI. whisper-1 הוא הוותיק והזול; דגמי gpt-4o מזהים עברית מדויק יותר ועולים יותר. **אף אחד מהם לא מפריד בין דוברים** — לזה צריך את ההגדרה שמעל.",
     where: "כל שיחת טלפון שנענתה",
     type: "select",
     options: [

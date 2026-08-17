@@ -224,8 +224,12 @@ export default function BotMapPanel({
         />
         <ModelRow
           job="מתמלל שיחות טלפון"
-          what="ממיר הקלטה לטקסט"
-          model={S.transcribeModel}
+          what={
+            S.transcribeProvider === "elevenlabs"
+              ? "ממיר הקלטה לטקסט — עם הפרדת דוברים"
+              : "ממיר הקלטה לטקסט — בלי הפרדת דוברים"
+          }
+          model={S.transcribeProvider === "elevenlabs" ? "ElevenLabs Scribe" : S.transcribeModel}
           onEdit={onEdit}
         />
         <ModelRow
