@@ -850,6 +850,100 @@ stale/missing verdict (cap 40/tick, concurrency 3), then a `sweepOrphanTasks`
 pass that finds every open `crm_tasks` row without an assignedTo, sets it
 to Itay in DB, and PATCHes GHL for rows that carry a `ghl_task_id`.
 
+## The bot layer — who says what (rebuilt 2026-08-16/17)
+
+**Read [bot design/09-bot-map.md](bot design/09-bot-map.md) first**, and the
+LIVE map at מגרש בדיקות → "🗺 מפת הבוט", which reads the real settings and job
+cursors on every open. A written map rots; that tab cannot.
+
+**The division of labour, which is now the organising principle:**
+
+| Job | Owner |
+|---|---|
+| Questionnaire + all price maths | **Code**, deterministic. Never move this. |
+| WHEN to speak, to WHOM, how often | **Code** — cadence, attempt cap, quiet hours, Sabbath, `bot_paused` |
+| WHAT is said | **The setter** (`lib/setter/`) — follow-ups, live replies, and the phrasing of the 14 state-change moments |
+| Whether the transition happens | **Code** — the setter only supplies words |
+
+"Code decides and executes, the sales brain talks." When adding a customer-facing
+message, ask which half it belongs to — a sentence fused to a state change
+(accept → ask for logo) splits: code does the transition, `phraseStateReply`
+writes the sentence, and `mustMention` guarantees the operative ask survives.
+
+**⚠️ Every LLM path degrades to a fixed fallback, by design.** Follow-ups fall
+back to the canned template, `phraseStateReply` to the canned sentence,
+transcription from ElevenLabs to OpenAI. This is not defensive padding: on
+2026-08-17 the OpenAI account ran out of credits and every AI path went dead
+for a full day — customers still got their follow-ups, in the old wording,
+because the fallback held. **Never add an LLM send path without one.**
+
+**⚠️ Failures here are SILENT.** Nothing errors; the system just gets stupider.
+`setter_decisions.draft_text IS NULL` across a window means the LLM is dead —
+that is how the credit exhaustion was found, and how the `temperature` bug was
+found before it. When "the bot sounds dumb", check that column first.
+
+### What is configurable (settings screen, `bot.settings`)
+
+~30 fields across 10 groups, including: all editable customer copy, the
+follow-up cadence per stage (`"2,12,23"` = hours per attempt, clamped so a `0`
+cannot become a spam loop — see [followup-cadence.ts](lib/autoresponder/followup-cadence.ts)),
+the auto-resume window, the setter's 10 tactics, **the two analyst briefs**,
+and every model. Adding a field: schema → FIELD entry → **wire it**; an unwired
+field is a lie.
+
+**The analyst prompts split in two** ([analysis-defaults.ts](lib/bot-settings/analysis-defaults.ts)):
+the BRIEF is editable, the JSON SCHEMA is not and is appended in code. Every
+schema field is read by name downstream (GHL note, callback task, setter
+dossier) — an edited schema would end analysis silently, not degrade it. The
+defaults live in a pure client-safe module ON PURPOSE so the settings screen
+can display them; importing them from the analysers would drag a server module
+into the client bundle.
+
+### Models — one job each, all in settings
+
+| Job | Setting |
+|---|---|
+| Answers customers | `setterModel` |
+| Transcribes calls | `transcribeProvider` + `transcribeModel` |
+| Analyses the transcript | `analysisModel` |
+| Writes "why it's stuck" | `analysisModel` |
+| Understands the customer | `intentModel` |
+
+**Speaker separation is a PROVIDER choice, not a model choice.** No OpenAI
+transcription model diarizes. `transcribeProvider: "elevenlabs"` uses Scribe
+(reusing the voice-agent key), returns "דובר 1 / דובר 2", and also clears
+Whisper's 25MB ceiling. Falls back to OpenAI on any failure.
+
+Three settings were LIES until 2026-08-17 — `analysisModel` did not reach call
+analysis, `intentModel` did not reach reply suggestions, and transcription had
+no setting. If a dropdown seems to do nothing, suspect this class of bug.
+
+### bot_paused carries a reason and expires
+
+A bare boolean left **81 of 117** active leads muted forever, so the setter
+could reach 5 leads in the entire system. Leads now carry `bot_paused_at` /
+`bot_pause_reason` / `bot_pause_sticky`, and an hourly sweep expires only the
+reasons meaning "a human is driving this one": `human_reply`, `escalation`,
+`logo_received`, `reengagement_reply`. `opt_out` and `human_handoff` are
+promises to the customer and NEVER expire; `deal_won`, `no_reply` and
+`manual_toggle` are deliberate.
+
+**Always pause via `pauseFields(reason)`** ([bot-pause.ts](lib/autoresponder/bot-pause.ts)).
+A pause written by hand lands unattributed and becomes un-diagnosable again.
+Resuming must reset `followUpCount` (else the first nudge trips the 3-strike
+escalation and re-mutes instantly) and clear `botPauseSticky`.
+
+### Scheduling reality
+
+Sub-daily work runs on **GitHub Actions**, not `vercel.json` — the Vercel plan
+fires crons once a day, which is why the follow-up cadence was fiction for
+months (56 of 65 followed-up leads ever got exactly one nudge). GitHub disables
+scheduled workflows after 60 days of repo inactivity; that is the expected way
+this dies. `followups` claims a row in `app_config` for the length of a run so
+overlapping triggers cannot double-send — **not** a pg advisory lock, which
+Neon's per-query HTTP driver silently drops (verified: it granted the same lock
+twice).
+
 ## Bot never auto-advances pipeline stage (2026-07-01 rule)
 
 The bot USED to write `pipelineStage: "FACTORY_WAIT"` from five sites in the
