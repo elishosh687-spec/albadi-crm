@@ -316,6 +316,8 @@ async function processCustomerLead(row: {
   supervisorEnabled: boolean;
   settings: BotSettings;
   gateCtx: FutureGateCtx;
+  /** Dry-run only: per-template send counter, so a preview honours the cap. */
+  dryQuota: Map<string, number>;
 }): Promise<ProcessedLead> {
   if (row.botPaused) {
     return { sid: row.sid, action: "skipped_paused" };
@@ -392,10 +394,23 @@ async function processCustomerLead(row: {
   //
   // Never claimed on a dry run — a preview must not spend real budget. Never
   // refunded on a send failure either; under-sending is the safe direction.
-  if (rule.dailyCap != null && !cfg.dryRun) {
-    const gotSlot = await claimFutureDailySlot(rule.dailyCap);
-    if (!gotSlot) {
-      return { sid: row.sid, action: "skipped_quota", detail: `cap=${rule.dailyCap}` };
+  if (rule.dailyCap != null) {
+    if (cfg.dryRun) {
+      // A preview counts against the same ceiling in memory, without touching
+      // the real quota row. Two reasons: a preview that lists 20 messages when
+      // 5 would actually go out misrepresents the day, and composing all of
+      // them is an LLM call each — enough to blow the route's 60s budget once
+      // the whole parked backlog comes due at once.
+      const used = cfg.dryQuota.get(rule.template) ?? 0;
+      if (used >= rule.dailyCap) {
+        return { sid: row.sid, action: "skipped_quota", detail: `cap=${rule.dailyCap} (יבש)` };
+      }
+      cfg.dryQuota.set(rule.template, used + 1);
+    } else {
+      const gotSlot = await claimFutureDailySlot(rule.dailyCap);
+      if (!gotSlot) {
+        return { sid: row.sid, action: "skipped_quota", detail: `cap=${rule.dailyCap}` };
+      }
     }
   }
 
@@ -888,6 +903,7 @@ export async function POST(req: NextRequest) {
     dryRun,
   };
 
+  const dryQuota = new Map<string, number>();
   const customerResults: ProcessedLead[] = [];
   const factoryResults: ProcessedLead[] = [];
 
@@ -933,6 +949,7 @@ export async function POST(req: NextRequest) {
       supervisorEnabled: S.followupSupervisorEnabled,
       settings: S,
       gateCtx,
+      dryQuota,
     });
     customerResults.push(r);
   }
