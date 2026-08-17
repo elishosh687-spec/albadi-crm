@@ -883,7 +883,9 @@ export async function POST(req: NextRequest) {
   // readers but no writers anywhere and is therefore always null.
   const gateCtx: FutureGateCtx = {
     now: Date.now(),
-    lastInbound: S.futureFollowupEnabled ? await loadLastInboundMap() : new Map(),
+    lastInbound:
+      S.futureFollowupEnabled || dryRun ? await loadLastInboundMap() : new Map(),
+    dryRun,
   };
 
   const customerResults: ProcessedLead[] = [];

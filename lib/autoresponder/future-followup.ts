@@ -77,6 +77,13 @@ export interface FutureGateCtx {
   now: number;
   /** sid → last inbound message time. Absent = the customer never wrote. */
   lastInbound: Map<string, Date>;
+  /**
+   * A preview run. The master switch is ignored so a dry run can show what the
+   * loop WOULD send — which is the only safe way to review it, since flipping
+   * the real setting hands the 15-minute cron a live population. Every other
+   * gate still applies, and nothing is sent or written.
+   */
+  dryRun?: boolean;
 }
 
 /**
@@ -97,7 +104,7 @@ export function gateFutureFollowup(
 ): GateSkip | null {
   // The master switch lives here rather than in `match` so a disabled feature
   // reports its own bucket instead of silently looking like an unhandled stage.
-  if (!S.futureFollowupEnabled) return { bucket: "skipped_disabled" };
+  if (!S.futureFollowupEnabled && !ctx.dryRun) return { bucket: "skipped_disabled" };
 
   // Belt and braces: `bot_paused` is already checked before rule matching, so
   // an opted-out lead can never reach this. Cold outreach to someone who asked
