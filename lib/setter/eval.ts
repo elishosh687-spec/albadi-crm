@@ -29,6 +29,10 @@ interface Scenario {
   customerText: string;
   /** Hours to age the whole conversation (silence scenarios). */
   ageHours?: number;
+  /** Override the seeded pipeline stage. Default INTAKE (post-quote). */
+  stage?: string;
+  /** Seed with no quote at all — the setter's strategy branches on this. */
+  noQuote?: boolean;
   expect: {
     intents: string[];
     goals: string[];
@@ -195,6 +199,51 @@ export const SCENARIOS: Scenario[] = [
       shouldMatchAny: [{ re: "הצעה|₪|6,?050", why: "עיגון בהצעה הספציפית" }],
     },
   },
+  {
+    slug: "future-parked",
+    name: "נשמר ל״להתקשר בעתיד״ אחרי הצעה",
+    customerText: "",
+    ageHours: 720,
+    stage: "FUTURE_FOLLOW_UP",
+    expect: {
+      // Still `revive`: a quote exists, so the ₪-anchored branch wins over the
+      // parked-stage branch (which sits after it on purpose).
+      intents: ["gone_quiet"],
+      goals: ["revive"],
+      wantsMessage: true,
+      shouldMatchAny: [
+        {
+          re: "\\d{1,2}:\\d{2}|מחר|היום|ראשון|שני|שלישי|רביעי|חמישי",
+          why: "השלב הזה קיים כדי לקבוע שיחה — חייב זמן קונקרטי",
+        },
+      ],
+      mustNotMatch: [{ re: "הנחה|מחיר מיוחד", why: "לא מתמחרים כדי להחזיר ליד" }],
+    },
+  },
+  {
+    slug: "future-parked-no-quote",
+    name: "נשמר ל״להתקשר בעתיד״ בלי הצעה",
+    customerText: "",
+    ageHours: 720,
+    stage: "FUTURE_FOLLOW_UP",
+    noQuote: true,
+    expect: {
+      // THE REGRESSION TEST for the parked-stage strategy branch. Without it
+      // this falls through to `hold_back`, and because the eval calls runSetter
+      // WITHOUT `force`, hold_back + gone_quiet short-circuits generation — so
+      // `message` comes back null and the scenario fails loudly rather than
+      // quietly producing a message that may not name a time.
+      intents: ["gone_quiet"],
+      goals: ["book_call"],
+      wantsMessage: true,
+      shouldMatchAny: [
+        {
+          re: "\\d{1,2}:\\d{2}|מחר|היום|ראשון|שני|שלישי|רביעי|חמישי",
+          why: "בלי הצעה לעגן בה, עדיין חייב להציע זמן",
+        },
+      ],
+    },
+  },
 ];
 
 export interface ScenarioResult {
@@ -232,8 +281,8 @@ async function seedLead(slug: string, sc: Scenario): Promise<string> {
     waJid: `${slug}.evaltest@c.us`,
     active: false,
     source: "setter_eval",
-    pipelineStage: "INTAKE",
-    quoteTotal: "6050",
+    pipelineStage: sc.stage ?? "INTAKE",
+    quoteTotal: sc.noQuote ? null : "6050",
     qState: {
       step: 10,
       product: "p3",
@@ -245,9 +294,17 @@ async function seedLead(slug: string, sc: Scenario): Promise<string> {
     },
   });
 
+  // A no-quote lead must not have the quote sitting in its transcript either,
+  // or the scenario contradicts itself: the DB says "never priced" while the
+  // thread shows ₪6,050, and the validator would reject any message repeating
+  // a figure the context no longer knows.
+  const convo = sc.noQuote
+    ? BASE_CONVO.filter((m) => !m.text.includes("הצעת מחיר"))
+    : BASE_CONVO;
+
   const age = (sc.ageHours ?? 0) * 3600_000;
-  const base = Date.now() - age - BASE_CONVO.length * 60_000 - 120_000;
-  const rows = BASE_CONVO.map((m, i) => ({
+  const base = Date.now() - age - convo.length * 60_000 - 120_000;
+  const rows = convo.map((m, i) => ({
     manychatSubId: sid,
     direction: m.dir,
     text: m.text,

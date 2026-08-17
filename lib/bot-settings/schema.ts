@@ -44,6 +44,14 @@ export interface BotSettings {
   followupCadenceConsideration: string;
   followupCadenceReengage: string;
 
+  // --- "להתקשר בעתיד" — the parked bucket ---
+  futureFollowupEnabled: boolean;
+  followupCadenceFutureFollowUp: string;
+  futureFollowupMaxAttempts: number;
+  futureFollowupDailyCap: number;
+  futureFollowupMinSilenceDays: number;
+  futureFollowupMaxAgeDays: number;
+
   // --- questionnaire behaviour ---
   pollsEnabled: boolean;
   reaskAttempts: number;
@@ -134,6 +142,15 @@ export const DEFAULT_BOT_SETTINGS: BotSettings = {
   followupCadenceAwaitingLogo: "2,12,23",
   followupCadenceConsideration: "2,12,23",
   followupCadenceReengage: "72",
+
+  // Ships OFF. Turning it on messages real customers who went cold, so it is a
+  // deliberate act, not a deploy side-effect.
+  futureFollowupEnabled: false,
+  futureFollowupMaxAttempts: 4,
+  followupCadenceFutureFollowUp: "168,168,336,504",
+  futureFollowupDailyCap: 5,
+  futureFollowupMinSilenceDays: 3,
+  futureFollowupMaxAgeDays: 90,
 
   pollsEnabled: true,
   reaskAttempts: 3,
@@ -417,6 +434,70 @@ export const BOT_SETTING_FIELDS: BotSettingField[] = [
       "לידים שגררת ידנית ל״חידוש קשר״. ערך אחד — הוא חוזר על עצמו ללא הגבלה עד שהלקוח עונה או מבקש להסיר. 72 שעות = כל 3 ימים.",
     where: "רק בשלב חידוש קשר",
     type: "text",
+  },
+
+  // ---------- להתקשר בעתיד ----------
+  {
+    key: "futureFollowupEnabled",
+    group: "להתקשר בעתיד",
+    label: "לעבוד על לידים שצוננו אחרי הצעה",
+    description:
+      "⚠️ שולח הודעות ללקוחות אמיתיים שכבר הפסיקו לענות. הבוט פונה ללידים שגררת ל״להתקשר בעתיד״ במטרה אחת — לקבוע שיחת טלפון. כל הודעה נושאת שורת הסרה, ולקוח שיבקש להסיר יעבור ל״אבוד״.",
+    where: "רק בשלב להתקשר בעתיד",
+    type: "toggle",
+  },
+  {
+    key: "followupCadenceFutureFollowUp",
+    group: "להתקשר בעתיד",
+    label: "כל כמה זמן לנסות",
+    description:
+      "שעות בין ניסיון לניסיון. ברירת המחדל 168,168,336,504 = אחרי שבוע, שבועיים, חודש, וחודש וחצי — הפער מתרחב בכוונה, כי ליד שלא ענה שלוש פעמים לא יענה בגלל שנדנדנו מהר יותר.",
+    where: "רק בשלב להתקשר בעתיד",
+    type: "text",
+  },
+  {
+    key: "futureFollowupMaxAttempts",
+    group: "להתקשר בעתיד",
+    label: "כמה ניסיונות לפני שמוותרים סופית",
+    description:
+      "אחרי המספר הזה הבוט משתיק את עצמו בשיחה ושולח לך התראה. בניגוד ל״חידוש קשר״, השלב הזה נגמר — ליד שקיבל ארבע פניות על פני חודשיים כבר ענה בשתיקה שלו.",
+    where: "נספר פר ליד",
+    type: "number",
+    min: 1,
+    max: 8,
+  },
+  {
+    key: "futureFollowupDailyCap",
+    group: "להתקשר בעתיד",
+    label: "מקסימום הודעות ליום מהשלב הזה",
+    description:
+      "ביום הראשון שתדליק את זה כל הלידים שממתינים בשלב יהיו ״בשלים״ בבת אחת. המכסה פורסת אותם על פני ימים, כדי שתספיק לקרוא מה יוצא ולכבות אם הניסוח לא מוצא חן בעיניך.",
+    where: "נספר לפי יום ישראלי",
+    type: "number",
+    min: 1,
+    max: 50,
+  },
+  {
+    key: "futureFollowupMinSilenceDays",
+    group: "להתקשר בעתיד",
+    label: "לא לפנות ללקוח ששוחחת איתו לאחרונה",
+    description:
+      "מספר הימים שחייבים לעבור מההודעה האחרונה של הלקוח. מגן על המקרה שגררת ליד לשלב אתמול אחרי שיחה שבה הוא ביקש שנחזור אליו בעוד חודש.",
+    where: "נמדד מההודעה האחרונה של הלקוח",
+    type: "number",
+    min: 0,
+    max: 30,
+  },
+  {
+    key: "futureFollowupMaxAgeDays",
+    group: "להתקשר בעתיד",
+    label: "מעבר לכמה זמן ליד כבר קר מדי",
+    description:
+      "ליד ששותק יותר מזה לא יקבל פנייה. מעבר לגבול מסוים הודעה כזאת כבר לא נקראת כמעקב אלא כספאם — איפה בדיוק עובר הגבול זו החלטה שלך.",
+    where: "נמדד מההודעה האחרונה של הלקוח",
+    type: "number",
+    min: 14,
+    max: 365,
   },
 
   // ---------- התנהגות השאלון ----------

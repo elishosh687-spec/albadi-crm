@@ -22,6 +22,19 @@ import { pauseFields } from "./bot-pause";
 export const RE_ENGAGEMENT_OPT_OUT_FOOTER =
   "\n\n_אם אינך מעוניין/ת לקבל הודעות נוספות, השב/י 'הסר' ולא אטריד שוב._";
 
+/**
+ * The opt-out line is not the writer's to omit.
+ *
+ * Both revival loops send unsolicited automated messages to people who already
+ * stopped replying — that is the exact category this footer exists for, so it
+ * is appended by the caller rather than trusted to whoever wrote the body.
+ * Appended AFTER validation, so its ~15 words don't fight the setter's word cap.
+ * Idempotent: a message that already offers "הסר" is left alone.
+ */
+export function withOptOutFooter(text: string): string {
+  return text.includes("הסר") ? text : text + RE_ENGAGEMENT_OPT_OUT_FOOTER;
+}
+
 const FALLBACK_BODY =
   "היי 👋 רק רציתי להזכיר שאנחנו כאן אם בא לך להתקדם עם ההצעה לשקיות הממותגות. תכתוב/י לי בכל זמן ואני אשמח להמשיך.";
 
@@ -213,10 +226,19 @@ export async function classifyReengagementReply(
 export async function handleReengagementInbound(input: {
   sid: string;
   text: string;
+  /** Which loop woke this lead — shown in the DM and the task title. */
+  stageLabel?: string;
+  /**
+   * Also open a crm_tasks row. A cold lead that finally speaks is the highest-
+   * value event either revival loop produces, and a DM scrolls away — which is
+   * how the parked bucket became invisible in the first place.
+   */
+  openTask?: boolean;
 }): Promise<boolean> {
   const sid = input.sid.trim();
   const text = (input.text ?? "").trim();
   if (!text) return false;
+  const stageLabel = input.stageLabel ?? "NO_RESPONSE_REENGAGE";
 
   // Snapshot lead before pausing so the DM uses the real name/phone.
   const [snap] = await db
@@ -252,7 +274,7 @@ export async function handleReengagementInbound(input: {
         ? "מבקש להפסיק"
         : "תגובה לא ברורה";
   const dm =
-    `${intentEmoji} ${who} (NO_RESPONSE_REENGAGE) — ${intentLabel}.\n` +
+    `${intentEmoji} ${who} (${stageLabel}) — ${intentLabel}.\n` +
     `הלקוח כתב: "${text.slice(0, 300)}"\n` +
     `🤖 ניתוח: ${classification.reason}\n` +
     `💡 המלצה: ${classification.recommendation}\n` +
@@ -261,6 +283,31 @@ export async function handleReengagementInbound(input: {
     await sendEliDM(dm);
   } catch (e) {
     console.warn("[re-engagement] eli DM failed", e);
+  }
+
+  // An artifact, not just a notification. Skipped for "removal" — that lead
+  // needs to be left alone, not called.
+  if (input.openTask && classification.intent !== "removal") {
+    try {
+      const { crmTasks } = await import("../../drizzle/schema");
+      const { resolveTaskAssigneeForSid } = await import("../crm-tasks/assignee");
+      const { jerusalemWorkdayAt } = await import("../clock/callback-window");
+      const { syncTaskToGHL } = await import("../../integrations/ghl/sync");
+      const [task] = await db
+        .insert(crmTasks)
+        .values({
+          manychatSubId: sid,
+          title: `🔥 ליד שצונן חזר לדבר (${stageLabel}) — ${intentLabel} — להתקשר`,
+          taskType: "reengaged_lead",
+          status: "open",
+          dueAt: await jerusalemWorkdayAt(9, 0),
+          assignedTo: (await resolveTaskAssigneeForSid(sid)) ?? null,
+        })
+        .returning({ id: crmTasks.id });
+      if (task?.id) await syncTaskToGHL(task.id);
+    } catch (e) {
+      console.warn("[re-engagement] task creation failed", sid, e);
+    }
   }
   return true;
 }

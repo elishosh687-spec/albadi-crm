@@ -504,10 +504,20 @@ async function routeThroughSupervisor(input: SupervisorRouteInput): Promise<void
   // "New conversation" detection — same logic as the Green API webhook
   // (see app/api/greenapi/webhook/route.ts). If the customer hasn't pinged
   // in > 7 days, the next inbound triggers a fresh questionnaire restart
-  // regardless of any leftover qState / pipeline_stage. NO_RESPONSE_REENGAGE
-  // is excluded because it has its own classifier branch below.
+  // regardless of any leftover qState / pipeline_stage. Both revival loops are
+  // excluded — they deliberately message leads silent for weeks, so every reply
+  // they earn trips this gap, and restarting the questionnaire throws away the
+  // answer. Keyed on the armed callback latch too, so a lead asked for a time
+  // is protected wherever it sits.
   const NEW_CONVO_GAP_MS = 7 * 24 * 60 * 60 * 1000;
-  if (inboundText && stage !== "NO_RESPONSE_REENGAGE") {
+  const bridgeArmedForCallback =
+    ((freshLead?.qState ?? null) as { callbackFlow?: string } | null)?.callbackFlow ===
+    "awaiting_reply";
+  const bridgeSkipRestart =
+    stage === "NO_RESPONSE_REENGAGE" ||
+    stage === "FUTURE_FOLLOW_UP" ||
+    bridgeArmedForCallback;
+  if (inboundText && !bridgeSkipRestart) {
     const priorInboundRows = await db.execute(sql`
       SELECT received_at FROM messages
       WHERE manychat_sub_id = ${sid} AND direction = 'in'

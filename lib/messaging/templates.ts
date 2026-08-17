@@ -20,7 +20,10 @@ export type FollowupStage =
   // Re-engagement loop for leads at NO_RESPONSE_REENGAGE. Body is built per
   // send by `lib/autoresponder/re-engagement.ts` via LLM — the entries below
   // are only used as a fallback if the LLM call returns nothing.
-  | "RE_ENGAGEMENT";
+  | "RE_ENGAGEMENT"
+  // Leads Eli parked in FUTURE_FOLLOW_UP ("להתקשר בעתיד"). Long, widening
+  // cadence; the only objective is a booked phone call.
+  | "FUTURE_FOLLOW_UP";
 
 const TEMPLATES: Record<FollowupStage, string[]> = {
   // pre-quote — questionnaire mid-flight (not bailed, not done).
@@ -56,6 +59,16 @@ const TEMPLATES: Record<FollowupStage, string[]> = {
   // produces a personalized body. These are used if the LLM call errors.
   RE_ENGAGEMENT: [
     "היי 👋 רק רציתי להזכיר שאנחנו כאן אם בא לך להתקדם עם ההצעה לשקיות הממותגות. תכתוב/י לי בכל זמן.",
+  ],
+  // FUTURE_FOLLOW_UP — the floor beneath the setter, which normally writes
+  // these against the lead's own conversation. Every line asks for a call at a
+  // concrete time, because that is the only thing this stage is trying to get.
+  // The opt-out footer is appended by the cron, not written in here.
+  FUTURE_FOLLOW_UP: [
+    "היי, עבר זמן מאז שדיברנו. שווה 5 דקות בטלפון כדי לסגור את זה — מחר בבוקר מתאים?",
+    "אם נוח לך, אני יכול להתקשר מחר ב-11:00. מתאים, או שעדיף שעה אחרת?",
+    "רוצה שנסגור את זה בשיחה קצרה השבוע? תגיד לי יום ושעה ואתקשר.",
+    "ניסיון אחרון מצדי — אם זה עדיין רלוונטי, תגיד לי מתי להתקשר.",
   ],
 };
 

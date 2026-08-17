@@ -311,6 +311,19 @@ export interface QState {
   callbackAskedAt?: string;
   /** the raw availability the customer replied with (for the task title). */
   requestedCallbackTime?: string;
+  /**
+   * Which loop asked. The detector asks once per lead; the parked
+   * FUTURE_FOLLOW_UP follow-up re-arms the same latch on a much slower clock,
+   * so without this the two are indistinguishable after the fact.
+   */
+  callbackArmedBy?: "detector" | "future_follow_up";
+  /** How many times we've asked for a time. Diagnostic, not a gate. */
+  callbackAskCount?: number;
+
+  // ─── "להתקשר בעתיד" parking ───
+  /** ISO when the lead entered FUTURE_FOLLOW_UP (its follow-up clock reset). */
+  parkedAt?: string;
+  parkedVia?: "widget" | "ghl_drag" | "audit";
 }
 
 function formatQuestion(q: Question): string {

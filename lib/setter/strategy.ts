@@ -94,6 +94,28 @@ export function planStrategy(
     };
   }
 
+  // Parked in "להתקשר בעתיד" — the stage's whole meaning is "the next action is
+  // a phone call", so a gone-quiet lead here books one even with no quote to
+  // anchor on. Without this branch those leads fall through to hold_back, and
+  // validateMessage then REFUSES any concrete time on a hold_back message — the
+  // bot would be mechanically forbidden from doing the one thing this bucket
+  // exists for. 20 of the 45 parked leads have no quote.
+  if (
+    cls.intent === "gone_quiet" &&
+    (ctx.stage || "").toUpperCase() === "FUTURE_FOLLOW_UP"
+  ) {
+    return {
+      ...base,
+      goal: "book_call",
+      skills: ["callback_scheduling", "appointment_booking"],
+      moves: [
+        "פתיחה קצרה בלי התנצלות על השתיקה",
+        "הצע שיחה בזמן קונקרטי אחד",
+        "אמור מה כדאי שיהיה מוכן לשיחה",
+      ],
+    };
+  }
+
   // Strong interest → convert the moment into a call.
   if (
     cls.intent === "ready_to_proceed" ||

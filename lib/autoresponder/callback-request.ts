@@ -24,7 +24,7 @@ import { sql, eq } from "drizzle-orm";
 import { sendBridgeMessage } from "@/lib/bridge/client";
 import { callLLM } from "./openai-client";
 import { syncTaskToGHL } from "@/integrations/ghl/sync";
-import { resolveAssigneeUserId } from "@/lib/crm-tasks/assignee";
+import { resolveTaskAssigneeForSid } from "@/lib/crm-tasks/assignee";
 import { clampToWorkWindow } from "@/lib/clock/callback-window";
 import { getBotSettings } from "@/lib/bot-settings/store";
 import { computeCallPrep, prepForSalesperson } from "./call-prep";
@@ -318,13 +318,62 @@ export async function runCallbackRequests(opts: { dry: boolean }): Promise<RunRe
   return { enabled, dry: opts.dry, count: candidates.length, items };
 }
 
-/** Merge qState.callbackFlow="awaiting_reply" onto a lead (jsonb merge). */
+/**
+ * Arm the reply→task bridge on a lead we just asked for a time.
+ *
+ * `handleCallbackReply` below is the only place in the entire system where
+ * customer text becomes a row in `crm_tasks`, and it only fires when the lead
+ * carries `callbackFlow === "awaiting_reply"`. So anything that asks "when can
+ * we talk?" has to arm this latch or the answer goes nowhere.
+ *
+ * It began as a once-per-lead latch owned by the detector. The parked
+ * FUTURE_FOLLOW_UP loop asks the same question on a much slower clock (weeks,
+ * not hours), so it is re-armable — but never over a customer who already
+ * declined. `callbackArmedBy` / `callbackAskCount` keep that decision legible
+ * afterwards instead of mysterious.
+ *
+ * The detector is unaffected: it selects only `pipeline_stage IS NULL OR
+ * 'INTAKE'`, disjoint from the parked bucket by construction.
+ *
+ * Returns false when the arm was refused or failed.
+ */
+export async function armCallbackReply(
+  sid: string,
+  armedBy: "detector" | "future_follow_up"
+): Promise<boolean> {
+  try {
+    const [row] = await db
+      .select({ qState: leads.qState })
+      .from(leads)
+      .where(eq(sql`trim(${leads.manychatSubId})`, sid.trim()))
+      .limit(1);
+    const q = parseQ(row?.qState);
+    // "לא, אל תתקשרו" is an answer. Re-arming would put their next message
+    // through a time-parser instead of listening to it.
+    if (q?.callbackFlow === "declined") return false;
+
+    const patch = JSON.stringify({
+      callbackFlow: "awaiting_reply",
+      callbackAskedAt: new Date().toISOString(),
+      callbackArmedBy: armedBy,
+      callbackAskCount: (q?.callbackAskCount ?? 0) + 1,
+    });
+    await db
+      .update(leads)
+      .set({
+        qState: sql`COALESCE(${leads.qState}, '{}'::jsonb) || ${patch}::jsonb`,
+        updatedAt: new Date(),
+      })
+      .where(eq(sql`trim(${leads.manychatSubId})`, sid.trim()));
+    return true;
+  } catch (e) {
+    console.warn("[callback-request] arm failed", sid, e);
+    return false;
+  }
+}
+
 async function markCallbackAsked(sid: string): Promise<void> {
-  const patch = JSON.stringify({ callbackFlow: "awaiting_reply", callbackAskedAt: new Date().toISOString() });
-  await db
-    .update(leads)
-    .set({ qState: sql`COALESCE(${leads.qState}, '{}'::jsonb) || ${patch}::jsonb`, updatedAt: new Date() })
-    .where(eq(sql`trim(${leads.manychatSubId})`, sid.trim()));
+  await armCallbackReply(sid, "detector");
 }
 
 async function setCallbackFlow(sid: string, patch: Partial<QState>): Promise<void> {
@@ -426,11 +475,30 @@ export async function handleCallbackReply(input: {
       taskType: "callback_time",
       status: "open",
       dueAt,
-      assignedTo: (await resolveAssigneeUserId()) ?? null,
+      // A task about ONE lead belongs to that lead's owner, not to whoever sits
+      // in the settings default — the same correction made for auto-tasks on
+      // 2026-08-02, when every task on Itay's leads was landing on Elazar.
+      // Falls back to the settings default for a lead with no owner yet.
+      assignedTo: (await resolveTaskAssigneeForSid(input.sid)) ?? null,
     })
     .returning({ id: crmTasks.id });
 
   await setCallbackFlow(input.sid, { callbackFlow: "answered", requestedCallbackTime: timeText });
+
+  // Close the loop back into the follow-up cadence: a lead with a call booked
+  // for Thursday must not get "shall we talk?" on Tuesday. Inert for every
+  // existing rule (none read this column); the parked-bucket gate honours it.
+  // Also syncs to GHL for free and shows in the v3 SLA list.
+  if (dueAt) {
+    try {
+      await db
+        .update(leads)
+        .set({ followUpDate: dueAt.toISOString().slice(0, 10), updatedAt: new Date() })
+        .where(eq(sql`trim(${leads.manychatSubId})`, input.sid.trim()));
+    } catch (e) {
+      console.warn("[callback-request] follow_up_date write failed", input.sid, e);
+    }
+  }
 
   // Confirm to the customer + push the task to GHL (best-effort).
   try {

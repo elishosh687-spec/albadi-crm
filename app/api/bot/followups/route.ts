@@ -52,6 +52,15 @@ import { getBotSettings } from "@/lib/bot-settings/store";
 import type { BotSettings } from "@/lib/bot-settings/schema";
 import { parseCadence, toMs } from "@/lib/autoresponder/followup-cadence";
 import { composeSetterFollowup } from "@/lib/setter/followup";
+import { withOptOutFooter } from "@/lib/autoresponder/re-engagement";
+import { armCallbackReply } from "@/lib/autoresponder/callback-request";
+import {
+  claimFutureDailySlot,
+  gateFutureFollowup,
+  loadLastInboundMap,
+  type FutureGateCtx,
+  type GateSkip,
+} from "@/lib/autoresponder/future-followup";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -72,6 +81,38 @@ interface StageRule {
    *  repeating until the customer replies, opts out, or Eli moves the lead
    *  manually. Used for the NO_RESPONSE_REENGAGE re-engagement loop. */
   unbounded?: boolean;
+  /** Per-rule attempt cap. Absent → the shared `followupMaxAttempts`. */
+  maxAttempts?: number;
+  /** Max sends per Jerusalem day from this rule. Absent → unlimited. */
+  dailyCap?: number;
+  /**
+   * Admissibility this rule's `match` predicate can't express — it needs the
+   * whole row plus settings (a wake date, how long the customer has been
+   * silent, an opt-out). Runs AFTER the rule is picked and BEFORE the cadence
+   * gate, and returns the bucket to report.
+   *
+   * Deliberately separate from `match`: that answers "which loop is this lead
+   * in" (structure), this answers "may we speak to it right now" (policy).
+   * Folding policy into `match` would drop a gated lead into `no_rule`, where
+   * it becomes indistinguishable from a lead nobody wrote a rule for — the
+   * exact blind spot this bucket spent months inside.
+   */
+  gate?: (row: GateRow, S: BotSettings, ctx: FutureGateCtx) => GateSkip | null;
+  /** Append the "reply הסר" line — cold outreach to someone who stopped replying. */
+  optOutFooter?: boolean;
+  /**
+   * After a successful send, arm `qState.callbackFlow` so the customer's reply
+   * runs through `handleCallbackReply` and becomes a task instead of vanishing.
+   */
+  armCallback?: boolean;
+}
+
+/** The row fields a `gate` may read. */
+interface GateRow {
+  sid: string;
+  name: string | null;
+  botPauseReason: string | null;
+  followUpDate: string | null;
 }
 
 /**
@@ -86,15 +127,21 @@ interface StageRule {
 function buildStageRules(S: BotSettings): StageRule[] {
   const cad = (raw: string, fallbackHours: number[]) =>
     toMs(parseCadence(raw, fallbackHours).hours);
-  return STAGE_RULE_SHAPES.map((shape) => ({
+  return STAGE_RULE_SHAPES.map(({ maxAttemptsKey, dailyCapKey, ...shape }) => ({
     ...shape,
     cadences: cad(S[shape.settingKey] as string, shape.fallbackHours),
+    maxAttempts: maxAttemptsKey ? Number(S[maxAttemptsKey]) || undefined : undefined,
+    dailyCap: dailyCapKey ? Number(S[dailyCapKey]) || undefined : undefined,
   }));
 }
 
-type StageRuleShape = Omit<StageRule, "cadences"> & {
+type StageRuleShape = Omit<StageRule, "cadences" | "maxAttempts" | "dailyCap"> & {
   settingKey: keyof BotSettings;
   fallbackHours: number[];
+  /** Settings key holding this rule's own attempt cap. */
+  maxAttemptsKey?: keyof BotSettings;
+  /** Settings key holding this rule's per-day send ceiling. */
+  dailyCapKey?: keyof BotSettings;
 };
 
 const STAGE_RULE_SHAPES: StageRuleShape[] = [
@@ -136,6 +183,34 @@ const STAGE_RULE_SHAPES: StageRuleShape[] = [
     template: "CONSIDERATION",
   },
   {
+    // FUTURE_FOLLOW_UP ("להתקשר בעתיד") — a lead that went cold, usually after
+    // a quote, that Eli parked meaning "work this later". Nothing worked it:
+    // measured 2026-08-17 the stage held 45 active leads (25 holding a quote we
+    // wrote) and every cron tick dropped all of them into `no_rule`.
+    //
+    // The objective here is not a reply, it is a booked phone call — so the
+    // setter runs its `revive` / `book_call` goals, and a successful send arms
+    // the callback latch so the answer becomes a task rather than vanishing.
+    //
+    // Entry stays MANUAL (Eli, 17.8): exhausting the INTAKE/CONSIDERATION
+    // follow-ups still freezes a lead as before. He picks who gets this loop.
+    //
+    // BOUNDED, unlike RE_ENGAGEMENT below. That loop may run forever because
+    // Eli fills it by hand, one deliberate decision at a time. This one should
+    // end: a customer who ignored four approaches over two months has answered.
+    match: (stage) => (stage || "").toUpperCase() === "FUTURE_FOLLOW_UP",
+    gate: gateFutureFollowup,
+    settingKey: "followupCadenceFutureFollowUp",
+    // Widening on purpose — attempt 1 lands while the quote is still
+    // recognizable, attempt 4 is seven weeks out.
+    fallbackHours: [168, 168, 336, 504],
+    maxAttemptsKey: "futureFollowupMaxAttempts",
+    dailyCapKey: "futureFollowupDailyCap",
+    template: "FUTURE_FOLLOW_UP",
+    optOutFooter: true,
+    armCallback: true,
+  },
+  {
     // NO_RESPONSE_REENGAGE — Eli manually drags leads here after 3 calls +
     // 3 messages without a reply. Bot nudges every 3 days with an
     // LLM-personalized message (see lib/autoresponder/re-engagement.ts).
@@ -171,7 +246,18 @@ interface ProcessedLead {
     | "skipped_paused"
     | "skipped_cadence"
     | "no_rule"
-    | "error";
+    | "error"
+    // A rule matched but declined to speak. These exist so a dry run can tell
+    // "the rule said not yet" apart from "nobody wrote a rule" — before them
+    // everything unhandled collapsed into `no_rule` (34 of 120 on the last
+    // run), and that single bucket is what hid the parked leads for months.
+    | "skipped_disabled"
+    | "skipped_opted_out"
+    | "skipped_internal"
+    | "skipped_snoozed"
+    | "skipped_too_fresh"
+    | "skipped_too_cold"
+    | "skipped_quota";
   detail?: string;
   /** Dry-run only: the exact text this lead would have received. */
   preview?: string;
@@ -217,6 +303,8 @@ async function processCustomerLead(row: {
   followUpCount: number;
   lastFollowUpAt: Date | null;
   botPaused: boolean;
+  botPauseReason: string | null;
+  followUpDate: string | null;
   notes: string | null;
   botSummary: string | null;
 }, cfg: {
@@ -226,16 +314,37 @@ async function processCustomerLead(row: {
   dryRun?: boolean;
   /** Run the legacy supervisor layer on top of the message. */
   supervisorEnabled: boolean;
+  settings: BotSettings;
+  gateCtx: FutureGateCtx;
 }): Promise<ProcessedLead> {
   if (row.botPaused) {
     return { sid: row.sid, action: "skipped_paused" };
   }
 
-  const maxFollowups = cfg.maxFollowups;
   const rule = pickRule(cfg.rules, row.pipelineStage, row.qState);
   if (!rule) {
     return { sid: row.sid, action: "no_rule" };
   }
+
+  // Policy check, after the rule is known and before anything is written.
+  if (rule.gate) {
+    const skip = rule.gate(
+      {
+        sid: row.sid,
+        name: row.name,
+        botPauseReason: row.botPauseReason,
+        followUpDate: row.followUpDate,
+      },
+      cfg.settings,
+      cfg.gateCtx
+    );
+    if (skip) return { sid: row.sid, action: skip.bucket, detail: skip.detail };
+  }
+
+  // A rule may cap itself tighter (or looser) than the shared setting.
+  const maxFollowups = rule.maxAttempts
+    ? Math.max(1, Math.min(8, rule.maxAttempts))
+    : cfg.maxFollowups;
 
   // HARD LIMIT — the configured attempt cap; the supervisor cannot override
   // it. Skipped for rules that opted into `unbounded` (re-engagement loop,
@@ -272,6 +381,24 @@ async function processCustomerLead(row: {
     }
   }
 
+  // Today's budget, claimed BEFORE composition — an LLM call per lead is real
+  // money and there is no point paying for a message we won't send.
+  //
+  // A per-run cap would not help this bucket: on the first enabled tick nearly
+  // every parked lead is due at once (39 of 45 carry a stale or null
+  // last_follow_up_at), and a 15-minute cron would drain the whole backlog in
+  // an afternoon. The daily ceiling spreads it across working days, which is
+  // the difference between reading what goes out and finding out afterwards.
+  //
+  // Never claimed on a dry run — a preview must not spend real budget. Never
+  // refunded on a send failure either; under-sending is the safe direction.
+  if (rule.dailyCap != null && !cfg.dryRun) {
+    const gotSlot = await claimFutureDailySlot(rule.dailyCap);
+    if (!gotSlot) {
+      return { sid: row.sid, action: "skipped_quota", detail: `cap=${rule.dailyCap}` };
+    }
+  }
+
   const recipient = row.jid || row.sid;
   const attempt = row.followUpCount + 1;
   /** Did the sales brain write this one? Decides whether the supervisor may rewrite it. */
@@ -288,7 +415,7 @@ async function processCustomerLead(row: {
     // places to tune, so the setter gets first refusal here as well — it is
     // the one carrying the ghost-recovery tactic and the mechanical validator.
     // The older writer stays as the fallback beneath it.
-    const { buildReEngagementMessage, RE_ENGAGEMENT_OPT_OUT_FOOTER } = await import(
+    const { buildReEngagementMessage } = await import(
       "@/lib/autoresponder/re-engagement"
     );
     const authored = await composeSetterFollowup({
@@ -297,11 +424,7 @@ async function processCustomerLead(row: {
       attempt,
     });
     if (authored) {
-      // The opt-out line is not the writer's to omit — this is cold outreach
-      // to someone who has already stopped replying.
-      candidateText = authored.text.includes("הסר")
-        ? authored.text
-        : authored.text + RE_ENGAGEMENT_OPT_OUT_FOOTER;
+      candidateText = authored.text;
       setterAuthored = true;
       setterHoldBack = authored.holdBack;
     } else {
@@ -326,6 +449,11 @@ async function processCustomerLead(row: {
       setterHoldBack = authored.holdBack;
     }
   }
+
+  // Both revival loops send unsolicited messages to people who already stopped
+  // replying. The footer is the caller's to guarantee, not the writer's to
+  // remember — and it lands after validation, so it doesn't fight the word cap.
+  if (rule.optOutFooter) candidateText = withOptOutFooter(candidateText);
 
   // Load recent thread for supervisor context.
   const recentRows = await db
@@ -577,6 +705,15 @@ async function processCustomerLead(row: {
     })
     .where(sql`trim(${leads.manychatSubId}) = ${row.sid.trim()}`);
 
+  // We just asked this customer for a time. Arm the latch so their answer runs
+  // through handleCallbackReply — the one place in the system where customer
+  // text becomes a task — instead of falling through to a handler that doesn't
+  // cover this stage. A failed arm costs the bridge for one cycle, not the
+  // message that already went out, so it never throws.
+  if (rule.armCallback) {
+    await armCallbackReply(row.sid, "future_follow_up");
+  }
+
   // Push the new follow_up_count + lastFollowUpAt to GHL so Eli sees it in
   // the contact card. Fire-and-forget — never throws.
   await syncLeadToGHL(row.sid);
@@ -731,6 +868,8 @@ export async function POST(req: NextRequest) {
       followUpCount: leads.followUpCount,
       lastFollowUpAt: leads.lastFollowUpAt,
       botPaused: leads.botPaused,
+      botPauseReason: leads.botPauseReason,
+      followUpDate: leads.followUpDate,
       pipelineFlag: leads.pipelineFlag,
       updatedAt: leads.updatedAt,
       notes: leads.notes,
@@ -738,6 +877,14 @@ export async function POST(req: NextRequest) {
     })
     .from(leads)
     .where(eq(leads.active, true));
+
+  // Silence ages for the parked-bucket gate. One query for the whole run, and
+  // only when that bucket is live — NOT leads.last_response_at, which has
+  // readers but no writers anywhere and is therefore always null.
+  const gateCtx: FutureGateCtx = {
+    now: Date.now(),
+    lastInbound: S.futureFollowupEnabled ? await loadLastInboundMap() : new Map(),
+  };
 
   const customerResults: ProcessedLead[] = [];
   const factoryResults: ProcessedLead[] = [];
@@ -773,9 +920,18 @@ export async function POST(req: NextRequest) {
       followUpCount: row.followUpCount,
       lastFollowUpAt: row.lastFollowUpAt,
       botPaused: row.botPaused,
+      botPauseReason: row.botPauseReason,
+      followUpDate: row.followUpDate,
       notes: row.notes,
       botSummary: row.botSummary,
-    }, { rules, maxFollowups, dryRun, supervisorEnabled: S.followupSupervisorEnabled });
+    }, {
+      rules,
+      maxFollowups,
+      dryRun,
+      supervisorEnabled: S.followupSupervisorEnabled,
+      settings: S,
+      gateCtx,
+    });
     customerResults.push(r);
   }
 
@@ -818,7 +974,18 @@ export async function POST(req: NextRequest) {
           );
           return [
             shape.template,
-            { hours: parsed.hours, warnings: parsed.warnings },
+            {
+              hours: parsed.hours,
+              warnings: parsed.warnings,
+              // Rules may cap themselves; showing the shared number for all of
+              // them would misreport what actually ran.
+              maxAttempts: shape.maxAttemptsKey
+                ? Number(S[shape.maxAttemptsKey]) || maxFollowups
+                : shape.unbounded
+                  ? null
+                  : maxFollowups,
+              dailyCap: shape.dailyCapKey ? Number(S[shape.dailyCapKey]) || null : null,
+            },
           ];
         })
       ),

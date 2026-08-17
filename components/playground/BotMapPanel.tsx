@@ -36,6 +36,9 @@ interface Pulse {
   cursors: Record<string, string>;
   pausedByReason: { reason: string; n: number }[];
   listening: number;
+  byStage?: { stage: string; n: number; paused: number; quoted: number; dated: number }[];
+  parkedPausedByReason?: { reason: string; n: number }[];
+  futureQuota?: { day: string; sent: number } | null;
 }
 
 export default function BotMapPanel({
@@ -80,6 +83,10 @@ export default function BotMapPanel({
     describeCadence(parseCadence(S[key] as string, fb).hours);
 
   const pausedTotal = pulse?.pausedByReason.reduce((a, r) => a + r.n, 0) ?? 0;
+
+  const parked = pulse?.byStage?.find((s) => s.stage === "FUTURE_FOLLOW_UP");
+  const parkedMuted =
+    pulse?.parkedPausedByReason?.reduce((a, r) => a + r.n, 0) ?? 0;
 
   return (
     <div style={{ maxWidth: 720 }}>
@@ -198,6 +205,66 @@ export default function BotMapPanel({
           <Locked text="נוסח 13 התזכורות הקבועות" />
         )}
       </Phase>
+
+      {/* ---------- the parked bucket ---------- */}
+      <H sub="לידים שגררת ידנית לעמודה הזו. המטרה כאן היא שיחת טלפון, לא תשובה.">
+        להתקשר בעתיד
+      </H>
+      <div style={grid}>
+        <Stat n={parked?.n ?? 0} label="לידים בעמודה" />
+        <Stat
+          n={Math.max(0, (parked?.n ?? 0) - parkedMuted)}
+          label="שהבוט יכול לפנות אליהם"
+          muted={!S.futureFollowupEnabled}
+        />
+        <Stat n={parkedMuted} label="מושתקים" muted />
+        <Stat
+          n={S.futureFollowupEnabled ? "פעיל" : "כבוי"}
+          label="המנוע"
+          muted={!S.futureFollowupEnabled}
+        />
+      </div>
+
+      <div style={{ ...card, marginTop: 8 }}>
+        {S.futureFollowupEnabled ? (
+          <>
+            <Cadence
+              title="קצב הפנייה"
+              text={cadence("followupCadenceFutureFollowUp", [168, 168, 336, 504])}
+              onEdit={onEdit}
+            />
+            <Meta
+              text={
+                `עד ${S.futureFollowupMaxAttempts} פניות ואז הליד עובר אליך · ` +
+                `מקסימום ${S.futureFollowupDailyCap} ביום` +
+                (pulse?.futureQuota ? ` (נשלחו היום: ${pulse.futureQuota.sent})` : "") +
+                ` · לא לפני ${S.futureFollowupMinSilenceDays} ימי שקט, ולא אחרי ${S.futureFollowupMaxAgeDays}`
+              }
+            />
+            <Meta text="כל הודעה נושאת שורת הסרה · תשובה עם שעה פותחת משימה לאיש המכירות אוטומטית" />
+          </>
+        ) : (
+          <Meta text="המנוע כבוי — אף אחד מהלידים בעמודה הזו לא מקבל פנייה." />
+        )}
+      </div>
+
+      {parkedMuted > 0 && (
+        <div style={{ ...card, marginTop: 8 }}>
+          <div style={cardHead}>למה הבוט לא נוגע בחלק מהם</div>
+          {(pulse?.parkedPausedByReason ?? []).map((r, i, arr) => (
+            <Row
+              key={r.reason}
+              k={PAUSE_REASON_LABELS[r.reason as keyof typeof PAUSE_REASON_LABELS] ?? r.reason}
+              v={String(r.n)}
+              last={i === arr.length - 1}
+            />
+          ))}
+          <p style={foot}>
+            השתקה מסוג &quot;לא ידוע&quot; נקבעה לפני שהתחלנו לתעד סיבות. אלה שיחות ישנות
+            שאיש לא זוכר את תוכנן — לשחרר אותן זו החלטה שלך, לא של הבוט.
+          </p>
+        </div>
+      )}
 
       {/* ---------- calls ---------- */}
       <H sub="כל שיחה שנענתה מתומללת, מנותחת, ונכתבת כהערה בכרטיס הלקוח.">שיחות טלפון</H>

@@ -200,6 +200,14 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     });
   }
 
+  // Read the stage BEFORE overwriting it — the parked-clock reset below must
+  // not fire on a webhook retry for a lead that was already parked.
+  const [beforeUpdate] = await db
+    .select({ stage: leads.pipelineStage })
+    .from(leads)
+    .where(matchClause)
+    .limit(1);
+
   const result = await db
     .update(leads)
     .set({
@@ -227,6 +235,19 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     sid: result[0].sid,
     pipelineStage: localStage,
   });
+  // Dragging a card into "להתקשר בעתיד" starts a new follow-up loop — reset the
+  // counter, or a lead arriving from an exhausted INTAKE (followUpCount=3)
+  // spends the parked bucket's whole budget on its first tick.
+  if (localStage === "FUTURE_FOLLOW_UP") {
+    try {
+      const { enterFutureFollowUp } = await import(
+        "@/lib/autoresponder/future-followup"
+      );
+      await enterFutureFollowUp(result[0].sid, "ghl_drag", beforeUpdate?.stage ?? null);
+    } catch (e) {
+      console.warn("[ghl.stage-changed] parked-clock reset failed", e);
+    }
+  }
   // Report lead-quality progression to Meta (CAPI-for-CRM), so the ad algorithm
   // optimizes for quality leads. DISCAVERY = qualified, CONSIDERATION = quote in
   // customer's hands. Purchase is reported separately on deal close (it carries

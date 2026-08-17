@@ -192,6 +192,17 @@ export async function setLeadStage(
       void createAutoTaskForStage(cleanSid, input.stage).catch((e) => {
         console.warn("[setLeadStage] createAutoTaskForStage failed", e);
       });
+      // Parking a lead in "להתקשר בעתיד" starts a NEW follow-up loop, so its
+      // counter has to start at zero. A lead dragged in from an exhausted
+      // INTAKE carries followUpCount=3 and would burn the parked bucket's whole
+      // budget on its first tick — 22 of the 45 leads already there have been
+      // nudged, so this is the common case, not the edge.
+      if (input.stage === "FUTURE_FOLLOW_UP") {
+        const { enterFutureFollowUp } = await import(
+          "@/lib/autoresponder/future-followup"
+        );
+        await enterFutureFollowUp(cleanSid, "widget", prior?.stage ?? null);
+      }
     }
 
     safeRevalidate("/dashboard/v3", "layout");

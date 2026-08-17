@@ -626,7 +626,20 @@ async function handleIncoming(evt: GreenWebhook): Promise<void> {
 
   const stage = (snap?.stage ?? "").toUpperCase() || null;
 
-  if (isNewConversation && stage !== "NO_RESPONSE_REENGAGE") {
+  // Both revival loops are EXEMPT from the restart.
+  //
+  // They deliberately message leads who have been silent for weeks, so every
+  // reply they earn trips the 7-day gap. Sending "בוא נמלא יחד שאלון קצר" to a
+  // customer who just answered "מחר ב-11" throws away the booked call and asks
+  // them their quantity again — the questionnaire-repetition complaint, in a
+  // different doorway. Keyed on the armed latch as well as the stage, so a lead
+  // we asked for a time is protected wherever it currently sits.
+  const armedForCallback =
+    ((snap?.qState ?? null) as QState | null)?.callbackFlow === "awaiting_reply";
+  const skipRestart =
+    stage === "NO_RESPONSE_REENGAGE" || stage === "FUTURE_FOLLOW_UP" || armedForCallback;
+
+  if (isNewConversation && !skipRestart) {
     console.log(
       `[green.webhook] new-conversation reset for ${canonicalSid} (gap ${Math.round((Date.now() - new Date(priorInboundAt!).getTime()) / 86_400_000)}d) — restarting questionnaire`
     );
@@ -637,6 +650,51 @@ async function handleIncoming(evt: GreenWebhook): Promise<void> {
       console.error("[green.webhook] new-conversation restart failed", e);
     }
     return;
+  }
+
+  // Re-read the pause state as late as possible: a salesperson (or Eli) may have
+  // jumped into THIS chat — outgoingMessageReceived → handleOutgoingManual set
+  // botPaused=true — while we were persisting + mirroring this inbound. If so,
+  // the human is now driving: stay silent instead of firing one more bot reply
+  // on top of them. Closes the race that let the bot "keep talking" after a
+  // takeover (Eli 2026-07-26). wasBotPaused (read at the top) only covers a pause
+  // that predates this inbound; this catches one that landed mid-processing.
+  //
+  // Hoisted above the revival branches (2026-08-17): each of them writes state
+  // and messages somebody, so "a human already took over" has to win over all
+  // of them, not only over the questionnaire path.
+  const [latePause] = await db
+    .select({ botPaused: leads.botPaused })
+    .from(leads)
+    .where(sql`trim(${leads.manychatSubId}) = ${canonicalSid.trim()}`)
+    .limit(1);
+  if (latePause?.botPaused === true) {
+    console.log(`[green.webhook] late-pause hit for ${canonicalSid} — human took over mid-inbound, bot stays silent`);
+    return;
+  }
+
+  // Callback-time reply — when the lead was asked "when's good to talk?",
+  // interpret this message first: it may open a salesperson task and confirm
+  // the slot to the customer.
+  //
+  // Hoisted above dispatchSupervisor (2026-08-17). The supervisor can return
+  // shouldRunLegacy=false, which would swallow the one reply this whole revival
+  // loop exists to capture — a customer answering with a time. This is also the
+  // only text→task bridge in the system, so nothing downstream would catch it.
+  const fullQ = (snap?.qState ?? null) as QState | null;
+  if (fullQ?.callbackFlow === "awaiting_reply") {
+    try {
+      const handled = await handleCallbackReply({
+        sid: canonicalSid,
+        text: textForRouting ?? "",
+        recipient: (snap?.waJid && snap.waJid.trim()) || canonicalSid,
+        name: snap?.name ?? null,
+        qState: fullQ,
+      });
+      if (handled) return;
+    } catch (e) {
+      console.error("[green.webhook] callback reply handler failed", e);
+    }
   }
 
   // NO_RESPONSE_REENGAGE inbound — classify intent, DM Eli, pause bot,
@@ -652,6 +710,30 @@ async function handleIncoming(evt: GreenWebhook): Promise<void> {
     return;
   }
 
+  // FUTURE_FOLLOW_UP inbound that wasn't a time.
+  //
+  // Without this the customer gets NOTHING: the routing chain below covers
+  // INTAKE / FACTORY_WAIT / CONSIDERATION / DISCAVERY, and a parked lead is in
+  // none of them — so a cold lead who finally writes "כמה זה עולה היום?" is met
+  // with silence, the worst possible outcome for a revival loop.
+  //
+  // It does NOT fall through to handleDecisionInbound: that routes on
+  // qState.subFlow and assumes post-quote state which 20 of the 45 parked leads
+  // don't have. The re-engagement handler is the right shape — classify, pause
+  // with the auto-resumable `reengagement_reply`, tell Eli — plus a task, since
+  // a cold lead that speaks again is the most valuable thing this loop produces
+  // and a DM scrolls away.
+  if (stage === "FUTURE_FOLLOW_UP" && textForRouting?.trim()) {
+    const { handleReengagementInbound } = await import("@/lib/autoresponder/re-engagement");
+    await handleReengagementInbound({
+      sid: canonicalSid,
+      text: textForRouting,
+      stageLabel: "להתקשר בעתיד",
+      openTask: true,
+    });
+    return;
+  }
+
   // qState is authoritative when the questionnaire is mid-flight. Without
   // this guard, a "start over" tag (which resets qState to step 1 but leaves
   // pipeline_stage at whatever GHL last pushed back via resync) sends the
@@ -664,23 +746,6 @@ async function handleIncoming(evt: GreenWebhook): Promise<void> {
   // questionnaire-owned. Step 10 is the terminal done state.
   const questionnaireActive =
     !!q && typeof q.step === "number" && q.step <= 9 && !q.doneAt && !q.bailed;
-
-  // Re-read the pause state as late as possible: a salesperson (or Eli) may have
-  // jumped into THIS chat — outgoingMessageReceived → handleOutgoingManual set
-  // botPaused=true — while we were persisting + mirroring this inbound. If so,
-  // the human is now driving: stay silent instead of firing one more bot reply
-  // on top of them. Closes the race that let the bot "keep talking" after a
-  // takeover (Eli 2026-07-26). wasBotPaused (read at the top) only covers a pause
-  // that predates this inbound; this catches one that landed mid-processing.
-  const [latePause] = await db
-    .select({ botPaused: leads.botPaused })
-    .from(leads)
-    .where(sql`trim(${leads.manychatSubId}) = ${canonicalSid.trim()}`)
-    .limit(1);
-  if (latePause?.botPaused === true) {
-    console.log(`[green.webhook] late-pause hit for ${canonicalSid} — human took over mid-inbound, bot stays silent`);
-    return;
-  }
 
   // Supervisor gate — LLM decides whether to let the bot reply, draft for Eli,
   // escalate, or silence. Mirrors lib/supervisor/server/dispatch logic used
@@ -702,21 +767,6 @@ async function handleIncoming(evt: GreenWebhook): Promise<void> {
   }
 
   try {
-    // Callback-time reply — when the lead was asked "when's good to talk?", try
-    // to interpret this message first (may open a salesperson task + confirm).
-    // If handled, skip the normal questionnaire/decision handler for it.
-    const fullQ = (snap?.qState ?? null) as QState | null;
-    if (fullQ?.callbackFlow === "awaiting_reply") {
-      const handled = await handleCallbackReply({
-        sid: canonicalSid,
-        text: textForRouting ?? "",
-        recipient: (snap?.waJid && snap.waJid.trim()) || canonicalSid,
-        name: snap?.name ?? null,
-        qState: fullQ,
-      });
-      if (handled) return;
-    }
-
     if (questionnaireActive || !stage) {
       // Pre-quote — questionnaire path. Also forced here when qState is
       // mid-flight even if pipeline_stage is set (re-quote via restart-tag
