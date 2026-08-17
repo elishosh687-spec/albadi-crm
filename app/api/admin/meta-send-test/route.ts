@@ -12,7 +12,7 @@
  *   testEventCode — Meta Test Events code (recommended)
  */
 import { NextRequest, NextResponse } from "next/server";
-import { sendMetaCrmEvent, metaCapiConfigured, MetaEventName } from "@/lib/meta/capi";
+import { sendMetaCrmEvent, metaCapiConfigured, pingMetaDataset, MetaEventName } from "@/lib/meta/capi";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -29,6 +29,21 @@ function authorized(req: NextRequest): boolean {
 }
 
 const VALID: MetaEventName[] = ["Qualified", "QuoteSent", "Purchase"];
+
+/**
+ * GET ?ping=1 — is the Meta connection actually alive right now?
+ *
+ * Reads the dataset back over the Graph API: proves the token is valid and can
+ * see THIS dataset, and sends no event. The one-command answer to "how do I
+ * know there's really a connection", without opening the ads tab.
+ */
+export async function GET(req: NextRequest) {
+  if (!authorized(req)) {
+    return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
+  }
+  const ping = await pingMetaDataset();
+  return NextResponse.json(ping, { status: ping.ok ? 200 : 502 });
+}
 
 export async function POST(req: NextRequest) {
   if (!authorized(req)) {
