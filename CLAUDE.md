@@ -954,6 +954,73 @@ overlapping triggers cannot double-send — **not** a pg advisory lock, which
 Neon's per-query HTTP driver silently drops (verified: it granted the same lock
 twice).
 
+### "להתקשר בעתיד" — the parked bucket books calls (built 2026-08-17)
+
+`FUTURE_FOLLOW_UP` held **45 active leads** — the largest non-terminal bucket in
+the system, 25 holding a quote we wrote — and **nothing touched them**: no rule
+matched the stage, `pipeline-audit` listed it under `HANDS_OFF_STAGES`,
+`ghl-tasks/derive` left it out of `ACTIVE_STAGES`, and `lib/ghl/next-action.ts`
+mapped it to `schedule_callback`, a string no code reads. Every tick they landed
+in `no_rule` and were dropped.
+
+**The objective is a booked phone call, not a reply.** The setter already knew
+how (`goal: revive` → `ghost_recovery` + `appointment_booking`), and
+`handleCallbackReply` was already the only text→task bridge in the codebase.
+What was missing was a rule to reach them and a bridge to catch the answer.
+
+- **Rule** in `STAGE_RULE_SHAPES` — cadence `168,168,336,504` (widening on
+  purpose), **bounded** at 4 (unlike RE_ENGAGEMENT, which may run forever because
+  Eli fills it one deliberate decision at a time). `gate` + `maxAttemptsKey` +
+  `dailyCapKey` are new per-rule fields; the gate lives in
+  [lib/autoresponder/future-followup.ts](lib/autoresponder/future-followup.ts).
+- **Entry is MANUAL** (Eli, 17.8). Exhausting the normal follow-ups still freezes
+  a lead at `NEEDS_ELI` + a permanent `no_reply` pause, exactly as before.
+- **Ships OFF** — `futureFollowupEnabled`, plus five knobs (cadence, attempts,
+  daily cap, min silence, max age). A **dry run ignores the master switch** so
+  the messages can be reviewed without handing the 15-minute cron a live
+  population of cold customers.
+- Every message carries the opt-out footer via `withOptOutFooter`, so enabling
+  this **will produce some LOST leads** — that is correct, a decided lead beats a
+  frozen one, but it should not be a surprise.
+
+**Four things would have made it inert, and each is a trap worth recognising:**
+1. **The 7-day restart ate the reply.** `isNewConversation` restarts the
+   questionnaire for anyone silent that long — which is every lead this loop
+   targets. A customer answering "מחר ב-11" would have been asked their quantity
+   again. Both revival stages and any lead with `callbackFlow='awaiting_reply'`
+   are now exempt, in **both** webhooks.
+2. **`revive` is gated on a quote existing**, and 20 of the 45 have none. They
+   fell to `hold_back`, whose messages `validateMessage` **forbids** from naming
+   a time — the bot was mechanically barred from its one job. A parked-stage
+   branch in [strategy.ts](lib/setter/strategy.ts) books the call anyway.
+3. **`follow_up_count` was never reset on a stage change**, so a lead dragged in
+   from an exhausted INTAKE arrived with its budget spent (22 of 45).
+   `enterFutureFollowUp` fixes entry; `scripts/_prepare-parked-bucket.ts`
+   backfilled the residents.
+4. **A non-time reply reached no handler at all** — the routing chain covers
+   INTAKE/FACTORY_WAIT/CONSIDERATION/DISCAVERY only, so a cold lead who finally
+   wrote back got silence. It now routes to `handleReengagementInbound` with
+   `openTask`.
+
+**⚠️ `leads.last_response_at` is a dead column** — readers in
+`ghl-tasks/derive.ts` + `reconcile.ts`, **zero writers** anywhere. Any gate built
+on it passes everything. (Which also means `derive.ts`'s `idle_active_lead` task
+has never fired — separate ticket.) Silence age is computed from `messages`.
+
+**The `skipped_*` buckets are the point.** Everything unhandled used to collapse
+into `no_rule` (34 of 120), and that one undifferentiated bucket is how 45 leads
+stayed invisible for months. A dry run now separates "the rule said not yet"
+(`skipped_snoozed` / `too_fresh` / `too_cold` / `quota` / `internal`) from "nobody
+wrote a rule". Verified 17.8: `no_rule` 34 → 13, exactly the 21 unpaused parked
+leads.
+
+**The daily cap is not optional.** On the first enabled tick every parked lead is
+due at once (their `last_follow_up_at` is null), and the 15-minute cron would
+drain the backlog in an afternoon. `claimFutureDailySlot` is the same
+`app_config` row-claim as the run lock, atomic under a Jerusalem-day reset. A dry
+run counts against it **in memory only** — otherwise the preview both lies about
+the day and blows the 60s route budget composing 40+ LLM messages.
+
 ## Bot never auto-advances pipeline stage (2026-07-01 rule)
 
 The bot USED to write `pipelineStage: "FACTORY_WAIT"` from five sites in the
