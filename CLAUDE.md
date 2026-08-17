@@ -881,6 +881,16 @@ because the fallback held. **Never add an LLM send path without one.**
 `setter_decisions.draft_text IS NULL` across a window means the LLM is dead —
 that is how the credit exhaustion was found, and how the `temperature` bug was
 found before it. When "the bot sounds dumb", check that column first.
+`npx tsx scripts/_check-ai-health.ts` (with the neonctl `DATABASE_URL`) prints
+all five jobs at once, so a partial recovery is visible rather than averaged.
+
+**⚠️ Topping the credits back up does NOT self-heal the queue.** Recordings that
+failed during the outage reached `attempts=3` and went terminal `failed`, which
+excludes them from every stage forever. Re-queue only those —
+`scripts/_reset-credit-failures.ts` matches on `last_error ILIKE '%no credits
+remaining%'` and leaves genuine failures ("returned no text", timeouts) alone —
+then POST `/api/bot/process-recordings` with `CALL_TRIGGER_SECRET`. Verified
+2026-08-17: 8 rows re-queued, all 8 transcribed → analyzed → posted.
 
 ### What is configurable (settings screen, `bot.settings`)
 
