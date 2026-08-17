@@ -65,6 +65,53 @@ export function metaCapiConfigured(): boolean {
   return Boolean(token && datasetId);
 }
 
+export interface MetaPingResult {
+  ok: boolean;
+  /** The dataset's own name as Meta reports it — proof we reached THIS dataset. */
+  datasetName?: string;
+  error?: string;
+  /** True when Meta rejected the credentials (expired/revoked token). */
+  authFailed?: boolean;
+}
+
+/**
+ * Actually talk to Meta.
+ *
+ * `metaCapiConfigured()` only proves two env vars are non-empty, so a health
+ * check built on it stays green through an expired or revoked token — the
+ * exact failure it exists to catch. This reads the dataset back over the Graph
+ * API: it needs the token to be valid AND to have access to that dataset, and
+ * it sends no events, so it can run on every page load without polluting data.
+ */
+export async function pingMetaDataset(): Promise<MetaPingResult> {
+  const { token, datasetId, version } = config();
+  if (!token || !datasetId) {
+    return { ok: false, error: "חסר META_CAPI_TOKEN או META_DATASET_ID" };
+  }
+  const url = `https://graph.facebook.com/${version}/${datasetId}?fields=name&access_token=${encodeURIComponent(token)}`;
+  try {
+    // Bounded: a slow Meta must not hang the ads page behind it.
+    const resp = await fetch(url, { signal: AbortSignal.timeout(6000), cache: "no-store" });
+    const json: {
+      name?: string;
+      error?: { message?: string; code?: number };
+    } = await resp.json().catch(() => ({}));
+    if (!resp.ok || json.error) {
+      const code = json.error?.code;
+      return {
+        ok: false,
+        // 190 = invalid/expired access token; 10/200 = permission denied.
+        authFailed: code === 190 || code === 10 || code === 200,
+        error: json.error?.message ?? `HTTP ${resp.status}`,
+      };
+    }
+    return { ok: true, datasetName: json.name };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return { ok: false, error: msg.includes("timeout") ? "מטא לא הגיבה בזמן" : msg };
+  }
+}
+
 interface LeadRow {
   sid: string;
   phone: string | null;

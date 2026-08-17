@@ -8,7 +8,7 @@
  */
 import { db } from "@/lib/db";
 import { sql } from "drizzle-orm";
-import { metaCapiConfigured } from "@/lib/meta/capi";
+import { pingMetaDataset } from "@/lib/meta/capi";
 import { pollGoodLeads } from "@/lib/meta/good-lead-poll";
 
 export interface MetaHealthCheck {
@@ -27,13 +27,21 @@ export async function checkMetaHealth(): Promise<MetaHealth> {
   const checks: MetaHealthCheck[] = [];
 
   // 1. Can we talk to Meta at all?
+  //
+  // This used to assert metaCapiConfigured() — i.e. "the two env vars are
+  // non-empty" — under the label "חיבור למטא", which stayed green through an
+  // expired or revoked token, the one failure it exists to catch. It now makes
+  // a real Graph call that reads the dataset back.
+  const ping = await pingMetaDataset();
   checks.push({
     key: "capi",
     label: "חיבור למטא (CAPI)",
-    ok: metaCapiConfigured(),
-    detail: metaCapiConfigured()
-      ? "טוקן ודאטהסט מוגדרים"
-      : "חסר META_CAPI_TOKEN או META_DATASET_ID — שום אירוע לא נשלח",
+    ok: ping.ok,
+    detail: ping.ok
+      ? `מחובר לדאטהסט "${ping.datasetName ?? "?"}" — נבדק עכשיו`
+      : ping.authFailed
+        ? `הטוקן נדחה על ידי מטא (${ping.error}) — צריך לחדש את META_CAPI_TOKEN ב-Events Manager`
+        : `אין תשובה ממטא: ${ping.error}`,
   });
 
   // 2. Attribution coverage: FB leads that never got a leadgen id can never be
