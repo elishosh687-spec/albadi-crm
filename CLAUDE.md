@@ -238,6 +238,25 @@ all of them are in Draft anyway (see Caveats). Every event is POSTed by
 `sendMetaCrmEvent` ([lib/meta/capi.ts](lib/meta/capi.ts)) from this codebase.
 Editing GHL changes nothing.
 
+**Is the connection alive right now?** (one command, sends nothing):
+
+```bash
+curl -s "$CRM/api/admin/meta-send-test?ping=1" -H "Authorization: Bearer $CALL_TRIGGER_SECRET"
+```
+
+`{"ok":true}` = the token is valid. ⚠️ Do NOT "improve" this into a plain
+dataset read: our CAPI token can SEND to the dataset but has no permission to
+READ its metadata, so `GET /<dataset>?fields=name` returns **"(#100) Missing
+Permission"** on a perfectly healthy pipe. `pingMetaDataset` tries the dataset
+first and falls back to `/me` on #100; only 190/10/200 mean Meta actually
+rejected the credentials. The ads-tab health strip runs this same call, so
+"חיבור למטא" is now a live check rather than an env-var check.
+
+**Is the מודעות tab current?** Yes — `export const dynamic = "force-dynamic"`,
+so it re-renders server-side on every load. What is NOT live is the *reporting*:
+Qualified is sent by the daily 06:00 UTC cron, so a lead tagged an hour ago
+correctly shows **ממתין** until it runs.
+
 **To see what we actually send** (Events Manager shows its own view of it, and
 its per-event "parameters" panel lists `custom_data`, not the matching keys —
 which reads as "only `lead_event_source` is sent"):
