@@ -9,6 +9,7 @@
  * Soft-fail contract: missing env or fetch error returns an empty snapshot
  * (total=0). NEVER throws — both the dashboard and the cron rely on this.
  */
+import { resolveFbFormColumns } from "@/lib/sheets/fb-form-columns";
 
 export interface SheetGapRow {
   rowIndex: number; // 1-based, matches Sheet row number
@@ -49,11 +50,50 @@ const EMPTY_SNAPSHOT = (): SheetGapSnapshot => ({
 let cache: { at: number; snap: SheetGapSnapshot } | null = null;
 const CACHE_TTL_MS = 5 * 60 * 1000;
 
-const COL_NAME = 12;
-const COL_PHONE = 13;
-const COL_SENT = 18;
-const COL_LAST_STATUS = 19;
-const COL_SID = 20;
+/**
+ * Column positions are resolved from the HEADER ROW, not hardcoded.
+ *
+ * Adding a question to the Instant Form inserts a column and shifts every
+ * field after it. Reading `phone` from a fixed index 13 then silently returns
+ * an answer instead of a number, and this panel — the one whose whole job is
+ * to catch leads that fell through — becomes the thing that hides them.
+ *
+ * The Apps Script's own three columns (SENT / status / sid) have blank headers
+ * today, so they still fall back to 18/19/20. Give them real headers in the
+ * sheet (`crm_sent` / `crm_status` / `crm_sid`) and they become shift-proof
+ * too. See lib/sheets/fb-form-columns.ts.
+ */
+const MARKER_HEADERS: Record<string, { names: string[]; fallback: number }> = {
+  sent: { names: ["crm_sent", "sent"], fallback: 18 },
+  status: { names: ["crm_status", "status", "last_status"], fallback: 19 },
+  sid: { names: ["crm_sid", "sid"], fallback: 20 },
+};
+
+interface GapCols {
+  name: number;
+  phone: number;
+  sent: number;
+  status: number;
+  sid: number;
+}
+
+function resolveGapCols(header: string[]): GapCols {
+  const base = resolveFbFormColumns(header);
+  const norm = (v: string) => v.trim().toLowerCase().replace(/\s+/g, "_");
+  const normalised = header.map(norm);
+  const marker = (key: keyof typeof MARKER_HEADERS) => {
+    const { names, fallback } = MARKER_HEADERS[key];
+    const found = normalised.findIndex((h) => names.some((n) => norm(n) === h));
+    return found >= 0 ? found : fallback;
+  };
+  return {
+    name: base.idx.fullName ?? 12,
+    phone: base.idx.phone ?? 13,
+    sent: marker("sent"),
+    status: marker("status"),
+    sid: marker("sid"),
+  };
+}
 
 function readEnv(key: string): string {
   const raw = process.env[key] ?? "";
@@ -126,16 +166,17 @@ export async function loadSheetGaps(
     let sendFailedCount = 0;
     let otherErrorCount = 0;
 
+    const COL = resolveGapCols(parseCSVLine(lines[0] ?? ""));
     // Skip header row (index 0).
     for (let i = 1; i < lines.length; i++) {
       const line = lines[i].trim();
       if (!line) continue;
       const r = parseCSVLine(line);
-      const name = (r[COL_NAME] ?? "").trim() || null;
-      const rawPhone = (r[COL_PHONE] ?? "").trim() || null;
-      const sent = (r[COL_SENT] ?? "").trim() || null;
-      const lastStatus = (r[COL_LAST_STATUS] ?? "").trim() || null;
-      const sid = (r[COL_SID] ?? "").trim() || null;
+      const name = (r[COL.name] ?? "").trim() || null;
+      const rawPhone = (r[COL.phone] ?? "").trim() || null;
+      const sent = (r[COL.sent] ?? "").trim() || null;
+      const lastStatus = (r[COL.status] ?? "").trim() || null;
+      const sid = (r[COL.sid] ?? "").trim() || null;
 
       if (!name || !rawPhone) continue;
       if (rawPhone.indexOf("test lead") !== -1) continue;
@@ -253,12 +294,13 @@ export async function loadFormGapsVsDb(): Promise<FormGapVsDbSnapshot> {
   const notInSystem: FormGapVsDbRow[] = [];
   let inSystem = 0;
   let checked = 0;
+  const COL = resolveGapCols(parseCSVLine(lines[0] ?? ""));
   for (let i = 1; i < lines.length; i++) {
     const line = lines[i].trim();
     if (!line) continue;
     const r = parseCSVLine(line);
-    const name = (r[COL_NAME] ?? "").trim();
-    const rawPhone = (r[COL_PHONE] ?? "").trim();
+    const name = (r[COL.name] ?? "").trim();
+    const rawPhone = (r[COL.phone] ?? "").trim();
     if (!name || !rawPhone) continue;
     if (rawPhone.toLowerCase().indexOf("test lead") !== -1) continue;
     checked++;
@@ -271,9 +313,9 @@ export async function loadFormGapsVsDb(): Promise<FormGapVsDbSnapshot> {
       rowIndex: i + 1,
       name,
       phone: rawPhone,
-      sent: (r[COL_SENT] ?? "").trim() || null,
-      status: (r[COL_LAST_STATUS] ?? "").trim() || null,
-      sid: (r[COL_SID] ?? "").trim() || null,
+      sent: (r[COL.sent] ?? "").trim() || null,
+      status: (r[COL.status] ?? "").trim() || null,
+      sid: (r[COL.sid] ?? "").trim() || null,
     });
   }
 
