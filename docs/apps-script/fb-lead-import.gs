@@ -154,11 +154,18 @@ function onNewLead() {
       continue;
     }
 
+    // Meta writes the leadgen id as "l:1234…". Stripped with plain string ops
+    // on purpose: a regex containing a bare `l` was mangled in transit between
+    // the repo and the Apps Script editor and evaluated as an identifier —
+    // "ReferenceError: l is not defined", on every row.
+    var leadgen = get(row, col.leadgen);
+    if (leadgen.substring(0, 2).toLowerCase() === 'l:') leadgen = leadgen.substring(2);
+
     var payload = {
       phone: phone,
       fullName: name,
       email: get(row, col.email),
-      leadgenId: get(row, col.leadgen).replace(/^\s*l:/i, ''),
+      leadgenId: leadgen,
       adId: get(row, col.adId),
       adName: get(row, col.adName),
       campaignId: get(row, col.campaignId),
