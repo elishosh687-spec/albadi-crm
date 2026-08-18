@@ -10,6 +10,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { enrichMetaAttribution } from "@/lib/sheets/meta-attribution";
 import { pollGoodLeads } from "@/lib/meta/good-lead-poll";
+import { postFormAnswerNotes } from "@/lib/sheets/form-answers-note";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -51,7 +52,15 @@ export async function POST(req: NextRequest) {
       console.warn("[enrich-meta-attribution] good-lead poll failed", e);
       goodLeads = { error: e instanceof Error ? e.message : String(e) };
     }
-    return NextResponse.json({ ok: true, ...result, goodLeads });
+    // The form answers reach the DB above; this puts them in front of whoever
+    // opens the contact. Non-fatal: a GHL wobble must not fail the enrichment.
+    let formNotes: Awaited<ReturnType<typeof postFormAnswerNotes>> | { error: string };
+    try {
+      formNotes = await postFormAnswerNotes();
+    } catch (e) {
+      formNotes = { error: e instanceof Error ? e.message : String(e) };
+    }
+    return NextResponse.json({ ok: true, ...result, goodLeads, formNotes });
   } catch (e) {
     console.error("[enrich-meta-attribution] failed", e);
     return NextResponse.json(

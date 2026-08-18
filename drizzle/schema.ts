@@ -97,6 +97,11 @@ export const leads = pgTable("leads", {
   metaCampaignId: text("meta_campaign_id"),
   metaCampaignName: text("meta_campaign_name"),
   metaFormEmail: text("meta_form_email"),
+  /** The customer's own answers to the Instant-Form questions, keyed by the
+   *  sheet's column label. Filled by the daily attribution cron; mirrored to
+   *  the GHL contact as a note (meta_form_note_at stamps that). */
+  metaFormAnswers: jsonb("meta_form_answers"),
+  metaFormNoteAt: timestamp("meta_form_note_at", { withTimezone: true }),
   // Stamped when a Meta "Qualified" event has been reported for this lead, so
   // the good-lead poller doesn't re-send on every tick. See memory
   // meta-conversion-loop.

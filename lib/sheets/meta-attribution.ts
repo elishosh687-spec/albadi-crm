@@ -9,14 +9,26 @@
  * `leads.meta_*` by phone. Covers past + future leads; a new form is one more
  * sheet id in GOOGLE_SHEETS_FB_LEADS_IDS — no script copy, no Google edits.
  *
- * Meta standard Instant-Form CSV columns (0-indexed), verified on both live
- * sheets — identical for the columns we read:
- *   0 id(leadgen) · 2 ad_id · 3 ad_name · 6 campaign_id · 7 campaign_name
- *   13 phone · 14 email
+ * Columns are resolved by HEADER NAME (lib/sheets/fb-form-columns.ts), not by
+ * position. Adding a question to the form inserts a column and shifts every
+ * field after it — which used to move `phone` off index 13 and silently break
+ * both this enrichment and the Apps Script's import. The historical indices
+ * survive only as the fallback.
+ *
+ * The same pass also captures the customer's OWN answers to the form's
+ * questions (any column that isn't ad metadata) into `leads.meta_form_answers`,
+ * so "how many units / do you have a logo" reaches the CRM instead of dying in
+ * the spreadsheet.
  */
 import { db } from "@/lib/db";
 import { sql } from "drizzle-orm";
 import { leads } from "@/drizzle/schema";
+import {
+  resolveFbFormColumns,
+  cell,
+  rowAnswers,
+  type FbFormColumns,
+} from "@/lib/sheets/fb-form-columns";
 
 // Known Meta form sheets (fallback when GOOGLE_SHEETS_FB_LEADS_IDS is unset).
 // "Albadi leads v2" + "Form #2".
@@ -24,14 +36,6 @@ const DEFAULT_SHEET_IDS = [
   "1AnswoeBAFV-z4aN3KhqyJjb9DegyiDNH-0FcB8ry518",
   "1LB4DDcrhPC13pSNHiIDrWxVBH2K9dDhhwTBiE5wF9Tg",
 ];
-
-const COL_LEADGEN = 0;
-const COL_AD_ID = 2;
-const COL_AD_NAME = 3;
-const COL_CAMPAIGN_ID = 6;
-const COL_CAMPAIGN_NAME = 7;
-const COL_PHONE = 13;
-const COL_EMAIL = 14;
 
 export interface EnrichResult {
   sheets: number;
@@ -98,6 +102,8 @@ interface MetaRec {
   campaignId: string | null;
   campaignName: string | null;
   email: string | null;
+  /** The form's own questions → the customer's answers, by column label. */
+  answers: Record<string, string> | null;
 }
 
 /**
@@ -126,20 +132,29 @@ export async function enrichMetaAttribution(): Promise<EnrichResult> {
       continue;
     }
     sheetsOk++;
-    const rows = parseCsv(text).slice(1); // drop header
+    const parsed = parseCsv(text);
+    const cols: FbFormColumns = resolveFbFormColumns(parsed[0] ?? []);
+    if (!cols.resolvedByName) {
+      // Not fatal — the fallback indices still apply — but it means Meta
+      // renamed a header, and the next shift will be read wrong. Say so.
+      console.warn(`[meta-enrich] sheet ${id}: some columns fell back to fixed positions`);
+    }
+    const rows = parsed.slice(1); // drop header
     for (const r of rows) {
-      const ph = digits(r[COL_PHONE] ?? "");
+      const ph = digits(cell(r, cols, "phone"));
       // Meta writes the leadgen id with an "l:" prefix in the sheet (like the
       // phone's "p:"). Strip it — the CAPI lead_id must be the bare number.
-      const leadgenId = (r[COL_LEADGEN] ?? "").replace(/^\s*l:/i, "").trim();
+      const leadgenId = cell(r, cols, "leadgenId").replace(/^\s*l:/i, "").trim();
       if (ph.length < 9 || !leadgenId) continue;
+      const answers = rowAnswers(r, cols);
       const rec: MetaRec = {
         leadgenId,
-        adId: (r[COL_AD_ID] ?? "").trim() || null,
-        adName: (r[COL_AD_NAME] ?? "").trim() || null,
-        campaignId: (r[COL_CAMPAIGN_ID] ?? "").trim() || null,
-        campaignName: (r[COL_CAMPAIGN_NAME] ?? "").trim() || null,
-        email: (r[COL_EMAIL] ?? "").trim() || null,
+        adId: cell(r, cols, "adId") || null,
+        adName: cell(r, cols, "adName") || null,
+        campaignId: cell(r, cols, "campaignId") || null,
+        campaignName: cell(r, cols, "campaignName") || null,
+        email: cell(r, cols, "email") || null,
+        answers: Object.keys(answers).length ? answers : null,
       };
       sheetRows++;
       // Last write wins — later sheet rows are newer duplicates of a phone.
@@ -160,7 +175,7 @@ export async function enrichMetaAttribution(): Promise<EnrichResult> {
     SELECT manychat_sub_id AS sid, phone_e164 AS phone, wa_jid AS jid
     FROM leads
     WHERE (source = 'facebook_import' OR lead_source = 'facebook')
-      AND meta_leadgen_id IS NULL`);
+      AND (meta_leadgen_id IS NULL OR meta_form_answers IS NULL)`);
   const rows = res.rows;
 
   let updated = 0;
@@ -185,6 +200,10 @@ export async function enrichMetaAttribution(): Promise<EnrichResult> {
         metaCampaignId: sql`COALESCE(${leads.metaCampaignId}, ${rec.campaignId})`,
         metaCampaignName: sql`COALESCE(${leads.metaCampaignName}, ${rec.campaignName})`,
         metaFormEmail: sql`COALESCE(${leads.metaFormEmail}, ${rec.email})`,
+        // The customer's own words. COALESCE so a hand-edited value survives.
+        metaFormAnswers: rec.answers
+          ? sql`COALESCE(${leads.metaFormAnswers}, ${JSON.stringify(rec.answers)}::jsonb)`
+          : sql`${leads.metaFormAnswers}`,
       })
       .where(sql`trim(${leads.manychatSubId}) = ${l.sid.trim()}`);
     updated++;
