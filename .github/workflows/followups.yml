@@ -32,29 +32,70 @@ jobs:
     steps:
       - name: Send due follow-ups
         run: |
+          set -uo pipefail
           Q=""
           if [ "${{ inputs.dry }}" = "true" ]; then Q="?dry=1"; fi
-          curl -sS -X POST "https://albadi-crm.vercel.app/api/bot/followups$Q" \
-            -H "Authorization: Bearer ${{ secrets.BOT_SECRET }}" \
-            --max-time 90 | python3 -c "
-          import json,sys
-          d = json.load(sys.stdin)
+          URL="https://albadi-crm.vercel.app/api/bot/followups$Q"
+
+          # Body and status separately: the old one-liner piped curl straight
+          # into json.load, so ANY empty response died as a Python traceback
+          # ("Expecting value: line 1 column 1") that says nothing about what
+          # actually went wrong.
+          call() {
+            curl -sS -X POST "$URL" \
+              -H "Authorization: Bearer ${{ secrets.BOT_SECRET }}" \
+              --max-time 120 -o /tmp/followups.json -w '%{http_code}' || echo 000
+          }
+
+          CODE="$(call)"
+          # 000 = no response at all. The route's own ceiling is maxDuration=60s
+          # (app/api/bot/followups/route.ts), and a tick that composes several
+          # LLM messages can cross it — Vercel then kills the lambda and curl
+          # gets nothing. That is transient, so retry once rather than emailing.
+          # Safe: the run-lock row is held for 5 minutes, so the retry returns
+          # `already_running` instead of nudging anyone twice.
+          if [ ! -s /tmp/followups.json ] || [ "$CODE" = "000" ] || [ "${CODE:0:1}" = "5" ]; then
+            echo "::warning::attempt 1 returned HTTP $CODE — retrying once in 30s (run-lock makes this safe)"
+            sleep 30
+            CODE="$(call)"
+          fi
+
+          if [ ! -s /tmp/followups.json ]; then
+            echo "::error::no response from the follow-ups endpoint on two attempts (HTTP $CODE)."
+            echo "Most likely the run exceeded maxDuration=60s in app/api/bot/followups/route.ts."
+            exit 1
+          fi
+
+          python3 - "$CODE" <<'PY'
+          import json, sys
+          code = sys.argv[1]
+          raw = open('/tmp/followups.json', encoding='utf-8').read()
+          try:
+              d = json.loads(raw)
+          except json.JSONDecodeError:
+              # Show what actually came back instead of a decoder traceback.
+              print(f'::error::endpoint returned HTTP {code} but not JSON. First 400 chars:')
+              print(raw[:400])
+              raise SystemExit(1)
+          if not d.get('ok', True):
+              print('::error::endpoint reported failure:', json.dumps(d, ensure_ascii=False)[:400])
+              raise SystemExit(1)
           if d.get('skipped'):
               print('skipped:', d['skipped']); raise SystemExit(0)
           cfg = d.get('config', {})
           print('max attempts:', cfg.get('maxFollowups'))
           for stage, c in (cfg.get('cadences') or {}).items():
-              warn = ('  ⚠ ' + '; '.join(c['warnings'])) if c.get('warnings') else ''
-              print(f\"  {stage}: {c['hours']}h{warn}\")
+              warn = ('  \u26a0 ' + '; '.join(c['warnings'])) if c.get('warnings') else ''
+              print(f"  {stage}: {c['hours']}h{warn}")
           print('customer:', json.dumps(d.get('customer', {}), ensure_ascii=False))
           print('factory :', json.dumps(d.get('factory', {}), ensure_ascii=False))
           if d.get('dryRun'):
               print()
               for r in (d.get('details', {}).get('customer') or []):
                   if r.get('action') != 'would_send': continue
-                  who = {'setter': 'מוח מכירות', 'supervisor': 'מפקח', 'template': 'טקסט קבוע'}.get(r.get('author'), '?')
-                  print('—', r['sid'], '·', r.get('detail'), '· כתב:', who)
+                  who = {'setter': '\u05de\u05d5\u05d7 \u05de\u05db\u05d9\u05e8\u05d5\u05ea', 'supervisor': '\u05de\u05e4\u05e7\u05d7', 'template': '\u05d8\u05e7\u05e1\u05d8 \u05e7\u05d1\u05d5\u05e2'}.get(r.get('author'), '?')
+                  print('\u2014', r['sid'], '\u00b7', r.get('detail'), '\u00b7 \u05db\u05ea\u05d1:', who)
                   if r.get('cannedInstead'):
-                      print('   קבוע:', r['cannedInstead'])
-                  print('   ישלח:', r.get('preview'))
-          "
+                      print('   \u05e7\u05d1\u05d5\u05e2:', r['cannedInstead'])
+                  print('   \u05d9\u05e9\u05dc\u05d7:', r.get('preview'))
+          PY
