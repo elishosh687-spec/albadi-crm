@@ -968,6 +968,26 @@ overlapping triggers cannot double-send — **not** a pg advisory lock, which
 Neon's per-query HTTP driver silently drops (verified: it granted the same lock
 twice).
 
+**The follow-ups tick runs to 120s, and three values must agree (2026-08-18).**
+`maxDuration` in [app/api/bot/followups/route.ts](app/api/bot/followups/route.ts)
+is **120**, and the workflow's `curl --max-time` is **150** — curl must OUTLAST
+the function, or it aborts first and hands back an empty body that looks
+identical to a timeout. The comments naming the ceiling (route + the workflow's
+error text) are part of the same change; leaving them at 60 misinforms whoever
+reads them next. The 5-minute run-lock still exceeds a 120s run, so a killed
+lambda cannot wedge follow-ups shut.
+
+**Why the failure emails looked like a bug and weren't.** A tick that composes
+several LLM messages crossed the old 60s ceiling, Vercel killed the lambda, and
+curl returned nothing — which the old workflow piped straight into `json.load`,
+so it surfaced as `JSONDecodeError: Expecting value: line 1 column 1`, naming
+neither the endpoint nor the timeout. The step now captures body and status
+separately, **retries once after 30s** (safe: the run-lock returns
+`already_running`, so nobody is nudged twice), prints the actual response when
+it isn't JSON, and treats `ok:false` as failure. Genuine breakage still fails
+loudly — the inbox should mean something. If failures become *routine* rather
+than a blip, the fix is fewer leads per tick, not a bigger timeout.
+
 ### "להתקשר בעתיד" — the parked bucket books calls (built 2026-08-17)
 
 `FUTURE_FOLLOW_UP` held **45 active leads** — the largest non-terminal bucket in
