@@ -21,6 +21,10 @@
       "schedule": "0 9 3 * *"
     },
     {
+      "path": "/api/cron/vat-reminder",
+      "schedule": "0 9 10 * *"
+    },
+    {
       "path": "/api/cron/enrich-meta-attribution",
       "schedule": "0 6 * * *"
     }
