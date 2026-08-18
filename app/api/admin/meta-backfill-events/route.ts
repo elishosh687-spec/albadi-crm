@@ -10,12 +10,17 @@
  * Query: ?dry=1 → count only, send nothing. ?testCode=XXX → route to Test Events.
  *
  * Events:
- *   Qualified — every lead with a meta_leadgen_id whose stage reached an engaged
- *     state (DISCAVERY / FACTORY_WAIT / CONSIDERATION / WON). event_time from
- *     last_response_at ?? updated_at ?? created_at.
- *   Purchase  — every closed deal (listClosedQuotes), value = grandTotalExVat,
- *     event_time from the deal's newest updatedAt.
+ *   Qualified — delegated to pollGoodLeads: leads Eli TAGGED "ליד טוב" in GHL.
+ *     It used to select by pipeline stage instead, which reported a much larger
+ *     population than the live path and inflated the count in Events Manager.
+ *   Purchase  — closed deals (listClosedQuotes) NOT already stamped
+ *     meta_purchase_sent_at, value = grandTotalExVat.
  * "Less good" leads get no event — Meta infers them from the absence.
+ *
+ * ⚠️ Re-running is a no-op by default: both halves skip what is already
+ * reported. Events Manager counts events RECEIVED, so re-sending visibly
+ * inflates the dataset even though Meta dedups on event_id for attribution.
+ * ?force=1 re-sends Purchases anyway.
  */
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
@@ -23,6 +28,7 @@ import { sql, eq } from "drizzle-orm";
 import { factoryQuoteRequests } from "@/drizzle/schema";
 import { sendMetaCrmEvent, metaCapiConfigured } from "@/lib/meta/capi";
 import { listClosedQuotes } from "@/lib/factory/server/closed";
+import { pollGoodLeads } from "@/lib/meta/good-lead-poll";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -69,6 +75,10 @@ export async function POST(req: NextRequest) {
   const url = new URL(req.url);
   const dry = url.searchParams.get("dry") === "1";
   const testCode = url.searchParams.get("testCode") || null;
+  // Opt-in re-send of things we already reported. Off by default: Events
+  // Manager counts events RECEIVED, so a casual re-run visibly inflates the
+  // dataset even though Meta dedups on event_id for attribution.
+  const force = url.searchParams.get("force") === "1";
 
   // ?names=a,b — send Qualified for leads matched by name (Eli hand-picking the
   // ones he knows were good). Uses the canonical event_id so it can't double
@@ -105,21 +115,27 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, mode: "names", sent: out.filter((o) => o.ok).length, results: out });
   }
 
-  // 1. Qualified candidates.
-  const qRes = await db.execute<{ sid: string; ts: number | null }>(sql`
-    SELECT manychat_sub_id AS sid,
-           EXTRACT(EPOCH FROM COALESCE(last_response_at, updated_at, created_at)) AS ts
-    FROM leads
-    WHERE meta_leadgen_id IS NOT NULL
-      AND pipeline_stage IN ('DISCAVERY','FACTORY_WAIT','CONSIDERATION','WON')`);
-  const qualified = qRes.rows.map((r) => ({
-    sid: r.sid,
-    ts: clampTs(r.ts ? Number(r.ts) : null),
-  }));
+  // 1. Qualified — delegated to the good-lead poller ON PURPOSE.
+  //
+  // This used to select `pipeline_stage IN (DISCAVERY, FACTORY_WAIT,
+  // CONSIDERATION, WON)`, i.e. "got far in the funnel" — the exact definition
+  // Eli rejected ("got a quote" is a pipeline step, not quality; the tag is
+  // the judgement). It therefore reported a different, larger population than
+  // the live path, inflating the Qualified count in Events Manager and
+  // teaching the algorithm the wrong thing. pollGoodLeads is the single rule:
+  // tagged in GHL, has an attribution key, not already reported.
 
   // 2. Purchase candidates (closed deals).
+  const stampedRows = await db.execute<{ id: string }>(sql`
+    SELECT id FROM factory_quote_requests WHERE meta_purchase_sent_at IS NOT NULL`);
+  const stampedDealIds = new Set(stampedRows.rows.map((r) => r.id));
   const deals = await listClosedQuotes();
   const purchases = deals
+    // Already reported? Skip it. Re-running used to re-send every deal, and
+    // Events Manager counts what it RECEIVES — two runs showed as double the
+    // conversions. ?force=1 re-sends anyway (Meta dedups on event_id, but the
+    // received-count still moves, so it is opt-in).
+    .filter((d) => force || !stampedDealIds.has(d.id))
     .filter((d) => d.leadSid && d.grandTotalExVat > 0)
     .map((d) => ({
       // carried so a successful send can be STAMPED on the deal — without it
@@ -131,10 +147,12 @@ export async function POST(req: NextRequest) {
     }));
 
   if (dry) {
+    const preview = await pollGoodLeads({ dry: true });
     return NextResponse.json({
       ok: true,
       dry: true,
-      wouldSend: { qualified: qualified.length, purchases: purchases.length },
+      wouldSend: { qualified: preview.matched, purchases: purchases.length },
+      alreadyReported: { purchases: stampedDealIds.size },
       samplePurchases: purchases.slice(0, 5),
     });
   }
@@ -142,18 +160,12 @@ export async function POST(req: NextRequest) {
   let qSent = 0, qSkip = 0, pSent = 0, pSkip = 0;
   const errors: string[] = [];
 
-  for (const q of qualified) {
-    const r = await sendMetaCrmEvent(q.sid, "Qualified", {
-      eventTime: q.ts,
-      testEventCode: testCode,
-      eventId: `${q.sid.trim()}:Qualified`,
-    });
-    if (r.ok) qSent++;
-    else {
-      qSkip++;
-      if (r.error) errors.push(`Q ${q.sid}: ${r.error}`);
-    }
-  }
+  // NB: pollGoodLeads owns its own send, so ?testCode does not reach the
+  // Qualified half. Use /api/admin/meta-send-test for a Test-Events dry run.
+  const poll = await pollGoodLeads();
+  qSent = poll.sent;
+  qSkip = poll.failed + poll.unattributable;
+  errors.push(...poll.errors.map((e) => `Q ${e}`));
   for (const p of purchases) {
     const r = await sendMetaCrmEvent(p.sid, "Purchase", {
       valueIls: p.value,
