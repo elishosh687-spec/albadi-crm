@@ -23,6 +23,7 @@ import {
   listOpportunitiesForContact,
 } from "@/integrations/ghl/client";
 import { GHL_FIELD_IDS, GHL_STAGE_IDS } from "@/integrations/ghl/config";
+import { ghlPauseChange } from "@/lib/autoresponder/bot-pause";
 
 export interface ResyncResult {
   ok: true;
@@ -180,14 +181,34 @@ export async function resyncContact(
   // pushing during a mid-deploy code update) is gone now that the mapping is
   // stable. Re-enabled so a GHL UI toggle of Lead Owner correctly flows back
   // to DB via either the resync workflow or the native app-webhook.
+  //
+  // Routed through ghlPauseChange so a resync can never lift a pause the
+  // CUSTOMER asked for, and so an un-pause clears the reason columns instead of
+  // leaving a ghost. Writing botPaused bare here is what re-woke escalated
+  // leads and sent Eli the same alert twice in an hour (2026-08-18).
+  let ghlWantsPaused: boolean | null = null;
   if (cf.lead_owner !== undefined) {
     const v = String(cf.lead_owner ?? "");
-    if (v.includes("Eli")) updateSet.botPaused = true;
-    else if (v.includes("Bot")) updateSet.botPaused = false;
+    if (v.includes("Eli")) ghlWantsPaused = true;
+    else if (v.includes("Bot")) ghlWantsPaused = false;
   } else if (cf.bot_paused !== undefined) {
     // Legacy fallback if old Bot Paused field is still set.
     const v = cf.bot_paused;
-    updateSet.botPaused = v === "Paused" || v === true || v === "true";
+    ghlWantsPaused = v === "Paused" || v === true || v === "true";
+  }
+  if (ghlWantsPaused !== null) {
+    const [pauseRow] = await db
+      .select({ reason: leads.botPauseReason })
+      .from(leads)
+      .where(sql`trim(${leads.manychatSubId}) = ${sid.trim()}`)
+      .limit(1);
+    const change = ghlPauseChange(ghlWantsPaused, pauseRow?.reason);
+    if (change) Object.assign(updateSet, change);
+    else {
+      console.log(
+        `[ghl.resync] refused to un-pause ${sid} — the customer asked us to stop`
+      );
+    }
   }
   if (cf.follow_up_date !== undefined) {
     const v = cf.follow_up_date;

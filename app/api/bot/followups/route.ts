@@ -274,6 +274,24 @@ async function escalateLead(input: {
   stage: string | null;
   reason: "no_reply" | "stop_word" | "bail";
 }): Promise<void> {
+  // Is Eli already holding this one? An escalation is supposed to happen once:
+  // it flags the lead, mutes the bot, and tells him. But `bot_paused` is a
+  // GHL-owned column, so a resync could push it back to false, the lead would
+  // come round again on the next tick, trip the same attempt cap, and DM him a
+  // second time — which is exactly what happened on 2026-08-18 (נדב לב at
+  // 09:54 and 10:37, אשר פרץ at 11:14 and 11:56). The resync side is fixed
+  // too; this is the belt to that pair of braces, because the DM is the part
+  // that actually costs him attention.
+  //
+  // Re-arms by itself: clearing NEEDS_ELI in GHL means he has dealt with it,
+  // and a later escalation will notify him again.
+  const [before] = await db
+    .select({ flag: leads.pipelineFlag })
+    .from(leads)
+    .where(sql`trim(${leads.manychatSubId}) = ${input.sid.trim()}`)
+    .limit(1);
+  const alreadyEscalated = before?.flag === "NEEDS_ELI";
+
   await db
     .update(leads)
     .set({
@@ -283,6 +301,13 @@ async function escalateLead(input: {
       ...pauseFields(input.reason === "stop_word" ? "opt_out" : "no_reply"),
     })
     .where(sql`trim(${leads.manychatSubId}) = ${input.sid.trim()}`);
+
+  if (alreadyEscalated) {
+    console.log(
+      `[followups] re-escalated ${input.sid} — already NEEDS_ELI, DM suppressed`
+    );
+    return;
+  }
   await sendEliDM(
     eliEscalationTemplate({
       name: input.name,
