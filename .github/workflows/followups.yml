@@ -44,11 +44,11 @@ jobs:
           call() {
             curl -sS -X POST "$URL" \
               -H "Authorization: Bearer ${{ secrets.BOT_SECRET }}" \
-              --max-time 120 -o /tmp/followups.json -w '%{http_code}' || echo 000
+              --max-time 150 -o /tmp/followups.json -w '%{http_code}' || echo 000
           }
 
           CODE="$(call)"
-          # 000 = no response at all. The route's own ceiling is maxDuration=60s
+          # 000 = no response at all. The route's own ceiling is maxDuration=120s
           # (app/api/bot/followups/route.ts), and a tick that composes several
           # LLM messages can cross it — Vercel then kills the lambda and curl
           # gets nothing. That is transient, so retry once rather than emailing.
@@ -62,7 +62,7 @@ jobs:
 
           if [ ! -s /tmp/followups.json ]; then
             echo "::error::no response from the follow-ups endpoint on two attempts (HTTP $CODE)."
-            echo "Most likely the run exceeded maxDuration=60s in app/api/bot/followups/route.ts."
+            echo "Most likely the run exceeded maxDuration=120s in app/api/bot/followups/route.ts."
             exit 1
           fi
 

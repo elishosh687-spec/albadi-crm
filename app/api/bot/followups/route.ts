@@ -63,7 +63,7 @@ import {
 } from "@/lib/autoresponder/future-followup";
 
 export const runtime = "nodejs";
-export const maxDuration = 60;
+export const maxDuration = 120;
 
 const HOUR_MS = 60 * 60 * 1000;
 const DAY_MS = 24 * HOUR_MS;
@@ -845,7 +845,7 @@ export async function POST(req: NextRequest) {
   // true twice in a row for the same key, i.e. it would have protected
   // nothing. This claims a row instead, which survives between queries.
   //
-  // The claim self-expires after 5 minutes (maxDuration is 60s), so a lambda
+  // The claim self-expires after 5 minutes (maxDuration is 120s), so a lambda
   // killed mid-run cannot wedge follow-ups shut.
   const claim = await db.execute(sql`
     INSERT INTO app_config (key, value, updated_at)
