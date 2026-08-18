@@ -421,7 +421,15 @@ const PROD_LABEL: Record<string, string> = {
   p13: "H25*W25 ס״מ",
 };
 
-function buildConfirmationMessage(state: QState): string {
+/**
+ * The customer's answers, rendered in Hebrew — ONE definition, used by both
+ * the confirmation message the customer sees and the GHL contact note
+ * (lib/autoresponder/ghl-questionnaire-note.ts). Kept together on purpose:
+ * a note that disagrees with what the customer was shown is worse than no
+ * note, and the raw qState values (`q3`, `p3`, `s2`, `"true"`) are unreadable
+ * to anyone but this file.
+ */
+export function renderAnswerLines(state: QState): string[] {
   const qty =
     state.quantity === "custom"
       ? state.quantityCustom || "אחר"
@@ -435,7 +443,6 @@ function buildConfirmationMessage(state: QState): string {
   const lamination = state.lamination === "true" ? "כן" : "לא";
 
   const lines = [
-    "הנה הפרטים שאספנו:",
     `📦 כמות: ${qty}`,
     `📐 מידה: ${prod}`,
     `🚚 משלוח: ${ship}`,
@@ -446,6 +453,11 @@ function buildConfirmationMessage(state: QState): string {
   if (state.orderNotes) {
     lines.push(`📝 הערות: ${state.orderNotes}`);
   }
+  return lines;
+}
+
+function buildConfirmationMessage(state: QState): string {
+  const lines = ["הנה הפרטים שאספנו:", ...renderAnswerLines(state)];
   // When polls are enabled the confirmation prompt + options live in the
   // poll itself, so the body stays summary-only. When polls AND buttons are
   // both off, fall back to the legacy numbered tail so the customer knows
@@ -943,6 +955,19 @@ function summarizeForFactory(state: QState, name: string | null, phone: string |
   return lines.join("\n");
 }
 
+/**
+ * Mirror the customer's answers to their GHL contact as a note.
+ *
+ * Dynamic import on purpose: the note module imports `renderAnswerLines` from
+ * here, so a static import would close a cycle. Fire-and-forget — the customer
+ * must never wait on GHL, and a GHL outage must not cost them their quote.
+ */
+function mirrorAnswersToGhl(sid: string, state: QState): void {
+  void import("@/lib/autoresponder/ghl-questionnaire-note")
+    .then((m) => m.postQuestionnaireNote(sid, state))
+    .catch((e) => console.warn("[q-note] mirror failed", sid, e));
+}
+
 async function routeToFactory(
   ctx: LeadCtx,
   state: QState
@@ -968,6 +993,7 @@ async function routeToFactory(
     })
     .where(sql`trim(${leads.manychatSubId}) = ${ctx.sid.trim()}`);
   await ensureAutoTaskForStage(ctx.sid.trim(), "INTAKE").catch(() => {});
+  mirrorAnswersToGhl(ctx.sid, done);
   await sendBridgeMessage(ctx.jid, S.factoryHoldMessage);
   await sendEliDM(summarizeForFactory(state, ctx.name, ctx.phone));
 }
@@ -1002,6 +1028,7 @@ async function routeToQuoted(
     // Ensure the INTAKE follow-up task exists — this path bypasses
     // setLeadStage, so the task auto-create doesn't fire otherwise.
     await ensureAutoTaskForStage(ctx.sid.trim(), "INTAKE").catch(() => {});
+    mirrorAnswersToGhl(ctx.sid, done);
     await logBotQuote({
       leadSid: ctx.sid,
       source: "initial",
@@ -1037,6 +1064,7 @@ async function routeToQuoted(
       })
       .where(sql`trim(${leads.manychatSubId}) = ${ctx.sid.trim()}`);
     await ensureAutoTaskForStage(ctx.sid.trim(), "INTAKE").catch(() => {});
+    mirrorAnswersToGhl(ctx.sid, bailed);
     await sendBridgeMessage(ctx.jid, S.factoryHoldMessage);
     // A custom size we couldn't estimate is a normal outcome, not a fault —
     // send the spec so it can be priced, rather than an error report.
@@ -1087,6 +1115,7 @@ export async function requoteWithUpdatedSpec(input: {
       })
       .where(sql`trim(${leads.manychatSubId}) = ${input.sid.trim()}`);
     await ensureAutoTaskForStage(input.sid.trim(), "INTAKE").catch(() => {});
+    mirrorAnswersToGhl(input.sid, next);
     await logBotQuote({
       leadSid: input.sid,
       source: "requote",
