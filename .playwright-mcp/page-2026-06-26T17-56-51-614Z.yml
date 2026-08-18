@@ -1,0 +1,902 @@
+- generic [active] [ref=e1]:
+  - banner [ref=e3]:
+    - generic [ref=e6]:
+      - link [ref=e8] [cursor=pointer]:
+        - /url: /
+        - img [ref=e9]
+      - list [ref=e20]:
+        - button "Product" [ref=e22] [cursor=pointer]
+        - button "Solutions" [ref=e24] [cursor=pointer]
+        - button "Resources" [ref=e26] [cursor=pointer]
+        - link "Pricing" [ref=e28] [cursor=pointer]:
+          - /url: /pricing
+      - list [ref=e29]:
+        - listitem [ref=e30]:
+          - link "Sign in" [ref=e31] [cursor=pointer]:
+            - /url: https://app.frontapp.com/signin
+        - listitem [ref=e32]:
+          - button "Request a demo" [ref=e33] [cursor=pointer]
+        - listitem [ref=e34]:
+          - button "Try for free" [ref=e35] [cursor=pointer]
+    - generic:
+      - generic:
+        - generic:
+          - generic:
+            - generic:
+              - generic:
+                - generic:
+                  - generic:
+                    - generic:
+                      - generic:
+                        - link "Front Product Interface Screenshot":
+                          - /url: https://front.com/product
+                          - img "Front Product Interface Screenshot"
+                      - generic:
+                        - generic:
+                          - link "Front Overview":
+                            - /url: /product
+                          - img
+                        - generic:
+                          - link "Product Tour":
+                            - /url: /product-tour
+                          - img
+                        - generic:
+                          - link "What's New":
+                            - /url: /whats-new
+                          - img
+                  - generic:
+                    - generic:
+                      - paragraph: Use Cases
+                      - generic:
+                        - generic:
+                          - generic:
+                            - img "Customer Service Icon"
+                          - generic:
+                            - generic:
+                              - link "Customer Service":
+                                - /url: /customer-service
+                              - img
+                            - paragraph: All-in-one support platform
+                        - generic:
+                          - generic:
+                            - img "Email Management Icon"
+                          - generic:
+                            - generic:
+                              - link "Email Management":
+                                - /url: /email-management
+                              - img
+                            - paragraph: Collaborative shared inboxes
+                        - generic:
+                          - generic:
+                            - img "Client Communication Icon"
+                          - generic:
+                            - generic:
+                              - link "Client Communication":
+                                - /url: /client-communication
+                              - img
+                            - paragraph: Personalized service at scale
+                  - generic:
+                    - generic:
+                      - paragraph: AI Platform
+                      - generic:
+                        - generic:
+                          - generic:
+                            - img "Feature Icon AI"
+                          - generic:
+                            - generic:
+                              - link "Front AI Overview":
+                                - /url: /product/ai
+                              - img
+                            - paragraph: AI for the hard stuff
+                        - generic:
+                          - generic:
+                            - img "Feature Icon Autopilot"
+                          - generic:
+                            - generic:
+                              - link "Autopilot":
+                                - /url: /product/autopilot-customer-service-automation
+                              - img
+                            - paragraph: Beyond happy-path automation
+                        - generic:
+                          - generic:
+                            - img "Feature Icon Copilot"
+                          - generic:
+                            - generic:
+                              - link "Copilot":
+                                - /url: /product/copilot-ai-assistant
+                              - img
+                            - paragraph: AI help that actually gets complexity
+                        - generic:
+                          - generic:
+                            - img "Feature Icon Smart QA"
+                          - generic:
+                            - generic:
+                              - link "Smart QA":
+                                - /url: /product/smart-qa-automated-quality-assurance
+                              - img
+                            - paragraph: QA minus the blind spots
+                        - generic:
+                          - generic:
+                            - img "Feature Icon Smart CSAT"
+                          - generic:
+                            - generic:
+                              - link "Smart CSAT":
+                                - /url: /product/smart-csat-ai-scoring
+                              - img
+                            - paragraph: CSAT without the lies
+                  - generic:
+                    - generic:
+                      - paragraph: More Features
+                      - generic:
+                        - generic:
+                          - generic:
+                            - img "Feature Icon Omnichannel"
+                          - generic:
+                            - generic:
+                              - link "Omnichannel":
+                                - /url: /product/omnichannel-support-inbox
+                              - img
+                            - paragraph: All the channels, zero chaos
+                        - generic:
+                          - generic:
+                            - img "Feature Icon Ticketing"
+                          - generic:
+                            - generic:
+                              - link "Ticketing":
+                                - /url: /product/ticketing-system
+                              - img
+                            - paragraph: Complexity in, clarity out
+                        - generic:
+                          - generic:
+                            - img "Feature Icon Live Chat Bots"
+                          - generic:
+                            - generic:
+                              - link "Live chat":
+                                - /url: /product/live-chat
+                              - img
+                            - paragraph: Chat people don’t hate
+                        - generic:
+                          - generic:
+                            - img "Feature Icon Knowledge Base"
+                          - generic:
+                            - generic:
+                              - link "Knowledge base":
+                                - /url: /product/knowledge-base
+                              - img
+                            - paragraph: Stop answering déjà vu
+                        - generic:
+                          - generic:
+                            - img "Feature Icon Integrations"
+                          - generic:
+                            - generic:
+                              - link "Integrations & API":
+                                - /url: /product/integrations-api
+                              - img
+                            - paragraph: Escape from tab hell
+            - generic:
+              - generic:
+                - generic:
+                  - generic:
+                    - generic:
+                      - paragraph: Industries
+                      - generic:
+                        - generic:
+                          - generic:
+                            - img "Industry Icon Technology"
+                          - generic:
+                            - generic:
+                              - link "Tech":
+                                - /url: /industries/b2b-tech
+                              - img
+                        - generic:
+                          - generic:
+                            - img "Industry Icon Financial Services"
+                          - generic:
+                            - generic:
+                              - link "Financial Services":
+                                - /url: /industries/financial-services
+                              - img
+                        - generic:
+                          - generic:
+                            - img "Industry Icon Logistics"
+                          - generic:
+                            - generic:
+                              - link "Logistics":
+                                - /url: /industries/logistics
+                              - img
+                        - generic:
+                          - generic:
+                            - img "Industry Icon Manufacturing"
+                          - generic:
+                            - generic:
+                              - link "Manufacturing":
+                                - /url: /industries/manufacturing
+                              - img
+                        - generic:
+                          - generic:
+                            - img "Industry Icon Professional Services"
+                          - generic:
+                            - generic:
+                              - link "Professional Services":
+                                - /url: /industries/professional-services
+                              - img
+                        - generic:
+                          - generic:
+                            - img "Industry Icon Travel"
+                          - generic:
+                            - generic:
+                              - link "Travel":
+                                - /url: /industries/travel
+                              - img
+                  - generic:
+                    - generic:
+                      - paragraph: Teams
+                      - generic:
+                        - generic:
+                          - generic:
+                            - img "Teams Icon Customer Support"
+                          - generic:
+                            - generic:
+                              - link "Customer Support":
+                                - /url: /teams/customer-service-support
+                              - img
+                        - generic:
+                          - generic:
+                            - img "Teams Icon Operations"
+                          - generic:
+                            - generic:
+                              - link "Operations":
+                                - /url: /teams/operations
+                              - img
+                        - generic:
+                          - generic:
+                            - img "Teams Icon Inbound Sales"
+                          - generic:
+                            - generic:
+                              - link "Inbound Sales":
+                                - /url: /teams/inbound-sales
+                              - img
+                        - generic:
+                          - generic:
+                            - img "Teams Icon Account Management"
+                          - generic:
+                            - generic:
+                              - link "Account Management":
+                                - /url: /teams/account-management
+                              - img
+                        - generic:
+                          - generic:
+                            - img "Teams Icon Customer Success"
+                          - generic:
+                            - generic:
+                              - link "Customer Success":
+                                - /url: /teams/customer-success
+                              - img
+            - generic:
+              - generic:
+                - generic:
+                  - generic:
+                    - generic:
+                      - paragraph: Using Front
+                      - generic:
+                        - generic:
+                          - generic:
+                            - generic:
+                              - link "Academy":
+                                - /url: https://academy.front.com/app
+                              - img
+                        - generic:
+                          - generic:
+                            - generic:
+                              - link "Community":
+                                - /url: https://community.front.com/
+                              - img
+                        - generic:
+                          - generic:
+                            - generic:
+                              - link "Help Center":
+                                - /url: https://help.front.com/
+                              - img
+                        - generic:
+                          - generic:
+                            - generic:
+                              - link "Developer Portal":
+                                - /url: https://dev.frontapp.com/docs/welcome
+                              - img
+                  - generic:
+                    - generic:
+                      - paragraph: Explore
+                      - generic:
+                        - generic:
+                          - generic:
+                            - generic:
+                              - link "Blog":
+                                - /url: /blog
+                              - img
+                        - generic:
+                          - generic:
+                            - generic:
+                              - link "Integrations":
+                                - /url: /integrations
+                              - img
+                        - generic:
+                          - generic:
+                            - generic:
+                              - link "Guides & Webinars":
+                                - /url: /resources
+                              - img
+                        - generic:
+                          - generic:
+                            - generic:
+                              - link "Security":
+                                - /url: /security
+                              - img
+                        - generic:
+                          - generic:
+                            - generic:
+                              - link "Customer Stories":
+                                - /url: /customer-stories
+                              - img
+                        - generic:
+                          - generic:
+                            - generic:
+                              - link "Download App":
+                                - /url: /download
+                              - img
+                        - generic:
+                          - generic:
+                            - generic:
+                              - link "Front's Support Report":
+                                - /url: /support-report
+                              - img
+                        - generic:
+                          - generic:
+                            - generic:
+                              - link "Channel Partnerships":
+                                - /url: /partners/channel
+                              - img
+                  - generic:
+                    - generic:
+                      - generic:
+                        - link "Front Coordination Tax Promo Image":
+                          - /url: /blog/autopilot-playbooks-resolve-copilot
+                          - img "Front Coordination Tax Promo Image"
+                      - generic:
+                        - generic:
+                          - link "See how Autopilot and Copilot handle what other AI tools can’t.":
+                            - /url: /blog/autopilot-playbooks-resolve-copilot
+                          - img
+  - generic [ref=e38]:
+    - generic [ref=e39]:
+      - generic [ref=e40]:
+        - heading "AI for simple support is everywhere. Complex customer operations demand Front." [level=1] [ref=e41]
+        - paragraph [ref=e42]: Only Front brings teams, conversations, and AI into one coordinated system, so customer operations stay fast, accurate, and in control.
+      - generic [ref=e43]:
+        - button "Request demo" [ref=e44] [cursor=pointer]
+        - button "Start free trial" [ref=e45] [cursor=pointer]
+    - generic [ref=e49]:
+      - button "Cross-team coordination" [ref=e52] [cursor=pointer]:
+        - img [ref=e53]
+        - text: Cross-team coordination
+      - button "Multi-step workflows" [ref=e59] [cursor=pointer]:
+        - img [ref=e60]
+        - text: Multi-step workflows
+      - button "AI command center" [ref=e65] [cursor=pointer]:
+        - img [ref=e66]
+        - text: AI command center
+    - generic [ref=e73]:
+      - paragraph [ref=e75]: Trusted by 9,300+ companies
+      - generic [ref=e76]:
+        - img [ref=e77]
+        - img [ref=e80]
+        - img [ref=e83]
+        - img [ref=e86]
+        - img [ref=e89]
+  - generic [ref=e94]:
+    - heading "Complexity is where most customer support platforms tap out" [level=3] [ref=e97]
+    - generic [ref=e99]:
+      - img [ref=e102]
+      - generic [ref=e104]:
+        - heading "Teams lack shared context" [level=3] [ref=e105]
+        - paragraph [ref=e106]: Scattered tools mean incomplete context and customers who have to repeat themselves
+    - generic [ref=e108]:
+      - img [ref=e111]
+      - generic [ref=e113]:
+        - heading "AI stops at simple questions" [level=3] [ref=e114]
+        - paragraph [ref=e115]: Other AI tools can only handle simple FAQs, not real-world, complex requests
+    - generic [ref=e117]:
+      - img [ref=e120]
+      - generic [ref=e123]:
+        - heading "Resolution slows to a crawl" [level=3] [ref=e124]
+        - paragraph [ref=e125]: Your agents shouldn't spend half their time fixing what AI got wrong
+  - generic [ref=e127]:
+    - heading "Where cross-team customer operations stops crossing wires" [level=2] [ref=e131]
+    - generic [ref=e135]:
+      - generic [ref=e136]:
+        - paragraph [ref=e137]: FRONT AI
+        - heading "Resolve up to 70% of requests with AI, not just the low-hanging fruit" [level=3] [ref=e138]
+        - paragraph [ref=e139]: Front AI takes on complex requests others escalate by automating responses, assisting teams, and analyzing quality across your entire operation. Every reply improves with each conversation.
+      - link "Explore Front AI" [ref=e141] [cursor=pointer]:
+        - /url: https://front.com/product/ai
+        - button "Explore Front AI" [ref=e142]
+    - generic [ref=e146]:
+      - generic [ref=e147]:
+        - paragraph [ref=e148]: CUSTOMER SUPPORT
+        - heading "Complex tickets span departments, your system should too" [level=3] [ref=e149]
+        - paragraph [ref=e150]: Tackle high-stakes inquiries with full customer context and shared visibility across every team and conversation. Route, escalate, or loop in the right team to resolve issues without dropping the ball.
+      - link "Front for customer support" [ref=e152] [cursor=pointer]:
+        - /url: https://front.com/teams/customer-service-support
+        - button "Front for customer support" [ref=e153]
+    - generic [ref=e157]:
+      - generic [ref=e158]:
+        - paragraph [ref=e159]: OPERATIONS
+        - heading "Tame the inbox chaos and tackle the workflows your business depends on" [level=3] [ref=e160]
+        - paragraph [ref=e161]: Coordinate across teams and systems from one centralized AI command center. Eliminate bottlenecks and keep complex customer requests moving across your organization.
+      - link "Front for complex operations" [ref=e163] [cursor=pointer]:
+        - /url: https://front.com/teams/operations
+        - button "Front for complex operations" [ref=e164]
+  - generic [ref=e167]:
+    - generic [ref=e168]:
+      - generic [ref=e169]:
+        - paragraph [ref=e170]: The more complex the operation, the clearer the choice.
+        - generic [ref=e171]: Front’s AI doesn’t just reply. It runs the operation. G2 proves who’s built for complex work.
+      - generic [ref=e173]:
+        - generic [ref=e174]:
+          - img "Capterra Customer Service Shortlist 2026" [ref=e176]
+          - generic [ref=e177]:
+            - generic [ref=e178]: "2026"
+            - generic [ref=e179]: Capterra Customer Service Shortlist
+        - generic [ref=e181]:
+          - img "g2-high-performer-enterprise-winter-2026" [ref=e183]
+          - img "g2-momentum-leader-enterprise-winter-2026" [ref=e185]
+          - img "g2-easiest-to-do-business-with-enterprise-winter-2026" [ref=e187]
+          - img "g2-easiest-to-use-enterprise-winter-2026" [ref=e189]
+          - img "g2-mid-market-best-relationship-winter-2026" [ref=e191]
+    - img "Product awards" [ref=e194]
+  - generic [ref=e199]:
+    - paragraph [ref=e200]: Where industry complexity meets operational control
+    - link "Customer Service Support Customer Service Support Work across departments to tackle your gnarliest tickets with ease Explore more" [ref=e202] [cursor=pointer]:
+      - /url: /teams/customer-service-support
+      - generic [ref=e203]:
+        - img "Customer Service Support" [ref=e205]
+        - generic [ref=e206]:
+          - generic [ref=e207]:
+            - heading "Customer Service Support" [level=3] [ref=e208]
+            - paragraph [ref=e209]: Work across departments to tackle your gnarliest tickets with ease
+          - button "Explore more" [ref=e211]:
+            - text: Explore more
+            - generic [ref=e213]:
+              - img [ref=e214]
+              - img [ref=e216]
+    - link "Inbound Sales Inbound Sales Route requests, respond with speed, and nail the hand off every time Explore more" [ref=e219] [cursor=pointer]:
+      - /url: /teams/inbound-sales
+      - generic [ref=e220]:
+        - img "Inbound Sales" [ref=e222]
+        - generic [ref=e223]:
+          - generic [ref=e224]:
+            - heading "Inbound Sales" [level=3] [ref=e225]
+            - paragraph [ref=e226]: Route requests, respond with speed, and nail the hand off every time
+          - button "Explore more" [ref=e228]:
+            - text: Explore more
+            - generic [ref=e230]:
+              - img [ref=e231]
+              - img [ref=e233]
+    - link "Customer Success Customer Success Where Success, Support, and Onboarding finally work as one Explore more" [ref=e236] [cursor=pointer]:
+      - /url: /teams/customer-success
+      - generic [ref=e237]:
+        - img "Customer Success" [ref=e239]
+        - generic [ref=e240]:
+          - generic [ref=e241]:
+            - heading "Customer Success" [level=3] [ref=e242]
+            - paragraph [ref=e243]: Where Success, Support, and Onboarding finally work as one
+          - button "Explore more" [ref=e245]:
+            - text: Explore more
+            - generic [ref=e247]:
+              - img [ref=e248]
+              - img [ref=e250]
+    - link "Operations Operations Orchestrate customer operations from one AI command center Explore more" [ref=e253] [cursor=pointer]:
+      - /url: /teams/operations
+      - generic [ref=e254]:
+        - img "Operations" [ref=e256]
+        - generic [ref=e257]:
+          - generic [ref=e258]:
+            - heading "Operations" [level=3] [ref=e259]
+            - paragraph [ref=e260]: Orchestrate customer operations from one AI command center
+          - button "Explore more" [ref=e262]:
+            - text: Explore more
+            - generic [ref=e264]:
+              - img [ref=e265]
+              - img [ref=e267]
+    - link "Account Management Account Management Manage complex accounts without the scramble across teams Explore more" [ref=e270] [cursor=pointer]:
+      - /url: /teams/account-management
+      - generic [ref=e271]:
+        - img "Account Management" [ref=e273]
+        - generic [ref=e274]:
+          - generic [ref=e275]:
+            - heading "Account Management" [level=3] [ref=e276]
+            - paragraph [ref=e277]: Manage complex accounts without the scramble across teams
+          - button "Explore more" [ref=e279]:
+            - text: Explore more
+            - generic [ref=e281]:
+              - img [ref=e282]
+              - img [ref=e284]
+    - link "The Coordination Tax The Coordination Tax A report on the hidden cost of coordination in B2B customer operations Explore more" [ref=e287] [cursor=pointer]:
+      - /url: /resources/coordination-tax-report
+      - generic [ref=e288]:
+        - img "The Coordination Tax" [ref=e290]
+        - generic [ref=e291]:
+          - generic [ref=e292]:
+            - heading "The Coordination Tax" [level=3] [ref=e293]
+            - paragraph [ref=e294]: A report on the hidden cost of coordination in B2B customer operations
+          - button "Explore more" [ref=e296]:
+            - text: Explore more
+            - generic [ref=e298]:
+              - img [ref=e299]
+              - img [ref=e301]
+  - generic [ref=e303]:
+    - heading "9,300+ customers trust Front with the hard stuff" [level=2] [ref=e308]
+    - generic [ref=e309]:
+      - generic [ref=e310]:
+        - generic [ref=e312]:
+          - img "Reed & Mackay Customer Logo" [ref=e313]
+          - generic [ref=e314]: “Front enabled us to transition from a one-dimensional Outlook email setup to a more dynamic platform with internal and external functionalities that we previously lacked.”
+          - generic [ref=e316]:
+            - paragraph [ref=e317]: Tony Peckham
+            - paragraph [ref=e318]: Global Operations Director
+        - generic [ref=e320]:
+          - img "Spruce Customer Logo" [ref=e321]
+          - generic [ref=e322]: “Front keeps everything trackable in one place. Our agents who’ve worked in support roles elsewhere say they love the way collaboration is handled in Front.”
+          - generic [ref=e324]:
+            - paragraph [ref=e325]: Liz Sanchez
+            - paragraph [ref=e326]: Senior Customer Support Manager
+        - generic [ref=e328]:
+          - img "Supacolor Customer Logo" [ref=e329]
+          - generic [ref=e330]: “We use tagging automation extensively. It’s so flexible, yet powerful—it lets us see where the biggest pain points and inefficiencies are across the business.”
+          - generic [ref=e332]:
+            - paragraph [ref=e333]: Rum Walia
+            - paragraph [ref=e334]: Chief Operating Officer
+        - generic [ref=e336]:
+          - img "Branch Customer Logo" [ref=e337]
+          - generic [ref=e338]: “After switching from Zendesk, we saw our productivity improve by 40% in our member support team managing email, text, and chat channels.”
+          - generic [ref=e340]:
+            - paragraph [ref=e341]: Joe Emison
+            - paragraph [ref=e342]: CTO & Co-founder
+        - generic [ref=e344]:
+          - img [ref=e346]
+          - generic [ref=e384]: We love that we can leave a comment on an email [in Front] and escalate it, and we know that nothing will get lost in Slack. We don’t need to open up tons of other tools like we used to
+          - generic [ref=e386]:
+            - paragraph [ref=e387]: Laura Ene
+            - paragraph [ref=e388]: Customer Success Team Lead
+        - generic [ref=e390]:
+          - img [ref=e392]
+          - generic [ref=e395]: "Front drives efficiency: it removes unnecessary work so the team can focus on the critical 1% of exceptions that truly matter."
+          - generic [ref=e397]:
+            - paragraph [ref=e398]: Jordan Dunn
+            - paragraph [ref=e399]: Senior Manager, Strategic Customer Success
+      - generic:
+        - button "Arrow" [ref=e400] [cursor=pointer]:
+          - img "Arrow" [ref=e401]
+        - button "Arrow" [ref=e402] [cursor=pointer]:
+          - img "Arrow" [ref=e403]
+  - generic [ref=e404]:
+    - generic [ref=e406]:
+      - generic [ref=e409]:
+        - heading "Alt+Tab isn’t a workflow. Unify your whole stack." [level=2] [ref=e410]
+        - paragraph [ref=e411]: Connect your channels and most-used tools with Front’s 160+ integrations and no-code workflows bring your entire stack into one shared view.
+        - list [ref=e412]:
+          - listitem [ref=e413]:
+            - link "View all integrations" [ref=e414] [cursor=pointer]:
+              - /url: https://front.com/integrations
+      - img "Front Integrations" [ref=e418]
+    - generic:
+      - img "dropshadow"
+  - generic [ref=e423]:
+    - paragraph [ref=e424]: Ready to tame the insanity? Come to Front.
+    - list [ref=e425]:
+      - listitem [ref=e426]:
+        - button "Request a demo" [ref=e427] [cursor=pointer]
+      - listitem [ref=e428]:
+        - button "Try for free" [ref=e429] [cursor=pointer]
+  - generic [ref=e431]:
+    - paragraph [ref=e432]: Don't miss these
+    - generic [ref=e436]:
+      - 'link "Blog Take control of service quality with AI: Smart QA & ticketing for modern support leaders" [ref=e438] [cursor=pointer]':
+        - /url: /blog/customer-service-quality-ai
+        - generic [ref=e440]:
+          - generic [ref=e441]: Blog
+          - generic [ref=e442]: "Take control of service quality with AI: Smart QA & ticketing for modern support leaders"
+      - link "Blog 15 must-track SLA metrics to keep your team and customers aligned" [ref=e444] [cursor=pointer]:
+        - /url: /blog/sla-metrics-customer-service
+        - generic [ref=e446]:
+          - generic [ref=e447]: Blog
+          - generic [ref=e448]: 15 must-track SLA metrics to keep your team and customers aligned
+      - link "Blog How to reduce email overload for your team" [ref=e450] [cursor=pointer]:
+        - /url: /blog/how-to-reduce-email-overload-for-your-team
+        - generic [ref=e452]:
+          - generic [ref=e453]: Blog
+          - generic [ref=e454]: How to reduce email overload for your team
+      - 'link "Blog Shared inbox rules: How to set them up successfully" [ref=e456] [cursor=pointer]':
+        - /url: /blog/shared-inbox-rules-how-to-set-them-up-successfully
+        - generic [ref=e458]:
+          - generic [ref=e459]: Blog
+          - generic [ref=e460]: "Shared inbox rules: How to set them up successfully"
+  - contentinfo [ref=e463]:
+    - img [ref=e465]
+    - generic [ref=e495]:
+      - generic [ref=e496]:
+        - img [ref=e497]
+        - paragraph [ref=e507]: The AI customer operations platform.
+        - generic [ref=e508]:
+          - img "g2-badge-quality-of-support-enterprise-winter-2026" [ref=e509]
+          - img "g2-badge-leader-enterprise-winter-2026" [ref=e510]
+          - img "g2-badge-best-results-midmarket-winter-2026" [ref=e511]
+        - list [ref=e512]:
+          - listitem [ref=e513]:
+            - link "Linked In" [ref=e514] [cursor=pointer]:
+              - /url: https://www.linkedin.com/company/fronthq
+              - img "Linked In" [ref=e515]
+          - listitem [ref=e516]:
+            - link "Facebook" [ref=e517] [cursor=pointer]:
+              - /url: https://www.facebook.com/FrontHQ
+              - img "Facebook" [ref=e518]
+          - listitem [ref=e519]:
+            - link "Instagram" [ref=e520] [cursor=pointer]:
+              - /url: https://www.instagram.com/FrontHQ/
+              - img "Instagram" [ref=e521]
+      - generic [ref=e525]:
+        - generic [ref=e526]:
+          - paragraph [ref=e527]: AI Platform
+          - list [ref=e528]:
+            - listitem [ref=e529]:
+              - link "Front AI Overview" [ref=e530] [cursor=pointer]:
+                - /url: /product/ai
+                - generic [ref=e531]: Front AI Overview
+            - listitem [ref=e532]:
+              - link "Autopilot" [ref=e533] [cursor=pointer]:
+                - /url: /product/autopilot-customer-service-automation
+                - generic [ref=e534]: Autopilot
+            - listitem [ref=e535]:
+              - link "Copilot" [ref=e536] [cursor=pointer]:
+                - /url: /product/copilot-ai-assistant
+                - generic [ref=e537]: Copilot
+            - listitem [ref=e538]:
+              - link "Smart QA" [ref=e539] [cursor=pointer]:
+                - /url: /product/smart-qa-automated-quality-assurance
+                - generic [ref=e540]: Smart QA
+            - listitem [ref=e541]:
+              - link "Smart CSAT" [ref=e542] [cursor=pointer]:
+                - /url: /product/smart-csat-ai-scoring
+                - generic [ref=e543]: Smart CSAT
+        - generic [ref=e544]:
+          - paragraph [ref=e545]: Use Cases
+          - list [ref=e546]:
+            - listitem [ref=e547]:
+              - link "Customer Service" [ref=e548] [cursor=pointer]:
+                - /url: /customer-service
+                - generic [ref=e549]: Customer Service
+            - listitem [ref=e550]:
+              - link "Email Management" [ref=e551] [cursor=pointer]:
+                - /url: /email-management
+                - generic [ref=e552]: Email Management
+            - listitem [ref=e553]:
+              - link "Client Communication" [ref=e554] [cursor=pointer]:
+                - /url: /client-communication
+                - generic [ref=e555]: Client Communication
+        - generic [ref=e556]:
+          - paragraph [ref=e557]: Compare
+          - list [ref=e558]:
+            - listitem [ref=e559]:
+              - link "Front vs. Zendesk" [ref=e560] [cursor=pointer]:
+                - /url: /compare/front-vs-zendesk
+                - generic [ref=e561]: Front vs. Zendesk
+            - listitem [ref=e562]:
+              - link "Front vs. Freshdesk" [ref=e563] [cursor=pointer]:
+                - /url: /compare/front-vs-freshdesk
+                - generic [ref=e564]: Front vs. Freshdesk
+            - listitem [ref=e565]:
+              - link "Front vs. Intercom" [ref=e566] [cursor=pointer]:
+                - /url: /compare/front-vs-intercom
+                - generic [ref=e567]: Front vs. Intercom
+            - listitem [ref=e568]:
+              - link "Front vs. Help Scout" [ref=e569] [cursor=pointer]:
+                - /url: /compare/front-vs-help-scout
+                - generic [ref=e570]: Front vs. Help Scout
+            - listitem [ref=e571]:
+              - link "Front vs. Salesforce" [ref=e572] [cursor=pointer]:
+                - /url: /compare/front-vs-sfdc
+                - generic [ref=e573]: Front vs. Salesforce
+            - listitem [ref=e574]:
+              - link "Front vs. Hiver" [ref=e575] [cursor=pointer]:
+                - /url: /compare/front-vs-hiver
+                - generic [ref=e576]: Front vs. Hiver
+            - listitem [ref=e577]:
+              - link "Front vs. Missive" [ref=e578] [cursor=pointer]:
+                - /url: /compare/front-vs-missive
+                - generic [ref=e579]: Front vs. Missive
+            - listitem [ref=e580]:
+              - link "Front vs. Pylon" [ref=e581] [cursor=pointer]:
+                - /url: /compare/front-vs-pylon
+                - generic [ref=e582]: Front vs. Pylon
+        - generic [ref=e583]:
+          - paragraph [ref=e584]: Company
+          - list [ref=e585]:
+            - listitem [ref=e586]:
+              - link "About" [ref=e587] [cursor=pointer]:
+                - /url: /about
+                - generic [ref=e588]: About
+            - listitem [ref=e589]:
+              - link "Careers" [ref=e590] [cursor=pointer]:
+                - /url: /jobs
+                - generic [ref=e591]: Careers
+            - listitem [ref=e592]:
+              - link "Press Kit" [ref=e593] [cursor=pointer]:
+                - /url: /about#front-media-assets
+                - generic [ref=e594]: Press Kit
+            - listitem [ref=e595]:
+              - link "Real-Time Metrics" [ref=e596] [cursor=pointer]:
+                - /url: /support-report
+                - generic [ref=e597]: Real-Time Metrics
+            - listitem [ref=e598]:
+              - link "Become a Partner" [ref=e599] [cursor=pointer]:
+                - /url: /partners/integration
+                - generic [ref=e600]: Become a Partner
+            - listitem [ref=e601]:
+              - link "Customer Referral" [ref=e602] [cursor=pointer]:
+                - /url: /customer-referral
+                - generic [ref=e603]: Customer Referral
+            - listitem [ref=e604]:
+              - link "Contact Support" [ref=e605] [cursor=pointer]:
+                - /url: https://help.front.com/en/contact-us
+                - generic [ref=e606]: Contact Support
+            - listitem [ref=e607]:
+              - link "Legal" [ref=e608] [cursor=pointer]:
+                - /url: /legal
+                - generic [ref=e609]: Legal
+        - generic [ref=e610]:
+          - paragraph [ref=e611]: More Features
+          - list [ref=e612]:
+            - listitem [ref=e613]:
+              - link "Front Overview" [ref=e614] [cursor=pointer]:
+                - /url: /product
+                - generic [ref=e615]: Front Overview
+            - listitem [ref=e616]:
+              - link "Help Desk" [ref=e617] [cursor=pointer]:
+                - /url: /teams/customer-service-support
+                - generic [ref=e618]: Help Desk
+            - listitem [ref=e619]:
+              - link "Shared Inbox" [ref=e620] [cursor=pointer]:
+                - /url: /product/omnichannel-support-inbox
+                - generic [ref=e621]: Shared Inbox
+            - listitem [ref=e622]:
+              - link "Ticketing" [ref=e623] [cursor=pointer]:
+                - /url: /product/ticketing-system
+                - generic [ref=e624]: Ticketing
+            - listitem [ref=e625]:
+              - link "Knowledge base" [ref=e626] [cursor=pointer]:
+                - /url: /product/knowledge-base
+                - generic [ref=e627]: Knowledge base
+            - listitem [ref=e628]:
+              - link "Live chat" [ref=e629] [cursor=pointer]:
+                - /url: /product/live-chat
+                - generic [ref=e630]: Live chat
+            - listitem [ref=e631]:
+              - link "Integrations" [ref=e632] [cursor=pointer]:
+                - /url: /product/integrations-api
+                - generic [ref=e633]: Integrations
+        - generic [ref=e634]:
+          - paragraph [ref=e635]: Explore
+          - list [ref=e636]:
+            - listitem [ref=e637]:
+              - link "Pricing" [ref=e638] [cursor=pointer]:
+                - /url: /pricing
+                - generic [ref=e639]: Pricing
+            - listitem [ref=e640]:
+              - link "Product Updates" [ref=e641] [cursor=pointer]:
+                - /url: https://community.front.com/product-updates
+                - generic [ref=e642]: Product Updates
+            - listitem [ref=e643]:
+              - link "Download App" [ref=e644] [cursor=pointer]:
+                - /url: /download
+                - generic [ref=e645]: Download App
+        - generic [ref=e646]:
+          - paragraph [ref=e647]: Resources
+          - list [ref=e648]:
+            - listitem [ref=e649]:
+              - link "Blog" [ref=e650] [cursor=pointer]:
+                - /url: /blog
+                - generic [ref=e651]: Blog
+            - listitem [ref=e652]:
+              - link "Customer Stories" [ref=e653] [cursor=pointer]:
+                - /url: /customer-stories
+                - generic [ref=e654]: Customer Stories
+            - listitem [ref=e655]:
+              - link "The Coordination Tax" [ref=e656] [cursor=pointer]:
+                - /url: https://research.front.com
+                - generic [ref=e657]: The Coordination Tax
+            - listitem [ref=e658]:
+              - link "Help" [ref=e659] [cursor=pointer]:
+                - /url: https://help.front.com/
+                - generic [ref=e660]: Help
+            - listitem [ref=e661]:
+              - link "Academy" [ref=e662] [cursor=pointer]:
+                - /url: https://academy.front.com/app
+                - generic [ref=e663]: Academy
+            - listitem [ref=e664]:
+              - link "Developers" [ref=e665] [cursor=pointer]:
+                - /url: https://dev.frontapp.com/docs/welcome
+                - generic [ref=e666]: Developers
+            - listitem [ref=e667]:
+              - link "API" [ref=e668] [cursor=pointer]:
+                - /url: /product/integrations-api
+                - generic [ref=e669]: API
+    - generic [ref=e671]:
+      - generic [ref=e673]:
+        - paragraph [ref=e675]: Additional Resources
+        - generic [ref=e677]:
+          - generic [ref=e678]:
+            - paragraph [ref=e679]: Customer Support and Service
+            - list [ref=e680]:
+              - listitem [ref=e681]:
+                - link "The State of Service Expectations" [ref=e682] [cursor=pointer]:
+                  - /url: /resources/state-of-service-expectations
+              - listitem [ref=e683]:
+                - link "Customer Support Metrics Library" [ref=e684] [cursor=pointer]:
+                  - /url: /guides/top-customer-service-metrics
+              - listitem [ref=e685]:
+                - link "Guide to 100% CSAT" [ref=e686] [cursor=pointer]:
+                  - /url: /blog/improve-csat
+          - generic [ref=e687]:
+            - paragraph [ref=e688]: AI and Automation
+            - list [ref=e689]:
+              - listitem [ref=e690]:
+                - link "Boost Agent Support Productivity" [ref=e691] [cursor=pointer]:
+                  - /url: /blog/customer-service-automation-ai
+              - listitem [ref=e692]:
+                - link "Front's New AI Capabilities" [ref=e693] [cursor=pointer]:
+                  - /url: /blog/customer-service-agent-assistance-ai
+              - listitem [ref=e694]:
+                - link "AI vs. Human Support Strategy" [ref=e695] [cursor=pointer]:
+                  - /url: /resources/ai-vs-human-why-you-dont-have-to-choose
+          - generic [ref=e696]:
+            - paragraph [ref=e697]: Knowledge Base
+            - list [ref=e698]:
+              - listitem [ref=e699]:
+                - link "5 Best Practices for Self-Service Support" [ref=e700] [cursor=pointer]:
+                  - /url: /resources/how-to-scale-delightful-customer-experiences-with-self-service-support
+              - listitem [ref=e701]:
+                - link "Create AI-Friendly Help Center Articles" [ref=e702] [cursor=pointer]:
+                  - /url: /resources/creating-ai-friendly-help-center-articles
+              - listitem [ref=e703]:
+                - link "Top Tips for Knowledge Base Articles" [ref=e704] [cursor=pointer]:
+                  - /url: /blog/how-to-write-knowledge-base-articles
+          - generic [ref=e705]:
+            - paragraph [ref=e706]: More
+            - list [ref=e707]:
+              - listitem [ref=e708]:
+                - link "Support Message Templates" [ref=e709] [cursor=pointer]:
+                  - /url: /resources/5-tried-and-true-message-templates-to-improve-your-support-teams-csat
+              - listitem [ref=e710]:
+                - link "Shared Inbox Management Tips" [ref=e711] [cursor=pointer]:
+                  - /url: /guides/shared-inbox-management
+      - generic [ref=e713]:
+        - paragraph [ref=e715]: 2026 FrontApp, Inc. All Rights Reserved.
+        - list [ref=e717]:
+          - listitem [ref=e718]:
+            - link "SaaS Service Agreement" [ref=e719] [cursor=pointer]:
+              - /url: /legal/saas-services-agreement
+          - listitem [ref=e720]:
+            - link "Privacy Notice" [ref=e721] [cursor=pointer]:
+              - /url: /legal/privacy-notice
+          - listitem [ref=e722]:
+            - link "Cookie Policy" [ref=e723] [cursor=pointer]:
+              - /url: /legal/cookie-policy
+          - listitem [ref=e724]:
+            - link "Google User Data Privacy Notice" [ref=e725] [cursor=pointer]:
+              - /url: /legal/front-products-and-services-privacy-notice#google_user_data_privacy_notice
+          - listitem [ref=e726]:
+            - link "Status" [ref=e727] [cursor=pointer]:
+              - /url: https://www.frontstatus.com/
+          - listitem [ref=e728]:
+            - generic [ref=e729]:
+              - text: Your Privacy Choices
+              - img [ref=e730]

@@ -1,0 +1,101 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e3]:
+    - generic [ref=e4]: ללא ליד — מצב standalone
+    - generic [ref=e6]:
+      - generic [ref=e7]:
+        - generic [ref=e8]: חישוב חי
+        - generic [ref=e11]:
+          - generic [ref=e12]: — New quote
+          - heading "הצעת מחיר — מתאים לקוסמטיקה, תכשיטים, אקססוריז." [level=1] [ref=e13]:
+            - text: הצעת מחיר
+            - generic [ref=e14]: — מתאים לקוסמטיקה, תכשיטים, אקססוריז.
+        - generic [ref=e15]:
+          - button "מחשבון" [ref=e16]
+          - button "מחשבון משוער ✨" [ref=e17]
+      - generic [ref=e18]:
+        - generic [ref=e19]: הזן מידות וכמות → המערכת תחזה את המחיר לפי המחירונים האמיתיים של המפעלים (80g, עד 10,000 יח׳), תבחר את המפעל הזול שמייצר, ותראה את ההיגיון. מחוץ לטווח → "שלח למפעל".
+        - generic [ref=e20]:
+          - generic [ref=e21]:
+            - generic [ref=e22]:
+              - generic: I
+              - generic [ref=e23]:
+                - generic [ref=e24]: I
+                - generic [ref=e25]: מוצר
+              - generic [ref=e27]:
+                - generic [ref=e28]:
+                  - generic [ref=e29]: גובה H (ס״מ)
+                  - spinbutton "30" [ref=e30]: "40"
+                - generic [ref=e31]:
+                  - generic [ref=e32]: עומק D (ס״מ)
+                  - spinbutton "10" [ref=e33]: "15"
+                - generic [ref=e34]:
+                  - generic [ref=e35]: רוחב W (ס״מ)
+                  - spinbutton "40" [ref=e36]: "30"
+            - generic [ref=e37]:
+              - generic: II
+              - generic [ref=e38]:
+                - generic [ref=e39]: II
+                - generic [ref=e40]: כמות ומשלוח
+              - generic [ref=e41]:
+                - generic [ref=e42]:
+                  - generic [ref=e43]: כמות
+                  - generic [ref=e44]:
+                    - button "3,000" [ref=e45] [cursor=pointer]
+                    - button "5,000" [ref=e46] [cursor=pointer]
+                    - button "10,000" [ref=e47] [cursor=pointer]
+                - generic [ref=e48]:
+                  - generic [ref=e49]: שיטת שילוח
+                  - generic [ref=e50]:
+                    - button "אקספרס אספקה תוך ~25 יום" [ref=e51] [cursor=pointer]:
+                      - generic [ref=e55]:
+                        - generic [ref=e56]: אקספרס
+                        - generic [ref=e57]: אספקה תוך ~25 יום
+                    - button "רגיל אספקה תוך ~90 יום" [ref=e58] [cursor=pointer]:
+                      - generic [ref=e64]:
+                        - generic [ref=e65]: רגיל
+                        - generic [ref=e66]: אספקה תוך ~90 יום
+            - generic [ref=e69]:
+              - generic: III
+              - generic [ref=e70]:
+                - generic [ref=e71]: III
+                - generic [ref=e72]: תוספות
+              - generic [ref=e73]:
+                - generic [ref=e74]:
+                  - generic [ref=e75]: צבעי לוגו
+                  - combobox [ref=e76]:
+                    - option "1 צבע"
+                    - option "2 צבעים"
+                    - option "3 צבעים"
+                    - option "4 צבעים" [selected]
+                    - option "5 צבעים"
+                    - option "6 צבעים"
+                    - option "7 צבעים"
+                    - option "8 צבעים"
+                - generic [ref=e77]:
+                  - generic [ref=e78] [cursor=pointer]:
+                    - switch "ידיות" [ref=e79]
+                    - generic [ref=e80]: ידיות
+                  - generic [ref=e81] [cursor=pointer]:
+                    - switch "למינציה" [checked] [ref=e82]
+                    - generic [ref=e83]: למינציה
+                - generic [ref=e84]:
+                  - generic [ref=e85]: מולדים / תבניות (¥ CNY) — חד פעמי
+                  - spinbutton "למשל 2000" [ref=e86]
+                  - generic [ref=e87]: ריק → רק הגלופה האוטומטית מהקטלוג (אם יש למינציה)
+            - generic [ref=e88]:
+              - generic: IV
+              - generic [ref=e89]:
+                - generic [ref=e90]: IV
+                - generic [ref=e91]: תמחור
+              - generic [ref=e93]:
+                - generic [ref=e94]:
+                  - generic [ref=e95]: "% רווח יעד (override)"
+                  - 'spinbutton "ברירת מחדל: 40%" [ref=e96]'
+                  - generic [ref=e97]: ריק → לפי הגדרות מערכת
+                - generic [ref=e98]:
+                  - generic [ref=e99]: רווח מינימלי ₪ (אזהרה)
+                  - spinbutton "למשל 1000" [ref=e100]
+                  - generic [ref=e101]: ריק → ללא בדיקה
+          - generic [ref=e102]: מחשב…
+  - button "Open Next.js Dev Tools" [ref=e111] [cursor=pointer]
+  - alert [ref=e115]

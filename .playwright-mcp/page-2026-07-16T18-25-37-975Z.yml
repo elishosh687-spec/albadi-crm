@@ -1,0 +1,380 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e3]:
+    - generic [ref=e4]:
+      - generic [ref=e5]:
+        - generic [ref=e6]: — Lead analysis
+        - generic [ref=e7]: למה לידים לא נסגרים.
+        - generic [ref=e10]:
+          - generic [ref=e11]: מה חוסם, מה מתנגד, ומי לא חזר אחרי פולואפ — מבוסס נתוחי ליד.
+          - button "מה זה עושה" [ref=e12] [cursor=pointer]: i
+      - button "✏️ ערוך פליז" [ref=e14] [cursor=pointer]
+    - generic [ref=e15]:
+      - generic [ref=e16]:
+        - generic [ref=e19]:
+          - generic [ref=e20]: יישור הלידים.
+          - button "מה זה עושה" [ref=e21] [cursor=pointer]: i
+        - generic [ref=e22]: — Pipeline audit
+      - generic [ref=e23]:
+        - generic [ref=e24]:
+          - generic [ref=e25]: בודקים שאף ליד לא נשכח, ושהשלבים בפייפליין מסונכרנים עם מה שהניתוח מוצא בשיחות ובהתכתבויות של הליד.
+          - button "רענן" [ref=e76] [cursor=pointer]
+        - generic [ref=e77]:
+          - generic [ref=e78]:
+            - generic [ref=e79]: "1"
+            - generic [ref=e80]: בלי משימה
+          - generic [ref=e81]:
+            - generic [ref=e82]: "18"
+            - generic [ref=e83]: שלב לא תואם
+          - generic [ref=e84]:
+            - generic [ref=e85]: "3.0"
+            - generic [ref=e86]: מחויבות ממוצעת
+          - generic [ref=e87]:
+            - generic [ref=e88]: "0"
+            - generic [ref=e89]: נדחו
+        - generic [ref=e27]:
+          - generic [ref=e90]:
+            - button "▾ נפלו בין הכיסאות 1 מה זה עושה" [ref=e91] [cursor=pointer]:
+              - generic [ref=e92]: ▾
+              - generic [ref=e93]: נפלו בין הכיסאות
+              - generic [ref=e94]: "1"
+              - button "מה זה עושה" [ref=e95]: i
+            - generic [ref=e96]: לידים בשלב פעיל שאין להם שום משימה פתוחה — פתח בווידג'ט והוסף משימה ב-GHL.
+            - generic [ref=e99]:
+              - generic [ref=e100]:
+                - generic [ref=e101]: שוקל / משא ומתן
+                - generic [ref=e102]: "1"
+              - generic [ref=e104]:
+                - generic [ref=e105]: עידן
+                - generic [ref=e106]:
+                  - generic [ref=e107]: נכנס 01/07
+                  - generic [ref=e108]: קשר אחרון 08/07 · לפני 8 ימים
+                - button "+ צור משימה למכירות" [ref=e109] [cursor=pointer]
+          - generic [ref=e110]:
+            - button "▾ שוקל / משא ומתן 4 מה זה עושה" [ref=e111] [cursor=pointer]:
+              - generic [ref=e112]: ▾
+              - generic [ref=e113]: שוקל / משא ומתן
+              - generic [ref=e114]: "4"
+              - button "מה זה עושה" [ref=e115]: i
+            - generic [ref=e116]: PDF רשמי ביד הלקוח — שוקל / מתמקח
+            - generic [ref=e117]:
+              - generic [ref=e118]:
+                - generic [ref=e120]:
+                  - button "▸ מור Edri 3/5" [ref=e121] [cursor=pointer]:
+                    - generic [ref=e122]: ▸
+                    - generic [ref=e123]: מור Edri
+                    - generic "ציון מחויבות מתוך הניתוח" [ref=e124]: 3/5
+                  - generic [ref=e125]:
+                    - generic [ref=e126]: מ־
+                    - generic [ref=e127]: מחכה למפעל
+                    - generic [ref=e128]: ←
+                    - generic [ref=e129]: ל־
+                    - generic [ref=e130]: שוקל / משא ומתן
+                  - generic [ref=e131]:
+                    - button "✓ אשר" [ref=e132] [cursor=pointer]
+                    - button "✗ דחה" [ref=e133] [cursor=pointer]
+                  - generic [ref=e134]:
+                    - generic [ref=e135]: או ל־
+                    - combobox [ref=e136] [cursor=pointer]:
+                      - option "קליטה"
+                      - option "אפיון"
+                      - option "מחכה למפעל"
+                      - option "שוקל / משא ומתן" [selected]
+                      - option "נסגר"
+                      - option "אבוד"
+                      - option "להתקשר בעתיד"
+                      - option "לא ענו"
+                    - button "→ העבר" [ref=e137] [cursor=pointer]
+                    - button "פרטים" [ref=e138] [cursor=pointer]
+                - generic [ref=e140]:
+                  - button "▸ יוסף אמון 3/5" [ref=e141] [cursor=pointer]:
+                    - generic [ref=e142]: ▸
+                    - generic [ref=e143]: יוסף אמון
+                    - generic "ציון מחויבות מתוך הניתוח" [ref=e144]: 3/5
+                  - generic [ref=e145]:
+                    - generic [ref=e146]: מ־
+                    - generic [ref=e147]: קליטה
+                    - generic [ref=e148]: ←
+                    - generic [ref=e149]: ל־
+                    - generic [ref=e150]: שוקל / משא ומתן
+                  - generic [ref=e151]:
+                    - button "✓ אשר" [ref=e152] [cursor=pointer]
+                    - button "✗ דחה" [ref=e153] [cursor=pointer]
+                  - generic [ref=e154]:
+                    - generic [ref=e155]: או ל־
+                    - combobox [ref=e156] [cursor=pointer]:
+                      - option "קליטה"
+                      - option "אפיון"
+                      - option "מחכה למפעל"
+                      - option "שוקל / משא ומתן" [selected]
+                      - option "נסגר"
+                      - option "אבוד"
+                      - option "להתקשר בעתיד"
+                      - option "לא ענו"
+                    - button "→ העבר" [ref=e157] [cursor=pointer]
+                    - button "פרטים" [ref=e158] [cursor=pointer]
+                - generic [ref=e160]:
+                  - button "▸ אלירן 3/5" [ref=e161] [cursor=pointer]:
+                    - generic [ref=e162]: ▸
+                    - generic [ref=e163]: אלירן
+                    - generic "ציון מחויבות מתוך הניתוח" [ref=e164]: 3/5
+                  - generic [ref=e165]:
+                    - generic [ref=e166]: מ־
+                    - generic [ref=e167]: קליטה
+                    - generic [ref=e168]: ←
+                    - generic [ref=e169]: ל־
+                    - generic [ref=e170]: שוקל / משא ומתן
+                  - generic [ref=e171]:
+                    - button "✓ אשר" [ref=e172] [cursor=pointer]
+                    - button "✗ דחה" [ref=e173] [cursor=pointer]
+                  - generic [ref=e174]:
+                    - generic [ref=e175]: או ל־
+                    - combobox [ref=e176] [cursor=pointer]:
+                      - option "קליטה"
+                      - option "אפיון"
+                      - option "מחכה למפעל"
+                      - option "שוקל / משא ומתן" [selected]
+                      - option "נסגר"
+                      - option "אבוד"
+                      - option "להתקשר בעתיד"
+                      - option "לא ענו"
+                    - button "→ העבר" [ref=e177] [cursor=pointer]
+                    - button "פרטים" [ref=e178] [cursor=pointer]
+                - generic [ref=e180]:
+                  - button "▸ יעקב חרמון 3/5" [ref=e181] [cursor=pointer]:
+                    - generic [ref=e182]: ▸
+                    - generic [ref=e183]: יעקב חרמון
+                    - generic "ציון מחויבות מתוך הניתוח" [ref=e184]: 3/5
+                  - generic [ref=e185]:
+                    - generic [ref=e186]: מ־
+                    - generic [ref=e187]: קליטה
+                    - generic [ref=e188]: ←
+                    - generic [ref=e189]: ל־
+                    - generic [ref=e190]: שוקל / משא ומתן
+                  - generic [ref=e191]:
+                    - button "✓ אשר" [ref=e192] [cursor=pointer]
+                    - button "✗ דחה" [ref=e193] [cursor=pointer]
+                  - generic [ref=e194]:
+                    - generic [ref=e195]: או ל־
+                    - combobox [ref=e196] [cursor=pointer]:
+                      - option "קליטה"
+                      - option "אפיון"
+                      - option "מחכה למפעל"
+                      - option "שוקל / משא ומתן" [selected]
+                      - option "נסגר"
+                      - option "אבוד"
+                      - option "להתקשר בעתיד"
+                      - option "לא ענו"
+                    - button "→ העבר" [ref=e197] [cursor=pointer]
+                    - button "פרטים" [ref=e198] [cursor=pointer]
+              - button "✓ אשר את כל 4 הלידים" [ref=e200] [cursor=pointer]
+          - generic [ref=e201]:
+            - button "▸ מחכה למפעל 5 מה זה עושה" [ref=e202] [cursor=pointer]:
+              - generic [ref=e203]: ▸
+              - generic [ref=e204]: מחכה למפעל
+              - generic [ref=e205]: "5"
+              - button "מה זה עושה" [ref=e206]: i
+            - generic [ref=e207]: נשלחה בקשה למפעל, מחכים למחיר
+          - generic [ref=e208]:
+            - button "▸ אפיון 9 מה זה עושה" [ref=e209] [cursor=pointer]:
+              - generic [ref=e210]: ▸
+              - generic [ref=e211]: אפיון
+              - generic [ref=e212]: "9"
+              - button "מה זה עושה" [ref=e213]: i
+            - generic [ref=e214]: היה קשר של ממש עם איש המכירות (שיחה/התכתבות)
+    - generic [ref=e28]:
+      - generic [ref=e29]:
+        - generic [ref=e32]:
+          - generic [ref=e33]: פערי טופס.
+          - button "מה זה עושה" [ref=e34] [cursor=pointer]: i
+        - generic [ref=e35]: — Form gaps
+      - generic [ref=e36]:
+        - generic [ref=e37]:
+          - generic [ref=e38]: מי מילא את טופס הפייסבוק ולא נמצא ב-CRM. בדיקה אמיתית מול הטלפון — לא רק לפי הסימון בגיליון.
+          - button "רענן" [ref=e215] [cursor=pointer]
+        - generic [ref=e216]:
+          - generic [ref=e217]:
+            - generic [ref=e218]: "1"
+            - generic [ref=e219]: לא נכנסו למערכת
+          - generic [ref=e220]:
+            - generic [ref=e221]: "75"
+            - generic [ref=e222]: במערכת ✓
+          - generic [ref=e223]:
+            - generic [ref=e224]: "76"
+            - generic [ref=e225]: נבדקו בטופס
+        - generic [ref=e227]:
+          - generic [ref=e228]:
+            - generic [ref=e229]: אופק סמדר
+            - generic [ref=e230]: p:+972509147833
+          - generic [ref=e231]:
+            - generic [ref=e232]: מסומן נשלח — אך חסר במערכת ⚠️
+            - link "שורה בטופס ↗" [ref=e233] [cursor=pointer]:
+              - /url: https://docs.google.com/spreadsheets/d/1AnswoeBAFV-z4aN3KhqyJjb9DegyiDNH-0FcB8ry518/edit#gid=0&range=A21
+    - generic [ref=e40]:
+      - generic [ref=e42]:
+        - generic [ref=e43]: שלב
+        - button "מה זה עושה" [ref=e44] [cursor=pointer]: i
+      - generic [ref=e45]:
+        - button "בשאלון" [ref=e46] [cursor=pointer]
+        - button "קליטה" [ref=e47] [cursor=pointer]
+        - button "אפיון" [ref=e48] [cursor=pointer]
+        - button "מחכה למפעל" [ref=e49] [cursor=pointer]
+        - button "שוקל / משא ומתן" [ref=e50] [cursor=pointer]
+        - button "נסגר" [ref=e51] [cursor=pointer]
+        - button "אבוד" [ref=e52] [cursor=pointer]
+        - button "להתקשר בעתיד" [ref=e53] [cursor=pointer]
+        - button "לא ענו" [ref=e54] [cursor=pointer]
+      - generic [ref=e55]:
+        - generic [ref=e56]:
+          - text: נוצר מ־
+          - textbox "נוצר מ־" [ref=e57]
+        - generic [ref=e58]:
+          - text: עד
+          - textbox "עד" [ref=e59]
+        - generic [ref=e60]:
+          - text: באצ'
+          - combobox "באצ'" [ref=e61]:
+            - option "10"
+            - option "20" [selected]
+            - option "40"
+        - generic [ref=e62]:
+          - checkbox "רק עם שיחות" [ref=e63]
+          - text: רק עם שיחות
+      - generic [ref=e64]:
+        - button "החל סינון" [ref=e234] [cursor=pointer]
+        - button "נתח 20 מתוך 56" [ref=e235] [cursor=pointer]
+    - generic [ref=e67]:
+      - generic [ref=e69]:
+        - generic [ref=e70]:
+          - generic [ref=e71]: נותחו 135 מתוך 191 בסינון
+          - generic [ref=e72]: 71%
+        - button "מה זה עושה" [ref=e73] [cursor=pointer]: i
+      - button "המשך לנתח עוד 20" [ref=e237] [cursor=pointer]
+    - generic [ref=e238]:
+      - generic [ref=e239]:
+        - generic [ref=e240]:
+          - generic [ref=e241]: נותחו
+          - generic [ref=e242]: "110"
+        - generic [ref=e243]:
+          - generic [ref=e244]: מחויבות ממוצעת
+          - generic [ref=e245]: 3/5
+        - generic [ref=e246]:
+          - generic [ref=e247]: נשירת פולואפ
+          - generic [ref=e248]: "15"
+        - generic [ref=e249]:
+          - generic [ref=e250]: ללא מספיק דאטה
+          - generic [ref=e251]: "25"
+      - generic [ref=e252]:
+        - generic [ref=e253]:
+          - generic [ref=e256]:
+            - generic [ref=e257]: חסם מרכזי
+            - button "מה זה עושה" [ref=e258] [cursor=pointer]: i
+          - generic [ref=e259]:
+            - button "▸ נפילת מעקב 29 · 26%" [ref=e261] [cursor=pointer]:
+              - generic [ref=e262]: ▸
+              - generic [ref=e263]: נפילת מעקב
+              - generic [ref=e264]: 29 · 26%
+            - button "▸ מחיר 26 · 24%" [ref=e268] [cursor=pointer]:
+              - generic [ref=e269]: ▸
+              - generic [ref=e270]: מחיר
+              - generic [ref=e271]: 26 · 24%
+            - button "▸ מוצר לא מתאים 16 · 15%" [ref=e275] [cursor=pointer]:
+              - generic [ref=e276]: ▸
+              - generic [ref=e277]: מוצר לא מתאים
+              - generic [ref=e278]: 16 · 15%
+            - button "▸ מפרט פתוח 11 · 10%" [ref=e282] [cursor=pointer]:
+              - generic [ref=e283]: ▸
+              - generic [ref=e284]: מפרט פתוח
+              - generic [ref=e285]: 11 · 10%
+            - button "▸ אחר 10 · 9%" [ref=e289] [cursor=pointer]:
+              - generic [ref=e290]: ▸
+              - generic [ref=e291]: אחר
+              - generic [ref=e292]: 10 · 9%
+            - button "▸ דוגמה/אמון 8 · 7%" [ref=e296] [cursor=pointer]:
+              - generic [ref=e297]: ▸
+              - generic [ref=e298]: דוגמה/אמון
+              - generic [ref=e299]: 8 · 7%
+            - button "▸ כמות מינימום 6 · 5%" [ref=e303] [cursor=pointer]:
+              - generic [ref=e304]: ▸
+              - generic [ref=e305]: כמות מינימום
+              - generic [ref=e306]: 6 · 5%
+            - button "▸ ליד לא רלוונטי 2 · 2%" [ref=e310] [cursor=pointer]:
+              - generic [ref=e311]: ▸
+              - generic [ref=e312]: ליד לא רלוונטי
+              - generic [ref=e313]: 2 · 2%
+            - button "▸ תנאי תשלום 2 · 2%" [ref=e317] [cursor=pointer]:
+              - generic [ref=e318]: ▸
+              - generic [ref=e319]: תנאי תשלום
+              - generic [ref=e320]: 2 · 2%
+        - generic [ref=e323]:
+          - generic [ref=e324]:
+            - generic [ref=e327]:
+              - generic [ref=e328]: התנגדויות
+              - button "מה זה עושה" [ref=e329] [cursor=pointer]: i
+            - generic [ref=e330]:
+              - button "▸ לא התנגדות — אנחנו נפלנו 22 · 20%" [ref=e332] [cursor=pointer]:
+                - generic [ref=e333]: ▸
+                - generic [ref=e334]: לא התנגדות — אנחנו נפלנו
+                - generic [ref=e335]: 22 · 20%
+              - button "▸ יקר (כללי) 20 · 18%" [ref=e339] [cursor=pointer]:
+                - generic [ref=e340]: ▸
+                - generic [ref=e341]: יקר (כללי)
+                - generic [ref=e342]: 20 · 18%
+              - button "▸ השוואה ליבוא ישיר מסין 18 · 16%" [ref=e346] [cursor=pointer]:
+                - generic [ref=e347]: ▸
+                - generic [ref=e348]: השוואה ליבוא ישיר מסין
+                - generic [ref=e349]: 18 · 16%
+              - button "▸ מוצר לא מתאים (ניילון/קרטון/קופסאות) 15 · 14%" [ref=e353] [cursor=pointer]:
+                - generic [ref=e354]: ▸
+                - generic [ref=e355]: מוצר לא מתאים (ניילון/קרטון/קופסאות)
+                - generic [ref=e356]: 15 · 14%
+              - button "▸ אחר 13 · 12%" [ref=e360] [cursor=pointer]:
+                - generic [ref=e361]: ▸
+                - generic [ref=e362]: אחר
+                - generic [ref=e363]: 13 · 12%
+              - button "▸ רוצה לראות דוגמה / לא מכיר אתכם 10 · 9%" [ref=e367] [cursor=pointer]:
+                - generic [ref=e368]: ▸
+                - generic [ref=e369]: רוצה לראות דוגמה / לא מכיר אתכם
+                - generic [ref=e370]: 10 · 9%
+              - button "▸ כמות מינימום גבוהה מדי 8 · 7%" [ref=e374] [cursor=pointer]:
+                - generic [ref=e375]: ▸
+                - generic [ref=e376]: כמות מינימום גבוהה מדי
+                - generic [ref=e377]: 8 · 7%
+              - button "▸ לא עכשיו 8 · 7%" [ref=e381] [cursor=pointer]:
+                - generic [ref=e382]: ▸
+                - generic [ref=e383]: לא עכשיו
+                - generic [ref=e384]: 8 · 7%
+              - button "▸ השוואה לשקית לא-ממותגת 4 · 4%" [ref=e388] [cursor=pointer]:
+                - generic [ref=e389]: ▸
+                - generic [ref=e390]: השוואה לשקית לא-ממותגת
+                - generic [ref=e391]: 4 · 4%
+              - button "▸ כבר עובד עם מישהו 3 · 3%" [ref=e395] [cursor=pointer]:
+                - generic [ref=e396]: ▸
+                - generic [ref=e397]: כבר עובד עם מישהו
+                - generic [ref=e398]: 3 · 3%
+              - button "▸ חומר אלבד 'חלש' / לא אוהב 3 · 3%" [ref=e402] [cursor=pointer]:
+                - generic [ref=e403]: ▸
+                - generic [ref=e404]: חומר אלבד 'חלש' / לא אוהב
+                - generic [ref=e405]: 3 · 3%
+              - button "▸ תנאי תשלום 2 · 2%" [ref=e409] [cursor=pointer]:
+                - generic [ref=e410]: ▸
+                - generic [ref=e411]: תנאי תשלום
+                - generic [ref=e412]: 2 · 2%
+              - button "▸ כבר שילם גלופה 2 · 2%" [ref=e416] [cursor=pointer]:
+                - generic [ref=e417]: ▸
+                - generic [ref=e418]: כבר שילם גלופה
+                - generic [ref=e419]: 2 · 2%
+          - generic [ref=e422]:
+            - generic [ref=e425]:
+              - generic [ref=e426]: מעקב ובקשות לראות מוצר
+              - button "מה זה עושה" [ref=e427] [cursor=pointer]: i
+            - generic [ref=e428]:
+              - button "▸ נפלנו — לקוח כתב אחרון, 3+ ימים ללא מענה 15 · 14%" [ref=e430] [cursor=pointer]:
+                - generic [ref=e431]: ▸
+                - generic [ref=e432]: נפלנו — לקוח כתב אחרון, 3+ ימים ללא מענה
+                - generic [ref=e433]: 15 · 14%
+              - button "▸ ביקשו לראות מוצר (לטפל בהוכחה ויזואלית) 12 · 11%" [ref=e437] [cursor=pointer]:
+                - generic [ref=e438]: ▸
+                - generic [ref=e439]: ביקשו לראות מוצר (לטפל בהוכחה ויזואלית)
+                - generic [ref=e440]: 12 · 11%
+  - button "Open Next.js Dev Tools" [ref=e448] [cursor=pointer]
+  - alert [ref=e75]

@@ -1,0 +1,69 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e3]:
+    - generic [ref=e4]:
+      - generic [ref=e5]:
+        - generic [ref=e6]: — Lead analysis
+        - generic [ref=e7]: למה לידים לא נסגרים.
+        - generic [ref=e10]:
+          - generic [ref=e11]: מה חוסם, מה מתנגד, ומי לא חזר אחרי פולואפ — מבוסס נתוחי ליד.
+          - button "מה זה עושה" [ref=e12] [cursor=pointer]: i
+      - button "✏️ ערוך פליז" [ref=e14] [cursor=pointer]
+    - generic [ref=e15]:
+      - generic [ref=e16]:
+        - generic [ref=e19]:
+          - generic [ref=e20]: יישור הלידים.
+          - button "מה זה עושה" [ref=e21] [cursor=pointer]: i
+        - generic [ref=e22]: — Pipeline audit
+      - generic [ref=e23]:
+        - generic [ref=e24]:
+          - generic [ref=e25]: בודקים שאף ליד לא נשכח, ושהשלבים בפייפליין מסונכרנים עם מה שהניתוח מוצא בשיחות ובהתכתבויות של הליד.
+          - button "בודק…" [disabled] [ref=e26]
+        - generic [ref=e27]: לחץ "בדיקת יישור" למעלה כדי לנתח את המצב.
+    - generic [ref=e28]:
+      - generic [ref=e29]:
+        - generic [ref=e32]:
+          - generic [ref=e33]: פערי טופס.
+          - button "מה זה עושה" [ref=e34] [cursor=pointer]: i
+        - generic [ref=e35]: — Form gaps
+      - generic [ref=e37]:
+        - generic [ref=e38]: מי מילא את טופס הפייסבוק ולא נמצא ב-CRM. בדיקה אמיתית מול הטלפון — לא רק לפי הסימון בגיליון.
+        - button "בודק…" [disabled] [ref=e39]
+    - generic [ref=e40]:
+      - generic [ref=e42]:
+        - generic [ref=e43]: שלב
+        - button "מה זה עושה" [ref=e44] [cursor=pointer]: i
+      - generic [ref=e45]:
+        - button "בשאלון" [ref=e46] [cursor=pointer]
+        - button "קליטה" [ref=e47] [cursor=pointer]
+        - button "אפיון" [ref=e48] [cursor=pointer]
+        - button "מחכה למפעל" [ref=e49] [cursor=pointer]
+        - button "שוקל / משא ומתן" [ref=e50] [cursor=pointer]
+        - button "נסגר" [ref=e51] [cursor=pointer]
+        - button "אבוד" [ref=e52] [cursor=pointer]
+        - button "להתקשר בעתיד" [ref=e53] [cursor=pointer]
+        - button "לא ענו" [ref=e54] [cursor=pointer]
+      - generic [ref=e55]:
+        - generic [ref=e56]:
+          - text: נוצר מ־
+          - textbox "נוצר מ־" [ref=e57]
+        - generic [ref=e58]:
+          - text: עד
+          - textbox "עד" [ref=e59]
+        - generic [ref=e60]:
+          - text: באצ'
+          - combobox "באצ'" [ref=e61]:
+            - option "10"
+            - option "20" [selected]
+            - option "40"
+        - generic [ref=e62]:
+          - checkbox "רק עם שיחות" [ref=e63]
+          - text: רק עם שיחות
+      - generic [ref=e64]:
+        - button "טוען…" [disabled] [ref=e65] [cursor=pointer]
+        - button "הכל נותח ✓" [disabled] [ref=e66] [cursor=pointer]
+    - generic [ref=e69]:
+      - generic [ref=e70]:
+        - generic [ref=e71]: נותחו 0 מתוך 0 בסינון
+        - generic [ref=e72]: 0%
+      - button "מה זה עושה" [ref=e73] [cursor=pointer]: i
+  - alert [ref=e75]

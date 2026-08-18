@@ -1,0 +1,13 @@
+- generic [active] [ref=f5e1]:
+  - generic [ref=f5e3]:
+    - generic [ref=f5e5]:
+      - generic [ref=f5e6]: — Factory quotes
+      - generic [ref=f5e7]: הצעות מהמפעל.
+      - generic [ref=f5e8]: חפש לקוח כדי לפתוח או לשלוח הצעה חדשה למפעל.
+    - textbox "חפש לפי שם / טלפון / sid" [ref=f5e14]
+    - generic [ref=f5e15]: בחר ליד מהרשימה למעלה כדי להתחיל זרימת הצעת מפעל.
+    - generic [ref=f5e19]:
+      - generic [ref=f5e20]: היסטוריית הצעות מפעל
+      - generic [ref=f5e21]: טוען...
+  - button "Open Next.js Dev Tools" [ref=f5e29] [cursor=pointer]
+  - alert [ref=f5e33]

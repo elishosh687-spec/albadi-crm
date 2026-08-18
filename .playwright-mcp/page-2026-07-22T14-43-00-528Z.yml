@@ -1,0 +1,68 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e3]:
+    - generic [ref=e5]:
+      - generic [ref=e6]: — Sales → Factory
+      - generic [ref=e7]: בקשת הצעת מחיר.
+      - generic [ref=e8]: בחר לקוח, מלא את הפרטים ושלח. אלי יקבל התראה, יבדוק ויעביר למפעל בעצמו.
+    - generic [ref=e9]:
+      - generic: I
+      - generic [ref=e10]: בחירת לקוח
+      - textbox "חפש לפי שם / טלפון" [ref=e18]
+    - generic [ref=e19]:
+      - generic: II
+      - generic [ref=e20]: פרטי המוצר
+      - generic [ref=e23]:
+        - generic [ref=e24]:
+          - generic [ref=e25]: תיאור המוצר
+          - textbox "תיאור המוצר" [ref=e26]:
+            - /placeholder: "למשל: שקיות מתנה לאירוע"
+            - text: שקית אלבדי
+        - generic [ref=e27]:
+          - generic [ref=e28]: חומר
+          - textbox "חומר" [ref=e29]:
+            - /placeholder: 80g non-woven
+            - text: 80g non-woven
+        - generic [ref=e30]:
+          - generic [ref=e31]: מידות (cm)
+          - generic [ref=e32]:
+            - generic [ref=e33]:
+              - generic [ref=e34]: W (רוחב)
+              - spinbutton "W (רוחב)" [ref=e35]
+            - generic [ref=e36]:
+              - generic [ref=e37]: H (גובה)
+              - spinbutton "H (גובה)" [ref=e38]
+            - generic [ref=e39]:
+              - generic [ref=e40]: D (עומק)
+              - spinbutton "D (עומק)" [ref=e41]
+          - generic [ref=e42]:
+            - generic [ref=e43]: "או הדבק:"
+            - textbox "H20*D8*W25" [ref=e44]
+        - generic [ref=e45]:
+          - generic [ref=e46]: כמות (מינימום 3,000)
+          - spinbutton "כמות (מינימום 3,000)" [ref=e47]
+        - generic [ref=e48]:
+          - generic [ref=e49]:
+            - generic [ref=e50]: צבעי לוגו
+            - combobox "צבעי לוגו" [ref=e51]:
+              - option "1 צבע" [selected]
+              - option "2 צבעים"
+              - option "3 צבעים"
+              - option "3+ צבעים"
+          - generic [ref=e52]:
+            - generic [ref=e53]: ידיות
+            - combobox "ידיות" [ref=e54]:
+              - option "עם ידיות" [selected]
+              - option "ללא ידיות"
+          - generic [ref=e55]:
+            - generic [ref=e56]: למינציה
+            - combobox "למינציה" [ref=e57]:
+              - option "ללא" [selected]
+              - option "עם למינציה"
+        - generic [ref=e58]:
+          - generic [ref=e59]: הערות למפעל
+          - textbox "הערות למפעל" [ref=e60]:
+            - /placeholder: (אופציונלי)
+        - generic [ref=e61]:
+          - generic [ref=e62]: בחר לקוח מהרשימה
+          - button "שלח לאישור אלי" [disabled] [ref=e63]
+  - alert [ref=e67]

@@ -1,0 +1,35 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - heading "STUDIO סטודיו אלבדי — הדמיה + פריסה" [level=1] [ref=e3]:
+      - generic [ref=e4]: STUDIO
+      - text: סטודיו אלבדי — הדמיה + פריסה
+    - generic [ref=e5]:
+      - textbox "מזהה עסקה (fq_…) — או השאר ריק לליד חופשי" [ref=e6]
+      - button "טען" [ref=e7] [cursor=pointer]
+      - generic [ref=e8]: לקוח מ-GHL · מוכן לשליחה ב-WhatsApp
+  - generic [ref=e9]:
+    - generic [ref=e10]:
+      - generic [ref=e11]: תוצאות
+      - generic [ref=e12]: עדיין אין קבצים. צור הדמיה או פריסה למטה, או בקש מ-Claude בצ'אט.
+      - generic [ref=e14]: 🎨 הדמיה — mockup ריאליסטי
+      - generic [ref=e15] [cursor=pointer]: לוגו הלקוח
+      - 'textbox "צבע רקע / הערה (למשל: ירוק זית)" [ref=e16]'
+      - button "צור הדמיה" [ref=e17] [cursor=pointer]
+      - generic [ref=e18]: מעלה לוגו ומבקש מ-Claude הדמיה (סקיל bag-mockup-video). תיקונים + וידאו — בצ'אט.
+      - generic [ref=e20]: 📐 פריסה — קובץ הפקה למפעל
+      - generic [ref=e21]:
+        - generic [ref=e22] [cursor=pointer]: לוגו
+        - generic [ref=e23] [cursor=pointer]: פריסת מפעל
+      - button "צור קובץ הפקה" [ref=e24] [cursor=pointer]
+      - generic [ref=e25]: מעלה את שני הקבצים ומבקש מ-Claude להריץ את סקיל הפריסה (dieline-print).
+    - generic [ref=e26]:
+      - generic [ref=e27]:
+        - generic [ref=e28]: "שלום 👋 טען עסקה למעלה, או פשוט תגיד לי מה לעשות — למשל: \"תעשה הדמיה לתיק 40×30, רקע ירוק זית, עם הלוגו שאעלה\"."
+        - generic [ref=e29]: טענתי לקוח מ-GHL — נעשה הדמיה ואפשר לשלוח לו ישירות ב-WhatsApp (גם בלי עסקה סגורה).
+      - generic [ref=e30]:
+        - textbox "כתוב ל-Claude… (תעשה הדמיה, שנה צבע, תגדיל לוגו, תעשה וידאו)" [ref=e31]
+        - button "שלח" [ref=e32] [cursor=pointer]
+  - generic [ref=e33]:
+    - text: רץ מקומית על ה-Mac · שומר קבצים ב-
+    - code [ref=e34]: ~/albadi-studio
+    - text: · מעלה לתיק העסקה + שולח ב-WhatsApp דרך ה-CRM

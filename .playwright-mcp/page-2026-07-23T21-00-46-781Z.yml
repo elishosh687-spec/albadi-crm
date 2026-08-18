@@ -1,0 +1,129 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e4]:
+    - generic [ref=e5]:
+      - generic [ref=e6]:
+        - generic [ref=e7]: — Deals
+        - generic [ref=e8]: תיקי עסקאות.
+        - generic [ref=e9]: ציר העסקה + הרווח האמיתי מכל לקוח · 0/4 עם עלויות שהוזנו
+      - generic [ref=e15]:
+        - generic [ref=e16]:
+          - generic [ref=e17]: "4"
+          - generic [ref=e18]: עסקאות
+        - generic [ref=e19]:
+          - generic [ref=e20]: ₪12,802
+          - generic [ref=e21]: רווח בפועל סה״כ
+    - generic [ref=e22]:
+      - generic [ref=e23]: כמה המחשבון שלי מדויק — מצטבר על כל העסקאות
+      - generic [ref=e24]:
+        - generic [ref=e25]:
+          - generic [ref=e26]: טיוטה ↔ מפעל · עלות מפעל ליחידה
+          - generic [ref=e27]: 16.7%פער חציוני
+          - generic [ref=e28]: ממוצע 16.7% · 2 עסקאות · המפעל בד״כ זול מהאומדן
+        - generic [ref=e29]:
+          - generic [ref=e30]: טיוטה ↔ מפעל · נפח משלוח (CBM)
+          - generic [ref=e31]: 22.0%פער חציוני
+          - generic [ref=e32]: ממוצע 22.0% · 2 עסקאות · הנפח בפועל קטן מהאומדן
+        - generic [ref=e33]:
+          - generic [ref=e34]: מתוכנן ↔ בפועל · רווח
+          - generic [ref=e35]: אין עדיין מספיק נתונים
+    - generic [ref=e36]:
+      - textbox "חיפוש לקוח / מס׳ הצעה…" [ref=e41]
+      - generic [ref=e42]:
+        - button "הכל" [ref=e43] [cursor=pointer]
+        - button "ללא עלויות" [ref=e44] [cursor=pointer]
+        - button "הוזנו עלויות" [ref=e45] [cursor=pointer]
+        - button "משולבות" [ref=e46] [cursor=pointer]
+        - button "לפי אומדן" [ref=e47] [cursor=pointer]
+      - combobox [ref=e48] [cursor=pointer]:
+        - option "עדכני ביותר" [selected]
+        - option "רווח (גבוה→נמוך)"
+        - option "שם לקוח"
+    - generic [ref=e49]: מציג 4 מתוך 4
+    - generic [ref=e50]:
+      - generic [ref=e52] [cursor=pointer]:
+        - generic [ref=e56]:
+          - generic [ref=e57]: אלי — בדיקת מערכת
+          - generic [ref=e58]: "שקית אלבד ממותגת — בדיקת מערכת · #TESTF1 · נסגר 21.07.26"
+          - generic [ref=e59]:
+            - generic [ref=e60]: ✓ הצעה
+            - generic [ref=e61]: ✓ זכייה
+            - generic [ref=e62]: הדמיה
+            - generic [ref=e63]: חשבונית
+            - generic [ref=e64]: פריסה
+            - generic [ref=e65]: ייצור
+            - generic [ref=e66]: משלוח
+            - generic [ref=e67]: הגיע
+        - generic [ref=e68]:
+          - generic [ref=e69]:
+            - generic "עלויות בפועל טרם הוזנו" [ref=e70]: ללא עלויות
+            - generic [ref=e71]: 0/7 שלבים
+          - generic [ref=e72]: רווח בפועל מהלקוח
+          - generic [ref=e73]: ₪6,860
+          - generic [ref=e74]: מחיר ללקוח ₪21,200 · מתוכנן היה ₪6,860
+      - generic [ref=e76] [cursor=pointer]:
+        - generic [ref=e80]:
+          - generic [ref=e81]:
+            - text: יוסי גולד בייבי
+            - generic [ref=e82]: עסקה משולבת · 2 מוצרים
+          - generic [ref=e83]:
+            - generic [ref=e84]: 1. 30×40 ס״מ — מוצר מותאם · 12,000 יח׳ · ₪8,243
+            - generic [ref=e85]: 2. 55×60 ס״מ — מוצר מותאם · 5,500 יח׳ · ₪5,949
+            - generic [ref=e86]: נסגר 23.07.26
+          - generic [ref=e87]:
+            - generic [ref=e88]: הצעה
+            - generic [ref=e89]: ✓ זכייה
+            - generic [ref=e90]: הדמיה
+            - generic [ref=e91]: חשבונית
+            - generic [ref=e92]: פריסה
+            - generic [ref=e93]: ייצור
+            - generic [ref=e94]: משלוח
+            - generic [ref=e95]: הגיע
+        - generic [ref=e96]:
+          - generic [ref=e97]:
+            - generic "עלויות בפועל טרם הוזנו" [ref=e98]: ללא עלויות
+            - generic [ref=e99]: 0/7 שלבים
+          - generic [ref=e100]: רווח בפועל מהלקוח
+          - generic [ref=e101]: ₪3,511
+          - generic [ref=e102]: מחיר ללקוח ₪14,192 · מתוכנן היה ₪3,512
+      - generic [ref=e104] [cursor=pointer]:
+        - generic [ref=e108]:
+          - generic [ref=e109]: אלבר אברהם אנקונינה
+          - generic [ref=e110]: "שקית אלבדי · #XSGTMZHM · נסגר 23.07.26"
+          - generic [ref=e111]:
+            - generic [ref=e112]: הצעה
+            - generic [ref=e113]: ✓ זכייה
+            - generic [ref=e114]: הדמיה
+            - generic [ref=e115]: חשבונית
+            - generic [ref=e116]: פריסה
+            - generic [ref=e117]: ייצור
+            - generic [ref=e118]: משלוח
+            - generic [ref=e119]: הגיע
+        - generic [ref=e120]:
+          - generic [ref=e121]:
+            - generic "עלויות בפועל טרם הוזנו" [ref=e122]: ללא עלויות
+            - generic [ref=e123]: 0/7 שלבים
+          - generic [ref=e124]: רווח בפועל מהלקוח
+          - generic [ref=e125]: ₪856
+          - generic [ref=e126]: מחיר ללקוח ₪5,366 · מתוכנן היה ₪856
+      - generic [ref=e128] [cursor=pointer]:
+        - generic [ref=e132]:
+          - generic [ref=e133]: איציק חודידה
+          - generic [ref=e134]: "שקית אלבדי · #KRS2BHR8 · נסגר 09.07.26"
+          - generic [ref=e135]:
+            - generic [ref=e136]: הצעה
+            - generic [ref=e137]: ✓ זכייה
+            - generic [ref=e138]: הדמיה
+            - generic [ref=e139]: חשבונית
+            - generic [ref=e140]: פריסה
+            - generic [ref=e141]: ייצור
+            - generic [ref=e142]: משלוח
+            - generic [ref=e143]: הגיע
+        - generic [ref=e144]:
+          - generic [ref=e145]:
+            - generic "עלויות בפועל טרם הוזנו" [ref=e146]: ללא עלויות
+            - generic [ref=e147]: 0/7 שלבים
+          - generic [ref=e148]: רווח בפועל מהלקוח
+          - generic [ref=e149]: ₪1,575
+          - generic [ref=e150]: מחיר ללקוח ₪4,424 · מתוכנן היה ₪1,575
+  - button "Open Next.js Dev Tools" [ref=e156] [cursor=pointer]
+  - alert [ref=e13]

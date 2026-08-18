@@ -1,0 +1,3497 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - banner [ref=e4]:
+      - generic [ref=e8]:
+        - link "Orchestrate revenue agents with the new Workflows" [ref=e9] [cursor=pointer]:
+          - /url: /platform/workflows
+          - generic [ref=e10]: Orchestrate revenue agents with the new Workflows
+          - img [ref=e11]
+        - button "Dismiss banner" [ref=e13] [cursor=pointer]:
+          - img [ref=e14]
+      - navigation [ref=e17]:
+        - generic [ref=e18]:
+          - generic [ref=e19]:
+            - link "Attio homepage" [ref=e20] [cursor=pointer]:
+              - /url: /
+              - img [ref=e21]
+            - navigation [ref=e29]:
+              - list [ref=e30]:
+                - listitem [ref=e31]:
+                  - button "Platform" [ref=e32] [cursor=pointer]:
+                    - generic [ref=e33]: Platform
+                    - img [ref=e34]
+                - listitem [ref=e36]:
+                  - button "Resources" [ref=e37] [cursor=pointer]:
+                    - generic [ref=e38]: Resources
+                    - img [ref=e39]
+                - listitem [ref=e41]:
+                  - link "Customers" [ref=e42] [cursor=pointer]:
+                    - /url: /customers
+                - listitem [ref=e43]:
+                  - link "Pricing" [ref=e44] [cursor=pointer]:
+                    - /url: /pricing
+          - generic [ref=e45]:
+            - link "Sign in" [ref=e46] [cursor=pointer]:
+              - /url: https://app.attio.com/
+            - link "Start for free" [ref=e47] [cursor=pointer]:
+              - /url: https://app.attio.com/welcome/sign-in
+    - main [ref=e48]:
+      - generic [ref=e49]:
+        - generic [ref=e53]:
+          - img [ref=e56]
+          - paragraph [ref=e58]:
+            - generic [ref=e59]: “When
+            - generic [ref=e61]: I
+            - generic [ref=e63]: first
+            - generic [ref=e65]: opened
+            - generic [ref=e67]: Attio,
+            - generic [ref=e68]: I
+            - generic [ref=e70]: instantly
+            - generic [ref=e72]: got
+            - generic [ref=e74]: the
+            - generic [ref=e76]: feeling
+            - generic [ref=e78]: this
+            - generic [ref=e80]: was
+            - generic [ref=e81]: the
+            - generic [ref=e83]: next
+            - generic [ref=e85]: generation
+            - generic [ref=e87]: of
+            - generic [ref=e89]: CRM.”
+          - paragraph [ref=e90]:
+            - generic [ref=e92]: Margaret Shen
+            - generic [ref=e95]: Head of Business Operations · Modal
+        - generic [ref=e98]:
+          - generic [ref=e100]:
+            - link "Explore GTM frameworks from operators like Elena Verna" [ref=e102] [cursor=pointer]:
+              - /url: https://atlas.attio.com
+              - generic [ref=e103]:
+                - generic [ref=e104]: Explore GTM frameworks from operators like Elena Verna
+                - img [ref=e105]
+            - heading "The revenue platform engineered for scale." [level=1] [ref=e107]
+            - paragraph [ref=e108]: Attio is the AI CRM that builds pipeline, accelerates every deal, and compounds revenue around the clock.
+            - generic [ref=e109]:
+              - link "Start for free" [ref=e110] [cursor=pointer]:
+                - /url: https://app.attio.com/welcome/sign-in
+              - button "Talk to sales" [ref=e111] [cursor=pointer]
+          - generic [ref=e112]:
+            - img [ref=e113]
+            - generic [ref=e114]:
+              - generic [ref=e115]:
+                - img [ref=e116]
+                - img [ref=e117]
+                - generic [ref=e119]:
+                  - button "Ask Attio" [ref=e121] [cursor=pointer]
+                  - button "Data model" [ref=e124] [cursor=pointer]
+                  - button "Workflows" [ref=e126] [cursor=pointer]
+                  - button "Reporting" [ref=e128] [cursor=pointer]
+              - generic [ref=e131]:
+                - generic:
+                  - generic:
+                    - generic:
+                      - img "Basepoint"
+                      - generic:
+                        - generic: Basepoint
+                        - img
+                      - img
+                    - generic:
+                      - generic:
+                        - generic:
+                          - generic:
+                            - generic:
+                              - generic:
+                                - img
+                                - generic:
+                                  - generic: Home
+                          - generic:
+                            - generic:
+                              - img
+                              - generic:
+                                - generic: Configure
+                            - generic:
+                              - img
+                              - generic:
+                                - generic: Help
+                    - generic:
+                      - generic:
+                        - generic:
+                          - generic:
+                            - img
+                            - generic: Quick Actions
+                          - generic:
+                            - generic: ⌘K
+                        - generic:
+                          - img
+                          - generic:
+                            - generic: /
+                      - generic:
+                        - generic:
+                          - list:
+                            - generic:
+                              - generic:
+                                - img
+                                - generic: Home
+                            - generic:
+                              - generic:
+                                - img
+                                - generic: Notifications
+                            - generic:
+                              - generic:
+                                - img
+                                - generic: Tasks
+                            - generic:
+                              - generic:
+                                - img
+                                - generic: Notes
+                            - generic:
+                              - generic:
+                                - img
+                                - generic: Emails
+                            - generic:
+                              - generic:
+                                - img
+                                - generic: Calls
+                            - generic:
+                              - generic:
+                                - img
+                                - generic: Reports
+                            - generic:
+                              - generic:
+                                - img
+                                - generic: Automations
+                                - img
+                              - generic:
+                                - generic:
+                                  - generic:
+                                    - generic:
+                                      - img
+                                      - generic: Sequences
+                                - generic:
+                                  - generic:
+                                    - generic:
+                                      - img
+                                      - generic: Workflows
+                        - generic:
+                          - generic:
+                            - img
+                            - generic: Favorites
+                          - list:
+                            - generic:
+                              - generic:
+                                - img
+                                - generic: PQL workflows
+                              - generic:
+                                - generic:
+                                  - generic:
+                                    - generic:
+                                      - img
+                                      - generic: PQL Pipeline Deals
+                                      - generic: Deals
+                                - generic:
+                                  - generic:
+                                    - generic:
+                                      - img
+                                      - generic: PQL Workspace Outreach
+                                - generic:
+                                  - generic:
+                                    - generic:
+                                      - img
+                                      - generic: PQL Triage
+                            - generic:
+                              - generic:
+                                - img
+                                - generic: Reports
+                              - generic:
+                                - generic:
+                                  - generic:
+                                    - generic:
+                                      - img
+                                      - generic: Revenue
+                                - generic:
+                                  - generic:
+                                    - generic:
+                                      - img
+                                      - generic: Attribution
+                            - generic:
+                              - generic:
+                                - img
+                                - generic: Upcoming calls
+                        - generic:
+                          - generic:
+                            - img
+                            - generic: Records
+                          - list:
+                            - generic:
+                              - generic:
+                                - img
+                                - generic: People
+                            - generic:
+                              - generic:
+                                - img
+                                - generic: Companies
+                    - generic:
+                      - generic:
+                        - generic:
+                          - generic:
+                            - generic: Good morning, Alex
+                          - generic:
+                            - generic:
+                              - generic:
+                                - generic:
+                                  - generic: Ask anything...
+                              - generic:
+                                - generic:
+                                  - generic:
+                                    - generic:
+                                      - generic: Auto
+                                  - generic:
+                                    - generic:
+                                      - img
+                                    - generic:
+                                      - img
+                            - generic:
+                              - generic:
+                                - img
+                                - generic:
+                                  - generic: Prep for next meeting
+                              - generic:
+                                - img
+                                - generic:
+                                  - generic: Recap last call
+                          - generic:
+                            - generic:
+                              - generic: Meetings
+                              - generic:
+                                - generic: Today, Jun 26
+                                - generic:
+                                  - generic:
+                                    - img
+                                  - generic:
+                                    - img
+                            - generic:
+                              - generic:
+                                - generic:
+                                  - generic:
+                                    - generic: Basepoint x Stripe
+                                  - generic: 10:00 - 11:00 AM
+                              - generic:
+                                - generic:
+                                  - generic:
+                                    - generic: Ashley & Martin
+                                  - generic: 10:20 - 10:40 AM
+                              - generic:
+                                - generic:
+                                  - generic:
+                                    - generic: Greenleaf // Basepoint
+                                  - generic: 2:30 - 3:00 PM
+                                - generic:
+                                  - generic:
+                                    - generic: Details
+                                    - generic:
+                                      - img
+                                      - paragraph: Demo call with Greenleaf team to help them get the most out of their PRO trial.
+                                    - generic:
+                                      - img
+                                      - paragraph: https://meet.google.com/psn-zfzb-yaw
+                                  - generic:
+                                    - generic:
+                                      - generic: Participants
+                                      - generic: "8"
+                                    - generic:
+                                      - generic: Dylan Parker
+                                      - generic: CEO of Basepoint
+                                    - generic:
+                                      - generic: Annie Zhang
+                                      - generic: Product Manager at Greenleaf
+      - generic [ref=e139]:
+        - generic [ref=e140]:
+          - generic [ref=e141]:
+            - heading "[01] Powerful platform" [level=2] [ref=e142]:
+              - generic [ref=e143]: "[01]"
+              - generic [ref=e144]: Powerful platform
+            - generic [ref=e145]: / item 1 ⋮ 4
+          - img [ref=e146]
+        - generic [ref=e148]:
+          - heading "The intelligent system that never sleeps." [level=3] [ref=e149]:
+            - generic [ref=e150]:
+              - generic [ref=e151]: The
+              - generic [ref=e152]: intelligent
+              - generic [ref=e153]: system
+              - generic [ref=e154]: that
+              - generic [ref=e155]: never
+              - generic [ref=e156]: sleeps.
+          - paragraph [ref=e157]: Picks up leads at 2am. Catches renewals before they slip. Hands you the answer before you ask.
+        - generic [ref=e160]:
+          - generic [ref=e162]:
+            - img [ref=e164]
+            - img [ref=e166]
+            - img [ref=e168]
+            - img [ref=e169]
+          - generic [ref=e170]:
+            - img [ref=e171]
+            - generic [ref=e172]:
+              - generic [ref=e173]:
+                - heading "Revenue agents at your command." [level=3] [ref=e174]
+                - paragraph [ref=e175]: It’s your playbook. Agents work every account, capture every signal, and move every deal forward.
+                - link "Explore agents" [ref=e176] [cursor=pointer]:
+                  - /url: /agents
+                  - generic [ref=e177]: Explore agents
+                  - img [ref=e178]
+              - generic:
+                - img
+                - generic:
+                  - img
+                  - generic:
+                    - img
+                    - generic: Upsell
+                  - generic:
+                    - img
+                    - generic: Nurture
+                  - generic:
+                    - img
+                  - generic:
+                    - generic:
+                      - img
+                      - generic: Trigger
+                    - img
+                    - generic:
+                      - generic:
+                        - generic:
+                          - img
+                          - paragraph: When Deal updated
+                        - generic:
+                          - generic: Deals
+                      - separator
+                      - paragraph: Trigger when a Deal’s status is updated
+                  - generic:
+                    - img
+                    - generic:
+                      - generic:
+                        - generic:
+                          - img
+                          - paragraph: Switch
+                        - generic:
+                          - generic: Condition
+                      - separator
+                      - paragraph: Route to upsell or nurture
+                  - generic:
+                    - img
+                    - generic:
+                      - generic:
+                        - generic:
+                          - img
+                          - paragraph: Enroll in sequence
+                        - generic:
+                          - generic: Sequences
+                      - separator
+                      - paragraph: Enroll person in “Power user upsell”
+                  - generic:
+                    - img
+                    - generic:
+                      - generic:
+                        - generic:
+                          - img
+                          - paragraph: Enroll in sequence
+                        - generic:
+                          - generic: Sequences
+                      - separator
+                      - paragraph: Enroll person in “Nurture”
+              - generic:
+                - generic:
+                  - generic:
+                    - img
+                    - img
+                  - generic:
+                    - generic:
+                      - img
+                    - generic: Re-engage warm leads
+                  - generic:
+                    - generic:
+                      - img
+                    - generic: Re-engage cold leads
+                  - generic:
+                    - generic:
+                      - img
+                    - generic: MQL lead routing
+                  - generic:
+                    - generic:
+                      - img
+                    - generic: Onboarding hand-off
+                  - generic:
+                    - generic:
+                      - img
+                    - generic: New Deal email campaign
+                  - generic:
+                    - generic:
+                      - img
+                    - generic: Lead form submissions
+                  - generic:
+                    - generic:
+                      - img
+                    - generic: Monitor customer health
+                  - generic:
+                    - generic:
+                      - img
+                    - generic: Identify expansion opportunity
+              - generic [ref=e180]:
+                - generic:
+                  - generic:
+                    - generic:
+                      - img
+                    - generic:
+                      - img
+                    - generic:
+                      - img
+                    - generic:
+                      - img
+                    - generic:
+                      - img
+                    - generic:
+                      - img
+                    - generic:
+                      - img
+                    - generic:
+                      - img
+                    - generic:
+                      - img
+                    - generic:
+                      - img
+                    - generic:
+                      - img
+                    - generic:
+                      - img
+                    - generic:
+                      - img
+                    - generic:
+                      - img
+                    - generic:
+                      - img
+                  - generic:
+                    - generic:
+                      - img
+                      - img
+                  - generic:
+                    - generic:
+                      - img
+                    - generic:
+                      - img
+                    - generic:
+                      - img
+                    - generic:
+                      - img
+                    - generic:
+                      - img
+                    - generic:
+                      - img
+                    - generic:
+                      - img
+                    - generic:
+                      - img
+                    - generic:
+                      - img
+                    - generic:
+                      - img
+                    - generic:
+                      - img
+                    - generic:
+                      - img
+                    - generic:
+                      - img
+                    - generic:
+                      - img
+                    - generic:
+                      - img
+                    - generic:
+                      - img
+                  - generic:
+                    - generic:
+                      - img
+                      - img
+                - img [ref=e182]
+          - generic [ref=e191]:
+            - img [ref=e192]
+            - generic [ref=e193]:
+              - generic [ref=e194]:
+                - heading "Already there when you arrive." [level=3] [ref=e195]
+                - paragraph [ref=e196]: Open your email, the draft is ready to send. Walk into the call, you’re already briefed. Type the question, the answer’s already there.
+                - link "Explore AI" [ref=e197] [cursor=pointer]:
+                  - /url: /platform/ai
+                  - generic [ref=e198]: Explore AI
+                  - img [ref=e199]
+              - generic:
+                - img
+                - generic:
+                  - generic:
+                    - generic:
+                      - generic:
+                        - img
+                        - img
+                      - generic:
+                        - img
+                        - img
+                    - generic:
+                      - generic:
+                        - img
+                        - img
+                      - generic:
+                        - img
+                        - img
+                    - generic:
+                      - generic:
+                        - img
+                        - img
+                      - generic:
+                        - img
+                        - img
+                    - generic:
+                      - generic:
+                        - generic:
+                          - generic:
+                            - generic:
+                              - img
+                            - paragraph: New lead found
+                    - generic:
+                      - generic:
+                        - generic:
+                          - generic:
+                            - generic:
+                              - img
+                            - paragraph: Activate PLG motion
+                            - generic: AI
+                          - img
+                          - generic:
+                            - paragraph: Does the company sell software to other businesses?
+                      - generic:
+                        - img
+                        - paragraph: Yes, they are a B2B SaaS business
+                    - generic:
+                      - generic:
+                        - generic:
+                          - generic:
+                            - generic:
+                              - img
+                            - paragraph: Evaluate size of opportunity
+                            - generic: AI
+                          - img
+                          - generic:
+                            - paragraph: Did the company raise any funds recently?
+                      - generic:
+                        - img
+                        - paragraph: $25M raised in Series A funding round
+                    - generic:
+                      - generic:
+                        - generic:
+                          - generic:
+                            - generic:
+                              - img
+                            - paragraph: Identify key stakeholders
+                            - generic: AI
+                          - img
+                          - generic:
+                            - paragraph: Who are the key stakeholders at the company?
+                      - generic:
+                        - img
+                        - paragraph: Adam Kingsley, CEO; Anne Zaragoza, CTO; Tom Wagner, VP of Sales
+              - generic:
+                - generic:
+                  - generic:
+                    - img
+                    - img
+                    - img
+                    - img
+                    - generic:
+                      - generic:
+                        - generic:
+                          - img
+                        - paragraph: Basepoint
+                      - generic:
+                        - generic:
+                          - img
+                          - paragraph: Domains
+                          - generic: basepoint.com
+                        - generic:
+                          - img
+                          - paragraph: Name
+                          - paragraph: Basepoint
+                        - generic:
+                          - img
+                          - paragraph: Estimated ARR
+                          - generic: $1–10M
+                        - generic:
+                          - img
+                          - paragraph: Location
+                          - paragraph: California, USA
+                        - generic:
+                          - img
+                          - paragraph: Categories
+                        - generic:
+                          - img
+                          - paragraph: Funding raised
+                        - generic:
+                          - img
+                          - paragraph: Stakeholders
+              - generic [ref=e201]:
+                - generic:
+                  - generic:
+                    - generic:
+                      - img
+                    - generic:
+                      - img
+                    - generic:
+                      - img
+                    - generic:
+                      - img
+                    - generic:
+                      - img
+                    - generic:
+                      - img
+                    - generic:
+                      - img
+                    - generic:
+                      - img
+                    - generic:
+                      - img
+                    - generic:
+                      - img
+                    - generic:
+                      - img
+                    - generic:
+                      - img
+                    - generic:
+                      - img
+                    - generic:
+                      - img
+                    - generic:
+                      - img
+                  - generic:
+                    - generic:
+                      - img
+                      - img
+                  - generic:
+                    - generic:
+                      - img
+                    - generic:
+                      - img
+                    - generic:
+                      - img
+                    - generic:
+                      - img
+                    - generic:
+                      - img
+                    - generic:
+                      - img
+                    - generic:
+                      - img
+                    - generic:
+                      - img
+                    - generic:
+                      - img
+                    - generic:
+                      - img
+                    - generic:
+                      - img
+                    - generic:
+                      - img
+                    - generic:
+                      - img
+                    - generic:
+                      - img
+                    - generic:
+                      - img
+                    - generic:
+                      - img
+                  - generic:
+                    - generic:
+                      - img
+                      - img
+                - img [ref=e203]
+          - generic [ref=e206]:
+            - img [ref=e207]
+            - generic [ref=e208]:
+              - generic [ref=e209]:
+                - heading "Continuous context for everyone." [level=3] [ref=e210]
+                - paragraph [ref=e211]: Sales, success, finance, and every agent in the company, all running on the same live picture of the customer.
+                - link "Explore data" [ref=e212] [cursor=pointer]:
+                  - /url: /platform/data
+                  - generic [ref=e213]: Explore data
+                  - img [ref=e214]
+              - generic:
+                - img
+                - generic:
+                  - generic:
+                    - generic:
+                      - generic:
+                        - generic:
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                        - generic:
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                        - generic:
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                        - generic:
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                        - generic:
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                        - generic:
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                        - generic:
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                        - generic:
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                        - generic:
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                        - generic:
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                        - generic:
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                        - generic:
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                        - generic:
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                        - generic:
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                        - generic:
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                      - generic:
+                        - generic:
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                        - generic:
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                        - generic:
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                        - generic:
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                        - generic:
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                        - generic:
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                        - generic:
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                        - generic:
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                        - generic:
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                        - generic:
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                        - generic:
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                        - generic:
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                        - generic:
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                        - generic:
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                        - generic:
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                          - generic:
+                            - img
+                      - generic:
+                        - img
+                        - img
+                        - img
+                        - img
+                        - img
+                        - img
+                      - generic:
+                        - generic:
+                          - generic:
+                            - img "Sales engagement"
+                            - paragraph: Sales engagement
+                          - generic:
+                            - img "Email & calendar"
+                            - paragraph: Email & calendar
+                        - generic:
+                          - generic:
+                            - img "Data warehouses"
+                            - paragraph: Data warehouses
+                          - generic:
+                            - img "Customer support"
+                            - paragraph: Customer support
+                        - generic:
+                          - generic:
+                            - img "Billing & invoicing"
+                            - paragraph: Billing & invoicing
+                          - generic:
+                            - img "Product data"
+                            - paragraph: Product data
+                    - generic:
+                      - generic:
+                        - img
+                      - generic:
+                        - img
+                      - generic:
+                        - img
+                      - generic:
+                        - generic:
+                          - img "Workspace"
+                          - paragraph: Workspace
+                          - generic: Standard
+                        - img
+                        - paragraph:
+                          - generic:
+                            - img "2,857":
+                              - generic:
+                                - generic:
+                                  - generic: "2"
+                                  - generic: ","
+                                  - generic: "8"
+                                  - generic: "5"
+                                  - generic: "7"
+                          - generic: Records
+                      - generic:
+                        - generic:
+                          - img "Company"
+                          - paragraph: Company
+                          - generic: Standard
+                        - img
+                        - paragraph:
+                          - generic:
+                            - img "3,096":
+                              - generic:
+                                - generic:
+                                  - generic: "3"
+                                  - generic: ","
+                                  - generic: "0"
+                                  - generic: "9"
+                                  - generic: "6"
+                          - generic: Records
+                      - generic:
+                        - generic:
+                          - img "Deal"
+                          - paragraph: Deal
+                          - generic: Standard
+                        - img
+                        - paragraph:
+                          - generic:
+                            - img "5,490":
+                              - generic:
+                                - generic:
+                                  - generic: "5"
+                                  - generic: ","
+                                  - generic: "4"
+                                  - generic: "9"
+                                  - generic: "0"
+                          - generic: Records
+                    - generic:
+                      - generic:
+                        - img "Attio"
+              - generic:
+                - generic:
+                  - generic:
+                    - generic:
+                      - img
+                    - generic:
+                      - img
+                    - generic:
+                      - img
+                    - generic:
+                      - img
+                    - generic:
+                      - img
+                    - generic:
+                      - img
+                    - generic:
+                      - img "logo"
+                    - generic:
+                      - img "logo"
+                    - generic:
+                      - img "logo"
+                    - generic:
+                      - img "logo"
+                    - generic:
+                      - img "logo"
+                    - generic:
+                      - img "logo"
+                    - generic:
+                      - img "logo"
+                    - generic:
+                      - img "logo"
+              - generic [ref=e216]:
+                - generic:
+                  - generic:
+                    - generic:
+                      - img
+                    - generic:
+                      - img
+                    - generic:
+                      - img
+                    - generic:
+                      - img
+                    - generic:
+                      - img
+                    - generic:
+                      - img
+                    - generic:
+                      - img
+                    - generic:
+                      - img
+                    - generic:
+                      - img
+                    - generic:
+                      - img
+                    - generic:
+                      - img
+                    - generic:
+                      - img
+                    - generic:
+                      - img
+                    - generic:
+                      - img
+                    - generic:
+                      - img
+                  - generic:
+                    - generic:
+                      - img
+                      - img
+                  - generic:
+                    - generic:
+                      - img
+                    - generic:
+                      - img
+                    - generic:
+                      - img
+                    - generic:
+                      - img
+                    - generic:
+                      - img
+                    - generic:
+                      - img
+                    - generic:
+                      - img
+                    - generic:
+                      - img
+                    - generic:
+                      - img
+                    - generic:
+                      - img
+                    - generic:
+                      - img
+                    - generic:
+                      - img
+                    - generic:
+                      - img
+                    - generic:
+                      - img
+                    - generic:
+                      - img
+                    - generic:
+                      - img
+                  - generic:
+                    - generic:
+                      - img
+                      - img
+                - img [ref=e218]
+          - generic [ref=e231]:
+            - img [ref=e232]
+            - img [ref=e233]
+            - generic [ref=e234]:
+              - generic [ref=e235]:
+                - heading "For the people who own the number." [level=3] [ref=e236]
+                - paragraph [ref=e237]: From the next forecast to the last cohort, get your business answers in seconds.
+                - link "Explore reporting" [ref=e238] [cursor=pointer]:
+                  - /url: /platform/reporting
+                  - generic [ref=e239]: Explore reporting
+                  - img [ref=e240]
+              - generic:
+                - img
+                - generic:
+                  - generic:
+                    - generic:
+                      - generic: 7D
+                    - generic:
+                      - generic: 30D
+                      - generic: 3M
+                      - generic: 6M
+                    - generic:
+                      - generic: 12M
+                    - generic:
+                      - generic: All
+                  - generic:
+                    - generic:
+                      - img
+                      - generic: Apr - Jun
+                    - generic:
+                      - img
+                      - generic: Jul - Sep
+                    - generic:
+                      - img
+                      - generic: Plus
+                    - generic:
+                      - img
+                      - generic: Pro
+                    - generic:
+                      - img
+                      - generic: Enterprise
+                  - generic:
+                    - generic:
+                      - generic:
+                        - generic: $ 2.8M
+                      - img
+                      - generic:
+                        - generic: $ 2.4M
+                      - img
+                      - generic:
+                        - generic: $ 2.0M
+                      - img
+                      - generic:
+                        - generic: $ 1.6M
+                      - img
+                      - generic:
+                        - generic: $ 1.2M
+                      - img
+                      - generic:
+                        - generic: $ 0.8M
+                      - img
+                      - generic:
+                        - generic: $ 0.4M
+                      - img
+                      - generic:
+                        - generic:
+                          - generic:
+                            - generic: July
+                            - generic:
+                              - generic:
+                                - generic: Pro plan
+                                - generic:
+                                  - generic: Time
+                                  - generic: July 2024
+                                - generic:
+                                  - generic: Amount
+                                  - generic: $ 1,920,240.00
+                          - generic:
+                            - generic: August
+                          - generic:
+                            - generic: September
+              - generic:
+                - generic:
+                  - generic:
+                    - generic:
+                      - img
+                      - img
+                  - generic:
+                    - generic:
+                      - generic:
+                        - generic:
+                          - img
+                        - generic: Insight
+                    - generic:
+                      - generic:
+                        - generic:
+                          - img
+                        - generic: Historical values
+                    - generic:
+                      - generic:
+                        - generic:
+                          - img
+                        - generic: Funnel
+                    - generic:
+                      - generic:
+                        - generic:
+                          - img
+                        - generic: Time in stage
+                    - generic:
+                      - generic:
+                        - generic:
+                          - img
+                        - generic: Stage changed
+              - generic [ref=e242]:
+                - generic:
+                  - generic:
+                    - generic:
+                      - img
+                    - generic:
+                      - img
+                    - generic:
+                      - img
+                    - generic:
+                      - img
+                    - generic:
+                      - img
+                    - generic:
+                      - img
+                    - generic:
+                      - img
+                    - generic:
+                      - img
+                    - generic:
+                      - img
+                    - generic:
+                      - img
+                    - generic:
+                      - img
+                    - generic:
+                      - img
+                    - generic:
+                      - img
+                    - generic:
+                      - img
+                    - generic:
+                      - img
+                  - generic:
+                    - generic:
+                      - img
+                      - img
+                  - generic:
+                    - generic:
+                      - img
+                    - generic:
+                      - img
+                    - generic:
+                      - img
+                    - generic:
+                      - img
+                    - generic:
+                      - img
+                    - generic:
+                      - img
+                    - generic:
+                      - img
+                    - generic:
+                      - img
+                    - generic:
+                      - img
+                    - generic:
+                      - img
+                    - generic:
+                      - img
+                    - generic:
+                      - img
+                    - generic:
+                      - img
+                    - generic:
+                      - img
+                    - generic:
+                      - img
+                    - generic:
+                      - img
+                  - generic:
+                    - generic:
+                      - img
+                      - img
+                - img [ref=e244]
+          - generic [ref=e251]:
+            - img [ref=e253]
+            - img [ref=e255]
+            - img [ref=e257]
+            - img [ref=e258]
+        - img [ref=e259]
+        - img [ref=e260]
+      - img [ref=e261]
+      - generic [ref=e264]:
+        - generic [ref=e266]:
+          - img [ref=e268]
+          - generic [ref=e269]:
+            - img [ref=e270]
+            - img [ref=e271]
+          - img [ref=e273]
+          - img [ref=e274]
+        - generic [ref=e276]:
+          - generic [ref=e277]:
+            - generic [ref=e278]:
+              - heading "Start with 14 days of Pro, for free." [level=2] [ref=e279]:
+                - text: Start with 14 days
+                - text: of Pro, for free.
+              - generic [ref=e280]:
+                - link "Start for free" [ref=e281] [cursor=pointer]:
+                  - /url: https://app.attio.com/welcome/sign-in
+                - link "See our plans" [ref=e282] [cursor=pointer]:
+                  - /url: /pricing
+            - img [ref=e284]
+          - generic [ref=e367]:
+            - img [ref=e368]
+            - img [ref=e369]
+        - generic [ref=e373]:
+          - img [ref=e375]
+          - generic [ref=e376]:
+            - img [ref=e377]
+            - img [ref=e378]
+          - img [ref=e380]
+          - img [ref=e381]
+      - img [ref=e382]
+      - generic [ref=e383]:
+        - generic [ref=e384]:
+          - generic [ref=e385]:
+            - generic [ref=e386]:
+              - heading "[02] Adaptive model" [level=2] [ref=e387]:
+                - generic [ref=e388]: "[02]"
+                - generic [ref=e389]: Adaptive model
+              - generic [ref=e390]: / data ↔ business
+            - img [ref=e391]
+          - generic [ref=e392]:
+            - generic [ref=e393]:
+              - heading "The only CRM with Universal Context ™ ." [level=3] [ref=e394]:
+                - generic [ref=e395]:
+                  - generic [ref=e396]: The
+                  - generic [ref=e397]: only
+                  - generic [ref=e398]: CRM
+                  - generic [ref=e399]: with
+                  - generic [ref=e400]: Universal
+                  - generic [ref=e401]:
+                    - text: Context
+                    - generic [ref=e402]:
+                      - generic [ref=e403]: ™
+                      - text: .
+              - paragraph [ref=e404]: Every signal from every customer, compounding into one layer your team and agents act on.
+            - link "Explore Universal Context" [ref=e405] [cursor=pointer]:
+              - /url: /engineering/blog/introducing-universal-context
+        - generic [ref=e408]:
+          - generic [ref=e409]:
+            - button "Scale-ups"
+            - button "SaaS startups" [ref=e410] [cursor=pointer]
+            - button "SMBs" [ref=e411] [cursor=pointer]
+            - button "Investors" [ref=e412] [cursor=pointer]
+          - generic [ref=e416]:
+            - generic [ref=e419]:
+              - generic [ref=e421]:
+                - generic:
+                  - generic:
+                    - generic:
+                      - generic:
+                        - img
+                        - generic: User
+                    - generic: Standard
+                  - generic:
+                    - generic:
+                      - generic:
+                        - generic:
+                          - img
+                          - generic: User ID
+                    - generic:
+                      - generic:
+                        - generic:
+                          - img
+                          - generic: Engagement score
+                    - generic:
+                      - generic:
+                        - generic:
+                          - img
+                          - generic: User type
+                  - generic:
+                    - generic:
+                      - img
+                      - generic: 4 More Attributes
+              - generic [ref=e423]:
+                - generic:
+                  - generic:
+                    - generic:
+                      - generic:
+                        - img
+                        - generic: Deal
+                    - generic: Standard
+                  - generic:
+                    - generic:
+                      - generic:
+                        - generic:
+                          - img
+                          - generic: Deal name
+                    - generic:
+                      - generic:
+                        - generic:
+                          - img
+                          - generic: Workspace
+                    - generic:
+                      - generic:
+                        - generic:
+                          - img
+                          - generic: Stage
+                  - generic:
+                    - generic:
+                      - img
+                      - generic: 2 More Attributes
+              - generic [ref=e425]:
+                - generic:
+                  - generic:
+                    - generic:
+                      - generic:
+                        - img
+                        - generic: Person
+                    - generic: Standard
+                  - generic:
+                    - generic:
+                      - generic:
+                        - generic:
+                          - img
+                          - generic: Name
+                    - generic:
+                      - generic:
+                        - generic:
+                          - img
+                          - generic: Email
+                    - generic:
+                      - generic:
+                        - generic:
+                          - img
+                          - generic: Company
+                  - generic:
+                    - generic:
+                      - img
+                      - generic: 12 More Attributes
+              - button "Add object Workspace Standard Name Company Status 7 More Attributes" [ref=e427] [cursor=pointer]:
+                - img [ref=e428]
+                - generic [ref=e430]:
+                  - generic [ref=e431]:
+                    - img [ref=e432]
+                    - generic [ref=e434]: Add object
+                  - generic [ref=e435]:
+                    - generic:
+                      - generic:
+                        - generic:
+                          - generic:
+                            - img
+                            - generic: Workspace
+                        - generic: Standard
+                      - generic:
+                        - generic:
+                          - generic:
+                            - generic:
+                              - img
+                              - generic: Name
+                        - generic:
+                          - generic:
+                            - generic:
+                              - img
+                              - generic: Company
+                        - generic:
+                          - generic:
+                            - generic:
+                              - img
+                              - generic: Status
+                      - generic:
+                        - generic:
+                          - img
+                          - generic: 7 More Attributes
+              - generic:
+                - img
+                - generic:
+                  - img
+                - generic:
+                  - img
+              - generic:
+                - img
+                - generic:
+                  - img
+                - generic:
+                  - img
+            - generic [ref=e438]:
+              - img [ref=e439]
+              - img [ref=e443]
+              - generic:
+                - generic:
+                  - img
+                  - generic:
+                    - generic:
+                      - generic: User
+                - generic:
+                  - generic:
+                    - generic:
+                      - generic:
+                        - img
+                        - generic: User ID
+                - generic:
+                  - generic:
+                    - generic:
+                      - generic:
+                        - img
+                        - generic: User type
+                - generic:
+                  - generic:
+                    - generic:
+                      - generic:
+                        - img
+                        - generic: Engagement score
+                - generic:
+                  - img
+                  - generic:
+                    - generic:
+                      - generic:
+                        - img
+                        - generic: Albert Lund
+                - generic:
+                  - generic:
+                    - generic:
+                      - generic: 6s59-027f-4C54-98a3-3af0b00a1a5c
+                - generic:
+                  - generic:
+                    - generic:
+                      - generic: Member
+                - generic:
+                  - generic:
+                    - generic:
+                      - generic: Light
+                - generic:
+                  - img
+                  - generic:
+                    - generic:
+                      - generic:
+                        - img
+                        - generic: Jenna Roberts
+                - generic:
+                  - generic:
+                    - generic:
+                      - generic: 2d77-027f-5B23-96V9-3D9ed00a2a5c
+                - generic:
+                  - generic:
+                    - generic:
+                      - generic: Admin
+                - generic:
+                  - generic:
+                    - generic:
+                      - generic: Light
+                - generic:
+                  - img
+                  - generic:
+                    - generic:
+                      - generic:
+                        - img
+                        - generic: David Chen
+                - generic:
+                  - generic:
+                    - generic:
+                      - generic: 1dj0-d7dd-5090-ab709-5912b0276bc0
+                - generic:
+                  - generic:
+                    - generic:
+                      - generic: Admin
+                - generic:
+                  - generic:
+                    - generic:
+                      - generic: Power User
+                - generic:
+                  - img
+                  - generic:
+                    - generic:
+                      - generic:
+                        - img
+                        - generic: Marc Lopez
+                - generic:
+                  - generic:
+                    - generic:
+                      - generic: 9bc0-3abd-8990-dj36-7698b0222ui4
+                - generic:
+                  - generic:
+                    - generic:
+                      - generic: Member
+                - generic:
+                  - generic:
+                    - generic:
+                      - generic: Inactive
+              - img [ref=e446]
+              - img [ref=e448]
+      - generic [ref=e451]:
+        - generic [ref=e453]:
+          - generic [ref=e454]:
+            - img "David Banys" [ref=e457]
+            - generic [ref=e458]:
+              - paragraph [ref=e459]: Railway’s favorite features
+              - img [ref=e460]
+          - generic:
+            - img [ref=e461]
+            - generic [ref=e474]:
+              - paragraph [ref=e475]:
+                - generic [ref=e477]: “Attio
+                - generic [ref=e479]: is
+                - generic [ref=e481]: a
+                - generic [ref=e483]: dev
+                - generic [ref=e485]: company’s
+                - generic [ref=e487]: dream
+                - generic [ref=e489]: CRM.
+                - generic [ref=e491]: It’s
+                - generic [ref=e493]: the
+                - generic [ref=e495]: perfect
+                - generic [ref=e497]: platform
+                - generic [ref=e499]: to
+                - generic [ref=e501]: understand
+                - generic [ref=e503]: our
+                - generic [ref=e505]: customers,
+                - generic [ref=e507]: gather
+                - generic [ref=e509]: crucial
+                - generic [ref=e511]: account
+                - generic [ref=e513]: information
+                - generic [ref=e515]: and
+                - generic [ref=e517]: produce
+                - generic [ref=e519]: critical
+                - generic [ref=e521]: pipeline
+                - generic [ref=e523]: insights.”
+              - paragraph: David Banys, Head of Product Marketing
+            - generic [ref=e524]:
+              - generic [ref=e525]:
+                - img "Workflows" [ref=e526]
+                - paragraph [ref=e527]: Workflows
+              - generic [ref=e528]:
+                - img "Deals" [ref=e529]
+                - paragraph [ref=e530]: Deals
+              - generic [ref=e531]:
+                - img "Reports" [ref=e532]
+                - paragraph [ref=e533]: Reports
+          - img [ref=e534]
+        - generic [ref=e537] [cursor=pointer]:
+          - generic [ref=e538]:
+            - img "David Boskovic" [ref=e541]
+            - generic [ref=e542]:
+              - paragraph [ref=e543]: Flatfile’s favorite features
+              - img [ref=e544]
+          - generic:
+            - img [ref=e545]
+            - generic [ref=e559]:
+              - paragraph [ref=e560]
+              - paragraph: David Boskovic, CEO & Founder
+            - generic [ref=e561]:
+              - generic [ref=e562]:
+                - img "Custom objects" [ref=e563]
+                - paragraph [ref=e564]: Custom objects
+              - generic [ref=e565]:
+                - img "Hightouch" [ref=e566]
+                - paragraph [ref=e567]: Hightouch
+              - generic [ref=e568]:
+                - img "Reports" [ref=e569]
+                - paragraph [ref=e570]: Reports
+          - img [ref=e571]
+        - generic [ref=e574] [cursor=pointer]:
+          - generic [ref=e575]:
+            - img "Jamie Marshall" [ref=e578]
+            - generic [ref=e579]:
+              - paragraph [ref=e580]: Snackpass’s favorite features
+              - img [ref=e581]
+          - generic:
+            - img [ref=e582]
+            - generic [ref=e584]:
+              - paragraph [ref=e585]
+              - paragraph: Jamie Marshall, COO & Co-founder
+            - generic [ref=e586]:
+              - generic [ref=e587]:
+                - img "Lists" [ref=e588]
+                - paragraph [ref=e589]: Lists
+              - generic [ref=e590]:
+                - img "Workflows" [ref=e591]
+                - paragraph [ref=e592]: Workflows
+              - generic [ref=e593]:
+                - img "API" [ref=e594]
+                - paragraph [ref=e595]: API
+          - img [ref=e596]
+      - generic [ref=e599]:
+        - generic [ref=e600]:
+          - generic [ref=e601]:
+            - heading "[03] data enrichment" [level=2] [ref=e602]:
+              - generic [ref=e603]: "[03]"
+              - generic [ref=e604]: data enrichment
+            - generic [ref=e605]: / speed 1:1
+          - img [ref=e606]
+        - generic [ref=e607]:
+          - generic [ref=e608]:
+            - generic [ref=e609]:
+              - heading "Live from day one." [level=3] [ref=e610]:
+                - generic [ref=e611]:
+                  - generic [ref=e612]: Live
+                  - generic [ref=e613]: from
+                  - generic [ref=e614]: day
+                  - generic [ref=e615]: one.
+              - paragraph [ref=e616]: Connect your inbox and calendar. Attio learns your business and builds itself around it — before your first agent even gets to work.
+            - link "Start for free" [ref=e618] [cursor=pointer]:
+              - /url: https://app.attio.com/welcome/sign-in
+          - generic [ref=e619]:
+            - generic [ref=e620]:
+              - img [ref=e621]
+              - img [ref=e622]
+            - generic [ref=e623]:
+              - generic [ref=e626]:
+                - generic [ref=e627]:
+                  - img [ref=e628]
+                  - generic [ref=e630]: Email events
+                - generic [ref=e631]:
+                  - img [ref=e632]
+                  - generic [ref=e634]: Calendar events
+                - generic [ref=e635]:
+                  - img [ref=e636]
+                  - generic [ref=e638]: Segment events
+                - generic [ref=e639]:
+                  - img [ref=e640]
+                  - generic [ref=e642]: Data sources
+              - generic [ref=e643]:
+                - img [ref=e645]
+                - img [ref=e648]
+                - img [ref=e651]
+                - img [ref=e654]
+            - generic [ref=e656]:
+              - img [ref=e657]
+              - img [ref=e658]
+            - generic [ref=e665]:
+              - generic [ref=e666]:
+                - generic [ref=e670]: Sarah Johnson
+                - generic [ref=e672]: Head of IT at GreenLeaf Inc.
+                - generic [ref=e673]:
+                  - generic [ref=e675]:
+                    - img [ref=e676]
+                    - generic [ref=e680]: Compose email
+                  - img [ref=e683]
+                  - img [ref=e687]
+                  - img [ref=e694]
+                  - img [ref=e700]
+              - generic [ref=e702]:
+                - generic [ref=e704]:
+                  - img [ref=e705]
+                  - generic [ref=e710]: Highlights
+                - generic [ref=e711]:
+                  - generic [ref=e714]:
+                    - generic [ref=e715]:
+                      - generic [ref=e716]: Summary
+                      - img [ref=e717]
+                    - generic [ref=e719]: Sarah Johnson, the Head of IT, is leading the initiative to modernize their data infrastructure, which aligns with GreenLeaf’s growth and sustainability goals. A successful demo call on August 29 confirmed the need for TechWave’s solutions, and the opportunity is moving forward with a 75% confidence level.
+                  - generic [ref=e722]:
+                    - generic [ref=e724]:
+                      - generic [ref=e725]: LinkedIn
+                      - img [ref=e726]
+                    - generic [ref=e730]: sarahjohnson
+                  - generic [ref=e734]:
+                    - generic [ref=e735]:
+                      - generic [ref=e736]: Upcoming
+                      - img [ref=e737]
+                    - generic [ref=e740]:
+                      - generic [ref=e741]:
+                        - generic [ref=e742]: Demo Call
+                        - generic [ref=e743]: Nov 29, 10:40 AM
+                      - generic [ref=e744]:
+                        - generic [ref=e745]: THU
+                        - generic [ref=e746]: "29"
+                  - generic [ref=e749]:
+                    - generic [ref=e750]:
+                      - generic [ref=e751]: Company
+                      - img [ref=e752]
+                    - generic [ref=e756]:
+                      - generic [ref=e757]: GreenLeaf Inc.
+                      - generic [ref=e758]: San Francisco, CA
+                  - generic [ref=e762]:
+                    - generic [ref=e763]:
+                      - generic [ref=e764]: Sales Outreach
+                      - img [ref=e765]
+                    - generic [ref=e768]:
+                      - generic [ref=e769]: Step 2
+                      - generic [ref=e770]: Automated email
+                - generic [ref=e782]:
+                  - img [ref=e783]
+                  - generic [ref=e785]: Activity
+                  - img [ref=e786]
+                - generic [ref=e794]:
+                  - generic [ref=e795]:
+                    - generic [ref=e796]:
+                      - img [ref=e799]
+                      - generic [ref=e801]:
+                        - generic [ref=e804]: Michael Chang
+                        - generic [ref=e805]: attended an in-person meeting
+                    - generic [ref=e807]: 6 hours ago
+                  - generic [ref=e809]:
+                    - generic [ref=e810]:
+                      - img [ref=e813]
+                      - generic [ref=e816]:
+                        - generic [ref=e819]: Sarah Johnson
+                        - generic [ref=e820]: attended an event
+                    - generic [ref=e822]: 2 days ago
+                  - generic [ref=e824]:
+                    - generic [ref=e825]:
+                      - generic [ref=e827]:
+                        - img [ref=e828]
+                        - img [ref=e830]
+                      - generic [ref=e835]:
+                        - generic [ref=e838]: Michael Chang
+                        - generic [ref=e839]: made an outbound phone call
+                    - generic [ref=e841]: 4 days ago
+            - generic [ref=e846]:
+              - img [ref=e847]
+              - img [ref=e848]
+            - generic [ref=e852]:
+              - img [ref=e853]
+              - img [ref=e854]
+      - generic [ref=e856]:
+        - generic [ref=e857]:
+          - generic [ref=e858]:
+            - heading "[04] Built for scale" [level=2] [ref=e859]:
+              - generic [ref=e860]: "[04]"
+              - generic [ref=e861]: Built for scale
+            - generic [ref=e862]: / growth + security
+          - img [ref=e863]
+        - generic [ref=e864]:
+          - generic [ref=e866]:
+            - img [ref=e867]
+            - generic [ref=e870]:
+              - img [ref=e871]
+              - img [ref=e873]
+              - img [ref=e875]
+              - img [ref=e877]
+              - img [ref=e879]
+              - img [ref=e881]
+              - img [ref=e883]
+              - img [ref=e885]
+              - img [ref=e887]
+              - img [ref=e889]
+              - img [ref=e891]
+              - img [ref=e893]
+              - img [ref=e895]
+              - img [ref=e897]
+              - img [ref=e899]
+            - img [ref=e901]
+            - img [ref=e903]
+          - generic [ref=e907]:
+            - heading "Built for the pace of agents." [level=3] [ref=e908]:
+              - generic [ref=e909]:
+                - generic [ref=e910]: Built
+                - generic [ref=e911]: for
+                - generic [ref=e912]: the
+                - generic [ref=e913]: pace
+                - generic [ref=e914]: of
+                - generic [ref=e915]: agents.
+            - paragraph [ref=e916]: Attio runs on infrastructure that keeps up with your most ambitious agents. Millions of records, sub-50ms latency, always on.
+          - generic [ref=e918]:
+            - generic [ref=e919]:
+              - generic [ref=e920]: "1000000"
+              - generic [ref=e921]: API calls per week
+            - generic [ref=e922]:
+              - generic [ref=e923]: "100000"
+              - generic [ref=e924]: MCP tool calls per month
+            - generic [ref=e925]:
+              - generic [ref=e926]: 1000+
+              - generic [ref=e927]: Agents running now
+            - generic [ref=e928]:
+              - generic [ref=e929]: "1"
+              - generic [ref=e930]: Uptime
+      - img [ref=e931]
+      - generic [ref=e934]:
+        - generic [ref=e936]:
+          - img [ref=e938]
+          - generic [ref=e940]:
+            - img [ref=e941]
+            - img [ref=e943]
+            - img [ref=e945]
+        - generic [ref=e949]:
+          - generic [ref=e950]:
+            - generic [ref=e951]:
+              - heading "Enterprise-ready, out of the box." [level=2] [ref=e952]
+              - paragraph [ref=e953]: ISO 27001, GDPR, CCPA, and the security your customer data needs.
+            - button "Talk to sales" [ref=e955] [cursor=pointer]
+          - generic [ref=e956]:
+            - generic [ref=e957]:
+              - img [ref=e958]
+              - img [ref=e959]
+              - generic [ref=e974]:
+                - img [ref=e975]
+                - text: GDPR
+            - generic [ref=e978]:
+              - img [ref=e979]
+              - img [ref=e980]
+              - generic [ref=e982]:
+                - img [ref=e983]
+                - text: CCPA
+            - generic [ref=e986]:
+              - img [ref=e987]
+              - img [ref=e988]
+              - generic [ref=e999]:
+                - img [ref=e1000]
+                - text: ISO
+        - generic [ref=e1004]:
+          - img [ref=e1006]
+          - generic [ref=e1008]:
+            - img [ref=e1009]
+            - img [ref=e1011]
+            - img [ref=e1013]
+      - img [ref=e1015]
+      - generic [ref=e1017]:
+        - img [ref=e1018]
+        - generic [ref=e1022]:
+          - heading "The next era of revenue runs on Attio." [level=2] [ref=e1023]:
+            - generic [ref=e1025]: The next era of revenue
+            - generic [ref=e1027]: runs on Attio.
+          - generic [ref=e1028]:
+            - link "Start for free" [ref=e1029] [cursor=pointer]:
+              - /url: https://app.attio.com/welcome/sign-in
+            - button "Talk to sales" [ref=e1030] [cursor=pointer]
+    - contentinfo [ref=e1031]:
+      - img [ref=e1032]
+      - generic [ref=e1034]:
+        - link "Attio homepage" [ref=e1036] [cursor=pointer]:
+          - /url: /
+          - img [ref=e1037]
+        - generic [ref=e1045]:
+          - generic [ref=e1046]:
+            - heading "Platform" [level=2] [ref=e1048]
+            - list [ref=e1049]:
+              - listitem [ref=e1050]:
+                - link "Refer a team New" [ref=e1051] [cursor=pointer]:
+                  - /url: /refer
+                  - generic [ref=e1052]: Refer a team
+                  - generic [ref=e1053]: New
+              - listitem [ref=e1054]:
+                - link "Changelog" [ref=e1055] [cursor=pointer]:
+                  - /url: /changelog
+                  - generic [ref=e1056]: Changelog
+              - listitem [ref=e1057]:
+                - link "Gmail extension" [ref=e1058] [cursor=pointer]:
+                  - /url: https://chrome.google.com/webstore/detail/attio/legacbojjmajoedfolbjlekjjkepadph/
+                  - generic [ref=e1059]: Gmail extension
+                  - img [ref=e1060]
+              - listitem [ref=e1062]:
+                - link "iOS app" [ref=e1063] [cursor=pointer]:
+                  - /url: https://apps.apple.com/gb/app/attio/id1511545395
+                  - generic [ref=e1064]: iOS app
+                  - img [ref=e1065]
+              - listitem [ref=e1067]:
+                - link "Android app" [ref=e1068] [cursor=pointer]:
+                  - /url: https://play.google.com/store/apps/details?id=com.attio&gl=GB
+                  - generic [ref=e1069]: Android app
+                  - img [ref=e1070]
+          - generic [ref=e1072]:
+            - heading "Company" [level=2] [ref=e1074]
+            - list [ref=e1075]:
+              - listitem [ref=e1076]:
+                - link "Customers" [ref=e1077] [cursor=pointer]:
+                  - /url: /customers
+                  - generic [ref=e1078]: Customers
+              - listitem [ref=e1079]:
+                - link "Announcements" [ref=e1080] [cursor=pointer]:
+                  - /url: /blog
+                  - generic [ref=e1081]: Announcements
+              - listitem [ref=e1082]:
+                - link "Engineering blog New" [ref=e1083] [cursor=pointer]:
+                  - /url: /engineering/blog
+                  - generic [ref=e1084]: Engineering blog
+                  - generic [ref=e1085]: New
+              - listitem [ref=e1086]:
+                - link "Careers" [ref=e1087] [cursor=pointer]:
+                  - /url: /careers
+                  - generic [ref=e1088]: Careers
+              - listitem [ref=e1089]:
+                - link "Manifesto" [ref=e1090] [cursor=pointer]:
+                  - /url: /redefine
+                  - generic [ref=e1091]: Manifesto
+              - listitem [ref=e1092]:
+                - link "Become a partner" [ref=e1093] [cursor=pointer]:
+                  - /url: /partners
+                  - generic [ref=e1094]: Become a partner
+          - generic [ref=e1095]:
+            - heading "Import from" [level=2] [ref=e1097]
+            - list [ref=e1098]:
+              - listitem [ref=e1099]:
+                - link "Salesforce" [ref=e1100] [cursor=pointer]:
+                  - /url: /help/reference/imports-and-exports/migrate-data-from-another-crm?source=footer_salesforce
+                  - generic [ref=e1101]: Salesforce
+              - listitem [ref=e1102]:
+                - link "Hubspot" [ref=e1103] [cursor=pointer]:
+                  - /url: /help/reference/imports-and-exports/migrate-data-from-another-crm?source=footer_hubspot
+                  - generic [ref=e1104]: Hubspot
+              - listitem [ref=e1105]:
+                - link "Pipedrive" [ref=e1106] [cursor=pointer]:
+                  - /url: /help/reference/imports-and-exports/migrate-data-from-another-crm?source=footer_pipedrive
+                  - generic [ref=e1107]: Pipedrive
+              - listitem [ref=e1108]:
+                - link "Zoho" [ref=e1109] [cursor=pointer]:
+                  - /url: /help/reference/imports-and-exports/migrate-data-from-another-crm?source=footer_zoho
+                  - generic [ref=e1110]: Zoho
+              - listitem [ref=e1111]:
+                - link "Excel" [ref=e1112] [cursor=pointer]:
+                  - /url: /help/reference/imports-and-exports/import-data-into-attio?source=footer_excel
+                  - generic [ref=e1113]: Excel
+              - listitem [ref=e1114]:
+                - link "CSV" [ref=e1115] [cursor=pointer]:
+                  - /url: /help/reference/imports-and-exports/import-data-into-attio?source=footer_csv
+                  - generic [ref=e1116]: CSV
+          - generic [ref=e1117]:
+            - heading "Attio for" [level=2] [ref=e1119]
+            - list [ref=e1120]:
+              - listitem [ref=e1121]:
+                - link "Startups" [ref=e1122] [cursor=pointer]:
+                  - /url: /solutions/startup-crm
+                  - generic [ref=e1123]: Startups
+              - listitem [ref=e1124]:
+                - link "Deal flow" [ref=e1125] [cursor=pointer]:
+                  - /url: /solutions/deal-flow-management-software
+                  - generic [ref=e1126]: Deal flow
+          - generic [ref=e1127]:
+            - heading "Apps" [level=2] [ref=e1129]
+            - list [ref=e1130]:
+              - listitem [ref=e1131]:
+                - link "Gmail" [ref=e1132] [cursor=pointer]:
+                  - /url: https://attio.com/apps/gmail
+                  - generic [ref=e1133]: Gmail
+              - listitem [ref=e1134]:
+                - link "Outlook" [ref=e1135] [cursor=pointer]:
+                  - /url: https://attio.com/apps/outlook
+                  - generic [ref=e1136]: Outlook
+              - listitem [ref=e1137]:
+                - link "Segment" [ref=e1138] [cursor=pointer]:
+                  - /url: https://attio.com/apps/segment
+                  - generic [ref=e1139]: Segment
+              - listitem [ref=e1140]:
+                - link "Mailchimp" [ref=e1141] [cursor=pointer]:
+                  - /url: https://attio.com/apps/mailchimp
+                  - generic [ref=e1142]: Mailchimp
+              - listitem [ref=e1143]:
+                - link "Slack" [ref=e1144] [cursor=pointer]:
+                  - /url: https://attio.com/apps/slack
+                  - generic [ref=e1145]: Slack
+              - listitem [ref=e1146]:
+                - link "Outreach" [ref=e1147] [cursor=pointer]:
+                  - /url: https://attio.com/apps/outreach
+                  - generic [ref=e1148]: Outreach
+              - listitem [ref=e1149]:
+                - link "Mixmax" [ref=e1150] [cursor=pointer]:
+                  - /url: https://attio.com/apps/mixmax
+                  - generic [ref=e1151]: Mixmax
+              - listitem [ref=e1152]:
+                - link "Typeform" [ref=e1153] [cursor=pointer]:
+                  - /url: https://attio.com/apps/typeform
+                  - generic [ref=e1154]: Typeform
+              - listitem [ref=e1155]:
+                - link "Zapier" [ref=e1156] [cursor=pointer]:
+                  - /url: https://attio.com/apps/zapier
+                  - generic [ref=e1157]: Zapier
+          - generic [ref=e1158]:
+            - heading "Resources" [level=2] [ref=e1160]
+            - list [ref=e1161]:
+              - listitem [ref=e1162]:
+                - link "Startup program" [ref=e1163] [cursor=pointer]:
+                  - /url: /startups
+                  - generic [ref=e1164]: Startup program
+              - listitem [ref=e1165]:
+                - link "Help center" [ref=e1166] [cursor=pointer]:
+                  - /url: /help
+                  - generic [ref=e1167]: Help center
+              - listitem [ref=e1168]:
+                - link "Developers" [ref=e1169] [cursor=pointer]:
+                  - /url: https://docs.attio.com/
+                  - generic [ref=e1170]: Developers
+                  - img [ref=e1171]
+              - listitem [ref=e1173]:
+                - link "System status" [ref=e1174] [cursor=pointer]:
+                  - /url: https://status.attio.com/
+                  - generic [ref=e1175]: System status
+                  - img [ref=e1176]
+              - listitem [ref=e1178]:
+                - link "Hire an expert" [ref=e1179] [cursor=pointer]:
+                  - /url: /experts
+                  - generic [ref=e1180]: Hire an expert
+              - listitem [ref=e1181]:
+                - link "Downloads" [ref=e1182] [cursor=pointer]:
+                  - /url: /download
+                  - generic [ref=e1183]: Downloads
+              - listitem [ref=e1184]:
+                - link "Trust Center" [ref=e1185] [cursor=pointer]:
+                  - /url: https://trust.attio.com/
+                  - generic [ref=e1186]: Trust Center
+                  - img [ref=e1187]
+      - generic [ref=e1191]:
+        - generic [ref=e1192]:
+          - link "Attio on LinkedIn" [ref=e1193] [cursor=pointer]:
+            - /url: https://linkedin.com/company/attio
+            - img [ref=e1194]
+          - link "Attio on X" [ref=e1196] [cursor=pointer]:
+            - /url: https://twitter.com/attio
+            - img [ref=e1197]
+          - link "Attio on Dribbble" [ref=e1199] [cursor=pointer]:
+            - /url: https://dribbble.com/attio
+            - img [ref=e1200]
+          - link "Attio on YouTube" [ref=e1202] [cursor=pointer]:
+            - /url: https://www.youtube.com/@attioCRM
+            - img [ref=e1203]
+        - generic [ref=e1205]:
+          - paragraph [ref=e1206]: © 2026 Attio Ltd. All rights reserved.
+          - generic [ref=e1207]:
+            - link "Services Agreement" [ref=e1208] [cursor=pointer]:
+              - /url: /legal/services-agreement
+            - link "Privacy Policy" [ref=e1209] [cursor=pointer]:
+              - /url: /legal/privacy
+            - link "LLMs" [ref=e1210] [cursor=pointer]:
+              - /url: https://attio.com/llms.txt
+  - region "Notifications alt+T"

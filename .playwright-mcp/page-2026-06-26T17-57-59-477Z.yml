@@ -1,0 +1,862 @@
+- generic [ref=e1]:
+  - region "Promotion" [ref=e2]:
+    - generic [ref=e5]:
+      - paragraph [ref=e6]:
+        - text: "PandaDoc is rated #1 in proposals, eSignature, and contract management by G2"
+        - link "Find out why" [ref=e7] [cursor=pointer]:
+          - /url: https://www.pandadoc.com/library/ebooks/g2-proposal-report-2025/?cid=fdgdfgdf
+          - generic [ref=e8]: Find out why
+      - button "Close promotion" [ref=e10] [cursor=pointer]:
+        - img [ref=e11]
+  - link "Skip to main content" [ref=e13] [cursor=pointer]:
+    - /url: "#main-content"
+  - generic [ref=e16]:
+    - link "Help center" [ref=e17] [cursor=pointer]:
+      - /url: https://support.pandadoc.com/en/
+    - button "English (United States)" [ref=e20] [cursor=pointer]:
+      - generic [ref=e22]: English (United States)
+  - region "Site header" [ref=e23]:
+    - generic [ref=e27]:
+      - link [ref=e29] [cursor=pointer]:
+        - /url: /
+        - figure [ref=e31]:
+          - img "Desktop Site Logo" [ref=e34]
+      - navigation "Main navigation"
+      - generic [ref=e35]:
+        - link "Request a demo" [ref=e36] [cursor=pointer]:
+          - /url: https://www.pandadoc.com/getdemo/eu/?ss=home_home_header-nav&cid=fdgdfgdf&lng=en-US
+        - button "Open menu" [ref=e37]:
+          - img [ref=e38]
+  - main [ref=e40]:
+    - generic [ref=e42]:
+      - generic [ref=e44]:
+        - generic [ref=e47]:
+          - heading "Make proposals that make impressions" [level=1] [ref=e48]:
+            - text: Make proposals
+            - text: that make impressions
+          - paragraph [ref=e49]: Stand out with the top-rated solution for creating, managing, tracking, and eSigning every important document you handle
+          - link "Get Started" [ref=e51] [cursor=pointer]:
+            - /url: https://signup.pandadoc.com/?ss=home_home_hero-video-large&lng=en-US
+            - generic [ref=e52]: Get Started
+          - paragraph
+        - generic [ref=e55]:
+          - paragraph
+          - generic [ref=e57]:
+            - generic:
+              - generic:
+                - paragraph
+                - paragraph
+            - generic [ref=e61]:
+              - generic [ref=e62]:
+                - img "autodesk" [ref=e65]
+                - link "lead-forensics" [ref=e67] [cursor=pointer]:
+                  - /url: https://www.google.com
+                  - img "lead-forensics" [ref=e68]
+                - img "SGS" [ref=e71]
+                - img "sylvan" [ref=e74]
+                - img "konika-minolta" [ref=e77]
+                - img "tata-steel" [ref=e80]
+                - img "Sysco" [ref=e83]
+                - img "rakuten" [ref=e86]
+                - img "u-haul" [ref=e89]
+                - img "hp" [ref=e92]
+                - img "bosch" [ref=e95]
+                - img "bonusly" [ref=e98]
+                - img "TomTom" [ref=e101]
+              - generic [ref=e102]:
+                - img [ref=e105]
+                - link [ref=e107] [cursor=pointer]:
+                  - /url: https://www.google.com
+                  - img [ref=e108]
+                - img [ref=e111]
+                - img [ref=e114]
+                - img [ref=e117]
+                - img [ref=e120]
+                - img [ref=e123]
+                - img [ref=e126]
+                - img [ref=e129]
+                - img [ref=e132]
+                - img [ref=e135]
+                - img [ref=e138]
+                - img [ref=e141]
+              - generic [ref=e142]:
+                - img [ref=e145]
+                - link [ref=e147] [cursor=pointer]:
+                  - /url: https://www.google.com
+                  - img [ref=e148]
+                - img [ref=e151]
+                - img [ref=e154]
+                - img [ref=e157]
+                - img [ref=e160]
+                - img [ref=e163]
+                - img [ref=e166]
+                - img [ref=e169]
+                - img [ref=e172]
+                - img [ref=e175]
+                - img [ref=e178]
+                - img [ref=e181]
+              - generic [ref=e182]:
+                - img [ref=e185]
+                - link [ref=e187] [cursor=pointer]:
+                  - /url: https://www.google.com
+                  - img [ref=e188]
+                - img [ref=e191]
+                - img [ref=e194]
+                - img [ref=e197]
+                - img [ref=e200]
+                - img [ref=e203]
+                - img [ref=e206]
+                - img [ref=e209]
+                - img [ref=e212]
+                - img [ref=e215]
+                - img [ref=e218]
+                - img [ref=e221]
+          - generic [ref=e231]:
+            - generic "Product Overview Home Page" [ref=e233]
+            - generic [ref=e235]:
+              - generic [ref=e236]:
+                - generic:
+                  - 'button "Play Video: Product Overview Home Page"'
+                - generic:
+                  - generic:
+                    - img [ref=e238]
+                    - img "PandaDoc walkthrough video showing how to choose a template, add a recipient, edit the document, insert a signature field, and send it for signing." [ref=e240]
+              - 'button "Play Video: Product Overview Home Page" [ref=e242] [cursor=pointer]':
+                - img [ref=e245]
+          - paragraph
+      - generic [ref=e248]:
+        - generic [ref=e249]:
+          - generic [ref=e250]:
+            - heading "The complete document management solutions" [level=2] [ref=e251]
+            - paragraph
+          - generic [ref=e252]:
+            - paragraph [ref=e254]: From creation to signature to payment, PandaDoc is a 360-degree document management solution that helps your teams get more done, faster.
+            - link "Request a demo" [ref=e256] [cursor=pointer]:
+              - /url: https://www.pandadoc.com/getdemo/?ss=home_home_benefits-tabs&lng=en-US
+              - generic [ref=e257]: Request a demo
+        - generic [ref=e260]:
+          - group "Benefits" [ref=e261]:
+            - generic [ref=e262]: Benefits
+            - generic [ref=e263]:
+              - button "Create" [expanded] [ref=e264]
+              - generic "Create" [ref=e266]:
+                - generic [ref=e267]:
+                  - paragraph [ref=e270]: Easily generate custom agreements tailored to your audience and workflow with our drag-and-drop editor.
+                  - link "Smart content" [ref=e272] [cursor=pointer]:
+                    - /url: /features/create/smart-content/
+            - generic [ref=e273]:
+              - button "Collaborate" [ref=e274] [cursor=pointer]
+              - generic:
+                - generic:
+                  - generic:
+                    - generic:
+                      - generic:
+                        - paragraph: With PandaDoc, everyone’s eyes are on the same document for real-time redlining, comments, approvals, and more.
+                    - generic:
+                      - link:
+                        - /url: /features/collaborate/workspaces/
+                        - text: Workspaces
+                      - link:
+                        - /url: /rooms/
+                        - text: Rooms
+            - generic [ref=e275]:
+              - button "Automate" [ref=e276] [cursor=pointer]
+              - generic:
+                - generic:
+                  - generic:
+                    - generic:
+                      - generic:
+                        - paragraph: PandaDoc's CRM integrations, embeddable API, and automation features speed up your workflows while eliminating errors and repetitive tasks.
+                    - generic:
+                      - link:
+                        - /url: /integrations/
+                        - text: CRM integration
+                      - link:
+                        - /url: /developer-api/
+                        - text: API
+            - generic [ref=e277]:
+              - button "Sign" [ref=e278] [cursor=pointer]
+              - generic:
+                - generic:
+                  - generic:
+                    - generic:
+                      - generic:
+                        - paragraph: Not only can you capture signatures, but decide signing order, verify the identity of recipients, set signing groups, and even notarize documents.
+                    - generic:
+                      - link:
+                        - /url: /features/signing-order/
+                        - text: Signing order
+                      - link:
+                        - /url: /electronic-signature-software/
+                        - text: eSignature
+            - generic [ref=e279]:
+              - button "Analyze" [ref=e280] [cursor=pointer]
+              - generic:
+                - generic:
+                  - generic:
+                    - generic:
+                      - generic:
+                        - paragraph: PandaDoc records an audit trail for every document, reports user activity, and tracks document metrics, too.
+                    - generic:
+                      - link:
+                        - /url: /document-tracking-software/
+                        - text: Document tracking
+                      - link:
+                        - /url: /features/audit-trail/
+                        - text: Audit trail
+            - generic [ref=e281]:
+              - button "Get paid" [ref=e282] [cursor=pointer]
+              - generic:
+                - generic:
+                  - generic:
+                    - generic:
+                      - generic:
+                        - paragraph: Easily embed trusted payment gateways directly into bills and invoices so customers can pay with just a few clicks.
+                    - generic:
+                      - link:
+                        - /url: /payments/
+                        - text: Payments
+          - generic "Benefits media" [ref=e283]:
+            - region [ref=e285]:
+              - generic [ref=e286]:
+                - group "1 of 6" [ref=e287]
+                - group [ref=e291]
+                - group [ref=e295]
+                - group [ref=e299]
+                - group [ref=e303]
+                - group [ref=e307]
+      - generic [ref=e312]:
+        - generic [ref=e314]:
+          - generic [ref=e315]:
+            - heading "Safe, secure, and legally binding" [level=2] [ref=e316]:
+              - text: Safe, secure, and
+              - text: legally binding
+            - paragraph [ref=e317]: PandaDoc is E-SIGN, UETA, HIPAA compliant, and SOC 2 certified, offering secure electronic signatures. It also provides SSO and a robust API for granular document and workspace permissions.
+          - link "Security and compliance" [ref=e319] [cursor=pointer]:
+            - /url: /security/
+            - generic [ref=e320]: Security and compliance
+        - region [ref=e325]:
+          - generic [ref=e326]:
+            - group [ref=e327]:
+              - img [ref=e330]
+            - group [ref=e331]:
+              - img [ref=e334]
+            - group [ref=e335]:
+              - img [ref=e338]
+            - group [ref=e339]:
+              - img [ref=e342]
+            - group [ref=e343]:
+              - img [ref=e346]
+            - group [ref=e347]:
+              - img [ref=e350]
+            - group [ref=e351]:
+              - img [ref=e354]
+            - group [ref=e355]:
+              - img [ref=e358]
+            - group [ref=e359]:
+              - img [ref=e362]
+            - group [ref=e363]:
+              - img [ref=e366]
+            - group "1 of 1" [ref=e367]:
+              - img "Home - Trust - Logo 1" [ref=e370]
+            - group [ref=e371]:
+              - img [ref=e374]
+            - group [ref=e375]:
+              - img [ref=e378]
+            - group [ref=e379]:
+              - img [ref=e382]
+            - group [ref=e383]:
+              - img [ref=e386]
+            - group [ref=e387]:
+              - img [ref=e390]
+            - group [ref=e391]:
+              - img [ref=e394]
+            - group [ref=e395]:
+              - img [ref=e398]
+            - group [ref=e399]:
+              - img [ref=e402]
+            - group [ref=e403]:
+              - img [ref=e406]
+            - group [ref=e407]:
+              - img [ref=e410]
+      - generic [ref=e412]:
+        - generic [ref=e414]:
+          - generic [ref=e416]:
+            - heading "Designed to make every agreement easier" [level=2] [ref=e417]:
+              - strong [ref=e418]:
+                - text: Designed to make every
+                - text: agreement easier
+            - paragraph
+          - link "See all Features" [ref=e421] [cursor=pointer]:
+            - /url: /features/
+            - generic [ref=e422]: See all Features
+        - generic [ref=e425]:
+          - link "CPQ (configure, price, quote) Impress buyers with automated quotes tailored just for them PandaDoc CPQ makes it easy to generate quotes that help close more deals. Pull data directly from your product catalog and implement rules-based pricing strategies to deliver an impressive buyer experience." [ref=e427] [cursor=pointer]:
+            - /url: /cpq-software/
+            - generic [ref=e429]:
+              - generic [ref=e430]: CPQ (configure, price, quote)
+              - generic [ref=e431]:
+                - heading "Impress buyers with automated quotes tailored just for them" [level=3] [ref=e432]
+                - paragraph
+              - paragraph [ref=e434]: PandaDoc CPQ makes it easy to generate quotes that help close more deals. Pull data directly from your product catalog and implement rules-based pricing strategies to deliver an impressive buyer experience.
+            - figure [ref=e436]:
+              - img "quote-1 - Image" [ref=e439]
+          - link "Rooms Close deals fast in a digital space that makes collaboration easy" [ref=e441] [cursor=pointer]:
+            - /url: /rooms/
+            - generic [ref=e443]:
+              - generic [ref=e444]: Rooms
+              - generic [ref=e445]:
+                - heading "Close deals fast in a digital space that makes collaboration easy" [level=3] [ref=e446]
+                - paragraph
+            - figure [ref=e448]:
+              - img "1st automations - Image" [ref=e451]
+          - link "Smart content Eliminate errors with pre-set document creation rules" [ref=e453] [cursor=pointer]:
+            - /url: /features/create/smart-content/
+            - generic [ref=e455]:
+              - generic [ref=e456]: Smart content
+              - generic [ref=e457]:
+                - heading "Eliminate errors with pre-set document creation rules" [level=3] [ref=e458]: Eliminate errors with pre-set document creation rules
+                - paragraph
+            - figure [ref=e460]:
+              - img "2nd automation - Image" [ref=e463]
+          - link "Automations Save time by automating manual and repetitive tasks" [ref=e465] [cursor=pointer]:
+            - /url: /features/organize/automations/
+            - generic [ref=e467]:
+              - generic [ref=e468]: Automations
+              - generic [ref=e469]:
+                - heading "Save time by automating manual and repetitive tasks" [level=3] [ref=e470]: Save time by automating manual and repetitive tasks
+                - paragraph
+            - figure [ref=e472]:
+              - img "3rd automation - Image" [ref=e475]
+          - link "Tracking and analytics Monitor user activity, document performance and more" [ref=e477] [cursor=pointer]:
+            - /url: /document-tracking-software/
+            - generic [ref=e479]:
+              - generic [ref=e480]: Tracking and analytics
+              - generic [ref=e481]:
+                - heading "Monitor user activity, document performance and more" [level=3] [ref=e482]: Monitor user activity, document performance and more
+                - paragraph
+            - figure [ref=e484]:
+              - img "4th analytics - Image" [ref=e487]
+      - generic [ref=e490]:
+        - generic [ref=e491]:
+          - generic [ref=e494]:
+            - heading "Will O’Neil, Head of IT & Strategic Enablement at Nomad" [level=2] [ref=e495]
+            - paragraph
+          - link "See all reviews" [ref=e497] [cursor=pointer]:
+            - /url: /customer-stories/
+            - generic [ref=e498]: See all reviews
+        - region [ref=e502]:
+          - generic [ref=e503]:
+            - group [ref=e504]:
+              - generic [ref=e505]:
+                - figure [ref=e509]:
+                  - img [ref=e512]
+                - generic [ref=e513]:
+                  - figure [ref=e515]:
+                    - img [ref=e518]
+                  - paragraph [ref=e521]: PandaDoc has a personal touch — they listen, adapt, and support us like true partners. This has made all the difference. I know I can reach out to them anytime. They take their time to walk us through everything, and I can trust that they’ll help us resolve any issues…
+                  - generic [ref=e524]:
+                    - generic [ref=e525]:
+                      - paragraph [ref=e527]: 25%
+                      - paragraph [ref=e529]: more documents sent per month
+                    - generic [ref=e530]:
+                      - paragraph [ref=e532]: 46x
+                      - paragraph [ref=e534]: faster to get a signature compared to Docusign
+            - group [ref=e535]:
+              - generic [ref=e536]:
+                - figure [ref=e540]:
+                  - img [ref=e543]
+                - generic [ref=e544]:
+                  - figure [ref=e546]:
+                    - img [ref=e549]
+                  - blockquote [ref=e552]:
+                    - paragraph [ref=e553]: "\"PandaDoc has enhanced the purchasing experience for our buyers and sales team. We’ve halved proposal creation time while demonstrating value in every single proposal. It’s helped us close more deals, save time and maintain our brand’s integrity.\""
+                  - generic [ref=e556]:
+                    - generic [ref=e557]:
+                      - paragraph [ref=e559]: 50%
+                      - paragraph [ref=e561]: reduction in proposal creation time
+                    - generic [ref=e562]:
+                      - paragraph [ref=e564]: 84%
+                      - paragraph [ref=e566]: of proposals viewed by prospects
+            - group "1 of 3" [ref=e567]:
+              - generic [ref=e568]:
+                - generic [ref=e570]:
+                  - figure [ref=e572]:
+                    - img "Testimonial - Customers - Slide 1 Video Cover Image - 121Ds9hfhFXdnIdTfIQ9N2" [ref=e575]
+                  - link "Video thumbnail" [ref=e579] [cursor=pointer]:
+                    - /url: https://fast.wistia.net/embed/iframe/stg7m9iok6?autoplay=1&controls=0&loop=0&muted=0
+                    - img "Video thumbnail" [ref=e581]
+                - generic [ref=e582]:
+                  - figure [ref=e584]:
+                    - img "nomad-logo - RrNik5DI3KxE3UUrwXopW" [ref=e587]
+                  - generic [ref=e589]:
+                    - blockquote [ref=e590]:
+                      - paragraph [ref=e591]: "\"PandaDoc’s HubSpot integration is second to none in comparison to competitors. It allows us to get a lot of information from the CRM directly into PandaDoc.\""
+                    - paragraph
+                  - generic [ref=e594]:
+                    - generic [ref=e595]:
+                      - paragraph [ref=e597]: 92%
+                      - paragraph [ref=e599]: reduction in proposal creation time
+                    - generic [ref=e600]:
+                      - paragraph [ref=e602]: 20%
+                      - paragraph [ref=e604]: reduction in customer acquisition costs
+            - group [ref=e605]:
+              - generic [ref=e606]:
+                - figure [ref=e610]:
+                  - img [ref=e613]
+                - generic [ref=e614]:
+                  - figure [ref=e616]:
+                    - img [ref=e619]
+                  - paragraph [ref=e622]: PandaDoc has a personal touch — they listen, adapt, and support us like true partners. This has made all the difference. I know I can reach out to them anytime. They take their time to walk us through everything, and I can trust that they’ll help us resolve any issues…
+                  - generic [ref=e625]:
+                    - generic [ref=e626]:
+                      - paragraph [ref=e628]: 25%
+                      - paragraph [ref=e630]: more documents sent per month
+                    - generic [ref=e631]:
+                      - paragraph [ref=e633]: 46x
+                      - paragraph [ref=e635]: faster to get a signature compared to Docusign
+            - group [ref=e636]:
+              - generic [ref=e637]:
+                - figure [ref=e641]:
+                  - img [ref=e644]
+                - generic [ref=e645]:
+                  - figure [ref=e647]:
+                    - img [ref=e650]
+                  - blockquote [ref=e653]:
+                    - paragraph [ref=e654]: "\"PandaDoc has enhanced the purchasing experience for our buyers and sales team. We’ve halved proposal creation time while demonstrating value in every single proposal. It’s helped us close more deals, save time and maintain our brand’s integrity.\""
+                  - generic [ref=e657]:
+                    - generic [ref=e658]:
+                      - paragraph [ref=e660]: 50%
+                      - paragraph [ref=e662]: reduction in proposal creation time
+                    - generic [ref=e663]:
+                      - paragraph [ref=e665]: 84%
+                      - paragraph [ref=e667]: of proposals viewed by prospects
+            - group [ref=e668]:
+              - generic [ref=e669]:
+                - generic [ref=e671]:
+                  - figure [ref=e673]:
+                    - img [ref=e676]
+                  - link [ref=e680] [cursor=pointer]:
+                    - /url: https://fast.wistia.net/embed/iframe/stg7m9iok6?autoplay=1&controls=0&loop=0&muted=0
+                    - img [ref=e682]
+                - generic [ref=e683]:
+                  - figure [ref=e685]:
+                    - img [ref=e688]
+                  - blockquote [ref=e691]:
+                    - paragraph [ref=e692]: "\"PandaDoc’s HubSpot integration is second to none in comparison to competitors. It allows us to get a lot of information from the CRM directly into PandaDoc.\""
+                  - generic [ref=e695]:
+                    - generic [ref=e696]:
+                      - paragraph [ref=e698]: 92%
+                      - paragraph [ref=e700]: reduction in proposal creation time
+                    - generic [ref=e701]:
+                      - paragraph [ref=e703]: 20%
+                      - paragraph [ref=e705]: reduction in customer acquisition costs
+            - group [ref=e706]:
+              - generic [ref=e707]:
+                - figure [ref=e711]:
+                  - img [ref=e714]
+                - generic [ref=e715]:
+                  - figure [ref=e717]:
+                    - img [ref=e720]
+                  - paragraph [ref=e723]: PandaDoc has a personal touch — they listen, adapt, and support us like true partners. This has made all the difference. I know I can reach out to them anytime. They take their time to walk us through everything, and I can trust that they’ll help us resolve any issues…
+                  - generic [ref=e726]:
+                    - generic [ref=e727]:
+                      - paragraph [ref=e729]: 25%
+                      - paragraph [ref=e731]: more documents sent per month
+                    - generic [ref=e732]:
+                      - paragraph [ref=e734]: 46x
+                      - paragraph [ref=e736]: faster to get a signature compared to Docusign
+          - generic:
+            - button "Go to last slide" [ref=e737] [cursor=pointer]:
+              - img [ref=e738]
+              - generic [ref=e740]: Previous Consensus
+            - button "Next slide" [ref=e741] [cursor=pointer]:
+              - generic [ref=e742]: Next Wizehire
+              - img [ref=e743]
+      - generic [ref=e746]:
+        - generic [ref=e749]:
+          - generic [ref=e750]:
+            - heading "Built to integrate with all your favorite tools" [level=2] [ref=e751]:
+              - text: Built to integrate with all
+              - text: your favorite tools
+            - paragraph
+          - link "See all integrations" [ref=e753] [cursor=pointer]:
+            - /url: /integrations/
+            - generic [ref=e754]: See all integrations
+        - generic [ref=e758]:
+          - generic [ref=e759]:
+            - link "Salesforce" [ref=e761] [cursor=pointer]:
+              - /url: /integrations/crm/salesforce/
+              - figure [ref=e762]:
+                - img "Salesforce logo" [ref=e765]
+              - generic: Salesforce
+            - link "HubSpot CRM" [ref=e767] [cursor=pointer]:
+              - /url: /integrations/crm/hubspot/
+              - figure [ref=e768]:
+                - img "Integrations - storage-dropbox-related-3 - Hero Integration Logo" [ref=e771]
+              - generic: HubSpot CRM
+            - link "Pipedrive" [ref=e773] [cursor=pointer]:
+              - /url: /integrations/crm/pipedrive/
+              - figure [ref=e774]:
+                - img "Integrations - storage-dropbox-related-2 - Hero Integration Logo" [ref=e777]
+              - generic: Pipedrive
+            - link "monday.com" [ref=e779] [cursor=pointer]:
+              - /url: /integrations/crm/mondaydotcom/
+              - figure [ref=e780]:
+                - img "Integrations - activecampaign-related-2 - Hero Integration Logo" [ref=e783]
+              - generic: monday.com
+            - link "Zapier Connectors" [ref=e785] [cursor=pointer]:
+              - /url: /integrations/integration-platforms/zapier/
+              - figure [ref=e786]:
+                - img "Integrations - activecampaign-related-4 - Hero Integration Logo" [ref=e789]
+              - generic: Zapier Connectors
+            - link "Stripe" [ref=e791] [cursor=pointer]:
+              - /url: /integrations/payment/stripe/
+              - figure [ref=e792]:
+                - img "Integrations - productivity-google-docs-related-8 - Hero Integration Logo" [ref=e795]
+              - generic: Stripe
+            - link "Square" [ref=e797] [cursor=pointer]:
+              - /url: /integrations/payment/square-payment-gateway/
+              - figure [ref=e798]:
+                - img "Integrations - crm-nutshell-related-2 - Hero Integration Logo" [ref=e801]
+              - generic: Square
+            - link "QuickBooks Online" [ref=e803] [cursor=pointer]:
+              - /url: /integrations/payment/quickbooks-online/
+              - figure [ref=e804]:
+                - img "QuickBooks Logo" [ref=e807]
+              - generic: QuickBooks Online
+            - link "PayPal" [ref=e809] [cursor=pointer]:
+              - /url: /integrations/payment/paypal/
+              - figure [ref=e810]:
+                - img "Integrations - crm-zoho-related-2 - Hero Integration Logo" [ref=e813]
+              - generic: PayPal
+            - link "Zoho" [ref=e815] [cursor=pointer]:
+              - /url: /integrations/crm/zoho/
+              - figure [ref=e816]:
+                - img "Integrations - crm-zoho - Hero Integration Logo" [ref=e819]
+              - generic: Zoho
+            - link "Authorize.Net" [ref=e821] [cursor=pointer]:
+              - /url: /integrations/payment/authorize-net-payment-gateway/
+              - figure [ref=e822]:
+                - img "Integrations - crm-sugarcrm-related-2 - Hero Integration Logo" [ref=e825]
+              - generic: Authorize.Net
+            - link "FreshBooks New" [ref=e827] [cursor=pointer]:
+              - /url: /integrations/payment/freshbooks-new/
+              - figure [ref=e828]:
+                - img "Integrations - storage-microsoft-onedrive-related-2 - Hero Integration Logo" [ref=e831]
+              - generic: FreshBooks New
+          - paragraph [ref=e833]:
+            - text: Want more customization?
+            - link "Explore the API" [ref=e834] [cursor=pointer]:
+              - /url: /api/?__hstc=149726313.129732dfd6cac682aa82e0e5648443b3.1716220944113.1727856152549.1727863063865.151&__hssc=149726313.1.1727863063865&__hsfp=443290148&cid=fdgdfgdfqwerqwerwasdfasdfwerqwerwerasdfasdrqwqwerwsadfasdf
+      - generic [ref=e837]:
+        - generic [ref=e838]:
+          - generic [ref=e839]:
+            - heading "Streamline your document workflow" [level=2] [ref=e840]
+            - paragraph [ref=e841]:
+              - text: Get
+              - strong [ref=e842]: personalized
+              - text: 1:1 demo with our product specialist.
+            - list [ref=e843]:
+              - listitem [ref=e844]:
+                - paragraph [ref=e845]: Tailored to your needs
+              - listitem [ref=e846]:
+                - paragraph [ref=e847]: Answers all your questions
+              - listitem [ref=e848]:
+                - paragraph [ref=e849]: No commitment to buy
+            - paragraph
+          - generic [ref=e851]:
+            - generic [ref=e853]:
+              - img "Chili Piper" [ref=e855]
+              - generic [ref=e857]:
+                - paragraph [ref=e858]:
+                  - text: ChiliPiper
+                  - link "increased their close rate by 28%" [ref=e859] [cursor=pointer]:
+                    - /url: /customers-case-study/chili-piper/?cid=fdgdfgdf
+                  - text: after implementing PandaDoc.
+                - paragraph
+            - paragraph
+        - generic [ref=e861]:
+          - generic [ref=e863]:
+            - heading "Schedule your free live demo" [level=2] [ref=e864]
+            - generic [ref=e865]:
+              - list [ref=e866]:
+                - listitem [ref=e867]:
+                  - generic [ref=e868]: "1"
+                  - generic [ref=e869]: Fill out the form
+                - listitem [ref=e870]:
+                  - generic [ref=e871]: "2"
+                  - generic [ref=e872]: Book a time slot
+                - listitem [ref=e873]:
+                  - generic [ref=e874]: "3"
+                  - generic [ref=e875]: Attend a demo
+              - generic [ref=e876]:
+                - generic: Work email
+                - textbox "Work email" [ref=e877]
+              - generic [ref=e878]:
+                - generic: Phone number
+                - generic [ref=e879]:
+                  - 'button "Selected country: Brazil" [ref=e881] [cursor=pointer]':
+                    - img "Brazil" [ref=e883]
+                  - textbox "Phone number" [ref=e889]:
+                    - /placeholder: " "
+                    - text: "+55"
+              - button "Schedule your demo" [ref=e891]
+              - paragraph [ref=e893]:
+                - text: By submitting this form, I agree that the
+                - link "Terms of Service" [ref=e894] [cursor=pointer]:
+                  - /url: https://www.pandadoc.com/terms-of-use/
+                - text: and
+                - link "Privacy Notice" [ref=e895] [cursor=pointer]:
+                  - /url: https://www.pandadoc.com/privacy-notice/
+                - text: will govern the use of services I receive and personal data I provide respectively.
+          - paragraph
+  - contentinfo [ref=e896]:
+    - generic [ref=e897]:
+      - generic [ref=e899]:
+        - generic [ref=e900]:
+          - generic [ref=e901]: Product
+          - list [ref=e902]:
+            - listitem [ref=e903]:
+              - link "Pricing" [ref=e904] [cursor=pointer]:
+                - /url: https://www.pandadoc.com/pricing/
+            - listitem [ref=e905]:
+              - link "Integrations" [ref=e906] [cursor=pointer]:
+                - /url: https://www.pandadoc.com/integrations/
+            - listitem [ref=e907]:
+              - link "Features" [ref=e908] [cursor=pointer]:
+                - /url: https://www.pandadoc.com/features/
+            - listitem [ref=e909]:
+              - link "Updates" [ref=e910] [cursor=pointer]:
+                - /url: https://www.pandadoc.com/blog/product-updates/
+            - listitem [ref=e911]:
+              - link "Security" [ref=e912] [cursor=pointer]:
+                - /url: https://www.pandadoc.com/security/
+            - listitem [ref=e913]:
+              - link "HIPAA" [ref=e914] [cursor=pointer]:
+                - /url: https://www.pandadoc.com/hipaa/
+        - generic [ref=e915]:
+          - generic [ref=e916]: Use cases
+          - list [ref=e917]:
+            - listitem [ref=e918]:
+              - link "Proposals" [ref=e919] [cursor=pointer]:
+                - /url: https://www.pandadoc.com/proposal-software/
+            - listitem [ref=e920]:
+              - link "eSignatures" [ref=e921] [cursor=pointer]:
+                - /url: https://www.pandadoc.com/electronic-signature-software/
+            - listitem [ref=e922]:
+              - link "Quotes" [ref=e923] [cursor=pointer]:
+                - /url: https://www.pandadoc.com/quoting-software/
+            - listitem [ref=e924]:
+              - link "Contracts" [ref=e925] [cursor=pointer]:
+                - /url: https://www.pandadoc.com/contract-management-software/
+            - listitem [ref=e926]:
+              - link "Payments" [ref=e927] [cursor=pointer]:
+                - /url: https://www.pandadoc.com/payments/
+            - listitem [ref=e928]:
+              - link "Forms" [ref=e929] [cursor=pointer]:
+                - /url: https://www.pandadoc.com/pandadoc-forms/
+            - listitem [ref=e930]:
+              - link "Notary" [ref=e931] [cursor=pointer]:
+                - /url: https://notary.pandadoc.com/
+            - listitem [ref=e932]:
+              - link "API" [ref=e933] [cursor=pointer]:
+                - /url: https://www.pandadoc.com/developer-api/
+            - listitem [ref=e934]:
+              - link "CPQ" [ref=e935] [cursor=pointer]:
+                - /url: https://www.pandadoc.com/cpq-software/
+            - listitem [ref=e936]:
+              - link "Deal Rooms" [ref=e937] [cursor=pointer]:
+                - /url: https://www.pandadoc.com/rooms/
+            - listitem [ref=e938]:
+              - link "All use cases" [ref=e939] [cursor=pointer]:
+                - /url: https://www.pandadoc.com/use-cases/
+                - text: All use cases
+                - img [ref=e940]
+        - generic [ref=e942]:
+          - generic [ref=e943]: Resources
+          - list [ref=e944]:
+            - listitem [ref=e945]:
+              - link "Help center" [ref=e946] [cursor=pointer]:
+                - /url: https://support.pandadoc.com/en/
+            - listitem [ref=e947]:
+              - link "Templates" [ref=e948] [cursor=pointer]:
+                - /url: https://www.pandadoc.com/templates/
+            - listitem [ref=e949]:
+              - link "Blog" [ref=e950] [cursor=pointer]:
+                - /url: https://www.pandadoc.com/blog/
+            - listitem [ref=e951]:
+              - link "Electronic signature law" [ref=e952] [cursor=pointer]:
+                - /url: https://www.pandadoc.com/electronic-signature-law/
+            - listitem [ref=e953]:
+              - link "How to guides" [ref=e954] [cursor=pointer]:
+                - /url: https://www.pandadoc.com/ask/
+            - listitem [ref=e955]:
+              - link "Developer center" [ref=e956] [cursor=pointer]:
+                - /url: https://developers.pandadoc.com/
+            - listitem [ref=e957]:
+              - link "System status" [ref=e958] [cursor=pointer]:
+                - /url: https://status.pandadoc.com/
+            - listitem [ref=e959]:
+              - link "Onboarding services" [ref=e960] [cursor=pointer]:
+                - /url: https://www.pandadoc.com/customer-experience/onboarding/
+            - listitem [ref=e961]:
+              - link "Partner Directory" [ref=e962] [cursor=pointer]:
+                - /url: https://www.pandadoc.com/partners/directory/
+            - listitem [ref=e963]:
+              - link "Recipes" [ref=e964] [cursor=pointer]:
+                - /url: /recipes/
+        - generic [ref=e965]:
+          - generic [ref=e966]: Compare
+          - list [ref=e967]:
+            - listitem [ref=e968]:
+              - link "vs DocuSign" [ref=e969] [cursor=pointer]:
+                - /url: https://www.pandadoc.com/alternatives/docusign/
+            - listitem [ref=e970]:
+              - link "vs Dropbox Sign" [ref=e971] [cursor=pointer]:
+                - /url: https://www.pandadoc.com/alternatives/hellosign/
+            - listitem [ref=e972]:
+              - link "vs Adobe Sign" [ref=e973] [cursor=pointer]:
+                - /url: https://www.pandadoc.com/alternatives/adobe-sign/
+            - listitem [ref=e974]:
+              - link "vs Proposify" [ref=e975] [cursor=pointer]:
+                - /url: https://www.pandadoc.com/alternatives/proposify/
+            - listitem [ref=e976]:
+              - link "vs Docsend" [ref=e977] [cursor=pointer]:
+                - /url: https://www.pandadoc.com/alternatives/docsend-alternative/
+            - listitem [ref=e978]:
+              - link "All alternatives" [ref=e979] [cursor=pointer]:
+                - /url: https://www.pandadoc.com/alternatives/
+                - text: All alternatives
+                - img [ref=e980]
+        - generic [ref=e982]:
+          - generic [ref=e983]: Company
+          - list [ref=e984]:
+            - listitem [ref=e985]:
+              - link "About us" [ref=e986] [cursor=pointer]:
+                - /url: https://www.pandadoc.com/about/
+            - listitem [ref=e987]:
+              - link "Culture" [ref=e988] [cursor=pointer]:
+                - /url: https://www.pandadoc.com/culture/
+            - listitem [ref=e989]:
+              - link "Careers" [ref=e990] [cursor=pointer]:
+                - /url: https://www.pandadoc.com/careers/
+            - listitem [ref=e991]:
+              - link "Stand with Ukraine" [ref=e992] [cursor=pointer]:
+                - /url: https://www.pandadoc.com/stand-with-ukraine/
+            - listitem [ref=e993]:
+              - link "Become a partner" [ref=e994] [cursor=pointer]:
+                - /url: https://www.pandadoc.com/partners/
+            - listitem [ref=e995]:
+              - link "Press" [ref=e996] [cursor=pointer]:
+                - /url: https://www.pandadoc.com/press/
+            - listitem [ref=e997]:
+              - link "Contact us" [ref=e998] [cursor=pointer]:
+                - /url: https://www.pandadoc.com/contact/?ss=home_home_cta&lng=en-US
+      - generic [ref=e999]:
+        - generic [ref=e1000]:
+          - generic [ref=e1001]:
+            - link "Google Play" [ref=e1002] [cursor=pointer]:
+              - /url: https://play.google.com/store/apps/details?id=com.pandadoc.mobile&hl=en&ss=home_home_cta&lng=en-US
+              - figure [ref=e1003]:
+                - generic:
+                  - generic:
+                    - img "google-play - 5oDsO5dnmteLthmHoOz8zf"
+            - link "App Store" [ref=e1004] [cursor=pointer]:
+              - /url: https://apps.apple.com/us/app/pandadoc-track-esign-docs/id1210645479?ss=home_home_cta&lng=en-US
+              - figure [ref=e1005]:
+                - generic:
+                  - generic:
+                    - img "app-store - 7k1gLMHhRkjo9tUIFOxmZA"
+          - generic [ref=e1006]:
+            - link "HIPAA":
+              - /url: "#"
+              - figure:
+                - generic:
+                  - generic:
+                    - img "HIPAA - 5HuNO4ZyABXujKhSFksXpO"
+            - link "AICPA SOC":
+              - /url: "#"
+              - figure:
+                - generic:
+                  - generic:
+                    - img "AICPA SOC - 5R2vjHEWxmRutkHsOecjoa"
+            - link "GDPR":
+              - /url: "#"
+              - figure:
+                - generic:
+                  - generic:
+                    - img "GDPR - 4mg7Hc6Mey5qZf2BXR5cMm"
+            - link "eIDAS":
+              - /url: "#"
+              - figure:
+                - generic:
+                  - generic:
+                    - img "eIDAS - 2e7wwuEceE5MyJeE4YlG2w"
+        - generic [ref=e1007]:
+          - generic [ref=e1008]:
+            - paragraph [ref=e1009]: © 2026 PandaDoc Inc. All rights reserved.
+            - generic [ref=e1010]:
+              - generic [ref=e1011]:
+                - link "Privacy Notice" [ref=e1012] [cursor=pointer]:
+                  - /url: /legal/privacy-notice/
+                - list
+              - generic [ref=e1013]:
+                - link "Legal" [ref=e1014] [cursor=pointer]:
+                  - /url: /legal/
+                - list
+              - generic [ref=e1015]:
+                - button "Cookie settings" [ref=e1016] [cursor=pointer]
+                - list
+              - generic [ref=e1017]:
+                - link "Accessibility Statement" [ref=e1018] [cursor=pointer]:
+                  - /url: https://www.pandadoc.com/accessibility-statement/
+                - list
+              - generic [ref=e1019]:
+                - link "Do Not Sell My Personal Information" [ref=e1020] [cursor=pointer]:
+                  - /url: https://privacyportal.onetrust.com/webform/68a57c74-9312-47e6-858f-68e403ff26c9/a6e53c17-c433-47d3-b558-c6f558902514
+                - list
+              - generic [ref=e1021]:
+                - link "AI Information" [ref=e1022] [cursor=pointer]:
+                  - /url: https://www.pandadoc.com/ai-information/
+                - list
+          - generic [ref=e1023]:
+            - generic [ref=e1024]:
+              - link "LinkedIn" [ref=e1025] [cursor=pointer]:
+                - /url: https://www.linkedin.com/company/pandadoc/
+                - figure [ref=e1026]:
+                  - img "Linkedin - 3kPI6bETgiN5EaXPDF7USK" [ref=e1029]
+              - link "Facebook" [ref=e1030] [cursor=pointer]:
+                - /url: https://www.facebook.com/PandaDoc/
+                - figure [ref=e1031]:
+                  - img "facebook - 3xfjNNs64Ta5cN83Ufruzd" [ref=e1034]
+              - link "X" [ref=e1035] [cursor=pointer]:
+                - /url: https://twitter.com/pandadoc
+                - figure [ref=e1036]:
+                  - img "Twitter - 4qW1lIw4i4QPpvdjceAKPk" [ref=e1039]
+              - link "Instagram" [ref=e1040] [cursor=pointer]:
+                - /url: https://www.instagram.com/pandadochq/
+                - figure [ref=e1041]:
+                  - img "Instagram - 1uWlHkvheOvMYkCmzzmvBB" [ref=e1044]
+              - link "YouTube" [ref=e1045] [cursor=pointer]:
+                - /url: https://www.youtube.com/user/thePandaDoc
+                - figure [ref=e1046]:
+                  - img "Youtube - 3t1MEZOttp1WiLOkEWxIdA" [ref=e1049]
+            - button "English (United States)" [ref=e1052] [cursor=pointer]:
+              - generic [ref=e1054]: English (United States)
+  - alert [ref=e1055]
+  - generic:
+    - region "Cookie banner" [active] [ref=e1056]:
+      - dialog "Privacy" [ref=e1057]:
+        - generic [ref=e1059]:
+          - generic [ref=e1062]:
+            - text: By clicking “Accept All Cookies”, you agree to the storing of cookies on your device to enhance site navigation, analyze site usage, and assist in our marketing efforts.
+            - link "More information about your privacy, opens in a new tab" [ref=e1063] [cursor=pointer]:
+              - /url: https://www.pandadoc.com/privacy-notice/
+              - text: Privacy Policy
+          - generic [ref=e1065]:
+            - button "Cookies Settings, Opens the preference center dialog" [ref=e1066] [cursor=pointer]: Cookies Settings
+            - button "Accept All Cookies" [ref=e1067] [cursor=pointer]
+    - text: Cookies Settings
+  - generic:
+    - img "close carousel"

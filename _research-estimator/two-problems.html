@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=Noto+Sans+Hebrew:wght@400;500;700&display=swap');
+  @page { size: A4; margin: 18mm 16mm; }
+  * { box-sizing: border-box; }
+  body {
+    font-family: "Noto Sans Hebrew", "Noto Sans SC", "Helvetica Neue", "Arial", "PingFang SC", sans-serif;
+    color: #2b2622; line-height: 1.55; font-size: 12px; margin: 0;
+    background: #fff;
+  }
+  .cover {
+    background: linear-gradient(135deg, #3a3430 0%, #5c5048 100%);
+    color: #f5efe8; padding: 34px 30px; border-radius: 10px; margin-bottom: 26px;
+  }
+  .cover h1 { margin: 0 0 6px; font-size: 23px; font-weight: 700; letter-spacing: .3px; }
+  .cover .sub { font-size: 13px; opacity: .82; }
+  .cover .meta { margin-top: 14px; font-size: 11px; opacity: .62; }
+  h2.prob {
+    font-size: 16px; margin: 30px 0 4px; padding: 9px 14px; border-radius: 7px;
+    background: #f0ebe4; border-right: 4px solid #b08d57; color: #4a4038;
+  }
+  h2.prob .num {
+    display: inline-block; background: #b08d57; color: #fff; width: 22px; height: 22px;
+    border-radius: 50%; text-align: center; line-height: 22px; font-size: 12px; margin-left: 8px;
+  }
+  .lang { margin: 12px 0 6px; }
+  .he { direction: rtl; text-align: right; }
+  .zh { direction: ltr; text-align: left; }
+  .tag { font-size: 10px; font-weight: 700; color: #b08d57; letter-spacing: 1px; text-transform: uppercase; margin-bottom: 3px; }
+  table { border-collapse: collapse; width: 100%; margin: 8px 0 12px; font-size: 11px; }
+  th, td { border: 1px solid #e0d8ce; padding: 5px 8px; text-align: center; }
+  th { background: #4a4038; color: #f5efe8; font-weight: 600; }
+  tr:nth-child(even) td { background: #faf7f2; }
+  .bad { background: #f7e4e0 !important; color: #a5352a; font-weight: 700; }
+  .ok  { color: #3f7a4f; font-weight: 600; }
+  ol.he, ul.he { direction: rtl; text-align: right; padding-right: 20px; margin: 6px 0; }
+  ol.zh, ul.zh { direction: ltr; text-align: left; padding-left: 20px; margin: 6px 0; }
+  li { margin: 3px 0; }
+  .concl { background: #f0ebe4; border-radius: 7px; padding: 10px 14px; margin: 8px 0 4px; font-weight: 600; }
+  .concl.he { direction: rtl; text-align: right; }
+  .concl.zh { direction: ltr; text-align: left; }
+  .divider { height: 1px; background: #e0d8ce; margin: 26px 0; }
+  .summary { margin-top: 30px; }
+  .summary th { background: #b08d57; }
+</style>
+</head>
+<body>
+
+<div class="cover">
+  <h1>报价自动估算 · 两个问题</h1>
+  <div class="sub">אומדן ההצעות האוטומטי — שתי בעיות עם ראיות</div>
+  <div class="meta">Albadi · 2026-07-03 · 数据来源 / מקור: 工厂目录 + 报价表 (Feishu)</div>
+</div>
+
+<!-- ===================== PROBLEM 1 ===================== -->
+<h2 class="prob"><span class="num">1</span>报价来自多个工厂，估算器只认识两个 · הצעות מכמה מפעלים, המחשבון מכיר רק שניים</h2>
+
+<div class="lang he">
+  <div class="tag">עברית</div>
+  <p>המחשבון בנוי על <b>2 מפעלים בלבד</b> שיש להם קטלוג (🟢 华庆/Mandy · 🔵 亚森). אבל טבלת ההצעות מכילה <b>6 מפעלים</b>. כשמפעל לא-ממודל — בעיקר <b>鼎驰, שהוא זול יותר</b> — נותן הצעה, המחשבון בוחר את הזול מבין השניים המוכרים ו<b>מתמחר גבוה מדי</b>.</p>
+</div>
+<div class="lang zh">
+  <div class="tag">中文</div>
+  <p>估算器只基于<b>两个有目录的工厂</b>（🟢 华庆/Mandy · 🔵 亚森），但报价表里有<b>六个工厂</b>。当一个未建模、<b>更便宜的工厂（主要是 鼎驰）</b>报价时，估算器只能从两个已知工厂里选最便宜的，于是<b>报得偏高</b>。</p>
+</div>
+
+<table>
+  <tr><th>工厂 / מפעל</th><th>报价数 / הצעות</th><th>有目录 / קטלוג</th></tr>
+  <tr><td>🔵 亚森</td><td>10</td><td class="ok">✔</td></tr>
+  <tr><td><b>鼎驰</b></td><td><b>8</b></td><td class="bad">✘</td></tr>
+  <tr><td>🟢 华庆 / Mandy</td><td>7</td><td class="ok">✔</td></tr>
+  <tr><td>永驰 / 华昊 / 亚宁</td><td>1 each</td><td class="bad">✘</td></tr>
+</table>
+
+<div class="tag" style="text-align:center">证据 · ראיות (估算 vs 实际 / מחשבון מול אמת)</div>
+<table>
+  <tr><th>袋子 / שקית</th><th>实际工厂 / ספק</th><th>实际价 / אמת</th><th>估算 / מחשבון</th><th>偏差 / סטייה</th></tr>
+  <tr><td>H28×D10×W28 (覆膜)</td><td>鼎驰</td><td>¥0.86</td><td>¥1.05</td><td class="bad">+22%</td></tr>
+  <tr><td>H41×D12×W36 (10000)</td><td>鼎驰</td><td>¥0.81</td><td>¥0.96</td><td class="bad">+19%</td></tr>
+  <tr><td>H30×D17×W30</td><td>鼎驰</td><td>¥1.03</td><td>¥1.14</td><td class="bad">+11%</td></tr>
+  <tr><td>H41×D12×W36 (5000)</td><td>鼎驰</td><td>¥0.91</td><td>¥1.01</td><td class="bad">+11%</td></tr>
+  <tr><td>已知工厂 / מפעלים מוכרים (亚森/华庆)</td><td>—</td><td>—</td><td>—</td><td class="ok">~3% ✔</td></tr>
+</table>
+
+<div class="concl he">💡 מסקנה: הסטייה אינה באג — מקורה במפעל שלישי זול (鼎驰) בלי קטלוג. <b>פתרון: להשיג קטלוג מ-鼎驰.</b></div>
+<div class="concl zh">💡 结论：偏差不是错误，而是有一个更便宜、没有目录的第三方工厂（鼎驰）。<b>解决办法：向 鼎驰 索取目录。</b></div>
+
+<div class="divider"></div>
+
+<!-- ===================== PROBLEM 2 ===================== -->
+<h2 class="prob"><span class="num">2</span>亚森的 2D 平面袋：价格不一致 + 装箱不可预测 · 2D בכחול: מחיר לא-עקבי + שילוח לא-צפוי</h2>
+
+<div class="lang he">
+  <div class="tag">עברית</div>
+  <p>רוב הצעות ה-2D (שקיות שטוחות) הן מ-<b>亚森</b>. המחירון שלו ל-2D <b>לא עקבי</b> — אי אפשר לבנות עליו נוסחה, גם במחיר וגם בשילוח.</p>
+</div>
+<div class="lang zh">
+  <div class="tag">中文</div>
+  <p>大部分 2D（平面袋）报价来自 <b>亚森</b>。其 2D 价目表<b>不一致</b> — 价格和装箱都无法建立公式。</p>
+</div>
+
+<div class="tag" style="text-align:center">2D 基础价 / מחיר בסיס (无提手 1色 / בלי ידית, צבע 1)</div>
+<table>
+  <tr><th>尺寸 / מידה</th><th>面积 / שטח</th><th>3000</th><th>5000</th><th>10000</th></tr>
+  <tr><td>H8×W10</td><td>160</td><td class="bad">¥0.53</td><td>¥0.55</td><td>¥0.37</td></tr>
+  <tr><td>H10×W15</td><td>300</td><td class="bad">¥0.74</td><td>¥0.71</td><td>¥0.68</td></tr>
+  <tr><td>H15×W20</td><td>600</td><td class="bad">¥0.53</td><td>¥0.55</td><td>¥0.37</td></tr>
+  <tr><td>H25×W25</td><td>1250</td><td>¥0.63</td><td>¥0.59</td><td>¥0.56</td></tr>
+  <tr><td>H30×W40</td><td>2400</td><td>¥0.70</td><td>¥0.55</td><td>¥0.46</td></tr>
+  <tr><td>H35×W50</td><td>3500</td><td>¥0.63</td><td>¥0.59</td><td>¥0.56</td></tr>
+</table>
+
+<div class="lang he">
+  <div class="tag">4 סתירות במחיר</div>
+  <ol class="he">
+    <li>המחיר לא עולה עם הגודל — H10×W15 (זעיר) ¥0.74 &gt; H35×W50 (ענק) ¥0.63.</li>
+    <li>מחירים זהים למידות שונות — H8×W10 = H15×W20 ; H25×W25 = H35×W50.</li>
+    <li>5000 יקר מ-3000 — H8×W10: ¥0.53 → ¥0.55.</li>
+    <li>הקטלוג לא מכסה את הגדלים הנפוצים (H60×W45, H65×W55).</li>
+  </ol>
+</div>
+<div class="lang zh">
+  <div class="tag">价格的四个矛盾</div>
+  <ol class="zh">
+    <li>价格不随尺寸增大 — H10×W15（小）¥0.74 &gt; H35×W50（大）¥0.63。</li>
+    <li>不同尺寸价格完全相同 — H8×W10 = H15×W20 ; H25×W25 = H35×W50。</li>
+    <li>5000个比3000个贵 — H8×W10：¥0.53 → ¥0.55。</li>
+    <li>目录未覆盖常订的大尺寸（H60×W45、H65×W55）。</li>
+  </ol>
+</div>
+
+<div class="tag" style="text-align:center">装箱厚度 T / עובי אריזה (mm)</div>
+<table>
+  <tr><th></th><th>目录小尺寸 / קטלוג קטנות</th><th>实际大尺寸 / הצעות גדולות</th></tr>
+  <tr><td>T (mm)</td><td class="bad">0.31 – 2.25 (极不稳定 / מפוזר)</td><td class="ok">0.52 – 0.75</td></tr>
+</table>
+<div class="lang he"><p style="direction:rtl;text-align:right;font-size:11px">שקית קטנה בקרטון סטנדרטי = הרבה אוויר → השילוח לא צפוי. לגדולות בערך (~T=0.55, ±10-15%).</p></div>
+<div class="lang zh"><p style="font-size:11px">小袋子装进标准纸箱有大量空隙 → 装箱不可预测。大尺寸大致可估（~T=0.55，±10-15%）。</p></div>
+
+<div class="concl he">💡 מסקנה: בגלל המחיר הלא-עקבי אי אפשר לבנות נוסחת 2D אמינה. <b>נדרש מחירון 2D מסודר: לפי שטח, מונוטוני בכמות, עד ~H65×W55.</b></div>
+<div class="concl zh">💡 结论：由于价格不一致，无法建立可靠的 2D 公式。<b>需要规范的 2D 价目表：按面积、数量递减、覆盖到约 H65×W55。</b></div>
+
+<!-- ===================== SUMMARY ===================== -->
+<div class="summary">
+<table>
+  <tr><th>问题 / בעיה</th><th>根源 / שורש</th><th>解决 / פתרון</th></tr>
+  <tr><td>1 · 未建模工厂 / מפעלים לא-ממודלים</td><td>鼎驰 更便宜且无目录 / זול ובלי קטלוג</td><td>向鼎驰索取目录 / קטלוג מ-鼎驰</td></tr>
+  <tr><td>2 · 2D 不一致 / 2D לא-עקבי</td><td>价格不随面积 + 小袋装箱 / מחיר לא לפי שטח</td><td>规范的2D价目表 / מחירון 2D מסודר</td></tr>
+</table>
+</div>
+
+</body>
+</html>

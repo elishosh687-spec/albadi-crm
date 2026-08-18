@@ -10,9 +10,11 @@
  * (total=0). NEVER throws — both the dashboard and the cron rely on this.
  */
 import { resolveFbFormColumns } from "@/lib/sheets/fb-form-columns";
+import { metaSheetIds } from "@/lib/sheets/meta-attribution";
 
 export interface SheetGapRow {
   rowIndex: number; // 1-based, matches Sheet row number
+  spreadsheetId: string; // which sheet this row came from — deep links need it
   name: string | null;
   rawPhone: string | null;
   sentAt: string | null;
@@ -144,27 +146,41 @@ export async function loadSheetGaps(
     return cache.snap;
   }
 
-  const spreadsheetId = readEnv("GOOGLE_SHEETS_FB_LEADS_ID").trim();
+  // Read EVERY known form sheet, not just the one in the env var. A live form
+  // gets its own spreadsheet (Meta writes each form's answers in that form's
+  // own field order, so two forms cannot share one sheet), and this panel's
+  // whole job is spotting leads that fell through — pointing it at a single
+  // sheet makes it blind to the newest form, which is precisely the one whose
+  // rows nobody has eyeballed yet. Shares the id list with the attribution
+  // pass so a sheet can never be registered in one place and missing here.
+  const sheetIds = metaSheetIds();
 
-  if (!spreadsheetId) {
-    console.warn("[sheets.lead-gaps] missing GOOGLE_SHEETS_FB_LEADS_ID — returning empty snapshot");
+  if (sheetIds.length === 0) {
+    console.warn("[sheets.lead-gaps] no sheet ids — returning empty snapshot");
     const empty = EMPTY_SNAPSHOT();
     cache = { at: Date.now(), snap: empty };
     return empty;
   }
 
-  try {
-    const url = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/export?format=csv&gid=0`;
-    const resp = await fetch(url, { redirect: "follow" });
-    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-    const text = await resp.text();
-    const lines = text.split(/\r?\n/);
+  const primaryId = readEnv("GOOGLE_SHEETS_FB_LEADS_ID").trim() || sheetIds[0];
 
+  try {
     const rows: SheetGapRow[] = [];
     let pendingCount = 0;
     let badPhoneCount = 0;
     let sendFailedCount = 0;
     let otherErrorCount = 0;
+
+    for (const spreadsheetId of sheetIds) {
+    const url = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/export?format=csv&gid=0`;
+    const resp = await fetch(url, { redirect: "follow" });
+    // One unreadable sheet must not blank the whole panel.
+    if (!resp.ok) {
+      console.warn(`[sheets.lead-gaps] ${spreadsheetId}: HTTP ${resp.status} — skipped`);
+      continue;
+    }
+    const text = await resp.text();
+    const lines = text.split(/\r?\n/);
 
     const COL = resolveGapCols(parseCSVLine(lines[0] ?? ""));
     // Skip header row (index 0).
@@ -193,6 +209,7 @@ export async function loadSheetGaps(
 
       rows.push({
         rowIndex: i + 1,
+        spreadsheetId,
         name,
         rawPhone,
         sentAt: sent,
@@ -200,6 +217,7 @@ export async function loadSheetGaps(
         sid,
         category,
       });
+    }
     }
 
     const snap: SheetGapSnapshot = {
@@ -211,14 +229,14 @@ export async function loadSheetGaps(
       oldestPendingAt: null,
       rows,
       fetchedAt: new Date(),
-      spreadsheetId,
+      spreadsheetId: primaryId,
     };
     cache = { at: Date.now(), snap };
     return snap;
   } catch (e) {
     console.warn("[sheets.lead-gaps] fetch failed — returning empty snapshot", e);
     const empty = EMPTY_SNAPSHOT();
-    empty.spreadsheetId = spreadsheetId;
+    empty.spreadsheetId = primaryId;
     cache = { at: Date.now(), snap: empty };
     return empty;
   }
@@ -240,6 +258,7 @@ export function sheetRowDeepLink(spreadsheetId: string | null, rowIndex: number)
 // ---------------------------------------------------------------------------
 export interface FormGapVsDbRow {
   rowIndex: number;
+  spreadsheetId: string;
   name: string;
   phone: string;
   sent: string | null;
@@ -257,26 +276,30 @@ export interface FormGapVsDbSnapshot {
 const last9 = (s: string) => s.replace(/[^0-9]/g, "").slice(-9);
 
 export async function loadFormGapsVsDb(): Promise<FormGapVsDbSnapshot> {
-  const spreadsheetId = readEnv("GOOGLE_SHEETS_FB_LEADS_ID").trim();
+  const sheetIds = metaSheetIds();
+  const primaryId = readEnv("GOOGLE_SHEETS_FB_LEADS_ID").trim() || sheetIds[0] || "";
   const empty = (): FormGapVsDbSnapshot => ({
     checked: 0,
     inSystem: 0,
     notInSystem: [],
     fetchedAt: new Date().toISOString(),
-    spreadsheetId: spreadsheetId || null,
+    spreadsheetId: primaryId || null,
   });
-  if (!spreadsheetId) return empty();
+  if (sheetIds.length === 0) return empty();
 
-  let lines: string[];
-  try {
-    const url = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/export?format=csv&gid=0`;
-    const resp = await fetch(url, { redirect: "follow" });
-    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-    lines = (await resp.text()).split(/\r?\n/);
-  } catch (e) {
-    console.warn("[sheets.form-gaps] fetch failed — returning empty", e);
-    return empty();
+  // id → rows, so a row's deep link points at the sheet it actually lives in.
+  const perSheet: { id: string; lines: string[] }[] = [];
+  for (const id of sheetIds) {
+    try {
+      const url = `https://docs.google.com/spreadsheets/d/${id}/export?format=csv&gid=0`;
+      const resp = await fetch(url, { redirect: "follow" });
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      perSheet.push({ id, lines: (await resp.text()).split(/\r?\n/) });
+    } catch (e) {
+      console.warn(`[sheets.form-gaps] ${id}: fetch failed — skipped`, e);
+    }
   }
+  if (perSheet.length === 0) return empty();
 
   // Lazy import keeps this file's other (db-free) exports safe for any caller.
   const { db } = await import("@/lib/db");
@@ -294,29 +317,32 @@ export async function loadFormGapsVsDb(): Promise<FormGapVsDbSnapshot> {
   const notInSystem: FormGapVsDbRow[] = [];
   let inSystem = 0;
   let checked = 0;
-  const COL = resolveGapCols(parseCSVLine(lines[0] ?? ""));
-  for (let i = 1; i < lines.length; i++) {
-    const line = lines[i].trim();
-    if (!line) continue;
-    const r = parseCSVLine(line);
-    const name = (r[COL.name] ?? "").trim();
-    const rawPhone = (r[COL.phone] ?? "").trim();
-    if (!name || !rawPhone) continue;
-    if (rawPhone.toLowerCase().indexOf("test lead") !== -1) continue;
-    checked++;
-    const k = last9(rawPhone);
-    if (k.length === 9 && dbSet.has(k)) {
-      inSystem++;
-      continue;
+  for (const { id, lines } of perSheet) {
+    const COL = resolveGapCols(parseCSVLine(lines[0] ?? ""));
+    for (let i = 1; i < lines.length; i++) {
+      const line = lines[i].trim();
+      if (!line) continue;
+      const r = parseCSVLine(line);
+      const name = (r[COL.name] ?? "").trim();
+      const rawPhone = (r[COL.phone] ?? "").trim();
+      if (!name || !rawPhone) continue;
+      if (rawPhone.toLowerCase().indexOf("test lead") !== -1) continue;
+      checked++;
+      const k = last9(rawPhone);
+      if (k.length === 9 && dbSet.has(k)) {
+        inSystem++;
+        continue;
+      }
+      notInSystem.push({
+        rowIndex: i + 1,
+        spreadsheetId: id,
+        name,
+        phone: rawPhone,
+        sent: (r[COL.sent] ?? "").trim() || null,
+        status: (r[COL.status] ?? "").trim() || null,
+        sid: (r[COL.sid] ?? "").trim() || null,
+      });
     }
-    notInSystem.push({
-      rowIndex: i + 1,
-      name,
-      phone: rawPhone,
-      sent: (r[COL.sent] ?? "").trim() || null,
-      status: (r[COL.status] ?? "").trim() || null,
-      sid: (r[COL.sid] ?? "").trim() || null,
-    });
   }
 
   return {
@@ -324,6 +350,6 @@ export async function loadFormGapsVsDb(): Promise<FormGapVsDbSnapshot> {
     inSystem,
     notInSystem,
     fetchedAt: new Date().toISOString(),
-    spreadsheetId,
+    spreadsheetId: primaryId || null,
   };
 }

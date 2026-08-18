@@ -614,7 +614,9 @@ the outbound row gets sender attribution automatically.
 
 Replaces the old Google Apps Script → ManyChat path. Three independent layers around a single Google Sheet; safe to re-run end-to-end.
 
-**Sheet** — Meta Lead Ads native CRM connector writes rows directly. Current sheet: `1AnswoeBAFV-z4aN3KhqyJjb9DegyiDNH-0FcB8ry518` ("Albadi leads v2"). **Must be set to "Anyone with link → Viewer"** or the dashboard pill silently fetches an empty snapshot. Standard Meta column layout (0-indexed):
+**Sheet** — Meta Lead Ads native CRM connector writes rows directly. **One sheet per form**: Meta writes each form's answers starting at column 12 in *that form's* field order, so two forms sharing a sheet put answers under each other's headers. Live sheet since 18/08/2026: `18RsMyyHGjlUW98xpHROmAn6lxlAW1bTAXhOoEVa9OqQ` ("albadi 18.8.26", form `2538189129956046`); `1AnswoeBAFV-…` ("Albadi leads v2") holds the 183 leads up to that date. Every known sheet id lives in `DEFAULT_SHEET_IDS` ([lib/sheets/meta-attribution.ts](lib/sheets/meta-attribution.ts)) and both the attribution pass and the gap panel read the whole list — the env var *adds*, it does not replace. **Each sheet must be "Anyone with link → Viewer"** or that sheet is silently skipped.
+
+⚠️ **Columns are resolved by header name** ([lib/sheets/fb-form-columns.ts](lib/sheets/fb-form-columns.ts)), not position — the table below is the *historical* layout kept as fallback. In the 18/08 sheet the same fields sit at 17/18/16. Do not reintroduce fixed indices.
 
 | idx | column | written by |
 |-----|--------|------------|
@@ -638,7 +640,7 @@ Replaces the old Google Apps Script → ManyChat path. Three independent layers 
 - Column constants `COL_NAME=12, COL_PHONE=13, COL_SENT=18, COL_LAST_STATUS=19, COL_SID=20` match the Apps Script writes exactly. Classification: SENT → not a gap; BAD_PHONE prefix → bad_phone; `lead_created_send_failed` → send_failed; `http_*`/`exception_*` → other_error; else → pending.
 - Consumed by [app/dashboard/v3/leads/page.tsx](app/dashboard/v3/leads/page.tsx) ("פערי טופס" pill) and [app/api/bot/followups/route.ts](app/api/bot/followups/route.ts) (cron DMs Eli about stuck rows).
 
-**Rotating the sheet:** to swap to a new form, update Vercel env `GOOGLE_SHEETS_FB_LEADS_ID` + share the new sheet "Anyone with link" + redeploy. Apps Script lives in the sheet so each new sheet needs its own copy of the script. Code requires zero changes as long as the Meta column layout stays standard.
+**Rotating the sheet:** add the id to `DEFAULT_SHEET_IDS`, share the sheet "Anyone with link → Viewer", and copy the Apps Script into it (the script lives in the sheet, not in this repo). No env change and no redeploy needed — which matters, because Vercel deploys have been blocked since 17/08. Column layout may differ freely; resolution is by header.
 
 ## GHL-gap audit (leads missing from GHL)
 

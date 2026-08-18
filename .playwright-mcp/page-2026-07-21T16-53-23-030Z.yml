@@ -1,0 +1,800 @@
+- generic [active] [ref=f4e1]:
+  - generic [ref=f4e3]:
+    - generic [ref=f4e5]:
+      - generic [ref=f4e6]: — Factory quotes
+      - generic [ref=f4e7]: הצעות מהמפעל.
+      - generic [ref=f4e8]: חפש לקוח כדי לפתוח או לשלוח הצעה חדשה למפעל.
+    - textbox "חפש לפי שם / טלפון / sid" [ref=f4e14]
+    - generic [ref=f4e15]: בחר ליד מהרשימה למעלה כדי להתחיל זרימת הצעת מפעל.
+    - generic [ref=f4e19]:
+      - generic [ref=f4e20]: היסטוריית הצעות מפעל
+      - generic [ref=f4e21]:
+        - searchbox "חפש לפי שם / טלפון / מס' הצעה" [ref=f4e38]
+        - generic [ref=f4e39]:
+          - generic [ref=f4e40]: נמחקו הצעות? ייבא אותן מחדש מ-Feishu (עם אותו מס' הצעה).
+          - button "ייבא מ-Feishu" [ref=f4e41]
+        - generic [ref=f4e45]:
+          - button "הכל (81)" [ref=f4e46]
+          - button "טיוטות (18)" [ref=f4e47]
+          - button "ממתינים (2)" [ref=f4e48]
+          - button "התקבלו (10)" [ref=f4e49]
+          - button "סופיים (51)" [ref=f4e50]
+        - generic [ref=f4e51]: מציג 81 מתוך 81 · לחישוב/שליחה משולבת — פתח כרטיס לקוח ולחץ "חישוב משולב"
+        - generic [ref=f4e52]:
+          - generic [ref=f4e54]:
+            - button "יוסף אמון 1 הצעות 21.07.26 סופי 1" [ref=f4e55]:
+              - generic [ref=f4e58]: יוסף אמון
+              - generic [ref=f4e59]: 1 הצעות
+              - generic [ref=f4e60]: 21.07.26
+              - generic [ref=f4e61]: סופי 1
+            - generic [ref=f4e63]:
+              - button "הצג הכל — פירוט מלא לבוס + PDF" [ref=f4e64]
+              - link "הורד PDF משולב ללקוח" [ref=f4e68] [cursor=pointer]:
+                - /url: /api/factory/combine/pdf?ids=fq_1784650833110_jw1a2dfj
+              - button "ערוך / חישוב משולב" [ref=f4e72]
+              - button "שלח הצעה משולבת ב-WhatsApp" [ref=f4e76]
+              - button "מחק את כל הצעות הלקוח" [ref=f4e79]
+              - link "פתח ב-GHL" [ref=f4e83] [cursor=pointer]:
+                - /url: https://app.gohighlevel.com/v2/location//contacts/detail/JzXYmVQPb9tzIV5P8S2j
+          - generic [ref=f4e89]:
+            - button "אלבר אברהם אנקונינה 1 הצעות 21.07.26 ממתין 1" [ref=f4e90]:
+              - generic [ref=f4e93]: אלבר אברהם אנקונינה
+              - generic [ref=f4e94]: 1 הצעות
+              - generic [ref=f4e95]: 21.07.26
+              - generic [ref=f4e96]: ממתין 1
+            - generic [ref=f4e98]:
+              - button "אין הצעות עם תשובת מפעל" [disabled] [ref=f4e99]
+              - button "מחק את כל הצעות הלקוח" [ref=f4e103]
+              - link "פתח ב-GHL" [ref=f4e107] [cursor=pointer]:
+                - /url: https://app.gohighlevel.com/v2/location//contacts/detail/jqLCFTNVU1Du7v5TGtdd
+          - generic [ref=f4e113]:
+            - button "Yael Vitale Nadler 1 הצעות 21.07.26 טיוטה 1" [ref=f4e114]:
+              - generic [ref=f4e117]: Yael Vitale Nadler
+              - generic [ref=f4e118]: 1 הצעות
+              - generic [ref=f4e119]: 21.07.26
+              - generic [ref=f4e120]: טיוטה 1
+            - generic [ref=f4e122]:
+              - button "אין הצעות עם תשובת מפעל" [disabled] [ref=f4e123]
+              - button "מחק את כל הצעות הלקוח" [ref=f4e127]
+              - link "פתח ב-GHL" [ref=f4e131] [cursor=pointer]:
+                - /url: https://app.gohighlevel.com/v2/location//contacts/detail/LkjaRENtA3yEdFPsszZS
+          - generic [ref=f4e137]:
+            - button "אורין 3 הצעות 20.07.26 טיוטה 3" [ref=f4e138]:
+              - generic [ref=f4e141]: אורין
+              - generic [ref=f4e142]: 3 הצעות
+              - generic [ref=f4e143]: 20.07.26
+              - generic [ref=f4e144]: טיוטה 3
+            - generic [ref=f4e146]:
+              - button "אין הצעות עם תשובת מפעל" [disabled] [ref=f4e147]
+              - button "מחק את כל הצעות הלקוח" [ref=f4e151]
+              - link "פתח ב-GHL" [ref=f4e155] [cursor=pointer]:
+                - /url: https://app.gohighlevel.com/v2/location//contacts/detail/RdpvLVRWjvAaPX1a0zge
+          - generic [ref=f4e161]:
+            - button "אלעזר חדד 1 הצעות 20.07.26 טיוטה 1" [ref=f4e162]:
+              - generic [ref=f4e165]: אלעזר חדד
+              - generic [ref=f4e166]: 1 הצעות
+              - generic [ref=f4e167]: 20.07.26
+              - generic [ref=f4e168]: טיוטה 1
+            - generic [ref=f4e170]:
+              - button "אין הצעות עם תשובת מפעל" [disabled] [ref=f4e171]
+              - button "מחק את כל הצעות הלקוח" [ref=f4e175]
+              - link "פתח ב-GHL" [ref=f4e179] [cursor=pointer]:
+                - /url: https://app.gohighlevel.com/v2/location//contacts/detail/EWuqMIdLJkqvadu1VHMV
+          - generic [ref=f4e185]:
+            - button "מוטי אטיאס 1 הצעות 20.07.26 ממתין 1" [ref=f4e186]:
+              - generic [ref=f4e189]: מוטי אטיאס
+              - generic [ref=f4e190]: 1 הצעות
+              - generic [ref=f4e191]: 20.07.26
+              - generic [ref=f4e192]: ממתין 1
+            - generic [ref=f4e194]:
+              - button "אין הצעות עם תשובת מפעל" [disabled] [ref=f4e195]
+              - button "מחק את כל הצעות הלקוח" [ref=f4e199]
+              - link "פתח ב-GHL" [ref=f4e203] [cursor=pointer]:
+                - /url: https://app.gohighlevel.com/v2/location//contacts/detail/P0NUThW39gWU6KKIPxl4
+          - generic [ref=f4e209]:
+            - button "תומר 1 הצעות 20.07.26 טיוטה 1" [ref=f4e210]:
+              - generic [ref=f4e213]: תומר
+              - generic [ref=f4e214]: 1 הצעות
+              - generic [ref=f4e215]: 20.07.26
+              - generic [ref=f4e216]: טיוטה 1
+            - generic [ref=f4e218]:
+              - button "אין הצעות עם תשובת מפעל" [disabled] [ref=f4e219]
+              - button "מחק את כל הצעות הלקוח" [ref=f4e223]
+              - link "פתח ב-GHL" [ref=f4e227] [cursor=pointer]:
+                - /url: https://app.gohighlevel.com/v2/location//contacts/detail/OipTptGe4wwOTO18BpVN
+          - generic [ref=f4e232]:
+            - generic [ref=f4e233]:
+              - button "יוסי גולד בייבי 2 הצעות 17.07.26 סופי 2" [ref=f4e234]:
+                - generic [ref=f4e237]: יוסי גולד בייבי
+                - generic [ref=f4e238]: 2 הצעות
+                - generic [ref=f4e239]: 17.07.26
+                - generic [ref=f4e240]: סופי 2
+              - generic [ref=f4e242]:
+                - button "הצג הכל — פירוט מלא לבוס + PDF" [ref=f4e243]
+                - link "הורד PDF משולב ללקוח" [ref=f4e247] [cursor=pointer]:
+                  - /url: /api/factory/combine/pdf?ids=fq_1784309542898_jjer0542,fq_1783514876189_xp2u98vo
+                - button "ערוך / חישוב משולב" [ref=f4e251]
+                - button "שלח הצעה משולבת ב-WhatsApp" [ref=f4e255]
+                - button "מחק את כל הצעות הלקוח" [ref=f4e258]
+                - link "פתח ב-GHL" [ref=f4e262] [cursor=pointer]:
+                  - /url: https://app.gohighlevel.com/v2/location//contacts/detail/gHhoYOo0L7b57XsKT1bm
+            - list [ref=f4e267]:
+              - listitem [ref=f4e268]:
+                - generic [ref=f4e269]:
+                  - generic [ref=f4e270]: 17.07.26
+                  - generic [ref=f4e271]: 4TIMEAL4
+                  - generic [ref=f4e272]: סופי
+                  - generic [ref=f4e273]: יוסי גולד בייבי
+                  - generic [ref=f4e274]: ₪5,949
+                - generic [ref=f4e275]:
+                  - button "פתח הצעה מלאה" [ref=f4e276]
+                  - link "הורד PDF" [ref=f4e280] [cursor=pointer]:
+                    - /url: https://e7nckfcqbgdjwish.public.blob.vercel-storage.com/factory-quotes/fq_1784309542898_jjer0542-cgcnosV6qWVJn6YWD9qUTXoq7qrNcG.pdf
+                  - button "ערוך כעותק חדש — מקור נשמר" [ref=f4e284]
+                  - button "שלח ללקוח ב-WhatsApp" [ref=f4e288]
+                  - button "מחק הצעה" [ref=f4e291]
+                  - link "פתח ב-GHL" [ref=f4e295] [cursor=pointer]:
+                    - /url: https://app.gohighlevel.com/v2/location//contacts/detail/gHhoYOo0L7b57XsKT1bm
+              - listitem [ref=f4e300]:
+                - generic [ref=f4e301]:
+                  - generic [ref=f4e302]: 08.07.26
+                  - generic [ref=f4e303]: U1SL6F4Y
+                  - generic [ref=f4e304]: סופי
+                  - generic [ref=f4e305]: יוסי גולד בייבי
+                  - generic [ref=f4e306]: ₪8,243
+                - generic [ref=f4e307]:
+                  - button "פתח הצעה מלאה" [ref=f4e308]
+                  - link "הורד PDF" [ref=f4e312] [cursor=pointer]:
+                    - /url: https://e7nckfcqbgdjwish.public.blob.vercel-storage.com/factory-quotes/fq_1783514876189_xp2u98vo-9LxaOEngCiR41QYptOvvGyPGlQoODS.pdf
+                  - button "ערוך כעותק חדש — מקור נשמר" [ref=f4e316]
+                  - button "שלח ללקוח ב-WhatsApp" [ref=f4e320]
+                  - button "מחק הצעה" [ref=f4e323]
+                  - link "פתח ב-GHL" [ref=f4e327] [cursor=pointer]:
+                    - /url: https://app.gohighlevel.com/v2/location//contacts/detail/gHhoYOo0L7b57XsKT1bm
+          - generic [ref=f4e333]:
+            - button "מלח הארץ 1 הצעות 17.07.26 התקבל 1" [ref=f4e334]:
+              - generic [ref=f4e337]: מלח הארץ
+              - generic [ref=f4e338]: 1 הצעות
+              - generic [ref=f4e339]: 17.07.26
+              - generic [ref=f4e340]: התקבל 1
+            - generic [ref=f4e342]:
+              - button "הצג הכל — פירוט מלא לבוס + PDF" [ref=f4e343]
+              - button "ערוך / חישוב משולב" [ref=f4e347]
+              - button "מחק את כל הצעות הלקוח" [ref=f4e351]
+              - link "פתח ב-GHL" [ref=f4e355] [cursor=pointer]:
+                - /url: https://app.gohighlevel.com/v2/location//contacts/detail/oscuZh1Ra3LUj8zJ7oH9
+          - generic [ref=f4e361]:
+            - button "תכשיטי התאומים 3 הצעות 16.07.26 סופי 3" [ref=f4e362]:
+              - generic [ref=f4e365]: תכשיטי התאומים
+              - generic [ref=f4e366]: 3 הצעות
+              - generic [ref=f4e367]: 16.07.26
+              - generic [ref=f4e368]: סופי 3
+            - generic [ref=f4e370]:
+              - button "הצג הכל — פירוט מלא לבוס + PDF" [ref=f4e371]
+              - link "הורד PDF משולב ללקוח" [ref=f4e375] [cursor=pointer]:
+                - /url: /api/factory/combine/pdf?ids=fq_1784224315183_7dsqax35,fq_1784224145495_4ivt9n69,fq_1784224072618_8nn2pjs5
+              - button "ערוך / חישוב משולב" [ref=f4e379]
+              - button "שלח הצעה משולבת ב-WhatsApp" [ref=f4e383]
+              - button "מחק את כל הצעות הלקוח" [ref=f4e386]
+              - link "פתח ב-GHL" [ref=f4e390] [cursor=pointer]:
+                - /url: https://app.gohighlevel.com/v2/location//contacts/detail/4RMoeUI6Bt2l3PiQ4WTG
+          - generic [ref=f4e396]:
+            - button "יוסף 2 הצעות 16.07.26 טיוטה 2" [ref=f4e397]:
+              - generic [ref=f4e400]: יוסף
+              - generic [ref=f4e401]: 2 הצעות
+              - generic [ref=f4e402]: 16.07.26
+              - generic [ref=f4e403]: טיוטה 2
+            - generic [ref=f4e405]:
+              - button "אין הצעות עם תשובת מפעל" [disabled] [ref=f4e406]
+              - button "מחק את כל הצעות הלקוח" [ref=f4e410]
+              - link "פתח ב-GHL" [ref=f4e414] [cursor=pointer]:
+                - /url: https://app.gohighlevel.com/v2/location//contacts/detail/KhW76DrQucucxNfgCwlL
+          - generic [ref=f4e420]:
+            - button "רפאל זרחי 1 הצעות 16.07.26 טיוטה 1" [ref=f4e421]:
+              - generic [ref=f4e424]: רפאל זרחי
+              - generic [ref=f4e425]: 1 הצעות
+              - generic [ref=f4e426]: 16.07.26
+              - generic [ref=f4e427]: טיוטה 1
+            - generic [ref=f4e429]:
+              - button "אין הצעות עם תשובת מפעל" [disabled] [ref=f4e430]
+              - button "מחק את כל הצעות הלקוח" [ref=f4e434]
+              - link "פתח ב-GHL" [ref=f4e438] [cursor=pointer]:
+                - /url: https://app.gohighlevel.com/v2/location//contacts/detail/Xt3eTUk8HWV7WpBK4hQ5
+          - generic [ref=f4e444]:
+            - button "מאור Bashan 3 הצעות 16.07.26 נשלח 1 סופי 2 התקבל 1" [ref=f4e445]:
+              - generic [ref=f4e448]: מאור Bashan
+              - generic [ref=f4e449]: 3 הצעות
+              - generic [ref=f4e450]: 16.07.26
+              - generic "1 הצעות נשלחו ללקוח" [ref=f4e451]: נשלח 1
+              - generic [ref=f4e454]:
+                - generic [ref=f4e455]: סופי 2
+                - generic [ref=f4e456]: התקבל 1
+            - generic [ref=f4e457]:
+              - button "הצג הכל — פירוט מלא לבוס + PDF" [ref=f4e458]
+              - link "הורד PDF משולב ללקוח" [ref=f4e462] [cursor=pointer]:
+                - /url: /api/factory/combine/pdf?ids=fq_1784178177010_z8g3j32h,fq_1783600100521_hjhsn3dc
+              - button "ערוך / חישוב משולב" [ref=f4e466]
+              - button "שלח הצעה משולבת ב-WhatsApp" [ref=f4e470]
+              - button "מחק את כל הצעות הלקוח" [ref=f4e473]
+              - link "פתח ב-GHL" [ref=f4e477] [cursor=pointer]:
+                - /url: https://app.gohighlevel.com/v2/location//contacts/detail/OnhGdDhrVXiRbQL6ezgJ
+          - generic [ref=f4e483]:
+            - button "אביב עיני 1 הצעות 15.07.26 טיוטה 1" [ref=f4e484]:
+              - generic [ref=f4e487]: אביב עיני
+              - generic [ref=f4e488]: 1 הצעות
+              - generic [ref=f4e489]: 15.07.26
+              - generic [ref=f4e490]: טיוטה 1
+            - generic [ref=f4e492]:
+              - button "אין הצעות עם תשובת מפעל" [disabled] [ref=f4e493]
+              - button "מחק את כל הצעות הלקוח" [ref=f4e497]
+              - link "פתח ב-GHL" [ref=f4e501] [cursor=pointer]:
+                - /url: https://app.gohighlevel.com/v2/location//contacts/detail/h1vc2ukbpTcO1ctXQLs7
+          - generic [ref=f4e507]:
+            - button "אביאל אחרק 1 הצעות 15.07.26 טיוטה 1" [ref=f4e508]:
+              - generic [ref=f4e511]: אביאל אחרק
+              - generic [ref=f4e512]: 1 הצעות
+              - generic [ref=f4e513]: 15.07.26
+              - generic [ref=f4e514]: טיוטה 1
+            - generic [ref=f4e516]:
+              - button "אין הצעות עם תשובת מפעל" [disabled] [ref=f4e517]
+              - button "מחק את כל הצעות הלקוח" [ref=f4e521]
+              - link "פתח ב-GHL" [ref=f4e525] [cursor=pointer]:
+                - /url: https://app.gohighlevel.com/v2/location//contacts/detail/vAEdsOR4RDXNzb4nHdQr
+          - generic [ref=f4e531]:
+            - button "אלירן 2 הצעות 15.07.26 נשלח 2 סופי 2" [ref=f4e532]:
+              - generic [ref=f4e535]: אלירן
+              - generic [ref=f4e536]: 2 הצעות
+              - generic [ref=f4e537]: 15.07.26
+              - generic "2 הצעות נשלחו ללקוח" [ref=f4e538]: נשלח 2
+              - generic [ref=f4e541]: סופי 2
+            - generic [ref=f4e543]:
+              - button "הצג הכל — פירוט מלא לבוס + PDF" [ref=f4e544]
+              - link "הורד PDF משולב ללקוח" [ref=f4e548] [cursor=pointer]:
+                - /url: /api/factory/combine/pdf?ids=fq_1784110107803_pun7na1k,fq_1784110038448_p38g1mmj
+              - button "ערוך / חישוב משולב" [ref=f4e552]
+              - button "שלח הצעה משולבת ב-WhatsApp" [ref=f4e556]
+              - button "מחק את כל הצעות הלקוח" [ref=f4e559]
+              - link "פתח ב-GHL" [ref=f4e563] [cursor=pointer]:
+                - /url: https://app.gohighlevel.com/v2/location//contacts/detail/CNutf2Avfc3E7U2Kjm1B
+          - generic [ref=f4e569]:
+            - button "יעקב 2 הצעות 14.07.26 טיוטה 2" [ref=f4e570]:
+              - generic [ref=f4e573]: יעקב
+              - generic [ref=f4e574]: 2 הצעות
+              - generic [ref=f4e575]: 14.07.26
+              - generic [ref=f4e576]: טיוטה 2
+            - generic [ref=f4e578]:
+              - button "אין הצעות עם תשובת מפעל" [disabled] [ref=f4e579]
+              - button "מחק את כל הצעות הלקוח" [ref=f4e583]
+              - link "פתח ב-GHL" [ref=f4e587] [cursor=pointer]:
+                - /url: https://app.gohighlevel.com/v2/location//contacts/detail/TVw8D56UfJLNkLZqOclC
+          - generic [ref=f4e593]:
+            - button "יעקב חרמון 2 הצעות 14.07.26 נשלח 2 סופי 2" [ref=f4e594]:
+              - generic [ref=f4e597]: יעקב חרמון
+              - generic [ref=f4e598]: 2 הצעות
+              - generic [ref=f4e599]: 14.07.26
+              - generic "2 הצעות נשלחו ללקוח" [ref=f4e600]: נשלח 2
+              - generic [ref=f4e603]: סופי 2
+            - generic [ref=f4e605]:
+              - button "הצג הכל — פירוט מלא לבוס + PDF" [ref=f4e606]
+              - link "הורד PDF משולב ללקוח" [ref=f4e610] [cursor=pointer]:
+                - /url: /api/factory/combine/pdf?ids=fq_1784036070594_4klb65to,fq_1783342261863_ka42w6t7
+              - button "ערוך / חישוב משולב" [ref=f4e614]
+              - button "שלח הצעה משולבת ב-WhatsApp" [ref=f4e618]
+              - button "מחק את כל הצעות הלקוח" [ref=f4e621]
+              - link "פתח ב-GHL" [ref=f4e625] [cursor=pointer]:
+                - /url: https://app.gohighlevel.com/v2/location//contacts/detail/Dzb5wXJIDrPn6izlHvbv
+          - generic [ref=f4e631]:
+            - button "מאור גבאי 1 הצעות 08.07.26 סופי 1" [ref=f4e632]:
+              - generic [ref=f4e635]: מאור גבאי
+              - generic [ref=f4e636]: 1 הצעות
+              - generic [ref=f4e637]: 08.07.26
+              - generic [ref=f4e638]: סופי 1
+            - generic [ref=f4e640]:
+              - button "הצג הכל — פירוט מלא לבוס + PDF" [ref=f4e641]
+              - link "הורד PDF משולב ללקוח" [ref=f4e645] [cursor=pointer]:
+                - /url: /api/factory/combine/pdf?ids=fq_1783534610189_ehqvcfqh
+              - button "ערוך / חישוב משולב" [ref=f4e649]
+              - button "שלח הצעה משולבת ב-WhatsApp" [ref=f4e653]
+              - button "מחק את כל הצעות הלקוח" [ref=f4e656]
+              - link "פתח ב-GHL" [ref=f4e660] [cursor=pointer]:
+                - /url: https://app.gohighlevel.com/v2/location//contacts/detail/yxhGZVjhqLGYbEtogBd0
+          - generic [ref=f4e666]:
+            - button "חן בן סימון 1 הצעות 08.07.26 טיוטה 1" [ref=f4e667]:
+              - generic [ref=f4e670]: חן בן סימון
+              - generic [ref=f4e671]: 1 הצעות
+              - generic [ref=f4e672]: 08.07.26
+              - generic [ref=f4e673]: טיוטה 1
+            - generic [ref=f4e675]:
+              - button "אין הצעות עם תשובת מפעל" [disabled] [ref=f4e676]
+              - button "מחק את כל הצעות הלקוח" [ref=f4e680]
+              - link "פתח ב-GHL" [ref=f4e684] [cursor=pointer]:
+                - /url: https://app.gohighlevel.com/v2/location//contacts/detail/R5AXNdLdXyHxRcLE9BDC
+          - generic [ref=f4e690]:
+            - button "יובל Anato 1 הצעות 08.07.26 טיוטה 1" [ref=f4e691]:
+              - generic [ref=f4e694]: יובל Anato
+              - generic [ref=f4e695]: 1 הצעות
+              - generic [ref=f4e696]: 08.07.26
+              - generic [ref=f4e697]: טיוטה 1
+            - generic [ref=f4e699]:
+              - button "אין הצעות עם תשובת מפעל" [disabled] [ref=f4e700]
+              - button "מחק את כל הצעות הלקוח" [ref=f4e704]
+              - link "פתח ב-GHL" [ref=f4e708] [cursor=pointer]:
+                - /url: https://app.gohighlevel.com/v2/location//contacts/detail/osxai6juobCVKclqE7q3
+          - generic [ref=f4e714]:
+            - button "פסקל שטיינברג 1 הצעות 07.07.26 נשלח 1 סופי 1" [ref=f4e715]:
+              - generic [ref=f4e718]: פסקל שטיינברג
+              - generic [ref=f4e719]: 1 הצעות
+              - generic [ref=f4e720]: 07.07.26
+              - generic "1 הצעות נשלחו ללקוח" [ref=f4e721]: נשלח 1
+              - generic [ref=f4e724]: סופי 1
+            - generic [ref=f4e726]:
+              - button "הצג הכל — פירוט מלא לבוס + PDF" [ref=f4e727]
+              - link "הורד PDF משולב ללקוח" [ref=f4e731] [cursor=pointer]:
+                - /url: /api/factory/combine/pdf?ids=fq_1783435688715_kcoid4i1
+              - button "ערוך / חישוב משולב" [ref=f4e735]
+              - button "שלח הצעה משולבת ב-WhatsApp" [ref=f4e739]
+              - button "מחק את כל הצעות הלקוח" [ref=f4e742]
+              - link "פתח ב-GHL" [ref=f4e746] [cursor=pointer]:
+                - /url: https://app.gohighlevel.com/v2/location//contacts/detail/P8wN9OEsHU6WNIZrKhp7
+          - generic [ref=f4e752]:
+            - button "איציק חודידה 1 הצעות 07.07.26 סופי 1" [ref=f4e753]:
+              - generic [ref=f4e756]: איציק חודידה
+              - generic [ref=f4e757]: 1 הצעות
+              - generic [ref=f4e758]: 07.07.26
+              - generic [ref=f4e759]: סופי 1
+            - generic [ref=f4e761]:
+              - button "הצג הכל — פירוט מלא לבוס + PDF" [ref=f4e762]
+              - link "הורד PDF משולב ללקוח" [ref=f4e766] [cursor=pointer]:
+                - /url: /api/factory/combine/pdf?ids=fq_1783433410934_krs2bhr8
+              - button "ערוך / חישוב משולב" [ref=f4e770]
+              - button "שלח הצעה משולבת ב-WhatsApp" [ref=f4e774]
+              - button "מחק את כל הצעות הלקוח" [ref=f4e777]
+              - link "פתח ב-GHL" [ref=f4e781] [cursor=pointer]:
+                - /url: https://app.gohighlevel.com/v2/location//contacts/detail/KyvBuBNI8Z7RAqhaKZLl
+          - generic [ref=f4e787]:
+            - button "משה 1 הצעות 07.07.26 טיוטה 1" [ref=f4e788]:
+              - generic [ref=f4e791]: משה
+              - generic [ref=f4e792]: 1 הצעות
+              - generic [ref=f4e793]: 07.07.26
+              - generic [ref=f4e794]: טיוטה 1
+            - generic [ref=f4e796]:
+              - button "אין הצעות עם תשובת מפעל" [disabled] [ref=f4e797]
+              - button "מחק את כל הצעות הלקוח" [ref=f4e801]
+              - link "פתח ב-GHL" [ref=f4e805] [cursor=pointer]:
+                - /url: https://app.gohighlevel.com/v2/location//contacts/detail/JFNelNAPbNVYbAHb4F44
+          - generic [ref=f4e811]:
+            - button "סלאבה 2 הצעות 07.07.26 נשלח 2 סופי 2" [ref=f4e812]:
+              - generic [ref=f4e815]: סלאבה
+              - generic [ref=f4e816]: 2 הצעות
+              - generic [ref=f4e817]: 07.07.26
+              - generic "2 הצעות נשלחו ללקוח" [ref=f4e818]: נשלח 2
+              - generic [ref=f4e821]: סופי 2
+            - generic [ref=f4e823]:
+              - button "הצג הכל — פירוט מלא לבוס + PDF" [ref=f4e824]
+              - link "הורד PDF משולב ללקוח" [ref=f4e828] [cursor=pointer]:
+                - /url: /api/factory/combine/pdf?ids=fq_1783423883262_kuajsm5w,fq_1781276686158_r5djjvzp
+              - button "ערוך / חישוב משולב" [ref=f4e832]
+              - button "שלח הצעה משולבת ב-WhatsApp" [ref=f4e836]
+              - button "מחק את כל הצעות הלקוח" [ref=f4e839]
+              - link "פתח ב-GHL" [ref=f4e843] [cursor=pointer]:
+                - /url: https://app.gohighlevel.com/v2/location//contacts/detail/bmdmxvfvAcq4q5dDrUPn
+          - generic [ref=f4e849]:
+            - button "ויקי אברמצייב 2 הצעות 06.07.26 טיוטה 2" [ref=f4e850]:
+              - generic [ref=f4e853]: ויקי אברמצייב
+              - generic [ref=f4e854]: 2 הצעות
+              - generic [ref=f4e855]: 06.07.26
+              - generic [ref=f4e856]: טיוטה 2
+            - generic [ref=f4e858]:
+              - button "אין הצעות עם תשובת מפעל" [disabled] [ref=f4e859]
+              - button "מחק את כל הצעות הלקוח" [ref=f4e863]
+              - link "פתח ב-GHL" [ref=f4e867] [cursor=pointer]:
+                - /url: https://app.gohighlevel.com/v2/location//contacts/detail/PwUsFnRBteRFe7kuSnSm
+          - generic [ref=f4e873]:
+            - button "תאופיק סלאמה 4 הצעות 05.07.26 התקבל 4" [ref=f4e874]:
+              - generic [ref=f4e877]: תאופיק סלאמה
+              - generic [ref=f4e878]: 4 הצעות
+              - generic [ref=f4e879]: 05.07.26
+              - generic [ref=f4e880]: התקבל 4
+            - generic [ref=f4e882]:
+              - button "הצג הכל — פירוט מלא לבוס + PDF" [ref=f4e883]
+              - button "ערוך / חישוב משולב" [ref=f4e887]
+              - button "מחק את כל הצעות הלקוח" [ref=f4e891]
+              - link "פתח ב-GHL" [ref=f4e895] [cursor=pointer]:
+                - /url: https://app.gohighlevel.com/v2/location//contacts/detail/slV9zWRWo9KOSHZMjYeh
+          - generic [ref=f4e901]:
+            - button "אור Laufman 5 הצעות 05.07.26 נשלח 3 סופי 5" [ref=f4e902]:
+              - generic [ref=f4e905]: אור Laufman
+              - generic [ref=f4e906]: 5 הצעות
+              - generic [ref=f4e907]: 05.07.26
+              - generic "3 הצעות נשלחו ללקוח" [ref=f4e908]: נשלח 3
+              - generic [ref=f4e911]: סופי 5
+            - generic [ref=f4e913]:
+              - button "הצג הכל — פירוט מלא לבוס + PDF" [ref=f4e914]
+              - link "הורד PDF משולב ללקוח" [ref=f4e918] [cursor=pointer]:
+                - /url: /api/factory/combine/pdf?ids=fq_1783265811084_uo5mxjly,fq_1783265618284_7sa6xqiq,fq_1783265548699_z75q18s3,fq_1779280470453_kttudaji,fq_1779280439104_a7r0pkaz
+              - button "ערוך / חישוב משולב" [ref=f4e922]
+              - button "שלח הצעה משולבת ב-WhatsApp" [ref=f4e926]
+              - button "מחק את כל הצעות הלקוח" [ref=f4e929]
+              - link "פתח ב-GHL" [ref=f4e933] [cursor=pointer]:
+                - /url: https://app.gohighlevel.com/v2/location//contacts/detail/bA3etfXiJMf3n7XZANCW
+          - generic [ref=f4e939]:
+            - button "יזהר הצלם 1 הצעות 02.07.26 נשלח 1 סופי 1" [ref=f4e940]:
+              - generic [ref=f4e943]: יזהר הצלם
+              - generic [ref=f4e944]: 1 הצעות
+              - generic [ref=f4e945]: 02.07.26
+              - generic "1 הצעות נשלחו ללקוח" [ref=f4e946]: נשלח 1
+              - generic [ref=f4e949]: סופי 1
+            - generic [ref=f4e951]:
+              - button "הצג הכל — פירוט מלא לבוס + PDF" [ref=f4e952]
+              - link "הורד PDF משולב ללקוח" [ref=f4e956] [cursor=pointer]:
+                - /url: /api/factory/combine/pdf?ids=fq_1783003226302_67scvwle
+              - button "ערוך / חישוב משולב" [ref=f4e960]
+              - button "שלח הצעה משולבת ב-WhatsApp" [ref=f4e964]
+              - button "מחק את כל הצעות הלקוח" [ref=f4e967]
+              - link "פתח ב-GHL" [ref=f4e971] [cursor=pointer]:
+                - /url: https://app.gohighlevel.com/v2/location//contacts/detail/J3fydZnPeZX6qWApXOAb
+          - generic [ref=f4e977]:
+            - button "עידן 1 הצעות 02.07.26 נשלח 1 סופי 1" [ref=f4e978]:
+              - generic [ref=f4e981]: עידן
+              - generic [ref=f4e982]: 1 הצעות
+              - generic [ref=f4e983]: 02.07.26
+              - generic "1 הצעות נשלחו ללקוח" [ref=f4e984]: נשלח 1
+              - generic [ref=f4e987]: סופי 1
+            - generic [ref=f4e989]:
+              - button "הצג הכל — פירוט מלא לבוס + PDF" [ref=f4e990]
+              - link "הורד PDF משולב ללקוח" [ref=f4e994] [cursor=pointer]:
+                - /url: /api/factory/combine/pdf?ids=fq_1783003226228_uqo12536
+              - button "ערוך / חישוב משולב" [ref=f4e998]
+              - button "שלח הצעה משולבת ב-WhatsApp" [ref=f4e1002]
+              - button "מחק את כל הצעות הלקוח" [ref=f4e1005]
+              - link "פתח ב-GHL" [ref=f4e1009] [cursor=pointer]:
+                - /url: https://app.gohighlevel.com/v2/location//contacts/detail/APCeKucyjS46Z7n2gyp0
+          - generic [ref=f4e1015]:
+            - button "גי סושי 1 הצעות 02.07.26 נשלח 1 סופי 1" [ref=f4e1016]:
+              - generic [ref=f4e1019]: גי סושי
+              - generic [ref=f4e1020]: 1 הצעות
+              - generic [ref=f4e1021]: 02.07.26
+              - generic "1 הצעות נשלחו ללקוח" [ref=f4e1022]: נשלח 1
+              - generic [ref=f4e1025]: סופי 1
+            - generic [ref=f4e1027]:
+              - button "הצג הכל — פירוט מלא לבוס + PDF" [ref=f4e1028]
+              - link "הורד PDF משולב ללקוח" [ref=f4e1032] [cursor=pointer]:
+                - /url: /api/factory/combine/pdf?ids=fq_1783003226156_6jdpatky
+              - button "ערוך / חישוב משולב" [ref=f4e1036]
+              - button "שלח הצעה משולבת ב-WhatsApp" [ref=f4e1040]
+              - button "מחק את כל הצעות הלקוח" [ref=f4e1043]
+              - link "פתח ב-GHL" [ref=f4e1047] [cursor=pointer]:
+                - /url: https://app.gohighlevel.com/v2/location//contacts/detail/PDSUhqYxbLWLj2o1Wkuv
+          - generic [ref=f4e1053]:
+            - button "מור Edri 5 הצעות 02.07.26 נשלח 5 סופי 5" [ref=f4e1054]:
+              - generic [ref=f4e1057]: מור Edri
+              - generic [ref=f4e1058]: 5 הצעות
+              - generic [ref=f4e1059]: 02.07.26
+              - generic "5 הצעות נשלחו ללקוח" [ref=f4e1060]: נשלח 5
+              - generic [ref=f4e1063]: סופי 5
+            - generic [ref=f4e1065]:
+              - button "הצג הכל — פירוט מלא לבוס + PDF" [ref=f4e1066]
+              - link "הורד PDF משולב ללקוח" [ref=f4e1070] [cursor=pointer]:
+                - /url: /api/factory/combine/pdf?ids=fq_1783003226083_zd4nkx2e,fq_1782825097162_6nl8x3ob,fq_1782306487731_okbl0r50,fq_1782306487664_d3qnlm7m,fq_1782306487590_3pdnqeiv
+              - button "ערוך / חישוב משולב" [ref=f4e1074]
+              - button "שלח הצעה משולבת ב-WhatsApp" [ref=f4e1078]
+              - button "מחק את כל הצעות הלקוח" [ref=f4e1081]
+              - link "פתח ב-GHL" [ref=f4e1085] [cursor=pointer]:
+                - /url: https://app.gohighlevel.com/v2/location//contacts/detail/vLgdkVNpLsOYOBrjnDnm
+          - generic [ref=f4e1091]:
+            - button "אהרון בנימינוב 1 הצעות 02.07.26 סופי 1" [ref=f4e1092]:
+              - generic [ref=f4e1095]: אהרון בנימינוב
+              - generic [ref=f4e1096]: 1 הצעות
+              - generic [ref=f4e1097]: 02.07.26
+              - generic [ref=f4e1098]: סופי 1
+            - generic [ref=f4e1100]:
+              - button "הצג הכל — פירוט מלא לבוס + PDF" [ref=f4e1101]
+              - link "הורד PDF משולב ללקוח" [ref=f4e1105] [cursor=pointer]:
+                - /url: /api/factory/combine/pdf?ids=fq_1783001697382_eure2vih
+              - button "ערוך / חישוב משולב" [ref=f4e1109]
+              - button "שלח הצעה משולבת ב-WhatsApp" [ref=f4e1113]
+              - button "מחק את כל הצעות הלקוח" [ref=f4e1116]
+              - link "פתח ב-GHL" [ref=f4e1120] [cursor=pointer]:
+                - /url: https://app.gohighlevel.com/v2/location//contacts/detail/7G7RsxMbO3jo6zRwJhuE
+          - generic [ref=f4e1126]:
+            - button "שמעון ווקנין 2 הצעות 30.06.26 נשלח 1 סופי 2" [ref=f4e1127]:
+              - generic [ref=f4e1130]: שמעון ווקנין
+              - generic [ref=f4e1131]: 2 הצעות
+              - generic [ref=f4e1132]: 30.06.26
+              - generic "1 הצעות נשלחו ללקוח" [ref=f4e1133]: נשלח 1
+              - generic [ref=f4e1136]: סופי 2
+            - generic [ref=f4e1138]:
+              - button "הצג הכל — פירוט מלא לבוס + PDF" [ref=f4e1139]
+              - link "הורד PDF משולב ללקוח" [ref=f4e1143] [cursor=pointer]:
+                - /url: /api/factory/combine/pdf?ids=fq_1782822518391_v5clai5c,fq_1779208035213_8e0q86tq
+              - button "ערוך / חישוב משולב" [ref=f4e1147]
+              - button "שלח הצעה משולבת ב-WhatsApp" [ref=f4e1151]
+              - button "מחק את כל הצעות הלקוח" [ref=f4e1154]
+              - link "פתח ב-GHL" [ref=f4e1158] [cursor=pointer]:
+                - /url: https://app.gohighlevel.com/v2/location//contacts/detail/3zW3jkRqhiNbQ3vufEd4
+          - generic [ref=f4e1164]:
+            - button "ערן David 2 הצעות 25.06.26 נשלח 1 סופי 2" [ref=f4e1165]:
+              - generic [ref=f4e1168]: ערן David
+              - generic [ref=f4e1169]: 2 הצעות
+              - generic [ref=f4e1170]: 25.06.26
+              - generic "1 הצעות נשלחו ללקוח" [ref=f4e1171]: נשלח 1
+              - generic [ref=f4e1174]: סופי 2
+            - generic [ref=f4e1176]:
+              - button "הצג הכל — פירוט מלא לבוס + PDF" [ref=f4e1177]
+              - link "הורד PDF משולב ללקוח" [ref=f4e1181] [cursor=pointer]:
+                - /url: /api/factory/combine/pdf?ids=fq_1782395103174_4w2jl1bs,fq_1782306487520_hvex7grp
+              - button "ערוך / חישוב משולב" [ref=f4e1185]
+              - button "שלח הצעה משולבת ב-WhatsApp" [ref=f4e1189]
+              - button "מחק את כל הצעות הלקוח" [ref=f4e1192]
+              - link "פתח ב-GHL" [ref=f4e1196] [cursor=pointer]:
+                - /url: https://app.gohighlevel.com/v2/location//contacts/detail/EyCXE0yh6qK7vfspfzvu
+          - generic [ref=f4e1202]:
+            - button "יוסי 2 הצעות 24.06.26 נשלח 2 סופי 2" [ref=f4e1203]:
+              - generic [ref=f4e1206]: יוסי
+              - generic [ref=f4e1207]: 2 הצעות
+              - generic [ref=f4e1208]: 24.06.26
+              - generic "2 הצעות נשלחו ללקוח" [ref=f4e1209]: נשלח 2
+              - generic [ref=f4e1212]: סופי 2
+            - generic [ref=f4e1214]:
+              - button "הצג הכל — פירוט מלא לבוס + PDF" [ref=f4e1215]
+              - link "הורד PDF משולב ללקוח" [ref=f4e1219] [cursor=pointer]:
+                - /url: /api/factory/combine/pdf?ids=fq_1782306490449_qag4oql3,fq_1782306490379_mqz4p4xl
+              - button "ערוך / חישוב משולב" [ref=f4e1223]
+              - button "שלח הצעה משולבת ב-WhatsApp" [ref=f4e1227]
+              - button "מחק את כל הצעות הלקוח" [ref=f4e1230]
+              - link "פתח ב-GHL" [ref=f4e1234] [cursor=pointer]:
+                - /url: https://app.gohighlevel.com/v2/location//contacts/detail/vCcjtg7sttC2vhg3xcGL
+          - generic [ref=f4e1240]:
+            - button "יוסף אדרי 1 הצעות 24.06.26 נשלח 1 סופי 1" [ref=f4e1241]:
+              - generic [ref=f4e1244]: יוסף אדרי
+              - generic [ref=f4e1245]: 1 הצעות
+              - generic [ref=f4e1246]: 24.06.26
+              - generic "1 הצעות נשלחו ללקוח" [ref=f4e1247]: נשלח 1
+              - generic [ref=f4e1250]: סופי 1
+            - generic [ref=f4e1252]:
+              - button "הצג הכל — פירוט מלא לבוס + PDF" [ref=f4e1253]
+              - link "הורד PDF משולב ללקוח" [ref=f4e1257] [cursor=pointer]:
+                - /url: /api/factory/combine/pdf?ids=fq_1782306487940_zk8qu1ox
+              - button "ערוך / חישוב משולב" [ref=f4e1261]
+              - button "שלח הצעה משולבת ב-WhatsApp" [ref=f4e1265]
+              - button "מחק את כל הצעות הלקוח" [ref=f4e1268]
+              - link "פתח ב-GHL" [ref=f4e1272] [cursor=pointer]:
+                - /url: https://app.gohighlevel.com/v2/location//contacts/detail/O84bSwrlxFp6t0d3YCAH
+          - generic [ref=f4e1278]:
+            - button "מפעל גיק 2 הצעות 24.06.26 נשלח 2 סופי 2" [ref=f4e1279]:
+              - generic [ref=f4e1282]: מפעל גיק
+              - generic [ref=f4e1283]: 2 הצעות
+              - generic [ref=f4e1284]: 24.06.26
+              - generic "2 הצעות נשלחו ללקוח" [ref=f4e1285]: נשלח 2
+              - generic [ref=f4e1288]: סופי 2
+            - generic [ref=f4e1290]:
+              - button "הצג הכל — פירוט מלא לבוס + PDF" [ref=f4e1291]
+              - link "הורד PDF משולב ללקוח" [ref=f4e1295] [cursor=pointer]:
+                - /url: /api/factory/combine/pdf?ids=fq_1782306487869_7ikfp6yc,fq_1782306487803_mfu84jyt
+              - button "ערוך / חישוב משולב" [ref=f4e1299]
+              - button "שלח הצעה משולבת ב-WhatsApp" [ref=f4e1303]
+              - button "מחק את כל הצעות הלקוח" [ref=f4e1306]
+              - link "פתח ב-GHL" [ref=f4e1310] [cursor=pointer]:
+                - /url: https://app.gohighlevel.com/v2/location//contacts/detail/1y8MC3iM59w1yvX1DecJ
+          - generic [ref=f4e1316]:
+            - button "ירון כוכבי - אלירז שיווק 3 הצעות 23.06.26 התקבל 3" [ref=f4e1317]:
+              - generic [ref=f4e1320]: ירון כוכבי - אלירז שיווק
+              - generic [ref=f4e1321]: 3 הצעות
+              - generic [ref=f4e1322]: 23.06.26
+              - generic [ref=f4e1323]: התקבל 3
+            - generic [ref=f4e1325]:
+              - button "הצג הכל — פירוט מלא לבוס + PDF" [ref=f4e1326]
+              - button "ערוך / חישוב משולב" [ref=f4e1330]
+              - button "מחק את כל הצעות הלקוח" [ref=f4e1334]
+              - link "פתח ב-GHL" [ref=f4e1338] [cursor=pointer]:
+                - /url: https://app.gohighlevel.com/v2/location//contacts/detail/bp2gNu5UWyYF7iJ8Xb0U
+          - generic [ref=f4e1344]:
+            - button "Moshe 1 הצעות 16.06.26 נשלח 1 סופי 1" [ref=f4e1345]:
+              - generic [ref=f4e1348]: Moshe
+              - generic [ref=f4e1349]: 1 הצעות
+              - generic [ref=f4e1350]: 16.06.26
+              - generic "1 הצעות נשלחו ללקוח" [ref=f4e1351]: נשלח 1
+              - generic [ref=f4e1354]: סופי 1
+            - generic [ref=f4e1356]:
+              - button "הצג הכל — פירוט מלא לבוס + PDF" [ref=f4e1357]
+              - link "הורד PDF משולב ללקוח" [ref=f4e1361] [cursor=pointer]:
+                - /url: /api/factory/combine/pdf?ids=fq_1781623352781_j3pokscw
+              - button "ערוך / חישוב משולב" [ref=f4e1365]
+              - button "שלח הצעה משולבת ב-WhatsApp" [ref=f4e1369]
+              - button "מחק את כל הצעות הלקוח" [ref=f4e1372]
+              - link "פתח ב-GHL" [ref=f4e1376] [cursor=pointer]:
+                - /url: https://app.gohighlevel.com/v2/location//contacts/detail/XwFnouO4alnpbPhbMM2g
+          - generic [ref=f4e1382]:
+            - button "אבי 3 הצעות 15.06.26 נשלח 2 התקבל 1 סופי 2" [ref=f4e1383]:
+              - generic [ref=f4e1386]: אבי
+              - generic [ref=f4e1387]: 3 הצעות
+              - generic [ref=f4e1388]: 15.06.26
+              - generic "2 הצעות נשלחו ללקוח" [ref=f4e1389]: נשלח 2
+              - generic [ref=f4e1392]:
+                - generic [ref=f4e1393]: התקבל 1
+                - generic [ref=f4e1394]: סופי 2
+            - generic [ref=f4e1395]:
+              - button "הצג הכל — פירוט מלא לבוס + PDF" [ref=f4e1396]
+              - link "הורד PDF משולב ללקוח" [ref=f4e1400] [cursor=pointer]:
+                - /url: /api/factory/combine/pdf?ids=fq_1781534946944_c7617bor,fq_1781534946136_myioxfqb
+              - button "ערוך / חישוב משולב" [ref=f4e1404]
+              - button "שלח הצעה משולבת ב-WhatsApp" [ref=f4e1408]
+              - button "מחק את כל הצעות הלקוח" [ref=f4e1411]
+              - link "פתח ב-GHL" [ref=f4e1415] [cursor=pointer]:
+                - /url: https://app.gohighlevel.com/v2/location//contacts/detail/M2A1wfa3Ikl6K2Fhp9os
+          - generic [ref=f4e1421]:
+            - button "יוסף חג׳ג׳ 4 הצעות 12.06.26 נשלח 4 סופי 4" [ref=f4e1422]:
+              - generic [ref=f4e1425]: יוסף חג׳ג׳
+              - generic [ref=f4e1426]: 4 הצעות
+              - generic [ref=f4e1427]: 12.06.26
+              - generic "4 הצעות נשלחו ללקוח" [ref=f4e1428]: נשלח 4
+              - generic [ref=f4e1431]: סופי 4
+            - generic [ref=f4e1433]:
+              - button "הצג הכל — פירוט מלא לבוס + PDF" [ref=f4e1434]
+              - link "הורד PDF משולב ללקוח" [ref=f4e1438] [cursor=pointer]:
+                - /url: /api/factory/combine/pdf?ids=fq_1781294201999_vww53cjv,fq_1781294200988_6g78e9q0,fq_1781294199999_hj4z0sgk,fq_1781294198927_tqd8bvk7
+              - button "ערוך / חישוב משולב" [ref=f4e1442]
+              - button "שלח הצעה משולבת ב-WhatsApp" [ref=f4e1446]
+              - button "מחק את כל הצעות הלקוח" [ref=f4e1449]
+              - link "פתח ב-GHL" [ref=f4e1453] [cursor=pointer]:
+                - /url: https://app.gohighlevel.com/v2/location//contacts/detail/6rZOE6ewmXrJLUs1qBj2
+          - generic [ref=f4e1459]:
+            - button "גלית 1 הצעות 20.05.26 נשלח 1 סופי 1" [ref=f4e1460]:
+              - generic [ref=f4e1463]: גלית
+              - generic [ref=f4e1464]: 1 הצעות
+              - generic [ref=f4e1465]: 20.05.26
+              - generic "1 הצעות נשלחו ללקוח" [ref=f4e1466]: נשלח 1
+              - generic [ref=f4e1469]: סופי 1
+            - generic [ref=f4e1471]:
+              - button "הצג הכל — פירוט מלא לבוס + PDF" [ref=f4e1472]
+              - link "הורד PDF משולב ללקוח" [ref=f4e1476] [cursor=pointer]:
+                - /url: /api/factory/combine/pdf?ids=fq_1779292807552_rlsgz6bh
+              - button "ערוך / חישוב משולב" [ref=f4e1480]
+              - button "שלח הצעה משולבת ב-WhatsApp" [ref=f4e1484]
+              - button "מחק את כל הצעות הלקוח" [ref=f4e1487]
+              - link "פתח ב-GHL" [ref=f4e1491] [cursor=pointer]:
+                - /url: https://app.gohighlevel.com/v2/location//contacts/detail/cpJ3d6MTBTd3YqVTPN9u
+          - generic [ref=f4e1497]:
+            - button "אלעד Goldsteen 1 הצעות 18.05.26 נשלח 1 סופי 1" [ref=f4e1498]:
+              - generic [ref=f4e1501]: אלעד Goldsteen
+              - generic [ref=f4e1502]: 1 הצעות
+              - generic [ref=f4e1503]: 18.05.26
+              - generic "1 הצעות נשלחו ללקוח" [ref=f4e1504]: נשלח 1
+              - generic [ref=f4e1507]: סופי 1
+            - generic [ref=f4e1509]:
+              - button "הצג הכל — פירוט מלא לבוס + PDF" [ref=f4e1510]
+              - link "הורד PDF משולב ללקוח" [ref=f4e1514] [cursor=pointer]:
+                - /url: /api/factory/combine/pdf?ids=fq_1779105673492_p0klrzlq
+              - button "ערוך / חישוב משולב" [ref=f4e1518]
+              - button "שלח הצעה משולבת ב-WhatsApp" [ref=f4e1522]
+              - button "מחק את כל הצעות הלקוח" [ref=f4e1525]
+              - link "פתח ב-GHL" [ref=f4e1529] [cursor=pointer]:
+                - /url: https://app.gohighlevel.com/v2/location//contacts/detail/eFCfZ3iVcjSma2cpauxd
+          - generic [ref=f4e1535]:
+            - button "ניר Davidson 1 הצעות 17.05.26 סופי 1" [ref=f4e1536]:
+              - generic [ref=f4e1539]: ניר Davidson
+              - generic [ref=f4e1540]: 1 הצעות
+              - generic [ref=f4e1541]: 17.05.26
+              - generic [ref=f4e1542]: סופי 1
+            - generic [ref=f4e1544]:
+              - button "הצג הכל — פירוט מלא לבוס + PDF" [ref=f4e1545]
+              - link "הורד PDF משולב ללקוח" [ref=f4e1549] [cursor=pointer]:
+                - /url: /api/factory/combine/pdf?ids=fq_1779035011166_ul999xhn
+              - button "ערוך / חישוב משולב" [ref=f4e1553]
+              - button "שלח הצעה משולבת ב-WhatsApp" [ref=f4e1557]
+              - button "מחק את כל הצעות הלקוח" [ref=f4e1560]
+              - link "פתח ב-GHL" [ref=f4e1564] [cursor=pointer]:
+                - /url: https://app.gohighlevel.com/v2/location//contacts/detail/WXYbxYxhWZcOHVEDiIdu
+          - generic [ref=f4e1570]:
+            - button "nachalawinry יקב נחלה 1 הצעות 16.05.26 נשלח 1 סופי 1" [ref=f4e1571]:
+              - generic [ref=f4e1574]: nachalawinry יקב נחלה
+              - generic [ref=f4e1575]: 1 הצעות
+              - generic [ref=f4e1576]: 16.05.26
+              - generic "1 הצעות נשלחו ללקוח" [ref=f4e1577]: נשלח 1
+              - generic [ref=f4e1580]: סופי 1
+            - generic [ref=f4e1582]:
+              - button "הצג הכל — פירוט מלא לבוס + PDF" [ref=f4e1583]
+              - link "הורד PDF משולב ללקוח" [ref=f4e1587] [cursor=pointer]:
+                - /url: /api/factory/combine/pdf?ids=fq_1778961524515_n9xc0md8
+              - button "ערוך / חישוב משולב" [ref=f4e1591]
+              - button "שלח הצעה משולבת ב-WhatsApp" [ref=f4e1595]
+              - button "מחק את כל הצעות הלקוח" [ref=f4e1598]
+              - link "פתח ב-GHL" [ref=f4e1602] [cursor=pointer]:
+                - /url: https://app.gohighlevel.com/v2/location//contacts/detail/jvBbKep90gM5v2jhoCwB
+      - generic [ref=f4e1608]:
+        - generic [ref=f4e1609]:
+          - generic [ref=f4e1610]:
+            - heading "חישוב משולב" [level=2] [ref=f4e1611]
+            - generic [ref=f4e1612]: יוסי גולד בייבי · 2 מוצרים
+          - button [ref=f4e1613]
+        - generic [ref=f4e1617]:
+          - generic [ref=f4e1618]:
+            - generic [ref=f4e1619]: שיטת שילוח (משותפת לכל ההזמנה)
+            - combobox [ref=f4e1620]:
+              - option "— ללא שילוח —"
+              - option "ים — סטנדרט (ים)" [selected]
+              - option "אוויר — אקספרס (אוויר)"
+          - generic [ref=f4e1621]:
+            - generic [ref=f4e1622]:
+              - generic [ref=f4e1623]: קבע אחוז רווח לכל המוצרים יחד
+              - generic [ref=f4e1624]: ~34%
+            - slider [ref=f4e1625]: "34"
+          - generic [ref=f4e1626]:
+            - generic [ref=f4e1627]: מוצרים — 2 נבחרו מתוך 2
+            - button "הרחב הכל" [ref=f4e1628]
+          - paragraph [ref=f4e1629]: סמן ✓ אילו מוצרים ייכנסו להצעה המשולבת (PDF / WhatsApp).
+          - generic [ref=f4e1631]:
+            - generic "כלול בהצעה המשולבת" [ref=f4e1632] [cursor=pointer]:
+              - checkbox [checked] [ref=f4e1633]
+            - button "1 55×60 ס״מ — מוצר מותאם 4TIMEAL4 סופי ₪5,800.8" [ref=f4e1634]:
+              - generic [ref=f4e1635]: "1"
+              - generic [ref=f4e1638]: 55×60 ס״מ — מוצר מותאם
+              - generic [ref=f4e1639]: 4TIMEAL4
+              - generic [ref=f4e1640]: סופי
+              - generic [ref=f4e1641]: ₪5,800.8
+          - generic [ref=f4e1643]:
+            - generic "כלול בהצעה המשולבת" [ref=f4e1644] [cursor=pointer]:
+              - checkbox [checked] [ref=f4e1645]
+            - button "2 30×40 ס״מ — מוצר מותאם U1SL6F4Y סופי ₪8,326.44" [ref=f4e1646]:
+              - generic [ref=f4e1647]: "2"
+              - generic [ref=f4e1650]: 30×40 ס״מ — מוצר מותאם
+              - generic [ref=f4e1651]: U1SL6F4Y
+              - generic [ref=f4e1652]: סופי
+              - generic [ref=f4e1653]: ₪8,326.44
+          - generic [ref=f4e1654]:
+            - generic [ref=f4e1655]: תוצאה משולבת (2 מוצרים)
+            - generic [ref=f4e1656]:
+              - generic [ref=f4e1657]: סה״כ נפח / משקל
+              - generic [ref=f4e1658]: 5.44 m³ · 642kg
+            - generic [ref=f4e1659]:
+              - generic [ref=f4e1660]: נפח ידני (m³)
+              - spinbutton "אוטומטי (סכום)" [ref=f4e1661]
+            - generic [ref=f4e1662]:
+              - generic [ref=f4e1663]: שילוח מאוחד
+              - generic [ref=f4e1664]: "₪5,454.55 (בנפרד: ₪6,296.71)"
+            - generic [ref=f4e1665]:
+              - generic [ref=f4e1666]: חיסכון בשילוח ללקוח
+              - generic [ref=f4e1667]: ₪842.16
+            - generic [ref=f4e1669]:
+              - generic [ref=f4e1670]: סה״כ ללקוח (משולב)
+              - generic [ref=f4e1671]: "₪14,127.24 (בנפרד: ₪14,969.4)"
+            - generic [ref=f4e1672]:
+              - generic [ref=f4e1673]: סה״כ רווח
+              - generic [ref=f4e1674]: ₪3,708.88
+            - generic [ref=f4e1675]:
+              - generic [ref=f4e1676]: מרווח כולל
+              - generic [ref=f4e1677]: 42.8%
+            - generic [ref=f4e1679]:
+              - generic [ref=f4e1680]: בסיס עמלה (ללא שילוח)
+              - generic [ref=f4e1681]: ₪8,672.69
+            - generic [ref=f4e1682]:
+              - generic [ref=f4e1683]: עמלת איש מכירות (10%) — על שני המוצרים
+              - generic [ref=f4e1684]: ₪867.27
+            - generic [ref=f4e1685]:
+              - generic [ref=f4e1686]: רווח נטו אחרי עמלה
+              - generic [ref=f4e1687]: ₪2,841.61
+            - generic [ref=f4e1689]:
+              - generic [ref=f4e1690]:
+                - generic [ref=f4e1691]: עמלת מכירות
+                - generic [ref=f4e1692]: תצוגה לבוס בלבד — לא משנה את מחיר הלקוח
+              - generic [ref=f4e1693]:
+                - generic [ref=f4e1694]:
+                  - spinbutton "אחוז עמלת מכירות" [ref=f4e1695]
+                  - generic [ref=f4e1696]: "%"
+                - button "שמור כברירת מחדל" [disabled] [ref=f4e1697]
+              - generic [ref=f4e1698]: "ברירת המחדל הגלובלית: 10%. שנה כדי לדרוס לחישוב הזה בלבד."
+            - button "פירוט מלא — ההזמנה כמוצר אחד 42.8% רווח" [ref=f4e1700]:
+              - generic [ref=f4e1701]: פירוט מלא — ההזמנה כמוצר אחד
+              - generic [ref=f4e1704]: 42.8% רווח
+          - generic [ref=f4e1706]:
+            - generic [ref=f4e1707]: פיצול משלוח — חלק אוויר, חלק ים
+            - button "הפעל פיצול" [ref=f4e1714]
+        - generic [ref=f4e1715]:
+          - button "ביטול" [ref=f4e1716]
+          - generic [ref=f4e1717]:
+            - link "פתח PDF" [ref=f4e1718] [cursor=pointer]:
+              - /url: http://localhost:3100/api/factory/combine/pdf?ids=fq_1784309542898_jjer0542,fq_1783514876189_xp2u98vo
+            - button "שלח ב-WhatsApp" [ref=f4e1719]
+            - button "שמור חישוב" [ref=f4e1722]
+  - button "Open Next.js Dev Tools" [ref=f4e29] [cursor=pointer]
+  - alert [ref=f4e33]

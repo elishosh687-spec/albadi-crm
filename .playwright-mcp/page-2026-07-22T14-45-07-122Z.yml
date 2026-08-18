@@ -1,0 +1,166 @@
+- generic [active] [ref=f1e1]:
+  - generic [ref=f1e3]:
+    - generic [ref=f1e4]: ללא ליד — מצב standalone
+    - generic [ref=f1e6]:
+      - generic [ref=f1e7]:
+        - generic [ref=f1e8]: חישוב חי
+        - generic [ref=f1e11]:
+          - generic [ref=f1e12]: — New quote
+          - heading "הצעת מחיר — מתאים לקוסמטיקה, תכשיטים, אקססוריז." [level=1] [ref=f1e13]:
+            - text: הצעת מחיר
+            - generic [ref=f1e14]: — מתאים לקוסמטיקה, תכשיטים, אקססוריז.
+        - generic [ref=f1e15]:
+          - button "מחשבון" [ref=f1e16]
+          - button "מחשבון משוער ✨" [ref=f1e17]
+      - generic [ref=f1e19]:
+        - generic [ref=f1e20]:
+          - generic: I
+          - generic [ref=f1e21]:
+            - generic [ref=f1e22]: I
+            - generic [ref=f1e23]: מוצר
+          - generic [ref=f1e24]:
+            - generic [ref=f1e25]:
+              - button "מוצר מקטלוג" [ref=f1e26]
+              - button "מוצר ידני" [ref=f1e27]
+            - generic [ref=f1e28]:
+              - generic [ref=f1e29]:
+                - generic [ref=f1e30]: בחירת מוצר
+                - combobox [ref=f1e31]:
+                  - option "H20*D8*W25 — מתאים לקוסמטיקה, תכשיטים, אקססוריז" [selected]
+                  - option "H30*D10*W30 — מתאים לביגוד קל, מתנות"
+                  - option "H30*D12*W40 — מתאים לנעליים, ביגוד, קופסאות"
+                  - option "H40*D15*W50 — מתאים לפריטים גדולים"
+                  - option "H30*W40 — מתאים לפריטים רחבים"
+                  - option "H15*W20 — מתאים לפריטים קטנים"
+                  - option "H15*D5*W20 — תיק קטן צר — מתאים למוצרי יוקרה"
+                  - option "H35*D10*W40 — תיק בינוני-גדול — מתאים לביגוד וקופסאות"
+                  - option "H40*D15*W45 — תיק גדול — מתאים לאריזות מתנה גדולות"
+                  - option "H10*W15 — תיק קטן — מתאים לאקססוריז"
+                  - option "H25*W25 — תיק ריבועי — מתאים למוצרים מרובעים"
+              - generic [ref=f1e32]:
+                - generic [ref=f1e33]:
+                  - generic [ref=f1e34]: גובה H
+                  - generic [ref=f1e35]:
+                    - text: "20"
+                    - generic [ref=f1e36]: cm
+                - generic [ref=f1e37]:
+                  - generic [ref=f1e38]: רוחב W
+                  - generic [ref=f1e39]:
+                    - text: "25"
+                    - generic [ref=f1e40]: cm
+                - generic [ref=f1e41]:
+                  - generic [ref=f1e42]: עומק D
+                  - generic [ref=f1e43]:
+                    - text: "8"
+                    - generic [ref=f1e44]: cm
+                - generic [ref=f1e45]:
+                  - generic [ref=f1e46]: עלות יח׳
+                  - generic [ref=f1e47]:
+                    - generic [ref=f1e48]: ¥
+                    - text: —
+              - generic [ref=f1e49]:
+                - generic [ref=f1e50]: נתוני קרטון אב
+                - generic [ref=f1e51]:
+                  - generic [ref=f1e52]:
+                    - generic [ref=f1e53]: יח׳/קרטון
+                    - generic [ref=f1e54]: "250"
+                  - generic [ref=f1e55]:
+                    - generic [ref=f1e56]: משקל
+                    - generic [ref=f1e57]: 5.5 ק״ג
+                  - generic [ref=f1e58]:
+                    - generic [ref=f1e59]: CBM/קרטון
+                    - generic [ref=f1e60]: "0.046"
+                  - generic [ref=f1e61]:
+                    - generic [ref=f1e62]: מידות L×W×H
+                    - generic [ref=f1e63]: 40×24×48
+        - generic [ref=f1e64]:
+          - generic: II
+          - generic [ref=f1e65]:
+            - generic [ref=f1e66]: II
+            - generic [ref=f1e67]: כמות ומשלוח
+          - generic [ref=f1e68]:
+            - generic [ref=f1e69]:
+              - generic [ref=f1e70]: כמות
+              - generic [ref=f1e71]:
+                - button "3,000 יחידות" [ref=f1e72] [cursor=pointer]
+                - button "5,000 יחידות" [ref=f1e73] [cursor=pointer]
+                - button "10,000 יחידות" [ref=f1e74] [cursor=pointer]
+                - button "מותאם" [ref=f1e75] [cursor=pointer]
+            - generic [ref=f1e79]:
+              - generic [ref=f1e80]: שיטת שילוח
+              - generic [ref=f1e81]:
+                - button "אקספרס אספקה תוך ~25 יום" [ref=f1e82] [cursor=pointer]:
+                  - generic [ref=f1e86]:
+                    - generic [ref=f1e87]: אקספרס
+                    - generic [ref=f1e88]: אספקה תוך ~25 יום
+                - button "רגיל אספקה תוך ~90 יום" [ref=f1e89] [cursor=pointer]:
+                  - generic [ref=f1e95]:
+                    - generic [ref=f1e96]: רגיל
+                    - generic [ref=f1e97]: אספקה תוך ~90 יום
+                - button "מפוצל (אוויר+ים) חלק באוויר, חלק בים" [ref=f1e100] [cursor=pointer]:
+                  - generic [ref=f1e109]:
+                    - generic [ref=f1e110]: מפוצל (אוויר+ים)
+                    - generic [ref=f1e111]: חלק באוויר, חלק בים
+        - generic [ref=f1e112]:
+          - generic: III
+          - generic [ref=f1e113]:
+            - generic [ref=f1e114]: Add-ons
+            - generic [ref=f1e115]: תוספות
+          - generic [ref=f1e117]:
+            - generic [ref=f1e118]:
+              - generic [ref=f1e119]: צבעי לוגו
+              - generic [ref=f1e120]:
+                - button "הפחת" [disabled] [ref=f1e121]
+                - generic [ref=f1e123]: "1"
+                - button "הוסף" [ref=f1e124]
+            - generic [ref=f1e126]:
+              - generic [ref=f1e127]: עלות תבניות / מולדים
+              - generic [ref=f1e128]:
+                - generic [ref=f1e129]: ¥
+                - spinbutton "0" [ref=f1e130]
+                - generic [ref=f1e131]: · חד-פעמי
+              - generic [ref=f1e132]: ריק → ללא עלות מולדים
+            - generic [ref=f1e133]:
+              - generic [ref=f1e134]: ידיות
+              - switch "חבל מפותל +₪—" [checked] [ref=f1e135]:
+                - generic [ref=f1e136]: חבל מפותל
+                - generic [ref=f1e137]: +₪—
+            - generic [ref=f1e138]:
+              - generic [ref=f1e139]: למינציה
+              - switch "מאט (F1) +¥0.45" [ref=f1e140]:
+                - generic [ref=f1e141]: מאט (F1)
+                - generic [ref=f1e142]: +¥0.45
+        - generic [ref=f1e143]:
+          - generic: IV
+          - generic [ref=f1e144]:
+            - generic [ref=f1e145]: Pricing
+            - generic [ref=f1e146]: תמחור
+          - generic [ref=f1e147]:
+            - generic [ref=f1e148]:
+              - generic [ref=f1e149]:
+                - generic [ref=f1e150]: מרווח רווח (margin-on-price)
+                - generic [ref=f1e151]: 40%
+              - slider "מרווח רווח" [ref=f1e152] [cursor=pointer]: "40"
+              - generic [ref=f1e153]: "ברירת מחדל מהמערכת: 40%"
+            - generic [ref=f1e154]:
+              - generic [ref=f1e155]:
+                - generic [ref=f1e156]: עמלת מכירות
+                - generic [ref=f1e157]: 10% · ללא שילוח
+              - generic [ref=f1e158]:
+                - generic [ref=f1e159]: רווח מינימלי / יח׳
+                - generic [ref=f1e160]:
+                  - generic [ref=f1e161]: ₪
+                  - spinbutton "0" [ref=f1e162]
+                - generic [ref=f1e163]: ריק → ללא בדיקה
+            - generic [ref=f1e164]:
+              - generic [ref=f1e165]:
+                - generic [ref=f1e166]: עמלת מכירות
+                - generic [ref=f1e167]: תצוגה לבוס בלבד — לא משנה את מחיר הלקוח
+              - generic [ref=f1e168]:
+                - generic [ref=f1e169]:
+                  - spinbutton "אחוז עמלת מכירות" [ref=f1e170]
+                  - generic [ref=f1e171]: "%"
+                - button "שמור כברירת מחדל" [disabled] [ref=f1e172]
+              - generic [ref=f1e173]: "ברירת המחדל הגלובלית: 10%. שנה כדי לדרוס לחישוב הזה בלבד."
+            - button "חישוב הפוך — ממחיר יעד אחורה למרווח" [ref=f1e174]
+  - button "Open Next.js Dev Tools" [ref=f1e189] [cursor=pointer]

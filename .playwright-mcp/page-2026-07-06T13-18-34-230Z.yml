@@ -1,0 +1,24 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e3]:
+    - generic [ref=e4]:
+      - generic [ref=e5]:
+        - generic [ref=e6]: — Competitor intel
+        - generic [ref=e7]: מחיר מתחרים.
+        - generic [ref=e8]: "כל פעם שאתה נתקל בהצעה מתחרה — תעד אותה כאן עם אותם מאפיינים שאנחנו מתמחרים, ותדע בדיוק איפה אתה עומד: מחיר, גלופות וזמן אספקה."
+      - button "מחיר מתחרה חדש" [ref=e10] [cursor=pointer]:
+        - img [ref=e11]
+        - text: מחיר מתחרה חדש
+    - generic [ref=e12]:
+      - generic [ref=e13]:
+        - generic [ref=e14]: "0"
+        - generic [ref=e15]: השוואות
+      - generic [ref=e16]:
+        - generic [ref=e17]: —
+        - generic [ref=e18]: זולים יותר
+      - generic [ref=e19]:
+        - generic [ref=e20]: —
+        - generic [ref=e21]: מהירים יותר
+    - generic [ref=e22]: טוען…
+  - button "Open Next.js Dev Tools" [ref=e28] [cursor=pointer]:
+    - img [ref=e29]
+  - alert [ref=e32]

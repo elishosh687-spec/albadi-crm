@@ -1,0 +1,522 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e3]:
+    - generic [ref=e4]:
+      - generic [ref=e5]:
+        - generic [ref=e6]: צריכים אותך עכשיו.
+        - generic [ref=e7]: 65 לידים
+      - generic [ref=e8]:
+        - generic [ref=e9]:
+          - generic [ref=e10]: "12"
+          - generic [ref=e11]: באיחור
+        - generic [ref=e12]:
+          - generic [ref=e13]: "177"
+          - generic [ref=e14]: פעילים
+    - generic [ref=e15]: לפי ההודעה האחרונה — מי שכתב אחרון למעלה, ומי שממתין לתשובה ראשון.
+    - generic [ref=e16]:
+      - generic [ref=e17]:
+        - generic [ref=e18]: ממתין לתשובה · בעוד 2 שע׳
+        - button "הפעל בוט" [ref=e21] [cursor=pointer]: בוט מושהה
+      - generic [ref=e24] [cursor=pointer]:
+        - generic [ref=e25]: עD
+        - generic [ref=e26]:
+          - generic [ref=e27]: ערן David
+          - generic [ref=e28]: questionnaire complete, quote sent, awaiting decision
+        - generic [ref=e29]: FACTORY_WAIT
+      - generic [ref=e30]:
+        - generic [ref=e31]: מה כדאי לענות
+        - generic [ref=e32]: — מתנצל על העיכוב. שולח לך עכשיו את מה שהבטחתי, וקובע איתך יום ושעה לחזרה — אני לא נעלם.
+      - generic [ref=e33]:
+        - button "תזכיר לי מחר" [ref=e34] [cursor=pointer]
+        - button "פתח שיחה מלאה" [ref=e38] [cursor=pointer]
+        - link [ref=e41] [cursor=pointer]:
+          - /url: tel:972547000793
+          - button "התקשר" [ref=e42]
+        - generic [ref=e46]: "שלח תבנית:"
+        - generic [ref=e47] [cursor=pointer]:
+          - generic [ref=e48]: 📐
+          - text: מידות
+        - generic [ref=e49] [cursor=pointer]:
+          - generic [ref=e50]: 💰
+          - text: מחיר
+        - generic [ref=e51] [cursor=pointer]:
+          - generic [ref=e52]: 📚
+          - text: קטלוג
+        - generic [ref=e53] [cursor=pointer]: ניתוח ליד
+    - generic [ref=e57]:
+      - generic [ref=e59] [cursor=pointer]:
+        - generic [ref=e60]: יו
+        - generic [ref=e61]:
+          - generic [ref=e62]: יוסי
+          - generic [ref=e63]: הלקוח לא הביע עניין בהזמנה עד לקבלת דוגמאות, מה שמעכב את ההתקדמות בעסקה.
+        - generic [ref=e64]:
+          - button "הפעל בוט" [ref=e65]: בוט מושהה
+          - generic [ref=e68]: אפיון
+      - generic [ref=e73] [cursor=pointer]:
+        - generic [ref=e74]: יכ
+        - generic [ref=e75]:
+          - generic [ref=e76]: ירון כוכבי - אלירז שיווק
+          - generic [ref=e77]: questionnaire complete, quote sent, awaiting decision
+        - button "הפעל בוט" [ref=e79]: בוט מושהה
+      - generic [ref=e86] [cursor=pointer]:
+        - generic [ref=e87]: יח
+        - generic [ref=e88]:
+          - generic [ref=e89]: יעקב חרמון
+          - generic [ref=e90]: "הלקוח ביקש לשנות: כמות → q2"
+        - generic [ref=e91]:
+          - button "הפעל בוט" [ref=e92]: בוט מושהה
+          - generic [ref=e95]: קליטה
+      - generic [ref=e100] [cursor=pointer]:
+        - generic [ref=e101]: בש
+        - generic [ref=e102]:
+          - generic [ref=e103]: בוטיק שילו
+          - generic [ref=e104]: spec change auto-requoted via LLM
+        - generic [ref=e105]:
+          - button "השהה בוט" [ref=e106]: בוט פעיל
+          - generic [ref=e110]: קליטה
+      - generic [ref=e115] [cursor=pointer]:
+        - generic [ref=e116]: מא
+        - generic [ref=e117]:
+          - generic [ref=e118]: מאי אסתר כולי תשלחו לי ווצאפ
+          - generic [ref=e119]: —
+        - generic [ref=e120]:
+          - button "השהה בוט" [ref=e121]: בוט פעיל
+          - generic [ref=e125]: קליטה
+      - generic [ref=e130] [cursor=pointer]:
+        - generic [ref=e131]: מB
+        - generic [ref=e132]:
+          - generic [ref=e133]: מאור Bashan
+          - generic [ref=e134]: —
+        - generic [ref=e135]:
+          - button "השהה בוט" [ref=e136]: בוט פעיל
+          - generic [ref=e140]: קליטה
+      - generic [ref=e145] [cursor=pointer]:
+        - generic [ref=e146]: דו
+        - generic [ref=e147]:
+          - generic [ref=e148]: דורון
+          - generic [ref=e149]: questionnaire complete, quote sent, awaiting decision
+        - generic [ref=e150]:
+          - button "השהה בוט" [ref=e151]: בוט פעיל
+          - generic [ref=e155]: קליטה
+      - generic [ref=e160] [cursor=pointer]:
+        - generic [ref=e161]: ער
+        - generic [ref=e162]:
+          - generic [ref=e163]: ערבי
+          - generic [ref=e164]: —
+        - generic [ref=e165]:
+          - button "השהה בוט" [ref=e166]: בוט פעיל
+          - generic [ref=e170]: קליטה
+      - generic [ref=e175] [cursor=pointer]:
+        - generic [ref=e176]: אג
+        - generic [ref=e177]:
+          - generic [ref=e178]: אל גרבי
+          - generic [ref=e179]: questionnaire complete, quote sent, awaiting decision
+        - generic [ref=e180]:
+          - button "השהה בוט" [ref=e181]: בוט פעיל
+          - generic [ref=e185]: קליטה
+      - generic [ref=e190] [cursor=pointer]:
+        - generic [ref=e191]: מי
+        - generic [ref=e192]:
+          - generic [ref=e193]: מוחמד יאסין
+          - generic [ref=e194]: —
+        - button "השהה בוט" [ref=e196]: בוט פעיל
+      - generic [ref=e204] [cursor=pointer]:
+        - generic [ref=e205]: EL
+        - generic [ref=e206]:
+          - generic [ref=e207]: Eliran
+          - generic [ref=e208]: —
+        - generic [ref=e209]:
+          - button "השהה בוט" [ref=e210]: בוט פעיל
+          - generic [ref=e214]: קליטה
+      - generic [ref=e219] [cursor=pointer]:
+        - generic [ref=e220]: 9-
+        - generic [ref=e221]:
+          - generic [ref=e222]: 972543987323 - נילי דקור
+          - generic [ref=e223]: —
+        - button "השהה בוט" [ref=e225]: בוט פעיל
+      - generic [ref=e233] [cursor=pointer]:
+        - generic [ref=e234]: אH
+        - generic [ref=e235]:
+          - generic [ref=e236]: איתן hanya
+          - generic [ref=e237]: —
+        - generic [ref=e238]:
+          - button "השהה בוט" [ref=e239]: בוט פעיל
+          - generic [ref=e243]: קליטה
+      - generic [ref=e248] [cursor=pointer]:
+        - generic [ref=e249]: מש
+        - generic [ref=e250]:
+          - generic [ref=e251]: משה
+          - generic [ref=e252]: —
+        - generic [ref=e253]:
+          - button "השהה בוט" [ref=e254]: בוט פעיל
+          - generic [ref=e258]: קליטה
+      - generic [ref=e263] [cursor=pointer]:
+        - generic [ref=e264]: קה
+        - generic [ref=e265]:
+          - generic [ref=e266]: קובי הרצשטרק
+          - generic [ref=e267]: questionnaire complete, quote sent, awaiting decision
+        - generic [ref=e268]:
+          - button "השהה בוט" [ref=e269]: בוט פעיל
+          - generic [ref=e273]: קליטה
+      - generic [ref=e278] [cursor=pointer]:
+        - generic [ref=e279]: יא
+        - generic [ref=e280]:
+          - generic [ref=e281]: יוסף אמון
+          - generic [ref=e282]: questionnaire complete, quote sent, awaiting decision
+        - generic [ref=e283]:
+          - button "השהה בוט" [ref=e284]: בוט פעיל
+          - generic [ref=e288]: קליטה
+      - generic [ref=e293] [cursor=pointer]:
+        - generic [ref=e294]: אב
+        - generic [ref=e295]:
+          - generic [ref=e296]: איתי בנדוד חדש
+          - generic [ref=e297]: questionnaire complete, quote sent, awaiting decision
+        - generic [ref=e298]:
+          - button "הפעל בוט" [ref=e299]: בוט מושהה
+          - generic [ref=e302]: שוקל / משא ומתן
+      - generic [ref=e307] [cursor=pointer]:
+        - generic [ref=e308]: שכ
+        - generic [ref=e309]:
+          - generic [ref=e310]: שמוליק כהן
+          - generic [ref=e311]: questionnaire complete, quote sent, awaiting decision
+        - generic [ref=e312]:
+          - button "השהה בוט" [ref=e313]: בוט פעיל
+          - generic [ref=e317]: קליטה
+      - generic [ref=e322] [cursor=pointer]:
+        - generic [ref=e323]: אG
+        - generic [ref=e324]:
+          - generic [ref=e325]: אור Grundland Raybi
+          - generic [ref=e326]: —
+        - generic [ref=e327]:
+          - button "השהה בוט" [ref=e328]: בוט פעיל
+          - generic [ref=e332]: קליטה
+      - generic [ref=e337] [cursor=pointer]:
+        - generic [ref=e338]: אי
+        - generic [ref=e339]:
+          - generic [ref=e340]: אהרון יונייב
+          - generic [ref=e341]: questionnaire complete, quote sent, awaiting decision
+        - generic [ref=e342]:
+          - button "הפעל בוט" [ref=e343]: בוט מושהה
+          - generic [ref=e346]: קליטה
+      - generic [ref=e351] [cursor=pointer]:
+        - generic [ref=e352]: פ🌹
+        - generic [ref=e353]:
+          - generic [ref=e354]: פריאל 🌹
+          - generic [ref=e355]: questionnaire complete, quote sent, awaiting decision
+        - generic [ref=e356]:
+          - button "הפעל בוט" [ref=e357]: בוט מושהה
+          - generic [ref=e360]: קליטה
+      - generic [ref=e365] [cursor=pointer]:
+        - generic [ref=e366]: אל
+        - generic [ref=e367]:
+          - generic [ref=e368]: אלבדי
+          - generic [ref=e369]: —
+        - button "השהה בוט" [ref=e371]: בוט פעיל
+      - generic [ref=e379] [cursor=pointer]:
+        - generic [ref=e380]: יו
+        - generic [ref=e381]:
+          - generic [ref=e382]: יוסי
+          - generic [ref=e383]: —
+        - generic [ref=e384]:
+          - button "השהה בוט" [ref=e385]: בוט פעיל
+          - generic [ref=e389]: קליטה
+      - generic [ref=e394] [cursor=pointer]:
+        - generic [ref=e395]: מE
+        - generic [ref=e396]:
+          - generic [ref=e397]: מור Edri
+          - generic [ref=e398]: customer accepted quote — awaiting logo
+        - generic [ref=e399]:
+          - button "הפעל בוט" [ref=e400]: בוט מושהה
+          - generic [ref=e403]: מחכה למפעל
+      - generic [ref=e408] [cursor=pointer]:
+        - generic [ref=e409]: שו
+        - generic [ref=e410]:
+          - generic [ref=e411]: שמעון ווקנין
+          - generic [ref=e412]: הלקוח מבקש להזכיר לו על משהו בשעה 9 בבוקר.
+        - generic [ref=e413]:
+          - button "הפעל בוט" [ref=e414]: בוט מושהה
+          - generic [ref=e417]: שוקל / משא ומתן
+      - generic [ref=e422] [cursor=pointer]:
+        - generic [ref=e423]: אג
+        - generic [ref=e424]:
+          - generic [ref=e425]: אמנון גמליאל
+          - generic [ref=e426]: —
+        - generic [ref=e427]:
+          - button "השהה בוט" [ref=e428]: בוט פעיל
+          - generic [ref=e432]: קליטה
+      - generic [ref=e437] [cursor=pointer]:
+        - generic [ref=e438]: מג
+        - generic [ref=e439]:
+          - generic [ref=e440]: מאור גבאי
+          - generic [ref=e441]: הלקוח שלח הודעה בלי טקסט (תמונה / קובץ / הקלטה) אחרי שקיבל הצעת מחיר. ייתכן שזה הלוגו או שאלה במדיה.
+        - generic [ref=e442]:
+          - button "הפעל בוט" [ref=e443]: בוט מושהה
+          - generic [ref=e446]: קליטה
+      - generic [ref=e451] [cursor=pointer]:
+        - generic [ref=e452]: נD
+        - generic [ref=e453]:
+          - generic [ref=e454]: ניר Davidson
+          - generic [ref=e455]: "Nir Davidson — ה-notes שלך: 'לשלוח הצעת מחיר למפעל' (55K יח, תפירה, צבע אחד). עסקה ענקית."
+        - generic [ref=e456]:
+          - button "הפעל בוט" [ref=e457]: בוט מושהה
+          - generic [ref=e460]: שוקל / משא ומתן
+      - generic [ref=e465] [cursor=pointer]:
+        - generic [ref=e466]: פפ
+        - generic [ref=e467]:
+          - generic [ref=e468]: פוני פרזול
+          - generic [ref=e469]: questionnaire complete, quote sent, awaiting decision
+        - generic [ref=e470]:
+          - button "השהה בוט" [ref=e471]: בוט פעיל
+          - generic [ref=e475]: אפיון
+      - generic [ref=e480] [cursor=pointer]:
+        - generic [ref=e481]: אL
+        - generic [ref=e482]:
+          - generic [ref=e483]: אור Laufman
+          - generic [ref=e484]: questionnaire complete, quote sent, awaiting decision
+        - generic [ref=e485]:
+          - button "השהה בוט" [ref=e486]: בוט פעיל
+          - generic [ref=e490]: שוקל / משא ומתן
+      - generic [ref=e495] [cursor=pointer]:
+        - generic [ref=e496]: חב
+        - generic [ref=e497]:
+          - generic [ref=e498]: חן בן סימון
+          - generic [ref=e499]: —
+        - generic [ref=e500]:
+          - button "השהה בוט" [ref=e501]: בוט פעיל
+          - generic [ref=e505]: קליטה
+      - generic [ref=e510] [cursor=pointer]:
+        - generic [ref=e511]: יA
+        - generic [ref=e512]:
+          - generic [ref=e513]: יובל Anato
+          - generic [ref=e514]: logo received — Eli to send final price within 24h
+        - generic [ref=e515]:
+          - button "הפעל בוט" [ref=e516]: בוט מושהה
+          - generic [ref=e519]: קליטה
+      - generic [ref=e524] [cursor=pointer]:
+        - generic [ref=e525]: עי
+        - generic [ref=e526]:
+          - generic [ref=e527]: עידן
+          - generic [ref=e528]: —
+        - generic [ref=e529]:
+          - button "הפעל בוט" [ref=e530]: בוט מושהה
+          - generic [ref=e533]: שוקל / משא ומתן
+      - generic [ref=e538] [cursor=pointer]:
+        - generic [ref=e539]: אל
+        - generic [ref=e540]:
+          - generic [ref=e541]: אלבדי
+          - generic [ref=e542]: —
+        - button "השהה בוט" [ref=e544]: בוט פעיל
+      - generic [ref=e552] [cursor=pointer]:
+        - generic [ref=e553]: ינ
+        - generic [ref=e554]:
+          - generic [ref=e555]: יהודה נוני
+          - generic [ref=e556]: —
+        - button "השהה בוט" [ref=e558]: בוט פעיל
+      - generic [ref=e566] [cursor=pointer]:
+        - generic [ref=e567]: זL
+        - generic [ref=e568]:
+          - generic [ref=e569]: זוהר Look
+          - generic [ref=e570]: הלקוח שלח הודעה בלי טקסט (תמונה / קובץ / הקלטה) אחרי שקיבל הצעת מחיר. ייתכן שזה הלוגו או שאלה במדיה.
+        - generic [ref=e571]:
+          - button "הפעל בוט" [ref=e572]: בוט מושהה
+          - generic [ref=e575]: קליטה
+      - generic [ref=e580] [cursor=pointer]:
+        - generic [ref=e581]: אS
+        - generic [ref=e582]:
+          - generic [ref=e583]: אופק Smadar
+          - generic [ref=e584]: —
+        - generic [ref=e585]:
+          - button "השהה בוט" [ref=e586]: בוט פעיל
+          - generic [ref=e590]: אפיון
+      - generic [ref=e595] [cursor=pointer]:
+        - generic [ref=e596]: PA
+        - generic [ref=e597]:
+          - generic [ref=e598]: Packtop
+          - generic [ref=e599]: Packtop — נשלחה הצעה. אתה רשמת 'לחזור'. עברו 40+ יום.
+        - button "הפעל בוט" [ref=e601]: בוט מושהה
+      - generic [ref=e608] [cursor=pointer]:
+        - generic [ref=e609]: אכ
+        - generic [ref=e610]:
+          - generic [ref=e611]: אלי כהן
+          - generic [ref=e612]: questionnaire complete, quote sent, awaiting decision
+        - generic [ref=e613]:
+          - button "הפעל בוט" [ref=e614]: בוט מושהה
+          - generic [ref=e617]: קליטה
+      - generic [ref=e622] [cursor=pointer]:
+        - generic [ref=e623]: גר
+        - generic [ref=e624]:
+          - generic [ref=e625]: גיא רג'ואן
+          - generic [ref=e626]: questionnaire complete, quote sent, awaiting decision
+        - generic [ref=e627]:
+          - button "השהה בוט" [ref=e628]: בוט פעיל
+          - generic [ref=e632]: קליטה
+      - generic [ref=e637] [cursor=pointer]:
+        - generic [ref=e638]: דש
+        - generic [ref=e639]:
+          - generic [ref=e640]: דן שירן
+          - generic [ref=e641]: —
+        - generic [ref=e642]:
+          - button "הפעל בוט" [ref=e643]: בוט מושהה
+          - generic [ref=e646]: קליטה
+      - generic [ref=e651] [cursor=pointer]:
+        - generic [ref=e652]: מב
+        - generic [ref=e653]:
+          - generic [ref=e654]: מלי ביטון
+          - generic [ref=e655]: מלי ביטון — ה-notes שלך מציין 'לשלוח הצעת מחיר למפעל'. מחכים לתמחור מהמפעל.
+        - generic [ref=e656]:
+          - button "הפעל בוט" [ref=e657]: בוט מושהה
+          - generic [ref=e660]: שוקל / משא ומתן
+      - generic [ref=e665] [cursor=pointer]:
+        - generic [ref=e666]: רפ
+        - generic [ref=e667]:
+          - generic [ref=e668]: ר.ד פרוטאין סנטר
+          - generic [ref=e669]: "הלקוח ביקש לשנות: כמות → 2500, הערה: לפניי כמעט 10 שנים הבאתי אותם ישירות מסין..אז עשיתי כמות של כ2500 ועם העמילות מכס והשינוע והכל יצא לי יותר זול מכל מי שאז לקחתי הצעות מחיר ממנו פה בארץ ופה בארץ עוד אני זוכר התקשקשו איתי על צד אחד או 2 צבע אחד או שתיים ..ואז זה עוד היה חדש יחסית..היום לכל בן אדם שני יש שירות של השקיות האלה 😊🤷‍♂️"
+        - generic [ref=e670]:
+          - button "הפעל בוט" [ref=e671]: בוט מושהה
+          - generic [ref=e674]: שוקל / משא ומתן
+      - generic [ref=e679] [cursor=pointer]:
+        - generic [ref=e680]: אל
+        - generic [ref=e681]:
+          - generic [ref=e682]: אלבדי
+          - generic [ref=e683]: —
+        - button "השהה בוט" [ref=e685]: בוט פעיל
+      - generic [ref=e693] [cursor=pointer]:
+        - generic [ref=e694]: יו
+        - generic [ref=e695]:
+          - generic [ref=e696]: יוסי
+          - generic [ref=e697]: —
+        - button "הפעל בוט" [ref=e699]: בוט מושהה
+      - generic [ref=e706] [cursor=pointer]:
+        - generic [ref=e707]: יא
+        - generic [ref=e708]:
+          - generic [ref=e709]: יוסף אדרי
+          - generic [ref=e710]: questionnaire complete, quote sent, awaiting decision
+        - button "הפעל בוט" [ref=e712]: בוט מושהה
+      - generic [ref=e719] [cursor=pointer]:
+        - generic [ref=e720]: אנ
+        - generic [ref=e721]:
+          - generic [ref=e722]: אלון נמרודי
+          - generic [ref=e723]: אלון נמרודי — שלחת שאלון לא ענה. אתה רשמת לחזור אחרי החג.
+        - button "השהה בוט" [ref=e725]: בוט פעיל
+      - generic [ref=e733] [cursor=pointer]:
+        - generic [ref=e734]: אG
+        - generic [ref=e735]:
+          - generic [ref=e736]: אלעד Goldsteen
+          - generic [ref=e737]: questionnaire complete, custom spec → factory quote needed
+        - generic [ref=e738]:
+          - button "הפעל בוט" [ref=e739]: בוט מושהה
+          - generic [ref=e742]: שוקל / משא ומתן
+      - generic [ref=e747] [cursor=pointer]:
+        - generic [ref=e748]: שמ
+        - generic [ref=e749]:
+          - generic [ref=e750]: שמעון
+          - generic [ref=e751]: "הודעה: \"טעות שלי\""
+        - generic [ref=e752]:
+          - button "הפעל בוט" [ref=e753]: בוט מושהה
+          - generic [ref=e756]: מחכה למפעל
+      - generic [ref=e761] [cursor=pointer]:
+        - generic [ref=e762]: אל
+        - generic [ref=e763]:
+          - generic [ref=e764]: אלבדי
+          - generic [ref=e765]: —
+        - generic [ref=e766]:
+          - button "הפעל בוט" [ref=e767]: בוט מושהה
+          - generic [ref=e770]: קליטה
+      - generic [ref=e775] [cursor=pointer]:
+        - generic [ref=e776]: למ
+        - generic [ref=e777]:
+          - generic [ref=e778]: ליד מקומי בדיקה
+          - generic [ref=e779]:
+            - text: —
+            - generic [ref=e780]: · ₪2850
+        - generic [ref=e781]:
+          - button "הפעל בוט" [ref=e782]: בוט מושהה
+          - generic [ref=e785]: קליטה
+      - generic [ref=e790] [cursor=pointer]:
+        - generic [ref=e791]: RF
+        - generic [ref=e792]:
+          - generic [ref=e793]: rfsdf
+          - generic [ref=e794]:
+            - text: —
+            - generic [ref=e795]: · ₪1653
+        - generic [ref=e796]:
+          - button "הפעל בוט" [ref=e797]: בוט מושהה
+          - generic [ref=e800]: קליטה
+      - generic [ref=e805] [cursor=pointer]:
+        - generic [ref=e806]: רG
+        - generic [ref=e807]:
+          - generic [ref=e808]: רונן Gilad
+          - generic [ref=e809]: —
+        - generic [ref=e810]:
+          - button "השהה בוט" [ref=e811]: בוט פעיל
+          - generic [ref=e815]: אפיון
+      - generic [ref=e820] [cursor=pointer]:
+        - generic [ref=e821]: TC
+        - generic [ref=e822]:
+          - generic [ref=e823]: Test Config Lead 2
+          - generic [ref=e824]:
+            - text: —
+            - generic [ref=e825]: · ₪100000
+        - generic [ref=e826]:
+          - button "השהה בוט" [ref=e827]: בוט פעיל
+          - generic [ref=e831]: קליטה
+      - generic [ref=e836] [cursor=pointer]:
+        - generic [ref=e837]: אט
+        - generic [ref=e838]:
+          - generic [ref=e839]: אריה טורף
+          - generic [ref=e840]: —
+        - button "הפעל בוט" [ref=e842]: בוט מושהה
+      - generic [ref=e849] [cursor=pointer]:
+        - generic [ref=e850]: AD
+        - generic [ref=e851]:
+          - generic [ref=e852]: adorani
+          - generic [ref=e853]: questionnaire complete, quote sent, awaiting decision
+        - button "השהה בוט" [ref=e855]: בוט פעיל
+      - generic [ref=e863] [cursor=pointer]:
+        - generic [ref=e864]: י-
+        - generic [ref=e865]:
+          - generic [ref=e866]: יהב - דפוס האומנים - פתרונות דפוס מתקדמים
+          - generic [ref=e867]: הלקוח שלח הודעה בלי טקסט (תמונה / קובץ / הקלטה) אחרי שקיבל הצעת מחיר. ייתכן שזה הלוגו או שאלה במדיה.
+        - button "השהה בוט" [ref=e869]: בוט פעיל
+      - generic [ref=e877] [cursor=pointer]:
+        - generic [ref=e878]: מד
+        - generic [ref=e879]:
+          - generic [ref=e880]: מאור דוד
+          - generic [ref=e881]: מאור דוד — לא ענה 31.3.
+        - button "הפעל בוט" [ref=e883]: בוט מושהה
+      - generic [ref=e890] [cursor=pointer]:
+        - generic [ref=e891]: אכ
+        - generic [ref=e892]:
+          - generic [ref=e893]: ארן כהן
+          - generic [ref=e894]: —
+        - button "הפעל בוט" [ref=e896]: בוט מושהה
+      - generic [ref=e903] [cursor=pointer]:
+        - generic [ref=e904]: דו
+        - generic [ref=e905]:
+          - generic [ref=e906]: דוד
+          - generic [ref=e907]: —
+        - button "הפעל בוט" [ref=e909]: בוט מושהה
+      - generic [ref=e916] [cursor=pointer]:
+        - generic [ref=e917]: זד
+        - generic [ref=e918]:
+          - generic [ref=e919]: זגורי דניאל
+          - generic [ref=e920]: questionnaire complete, quote sent, awaiting decision
+        - button "השהה בוט" [ref=e922]: בוט פעיל
+      - generic [ref=e930] [cursor=pointer]:
+        - generic [ref=e931]: לT
+        - generic [ref=e932]:
+          - generic [ref=e933]: לירון TEST
+          - generic [ref=e934]: questionnaire complete, quote sent, awaiting decision
+        - button "הפעל בוט" [ref=e936]: בוט מושהה
+      - generic [ref=e943] [cursor=pointer]:
+        - generic [ref=e944]: KP
+        - generic [ref=e945]:
+          - generic [ref=e946]: Keren Pesach
+          - generic [ref=e947]: questionnaire complete, quote sent, awaiting decision
+        - button "הפעל בוט" [ref=e949]: בוט מושהה
+      - generic [ref=e956] [cursor=pointer]:
+        - generic [ref=e957]: SE
+        - generic [ref=e958]:
+          - generic [ref=e959]: Sharbel Elias
+          - generic [ref=e960]: Sharbel Elias — חדש, אין מידע.
+        - button "הפעל בוט" [ref=e962]: בוט מושהה
+  - button "Open Next.js Dev Tools" [ref=e973] [cursor=pointer]

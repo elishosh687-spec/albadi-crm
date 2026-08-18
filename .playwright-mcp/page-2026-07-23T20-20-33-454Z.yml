@@ -1,0 +1,9 @@
+- generic [active] [ref=f1e1]:
+  - generic [ref=f1e4]:
+    - generic [ref=f1e6]:
+      - generic [ref=f1e7]: — Deals
+      - generic [ref=f1e8]: תיקי עסקאות.
+      - generic [ref=f1e9]: ציר העסקה + הרווח האמיתי מכל לקוח
+    - generic [ref=f1e10]: טוען…
+  - button "Open Next.js Dev Tools" [ref=f1e18] [cursor=pointer]
+  - alert [ref=f1e22]

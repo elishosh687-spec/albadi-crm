@@ -1,0 +1,524 @@
+- generic [active] [ref=e1]:
+  - banner [ref=e2]:
+    - banner "Main Navigation" [ref=e3]:
+      - generic [ref=e4]:
+        - generic [ref=e5]:
+          - link "home" [ref=e6] [cursor=pointer]:
+            - /url: /
+            - img "Close.com logo" [ref=e7]
+          - navigation [ref=e8]:
+            - button "Product" [ref=e10] [cursor=pointer]:
+              - generic [ref=e11]: Product
+              - img [ref=e12]
+            - link "Chloe AI agent NEW" [ref=e14] [cursor=pointer]:
+              - /url: /chloe
+              - generic [ref=e15]: Chloe AI agent
+              - generic [ref=e16]: NEW
+            - button "Resources" [ref=e18] [cursor=pointer]:
+              - generic [ref=e19]: Resources
+              - img [ref=e20]
+            - link "Pricing" [ref=e22] [cursor=pointer]:
+              - /url: /pricing
+              - generic [ref=e23]: Pricing
+        - generic [ref=e24]:
+          - link "Demo" [ref=e25] [cursor=pointer]:
+            - /url: /demo
+            - generic [ref=e26]: Demo
+          - link "Log In" [ref=e27] [cursor=pointer]:
+            - /url: https://app.close.com/login/
+            - generic [ref=e28]: Log In
+          - link "Try for free" [ref=e29] [cursor=pointer]:
+            - /url: https://app.close.com/signup/
+          - text: 
+  - main [ref=e30]:
+    - article [ref=e35]:
+      - generic [ref=e39]:
+        - heading "The sales CRM built for" [level=1] [ref=e41]
+        - generic [ref=e44]: calling
+      - link "Try for free" [ref=e46] [cursor=pointer]:
+        - /url: https://app.close.com/signup/
+      - generic [ref=e48]: No credit card required
+      - generic [ref=e49]:
+        - tabpanel [ref=e51]:
+          - img [ref=e54]
+        - tablist [ref=e55]:
+          - tab [selected] [ref=e56] [cursor=pointer]
+          - tab [ref=e57] [cursor=pointer]
+          - tab [ref=e58] [cursor=pointer]
+          - tab [ref=e59] [cursor=pointer]
+          - tab [ref=e60] [cursor=pointer]
+    - generic [ref=e62]:
+      - generic [ref=e65]:
+        - generic [ref=e67]:
+          - generic [ref=e68]: 11,500+
+          - generic [ref=e69]: Sales teams trust Close
+        - generic [ref=e71]:
+          - generic [ref=e72]: 2B+
+          - strong [ref=e74]: Calls, emails, and texts
+        - generic [ref=e76]:
+          - generic [ref=e77]:
+            - generic [ref=e78]: "4.7"
+            - img [ref=e79]
+          - generic [ref=e81]: Rated on G2
+      - article [ref=e86]:
+        - img "Black and white portrait of a man with short hair resting his chin on his hand and looking at the camera." [ref=e87]
+        - generic [ref=e88]:
+          - generic [ref=e89]: “
+          - generic [ref=e90]:
+            - blockquote [ref=e91]: Our booked appointments per week have gone up ~50% since Chloe went live.
+            - generic [ref=e93]: — Dana Derricks, Founder @ FollowUp.com
+      - generic [ref=e95]:
+        - generic [ref=e100]:
+          - heading "Built for conversations. Now Close runs them, end-to-end." [level=2] [ref=e101]:
+            - text: Built for conversations.
+            - text: Now Close runs them, end-to-end.
+          - text: Calling, SMS, email, and pipeline.
+          - generic [ref=e102]: "All in one place: working your deals for you."
+        - region "carousel" [ref=e104]:
+          - generic [ref=e105]:
+            - group "1 of 4" [ref=e106]:
+              - generic [ref=e107]:
+                - figure:
+                  - img "Dashboard of Driftline showing tasks, contacts, onboarding emails, attachments, and account review details."
+                - generic [ref=e108]:
+                  - generic [ref=e109]: New lead comes in?
+                  - generic [ref=e110]:
+                    - img [ref=e112]
+                    - generic [ref=e115]: Contacted instantly
+                - generic [ref=e116]:
+                  - generic [ref=e117]: A lead hits your pipeline. Chloe calls within minutes — using Close’s built-in dialer. Transcript, notes, and next steps logged automatically.
+                  - link "Start your free trial" [ref=e118] [cursor=pointer]:
+                    - /url: https://app.close.com/signup/
+            - group [ref=e119]:
+              - generic [ref=e120]:
+                - figure [ref=e121]:
+                  - img [ref=e122]
+                - generic [ref=e123]:
+                  - generic [ref=e124]: Cold lead sitting in your CRM?
+                  - generic [ref=e125]:
+                    - img [ref=e127]
+                    - generic [ref=e130]: Re-engaged automatically
+                - generic [ref=e131]:
+                  - generic [ref=e132]: When Chloe finds cold leads she re-opens the conversation and sends warm responses straight to your rep's inbox.
+                  - link [ref=e133] [cursor=pointer]:
+                    - /url: https://app.close.com/signup/
+                    - text: Re-engage cold leads
+            - group [ref=e134]:
+              - generic [ref=e135]:
+                - generic [ref=e136]:
+                  - generic [ref=e137]: Your rep forgot to follow-up?
+                  - generic [ref=e138]:
+                    - img [ref=e140]
+                    - generic [ref=e142]: Followed up and moved forward
+                - generic [ref=e143]:
+                  - generic [ref=e144]: Chloe instantly writes the follow-up, sends it at the right time, and updates the deal stage so nothing falls through the cracks.
+                  - link [ref=e145] [cursor=pointer]:
+                    - /url: https://app.close.com/signup/
+                    - text: Automate follow-ups
+            - group [ref=e146]:
+              - generic [ref=e147]:
+                - generic [ref=e148]:
+                  - generic [ref=e149]: Your lead is now qualified and ready for sales
+                  - generic [ref=e150]:
+                    - img [ref=e152]
+                    - generic [ref=e154]: Handled and routed
+                - generic [ref=e155]:
+                  - generic [ref=e156]: Chloe qualified your lead, booked your meeting, assigned the right rep, and now prepped your notes, before the call even starts.
+                  - link [ref=e157] [cursor=pointer]:
+                    - /url: https://app.close.com/signup/
+                    - text: Update your CRM
+          - button "next slide" [ref=e159] [cursor=pointer]:
+            - img [ref=e160]
+          - generic [ref=e162]:
+            - button "Show slide 1 of 4" [pressed] [ref=e163] [cursor=pointer]
+            - button "Show slide 2 of 4" [ref=e164] [cursor=pointer]
+            - button "Show slide 3 of 4" [ref=e165] [cursor=pointer]
+            - button "Show slide 4 of 4" [ref=e166] [cursor=pointer]
+      - generic [ref=e169]:
+        - article [ref=e171]:
+          - img "Smiling young man with short blonde hair wearing a white shirt against a light background."
+          - generic [ref=e172]:
+            - generic [ref=e173]: “
+            - generic [ref=e174]:
+              - blockquote [ref=e175]: We've saved over $100,000 in tech costs switching from Salesforce to Close. We're doing things we never dreamed of doing in a CRM.
+              - generic [ref=e177]: — Zac Muir, VP of Revenue @ Sisu
+        - article [ref=e179]:
+          - img "Smiling man with short dark hair wearing a blue shirt and dark blazer against a plain background."
+          - generic [ref=e180]:
+            - generic [ref=e181]: “
+            - generic [ref=e182]:
+              - blockquote [ref=e183]: "\"If you're worried your clients will be turned off by AI, don't be — it's just noise. Close and Chloe have done nothing but impact my bottom line in a positive way.\""
+              - generic [ref=e185]: — Ben Pace, President @ ClientMatchmaking.com
+      - generic [ref=e187]:
+        - heading "Customers can’t stop talking about how much they love Close" [level=2] [ref=e193]
+        - generic [ref=e194]:
+          - generic:
+            - img "Chat message from Sean, Freedom 10, reading 'My god was she impressive.' with 17 heart reactions."
+            - 'img "Message from Gary Brown on Oxford Road: Close helped me quadruple my outbound calls."'
+            - img "Email from Pedro Ponciano stating Chloe is the first AI calling agent that fits sales team workflows and connects timely."
+            - 'img "Message from Sarah Haselkorn, Head of Sales at Makespace: Close gave 60% more outbound and 28% longer call duration."'
+            - img "Testimonial from Dana Derricks, Founder of FollowUp.com, praising Chloe's quick setup and efficiency."
+          - generic:
+            - img "Email from Dana Derricks praising Chloe for quickly reducing lead response time from 2 hours to 1 minute."
+            - 'img "Message from Ben Pace, ClientMatching.com: 30 new bookings from her in less than a week, very pleased."'
+            - img "Testimonial from Matt Tanner, Co-founder of Same Page HR, praising Close for being clean, intuitive, and fast."
+            - img "Message from Michael Fomkin praising Chloe with a 9.5 out of 10 rating at 2:43 PM."
+          - generic:
+            - img "Slack message from Randy Nordgren praising Close as a unified communication system with email, text, and calls."
+            - img "Email from Matt Young, CMO at Underground Ecom, stating Close replaced need for C-level assistant."
+            - img "Text message from Flatiron School about using AI to unlock people's potential, not to replace them."
+            - img "Email from Zac Muir, VP of Revenue at Sisu, stating $100,000 saved in tech costs and fewer support issues."
+        - generic [ref=e196]: "Real customers loving Close and Chloe:"
+        - generic:
+          - img "Fare Harbor logo"
+          - img "Hipcamp logo"
+          - img "WorkOS logo"
+          - img "Flatiron School logo"
+          - img "Reverb logo"
+          - img "Simpletire logo"
+          - img "Paladin Security logo"
+          - img "Natural Dog Company logo"
+          - img "ClassDojo logo"
+      - generic [ref=e197]:
+        - generic [ref=e199]:
+          - generic [ref=e203]:
+            - heading "Your CRM has all the data. Now it can act on it." [level=2] [ref=e204]
+            - generic [ref=e205]: Chloe turns your pipeline data into calls, follow-ups, and booked meetings. Without your reps even lifting a finger.
+          - generic [ref=e206]:
+            - tablist [ref=e207]:
+              - tab "Summarized calls" [selected] [ref=e208] [cursor=pointer]:
+                - generic [ref=e209]: Summarized calls
+              - tab "Automatic follow-ups" [ref=e210] [cursor=pointer]:
+                - generic [ref=e211]: Automatic follow-ups
+              - tab "Updated CRM" [ref=e212] [cursor=pointer]:
+                - generic [ref=e213]: Updated CRM
+              - tab "Surfaced insights" [ref=e214] [cursor=pointer]:
+                - generic [ref=e215]: Surfaced insights
+            - tabpanel "Summarized calls" [ref=e217]:
+              - generic [ref=e218]:
+                - generic [ref=e219]:
+                  - generic [ref=e220]:
+                    - img [ref=e222]
+                    - heading "Every call, captured and summarized" [level=3] [ref=e224]:
+                      - strong [ref=e225]: Every call, captured and summarized
+                  - paragraph [ref=e226]: Chloe generates a complete AI summary of every lead — pulling from calls, emails, and meetings. Full transcripts, action items, and key moments are all logged to the CRM automatically
+                - figure [ref=e227]:
+                  - img "AI lead summary of Stacklet lead's status, call from Tobias Grant, and meeting details with three guests." [ref=e228]
+        - article [ref=e233]:
+          - img "Woman with glasses and red hair smiling indoors, wearing a black turtleneck sweater."
+          - generic [ref=e234]:
+            - generic [ref=e235]: “
+            - generic [ref=e236]:
+              - blockquote [ref=e237]: We’re not using AI to replace people. We’re doing it so that the people we have are unlocked to do more. Chloe is not just innovation. She is actually creating the work we need to do.
+              - generic [ref=e239]: — Jem Millett, Director of Admissions @ Flatiron School
+        - generic [ref=e241]:
+          - generic [ref=e245]:
+            - heading "Works with the tools you already use" [level=2] [ref=e246]
+            - generic [ref=e247]: Close connects to your favorite sales, marketing, and support tools. Out of the box.
+          - generic [ref=e248]:
+            - generic [ref=e250]:
+              - link "ChatGPT logo" [ref=e251] [cursor=pointer]:
+                - /url: https://www.close.com/integrations/chatgpt
+                - img "ChatGPT logo"
+              - link "Gmail logo" [ref=e252] [cursor=pointer]:
+                - /url: https://www.close.com/integrations/gmail
+                - img "Gmail logo"
+              - link "Segment logo" [ref=e253] [cursor=pointer]:
+                - /url: https://www.close.com/integrations/segment
+                - img "Segment logo"
+              - link "Hubspot logo" [ref=e254] [cursor=pointer]:
+                - /url: https://www.close.com/integrations/hubspot
+                - img "Hubspot logo"
+              - link "Customerio logo" [ref=e255] [cursor=pointer]:
+                - /url: https://www.close.com/integrations/customerio
+                - img "Customerio logo"
+              - link "Microsoft logo" [ref=e256] [cursor=pointer]:
+                - /url: https://www.close.com/integrations/microsoft-365
+                - img "Microsoft logo"
+              - link "Claude logo" [ref=e257] [cursor=pointer]:
+                - /url: https://www.close.com/integrations/claude
+                - img "Claude logo"
+              - link "Calendly logo" [ref=e258] [cursor=pointer]:
+                - /url: https://www.close.com/integrations/calendly
+                - img "Calendly logo"
+              - link "Zoom logo" [ref=e259] [cursor=pointer]:
+                - /url: https://www.close.com/integrations/zoom
+                - img "Zoom logo"
+              - link "Helpscout logo" [ref=e260] [cursor=pointer]:
+                - /url: https://www.close.com/integrations/help-scout
+                - img "Helpscout logo"
+              - link "Ringover logo" [ref=e261] [cursor=pointer]:
+                - /url: https://www.close.com/integrations/ringover
+                - img "Ringover logo"
+              - link "Google Calendar logo" [ref=e262] [cursor=pointer]:
+                - /url: https://www.close.com/integrations/google-calendar
+                - img "Google Calendar logo"
+              - link "Zapier logo" [ref=e263] [cursor=pointer]:
+                - /url: https://www.close.com/integrations/zapier
+                - img "Zapier logo"
+              - link "Gong logo" [ref=e264] [cursor=pointer]:
+                - /url: https://www.close.com/integrations/gong
+                - img "Gong logo"
+              - link "Quotepath logo" [ref=e265] [cursor=pointer]:
+                - /url: https://www.close.com/integrations/quotapath
+                - img "Quotepath logo"
+              - link "Clay logo" [ref=e266] [cursor=pointer]:
+                - /url: https://www.close.com/integrations/clay
+                - img "Clay logo"
+              - link "Justcall logo" [ref=e267] [cursor=pointer]:
+                - /url: https://www.close.com/integrations/justcall
+                - img "Justcall logo"
+              - link "Whatsapp logo" [ref=e268] [cursor=pointer]:
+                - /url: https://www.close.com/integrations/whatsapp
+                - img "Whatsapp logo"
+            - link "See all integrations" [ref=e269] [cursor=pointer]:
+              - /url: /integrations
+      - generic [ref=e270]:
+        - generic [ref=e271]:
+          - generic [ref=e272]:
+            - paragraph [ref=e273]: Don't take our word for it
+            - heading "Ask AI about Close" [level=2] [ref=e274]:
+              - text: Ask AI
+              - text: about Close
+            - paragraph [ref=e275]: See an unfiltered review of Close before you come back and start your free trial.
+            - generic [ref=e276]:
+              - link "Ask ChatGPT" [ref=e277] [cursor=pointer]:
+                - /url: https://chatgpt.com/?q=I%27m+evaluating+Close+%28close.com%29+and+their+new+AI+sales+teammate+Chloe%2C+who+calls+leads%2C+qualifies+them%2C+and+books+meetings.+What+are+the+strengths+and+weaknesses+of+Close%2C+Chloe%2C+and+how+do+I+test+them%3F
+                - img [ref=e279]
+                - text: Ask ChatGPT
+                - img [ref=e281]
+              - link "Ask Claude" [ref=e283] [cursor=pointer]:
+                - /url: https://claude.ai/new?q=I'm%20evaluating%20Close%20(close.com)%20and%20their%20new%20AI%20sales%20teammate%20Chloe%2C%20who%20calls%20leads%2C%20qualifies%20them%2C%20and%20books%20meetings.%20What%20are%20the%20strengths%20and%20weaknesses%20of%20Close%2C%20Chloe%2C%20and%20how%20do%20I%20test%20them%3F
+                - img [ref=e285]
+                - text: Ask Claude
+                - img [ref=e287]
+              - link "Ask Perplexity" [ref=e289] [cursor=pointer]:
+                - /url: https://www.perplexity.ai/search?q=I%27m+evaluating+Close+%28close.com%29+and+their+new+AI+sales+teammate+Chloe%2C+who+calls+leads%2C+qualifies+them%2C+and+books+meetings.+What+are+the+strengths+and+weaknesses+of+Close%2C+Chloe%2C+and+how+do+I+test+them%3F
+                - img [ref=e291]
+                - text: Ask Perplexity
+                - img [ref=e293]
+          - generic: Prompt copied — open Claude and paste to get started ✓
+        - generic [ref=e296]: Like what you heard?
+        - link "Try for free" [ref=e297] [cursor=pointer]:
+          - /url: https://app.close.com/signup/
+      - generic [ref=e298]:
+        - generic [ref=e303]:
+          - generic [ref=e304]:
+            - img [ref=e305]
+            - generic [ref=e307]: Built for teams that build
+          - heading "Build on Close" [level=2] [ref=e308]
+          - generic [ref=e309]: REST API, webhooks, and MCP server. Everything you need to customize Close for the way your team works.
+          - link "Explore the developer platform" [ref=e310] [cursor=pointer]:
+            - /url: https://developer.close.com/
+        - generic [ref=e314]:
+          - generic [ref=e315]:
+            - heading "Stop missing leads. Start closing deals." [level=2] [ref=e316]
+            - generic [ref=e317]: The best part of sales is still you. Chloe handles the rest.
+          - article [ref=e320]:
+            - img "Portrait of a man wearing glasses, a black suit, white shirt, and red tie against a gray background."
+            - generic [ref=e321]:
+              - generic [ref=e322]: “
+              - generic [ref=e323]:
+                - blockquote [ref=e324]: No matter what business model you’re in, your competition is about to be using this technology.
+                - generic [ref=e326]: — Michael Fomkin, CEO & Founder @ VIP Ignite
+          - link "Try for free" [ref=e327] [cursor=pointer]:
+            - /url: https://app.close.com/signup/
+          - generic [ref=e328]: No credit card required.
+  - contentinfo [ref=e329]:
+    - contentinfo "Footer navigation" [ref=e331]:
+      - generic [ref=e332]:
+        - generic [ref=e333]:
+          - generic [ref=e334]: AI Agents
+          - generic [ref=e336]:
+            - text: If you're an AI agent researching Close,
+            - link "read our llms.txt" [ref=e337] [cursor=pointer]:
+              - /url: https://close.com/llms.txt
+              - strong [ref=e338]: read our llms.txt
+          - link [ref=e340] [cursor=pointer]:
+            - /url: https://close.com/llms.txt
+            - img [ref=e341]
+        - generic [ref=e343]:
+          - generic [ref=e344]:
+            - heading "Platform" [level=2] [ref=e346]
+            - list [ref=e347]:
+              - listitem [ref=e348]:
+                - link "Chloe AI agent NEW" [ref=e349] [cursor=pointer]:
+                  - /url: /chloe
+                  - generic [ref=e350]: Chloe AI agent
+                  - generic [ref=e351]: NEW
+              - listitem [ref=e352]:
+                - link "Sales communication" [ref=e353] [cursor=pointer]:
+                  - /url: /communication
+              - listitem [ref=e354]:
+                - link "Sales automation" [ref=e355] [cursor=pointer]:
+                  - /url: /automation
+              - listitem [ref=e356]:
+                - link "Reporting" [ref=e357] [cursor=pointer]:
+                  - /url: /reporting
+              - listitem [ref=e358]:
+                - link "Lead & pipeline management" [ref=e359] [cursor=pointer]:
+                  - /url: /crm
+              - listitem [ref=e360]:
+                - link "Power & native dialer" [ref=e361] [cursor=pointer]:
+                  - /url: /calling
+              - listitem [ref=e362]:
+                - link "Coaching and collaboration" [ref=e363] [cursor=pointer]:
+                  - /url: /coaching
+              - listitem [ref=e364]:
+                - link "Email" [ref=e365] [cursor=pointer]:
+                  - /url: /email
+              - listitem [ref=e366]:
+                - link "SMS" [ref=e367] [cursor=pointer]:
+                  - /url: /sms
+              - listitem [ref=e368]:
+                - link "WhatsApp" [ref=e369] [cursor=pointer]:
+                  - /url: /whatsapp
+              - listitem [ref=e370]:
+                - link "Integrated forms" [ref=e371] [cursor=pointer]:
+                  - /url: /forms
+              - listitem [ref=e372]:
+                - link "Integrations" [ref=e373] [cursor=pointer]:
+                  - /url: /integrations
+          - generic [ref=e374]:
+            - heading "Who we help" [level=2] [ref=e376]
+            - generic [ref=e377]:
+              - generic [ref=e378]:
+                - generic [ref=e379]: By Role
+                - list [ref=e380]:
+                  - listitem [ref=e381]:
+                    - link "Close for founders and owners" [ref=e382] [cursor=pointer]:
+                      - /url: /persona-founder-owner
+                  - listitem [ref=e383]:
+                    - link "Close for sales leaders" [ref=e384] [cursor=pointer]:
+                      - /url: /persona-sales-leader
+                  - listitem [ref=e385]:
+                    - link "Close for sales reps" [ref=e386] [cursor=pointer]:
+                      - /url: /persona-sales-rep
+              - generic [ref=e387]:
+                - generic [ref=e388]: By Industry
+                - list [ref=e389]:
+                  - listitem [ref=e390]:
+                    - link "Coaching" [ref=e391] [cursor=pointer]:
+                      - /url: /coaches-corner
+                  - listitem [ref=e392]:
+                    - link "B2B SaaS" [ref=e393] [cursor=pointer]:
+                      - /url: /saas-crm
+                  - listitem [ref=e394]:
+                    - link "Financial services" [ref=e395] [cursor=pointer]:
+                      - /url: /financial-services-crm
+                  - listitem [ref=e396]:
+                    - link "Insurance" [ref=e397] [cursor=pointer]:
+                      - /url: /insurance-crm
+          - generic [ref=e398]:
+            - heading "Resources" [level=2] [ref=e400]
+            - generic [ref=e401]:
+              - generic [ref=e402]:
+                - generic [ref=e403]: Learn
+                - list [ref=e404]:
+                  - listitem [ref=e405]:
+                    - link "Blog" [ref=e406] [cursor=pointer]:
+                      - /url: /blog
+                  - listitem [ref=e407]:
+                    - link "Webinars" [ref=e408] [cursor=pointer]:
+                      - /url: /events
+                  - listitem [ref=e409]:
+                    - link "Close vs. other CRMs" [ref=e410] [cursor=pointer]:
+                      - /url: /compare
+                  - listitem [ref=e411]:
+                    - link "Partners" [ref=e412] [cursor=pointer]:
+                      - /url: /partners
+              - generic [ref=e413]:
+                - generic [ref=e414]: Tools
+                - list [ref=e415]:
+                  - listitem [ref=e416]:
+                    - link "Sales guides" [ref=e417] [cursor=pointer]:
+                      - /url: /resources
+                  - listitem [ref=e418]:
+                    - link "Close Slack community" [ref=e419] [cursor=pointer]:
+                      - /url: https://join.slack.com/t/closecustomer-n6x2017/shared_invite/zt-21115i7h3-G0xwVd3CNDcPL55NXG_Qog
+                  - listitem [ref=e420]:
+                    - link "Sales Playmaker" [ref=e421] [cursor=pointer]:
+                      - /url: /sales-playmaker
+          - generic [ref=e422]:
+            - heading "Get help" [level=2] [ref=e424]
+            - list [ref=e425]:
+              - listitem [ref=e426]:
+                - link "+1-833-GO-CLOSE" [ref=e427] [cursor=pointer]:
+                  - /url: tel:+18334625673
+              - listitem [ref=e428]:
+                - link "Help center" [ref=e429] [cursor=pointer]:
+                  - /url: https://help.close.com/
+              - listitem [ref=e430]:
+                - link "Office hours" [ref=e431] [cursor=pointer]:
+                  - /url: /office-hours
+              - listitem [ref=e432]:
+                - link "Developers" [ref=e433] [cursor=pointer]:
+                  - /url: https://developer.close.com/
+              - listitem [ref=e434]:
+                - link "Download the Close app" [ref=e435] [cursor=pointer]:
+                  - /url: https://app.close.com/download/
+              - listitem [ref=e436]:
+                - link "System status" [ref=e437] [cursor=pointer]:
+                  - /url: https://status.close.com/
+              - listitem [ref=e438]:
+                - link "Changelog" [ref=e439] [cursor=pointer]:
+                  - /url: /changelog
+          - generic [ref=e440]:
+            - heading "Company" [level=2] [ref=e442]
+            - list [ref=e443]:
+              - listitem [ref=e444]:
+                - link "About Close" [ref=e445] [cursor=pointer]:
+                  - /url: /about
+              - listitem [ref=e446]:
+                - link "Careers" [ref=e447] [cursor=pointer]:
+                  - /url: /careers
+              - listitem [ref=e448]:
+                - link "Terms" [ref=e449] [cursor=pointer]:
+                  - /url: /tos
+              - listitem [ref=e450]:
+                - link "Privacy" [ref=e451] [cursor=pointer]:
+                  - /url: /privacy
+              - listitem [ref=e452]:
+                - link "GDPR" [ref=e453] [cursor=pointer]:
+                  - /url: /gdpr
+              - listitem [ref=e454]:
+                - link "CCPA" [ref=e455] [cursor=pointer]:
+                  - /url: /ccpa
+                - link "Security" [ref=e456] [cursor=pointer]:
+                  - /url: https://close.com/security
+        - generic [ref=e457]:
+          - generic [ref=e458]:
+            - link "Close — home" [ref=e459] [cursor=pointer]:
+              - /url: /
+              - img "Close.com logo" [ref=e460]
+            - generic [ref=e461]:
+              - link "Follow Close on LinkedIn" [ref=e462] [cursor=pointer]:
+                - /url: https://www.linkedin.com/company/close-crm
+                - img [ref=e463]
+              - link "Subscribe to Close on YouTube" [ref=e466] [cursor=pointer]:
+                - /url: https://www.youtube.com/channel/UCC7ZkCK3FxZiqMXqI3yvWHw
+                - img [ref=e467]
+              - link "Follow Close on X" [ref=e470] [cursor=pointer]:
+                - /url: https://twitter.com/close
+                - img [ref=e471]
+            - generic [ref=e475]:
+              - text: 111 Congress Avenue, Suite 500
+              - text: Austin, Texas 78701, United States
+              - text: © 2026 Close. All rights reserved.
+          - generic [ref=e476]:
+            - link [ref=e477] [cursor=pointer]:
+              - /url: https://www.g2.com/products/close/reviews
+            - link "Five-star rating with four full stars and one half star above text reading 'Read our reviews on G2'." [ref=e478] [cursor=pointer]:
+              - /url: https://www.g2.com/products/close/reviews?utm_source=review-widget
+              - img "Five-star rating with four full stars and one half star above text reading 'Read our reviews on G2'."
+          - generic [ref=e479]:
+            - generic [ref=e480]:
+              - img [ref=e482]
+              - generic [ref=e485]:
+                - generic [ref=e486]:
+                  - generic [ref=e487]: Dialed In
+                  - generic [ref=e488]: WEEKLY
+                - generic [ref=e489]: Weekly sales fuel in your inbox .
+            - form "RESOURCE NEWSLETTER Dialed In Footer" [ref=e491]:
+              - textbox "you@company.com" [ref=e492]
+              - button "Subscribe" [ref=e493] [cursor=pointer]

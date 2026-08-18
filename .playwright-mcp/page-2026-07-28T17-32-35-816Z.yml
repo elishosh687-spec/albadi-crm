@@ -1,0 +1,12 @@
+- generic [active] [ref=f6e1]:
+  - generic [ref=f6e3]:
+    - generic [ref=f6e5]:
+      - generic [ref=f6e6]: — Factory quotes
+      - generic [ref=f6e7]: הצעות מהמפעל.
+      - generic [ref=f6e8]: חפש לקוח כדי לפתוח או לשלוח הצעה חדשה למפעל.
+    - textbox "חפש לפי שם / טלפון / sid" [ref=f6e14]
+    - generic [ref=f6e15]: בחר ליד מהרשימה למעלה כדי להתחיל זרימת הצעת מפעל.
+    - generic [ref=f6e19]:
+      - generic [ref=f6e20]: היסטוריית הצעות מפעל
+      - generic [ref=f6e21]: טוען...
+  - alert [ref=f6e24]

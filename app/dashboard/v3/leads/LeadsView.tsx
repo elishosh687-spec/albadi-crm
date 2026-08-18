@@ -78,7 +78,8 @@ function GapsTable({ rows, spreadsheetId }: { rows: SheetGapRow[]; spreadsheetId
         </thead>
         <tbody>
           {rows.map((row) => {
-            const link = sheetRowDeepLink(spreadsheetId, row.rowIndex);
+            // Rows can come from different form sheets — prefer the row's own.
+            const link = sheetRowDeepLink(row.spreadsheetId ?? spreadsheetId, row.rowIndex);
             return (
               <tr key={row.rowIndex} className="border-b border-border/50 hover:bg-muted/20 transition-colors">
                 <td className="px-4 py-3">{row.name ?? "—"}</td>

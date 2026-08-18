@@ -1,0 +1,30 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - heading "STUDIO סטודיו אלבדי — הדמיה + פריסה" [level=1] [ref=e3]:
+      - generic [ref=e4]: STUDIO
+      - text: סטודיו אלבדי — הדמיה + פריסה
+    - generic [ref=e5]:
+      - textbox "מזהה עסקה (fq_…) — או השאר ריק לליד חופשי" [ref=e6]
+      - button "טען" [ref=e7] [cursor=pointer]
+      - generic [ref=e8]: לקוח מ-GHL · מוכן לשליחה ב-WhatsApp
+  - generic [ref=e9]:
+    - generic [ref=e10]:
+      - generic [ref=e11]: תוצאות
+      - generic [ref=e12]: עדיין אין קבצים. בקש מ-Claude "תעשה הדמיה" והם יופיעו כאן.
+      - generic [ref=e14]: פריסה — קובץ הפקה
+      - generic [ref=e15]:
+        - generic [ref=e16] [cursor=pointer]: לוגו
+        - generic [ref=e17] [cursor=pointer]: פריסת מפעל
+      - button "צור קובץ הפקה" [ref=e18] [cursor=pointer]
+      - generic [ref=e19]: מעלה את שני הקבצים ומבקש מ-Claude להריץ את סקיל הפריסה.
+    - generic [ref=e20]:
+      - generic [ref=e21]:
+        - generic [ref=e22]: "שלום 👋 טען עסקה למעלה, או פשוט תגיד לי מה לעשות — למשל: \"תעשה הדמיה לתיק 40×30, רקע ירוק זית, עם הלוגו שאעלה\"."
+        - generic [ref=e23]: טענתי לקוח מ-GHL — נעשה הדמיה ואפשר לשלוח לו ישירות ב-WhatsApp (גם בלי עסקה סגורה).
+      - generic [ref=e24]:
+        - textbox "כתוב ל-Claude… (תעשה הדמיה, שנה צבע, תגדיל לוגו, תעשה וידאו)" [ref=e25]
+        - button "שלח" [ref=e26] [cursor=pointer]
+  - generic [ref=e27]:
+    - text: רץ מקומית על ה-Mac · שומר קבצים ב-
+    - code [ref=e28]: ~/albadi-studio
+    - text: · מעלה לתיק העסקה + שולח ב-WhatsApp דרך ה-CRM

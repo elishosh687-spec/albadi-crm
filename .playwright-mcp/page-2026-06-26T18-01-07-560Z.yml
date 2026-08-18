@@ -1,0 +1,404 @@
+- generic [active] [ref=e1]:
+  - banner [ref=e2]:
+    - generic [ref=e4]:
+      - link "Home page" [ref=e5] [cursor=pointer]:
+        - /url: /
+        - img "Home page" [ref=e6]
+      - button "Menu" [ref=e17] [cursor=pointer]
+  - main [ref=e18]:
+    - generic [ref=e20]:
+      - generic [ref=e21]:
+        - generic [ref=e25]:
+          - generic "Make your competitors’ proposals look primitive" [ref=e28]
+          - generic "Make it interactive" [ref=e31]
+          - generic "Make it match my brand" [ref=e34]
+          - generic "Get paid when the buyer says yes" [ref=e37]
+          - generic "Secure sign-off and payment in one doc" [ref=e40]
+        - generic [ref=e41]:
+          - generic [ref=e42]: proposal software for modern sales teams
+          - heading "Make your competitors’ proposals look primitive" [level=1] [ref=e43]:
+            - generic [ref=e44]:
+              - generic [ref=e45]: Make your competitors’ proposals look
+              - generic [ref=e47]: Make your competitors’ proposals look primitive
+          - generic [ref=e48]:
+            - link "Try it free" [ref=e49] [cursor=pointer]:
+              - /url: https://app.qwilr.com/#/signup
+              - generic [ref=e50]: Try it free
+            - link "Book a demo" [ref=e51] [cursor=pointer]:
+              - /url: /book-a-demo/?from=hero
+              - generic [ref=e52]: Book a demo
+          - paragraph [ref=e53]: No credit card required | 14 day free trial
+      - generic [ref=e55]: Send interactive proposals, generate quotes, secure sign-off and payment
+    - generic [ref=e58]:
+      - heading "Loved by 5000+ customers" [level=2] [ref=e59]
+      - generic [ref=e60]:
+        - generic [ref=e61]:
+          - img "Thomson Reuters" [ref=e62]
+          - img "Drata" [ref=e63]
+          - img "Meltwater" [ref=e64]
+          - img "Site Minder" [ref=e65]
+          - img "Safety Culture" [ref=e66]
+          - img "Sotheby's International Realty" [ref=e67]
+          - img "Morningstar" [ref=e68]
+          - img "Yale" [ref=e69]
+          - img "OpenTable" [ref=e70]
+        - generic [ref=e71]:
+          - img [ref=e72]
+          - img [ref=e73]
+          - img [ref=e74]
+          - img [ref=e75]
+          - img [ref=e76]
+          - img [ref=e77]
+          - img [ref=e78]
+          - img [ref=e79]
+          - img [ref=e80]
+    - generic [ref=e83]:
+      - generic [ref=e84]:
+        - heading "How it works" [level=2] [ref=e85]
+        - generic [ref=e86]:
+          - generic [ref=e87]:
+            - heading "Create interactive proposals" [level=3] [ref=e88]:
+              - button "Create interactive proposals" [disabled] [expanded] [ref=e89] [cursor=pointer]:
+                - heading "Create interactive proposals" [level=3] [ref=e90]
+                - img [ref=e91]
+            - region "Create interactive proposals" [ref=e93]:
+              - paragraph [ref=e95]: Deliver interactive proposals and quotes that impress buyers. Send them in a few clicks direct from a CRM.
+          - heading "Collect payments and signatures" [level=3] [ref=e97]:
+            - button "Collect payments and signatures" [ref=e98] [cursor=pointer]:
+              - heading "Collect payments and signatures" [level=3] [ref=e99]
+              - img [ref=e100]
+          - heading "Get document analytics" [level=3] [ref=e103]:
+            - button "Get document analytics" [ref=e104] [cursor=pointer]:
+              - heading "Get document analytics" [level=3] [ref=e105]
+              - img [ref=e106]
+        - link "Software overview" [ref=e108] [cursor=pointer]:
+          - /url: /product/overview/
+          - text: Software overview
+          - img [ref=e110]
+      - img "Drag and drop reusable blocks of rich content" [ref=e114]
+    - generic [ref=e119]:
+      - generic [ref=e120]:
+        - img [ref=e121]
+        - text: AI Creator
+      - heading "Create a standout proposal, instantly" [level=2] [ref=e123]
+      - paragraph [ref=e124]: Turn your website into a ready-to-use proposal template, perfect for every deal.
+      - link "Try now" [ref=e126] [cursor=pointer]:
+        - /url: /use-cases/proposal-generator-software/
+        - generic [ref=e127]: Try now
+    - generic [ref=e130]:
+      - generic [ref=e131]:
+        - heading "Connected with the best" [level=2] [ref=e132]
+        - paragraph [ref=e133]: Qwilr integrates with all the leading CRM, sales and accounting software, like HubSpot, Salesforce, Zoho, Pipedrive, and Quickbooks.
+        - link "View integrations" [ref=e134] [cursor=pointer]:
+          - /url: /integrations/
+          - text: View integrations
+          - img [ref=e136]
+      - img "A grid of logos including Stripe, Salesforce, HubSpot and more" [ref=e140]
+    - generic [ref=e143]:
+      - generic [ref=e144]:
+        - heading "Qwilr drives revenue for sales teams" [level=2] [ref=e145]
+        - paragraph [ref=e146]: With Qwilr, your sales team unlocks revenue with insights into how buyers are engaging with your content at crucial stages of the deal.
+        - generic [ref=e148]:
+          - img "4.5 stars" [ref=e149]
+          - paragraph [ref=e156]: 500+ 5-star G2 reviews
+      - generic [ref=e157]:
+        - generic [ref=e158]:
+          - heading "Win rate" [level=3] [ref=e159]
+          - generic [ref=e160]:
+            - text: "20"
+            - subscript [ref=e161]: "%+"
+          - paragraph [ref=e162]: Increase in win rates with Qwilr.
+        - generic [ref=e163]:
+          - heading "ROI" [level=3] [ref=e164]
+          - generic [ref=e165]:
+            - text: "5"
+            - subscript [ref=e166]: months
+          - paragraph [ref=e167]: To see full payback.
+        - generic [ref=e168]:
+          - heading "Time saved" [level=3] [ref=e169]
+          - generic [ref=e170]:
+            - generic [ref=e171]:
+              - generic [ref=e172]:
+                - text: "20"
+                - subscript [ref=e173]: "%"
+              - paragraph [ref=e174]: Reduction in time to close deals.
+            - generic [ref=e175]:
+              - generic [ref=e176]:
+                - text: "75"
+                - subscript [ref=e177]: "%"
+              - paragraph [ref=e178]: Reduction in time spent creating sales materials.
+    - generic [ref=e181]:
+      - generic [ref=e182]:
+        - heading "Teams love Qwilr" [level=2] [ref=e183]
+        - paragraph [ref=e184]: Use Qwilr across all your GTM teams to build an end-to-end sales experience that increases deal velocity.
+      - generic [ref=e185]:
+        - link "Headshot of a smiling sales leader Sales leaders Empower your team and increase your revenue. Qwilr for Leaders" [ref=e186] [cursor=pointer]:
+          - /url: /role/sales-teams/
+          - img "Headshot of a smiling sales leader" [ref=e188]
+          - heading "Sales leaders" [level=3] [ref=e189]
+          - paragraph [ref=e190]: Empower your team and increase your revenue.
+          - generic [ref=e192]:
+            - text: Qwilr for Leaders
+            - img [ref=e194]
+        - link "Headshot of a smiling marketing manager Marketing Create beautiful collateral consistently that you can track. Qwilr for Marketing" [ref=e196] [cursor=pointer]:
+          - /url: /role/marketing/
+          - img "Headshot of a smiling marketing manager" [ref=e198]
+          - heading "Marketing" [level=3] [ref=e199]
+          - paragraph [ref=e200]: Create beautiful collateral consistently that you can track.
+          - generic [ref=e202]:
+            - text: Qwilr for Marketing
+            - img [ref=e204]
+        - link "Headshot of a smiling sales ops manager Sales operations Build a scaleable and personalized quoting system. Qwilr for Operations" [ref=e206] [cursor=pointer]:
+          - /url: /role/sales-ops/
+          - img "Headshot of a smiling sales ops manager" [ref=e208]
+          - heading "Sales operations" [level=3] [ref=e209]
+          - paragraph [ref=e210]: Build a scaleable and personalized quoting system.
+          - generic [ref=e212]:
+            - text: Qwilr for Operations
+            - img [ref=e214]
+        - link "Headshot of a smiling customer success manager Customer success Deepen customer relationships with personalized content. Qwilr for Customer Success" [ref=e216] [cursor=pointer]:
+          - /url: /role/customer-success/
+          - img "Headshot of a smiling customer success manager" [ref=e218]
+          - heading "Customer success" [level=3] [ref=e219]
+          - paragraph [ref=e220]: Deepen customer relationships with personalized content.
+          - generic [ref=e222]:
+            - text: Qwilr for Customer Success
+            - img [ref=e224]
+    - generic [ref=e227]:
+      - heading "A word from our customers" [level=2] [ref=e229]
+      - generic [ref=e230]:
+        - generic [ref=e232]:
+          - figure [ref=e233]:
+            - img "A smiling young woman with dark skin and long dark hair, wearing a dark top." [ref=e235]
+            - generic [ref=e236]:
+              - img "Lorikeet"
+              - blockquote [ref=e237]: “Qwilr is incredibly easy to use and saves our team so much time. We know we’re putting our best foot forward with every prospect.”
+              - generic [ref=e238]:
+                - generic [ref=e239]: Dilshi Gunasekara
+                - generic [ref=e240]: Business Operations
+          - figure [ref=e241]:
+            - img "Qwilr customer Robert Brooks, VP of Sales at Lambda" [ref=e243]
+            - generic [ref=e244]:
+              - img "Lambda" [ref=e245]
+              - blockquote [ref=e246]: “I love the live link. It’s been really helpful to be able to make changes on the fly and not have to resend a bunch of documents. It’s a much better customer experience than someone needing to look through multiple versions to find the most current one.”
+              - generic [ref=e247]:
+                - generic [ref=e248]: Robert Brooks
+                - generic [ref=e249]: VP, Sales
+          - figure [ref=e250]:
+            - img "Qwilr customer Amy DeCicco, Sr. Vice President of Marketing at ExtensisHR" [ref=e252]
+            - generic [ref=e253]:
+              - img "ExtensisHR"
+              - blockquote [ref=e254]: “Sometimes, we’re not even able to get in the room. Our proposal has to be the representation of the salesperson and have all the information a customer needs because our product is complex.”
+              - generic [ref=e255]:
+                - generic [ref=e256]: Amy DeCicco
+                - generic [ref=e257]: Sr. Vice President, Marketing
+          - figure [ref=e258]:
+            - img "Qwilr customer Xiaohui Wong, Founder at Essence of Email" [ref=e260]
+            - generic [ref=e261]:
+              - img "Essence of Email"
+              - blockquote [ref=e262]: “On a functional level, we really appreciate how Qwilr allows us to password protect and digitally sign our proposals to improve privacy and security with clients. Also, the ability to track page views on live proposals has helped us better focus our time and efforts on pursuing quality leads.”
+              - generic [ref=e263]:
+                - generic [ref=e264]: Xiaohui Wong
+                - generic [ref=e265]: Founder
+          - figure [ref=e266]:
+            - img "Qwilr customer Blake Ziolowski, Sales Manager at LaunchNotes" [ref=e268]
+            - generic [ref=e269]:
+              - img "LaunchNotes"
+              - blockquote [ref=e270]: “We’re seeing deals close a lot faster while also adding a level of professionalism and enjoying powerful insights. None of these things we were getting through the use of PDFs and e-signature software alone.”
+              - generic [ref=e271]:
+                - generic [ref=e272]: Blake Ziolowski
+                - generic [ref=e273]: Sales Manager
+        - generic [ref=e274]:
+          - button "Go to slide 1" [ref=e275] [cursor=pointer]
+          - button "Go to slide 2" [ref=e276] [cursor=pointer]
+          - button "Go to slide 3" [ref=e277] [cursor=pointer]
+          - button "Go to slide 4" [ref=e278] [cursor=pointer]
+          - button "Go to slide 5" [ref=e279] [cursor=pointer]
+        - button "Previous slide" [ref=e280] [cursor=pointer]:
+          - img [ref=e281]
+        - button "Next slide" [ref=e283] [cursor=pointer]:
+          - img [ref=e284]
+    - generic [ref=e287]:
+      - generic [ref=e288]:
+        - heading "Templates for all needs" [level=2] [ref=e289]
+        - paragraph [ref=e290]: Explore proposal templates and collateral for sales, marketing, customer success, sales enablement, and more.
+        - link "Explore template gallery" [ref=e291] [cursor=pointer]:
+          - /url: /templates/
+          - text: Explore template gallery
+          - img [ref=e293]
+      - generic [ref=e295]:
+        - tablist "View templates by category" [ref=e296]:
+          - tab "Sales" [selected] [ref=e297] [cursor=pointer]
+          - tab "Marketing" [ref=e298] [cursor=pointer]
+          - tab "Sales enablement" [ref=e299] [cursor=pointer]
+          - tab "Customer success" [ref=e300] [cursor=pointer]
+        - tabpanel "Sales" [ref=e301]:
+          - generic [ref=e302]:
+            - link "Preview of Enterprise Sales Template Enterprise Sales Template" [ref=e303] [cursor=pointer]:
+              - /url: /templates/enterprise-sales-template/
+              - img "Preview of Enterprise Sales Template" [ref=e305]
+              - generic [ref=e307]:
+                - text: Enterprise Sales Template
+                - img [ref=e308]
+            - link "Preview of Sales Proposal Template Sales Proposal Template" [ref=e311] [cursor=pointer]:
+              - /url: /templates/sales-proposal-template/
+              - img "Preview of Sales Proposal Template" [ref=e313]
+              - generic [ref=e315]:
+                - text: Sales Proposal Template
+                - img [ref=e316]
+            - link "Preview of Gap Selling Template Gap Selling Template" [ref=e319] [cursor=pointer]:
+              - /url: /templates/gap-selling-template/
+              - img "Preview of Gap Selling Template" [ref=e321]
+              - generic [ref=e323]:
+                - text: Gap Selling Template
+                - img [ref=e324]
+  - contentinfo [ref=e327]:
+    - generic [ref=e329]:
+      - generic [ref=e331]:
+        - heading "Build better sales proposals with Qwilr" [level=3] [ref=e332]
+        - paragraph [ref=e333]: See how Qwilr helps your sales team create personalised, on-brand proposals faster, streamline approvals and track buyer engagement.
+        - generic [ref=e334]:
+          - link "Book a demo" [ref=e335] [cursor=pointer]:
+            - /url: /book-a-demo/
+            - generic [ref=e336]: Book a demo
+          - link "Try it free" [ref=e337] [cursor=pointer]:
+            - /url: https://app.qwilr.com/#/signup
+            - text: Try it free
+            - img [ref=e339]
+      - generic [ref=e341]:
+        - navigation [ref=e342]:
+          - generic [ref=e343]:
+            - generic [ref=e344]:
+              - generic [ref=e345]: Product
+              - list [ref=e346]:
+                - listitem [ref=e347]:
+                  - link "Editor" [ref=e348] [cursor=pointer]:
+                    - /url: /product/content-creation/
+                - listitem [ref=e349]:
+                  - link "Automation" [ref=e350] [cursor=pointer]:
+                    - /url: /product/automation/
+                - listitem [ref=e351]:
+                  - link "Analytics & notifications" [ref=e352] [cursor=pointer]:
+                    - /url: /product/analytics/
+                - listitem [ref=e353]:
+                  - link "Quotes" [ref=e354] [cursor=pointer]:
+                    - /url: /product/quotes/
+                - listitem [ref=e355]:
+                  - link "QwilrPay" [ref=e356] [cursor=pointer]:
+                    - /url: /product/payments/
+                - listitem [ref=e357]:
+                  - link "Integrations" [ref=e358] [cursor=pointer]:
+                    - /url: /integrations/
+                - listitem [ref=e359]:
+                  - link "E-sign & agreements" [ref=e360] [cursor=pointer]:
+                    - /url: /product/esign/
+                - listitem [ref=e361]:
+                  - link "Pricing" [ref=e362] [cursor=pointer]:
+                    - /url: /pricing/
+            - generic [ref=e363]:
+              - generic [ref=e364]: Why Qwilr
+              - list [ref=e365]:
+                - listitem [ref=e366]:
+                  - link "Qwilr vs. PDF" [ref=e367] [cursor=pointer]:
+                    - /url: /compare/pdf/
+                - listitem [ref=e368]:
+                  - link "Qwilr vs. Pandadoc" [ref=e369] [cursor=pointer]:
+                    - /url: /compare/pandadoc/
+                - listitem [ref=e370]:
+                  - link "Qwilr vs. Proposify" [ref=e371] [cursor=pointer]:
+                    - /url: /compare/proposify/
+                - listitem [ref=e372]:
+                  - link "Qwilr vs. Better Proposals" [ref=e373] [cursor=pointer]:
+                    - /url: /compare/better-proposals/
+                - listitem [ref=e374]:
+                  - link "Qwilr vs. Docusign" [ref=e375] [cursor=pointer]:
+                    - /url: /compare/docusign/
+                - listitem [ref=e376]:
+                  - link "Qwilr vs. HubSpot Quotes" [ref=e377] [cursor=pointer]:
+                    - /url: /compare/hubspot-quotes/
+          - generic [ref=e378]:
+            - generic [ref=e379]: Use cases
+            - list [ref=e380]:
+              - listitem [ref=e381]:
+                - link "Proposal generator" [ref=e382] [cursor=pointer]:
+                  - /url: /use-cases/proposal-generator-software/
+              - listitem [ref=e383]:
+                - link "Document automation" [ref=e384] [cursor=pointer]:
+                  - /url: /use-cases/document-automation-software/
+              - listitem [ref=e385]:
+                - link "Contracts" [ref=e386] [cursor=pointer]:
+                  - /url: /use-cases/contract-management-software/
+              - listitem [ref=e387]:
+                - link "Digital sales rooms" [ref=e388] [cursor=pointer]:
+                  - /url: /use-cases/digital-sales-room-software/
+              - listitem [ref=e389]:
+                - link "Mutual action plans" [ref=e390] [cursor=pointer]:
+                  - /url: /use-cases/mutual-action-plan-software/
+              - listitem [ref=e391]:
+                - link "Customer onboarding" [ref=e392] [cursor=pointer]:
+                  - /url: /use-cases/customer-onboarding-software/
+          - generic [ref=e393]:
+            - generic [ref=e394]: Resources
+            - list [ref=e395]:
+              - listitem [ref=e396]:
+                - link "Resource hub" [ref=e397] [cursor=pointer]:
+                  - /url: /resources/
+              - listitem [ref=e398]:
+                - link "Case studies" [ref=e399] [cursor=pointer]:
+                  - /url: /case-studies/
+              - listitem [ref=e400]:
+                - link "Blog" [ref=e401] [cursor=pointer]:
+                  - /url: /blog/
+              - listitem [ref=e402]:
+                - link "Product updates" [ref=e403] [cursor=pointer]:
+                  - /url: https://team.qwilr.com/Qwilr-Product-Updates-2025-ZmP5Cml2THGA
+              - listitem [ref=e404]:
+                - link "Getting started guide" [ref=e405] [cursor=pointer]:
+                  - /url: https://guides.qwilr.com/Guide-Getting-Started-with-Qwilr-eM3hPOpTga2p/
+              - listitem [ref=e406]:
+                - link "API documentation" [ref=e407] [cursor=pointer]:
+                  - /url: https://docs.qwilr.com/
+          - generic [ref=e408]:
+            - generic [ref=e409]: Company
+            - list [ref=e410]:
+              - listitem [ref=e411]:
+                - link "About us" [ref=e412] [cursor=pointer]:
+                  - /url: /about/
+              - listitem [ref=e413]:
+                - link "Careers" [ref=e414] [cursor=pointer]:
+                  - /url: /jobs/
+              - listitem [ref=e415]:
+                - link "Partner program" [ref=e416] [cursor=pointer]:
+                  - /url: /partners/
+              - listitem [ref=e417]:
+                - link "Newsroom" [ref=e418] [cursor=pointer]:
+                  - /url: /newsroom/
+              - listitem [ref=e419]:
+                - link "Terms" [ref=e420] [cursor=pointer]:
+                  - /url: /terms/
+              - listitem [ref=e421]:
+                - link "Privacy policy" [ref=e422] [cursor=pointer]:
+                  - /url: /privacy-policy/
+              - listitem [ref=e423]:
+                - link "Trust and security" [ref=e424] [cursor=pointer]:
+                  - /url: /trust-and-security/
+              - listitem [ref=e425]:
+                - link "Support" [ref=e426] [cursor=pointer]:
+                  - /url: /outstanding-support/
+        - generic [ref=e427]:
+          - generic [ref=e428]:
+            - img [ref=e429]
+            - paragraph [ref=e435]: © 2026 Qwilr Pty Ltd. All rights reserved.
+          - generic [ref=e436]:
+            - link "Help centre" [ref=e438] [cursor=pointer]:
+              - /url: https://help.qwilr.com/
+            - generic [ref=e439]:
+              - link "X" [ref=e440] [cursor=pointer]:
+                - /url: https://x.com/qwilr
+                - img [ref=e441]
+              - link "Facebook" [ref=e443] [cursor=pointer]:
+                - /url: https://www.facebook.com/qwilr
+                - img [ref=e444]
+              - link "Linkedin" [ref=e446] [cursor=pointer]:
+                - /url: https://www.linkedin.com/company/qwilr
+                - img [ref=e447]
