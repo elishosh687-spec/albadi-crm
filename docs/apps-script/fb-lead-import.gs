@@ -80,16 +80,27 @@ function crmCols_(sheet, header) {
   return out;
 }
 
-/** "p:+9725…" / "0543…" / "5433…" → "+9725…", or '' when unusable. */
+/**
+ * "p:+9725…" / "0501234567" / "050-123-4567" → "+9725…", or '' when unusable.
+ *
+ * Kept from Eli's version, including the guard below: a 9-digit local number
+ * with no leading zero normalises to "+501234567", which LOOKS like E.164 and
+ * is a different country. The length test is what catches it, so both halves
+ * must stay together.
+ */
 function fixPhone_(raw) {
-  var s = String(raw == null ? '' : raw).trim().replace(/^p:/i, '');
-  s = s.replace(/[^\d+]/g, '');
-  if (!s) return '';
-  if (s.charAt(0) === '+') return s;
-  if (s.indexOf('0') === 0) return '+972' + s.substring(1);
-  if (s.indexOf('972') === 0) return '+' + s;
-  if (s.length === 9) return '+972' + s;   // local number missing its 0
-  return '+' + s;
+  var phone = String(raw == null ? '' : raw).replace(/^p:/i, '').trim();
+  var hasPlus = phone.charAt(0) === '+';
+  phone = phone.replace(/[^\d]/g, '');
+  if (!phone) return '';
+  if (phone.charAt(0) === '0' && phone.length === 10) return '+972' + phone.substring(1);
+  if (hasPlus) return '+' + phone;
+  return '+' + phone;
+}
+
+/** Plausible E.164 only: '+' then 10-15 digits, and never a '+0' country. */
+function phoneLooksValid_(p) {
+  return /^\+\d{10,15}$/.test(p) && p.indexOf('+0') !== 0;
 }
 
 function onNewLead() {
@@ -132,9 +143,10 @@ function onNewLead() {
     if (rawPhone.toLowerCase().indexOf('test lead') !== -1) continue;
 
     var phone = fixPhone_(rawPhone);
-    if (!phone || phone.replace(/\D/g, '').length < 9) {
-      // Status but NOT the SENT marker — a fixed phone is retried next run.
-      sheet.getRange(rowNum, crm.status).setValue('BAD_PHONE: ' + rawPhone);
+    if (!phoneLooksValid_(phone)) {
+      // Status but NOT the SENT marker — a hand-fixed phone retries next run.
+      sheet.getRange(rowNum, crm.status).setValue('BAD_PHONE: ' + phone);
+      Logger.log('BAD_PHONE: ' + name + ' | raw=' + rawPhone + ' | normalized=' + phone);
       continue;
     }
 
@@ -178,6 +190,17 @@ function onNewLead() {
     // retry can finish the job; a bad phone isn't marked either.
     if (status === 'sent' || status === 'tagged_only') {
       sheet.getRange(rowNum, crm.sent).setValue('SENT');
+      Logger.log(status + ': ' + name + ' | ' + phone);
+    } else {
+      // lead_created_send_failed → the lead exists but the opening didn't go
+      // out. Deliberately NOT marked SENT, so the row stays a retry candidate.
+      Logger.log('FAILED: ' + name + ' | ' + phone + ' | ' + status);
     }
+    Utilities.sleep(500);
   }
+}
+
+/** Manual entry point — same pass, run by hand over the whole sheet. */
+function importAllExistingLeads() {
+  onNewLead();
 }
