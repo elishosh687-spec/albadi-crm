@@ -104,7 +104,7 @@ function phoneLooksValid_(p) {
 }
 
 function onNewLead() {
-  var sheet = SpreadsheetApp.getActiveSheet();
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
   var values = sheet.getDataRange().getValues();
   if (values.length < 2) return;
 
@@ -139,8 +139,12 @@ function onNewLead() {
     if (get(row, crm.sent)) continue;                       // already processed
     var rawPhone = get(row, col.phone);
     var name = get(row, col.name);
-    if (!rawPhone && !name) continue;                       // blank row
+    // Same three skips as the previous script, in the same order: no phone,
+    // Meta's own test row, no name. A nameless row is left untouched and
+    // unmarked so it can be fixed by hand and picked up on the next run.
+    if (!rawPhone) continue;
     if (rawPhone.toLowerCase().indexOf('test lead') !== -1) continue;
+    if (!name) continue;
 
     var phone = fixPhone_(rawPhone);
     if (!phoneLooksValid_(phone)) {
@@ -152,7 +156,7 @@ function onNewLead() {
 
     var payload = {
       phone: phone,
-      fullName: name || phone,
+      fullName: name,
       email: get(row, col.email),
       leadgenId: get(row, col.leadgen).replace(/^\s*l:/i, ''),
       adId: get(row, col.adId),
@@ -176,9 +180,12 @@ function onNewLead() {
       if (code >= 200 && code < 300) {
         status = body.status || 'sent';
         sid = body.sid || '';
-      } else {
-        status = body.status || ('http_' + code);
+      } else if (body && body.status) {
+        status = body.status;
         sid = body.sid || '';
+      } else {
+        // Keep the CRM's error text — it is what makes a failed row triageable.
+        status = 'http_' + code + '_' + ((body && body.error) || 'unknown');
       }
     } catch (err) {
       status = 'exception_' + String(err).substring(0, 60);
