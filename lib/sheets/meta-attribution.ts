@@ -30,11 +30,15 @@ import {
   type FbFormColumns,
 } from "@/lib/sheets/fb-form-columns";
 
-// Known Meta form sheets (fallback when GOOGLE_SHEETS_FB_LEADS_IDS is unset).
-// "Albadi leads v2" + "Form #2".
+// Every Meta form sheet we know of. These are ALWAYS read, and the env var
+// adds to them rather than replacing them: a form sheet silently dropping out
+// of the loop costs attribution on every lead it carries and shows up as
+// nothing at all, whereas one extra public CSV fetch costs nothing.
+// "Albadi leads v2" · "Form #2" · "טופס מסונן עברית 18.8.2026".
 const DEFAULT_SHEET_IDS = [
   "1AnswoeBAFV-z4aN3KhqyJjb9DegyiDNH-0FcB8ry518",
   "1LB4DDcrhPC13pSNHiIDrWxVBH2K9dDhhwTBiE5wF9Tg",
+  "18RsMyyHGjlUW98xpHROmAn6lxlAW1bTAXhOoEVa9OqQ",
 ];
 
 export interface EnrichResult {
@@ -52,7 +56,7 @@ export function metaSheetIds(): string[] {
     .map((s) => s.trim())
     .filter(Boolean);
   const single = (process.env.GOOGLE_SHEETS_FB_LEADS_ID ?? "").trim();
-  const ids = new Set<string>(multi.length ? multi : DEFAULT_SHEET_IDS);
+  const ids = new Set<string>([...DEFAULT_SHEET_IDS, ...multi]);
   if (single) ids.add(single);
   return [...ids];
 }
