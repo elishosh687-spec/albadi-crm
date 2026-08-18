@@ -938,6 +938,20 @@ reasons meaning "a human is driving this one": `human_reply`, `escalation`,
 promises to the customer and NEVER expire; `deal_won`, `no_reply` and
 `manual_toggle` are deliberate.
 
+**⚠️ GHL can un-pause, but not a customer's opt-out (fixed 2026-08-18).**
+`bot_paused` is a GHL-owned shared field, so every resync pushes its value
+back — and the three write sites set that one boolean bare while `pauseFields`
+writes three columns. So a resync silently woke leads the bot had muted and
+left `bot_pause_reason` behind as a ghost. Visible symptom: an escalated lead
+came round again on the next tick, tripped the same cap, and DM'd Eli a second
+time within the hour. `ghlPauseChange` / `applyGhlPause`
+([bot-pause.ts](lib/autoresponder/bot-pause.ts)) now own that decision:
+`opt_out` and `human_handoff` are **irrevocable from GHL** (promises to the
+customer, not workflow bookkeeping), everything else stays Eli's to override,
+and an un-pause clears the reason columns. `escalateLead` also suppresses its
+DM when the lead is already `NEEDS_ELI`. If a pause "doesn't stick", this is
+the first thing to check.
+
 **Always pause via `pauseFields(reason)`** ([bot-pause.ts](lib/autoresponder/bot-pause.ts)).
 A pause written by hand lands unattributed and becomes un-diagnosable again.
 Resuming must reset `followUpCount` (else the first nudge trips the 3-strike
