@@ -17,8 +17,11 @@
  * (there are already both "איציק חודדה" and "איציק חודידה").
  *
  * Idempotent: a file already on disk is skipped, so it is safe on a schedule.
- * HEIC is converted to JPG with `sips` and the original kept — most of the
- * factory's photos are HEIC, which nothing outside Apple will open.
+ * HEIC is converted to JPG with `sips` and the original then DELETED — Eli
+ * only wants viewable files in these folders, and Feishu remains the archive.
+ * That makes the "have I already fetched this?" test subtle: the .heic is
+ * gone by design, so presence of its .jpg has to count as having it, or every
+ * run would download all of them again.
  *
  *   DATABASE_URL=… npx tsx scripts/sync-inspection-photos.ts [--dry] [--no-jpg]
  */
@@ -123,9 +126,21 @@ async function main() {
     );
     const files = ((await listed.json()) as { data?: { files?: { token: string; name: string }[] } }).data?.files ?? [];
 
+    /** Where this file's JPG would land — see convertedName() below. */
+    const jpgFor = (name: string) =>
+      path.join(
+        dir,
+        files.some((o) => o.name.toLowerCase() === name.replace(/\.heic$/i, ".jpg").toLowerCase())
+          ? name.replace(/\.heic$/i, "-heic.jpg")
+          : name.replace(/\.heic$/i, ".jpg"),
+      );
+
     for (const f of files) {
       const dest = path.join(dir, f.name);
-      if (fs.existsSync(dest)) { skipped++; continue; }
+      // A HEIC we already converted has been deleted, so its JPG is the proof
+      // we hold it. Without this the folder is re-downloaded every single day.
+      const held = fs.existsSync(dest) || (/\.heic$/i.test(f.name) && fs.existsSync(jpgFor(f.name)));
+      if (held) { skipped++; continue; }
       if (DRY) { downloaded++; continue; }
       const dl = await fetch(`${base}/open-apis/drive/v1/files/${f.token}/download`, { headers: auth });
       if (!dl.ok) { console.warn(`   ✗ ${f.name}: HTTP ${dl.status}`); continue; }
@@ -147,15 +162,16 @@ async function main() {
         // factory sent one and when a previous run converted this same file,
         // and treating the second case as a clash re-converted every photo on
         // every run (11 duplicates in one folder before this was caught).
-        const plain = f.name.replace(/\.heic$/i, ".jpg");
-        const factoryHasJpg = files.some((o) => o.name.toLowerCase() === plain.toLowerCase());
-        const jpg = path.join(dir, factoryHasJpg ? f.name.replace(/\.heic$/i, "-heic.jpg") : plain);
-        if (fs.existsSync(jpg)) continue;
+        const jpg = jpgFor(f.name);
+        if (fs.existsSync(jpg)) { fs.rmSync(src, { force: true }); continue; }
         try {
           execFileSync("sips", ["-s", "format", "jpeg", src, "--out", jpg], { stdio: "ignore" });
           converted++;
+          // Only after a JPG demonstrably exists — never delete the one copy
+          // we have because sips was unhappy.
+          if (fs.existsSync(jpg) && fs.statSync(jpg).size > 0) fs.rmSync(src, { force: true });
         } catch {
-          console.warn(`   ✗ could not convert ${f.name}`);
+          console.warn(`   ✗ could not convert ${f.name} — keeping the .heic`);
         }
       }
     }
