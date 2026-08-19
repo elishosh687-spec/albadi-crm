@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.albadi.inspection-photos</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/Users/eli/Projects/albadi-crm/scripts/launchd/sync-inspection-photos.sh</string>
+  </array>
+
+  <!-- 10:00 local, daily. RunAtLoad is off on purpose: loading the agent
+       should not fire a sync, and a missed run is picked up the next day. -->
+  <key>StartCalendarInterval</key>
+  <dict>
+    <key>Hour</key><integer>10</integer>
+    <key>Minute</key><integer>0</integer>
+  </dict>
+
+  <key>WorkingDirectory</key>
+  <string>/Users/eli/Projects/albadi-crm</string>
+
+  <key>StandardOutPath</key>
+  <string>/Users/eli/Library/Logs/albadi-inspection-sync.err.log</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/eli/Library/Logs/albadi-inspection-sync.err.log</string>
+</dict>
+</plist>
