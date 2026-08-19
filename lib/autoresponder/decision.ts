@@ -35,9 +35,9 @@ import { leads, messages as messagesTable } from "../../drizzle/schema";
 import { desc, sql, eq } from "drizzle-orm";
 import { sendBridgeMessage, sendCompanyTemplate } from "../bridge/client";
 import { sendEliDM } from "../notify/eli";
-import { classifyIntent, type Intent } from "./intent";
+import { classifyIntent, type Intent, type IntentResult } from "./intent";
 import { handleUnmatch, type UnmatchResult } from "./unmatch-agent";
-import { extractSpecFromText, hasAnyField } from "./spec-extractor";
+import { extractSpecFromText, hasAnyField, type ExtractedSpec } from "./spec-extractor";
 import {
   mergeExtracted,
   requoteWithUpdatedSpec,
@@ -344,6 +344,108 @@ async function runUnmatchAgent(
  * Render an LLM-extracted spec change as a short Hebrew clause for the DM
  * to Eli ("ביקש לשנות: כמות → 2500, ידיות → לא"). Skips undefined fields.
  */
+/**
+ * Apply an extracted spec change: merge, then either escalate for manual
+ * pricing or auto-requote.
+ *
+ * Shared by the two ways a customer can ask for a change — saying it outright
+ * ("5,000 יחידות") and answering the "what would you like to change?" prompt.
+ * They used to be different code paths, and only one of them read the number.
+ */
+async function applyExtractedSpecChange(
+  ctx: LeadCtx,
+  classification: IntentResult,
+  extracted: ExtractedSpec,
+  currentQState: QState
+): Promise<DecisionResult> {
+    // Got something extractable — merge into qState.
+    const { merged } = mergeExtracted(currentQState, extracted);
+    // Clear sub-state + counter as we resolve this turn.
+    merged.specChangeAttempts = 0;
+    const cleared: QState = { ...merged, decisionState: null } as QState & {
+      decisionState: null;
+    };
+
+    if (shouldRouteToFactory(cleared)) {
+      // New spec still needs Eli (custom dims, sub-tier qty). Persist the
+      // merged values for Eli's reference, then escalate with a structured
+      // analysis of WHAT changed.
+      await db
+        .update(leads)
+        .set({
+          qState: cleared as any,
+          updatedAt: new Date(),
+        })
+        .where(sql`trim(${leads.manychatSubId}) = ${ctx.sid.trim()}`);
+
+      const changedSummary = describeSpecChange(extracted);
+      await sendBridgeMessage(
+      ctx.jid,
+      await phraseStateReply({
+        sid: ctx.sid,
+        trigger: 'spec_change_ack',
+        situation: 'קיבלת מהלקוח שינוי מפרט שדורש תמחור ידני. אשר שקיבלת ואמור שתחזור עם הצעה מעודכנת.',
+        fallback: REPLY_SPEC_CHANGE_ACK,
+      })
+    );
+      await escalateToEli(ctx, "spec change requires manual pricing", {
+        kind: "spec_change",
+        llmAnalysis: `הלקוח ביקש לשנות: ${changedSummary}`,
+        recommendation:
+          "לתמחר ידנית את המפרט המעודכן ולהחזיר הצעה ללקוח.",
+      });
+      return {
+        action: "escalated",
+        intent: classification.intent,
+        detail: `spec_change → factory: ${changedSummary}`,
+      };
+    }
+
+    // Auto-requote — new spec is inside the calculator's range.
+    await sendBridgeMessage(
+      ctx.jid,
+      await phraseStateReply({
+        sid: ctx.sid,
+        trigger: 'spec_change_auto_quote',
+        // The exact change is handed over, and inventing one is forbidden.
+        // The sentence used to be written from the conversation alone, so the
+        // setter confidently announced "עדכנתי ל-5,000 יחידות" while the code
+        // had changed nothing and the quote underneath still said 3,000
+        // (רוברטו בגדדי, 2026-08-19). A sentence about a state change must be
+        // fed the state change, never left to infer it.
+        situation:
+          `עדכנת את המפרט. מה שהשתנה בפועל: ${describeSpecChange(extracted)}. ` +
+          'ההצעה המחודשת נשלחת מיד אחרי המשפט הזה — משפט קצר מאוד שמוביל אליה. ' +
+          'אל תזכיר שום ערך שלא מופיע ברשימה הזו, ואל תמציא מספרים.',
+        fallback: REPLY_SPEC_CHANGE_AUTO_QUOTE,
+      })
+    );
+    const ok = await requoteWithUpdatedSpec({
+      sid: ctx.sid,
+      jid: ctx.jid,
+      state: cleared,
+    });
+    if (!ok) {
+      // Calc failed — fall back to escalation so the customer gets a real
+      // human follow-up rather than silent dead-end.
+      await escalateToEli(ctx, "auto-requote after spec change failed", {
+        kind: "spec_change",
+        llmAnalysis: `הלקוח ביקש שינוי (${describeSpecChange(extracted)}) — המחשבון נכשל`,
+        recommendation: "לבדוק את המפרט החדש ולתמחר ידנית.",
+      });
+      return {
+        action: "escalated",
+        intent: classification.intent,
+        detail: "requote failed",
+      };
+    }
+    return {
+      action: "canned_reply",
+      intent: classification.intent,
+      detail: `spec_change auto-requoted: ${describeSpecChange(extracted)}`,
+    };
+}
+
 function describeSpecChange(extracted: {
   shipping?: string;
   quantity?: string;
@@ -711,83 +813,9 @@ async function handleDecisionStage(
       };
     }
 
-    // Got something extractable — merge into qState.
-    const { merged } = mergeExtracted(currentQState, extracted!);
-    // Clear sub-state + counter as we resolve this turn.
-    merged.specChangeAttempts = 0;
-    const cleared: QState = { ...merged, decisionState: null } as QState & {
-      decisionState: null;
-    };
-
-    if (shouldRouteToFactory(cleared)) {
-      // New spec still needs Eli (custom dims, sub-tier qty). Persist the
-      // merged values for Eli's reference, then escalate with a structured
-      // analysis of WHAT changed.
-      await db
-        .update(leads)
-        .set({
-          qState: cleared as any,
-          updatedAt: new Date(),
-        })
-        .where(sql`trim(${leads.manychatSubId}) = ${ctx.sid.trim()}`);
-
-      const changedSummary = describeSpecChange(extracted!);
-      await sendBridgeMessage(
-      ctx.jid,
-      await phraseStateReply({
-        sid: ctx.sid,
-        trigger: 'spec_change_ack',
-        situation: 'קיבלת מהלקוח שינוי מפרט שדורש תמחור ידני. אשר שקיבלת ואמור שתחזור עם הצעה מעודכנת.',
-        fallback: REPLY_SPEC_CHANGE_ACK,
-      })
-    );
-      await escalateToEli(ctx, "spec change requires manual pricing", {
-        kind: "spec_change",
-        llmAnalysis: `הלקוח ביקש לשנות: ${changedSummary}`,
-        recommendation:
-          "לתמחר ידנית את המפרט המעודכן ולהחזיר הצעה ללקוח.",
-      });
-      return {
-        action: "escalated",
-        intent: classification.intent,
-        detail: `spec_change → factory: ${changedSummary}`,
-      };
-    }
-
-    // Auto-requote — new spec is inside the calculator's range.
-    await sendBridgeMessage(
-      ctx.jid,
-      await phraseStateReply({
-        sid: ctx.sid,
-        trigger: 'spec_change_auto_quote',
-        situation: 'עדכנת את המפרט וההצעה המחודשת נשלחת מיד אחרי המשפט הזה. משפט קצר מאוד שמוביל אליה.',
-        fallback: REPLY_SPEC_CHANGE_AUTO_QUOTE,
-      })
-    );
-    const ok = await requoteWithUpdatedSpec({
-      sid: ctx.sid,
-      jid: ctx.jid,
-      state: cleared,
-    });
-    if (!ok) {
-      // Calc failed — fall back to escalation so the customer gets a real
-      // human follow-up rather than silent dead-end.
-      await escalateToEli(ctx, "auto-requote after spec change failed", {
-        kind: "spec_change",
-        llmAnalysis: `הלקוח ביקש שינוי (${describeSpecChange(extracted!)}) — המחשבון נכשל`,
-        recommendation: "לבדוק את המפרט החדש ולתמחר ידנית.",
-      });
-      return {
-        action: "escalated",
-        intent: classification.intent,
-        detail: "requote failed",
-      };
-    }
-    return {
-      action: "canned_reply",
-      intent: classification.intent,
-      detail: `spec_change auto-requoted: ${describeSpecChange(extracted!)}`,
-    };
+    // Got a real field — apply it. Shared with the custom_size entry point so
+    // both paths change state the same way.
+    return await applyExtractedSpecChange(ctx, classification, extracted!, currentQState);
   }
 
   if (decisionState === "awaiting_pause_reason") {
@@ -908,8 +936,24 @@ async function handleDecisionStage(
     }
 
     case "custom_size": {
-      // §2.5 — ask what they want to change first; the answer is captured
-      // on the next turn (awaiting_spec_change) → ack + escalate.
+      // §2.5 — the customer wants to change something.
+      //
+      // Try to read it out of the message they ALREADY sent before asking.
+      // "5,000 יחידות" contains the whole answer, and asking "what would you
+      // like to change?" in reply to it is the bot ignoring what it was just
+      // told. Worse, the follow-up answer is then a bare "כמות" — a message
+      // that by construction has no number in it, so the extractor sees a
+      // request to change the quantity with no quantity (רוברטו בגדדי,
+      // 2026-08-19).
+      //
+      // Only when nothing concrete is in the message do we fall back to
+      // asking, which is the original behaviour.
+      const upfront = await extractSpecFromText({ text: t });
+      if (upfront && hasAnyField(upfront)) {
+        return await applyExtractedSpecChange(ctx, classification, upfront, {
+          ...((ctx.qState ?? {}) as QState),
+        });
+      }
       await setDecisionState(ctx.sid, "awaiting_spec_change", ctx.qState);
       await sendBridgeMessage(ctx.jid, REPLY_SPEC_CHANGE_ASK);
       return {

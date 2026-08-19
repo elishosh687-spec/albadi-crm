@@ -263,6 +263,18 @@ function normalize(raw: {
  * Used by matchAnswer fallback to decide whether to accept the LLM's reading
  * or fall back to re-ask.
  */
+/**
+ * Did the extractor actually pin down a SPEC field?
+ *
+ * `notes` is deliberately excluded. It is the extractor's own commentary on
+ * what it could NOT map — "the customer only said 'quantity' without a number"
+ * — and counting it as a field inverted the meaning of this function: a total
+ * extraction failure came back as success. On 2026-08-19 that told רוברטו
+ * בגדדי "עדכנתי ל-5,000 יחידות" and then re-sent him the 3,000-unit price,
+ * because the caller merged a spec in which nothing had changed.
+ *
+ * A note is something to pass to Eli. It is not a value to quote a price on.
+ */
 export function hasAnyField(spec: ExtractedSpec): boolean {
   return Boolean(
     spec.shipping ||
@@ -270,8 +282,7 @@ export function hasAnyField(spec: ExtractedSpec): boolean {
       spec.product ||
       spec.handles ||
       spec.lamination ||
-      spec.colors ||
-      spec.notes
+      spec.colors
   );
 }
 
