@@ -985,18 +985,51 @@ export async function POST(req: NextRequest) {
     return by;
   };
 
+  // Sheet-gap alert. This route ticks every 15 minutes (.github/workflows/
+  // followups.yml), but a gap is a STANDING condition — a row that failed to
+  // insert stays failed until a human fixes it. Firing on every tick sent the
+  // identical DM ~50 times a day and taught Eli to swipe it away, which is the
+  // opposite of what an alert is for. So: send only when the picture CHANGES
+  // (different count//mix, or a new row), and at most once a day otherwise.
   try {
     const gaps = await loadSheetGaps();
     if (gaps.total > 0) {
-      const lines: string[] = [
-        `📋 פערי טופס FB: ${gaps.total}`,
-        `  • ממתינים: ${gaps.pendingCount}`,
-        `  • טלפון פגום: ${gaps.badPhoneCount}`,
-        `  • שליחה נכשלה: ${gaps.sendFailedCount}`,
-      ];
-      if (gaps.otherErrorCount > 0) lines.push(`  • שגיאות אחרות: ${gaps.otherErrorCount}`);
-      lines.push("https://albadi-crm.vercel.app/dashboard/v3/leads?stage=GAPS");
-      await sendEliDM(lines.join("\n"));
+      const fingerprint = [
+        gaps.total, gaps.pendingCount, gaps.badPhoneCount,
+        gaps.sendFailedCount, gaps.otherErrorCount,
+        ...gaps.rows.map((r) => `${r.spreadsheetId}:${r.rowIndex}`).sort(),
+      ].join("|");
+
+      // Claim the right to speak: same fingerprint within 24h → stay quiet.
+      const spoke = await db.execute(sql`
+        INSERT INTO app_config (key, value, updated_at)
+        VALUES ('followups.gapAlert', jsonb_build_object('fp', ${fingerprint}::text, 'at', now()), now())
+        ON CONFLICT (key) DO UPDATE
+          SET value = jsonb_build_object('fp', ${fingerprint}::text, 'at', now()), updated_at = now()
+          WHERE app_config.value->>'fp' IS DISTINCT FROM ${fingerprint}::text
+             OR (app_config.value->>'at')::timestamptz < now() - interval '24 hours'
+        RETURNING key`);
+      const shouldSend = (((spoke as any).rows ?? spoke) as unknown[]).length > 0;
+
+      if (shouldSend) {
+        const lines: string[] = [
+          `📋 פערי טופס FB: ${gaps.total}`,
+          `  • ממתינים: ${gaps.pendingCount}`,
+          `  • טלפון פגום: ${gaps.badPhoneCount}`,
+          `  • שליחה נכשלה: ${gaps.sendFailedCount}`,
+        ];
+        if (gaps.otherErrorCount > 0) lines.push(`  • שגיאות אחרות: ${gaps.otherErrorCount}`);
+        // Name them. "2 gaps" is a number to dismiss; a name and a phone is a
+        // person you can call — and it saves opening the dashboard to find out.
+        for (const r of gaps.rows.slice(0, 5)) {
+          lines.push(`  – ${r.name ?? "?"} ${r.rawPhone ?? ""} (${r.lastStatus ?? r.category})`);
+        }
+        if (gaps.rows.length > 5) lines.push(`  …ועוד ${gaps.rows.length - 5}`);
+        lines.push("https://albadi-crm.vercel.app/dashboard/v3/leads?stage=GAPS");
+        await sendEliDM(lines.join("\n"));
+      } else {
+        console.log("[followups] gap alert suppressed — unchanged within 24h");
+      }
     }
   } catch (e) {
     console.warn("[followups] sheet-gap alert failed", e);
