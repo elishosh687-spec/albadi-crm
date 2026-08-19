@@ -361,6 +361,42 @@ export async function sendBridgeMessage(
     console.warn("[sendBridgeMessage] outbound pre-insert failed", e);
   }
 
+  // A human just spoke to this customer — stand down.
+  //
+  // The rule has existed since 2026-07-22, but only two paths implemented it:
+  // the dashboard reply box and a human typing straight into WhatsApp. Every
+  // OTHER way Eli reaches a customer — sending an estimate, a calculator
+  // quote, a factory price, a mockup — left the bot running. So on 2026-08-18
+  // he sent שרון יואב a full ₪6,177 quote by hand and the bot, which still had
+  // her at question 1 of the questionnaire, kept following up and then
+  // answered her "דוגמא של שקית?" with "🚚 שיטת משלוח?".
+  //
+  // This is the choke point every send passes through and it already knows who
+  // is speaking, so the rule belongs here rather than in each caller — a new
+  // send path should not be able to forget it. Best-effort: a failed pause
+  // must never fail the message that already went out.
+  if (sender === "eli") {
+    try {
+      const { pauseFields } = await import("@/lib/autoresponder/bot-pause");
+      // Match across BOTH JID namespaces plus the bare phone. A lead's sid is
+      // often `<phone>@s.whatsapp.net` while GreenAPI addresses it as
+      // `<phone>@c.us`, so matching the sid alone would update zero rows and
+      // the pause would silently not happen — the #1 messaging footgun in this
+      // codebase (see CLAUDE.md, "Two JID namespaces").
+      const digits = jid.replace(/\D/g, "");
+      await db
+        .update(leads)
+        .set(pauseFields("human_reply"))
+        .where(sql`
+          trim(${leads.manychatSubId}) = ${jid.trim()}
+          OR trim(coalesce(${leads.waJid}, '')) = ${jid.trim()}
+          OR (${digits} <> '' AND regexp_replace(coalesce(${leads.phoneE164}, ''), '\\D', '', 'g') = ${digits})
+        `);
+    } catch (e) {
+      console.warn("[sendBridgeMessage] auto-pause on human send failed", e);
+    }
+  }
+
   // Mirror to GHL Inbox so bot + eli replies appear in the unified thread.
   // Only the GHL-Inbox-originated path (api/integrations/outbound) opts out
   // via skipGhlMirror — GHL already recorded that send in its own thread, so

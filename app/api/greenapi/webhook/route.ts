@@ -459,12 +459,30 @@ async function handleIncoming(evt: GreenWebhook): Promise<void> {
   // qState this could be the lead's first contact, and swallowing it would
   // mean the bot never opens at all.
   if (textForRouting && isLeadFormGreeting(textForRouting)) {
+    // Gated on "have we spoken yet", not on qState.
+    //
+    // The greeting lands a second or two after our opening, and the
+    // questionnaire's first question is written in the same beat — so qState
+    // was frequently still null at the moment the greeting was processed, the
+    // guard fell through, and the greeting was scored as an answer anyway.
+    // That is what happened to שרון יואב on 2026-08-18: opening at 06:33:07,
+    // greeting at :08, "לא הצלחתי להבין" at :11, and her questionnaire never
+    // moved past question 1 again.
+    //
+    // An outbound message is the honest test: if we have already said hello,
+    // this greeting cannot be the thing that opens the conversation, so it is
+    // never an answer either. With no outbound at all it still falls through,
+    // so a first-contact lead is never left unopened.
     const [existing] = await db
       .select({ qState: leads.qState })
       .from(leads)
       .where(sql`trim(${leads.manychatSubId}) = ${canonicalSid.trim()}`)
       .limit(1);
-    if (existing?.qState) {
+    const [spoken] = await db
+      .select({ n: sql<number>`count(*)::int` })
+      .from(messagesTable)
+      .where(sql`trim(${messagesTable.manychatSubId}) = ${canonicalSid.trim()} AND ${messagesTable.direction} = 'out'`);
+    if (existing && (existing.qState || (spoken?.n ?? 0) > 0)) {
       console.log("[greenapi.webhook] lead-form greeting — stored, not treated as an answer", {
         sid: canonicalSid,
       });
