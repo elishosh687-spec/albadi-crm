@@ -9,6 +9,7 @@
  * the "הצעות מהמפעל" tab (draft filter).
  */
 
+import { requiresLamination } from "@/lib/factory/calculator/lamination";
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import { Loader2, Send, CheckCircle2, Search, X, User } from "lucide-react";
 import { LuxShell, LuxTitle, LuxAccent, LuxCTA, Section } from "@/components/widget-ui/lux";
@@ -134,7 +135,7 @@ export function SalesQuoteRequestForm({ apiToken, salesMode = false }: { apiToke
   // 3 colours or more REQUIRE lamination (factory rule, Eli 2026-07-22). Auto-turn
   // it on so the spec sent to the factory is consistent (the "3+" option = 4).
   useEffect(() => {
-    if (f.logoColors >= 3 && !f.hasLamination) {
+    if (requiresLamination(f.logoColors) && !f.hasLamination) {
       setF((prev) => ({ ...prev, hasLamination: true }));
     }
   }, [f.logoColors, f.hasLamination]);
@@ -511,7 +512,7 @@ export function SalesQuoteRequestForm({ apiToken, salesMode = false }: { apiToke
               ]}
             />
           </div>
-          {f.logoColors >= 3 && (
+          {requiresLamination(f.logoColors) && (
             <div className="text-[10px] text-right" style={{ color: "#e0a96d" }}>
               3 צבעים ומעלה מחייבים למינציה — סומן אוטומטית.
             </div>

@@ -29,6 +29,7 @@ import { sendBridgeMessage, sendCompanyTemplate } from "../bridge/client";
 import { sendEliDM } from "../notify/eli";
 import { calculateQuoteByCodes } from "../factory/calculator";
 import { buildQuoteMessage } from "../factory/calculator/message";
+import { resolveLamination } from "../factory/calculator/lamination";
 import {
   quoteCustomSize,
   validateCustomDimsInput,
@@ -440,7 +441,11 @@ export function renderAnswerLines(state: QState): string[] {
       : PROD_LABEL[state.product ?? ""] ?? state.product ?? "?";
   const ship = SHIP_LABEL[state.shipping ?? ""] ?? state.shipping ?? "?";
   const handles = state.handles === "true" ? "כן" : "לא";
-  const lamination = state.lamination === "true" ? "כן" : "לא";
+  // Same resolution as the quote — otherwise the customer confirms
+  // "למינציה: לא" and is then sent a quote headed "עם למינציה".
+  const lamination = resolveLamination(state.lamination === "true", Number(state.colors) || 1)
+    ? "כן"
+    : "לא";
 
   const lines = [
     `📦 כמות: ${qty}`,
@@ -702,7 +707,12 @@ async function fetchQuote(state: QState): Promise<QuoteCalcOutput> {
       `calc missing required state: product=${state.product} quantity=${state.quantity} shipping=${state.shipping}`
     );
   }
-  const hasLamination = state.lamination === "true";
+  // 3+ colours force lamination — resolved HERE so the engine and the message
+  // get the same value. This line is the bug fix of 2026-08-19.
+  const hasLamination = resolveLamination(
+    state.lamination === "true",
+    Number(state.colors) || 1,
+  );
 
   // Off-catalog size → estimator. Returns null when it can't be priced
   // (unparseable text, geometry the factory can't make, outside the trained
@@ -946,9 +956,9 @@ function summarizeForFactory(state: QState, name: string | null, phone: string |
     `ידיות: ${handles}`,
     `צבעים: ${state.colors ?? "?"}`,
   ];
-  if (state.lamination) {
-    lines.push(`למינציה: ${state.lamination === "true" ? "כן" : "לא"}`);
-  }
+  lines.push(
+    `למינציה: ${resolveLamination(state.lamination === "true", Number(state.colors) || 1) ? "כן" : "לא"}`,
+  );
   if (state.orderNotes) {
     lines.push(`📝 הערות לקוח: ${state.orderNotes}`);
   }

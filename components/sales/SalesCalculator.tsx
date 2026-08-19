@@ -9,6 +9,7 @@
  * Phase A: catalog products. Estimate + history come next.
  */
 
+import { requiresLamination } from "@/lib/factory/calculator/lamination";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Loader2, Search, Check, Send, Package, User } from "lucide-react";
 import { cn } from "@/lib/cn";
@@ -101,7 +102,7 @@ export function SalesCalculator({ token }: { token: string }) {
   const estimateReady = mode !== "estimate" || (Number(dimW) > 0 && Number(dimH) > 0);
 
   // 3+ colours REQUIRE lamination (factory rule, Eli 2026-07-22) — auto-turn on.
-  const laminationForced = colors >= 3;
+  const laminationForced = requiresLamination(colors);
   useEffect(() => {
     if (laminationForced && !lamination) setLamination(true);
   }, [laminationForced, lamination]);

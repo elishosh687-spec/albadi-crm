@@ -88,9 +88,10 @@ export function buildQuoteMessage(params: QuoteMessageParams): string {
       : fp(n);
 
   const handlesText = hasHandles ? "עם ידיות" : "ללא ידיות";
-  // 3+ logo colours are always laminated (factory rule) — reflect it in the text
-  // even if the flag wasn't set upstream, so the quote never contradicts pricing.
-  const laminationText = hasLamination || logoColors >= 3 ? "עם למינציה" : "ללא למינציה";
+  // Renders what was PRICED. The 3-colour rule is applied by the caller via
+  // resolveLamination() — deriving it again here is what let the text and
+  // the price disagree. See lib/factory/calculator/lamination.ts.
+  const laminationText = hasLamination ? "עם למינציה" : "ללא למינציה";
   const altBlock = alt
     ? `\n💡 חלופה — משלוח ${alt.shippingName} (~${alt.shippingDays} ימים):\n` +
       `   ליחידה: ${band(alt.pricePerUnit)} | סה״כ: ${band(altTotalShown)}\n` +

@@ -1,5 +1,6 @@
 "use client";
 
+import { requiresLamination } from "@/lib/factory/calculator/lamination";
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { Loader2, Send, Copy, Check, Search, X, ChevronDown, Calculator, Pencil, Ship, Plane, Repeat, Minus, Plus } from "lucide-react";
 import { cn } from "@/lib/cn";
@@ -240,7 +241,7 @@ export function CalculatorView({ products, quantityTiers, shippingOptions, initi
   // 3+-colour print must be laminated. So instead of clamping colours down, turn
   // lamination ON automatically once colours reach 3 (never silently drop colours).
   useEffect(() => {
-    if (colors >= 3 && !lamination) setLamination(true);
+    if (requiresLamination(colors) && !lamination) setLamination(true);
   }, [colors, lamination]);
 
   // Mold fee tracks the colour count: ¥500 × colours (Eli 2026-07-23). Recomputes
@@ -1206,7 +1207,7 @@ function EstimateTab({ apiToken, shippingOptions, sid, leadName, initialMargins,
   // 3 colours or more REQUIRE lamination (factory rule, Eli 2026-07-22). Turn
   // lamination ON automatically once colours reach 3 instead of clamping colours.
   useEffect(() => {
-    if (colors >= 3 && !lam) setLam(true);
+    if (requiresLamination(colors) && !lam) setLam(true);
   }, [colors, lam]);
 
   // Mold fee tracks the colour count: ¥500 × colours (Eli 2026-07-23).
