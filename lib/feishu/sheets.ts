@@ -259,13 +259,31 @@ export function baseQuoteNo(s: string): string {
   return s.trim().replace(/-[A-Za-z0-9]+$/, "");
 }
 
+/**
+ * The 1-based sheet row for a quotation number, or null.
+ *
+ * ⚠️ A quotation number can occupy SEVERAL rows. The factory copies a row down
+ * to answer it rather than editing in place — LRFWPG8H sat on both 64 (blank)
+ * and 65 (fully answered). This used to return the FIRST match, so the refresh
+ * cron read the blank row every 15 minutes and the quote stayed "waiting for
+ * the factory" for days with the answer sitting one row below. That is exactly
+ * the failure it was written to prevent.
+ *
+ * So: among rows carrying this number, prefer one that actually has a factory
+ * response, and take the LAST of those — the factory's most recent word. Falls
+ * back to the first match when none is answered (a request we sent that hasn't
+ * come back yet, which is the normal case).
+ *
+ * Reads the full A..U width rather than A:B because "does this row have an
+ * answer?" cannot be decided from the quotation number alone.
+ */
 export async function findRowByQuotationNo(
   quotationNo: string,
   maxRows = 200
 ): Promise<string | null> {
   const token = getSpreadsheetToken();
   const sheetId = await getSheetId();
-  const range = `${sheetId}!A1:B${maxRows}`;
+  const range = `${sheetId}!A1:U${maxRows}`;
   type ReadResp = {
     data: {
       valueRange: {
@@ -279,13 +297,18 @@ export async function findRowByQuotationNo(
   );
   const rows = resp.data?.valueRange?.values ?? [];
   const needle = baseQuoteNo(quotationNo);
+
+  let first: number | null = null;
+  let lastAnswered: number | null = null;
   for (let i = 0; i < rows.length; i++) {
-    const b = rows[i][1];
-    if (b !== null && b !== undefined && baseQuoteNo(String(b)) === needle) {
-      return String(i + 1); // 1-based row index
-    }
+    const b = rows[i]?.[1];
+    if (b === null || b === undefined) continue;
+    if (baseQuoteNo(String(b)) !== needle) continue;
+    if (first === null) first = i;
+    if (parseFactoryResponseRow(rows[i]).hasResponse) lastAnswered = i;
   }
-  return null;
+  const pick = lastAnswered ?? first;
+  return pick === null ? null : String(pick + 1); // 1-based row index
 }
 
 /**
