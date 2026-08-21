@@ -188,10 +188,15 @@ export function QuotesHistoryView({ apiToken }: { apiToken: string }) {
         return;
       }
       setUnmatched(j.unmatched ?? []);
+      const refreshed: { quotationNo: string; note: string }[] = j.refreshed ?? [];
       alert(
-        `יובאו ${j.imported} הצעות.\n` +
-          `אבחון: נסרקו ${j.scanned} שורות, ${j.withQuoteNo} עם מס' הצעה, ` +
-          `${j.skippedExisting} כבר קיימות, ${j.unmatched?.length ?? 0} ללא ליד תואם.` +
+        `יובאו ${j.imported} הצעות חדשות.\n` +
+          `עודכנו מהמפעל: ${refreshed.length}\n` +
+          (refreshed.length
+            ? refreshed.map((r) => `   • ${r.quotationNo} — ${r.note}`).join("\n") + "\n"
+            : "") +
+          `\nאבחון: נסרקו ${j.scanned} שורות, ${j.withQuoteNo} עם מס' הצעה, ` +
+          `${j.unchanged ?? 0} ללא שינוי, ${j.unmatched?.length ?? 0} ללא ליד תואם.` +
           (j.unmatched?.length
             ? `\nבחר ללא-המותאמות לקוח ידנית בתיבה למטה.`
             : "")
