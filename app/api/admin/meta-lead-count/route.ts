@@ -18,6 +18,11 @@
  * while the ad account has its own timezone, so a 1-day boundary drift is
  * expected — compare with tolerance, not for equality.
  *
+ * Also returns `bySource`: every `lead_source` value with its count, so the
+ * same call answers "how many leads did Google Ads actually put in the CRM"
+ * without a database session. The facebook-vs-remainder split alone hid a
+ * live paid-search campaign inside an anonymous 'everything else' bucket.
+ *
  * Auth: Bearer BOT_SECRET / CALL_TRIGGER_SECRET / CRON_SECRET.
  */
 import { NextRequest, NextResponse } from "next/server";
@@ -70,6 +75,22 @@ export async function GET(req: NextRequest) {
     WHERE created_at >= ${since}::date
       AND created_at <  (${until}::date + interval '1 day')`);
 
+  // Full breakdown, so "how many came from Google?" stops being unanswerable.
+  // The facebook-vs-rest split above was enough to validate Meta's number and
+  // nothing else: every other channel collapsed into one anonymous remainder,
+  // and a paid-search campaign spending real money sat inside it invisibly.
+  const bySourceRes = await db.execute<{ lead_source: string | null; n: number }>(sql`
+    SELECT lead_source, count(*)::int AS n
+    FROM leads
+    WHERE created_at >= ${since}::date
+      AND created_at <  (${until}::date + interval '1 day')
+    GROUP BY lead_source
+    ORDER BY n DESC`);
+  const bySource: Record<string, number> = {};
+  for (const row of bySourceRes.rows) {
+    bySource[row.lead_source ?? "(null)"] = Number(row.n ?? 0);
+  }
+
   const r = res.rows[0];
   return NextResponse.json({
     ok: true,
@@ -81,5 +102,7 @@ export async function GET(req: NextRequest) {
     // Narrower — only leads the attribution cron already matched to a form.
     withLeadgenId: Number(r?.with_leadgen ?? 0),
     allNewLeads: Number(r?.all_leads ?? 0),
+    // Every channel by name. `google` = the landing-page form carried a gclid.
+    bySource,
   });
 }
