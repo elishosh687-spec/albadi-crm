@@ -169,10 +169,19 @@ export async function setCellDateFormat(
 export async function setCellValue(
   rowIndex: string | number,
   columnLetter: string,
-  value: string | number
+  value: string | number,
+  /**
+   * Target tab. Omitted = FEISHU_SHEET_TAB_ID, else the workbook's FIRST tab —
+   * which is the quotes sheet. That default is silent and destructive when the
+   * caller meant another tab: writing an address to "S12" of ORDER SHIPPING
+   * landed on the Supplier column of two unrelated quotes instead (2026-08-23,
+   * restored from the DB). Pass the sheet id explicitly for anything that is
+   * not the quotes tab.
+   */
+  sheetIdOverride?: string
 ): Promise<void> {
   const token = getSpreadsheetToken();
-  const sheetId = await getSheetId();
+  const sheetId = sheetIdOverride ?? (await getSheetId());
   const idx = typeof rowIndex === "string" ? parseInt(rowIndex, 10) : rowIndex;
   if (!Number.isFinite(idx) || idx <= 0) {
     throw new Error(`setCellValue: invalid rowIndex=${rowIndex}`);
