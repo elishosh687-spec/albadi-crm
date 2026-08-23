@@ -233,6 +233,15 @@ export async function setRowHeight(
  * Both columns can carry the plate-fee token — parseFactoryResponseRow scans
  * U first, then T. Read one column past 备注 so the plate fee is never missed.
  */
+/**
+ * Feishu returns a formula cell as its FORMULA TEXT unless asked otherwise —
+ * `"PRODUCT(H11:J11)/1000000"` instead of `0.144522`. Every reader here wants
+ * the computed number, so all of them pass this. Verified 2026-08-23 that it
+ * changes nothing else: embedded images still arrive as objects and
+ * `extractFeishuFileToken` finds the same tokens.
+ */
+const RENDER = "?valueRenderOption=UnformattedValue";
+
 export async function readRow(rowIndex: string | number): Promise<(string | number | null)[]> {
   const token = getSpreadsheetToken();
   const sheetId = await getSheetId();
@@ -245,7 +254,7 @@ export async function readRow(rowIndex: string | number): Promise<(string | numb
     };
   };
   const resp = await feishuFetch<ReadResp>(
-    `/open-apis/sheets/v2/spreadsheets/${token}/values/${encodeURIComponent(range)}`,
+    `/open-apis/sheets/v2/spreadsheets/${token}/values/${encodeURIComponent(range)}${RENDER}`,
     { method: "GET" }
   );
   const rows = resp.data?.valueRange?.values ?? [];
@@ -301,7 +310,7 @@ export async function findRowByQuotationNo(
     };
   };
   const resp = await feishuFetch<ReadResp>(
-    `/open-apis/sheets/v2/spreadsheets/${token}/values/${encodeURIComponent(range)}`,
+    `/open-apis/sheets/v2/spreadsheets/${token}/values/${encodeURIComponent(range)}${RENDER}`,
     { method: "GET" }
   );
   const rows = resp.data?.valueRange?.values ?? [];
@@ -338,7 +347,7 @@ export async function readAllRows(
     data: { valueRange: { values: (string | number | null)[][] } };
   };
   const resp = await feishuFetch<ReadResp>(
-    `/open-apis/sheets/v2/spreadsheets/${token}/values/${encodeURIComponent(range)}`,
+    `/open-apis/sheets/v2/spreadsheets/${token}/values/${encodeURIComponent(range)}${RENDER}`,
     { method: "GET" }
   );
   return resp.data?.valueRange?.values ?? [];
