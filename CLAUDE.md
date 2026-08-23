@@ -1504,10 +1504,10 @@ Code: [lib/feishu/order-follow.ts](lib/feishu/order-follow.ts) (`findOrderRows` 
 app already has write access to that sheet (no sharing step needed).
 
 **Local side (Eli's Mac, NOT deployed):** shared helper
-`~/.claude/skills/albadi-deliver/deliver.mjs` — each skill's SKILL.md has a
+`~/.claude/skills/albadi/deliver.mjs` — each skill's SKILL.md has a
 "מסירה ללקוח" section that (a) saves the file to
 `/Users/eli/Projects/content/albadi/customers/<customer>/`, (b) POSTs to the
-deliver endpoint. Config `~/.claude/skills/albadi-deliver/.env` needs
+deliver endpoint. Config `~/.claude/skills/albadi/.env` needs
 `WIDGET_TOKEN` (=GHL_WIDGET_TOKEN) + optional `CRM_BASE`. Customer lookup uses
 `/api/widget/leads/recent?q=` for the sid.
 
