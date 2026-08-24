@@ -239,9 +239,14 @@ export async function resyncContact(
   // Replaces a dead branch that mapped a long-deleted contact "Lead Score"
   // field onto `leads.lead_score` — which is the legacy NUMERIC band column,
   // so had that field ever returned it would have written "HOT" over a number.
-  if (cf.albadi_lead_score !== undefined) {
-    updateSet.albadiLeadScore = normalizeAlbadiLeadScore(cf.albadi_lead_score);
-  }
+  // ⚠️ Assigned UNCONDITIONALLY, unlike every other field here — GHL drops a
+  // CLEARED custom field from `contact.customFields` entirely rather than
+  // returning it with a null value, so the usual `!== undefined` guard reads
+  // "cleared in GHL" as "not mentioned, leave DB alone" and a stale HOT sticks
+  // forever. Verified 2026-08-24: clearing the field in GHL left the DB on
+  // WARM through 10 consecutive resyncs. `getContact` always returns the whole
+  // contact, so absent genuinely means empty.
+  updateSet.albadiLeadScore = normalizeAlbadiLeadScore(cf.albadi_lead_score);
   if (notes.length > 0) {
     const sorted = [...notes].sort((a, b) =>
       (b.dateAdded ?? "").localeCompare(a.dateAdded ?? "")
