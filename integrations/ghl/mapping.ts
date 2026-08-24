@@ -27,6 +27,7 @@ export interface LocalLeadSnapshot {
   followUpCount?: number | null;
   nextAction?: string | null;
   leadScore?: string | null;
+  albadiLeadScore?: string | null;
 }
 
 /**
@@ -127,8 +128,16 @@ export function buildCustomFieldsPayload(
   // (leads.next_action) but pushed to the V2 GHL field so we get a typed
   // dropdown in the UI instead of free text.
   add(out, "next_action_v2", lead.nextAction);
-  // Lead Score GHL custom field removed 2026-06-08 (unused by Eli). DB keeps
-  // its own banding in `lead_score_snapshots`; we just stop mirroring to GHL.
+  // Legacy "Lead Score" GHL contact field removed 2026-06-08 (unused by Eli).
+  // DB keeps its own numeric banding in `lead_score_snapshots`.
+  //
+  // "Albadi Lead Score" (HOT/WARM/COLD) is a DIFFERENT field, added to the
+  // CONTACT 2026-08-24. Only push it when the lead actually carries a value:
+  // GHL owns this field (Eli sets it by hand on the contact card), so sending
+  // null on every unrelated sync would wipe his choice.
+  if (lead.albadiLeadScore) {
+    add(out, "albadi_lead_score", lead.albadiLeadScore);
+  }
   // Lead Owner — derived from bot_paused. Single source of truth. The widget
   // toggle writes bot_paused; we mirror to GHL so the contact card shows
   // who's currently driving the lead.

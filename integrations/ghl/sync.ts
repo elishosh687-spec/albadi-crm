@@ -145,6 +145,7 @@ const LOAD_LEAD_COLS = {
   followUpCount: leads.followUpCount,
   nextAction: leads.nextAction,
   leadScore: leads.leadScore,
+  albadiLeadScore: leads.albadiLeadScore,
   ghlContactId: leads.ghlContactId,
   ghlOpportunityId: leads.ghlOpportunityId,
 } as const;

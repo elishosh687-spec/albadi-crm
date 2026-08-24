@@ -24,6 +24,7 @@ import {
 } from "@/integrations/ghl/client";
 import { GHL_FIELD_IDS, GHL_STAGE_IDS } from "@/integrations/ghl/config";
 import { ghlPauseChange } from "@/lib/autoresponder/bot-pause";
+import { normalizeAlbadiLeadScore } from "@/lib/ghl/albadi-lead-score";
 
 export interface ResyncResult {
   ok: true;
@@ -229,14 +230,17 @@ export async function resyncContact(
   if (cf.next_action_v2 !== undefined) {
     updateSet.nextAction = String(cf.next_action_v2 ?? "") || null;
   }
-  // Lead Score — GHL stores with emoji prefix; strip back to plain band.
-  if (cf.lead_score !== undefined) {
-    const v = String(cf.lead_score ?? "");
-    if (v.includes("HOT")) updateSet.leadScore = "HOT";
-    else if (v.includes("WARM")) updateSet.leadScore = "WARM";
-    else if (v.includes("NURTURE")) updateSet.leadScore = "NURTURE";
-    else if (v.includes("LOW")) updateSet.leadScore = "LOW";
-    else if (!v) updateSet.leadScore = null;
+  // Albadi Lead Score (HOT | WARM | COLD) — GHL owns it, DB mirrors.
+  //
+  // Reads the CONTACT field `contact.albadi_lead_score`. The old
+  // `opportunity.albadi_lead_score` is NOT read here and must not be: the
+  // score belongs to the lead, and a contact can hold several opportunities.
+  //
+  // Replaces a dead branch that mapped a long-deleted contact "Lead Score"
+  // field onto `leads.lead_score` — which is the legacy NUMERIC band column,
+  // so had that field ever returned it would have written "HOT" over a number.
+  if (cf.albadi_lead_score !== undefined) {
+    updateSet.albadiLeadScore = normalizeAlbadiLeadScore(cf.albadi_lead_score);
   }
   if (notes.length > 0) {
     const sorted = [...notes].sort((a, b) =>

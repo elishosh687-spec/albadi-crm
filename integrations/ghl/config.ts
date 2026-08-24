@@ -117,7 +117,20 @@ export const GHL_FIELD_IDS: Record<string, string> = {
   follow_up_count: readEnv("GHL_FIELD_FOLLOW_UP_COUNT"),
   next_action: readEnv("GHL_FIELD_NEXT_ACTION"),
   lead_owner: readEnv("GHL_FIELD_LEAD_OWNER"),
-  lead_score: readEnv("GHL_FIELD_LEAD_SCORE"),
+  // "Albadi Lead Score" — HOT | WARM | COLD, RADIO, no custom option.
+  //
+  // Lives on the CONTACT (`contact.albadi_lead_score`, created 2026-08-24).
+  // It replaced the identically-named OPPORTUNITY field
+  // (`opportunity.albadi_lead_score`, id gNojMCZVszE5m2k8jvXh) because the
+  // score describes the lead, not one of its opportunities — a contact with
+  // several opportunities used to have several conflicting scores.
+  // Do NOT read or write the opportunity field; it is retained only as a
+  // read-only historical record.
+  //
+  // Hardcoded fallback so this works without a Vercel env write; set
+  // GHL_FIELD_ALBADI_LEAD_SCORE to override (e.g. a different location).
+  albadi_lead_score:
+    readEnv("GHL_FIELD_ALBADI_LEAD_SCORE") || "zneBwsG0dSB3ajj8lnjv",
   next_action_v2: readEnv("GHL_FIELD_NEXT_ACTION_V2"),
   // Last PHONE call date (only telephone calls — not WhatsApp/SMS). Written by
   // the call-recording pipeline so Eli can add a sortable "calls only" column
@@ -179,6 +192,15 @@ export const GHL_FIELD_DEFINITIONS = [
     envKey: "GHL_FIELD_LAST_CALL_AT",
     name: "Last Call Date",
     dataType: "DATE",
+  },
+  {
+    // CONTACT-model RADIO with picklistOptions HOT/WARM/COLD and
+    // isAllowedCustomOption:false. Note the create API rejects
+    // `isAllowedCustomOption` in the body — it defaults to false when the
+    // field is created with `options`, which is what we want.
+    envKey: "GHL_FIELD_ALBADI_LEAD_SCORE",
+    name: "Albadi Lead Score",
+    dataType: "RADIO",
   },
 ] as const;
 

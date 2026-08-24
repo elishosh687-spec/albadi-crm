@@ -474,6 +474,7 @@ GHL. DB just follows. No two-source-of-truth drift.
 - `lead_tags.tag` (Contact.tags)
 - `leads.bot_summary`, `leads.quote_total`, `leads.loss_reason`,
   `leads.bot_paused`, `leads.pipeline_flag` (Contact.customFields)
+- `leads.albadi_lead_score` (Contact.customFields — see "Albadi Lead Score" below)
 - `leads.notes` (Contact.notes, concat of all)
 - `crm_tasks` rows (Contact.tasks, upserted by `ghl_task_id`)
 - `leads.pipeline_stage` (Opportunity.pipelineStageId, mapped via `GHL_STAGE_IDS`)
@@ -1115,6 +1116,56 @@ The 2026-07-01 "every task → Itay" rule evolved twice:
 | Pull from GHL resync ([resync-helper.ts]) | GHL task's own assignee ?? settings |
 
 The nightly cron sweep catches any row that slipped through.
+
+## Albadi Lead Score — lives on the CONTACT (moved 2026-08-24)
+
+HOT / WARM / COLD, set by hand by Eli on the GHL contact card. It describes the
+**lead**, so it belongs to the Contact.
+
+**It used to be an OPPORTUNITY field** (`opportunity.albadi_lead_score`, id
+`gNojMCZVszE5m2k8jvXh`, created 2026-05-23). That was wrong here specifically:
+a GHL contact in this account routinely holds **several** opportunities (the
+whole reason `reconcileStagesFromGhl` has a newest-wins rule), so one lead could
+carry several conflicting scores with no rule saying which one counted.
+
+| | |
+|---|---|
+| Field | `contact.albadi_lead_score` |
+| Id | `zneBwsG0dSB3ajj8lnjv` |
+| Type | RADIO, `picklistOptions` HOT/WARM/COLD, `isAllowedCustomOption: false` |
+| DB mirror | `leads.albadi_lead_score` |
+| Code | [lib/ghl/albadi-lead-score.ts](lib/ghl/albadi-lead-score.ts) |
+
+**GHL owns it, DB follows** — the standard shared-field rule. In: the native
+`ContactUpdate` app-webhook → `resyncContact` → `normalizeAlbadiLeadScore` →
+`leads.albadi_lead_score`. Out: `buildCustomFieldsPayload` pushes it, but
+**only when non-null** — Eli sets this by hand, so pushing null on an unrelated
+sync would wipe his choice. Write from code via `setAlbadiLeadScore(sid, band)`,
+never by touching the column directly, or GHL and DB drift.
+
+**⚠️ `leads.lead_score` is a DIFFERENT, unrelated column** — a legacy NUMERIC
+band (0/5/20/30/40/45/55) from the ManyChat scoring engine, plus one stray
+"HOT" row. Do not conflate them; do not "consolidate" them. Its GHL counterpart
+(`GHL_FIELD_LEAD_SCORE`) was deleted from GHL on 2026-06-08, and the resync
+branch still reading it was dead code that would have written "HOT" over a
+number had the field ever come back — removed 2026-08-24 along with the stale
+`lead_score` entry in `GHL_FIELD_IDS`.
+
+**The field id is hardcoded as a fallback** in `GHL_FIELD_IDS.albadi_lead_score`
+so no Vercel env write was needed; set `GHL_FIELD_ALBADI_LEAD_SCORE` to override.
+
+**No GHL Workflow is involved** (all 5 in this account are Draft anyway) and no
+Automation, filter or integration referenced the old opportunity field — grep
+confirmed the codebase never read or wrote it at all. It was purely manual.
+
+**The old opportunity field is intentionally still there**, holding its 3
+historical values, unread by anything. Smart Lists are a Contacts-only feature,
+so they can only filter the Contact field.
+
+**⚠️ Smart Lists have no public API** — `/contacts/views` answers
+*"We are not supporting OAUTH requests right now"*, every other candidate path
+404s. They must be created by hand in the GHL UI; don't burn time hunting for
+an endpoint.
 
 ## Display labels: use Eli's working vocabulary
 

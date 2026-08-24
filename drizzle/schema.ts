@@ -43,7 +43,14 @@ export const leads = pgTable("leads", {
   leadSource: text("lead_source"),
   lastContactDate: text("last_contact_date"),
   followUpDate: text("follow_up_date"),
+  // Legacy numeric band (0/5/20/30/40/45/55) inherited from the ManyChat
+  // scoring engine. NOT the HOT/WARM/COLD score — that is albadiLeadScore.
   leadScore: text("lead_score"),
+  // "Albadi Lead Score" — HOT | WARM | COLD. Mirrors the GHL CONTACT custom
+  // field `contact.albadi_lead_score` (GHL owns it; DB follows), which
+  // replaced the old `opportunity.albadi_lead_score` on 2026-08-24: the score
+  // describes the lead, not one opportunity.
+  albadiLeadScore: text("albadi_lead_score"),
   quantity: text("quantity"),
   lastContactType: text("last_contact_type"),
 
