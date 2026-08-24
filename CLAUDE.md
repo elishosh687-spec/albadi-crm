@@ -1123,7 +1123,8 @@ HOT / WARM / COLD, set by hand by Eli on the GHL contact card. It describes the
 **lead**, so it belongs to the Contact.
 
 **It used to be an OPPORTUNITY field** (`opportunity.albadi_lead_score`, id
-`gNojMCZVszE5m2k8jvXh`, created 2026-05-23). That was wrong here specifically:
+`gNojMCZVszE5m2k8jvXh`, created 2026-05-23, **deleted 2026-08-24**). That was
+wrong here specifically:
 a GHL contact in this account routinely holds **several** opportunities (the
 whole reason `reconcileStagesFromGhl` has a newest-wins rule), so one lead could
 carry several conflicting scores with no rule saying which one counted.
@@ -1158,9 +1159,28 @@ so no Vercel env write was needed; set `GHL_FIELD_ALBADI_LEAD_SCORE` to override
 Automation, filter or integration referenced the old opportunity field — grep
 confirmed the codebase never read or wrote it at all. It was purely manual.
 
-**The old opportunity field is intentionally still there**, holding its 3
-historical values, unread by anything. Smart Lists are a Contacts-only feature,
-so they can only filter the Contact field.
+**The opportunity field is DELETED** (2026-08-24, at Eli's instruction, after
+the 4 values were migrated and verified on the contact). The location now has
+**zero** opportunity custom fields — so a `?model=opportunity` list coming back
+empty is correct, not a broken token. Snapshot of what it held, if it is ever
+needed: Netanel HOT · Lilach HOT · יוסי COLD · Dor Turgeman COLD.
+
+**Two things that bit the deletion, both worth knowing:**
+1. **Someone can still be USING a field you are about to delete.** A 4th value
+   (Dor Turgeman COLD) appeared on the opportunity field ~1 minute before the
+   delete — Eli set it by hand out of muscle memory while the old field was
+   still on the card. The delete script refuses to run unless every opportunity
+   value is already present on the contact, which is the only reason it wasn't
+   destroyed. Keep that pre-flight check in any future field migration.
+2. **GHL's custom-field list is stale right after a DELETE.** The list endpoint
+   still returned the deleted field, so the verification read "delete FAILED"
+   when it had actually succeeded. Confirm a deletion by `GET`ting the field id
+   directly — a gone field answers `400 "The custom field id or field_key is
+   invalid"` — not by re-listing.
+
+Smart Lists are a Contacts-only feature and never could filter the Opportunity
+field — which is why this move was a precondition for the list, not just tidier
+modelling.
 
 **Smart List:** `🔥 HOT Leads` (id `vUM1kYCevw0Lc3D4kV1S`), filter
 `Albadi Lead Score Is HOT`. Eli wanted **only** the HOT list — deliberately not
