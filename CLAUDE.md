@@ -1162,10 +1162,16 @@ confirmed the codebase never read or wrote it at all. It was purely manual.
 historical values, unread by anything. Smart Lists are a Contacts-only feature,
 so they can only filter the Contact field.
 
+**Smart List:** `🔥 HOT Leads` (id `vUM1kYCevw0Lc3D4kV1S`), filter
+`Albadi Lead Score Is HOT`. Eli wanted **only** the HOT list — deliberately not
+one per band; WARM/COLD are noise he doesn't work from.
+
 **⚠️ Smart Lists have no public API** — `/contacts/views` answers
 *"We are not supporting OAUTH requests right now"*, every other candidate path
-404s. They must be created by hand in the GHL UI; don't burn time hunting for
-an endpoint.
+404s. This one was built by driving the GHL UI. Don't burn time hunting for an
+endpoint; the flow is Contacts → Filters → field → Apply → "Unsaved changes" →
+*Save as new smart list*. Note "New smart list" in the name box is a real
+VALUE, not a placeholder — clear it or the name comes out concatenated.
 
 ## Display labels: use Eli's working vocabulary
 
