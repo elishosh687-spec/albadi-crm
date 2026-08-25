@@ -1193,6 +1193,38 @@ endpoint; the flow is Contacts → Filters → field → Apply → "Unsaved chan
 *Save as new smart list*. Note "New smart list" in the name box is a real
 VALUE, not a placeholder — clear it or the name comes out concatenated.
 
+## Messaging a colleague — "שלח לסיימון הודעה" (built 2026-08-25)
+
+When Eli says *send X a message* mid-session, X is usually a **colleague, not a
+lead**. Use [lib/notify/team.ts](lib/notify/team.ts):
+
+```ts
+import { sendTeamDM, findMember, loadTeam } from "@/lib/notify/team";
+await sendTeamDM("סיימון", "…");   // id / name / alias all match
+```
+
+CLI (no code needed):
+```bash
+DATABASE_URL="$(~/.local/node/bin/neonctl connection-string --project-id fragrant-morning-71359670 --org-id org-frosty-star-50411125)" npx tsx scripts/team.ts list
+# … team.ts add <id> <name> <phone> <he|zh|en> "<role>" [aliases]
+# … team.ts dm <id-or-name> "<text>"        ← sends a real WhatsApp
+```
+
+**⚠️ NEVER add a colleague to `leads`.** The bot would follow them up, they'd
+sit in the pipeline, and they'd skew every analytics screen. The registry is
+`app_config` key `crm.team` — same place and reasoning as `crm.quoteNotify`, so
+**a phone number never lands in git** and re-pointing needs no redeploy.
+Registered today: `simon` — 中文, buys from and talks to the Chinese factories.
+
+Sends go out as `sender='eli'` through the normal `sendBridgeMessage` path, so
+the message is recorded in `messages` like any other outbound. The GHL mirror
+will log `ghl_mirror.skip reason=no_lead` — expected and harmless; a colleague
+has no GHL contact.
+
+**Always show Eli the text and the recipient before sending.** A DM to a real
+person is not undoable, and Chinese-language messages he can't proof-read are
+exactly where a mistake costs the most.
+
 ## "צבעים" tab — the factory colour catalogue (built 2026-08-25)
 
 Hub tab `colors` ([app/widget/colors](app/widget/colors/page.tsx) →
