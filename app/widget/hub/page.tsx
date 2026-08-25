@@ -17,6 +17,7 @@ import {
   BarChart3,
   Megaphone,
   Calculator,
+  SwatchBook,
   Swords,
   Box,
   Package,
@@ -83,6 +84,12 @@ const TABS: TabDef[] = [
     label: "מחשבון",
     icon: Calculator,
     url: (t, sid) => withSid(`/widget/calculator?widget_token=${encodeURIComponent(t)}`, sid),
+  },
+  {
+    id: "colors",
+    label: "צבעים",
+    icon: SwatchBook,
+    url: (t) => `/widget/colors?widget_token=${encodeURIComponent(t)}`,
   },
   {
     id: "ads",
