@@ -67,6 +67,13 @@ export const maxDuration = 120;
 
 const HOUR_MS = 60 * 60 * 1000;
 const DAY_MS = 24 * HOUR_MS;
+/**
+ * How long after a customer writes we treat the conversation as LIVE and hold
+ * the canned follow-up back. Six hours: long enough to cover a reply that
+ * arrives while Eli is asleep, short enough that a lead who says one word and
+ * goes quiet is still nudged the same working day.
+ */
+const MID_CONVERSATION_MS = 6 * HOUR_MS;
 /** Fallback only — the live value comes from settings (followupMaxAttempts). */
 const MAX_FOLLOWUPS_FALLBACK = 3;
 
@@ -257,7 +264,9 @@ interface ProcessedLead {
     | "skipped_snoozed"
     | "skipped_too_fresh"
     | "skipped_too_cold"
-    | "skipped_quota";
+    | "skipped_quota"
+    // The customer is mid-conversation — see MID_CONVERSATION_MS.
+    | "skipped_customer_replied";
   detail?: string;
   /** Dry-run only: the exact text this lead would have received. */
   preview?: string;
@@ -399,6 +408,32 @@ async function processCustomerLead(row: {
   }
 
   const now = Date.now();
+
+  // A follow-up is for SILENCE. Until 2026-08-26 the cadence looked only at
+  // last_follow_up_at, so a lead who was actively talking to us still got one:
+  // יחיאל בן שושן wrote "המחיר קצת גבוה" at 10:35, the live setter answered
+  // him, and ten minutes later this loop asked him the same question again as
+  // a canned nudge.
+  //
+  // Bounded on purpose. Skipping only while the reply is FRESH means the worst
+  // case is a nudge delayed by a few hours, never a lead starved of follow-ups
+  // — which is what an unbounded "never nudge anyone who ever replied" would
+  // cause if the live path forgets to stamp last_follow_up_at.
+  const lastInboundAt = cfg.gateCtx.lastInbound.get(row.sid.trim());
+  if (lastInboundAt) {
+    const sinceReply = now - lastInboundAt.getTime();
+    const answeredSince =
+      row.lastFollowUpAt != null &&
+      row.lastFollowUpAt.getTime() >= lastInboundAt.getTime();
+    if (sinceReply < MID_CONVERSATION_MS && !answeredSince) {
+      return {
+        sid: row.sid,
+        action: "skipped_customer_replied",
+        detail: `הלקוח כתב לפני ${Math.round(sinceReply / 60000)} דק׳`,
+      };
+    }
+  }
+
   const cadenceIdx = Math.min(row.followUpCount, rule.cadences.length - 1);
   const waitMs = rule.cadences[cadenceIdx];
   if (row.lastFollowUpAt) {
@@ -923,8 +958,9 @@ export async function POST(req: NextRequest) {
   // readers but no writers anywhere and is therefore always null.
   const gateCtx: FutureGateCtx = {
     now: Date.now(),
-    lastInbound:
-      S.futureFollowupEnabled || dryRun ? await loadLastInboundMap() : new Map(),
+    // Loaded on EVERY run since 2026-08-26 — the mid-conversation guard in
+    // processCustomerLead needs it for all stages, not just the parked bucket.
+    lastInbound: await loadLastInboundMap(),
     dryRun,
   };
 

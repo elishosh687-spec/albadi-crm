@@ -60,7 +60,10 @@ import {
 } from "@/integrations/ghl/sync";
 
 export const runtime = "nodejs";
-export const maxDuration = 15;
+// 60, not 15. At 15 the setter's LLM reply + the GHL mirror finished at ~15.0s
+// and the lambda was killed a hair before returning 200, so Green API retried
+// and the customer got the answer again. See the dedupe note in POST.
+export const maxDuration = 60;
 
 const CHAT_SUFFIX = "@c.us";
 
@@ -125,9 +128,24 @@ function authOk(req: NextRequest): boolean {
   return false;
 }
 
-async function auditLog(evtId: string, type: string, payload: unknown): Promise<void> {
+/**
+ * Audit the envelope AND claim it.
+ *
+ * Returns false when this evtId was already stored — i.e. Green API is
+ * re-delivering a webhook we have seen. `bridge_events.evt_id` is UNIQUE, so
+ * the insert itself is the claim: exactly one caller can win it, even if two
+ * retries land on two lambdas at the same moment.
+ *
+ * This return value is the whole fix for the 2026-08-26 duplicate-reply bug —
+ * see the note on the POST handler.
+ */
+async function auditLog(
+  evtId: string,
+  type: string,
+  payload: unknown,
+): Promise<boolean> {
   try {
-    await db
+    const rows = await db
       .insert(bridgeEvents)
       .values({
         evtId,
@@ -136,9 +154,13 @@ async function auditLog(evtId: string, type: string, payload: unknown): Promise<
         occurredAt: new Date(),
         payload: payload as any,
       })
-      .onConflictDoNothing();
+      .onConflictDoNothing()
+      .returning({ id: bridgeEvents.id });
+    return rows.length > 0;
   } catch (e) {
     console.warn("[green.webhook] audit insert failed", e);
+    // Never let an audit failure swallow a real customer message.
+    return true;
   }
 }
 
@@ -941,7 +963,29 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     `${body.typeWebhook}:${body.timestamp ?? Date.now()}:${Math.random()
       .toString(36)
       .slice(2, 8)}`;
-  await auditLog(evtId, body.typeWebhook ?? "unknown", body);
+  // ⚠️ Idempotency. Green API retries a webhook it got no 200 for, roughly
+  // every 75 seconds. Until 2026-08-26 nothing stopped the retry from being
+  // processed again: auditLog swallowed the duplicate with onConflictDoNothing
+  // and insertGreenMessage returned the existing row — both correctly refused
+  // to write a second row, and both let the handler run on. So one customer
+  // message produced a fresh LLM reply per retry. יחיאל בן שושן got the same
+  // question three times in three minutes, 74s apart, and the third one opened
+  // with "כדי לא לחזור על עצמי". 29 such re-sends reached 9 customers.
+  //
+  // The trigger was maxDuration=15 on this route: the setter's LLM call plus
+  // the GHL mirror finished at ~15.0s, so the lambda was killed just before it
+  // could return 200 — work done, no acknowledgement, retry. maxDuration is 60
+  // now, and this claim makes a retry harmless even when one does happen.
+  //
+  // Only true duplicates are dropped. An evtId is Green's own idMessage, unique
+  // per message; envelopes without one get a random evtId and so never collide.
+  const claimed = await auditLog(evtId, body.typeWebhook ?? "unknown", body);
+  if (!claimed) {
+    console.warn(
+      `[green.webhook] duplicate delivery ignored — evt=${evtId} type=${body.typeWebhook}`,
+    );
+    return NextResponse.json({ ok: true, deduped: true });
+  }
 
   try {
     switch (body.typeWebhook) {
