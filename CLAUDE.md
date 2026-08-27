@@ -1268,9 +1268,20 @@ non-woven bag material selection* (`RFd0stnYfh6H2BtFHZZc1cD2nme`, also tab
 
 So the four mills are never all available at once, and `CHEN`'s 32 shades are
 the one palette that works for any bag. Quote share for context (column S of the
-quotes tab, 62 quotes): 华庆-Mandy 37% · 温州亚森 26% · 浙江鼎驰 23%. **Only
-华庆 = MANDY is certain**; nothing in any sheet maps `CHEN`/`WEIWEI` onto 亚森 /
-鼎驰, and Eli works by the catalogue names, so the UI uses those.
+quotes tab, 62 quotes). **The catalogue names are the CONTACTS, the sheet
+records the FIRMS** — no sheet maps between them; Simon confirmed it by hand on
+2026-08-27:
+
+| Catalogue name | Company (column S) | Share of quotes |
+|---|---|---|
+| `MANDY` | 浙江华庆塑业有限公司 | 37% (23) |
+| `WEIWEI` | 温州亚森制袋 | 26% (16) |
+| `CHEN` | 浙江鼎驰新材料科技有限公司 | 23% (14) |
+
+The remaining ~14% is eight one-off suppliers. Eli works by the contact name, so
+that is what the UI leads with; the company name is the secondary line.
+Worth noticing: `CHEN` is the only fabric that fits every bag type, yet it takes
+the *smallest* share of the big three.
 
 **Measured from photos, not a spectrophotometer.** Good enough to build the
 shortlist, not to commit to a customer — the screen says so, keep it that way.

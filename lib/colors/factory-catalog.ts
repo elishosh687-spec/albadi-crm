@@ -43,6 +43,10 @@ export interface SharedColor {
 
 export interface FactoryMeta {
   label: string;
+  /**
+   * The company as the quotes sheet writes it (column S, 供应商). Confirmed by
+   * Simon 2026-08-27 — the catalogue names are the contacts, not the firms.
+   */
   chineseName?: string;
   /** When this factory is the one you order from. */
   whenToUse: string;
@@ -59,6 +63,7 @@ export interface FactoryMeta {
 export const FACTORIES: Record<FactoryId, FactoryMeta> = {
   CHEN: {
     label: "CHEN",
+    chineseName: "浙江鼎驰新材料科技有限公司",
     whenToUse:
       "מתאים לכל סוגי התיקים — ריתוך חם ותפירה ידנית, שטוח ותלת־ממדי. המפעל היחיד שמכסה הכול, ולכן הקטלוג שלו הוא ברירת המחדל הבטוחה.",
     whenToUseShort: "כל סוגי התיקים",
@@ -66,6 +71,7 @@ export const FACTORIES: Record<FactoryId, FactoryMeta> = {
   },
   WEIWEI: {
     label: "WEIWEI",
+    chineseName: "温州亚森制袋",
     whenToUse:
       "תפירה ידנית — שטוח וגם תלת־ממדי — וריתוך חם שטוח. לא זמין לריתוך חם תלת־ממדי, אז שקית מולחמת עם גוסט לא תיוצר כאן.",
     whenToUseShort: "תפירה, וריתוך שטוח",
