@@ -98,6 +98,29 @@ export async function findMember(query: string): Promise<TeamMember | null> {
   );
 }
 
+/**
+ * Is this number a colleague rather than a customer?
+ *
+ * The inbound webhook has to ask this BEFORE it creates a lead. Registering
+ * Simon only protected the outbound direction — when he replied on 2026-08-27
+ * the webhook saw an unknown number, made him a lead, and the bot sent him the
+ * Hebrew questionnaire and then a follow-up nudge. He wrote back "can you
+ * explain to me in English?" and Eli had to apologise for the bot.
+ *
+ * Accepts a chatId ("8615…@c.us"), a JID, or bare digits — compares on digits
+ * only, so the suffix and any "+" are irrelevant.
+ */
+export async function findTeamMemberByPhone(
+  phoneOrJid: string,
+): Promise<TeamMember | null> {
+  const digits = String(phoneOrJid).split("@")[0].replace(/[^0-9]/g, "");
+  if (!digits) return null;
+  const { members } = await loadTeam();
+  return (
+    members.find((m) => m.phone.replace(/[^0-9]/g, "") === digits) ?? null
+  );
+}
+
 // Same reasoning as notify/itay.ts: cache the resolved JID per raw target so
 // changing a number in settings takes effect without a redeploy.
 const jidCache = new Map<string, string | null>();

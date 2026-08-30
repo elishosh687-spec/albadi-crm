@@ -51,6 +51,11 @@ import {
 import { getBotSettings } from "@/lib/bot-settings/store";
 import { pauseFields } from "@/lib/autoresponder/bot-pause";
 import { sendEliDM } from "@/lib/notify/eli";
+import { findTeamMemberByPhone } from "@/lib/notify/team";
+import {
+  detectWebsiteOrigin,
+  recordWebsiteOrigin,
+} from "@/lib/leads/website-origin";
 import { sendBridgeMessage } from "@/lib/bridge/client";
 import { dispatchSupervisor } from "@/lib/supervisor/server/dispatch";
 import { refreshNextAction } from "@/lib/ghl/next-action";
@@ -361,6 +366,23 @@ async function handleIncoming(evt: GreenWebhook): Promise<void> {
   if (!phone) return;
   const senderName =
     sender.senderContactName || sender.senderName || sender.chatName || undefined;
+
+  // A colleague wrote in — not a customer. Never make them a lead.
+  //
+  // Registering someone in `crm.team` used to protect only the OUTBOUND side.
+  // When Simon answered a question we had sent him (2026-08-27) this webhook
+  // saw an unknown number, created a lead, synced a GHL contact, and the bot
+  // opened the Hebrew questionnaire on him — then nudged him again hours later.
+  // He replied "can you explain to me in English?" and Eli had to apologise for
+  // the bot. Nothing below this line should run for a teammate.
+  const teamMember = await findTeamMemberByPhone(chatId);
+  if (teamMember) {
+    console.log(
+      `[green.webhook] inbound from teammate ${teamMember.name} (${chatId}) — no lead, no bot`,
+    );
+    return;
+  }
+
   // canonicalSid is the lead row's manychat_sub_id — may equal chatId for
   // green-native leads or differ (e.g. `<phone>@s.whatsapp.net`) for leads
   // first created via facebook-import. Use it for every DB op below so we
@@ -414,6 +436,15 @@ async function handleIncoming(evt: GreenWebhook): Promise<void> {
     payload: evt as unknown as Record<string, unknown>,
   });
   const inboundMessageId = insertedMessage?.id ?? null;
+
+  // Did they arrive by pressing WhatsApp on the website? The prefilled sentence
+  // the site puts in the box is the only evidence — same number, same webhook
+  // as every other cold inbound. Fills `lead_source` only when it is still
+  // empty, and always logs a `source_touches` row. Never throws.
+  const websiteOrigin = detectWebsiteOrigin(textToStore);
+  if (websiteOrigin) {
+    await recordWebsiteOrigin(canonicalSid, websiteOrigin);
+  }
 
   // Duplicate poll-vote guard — the same answer reaching us twice.
   //
@@ -861,6 +892,17 @@ async function handleOutgoingManual(evt: GreenWebhook): Promise<void> {
   if (!phone) return;
   const senderName =
     sender.senderContactName || sender.senderName || sender.chatName || undefined;
+
+  // Same rule as the inbound path: Eli typing to a colleague from his phone
+  // must not create a lead either.
+  const teamMember = await findTeamMemberByPhone(chatId);
+  if (teamMember) {
+    console.log(
+      `[green.webhook] manual outbound to teammate ${teamMember.name} — no lead`,
+    );
+    return;
+  }
+
   const canonicalSid = await upsertLeadFromGreen({
     chatId,
     phone,

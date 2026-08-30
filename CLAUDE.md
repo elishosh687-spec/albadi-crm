@@ -1216,6 +1216,23 @@ sit in the pipeline, and they'd skew every analytics screen. The registry is
 **a phone number never lands in git** and re-pointing needs no redeploy.
 Registered today: `simon` — 中文, buys from and talks to the Chinese factories.
 
+**⚠️ Registering them is only half of it — the INBOUND webhook has to know too
+(fixed 2026-08-30).** The registry protected sends; the Green webhook still saw
+an unknown number. When Simon answered a question we had sent him, it made him
+a lead, synced a GHL contact, and the bot opened the **Hebrew questionnaire** on
+him and nudged him again hours later — he replied *"can you explain to me in
+English?"* and Eli had to apologise for the bot. Both handlers in
+[greenapi/webhook](app/api/greenapi/webhook/route.ts) now call
+`findTeamMemberByPhone(chatId)` **before** `upsertLeadFromGreen` and return
+early — no lead, no GHL contact, no bot, in either direction. Any NEW inbound
+path must do the same; the registry alone will not save you.
+
+Side note from that incident: **GHL rewrites a foreign number to the location's
+country.** Simon's `+8615180009512` came back from `ContactCreate` as
+`+9728615180009512`, and the resync mirrored that into `leads.phone_e164`. The
+sid/JID stayed correct, so sending still worked — but don't trust `phone_e164`
+for a non-Israeli contact.
+
 Sends go out as `sender='eli'` through the normal `sendBridgeMessage` path, so
 the message is recorded in `messages` like any other outbound. The GHL mirror
 will log `ghl_mirror.skip reason=no_lead` — expected and harmless; a colleague
@@ -1224,6 +1241,36 @@ has no GHL contact.
 **Always show Eli the text and the recipient before sending.** A DM to a real
 person is not undoable, and Chinese-language messages he can't proof-read are
 exactly where a mistake costs the most.
+
+## Website leads — recognised from the WhatsApp prefill (built 2026-08-30)
+
+The site's WhatsApp buttons open `wa.me/972559662713` — **the same GreenAPI
+number every other lead uses** — so a website lead arrived indistinguishable
+from any cold inbound. Measured before the fix: **58 of 89** WhatsApp-origin
+leads had `lead_source` empty, and there was no way to tell whether the site
+produced anything.
+
+The one signal available is the sentence the site prefills into the message box
+(`whatsappHref` in the albadi-web repo, `lib/contact.ts`).
+[lib/leads/website-origin.ts](lib/leads/website-origin.ts) matches a
+**distinctive fragment**, not the whole string — customers routinely edit the
+text before sending — and the webhook calls it on every inbound:
+
+| Button | Fragment matched | `source_detail_1` |
+|---|---|---|
+| page CTA (he/en) | `באתר ואשמח להצעת מחיר` · `would like a quote for branded non-woven bags` | `page_cta` |
+| landing page | `הגעתי מגוגל` | `landing_google` |
+| after the lead form | `הרגע השארתי פרטים באתר` | `after_lead_form` |
+
+`lead_source` is filled with `COALESCE(…, 'website')` — a lead already
+attributed to facebook/google **keeps** that attribution, because the prefill is
+a later touch, not a re-attribution. A `source_touches` row is written either
+way, with the page name (the site interpolates it into quotes) in
+`source_detail_2`, so the full journey stays visible.
+
+**If the site copy changes, update the fragments** — they are the whole
+mechanism, and nothing fails loudly when they stop matching. The tell is
+`lead_source` going quiet again.
 
 ## "צבעים" tab — the factory colour catalogue (built 2026-08-25)
 
