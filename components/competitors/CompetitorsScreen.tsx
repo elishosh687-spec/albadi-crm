@@ -24,6 +24,7 @@ import {
   ChevronLeft,
 } from "lucide-react";
 import { LuxShell, LuxTitle, LuxAccent, LuxCTA, LuxStat } from "@/components/widget-ui/lux";
+import SizeComparisonTable from "./SizeComparisonTable";
 
 interface Row {
   id: number;
@@ -36,6 +37,7 @@ interface Row {
   ourPrice: number | null;
   ourLeadDays: number | null;
   ourPlateFee: number | null;
+  ourPriceSource: string | null;
   competitor: string;
   competitorPrice: number | null;
   competitorLeadDays: number | null;
@@ -70,6 +72,12 @@ const orderTotal = (
 
 const HANDLE_OPTIONS = ["", "בלי", "חיצונית", "פנימית", "חיצונית + פנימית"];
 const ORIGIN_OPTIONS = ["", "ישראל", "סין"];
+/** Where our own number came from — shown next to it so the confidence is visible. */
+const PRICE_SOURCE_LABEL: Record<string, string> = {
+  calculator: "מחשבון מדויק",
+  estimator: "מחשבון משוער",
+  factory: "הצעת מפעל",
+};
 const LAMINATION_OPTIONS = ["", "בלי", "מבריקה", "מט"];
 
 const inputStyle: React.CSSProperties = {
@@ -180,6 +188,7 @@ function SideColumn({
   days,
   plateFee,
   plateCurrency,
+  sourceLabel,
   colors,
   qty,
 }: {
@@ -189,6 +198,8 @@ function SideColumn({
   days: number | null;
   plateFee: number | null;
   plateCurrency?: string | null;
+  /** "מחשבון מדויק" / "מחשבון משוער" — only ever set on our own side. */
+  sourceLabel?: string | null;
   colors: number | null;
   qty: number | null;
 }) {
@@ -221,6 +232,19 @@ function SideColumn({
       >
         {who}
       </div>
+      {sourceLabel ? (
+        <div
+          style={{
+            fontSize: 10,
+            color: "var(--lux-muted)",
+            marginTop: -4,
+            marginBottom: 5,
+            opacity: 0.85,
+          }}
+        >
+          {sourceLabel}
+        </div>
+      ) : null}
       <div style={{ fontSize: 19, fontWeight: 600, color: "var(--lux-ink)" }}>
         {price != null ? nisUnit(price) : "—"}
         {price != null && <span style={{ fontSize: 11, color: "var(--lux-muted)", fontWeight: 400 }}> / יח׳</span>}
@@ -331,6 +355,7 @@ function ComparisonCard({ row, onDelete }: { row: Row; onDelete: (id: number) =>
           price={row.ourPrice}
           days={row.ourLeadDays}
           plateFee={row.ourPlateFee}
+          sourceLabel={row.ourPriceSource ? PRICE_SOURCE_LABEL[row.ourPriceSource] ?? row.ourPriceSource : null}
           colors={row.logoColors}
           qty={row.quantity}
         />
@@ -393,6 +418,7 @@ const EMPTY_FORM = {
   ourPrice: "",
   ourLeadDays: "",
   ourPlateFee: "",
+  ourPriceSource: "",
   notes: "",
 };
 
@@ -404,6 +430,9 @@ export default function CompetitorsScreen({
   leadSid: string;
 }) {
   const [rows, setRows] = useState<Row[]>([]);
+  // Table is the default: the card-per-comparison view could not be scanned
+  // one size at a time, which is the question Eli actually asks.
+  const [view, setView] = useState<"table" | "cards">("table");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -644,6 +673,14 @@ export default function CompetitorsScreen({
               <Field label="אספקה (ימים)">
                 <input style={inputStyle} value={form.ourLeadDays} onChange={set("ourLeadDays")} inputMode="numeric" placeholder="90" />
               </Field>
+              <Field label="מקור המחיר שלנו">
+                <select style={inputStyle} value={form.ourPriceSource} onChange={set("ourPriceSource")}>
+                  <option value="">— לא צוין —</option>
+                  {Object.entries(PRICE_SOURCE_LABEL).map(([k, v]) => (
+                    <option key={k} value={k}>{v}</option>
+                  ))}
+                </select>
+              </Field>
             </div>
 
             {/* competitor side */}
@@ -705,6 +742,36 @@ export default function CompetitorsScreen({
 
       {error && <div style={{ color: "#e8b4b4", fontSize: 13, marginBottom: 14 }}>{error}</div>}
 
+      <div className="lux-wrap-sm" style={{ display: "flex", gap: 8, flexWrap: "wrap", margin: "4px 0 16px" }}>
+        {(["table", "cards"] as const).map((v) => (
+          <button
+            key={v}
+            type="button"
+            onClick={() => setView(v)}
+            className="lux-tap"
+            style={{
+              padding: "6px 14px",
+              borderRadius: 6,
+              border: "none",
+              cursor: "pointer",
+              fontSize: 13,
+              fontFamily: "inherit",
+              color: view === v ? "#1d1b1a" : "var(--lux-ink)",
+              background: view === v ? "var(--lux-champagne)" : "var(--lux-card)",
+              boxShadow: view === v ? "none" : "inset 0 0 0 1px var(--lux-line)",
+            }}
+          >
+            {v === "table" ? "לפי מידה" : "כרטיסים"}
+          </button>
+        ))}
+      </div>
+
+      {view === "table" && !loading && rows.length > 0 && (
+        <SizeComparisonTable rows={rows as never} token={token} />
+      )}
+
+      {view === "cards" && (
+      <>
       {/* the "where I stand" list — collapsible product groups */}
       {loading ? (
         <div style={{ color: "var(--lux-muted)", fontSize: 13 }}>טוען…</div>
@@ -782,6 +849,8 @@ export default function CompetitorsScreen({
             );
           })}
         </div>
+      )}
+      </>
       )}
     </LuxShell>
   );

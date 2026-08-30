@@ -3,38 +3,10 @@ import { calculateQuote } from "@/lib/factory/calculator/engine";
 import { DEFAULT_CONFIG } from "@/lib/factory/calculator/constants";
 import { getFactoryConfig } from "@/lib/factory/config";
 import type { AppConfig, Product, QuoteFormData } from "@/lib/factory/calculator/types";
+import { buildCatalogConfig } from "@/lib/factory/server/catalog-quote";
 
 export const runtime = "nodejs";
 
-function buildConfig(
-  dbConfig: Awaited<ReturnType<typeof getFactoryConfig>>,
-  marginOverride: number | null,
-  extraProducts: Product[] = []
-): AppConfig {
-  const margins = marginOverride !== null
-    ? { "1000": marginOverride, "3000": marginOverride, "5000": marginOverride, "10000": marginOverride }
-    : (dbConfig.profitMarginByQuantity ?? {});
-
-  return {
-    ...DEFAULT_CONFIG,
-    products: [...DEFAULT_CONFIG.products, ...extraProducts],
-    seaCarriers: dbConfig.seaCarriers ?? DEFAULT_CONFIG.seaCarriers,
-    activeSeaCarrierId: dbConfig.activeSeaCarrierId ?? DEFAULT_CONFIG.activeSeaCarrierId,
-    assumedShipmentCbm: dbConfig.assumedShipmentCbm ?? DEFAULT_CONFIG.assumedShipmentCbm,
-    exchangeRates: { usdToIls: dbConfig.usdToIls, usdToCny: dbConfig.usdToCny },
-    adminSettings: {
-      globalProfitMargin: marginOverride ?? dbConfig.defaultProfitMargin,
-      profitMarginByQuantity: margins,
-      negotiationBufferAgorot: dbConfig.negotiationBufferAgorot,
-      laminationPlateFeePerColorCny: dbConfig.laminationPlateFeePerColorCny,
-    },
-    shippingOptions: DEFAULT_CONFIG.shippingOptions.map((s) => {
-      const dbOpt = dbConfig.shippingOptions.find((d) => d.type === s.type && d.enabled);
-      if (!dbOpt) return s;
-      return { ...s, enabled: dbOpt.enabled, seaRate: dbOpt.seaRate ?? s.seaRate, airRates: dbOpt.airRates ?? s.airRates };
-    }),
-  };
-}
 
 function buildCustomProduct(sp: URLSearchParams): Product | null {
   const cnyRaw = sp.get("customUnitCostCny");
@@ -113,7 +85,7 @@ export async function GET(req: NextRequest) {
   const moldsCostCny = Number.isFinite(moldsParsed) && moldsParsed > 0 ? moldsParsed : 0;
 
   const dbConfig = await getFactoryConfig({ fresh: true });
-  const cfg = buildConfig(dbConfig, marginOverride, customProduct ? [customProduct] : []);
+  const cfg = buildCatalogConfig(dbConfig, marginOverride, customProduct ? [customProduct] : []);
 
   const form: QuoteFormData = {
     productId: product,

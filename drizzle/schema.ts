@@ -839,6 +839,11 @@ export const competitorPrices = pgTable(
     ourPrice: doublePrecision("our_price"),
     ourLeadDays: integer("our_lead_days"),
     ourPlateFee: doublePrecision("our_plate_fee"),
+    // "calculator" (exact catalog SKU) | "estimator" (regression model) |
+    // "factory" (a real factory quote). Eli asked for this: an estimator
+    // number and a catalog number do not carry the same confidence, and a
+    // comparison that hides which is which is misleading.
+    ourPriceSource: text("our_price_source"),
     // The competitor.
     competitor: text("competitor").notNull(),
     competitorPrice: doublePrecision("competitor_price"),

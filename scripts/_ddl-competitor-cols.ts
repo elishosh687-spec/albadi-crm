@@ -28,6 +28,11 @@ const COLS: { name: string; ddl: string }[] = [
   { name: "shipping_included", ddl: "boolean" },
   { name: "lead_time_text", ddl: "text" },
   { name: "competitor_plate_fee_currency", ddl: "text" },
+  // Where OUR number came from: the exact catalog calculator, the estimator
+  // model, or a real factory quote. Eli asked for this explicitly — an
+  // estimator number and a catalog number do not carry the same confidence,
+  // and a comparison that hides which is which is misleading.
+  { name: "our_price_source", ddl: "text" },
 ];
 
 async function main() {

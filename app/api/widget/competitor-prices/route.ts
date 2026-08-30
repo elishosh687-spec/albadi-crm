@@ -5,7 +5,7 @@
  *      { product, competitor, ourPrice?, ourLeadDays?, competitorPrice?,
  *        competitorLeadDays?, quantity?, leadSid?, notes?,
  *        origin?, gsm?, shippingIncluded?, leadTimeText?,
- *        competitorPlateFeeCurrency? }
+ *        competitorPlateFeeCurrency?, ourPriceSource? }
  *
  * Auth: ?widget_token=<GHL_WIDGET_TOKEN> (or Bearer for external callers).
  */
@@ -104,6 +104,7 @@ export async function POST(req: NextRequest) {
         ourPrice: num(body.ourPrice),
         ourLeadDays: num(body.ourLeadDays),
         ourPlateFee: num(body.ourPlateFee),
+        ourPriceSource: str(body.ourPriceSource),
         competitorPrice: num(body.competitorPrice),
         competitorLeadDays: num(body.competitorLeadDays),
         competitorPlateFee: num(body.competitorPlateFee),
