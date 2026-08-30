@@ -844,6 +844,20 @@ export const competitorPrices = pgTable(
     competitorPrice: doublePrecision("competitor_price"),
     competitorLeadDays: integer("competitor_lead_days"),
     competitorPlateFee: doublePrecision("competitor_plate_fee"),
+    // "ILS" | "USD". One competitor quotes the plate in dollars — storing a
+    // bare 150 next to a bare 500 would be a 3.7× error.
+    competitorPlateFeeCurrency: text("competitor_plate_fee_currency"),
+    // Where it is made — "ישראל" / "סין". The single biggest driver in Eli's
+    // own survey: the same 30×40 bag is ₪6.45 in Israel and ₪2.49 in China.
+    origin: text("origin"),
+    // Fabric weight, e.g. 80. A competitor quoting 70GSM is not the same bag.
+    gsm: integer("gsm"),
+    // "כולל משלוח" vs "ללא משלוח" — moves the real number by more than most
+    // of the price gaps in the table, so it cannot live in free-text notes.
+    shippingIncluded: boolean("shipping_included"),
+    // Lead time as quoted: "60-90 ימים", "כשבועיים". competitorLeadDays holds
+    // the comparable number (upper bound of a range); this holds the truth.
+    leadTimeText: text("lead_time_text"),
     // Optional link to a CRM lead this data point came from.
     leadSid: text("lead_sid"),
     notes: text("notes"),

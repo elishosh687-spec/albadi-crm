@@ -40,6 +40,11 @@ interface Row {
   competitorPrice: number | null;
   competitorLeadDays: number | null;
   competitorPlateFee: number | null;
+  competitorPlateFeeCurrency: string | null;
+  origin: string | null;
+  gsm: number | null;
+  shippingIncluded: boolean | null;
+  leadTimeText: string | null;
   leadSid: string | null;
   notes: string | null;
   createdAt: string;
@@ -48,6 +53,10 @@ interface Row {
 // Unit prices are decimals (₪1.60); totals are big and rounded (₪16,000).
 const nisUnit = (n: number) => "₪" + n.toFixed(2);
 const nisTotal = (n: number) => "₪" + Math.round(n).toLocaleString("he-IL");
+// One competitor quotes the plate in dollars. Never render a USD figure with a
+// ₪ sign — at ~3.7 to the dollar that reads as a quarter of the real cost.
+const money = (n: number, currency?: string | null) =>
+  (currency === "USD" ? "$" : "₪") + Math.round(n).toLocaleString("he-IL");
 
 // plate fee is per colour → one-time cost = fee × colours (colours default 1).
 const plateTotal = (fee: number | null, colors: number | null): number | null =>
@@ -60,6 +69,7 @@ const orderTotal = (
 ): number | null => (price == null || qty == null ? null : price * qty + (plates ?? 0));
 
 const HANDLE_OPTIONS = ["", "בלי", "חיצונית", "פנימית", "חיצונית + פנימית"];
+const ORIGIN_OPTIONS = ["", "ישראל", "סין"];
 const LAMINATION_OPTIONS = ["", "בלי", "מבריקה", "מט"];
 
 const inputStyle: React.CSSProperties = {
@@ -115,6 +125,13 @@ function specChips(row: Row): string[] {
   if (row.handles) out.push(`ידית ${row.handles}`);
   if (row.logoColors != null) out.push(`${row.logoColors} צבע${row.logoColors === 1 ? "" : "ים"} בלוגו`);
   if (row.lamination) out.push(`למינציה ${row.lamination}`);
+  if (row.gsm != null) out.push(`${row.gsm} גרם`);
+  // Origin and shipping are the two that actually move the number — a China
+  // price without shipping is not comparable to an Israeli one with it.
+  if (row.origin) out.push(`ייצור ב${row.origin}`);
+  if (row.shippingIncluded === true) out.push("כולל משלוח");
+  else if (row.shippingIncluded === false) out.push("ללא משלוח");
+  if (row.leadTimeText) out.push(`אספקה ${row.leadTimeText}`);
   return out;
 }
 
@@ -162,6 +179,7 @@ function SideColumn({
   price,
   days,
   plateFee,
+  plateCurrency,
   colors,
   qty,
 }: {
@@ -170,11 +188,15 @@ function SideColumn({
   price: number | null;
   days: number | null;
   plateFee: number | null;
+  plateCurrency?: string | null;
   colors: number | null;
   qty: number | null;
 }) {
   const plates = plateTotal(plateFee, colors);
-  const total = orderTotal(price, qty, plates);
+  // A dollar plate fee cannot be added into a shekel order total without an
+  // exchange rate we do not have here — show it, don't fold it in.
+  const foreignPlate = plateCurrency === "USD";
+  const total = orderTotal(price, qty, foreignPlate ? null : plates);
   return (
     <div
       style={{
@@ -208,8 +230,10 @@ function SideColumn({
       <div style={{ fontSize: 11.5, color: "var(--lux-muted)", marginTop: 6, lineHeight: 1.5 }}>
         {plateFee != null ? (
           <>
-            גלופות {nisTotal(plateFee)}/צבע
-            {plates != null && colors ? ` · ${nisTotal(plates)} חד-פעמי` : " · חד-פעמי"}
+            גלופות {money(plateFee, plateCurrency)}/צבע
+            {plates != null && colors
+              ? ` · ${money(plates, plateCurrency)} חד-פעמי`
+              : " · חד-פעמי"}
           </>
         ) : (
           <span style={{ opacity: 0.6 }}>גלופות —</span>
@@ -220,7 +244,9 @@ function SideColumn({
       {total != null && (
         <div style={{ fontSize: 12.5, color: "var(--lux-ink)", marginTop: 4, fontWeight: 600 }}>
           סה״כ {nisTotal(total)}
-          <span style={{ fontSize: 10.5, color: "var(--lux-muted)", fontWeight: 400 }}> (כולל גלופות)</span>
+          <span style={{ fontSize: 10.5, color: "var(--lux-muted)", fontWeight: 400 }}>
+            {foreignPlate ? " (ללא גלופות — נמסרו בדולר)" : " (כולל גלופות)"}
+          </span>
         </div>
       )}
 
@@ -314,6 +340,7 @@ function ComparisonCard({ row, onDelete }: { row: Row; onDelete: (id: number) =>
           price={row.competitorPrice}
           days={row.competitorLeadDays}
           plateFee={row.competitorPlateFee}
+          plateCurrency={row.competitorPlateFeeCurrency}
           colors={row.logoColors}
           qty={row.quantity}
         />
@@ -358,6 +385,11 @@ const EMPTY_FORM = {
   competitorPrice: "",
   competitorLeadDays: "",
   competitorPlateFee: "",
+  competitorPlateFeeCurrency: "ILS",
+  origin: "",
+  gsm: "80",
+  shippingIncluded: "",
+  leadTimeText: "",
   ourPrice: "",
   ourLeadDays: "",
   ourPlateFee: "",
@@ -568,6 +600,23 @@ export default function CompetitorsScreen({
                   ))}
                 </select>
               </Field>
+              <Field label="מקום ייצור">
+                <select style={inputStyle} value={form.origin} onChange={set("origin")}>
+                  {ORIGIN_OPTIONS.map((o) => (
+                    <option key={o} value={o}>{o || "— בחר —"}</option>
+                  ))}
+                </select>
+              </Field>
+              <Field label="גרם (GSM)">
+                <input style={inputStyle} value={form.gsm} onChange={set("gsm")} inputMode="numeric" placeholder="80" />
+              </Field>
+              <Field label="משלוח">
+                <select style={inputStyle} value={form.shippingIncluded} onChange={set("shippingIncluded")}>
+                  <option value="">— לא צוין —</option>
+                  <option value="1">כולל משלוח</option>
+                  <option value="0">ללא משלוח</option>
+                </select>
+              </Field>
             </div>
 
             {/* our side */}
@@ -621,6 +670,15 @@ export default function CompetitorsScreen({
               </Field>
               <Field label="אספקה (ימים)">
                 <input style={inputStyle} value={form.competitorLeadDays} onChange={set("competitorLeadDays")} inputMode="numeric" placeholder="30" />
+              </Field>
+              <Field label="מטבע הגלופה">
+                <select style={inputStyle} value={form.competitorPlateFeeCurrency} onChange={set("competitorPlateFeeCurrency")}>
+                  <option value="ILS">₪ שקל</option>
+                  <option value="USD">$ דולר</option>
+                </select>
+              </Field>
+              <Field label="אספקה — כפי שנמסר">
+                <input style={inputStyle} value={form.leadTimeText} onChange={set("leadTimeText")} placeholder="60-90 ימים / כשבועיים" />
               </Field>
             </div>
 

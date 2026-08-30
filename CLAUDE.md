@@ -425,16 +425,35 @@ When listing overflowing elements, **skip anything inside a scrollable
 ancestor** (`overflowX auto/scroll` && `scrollWidth > clientWidth`) — otherwise
 a deliberately side-scrolling table reports as 28 breaks.
 
-**How to check a DATA screen locally.** You can't: `vercel env pull` masks
-`DATABASE_URL` to `""`, and this project's **Vercel previews cannot build at
-all** because `DATABASE_URL` is scoped to Production only. Instead, add a
-throwaway `app/widget/<name>/page.tsx` that patches `window.fetch` at MODULE
-scope (runs before any child mounts) and renders the real component against
-fixtures. Two gotchas: an `_`-prefixed folder is a **private** folder and won't
-route, and a fixture missing one numeric field throws
-`undefined.toLocaleString` inside render, which React retries until the renderer
-dies — that reads as "the page won't load", not as a bad fixture. Delete the
-route when done.
+**How to check a DATA screen locally — you CAN (fixed 2026-08-31).** The old
+advice here was "you can't, build fixtures instead", because `vercel env pull`
+masks `DATABASE_URL` to `""` and this project's Vercel previews cannot build at
+all (`DATABASE_URL` is Production-scoped). But `neonctl` is authed on this
+machine, so the launch config can resolve the connection string **at launch
+time** and nothing secret is written to disk:
+
+```jsonc
+// .claude/launch.json — ⚠️ gitignored (.gitignore:15 `.claude/*`), so it is
+// per-machine. Recreate this entry if it is missing:
+{
+  "name": "albadi-crm-data-dev",
+  "runtimeExecutable": "sh",
+  "runtimeArgs": ["-c", "GHL_WIDGET_TOKEN= DATABASE_URL=\"$(~/.local/node/bin/neonctl connection-string --project-id fragrant-morning-71359670 --org-id org-frosty-star-50411125)\" npm run dev -- -p 3002"],
+  "port": 3002
+}
+```
+
+Blank `GHL_WIDGET_TOKEN` takes `verifyWidgetToken`'s dev pass-through branch, so
+widget routes open without a token in the URL. **This is the live production
+database** — read freely, but anything that writes (a form submit, a delete
+button) writes for real. Use `albadi-crm-widget-dev` (port 3001) for pure
+layout work where the screen may render empty.
+
+The fixture route is still the right tool when you need a state the real data
+does not contain. Two gotchas if you go that way: an `_`-prefixed folder is a
+**private** folder and won't route, and a fixture missing one numeric field
+throws `undefined.toLocaleString` inside render, which React retries until the
+renderer dies — that reads as "the page won't load", not as a bad fixture.
 
 **Footgun while developing:** Turbopack serves a **stale CSS chunk** — edits to
 globals.css silently don't appear, and restarting the dev server is not enough.

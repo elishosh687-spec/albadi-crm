@@ -3,7 +3,9 @@
  *      newest first. Consumed by the "מחיר מתחרים" hub tab.
  * POST /api/widget/competitor-prices — log one head-to-head:
  *      { product, competitor, ourPrice?, ourLeadDays?, competitorPrice?,
- *        competitorLeadDays?, quantity?, leadSid?, notes? }
+ *        competitorLeadDays?, quantity?, leadSid?, notes?,
+ *        origin?, gsm?, shippingIncluded?, leadTimeText?,
+ *        competitorPlateFeeCurrency? }
  *
  * Auth: ?widget_token=<GHL_WIDGET_TOKEN> (or Bearer for external callers).
  */
@@ -29,6 +31,17 @@ function num(v: unknown): number | null {
   if (v === null || v === undefined || v === "") return null;
   const n = typeof v === "number" ? v : Number(String(v).replace(/,/g, "").trim());
   return Number.isFinite(n) ? n : null;
+}
+
+/** Tri-state: true / false / null (unknown). "כולל משלוח" is a real signal;
+ *  "not filled in" is not the same as "shipping excluded". */
+function bool(v: unknown): boolean | null {
+  if (v === null || v === undefined || v === "") return null;
+  if (typeof v === "boolean") return v;
+  const s = String(v).trim().toLowerCase();
+  if (["1", "true", "yes", "כן"].includes(s)) return true;
+  if (["0", "false", "no", "לא"].includes(s)) return false;
+  return null;
 }
 
 /** Coerce to a trimmed non-empty string or null. */
@@ -94,6 +107,11 @@ export async function POST(req: NextRequest) {
         competitorPrice: num(body.competitorPrice),
         competitorLeadDays: num(body.competitorLeadDays),
         competitorPlateFee: num(body.competitorPlateFee),
+        competitorPlateFeeCurrency: str(body.competitorPlateFeeCurrency),
+        origin: str(body.origin),
+        gsm: num(body.gsm),
+        shippingIncluded: bool(body.shippingIncluded),
+        leadTimeText: str(body.leadTimeText),
         leadSid: str(body.leadSid),
         notes: str(body.notes),
       })
