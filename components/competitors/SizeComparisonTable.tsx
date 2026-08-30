@@ -12,6 +12,13 @@
  * Our number is never invented: each one is labelled with where it came from,
  * and where the estimator refuses (flat shapes — shipping can't be estimated
  * reliably) the cell says so instead of showing a figure.
+ *
+ * ⚠️ Alignment rule for this table. The page is RTL and every price is a Latin
+ * string ("₪1.77"). Putting `direction:"ltr"` on the CELL pushes its content to
+ * the left edge while the header stays on the right — that is exactly how the
+ * first version came out crooked. So the cell always keeps the page direction
+ * and only the number itself is isolated (`<Num>`), which keeps "₪" in front
+ * without moving the column.
  */
 
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -26,6 +33,7 @@ export interface CompRow {
   gsm: number | null;
   shippingIncluded: boolean | null;
   leadTimeText: string | null;
+  competitorLeadDays: number | null;
   competitorPrice: number | null;
   competitorPlateFee: number | null;
   competitorPlateFeeCurrency: string | null;
@@ -36,6 +44,7 @@ export interface CompRow {
 interface OurRow {
   id: number;
   unitIls: number | null;
+  leadDays: number | null;
   source: "calculator" | "estimator" | null;
   refused?: string;
 }
@@ -47,6 +56,44 @@ const SOURCE_SHORT: Record<string, string> = {
 
 const nis = (n: number) => "₪" + n.toFixed(2);
 
+/**
+ * Where the bag is made — and therefore how long the customer waits. Eli thinks
+ * in exactly these two buckets: local is weeks, overseas is about three months.
+ * Origin is the primary signal; the quoted lead time is the fallback for a row
+ * logged without one.
+ */
+type OriginBucket = "IL" | "CN";
+
+function bucketOf(row: CompRow): OriginBucket {
+  const o = row.origin ?? "";
+  if (o.includes("ישראל")) return "IL";
+  if (o) return "CN"; // סין / any other overseas origin
+  return (row.competitorLeadDays ?? 0) > 30 ? "CN" : "IL";
+}
+
+const ORIGIN_TABS: { id: "all" | OriginBucket; label: string; hint: string }[] = [
+  { id: "all", label: "הכל", hint: "" },
+  { id: "IL", label: "ייצור בארץ", hint: "עד חודש" },
+  { id: "CN", label: "ייצור בחו״ל", hint: "כ-3 חודשים" },
+];
+
+/** A Latin/number string inside an RTL cell — isolated so "₪" stays in front. */
+function Num({ children, bold }: { children: React.ReactNode; bold?: boolean }) {
+  return (
+    <span
+      style={{
+        direction: "ltr",
+        unicodeBidi: "isolate",
+        display: "inline-block",
+        fontVariantNumeric: "tabular-nums",
+        fontWeight: bold ? 600 : undefined,
+      }}
+    >
+      {children}
+    </span>
+  );
+}
+
 export default function SizeComparisonTable({
   rows,
   token,
@@ -54,18 +101,34 @@ export default function SizeComparisonTable({
   rows: CompRow[];
   token: string;
 }) {
+  const [origin, setOrigin] = useState<"all" | OriginBucket>("all");
+
+  const originCounts = useMemo(() => {
+    const c = { all: rows.length, IL: 0, CN: 0 };
+    for (const r of rows) c[bucketOf(r)]++;
+    return c;
+  }, [rows]);
+
+  const inOrigin = useMemo(
+    () => (origin === "all" ? rows : rows.filter((r) => bucketOf(r) === origin)),
+    [rows, origin],
+  );
+
   const sizes = useMemo(() => {
     const seen = new Map<string, number>();
-    for (const r of rows) {
+    for (const r of inOrigin) {
       const s = (r.size ?? "").trim();
       if (s) seen.set(s, (seen.get(s) ?? 0) + 1);
     }
     return [...seen.entries()].sort((a, b) => b[1] - a[1]);
-  }, [rows]);
+  }, [inOrigin]);
 
   const [size, setSize] = useState<string>("");
+  // Filtering can remove the selected size entirely — fall back to the biggest
+  // group that survived rather than rendering an empty table.
   useEffect(() => {
-    if (!size && sizes.length) setSize(sizes[0][0]);
+    if (!sizes.length) return;
+    if (!sizes.some(([s]) => s === size)) setSize(sizes[0][0]);
   }, [sizes, size]);
 
   const [margin, setMargin] = useState<number | null>(null);
@@ -106,10 +169,10 @@ export default function SizeComparisonTable({
 
   const visible = useMemo(
     () =>
-      rows
+      inOrigin
         .filter((r) => (r.size ?? "").trim() === size)
         .sort((a, b) => (a.quantity ?? 0) - (b.quantity ?? 0)),
-    [rows, size],
+    [inOrigin, size],
   );
 
   const cheapest = useMemo(() => {
@@ -120,7 +183,7 @@ export default function SizeComparisonTable({
   const spec = visible[0];
   const specLine = spec
     ? [
-        spec.quantity != null && (spec.size?.split(/[×x*]/).length ?? 0) > 2 ? "תלת־ממדי" : "שטוח",
+        (spec.size?.split(/[×x*]/).length ?? 0) > 2 ? "תלת־ממדי" : "שטוח",
         spec.gsm ? `${spec.gsm} גרם` : null,
         spec.handles,
       ]
@@ -128,54 +191,84 @@ export default function SizeComparisonTable({
         .join(" · ")
     : "";
 
+  // One style per column, shared by the header and its cells, so a header can
+  // never drift away from the numbers beneath it.
   const th: React.CSSProperties = {
-    padding: "9px 10px",
+    padding: "10px 12px",
     fontSize: 11,
     fontWeight: 600,
     color: "var(--lux-muted)",
     whiteSpace: "nowrap",
     textAlign: "start",
+    letterSpacing: "0.02em",
   };
   const td: React.CSSProperties = {
-    padding: "10px",
+    padding: "11px 12px",
     fontSize: 13,
-    borderTop: "1px solid var(--lux-line)",
-    verticalAlign: "top",
-  };
-  const numTd: React.CSSProperties = {
-    ...td,
-    fontVariantNumeric: "tabular-nums",
-    direction: "ltr",
     textAlign: "start",
+    whiteSpace: "nowrap",
+    verticalAlign: "middle",
   };
+  const soft: React.CSSProperties = { ...td, fontSize: 12, color: "var(--lux-muted)" };
+  // The "אנחנו" column is the point of the table — framed rather than tinted,
+  // so it reads as one continuous column top to bottom.
+  const mineEdge = "1px solid rgba(214,196,172,0.22)";
+  const mineCell: React.CSSProperties = {
+    ...td,
+    background: "rgba(214,196,172,0.06)",
+    borderInlineStart: mineEdge,
+    borderInlineEnd: mineEdge,
+  };
+
+  const pill = (on: boolean): React.CSSProperties => ({
+    padding: "6px 13px",
+    borderRadius: 999,
+    border: "none",
+    cursor: "pointer",
+    fontSize: 13,
+    fontFamily: "inherit",
+    color: on ? "#1d1b1a" : "var(--lux-ink)",
+    background: on ? "var(--lux-champagne)" : "var(--lux-card)",
+    boxShadow: on ? "none" : "inset 0 0 0 1px var(--lux-line)",
+  });
 
   return (
     <div>
+      {/* where it's made — the filter Eli asked for: local weeks vs overseas months */}
+      <div
+        className="lux-wrap-sm"
+        style={{ display: "flex", gap: 7, flexWrap: "wrap", alignItems: "center", marginBottom: 10 }}
+      >
+        <span style={{ fontSize: 12, color: "var(--lux-muted)", marginInlineEnd: 2 }}>ייצור</span>
+        {ORIGIN_TABS.map((t) => {
+          const n = originCounts[t.id];
+          if (t.id !== "all" && n === 0) return null;
+          const on = t.id === origin;
+          return (
+            <button key={t.id} type="button" onClick={() => setOrigin(t.id)} className="lux-tap" style={pill(on)}>
+              {t.label}
+              {t.hint && (
+                <span style={{ opacity: on ? 0.65 : 0.5, fontSize: 11, marginInlineStart: 6 }}>{t.hint}</span>
+              )}
+              <span style={{ opacity: 0.6, marginInlineStart: 6, fontSize: 11 }}>
+                <Num>{n}</Num>
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
       {/* size picker */}
-      <div className="lux-wrap-sm" style={{ display: "flex", gap: 7, flexWrap: "wrap", marginBottom: 14 }}>
+      <div className="lux-wrap-sm" style={{ display: "flex", gap: 7, flexWrap: "wrap", alignItems: "center", marginBottom: 14 }}>
+        <span style={{ fontSize: 12, color: "var(--lux-muted)", marginInlineEnd: 2 }}>מידה</span>
         {sizes.map(([s, n]) => {
           const on = s === size;
           return (
-            <button
-              key={s}
-              type="button"
-              onClick={() => setSize(s)}
-              className="lux-tap"
-              style={{
-                padding: "6px 13px",
-                borderRadius: 999,
-                border: "none",
-                cursor: "pointer",
-                fontSize: 13,
-                fontFamily: "inherit",
-                direction: "ltr",
-                color: on ? "#1d1b1a" : "var(--lux-ink)",
-                background: on ? "var(--lux-champagne)" : "var(--lux-card)",
-                boxShadow: on ? "none" : "inset 0 0 0 1px var(--lux-line)",
-              }}
-            >
-              {s}
-              <span style={{ opacity: 0.6, marginInlineStart: 6, fontSize: 11 }}>{n}</span>
+            <button key={s} type="button" onClick={() => setSize(s)} className="lux-tap" style={pill(on)}>
+              <Num>{s}</Num>
+              <span style={{ opacity: 0.6, marginInlineStart: 6, fontSize: 11 }}>
+                <Num>{n}</Num>
+              </span>
             </button>
           );
         })}
@@ -207,17 +300,8 @@ export default function SizeComparisonTable({
           style={{ flex: "1 1 160px", minWidth: 120, accentColor: "var(--lux-champagne)" }}
           aria-label="אחוז רווחיות"
         />
-        <span
-          style={{
-            fontSize: 18,
-            fontWeight: 600,
-            minWidth: 58,
-            direction: "ltr",
-            textAlign: "start",
-            fontVariantNumeric: "tabular-nums",
-          }}
-        >
-          {margin ?? "—"}%
+        <span style={{ fontSize: 18, minWidth: 58 }}>
+          <Num bold>{margin ?? "—"}%</Num>
         </span>
         {defaultMargin != null && margin !== defaultMargin && (
           <button
@@ -248,77 +332,102 @@ export default function SizeComparisonTable({
         </div>
       )}
 
-      <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: 8 }}>
-        <span style={{ fontSize: 16, fontWeight: 600, direction: "ltr" }}>{size}</span>
+      <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: 8, flexWrap: "wrap" }}>
+        <span style={{ fontSize: 16, fontWeight: 600 }}>
+          <Num>{size}</Num>
+        </span>
         <span style={{ fontSize: 12, color: "var(--lux-muted)" }}>{specLine}</span>
       </div>
 
       {/* the table — a flat grid, so it scrolls sideways rather than stacking */}
-      <div className="lux-scroll-x" style={{ overflowX: "auto", borderRadius: 7, boxShadow: "inset 0 0 0 1px var(--lux-line)" }}>
-        <table style={{ width: "100%", minWidth: 560, borderCollapse: "collapse" }}>
+      <div
+        className="lux-scroll-x"
+        style={{ overflowX: "auto", borderRadius: 8, boxShadow: "inset 0 0 0 1px var(--lux-line)" }}
+      >
+        <table style={{ width: "100%", minWidth: origin === "all" ? 640 : 560, borderCollapse: "collapse" }}>
           <thead>
-            <tr style={{ background: "var(--lux-card)" }}>
+            <tr style={{ background: "rgba(255,255,255,0.03)" }}>
               <th style={th}>ספק</th>
+              {/* redundant once a bucket is picked — and dropping it pulls the
+                  "אנחנו" column into view on a phone without side-scrolling */}
+              {origin === "all" && <th style={th}>ייצור</th>}
               <th style={th}>כמות</th>
               <th style={th}>שלהם</th>
-              <th style={{ ...th, color: "var(--lux-champagne)" }}>אנחנו</th>
+              <th style={{ ...th, color: "var(--lux-champagne)", background: "rgba(214,196,172,0.06)", borderInlineStart: mineEdge, borderInlineEnd: mineEdge }}>
+                אנחנו
+              </th>
               <th style={th}>פער</th>
-              <th style={th}>ייצור</th>
               <th style={th}>גלופה</th>
               <th style={th}>משלוח</th>
               <th style={th}>אספקה</th>
             </tr>
           </thead>
           <tbody>
-            {visible.map((r) => {
+            {visible.map((r, i) => {
               const mine = ours.get(r.id);
               const theirs = r.competitorPrice;
-              const gap =
-                mine?.unitIls != null && theirs != null ? theirs - mine.unitIls : null;
+              const gap = mine?.unitIls != null && theirs != null ? theirs - mine.unitIls : null;
               const isCheapest = theirs != null && cheapest != null && theirs === cheapest;
+              const zebra = i % 2 ? "rgba(255,255,255,0.015)" : "transparent";
+              const line = { borderTop: "1px solid var(--lux-line)" };
               return (
-                <tr key={r.id}>
-                  <td style={td}>
+                <tr key={r.id} style={{ background: zebra }}>
+                  <td style={{ ...td, ...line }}>
                     {r.competitor}
                     {isCheapest && (
-                      <span style={{ fontSize: 10, color: "var(--lux-muted)", marginInlineStart: 6 }}>
-                        הזול
-                      </span>
+                      <span style={{ fontSize: 10, color: "var(--lux-muted)", marginInlineStart: 6 }}>הזול</span>
                     )}
                   </td>
-                  <td style={numTd}>{r.quantity?.toLocaleString("he-IL") ?? "—"}</td>
-                  <td style={numTd}>{theirs != null ? nis(theirs) : "—"}</td>
-                  <td style={{ ...numTd, background: "rgba(214,196,172,0.05)" }}>
+                  {origin === "all" && (
+                    <td style={{ ...soft, ...line }}>
+                      {r.origin ?? (bucketOf(r) === "IL" ? "ישראל" : "חו״ל")}
+                    </td>
+                  )}
+                  <td style={{ ...td, ...line }}>
+                    <Num>{r.quantity?.toLocaleString("he-IL") ?? "—"}</Num>
+                  </td>
+                  <td style={{ ...td, ...line }}>
+                    <Num>{theirs != null ? nis(theirs) : "—"}</Num>
+                  </td>
+                  <td style={{ ...mineCell, ...line, borderTopColor: "rgba(214,196,172,0.18)" }}>
                     {mine?.unitIls != null ? (
                       <>
-                        <span style={{ fontWeight: 600 }}>{nis(mine.unitIls)}</span>
+                        <Num bold>{nis(mine.unitIls)}</Num>
                         <span style={{ display: "block", fontSize: 10, color: "var(--lux-muted)" }}>
                           {SOURCE_SHORT[mine.source ?? ""] ?? ""}
+                          {mine.leadDays != null && ` · כ-${mine.leadDays} ימים`}
                         </span>
                       </>
                     ) : (
                       <span
-                        style={{ fontSize: 11, color: "var(--lux-muted)", direction: "rtl", display: "block", maxWidth: 150 }}
+                        style={{ fontSize: 11, color: "var(--lux-muted)", whiteSpace: "normal", display: "block", maxWidth: 130 }}
                         title={mine?.refused ?? ""}
                       >
                         {mine?.refused ? "צריך מחיר מהמפעל" : "—"}
                       </span>
                     )}
                   </td>
-                  <td style={{ ...numTd, color: gap == null ? "var(--lux-muted)" : gap > 0 ? "#a8c0a0" : "#e8b4b4" }}>
-                    {gap == null ? "—" : (gap > 0 ? "−" : "+") + nis(Math.abs(gap)).replace("₪", "₪")}
+                  <td
+                    style={{
+                      ...td,
+                      ...line,
+                      color: gap == null ? "var(--lux-muted)" : gap > 0 ? "#a8c0a0" : "#e8b4b4",
+                    }}
+                  >
+                    <Num>{gap == null ? "—" : (gap > 0 ? "−" : "+") + nis(Math.abs(gap))}</Num>
                   </td>
-                  <td style={{ ...td, fontSize: 12, color: "var(--lux-muted)" }}>{r.origin ?? "—"}</td>
-                  <td style={{ ...numTd, fontSize: 12, color: "var(--lux-muted)" }}>
-                    {r.competitorPlateFee == null
-                      ? "—"
-                      : (r.competitorPlateFeeCurrency === "USD" ? "$" : "₪") +
-                        Math.round(r.competitorPlateFee)}
+                  <td style={{ ...soft, ...line }}>
+                    <Num>
+                      {r.competitorPlateFee == null
+                        ? "—"
+                        : (r.competitorPlateFeeCurrency === "USD" ? "$" : "₪") +
+                          Math.round(r.competitorPlateFee)}
+                    </Num>
                   </td>
-                  <td style={{ ...td, fontSize: 12, color: "var(--lux-muted)" }}>
+                  <td style={{ ...soft, ...line }}>
                     {r.shippingIncluded === true ? "כולל" : r.shippingIncluded === false ? "לא כולל" : "—"}
                   </td>
-                  <td style={{ ...td, fontSize: 12, color: "var(--lux-muted)" }}>{r.leadTimeText ?? "—"}</td>
+                  <td style={{ ...soft, ...line }}>{r.leadTimeText ?? "—"}</td>
                 </tr>
               );
             })}
@@ -330,6 +439,13 @@ export default function SizeComparisonTable({
         הצד שלנו מחושב חי במחשבון, במשלוח ימי, לאותה כמות בדיוק. «מדויק» = המידה בקטלוג.
         «משוער» = מודל האומדן. «צריך מחיר מהמפעל» = האומדן סירב, ולא נמציא מספר במקומו.
         פער שלילי (ירוק) = אנחנו זולים מהם.
+        {origin === "IL" && (
+          <>
+            {" "}
+            <b style={{ color: "var(--lux-ink)" }}>שים לב:</b> מול ייצור בארץ ההשוואה היא מחיר מול זמן —
+            הם מספקים בשבועיים, אנחנו מייצרים בסין וזה כ-3 חודשים.
+          </>
+        )}
       </p>
     </div>
   );
