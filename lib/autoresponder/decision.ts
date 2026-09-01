@@ -542,6 +542,28 @@ export async function handleDecisionInbound(input: {
   if (subFlow === "awaiting_logo") {
     return handleLogoStage(ctx, input.text, input.hasMedia);
   }
+
+  /**
+   * A FILE is never a spec change — its caption is a label, not an order.
+   *
+   * Eleven_Four_jeans, 01/09 19:20: the customer sent his logo twice, and the
+   * second image carried the caption "logo black boxer -2". With only the text
+   * reaching this handler that classified as `custom_size`, the extractor
+   * "read" a colour count out of it, and the bot silently changed the order
+   * from 2 print colours to 1 and re-sent the entire opening block — quote,
+   * about-us, links — one minute after the customer had already received it.
+   * He answered "המחיר לא רלוונטי" and the lead is now LOST.
+   *
+   * `handleLogoStage` is the handler that already knows what to do with a
+   * file at this point in the funnel: acknowledge it, DM Eli, and PAUSE the
+   * bot so a human looks before anything else is sent. If the image turns out
+   * to be a competitor's quote rather than a logo, Eli sees that in the DM —
+   * a wrong label on an escalation costs nothing next to a wrong requote.
+   */
+  if (input.hasMedia && (subFlow === "awaiting_estimate_decision" || (!subFlow && stage === "INTAKE"))) {
+    return handleLogoStage(ctx, input.text, true);
+  }
+
   if (subFlow === "awaiting_estimate_decision") {
     return handleDecisionStage(ctx, input.text);
   }

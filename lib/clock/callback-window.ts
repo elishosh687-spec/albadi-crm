@@ -21,7 +21,7 @@ const WORK_START_HOUR = 9; // 09:00 inclusive
 const WORK_END_HOUR = 21;
 const MAX_ROLL_ITERATIONS = 14; // guard against pathological holiday stretches
 
-interface JerusalemParts {
+export interface JerusalemParts {
   year: number;
   month: number;
   day: number;
@@ -29,7 +29,7 @@ interface JerusalemParts {
   minute: number;
 }
 
-function jerusalemParts(d: Date): JerusalemParts {
+export function jerusalemParts(d: Date): JerusalemParts {
   const parts = new Intl.DateTimeFormat("en-US", {
     timeZone: JERUSALEM_TZ,
     hour12: false,
@@ -62,7 +62,7 @@ function jerusalemOffsetMs(utcMs: number): number {
 }
 
 // Build the UTC Date corresponding to a Jerusalem wall-clock time.
-function jerusalemWallClock(
+export function jerusalemWallClock(
   year: number,
   month: number,
   day: number,
@@ -80,7 +80,7 @@ function jerusalemWallClock(
 
 // Roll a Jerusalem calendar date forward N days (pure Y-M-D arithmetic via UTC
 // — no TZ involved, just month/year carry).
-function addCalendarDays(
+export function addCalendarDays(
   year: number,
   month: number,
   day: number,

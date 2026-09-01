@@ -13,6 +13,7 @@ import type { SalesContext } from "./context";
 import type { SalesClassification } from "./classify";
 import type { SalesStrategy } from "./strategy";
 import { SKILLS, SKILL_SETTING_KEY } from "./skills";
+import { proposeCallSlots, describeNow, type CallSlot } from "./slots";
 
 export interface ValidationReport {
   ok: boolean;
@@ -30,7 +31,9 @@ export function validateMessage(
   text: string,
   ctx: SalesContext,
   strategy: SalesStrategy,
-  maxWords = 60
+  maxWords = 60,
+  /** The only windows this turn may name. Empty = no hour may be named at all. */
+  allowedSlots: CallSlot[] = []
 ): ValidationReport {
   const violations: string[] = [];
   const trimmed = text.trim();
@@ -62,13 +65,39 @@ export function validateMessage(
     violations.push("מציעה הנחה — אסור");
   }
 
-  // No invented availability: times are allowed only when the strategy booked
-  // a call ON PURPOSE. (Real slot feeds arrive in a later phase; until then a
-  // suggested hour is a soft commitment Eli can keep, so it's allowed only on
-  // book_call goals.)
-  const hasTime = /\b\d{1,2}:\d{2}\b/.test(trimmed);
-  if (hasTime && strategy.goal !== "book_call" && strategy.goal !== "revive") {
+  // No invented availability. Two separate rules:
+  //   1. an hour may only appear when the strategy actually set out to book a
+  //      call, and
+  //   2. it must be one of the windows code computed for THIS moment.
+  // Rule 2 is what stops "היום ב-17:00" going out at 19:20 — the generator no
+  // longer chooses hours, it picks from a list, and anything else is rejected
+  // and regenerated (and failing that, the canned template is sent instead).
+  const times = [...trimmed.matchAll(/\b(\d{1,2}:\d{2})\b/g)].map((m) => m[1]);
+  if (times.length && strategy.goal !== "book_call" && strategy.goal !== "revive") {
     violations.push("מציעה שעה למרות שהיעד אינו קביעת שיחה");
+  } else if (times.length) {
+    // Hebrew text arrives with a maqaf (ב־11:00) where our labels use a plain
+    // hyphen; normalise before comparing or every legitimate slot is rejected.
+    const flat = trimmed.replace(/[\u05BE\u2010-\u2015\u2212]/g, "-").replace(/\s+/g, " ");
+    const allowedTimes = allowedSlots.map((s) => s.time);
+    for (const t of times) {
+      const norm = t.length === 4 ? `0${t}` : t;
+      if (!allowedTimes.includes(norm)) {
+        violations.push(`שעה שלא הוצעה לה: ${t} (מותר רק: ${allowedTimes.join(", ") || "אין"})`);
+      }
+    }
+    // The DAY has to match too. "היום ב-17:00" sent at 19:20 uses a legal hour
+    // on a legal (later) day — checking the clock alone would wave it through,
+    // which is the exact message that started this.
+    const dayMatched = allowedSlots.some((s) => {
+      const dayPart = s.label.split(" ב-")[0];
+      return flat.includes(dayPart) && flat.includes(s.time);
+    });
+    if (!dayMatched && !violations.some((v) => v.startsWith("שעה שלא"))) {
+      violations.push(
+        `היום לא תואם לשעה — מותר רק: ${allowedSlots.map((s) => s.label).join(" / ") || "אין"}`
+      );
+    }
   }
 
   if (/http|www\./.test(trimmed)) violations.push("קישור בהודעה — לא בשכבה הזאת");
@@ -76,13 +105,24 @@ export function validateMessage(
   return { ok: violations.length === 0, violations, wordCount: words.length };
 }
 
-function renderContext(ctx: SalesContext, strategy: SalesStrategy): string {
+function renderContext(
+  ctx: SalesContext,
+  strategy: SalesStrategy,
+  slots: CallSlot[],
+  now: Date
+): string {
   const lines = [
+    `עכשיו: ${describeNow(now)} (שעון ישראל)`,
+    slots.length
+      ? `חלונות פנויים לשיחה — השתמש בניסוח הזה מילה במילה, ואל תמציא שעה אחרת: ${slots.map((s) => `"${s.label}"`).join(" · ")}`
+      : "אין כרגע חלון פנוי להצעה — אל תנקוב בשום שעה.",
     `שם הלקוח: ${ctx.name ?? "לא ידוע"}`,
     `שלב: ${ctx.stage ?? "שאלון"}`,
-    ctx.quote.sent
-      ? `הצעה נשלחה: ₪${ctx.quote.totalIls?.toLocaleString() ?? "?"} לפני ${ctx.timing.hoursSinceLastCustomerMessage ?? "?"} שעות`
-      : "עוד לא נשלחה הצעה",
+    ctx.quote.supersededAtIso
+      ? "נשלחה ללקוח הצעה מעודכנת מחוץ לבוט (אלי שלח מחיר בעצמו) — אסור לנקוב בשום סכום, דבר על 'ההצעה ששלחנו' בלי מספר"
+      : ctx.quote.sent
+        ? `הצעה נשלחה: ₪${ctx.quote.totalIls?.toLocaleString() ?? "?"} לפני ${ctx.timing.hoursSinceLastCustomerMessage ?? "?"} שעות`
+        : "עוד לא נשלחה הצעה",
     strategy.informationToRequest.length
       ? `חסר ללקוח לשיחה: ${strategy.informationToRequest.join(", ")}`
       : "יש לו את כל הפרטים",
@@ -152,16 +192,25 @@ export async function generateMessage(
     })
     .join("\n\n");
 
+  const now = new Date();
+  // Real windows, computed per lead so two customers don't hear the same hour.
+  const slots = await proposeCallSlots(ctx.sid, now);
+
   const aimWords = Math.max(15, Math.round((S.setterMaxWords * 2) / 3));
   const system =
     "אתה כותב הודעת WhatsApp אחת בעברית עבור אלבדי — שקיות ממותגות לעסקים. " +
     "אתה לא סוגר עסקאות בצ'אט; ההצלחה שלך היא שיחת טלפון קבועה. " +
     `כללי סגנון: ${S.setterStyle} עד ${aimWords} מילים. ` +
-    "אסור להמציא מחירים, הנחות, מלאי או עובדות.\n\n" +
+    "אסור להמציא מחירים, הנחות, מלאי או עובדות. " +
+    // The customer can scroll up. Two nudges built from the same skeleton read
+    // as a mailing list, which is exactly what a personal message must not
+    // sound like — and it is the failure Eli named: "הוא לא כותב ללקוחות, הוא
+    // שולח תבניות".
+    "הלקוח רואה את כל ההודעות הקודמות שלנו — אל תחזור על אותו פתיח, אותו מבנה או אותו משפט סיום.\n\n" +
     `## הטקטיקות שלך לתור הזה:\n${skillBlocks}`;
 
   const user =
-    renderContext(ctx, strategy) +
+    renderContext(ctx, strategy, slots, now) +
     `\n\nניתוח: כוונה=${cls.intent}, סימן קנייה=${cls.buyingSignal}, מוכנות לשיחה=${cls.meetingReadiness}` +
     (cls.objectionType ? `, התנגדות=${cls.objectionType}` : "") +
     `\nיעד: ${strategy.goal}\nעשה: ${strategy.moves.join(" · ")}\nאל תעשה: ${strategy.avoid.join(" · ")}\n` +
@@ -183,7 +232,7 @@ export async function generateMessage(
     });
     const text = res?.message?.trim();
     if (!text) continue;
-    const validation = validateMessage(text, ctx, strategy, S.setterMaxWords);
+    const validation = validateMessage(text, ctx, strategy, S.setterMaxWords, slots);
     if (validation.ok) return { text, validation, attempts };
     feedback = `\n\nהניסיון הקודם נפסל: ${validation.violations.join("; ")}. תקן וכתוב מחדש.`;
     if (attempts === 2) return { text, validation, attempts };

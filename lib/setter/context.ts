@@ -19,8 +19,24 @@ export interface SalesContext {
   subFlow: string | null;
   quote: {
     sent: boolean;
+    /**
+     * The total the customer is actually holding — or null when we can't be
+     * sure, which is a state the writer must respect rather than fill in.
+     */
     totalIls: number | null;
     sentAtIso: string | null;
+    /**
+     * A newer customer-facing quote exists (a factory quote sent, or Eli
+     * pasting a price into the chat) that we can't reduce to one number.
+     *
+     * בתאל, 31/08: the bot's questionnaire auto-quote said ₪2,610; two hours
+     * later Eli sent her ₪4,470 and ₪5,800 by hand. For two days the setter
+     * opened every message with "בהצעה של ₪2,610" — a number she had stopped
+     * looking at, which reads as a machine talking to itself. When this is
+     * set, `totalIls` is deliberately null and the money guard in the
+     * validator then rejects ANY ₪ figure in the message.
+     */
+    supersededAtIso: string | null;
   };
   missingInformation: PrepItem[];
   timing: {
@@ -107,6 +123,8 @@ export async function buildSalesContext(sid: string): Promise<SalesContext | nul
   const hours = (d: Date | undefined | null) =>
     d ? Math.round(((Date.now() - d.getTime()) / 36e5) * 10) / 10 : null;
 
+  const supersededAtIso = await findNewerCustomerQuote(sid, latestQuote?.at ?? null);
+
   const prep = await computeCallPrep(sid);
   const dossier = await loadDossier(sid, lead.ghlContactId, lead.notes, lead.botSummary);
 
@@ -116,9 +134,12 @@ export async function buildSalesContext(sid: string): Promise<SalesContext | nul
     stage: lead.stage,
     subFlow: typeof q.subFlow === "string" ? q.subFlow : null,
     quote: {
-      sent: !!latestQuote || !!lead.quoteTotal,
-      totalIls: latestQuote?.totalIls ?? (lead.quoteTotal ? Number(lead.quoteTotal) || null : null),
+      sent: !!latestQuote || !!lead.quoteTotal || !!supersededAtIso,
+      totalIls: supersededAtIso
+        ? null
+        : latestQuote?.totalIls ?? (lead.quoteTotal ? Number(lead.quoteTotal) || null : null),
       sentAtIso: latestQuote?.at?.toISOString() ?? null,
+      supersededAtIso,
     },
     missingInformation: prep.missing,
     timing: {
@@ -135,6 +156,60 @@ export async function buildSalesContext(sid: string): Promise<SalesContext | nul
     lastCustomerMessage: lastIn?.text ?? null,
     dossier,
   };
+}
+
+
+/**
+ * Did anything newer than the bot's own auto-quote reach this customer?
+ *
+ * Two sources, because a real quote leaves two different traces: a row in
+ * `factory_quote_requests` with `sent_to_customer_at`, and — just as often —
+ * Eli pasting the quote into WhatsApp himself. Either one means the number in
+ * `bot_quotes` is history.
+ *
+ * We deliberately do NOT try to work out which of the newer amounts is "the"
+ * price: Eli routinely sends two quantities as options, and picking one would
+ * be guessing at the customer's expense. Knowing that we don't know is the
+ * useful output.
+ */
+async function findNewerCustomerQuote(
+  sid: string,
+  botQuoteAt: Date | null
+): Promise<string | null> {
+  const after = botQuoteAt ?? new Date(0);
+  let newest: Date | null = null;
+  const consider = (v: unknown) => {
+    if (!v) return;
+    const d = v instanceof Date ? v : new Date(String(v));
+    if (Number.isNaN(d.getTime()) || d.getTime() <= after.getTime()) return;
+    if (!newest || d > newest) newest = d;
+  };
+
+  try {
+    const f = await db.execute(sql`
+      SELECT max(sent_to_customer_at) AS at
+      FROM factory_quote_requests
+      WHERE trim(manychat_sub_id) = ${sid.trim()}
+        AND sent_to_customer_at IS NOT NULL
+        AND deleted_at IS NULL`);
+    consider((((f as any).rows ?? f) as any[])[0]?.at);
+  } catch (e) {
+    console.warn("[setter.context] factory quote read failed", e);
+  }
+
+  try {
+    const m = await db.execute(sql`
+      SELECT max(received_at) AS at
+      FROM messages
+      WHERE manychat_sub_id = ${sid.trim()}
+        AND direction = 'out' AND sender = 'eli'
+        AND text ILIKE '%הצעת מחיר%' AND text LIKE '%₪%'`);
+    consider((((m as any).rows ?? m) as any[])[0]?.at);
+  } catch (e) {
+    console.warn("[setter.context] manual quote read failed", e);
+  }
+
+  return newest ? (newest as Date).toISOString() : null;
 }
 
 /**

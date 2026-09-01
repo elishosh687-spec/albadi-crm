@@ -9,6 +9,13 @@
  * Deliberately TS constants, not files-on-disk and not a vector store: the
  * router picks 1-3 by deterministic rules, and at this corpus size retrieval
  * infrastructure would add latency without adding information.
+ *
+ * ⚠️ Never put a literal clock time in a guidance string, not even as an
+ * example. The generator copies examples verbatim: "היום ב-17:00 או מחר
+ * ב-11:00" sat in the appointment skill and went out to 22 customers in three
+ * days, six of them after that hour had already passed. Hours come from
+ * `proposeCallSlots` and nowhere else. Same rule applies to Eli's edited
+ * copies in the settings screen.
  */
 
 export type SkillId =
@@ -28,7 +35,7 @@ export const SKILLS: Record<SkillId, { title: string; guidance: string }> = {
     title: "קביעת שיחה",
     guidance:
       "היעד: שיחת טלפון בזמן מוגדר, לא 'נדבר מתישהו'. " +
-      "הצע חלון קונקרטי אחד או שניים (למשל 'היום ב-17:00 או מחר ב-11:00') — אף פעם לא 'מתי נוח לך?' פתוח, זה מעביר את כל העבודה ללקוח. " +
+      "הצע חלון קונקרטי אחד או שניים מתוך רשימת החלונות הפנויים שקיבלת, בניסוח שלה מילה במילה — לעולם אל תמציא שעה משלך, ואף פעם לא 'מתי נוח לך?' פתוח, שמעביר את כל העבודה ללקוח. " +
       "אם חסר ללקוח מידע לשיחה (מידות/לוגו/כמות) — אמור בקצרה מה כדאי שיהיה מולו, כדי שהשיחה תהיה שווה לשני הצדדים. " +
       "מסגר את השיחה כקצרה וקלה: 'שיחה של 10 דקות'. אל תציג אותה כ'פגישה' כבדה.",
   },
@@ -70,7 +77,7 @@ export const SKILLS: Record<SkillId, { title: string; guidance: string }> = {
   callback_scheduling: {
     title: "קיבוע דחייה לזמן",
     guidance:
-      "כשלקוח אומר 'דבר איתי שבוע הבא' / 'אחרי החג' — זו הסכמה, אל תתווכח איתה. קבע אותה: הפוך את הדחייה לזמן מוגדר ('סגור. יום שני ב-11:00 טוב?'). " +
+      "כשלקוח אומר 'דבר איתי שבוע הבא' / 'אחרי החג' — זו הסכמה, אל תתווכח איתה. קבע אותה: הפוך את הדחייה לזמן מוגדר, מתוך רשימת החלונות הפנויים שקיבלת ('סגור, ואם מתאים לך גם החלון הזה — נסגור עליו'). " +
       "דחייה בלי תאריך היא דחייה לנצח; דחייה עם תאריך היא פגישה. " +
       "אשר בקצרה מה יהיה בשיחה כדי שיגיע מוכן.",
   },
