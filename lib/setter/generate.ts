@@ -113,9 +113,15 @@ function renderContext(
 ): string {
   const lines = [
     `עכשיו: ${describeNow(now)} (שעון ישראל)`,
-    slots.length
-      ? `חלונות פנויים לשיחה — השתמש בניסוח הזה מילה במילה, ואל תמציא שעה אחרת: ${slots.map((s) => `"${s.label}"`).join(" · ")}`
-      : "אין כרגע חלון פנוי להצעה — אל תנקוב בשום שעה.",
+    // Only a turn that set out to book a call may see the windows at all.
+    // Listing them on every turn tempts the writer into naming an hour when
+    // the goal was to answer a question — which the validator then rejects,
+    // costing the customer a real reply.
+    strategy.goal !== "book_call" && strategy.goal !== "revive"
+      ? "אל תנקוב בשום שעה בהודעה הזאת."
+      : slots.length
+        ? `חלונות פנויים לשיחה — השתמש בניסוח הזה מילה במילה, ואל תמציא שעה אחרת: ${slots.map((s) => `"${s.label}"`).join(" · ")}`
+        : "אין כרגע חלון פנוי להצעה — אל תנקוב בשום שעה.",
     `שם הלקוח: ${ctx.name ?? "לא ידוע"}`,
     `שלב: ${ctx.stage ?? "שאלון"}`,
     ctx.quote.supersededAtIso
