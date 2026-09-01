@@ -914,6 +914,56 @@ remaining%'` and leaves genuine failures ("returned no text", timeouts) alone �
 then POST `/api/bot/process-recordings` with `CALL_TRIGGER_SECRET`. Verified
 2026-08-17: 8 rows re-queued, all 8 transcribed → analyzed → posted.
 
+### ⚠️ Never put a concrete value in a prompt as an "example"
+
+The appointment skill carried *"(למשל 'היום ב-17:00 או מחר ב-11:00')"*. The
+generator copied it verbatim: 30/08–01/09/2026, **20 of 26** messages naming an
+hour named exactly those two, to 18 customers, and **6 offered "היום ב-17:00"
+after 17:00 had passed** (one at 19:20). An example is indistinguishable from
+an instruction, and a value that must also be TRUE RIGHT NOW is doubly wrong —
+the model has no clock.
+
+Hours now come from [lib/setter/slots.ts](lib/setter/slots.ts)
+(`proposeCallSlots`): real Israel working hours, never within 90 minutes, never
+on a Sabbath or holiday, one slot per day over consecutive working days, and
+**shifted per lead** so two customers don't hear the same slot. The generator
+gets the exact strings, sees them ONLY when the goal is `book_call`/`revive`,
+and `validateMessage` rejects any hour — **and any day** — that wasn't offered.
+Validating the hour alone is not enough: "היום ב-17:00" at 19:20 uses an hour
+that is perfectly legal tomorrow.
+
+**Two things that make this class of fix fail silently:**
+1. **The stored copy shadows the constant.** Every skill has an editable twin in
+   `app_config → bot.settings`; fixing `skills.ts` alone changes nothing.
+   `scripts/migrate-setter-skill-hours.ts` rewrites only text still matching the
+   old default and reports anything hand-edited.
+2. A rejected message is not sent — both send paths honour `validation.ok` and
+   fall back to the canned template — so a too-strict rule costs the customer a
+   real reply, not a wrong one. That is why the windows are hidden on non-booking
+   turns.
+
+### ⚠️ The setter must never name a superseded amount
+
+`buildSalesContext` read `bot_quotes` — the questionnaire's own auto-estimate.
+When Eli sends a real quote afterwards (a `factory_quote_requests` row with
+`sent_to_customer_at`, or him pasting a price into WhatsApp) that number is
+history. בתאל got "בהצעה של ₪2,610" for two days after Eli had sent her ₪4,470
+and ₪5,800. `findNewerCustomerQuote` now checks both sources; when something
+newer exists, `quote.totalIls` is **null on purpose** (he routinely sends two
+quantities as options, so picking one would be a guess) and the money guard in
+`validateMessage` then rejects any ₪ figure in the message.
+
+### ⚠️ A file is never a spec change
+
+`handleDecisionInbound` passed only the caption to `handleDecisionStage`, so an
+image's caption was classified as text. Eleven_Four_jeans sent his logo with the
+caption "logo black boxer -2" — the extractor "read" a colour count out of it,
+the bot cut the order from 2 print colours to 1 and re-sent the whole opening
+block (quote + about-us + links) one minute after he had received it. He
+answered "המחיר לא רלוונטי" and the lead is LOST. Media at the decision stage
+now routes to `handleLogoStage` like everywhere else: acknowledge, DM Eli, pause
+the bot. A wrong label on an escalation costs nothing next to a wrong requote.
+
 ### What is configurable (settings screen, `bot.settings`)
 
 ~30 fields across 10 groups, including: all editable customer copy, the
