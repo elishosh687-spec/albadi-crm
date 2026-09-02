@@ -1827,6 +1827,20 @@ details anywhere.
    sum to the printed total (30/40/30 → 6,593.31 + 8,791.08 + **6,593.32**).
    Same rule as `customerRoundedTotalIls` / `splitCustomerView`.
 
+**Default since 2026-09-02: ON, at `30_70`** (`paymentTerms.includeByDefault`
++ `defaultPlanId` in `factory_pricing`). This REVERSES the 2026-08-03 "default
+off" — Eli asked for it back after quotes went out bare for two weeks. It
+governs BOTH sending and simply viewing a PDF: with no `?plan=`, the route
+resolves the settings plan, so an ad-hoc view now prints the block too (and the
+stale finalize Blob is never served, since `renderPlan` is no longer null).
+
+⚠️ The toggle used to be a lie on the calculator screen: it hard-coded
+`NO_PAYMENT_PLAN_ID` and POSTed it, and an EXPLICIT "none" is read as a
+deliberate refusal — so the setting could not win no matter what it said.
+`usePaymentPlanDefault` now seeds the picker from the config (a manual pick is
+never overwritten when the fetch lands). The quotes list already read the
+config, which is why only quotes sent from the calculator came out bare.
+
 **Plans:** `50_50` · `30_70` · `30_40_30` (30% התחלה / 40% לפני משלוח / 30%
 בהגעה) + `custom_NN`. Default in `factory_pricing.paymentTerms.defaultPlanId`
 (backfilled by `normalizeConfig` — no migration), edited in the widget settings
