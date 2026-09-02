@@ -137,6 +137,16 @@ export function QuotesHistoryView({ apiToken }: { apiToken: string }) {
   const [estimateRow, setEstimateRow] = useState<ApiQuoteRow | null>(null);
   const [finalizing, setFinalizing] = useState<ApiQuoteRow | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  /**
+   * Rows ticked in the reminder panels.
+   *
+   * One set across all three panels — ids are unique, and each panel's
+   * "בחר הכל" only ever touches its own ids. Eli works these lists in a burst
+   * ("סימנתי הכל, ראיתי הכל"), and doing it one row at a time was the whole
+   * complaint.
+   */
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulkBusy, setBulkBusy] = useState<string | null>(null);
   // Payment-plan picker shown before a send (Eli 2026-07-28).
   const [payModal, setPayModal] = useState<
     { row: ApiQuoteRow; planId: string; customPct: string } | null
@@ -464,6 +474,66 @@ export function QuotesHistoryView({ apiToken }: { apiToken: string }) {
       setBusyId(null);
     }
   }
+
+  const toggleRow = (id: string) =>
+    setSelected((cur) => {
+      const next = new Set(cur);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+
+  const toggleAll = (ids: string[], on: boolean) =>
+    setSelected((cur) => {
+      const next = new Set(cur);
+      for (const id of ids) {
+        if (on) next.add(id);
+        else next.delete(id);
+      }
+      return next;
+    });
+
+  /**
+   * Apply one reminder action to every ticked row, then refresh ONCE.
+   *
+   * Deliberately sequential: these are writes against the same table and the
+   * lists are short. It also keeps the progress counter honest — "3/12" means
+   * three are actually done.
+   */
+  async function runBulk(
+    label: string,
+    rows: ApiQuoteRow[],
+    path: (r: ApiQuoteRow) => string,
+    body: Record<string, unknown>
+  ) {
+    if (!rows.length) return;
+    if (!confirm(`${label} — ${rows.length} הצעות. להמשיך?`)) return;
+    let done = 0;
+    let failed = 0;
+    for (const r of rows) {
+      setBulkBusy(`${label} ${done + 1}/${rows.length}`);
+      try {
+        const res = await fetch(
+          `/api/widget/factory/${r.id}/${path(r)}?widget_token=${encodeURIComponent(apiToken)}`,
+          { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }
+        );
+        const j = await res.json().catch(() => ({}));
+        if (j?.ok) done++;
+        else failed++;
+      } catch {
+        failed++;
+      }
+    }
+    setBulkBusy(null);
+    setSelected(new Set());
+    await refresh();
+    if (failed) alert(`${label}: ${done} הצליחו, ${failed} נכשלו.`);
+  }
+
+  const bulkMarkSent = (rows: ApiQuoteRow[]) =>
+    runBulk("סמן כנשלח", rows, () => "mark-sent", { sent: true });
+  const bulkDismiss = (rows: ApiQuoteRow[]) =>
+    runBulk("הסר מהתזכורת", rows, () => "dismiss-reminder", { dismissed: true });
 
   // Remove a quote from the "צריך לשלוח" reminder without sending/deleting — a
   // dead lead Eli will never price/send. Persistent (reminder_dismissed_at).
@@ -1044,41 +1114,52 @@ export function QuotesHistoryView({ apiToken }: { apiToken: string }) {
         )}
 
         {needsPricing.length > 0 && (
-          <div className="rounded-lg border border-sky-500/40 bg-sky-500/10 p-3 space-y-1.5" dir="rtl">
-            <div className="text-xs font-semibold text-sky-400 flex items-center gap-1.5">
-              📝 בקשות מחיר שממתינות לתמחור ({needsPricing.length})
-              {needsPricing.some((r) => r.createdBy === "sales") && (
-                <span className="text-[10px] px-1.5 py-0.5 rounded bg-sky-500/20">
-                  {needsPricing.filter((r) => r.createdBy === "sales").length} מאיש מכירות
-                </span>
-              )}
-            </div>
-            <p className="text-[10px] text-muted-foreground">
-              מפרטים ללא מחיר — צריך לתמחר (מחשבון) ואז לשלוח ללקוח או למפעל.
-            </p>
-            <ul className="space-y-1">
-              {needsPricing.slice(0, 12).map((r) => (
-                <li
-                  key={r.id}
-                  className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border/60 bg-background/40 px-2.5 py-1.5"
-                >
-                  <div className="flex items-center gap-2 min-w-0 flex-1 flex-wrap">
-                    <span className="text-[11px] text-muted-foreground tabular-nums shrink-0">
-                      {fmtDate(r.createdAt)}
+          <AlertShell
+            tone="sky"
+            title={
+              <>
+                📝 בקשות מחיר שממתינות לתמחור ({needsPricing.length})
+                {needsPricing.some((r) => r.createdBy === "sales") && (
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-sky-500/20">
+                    {needsPricing.filter((r) => r.createdBy === "sales").length} מאיש מכירות
+                  </span>
+                )}
+              </>
+            }
+            hint="מפרטים ללא מחיר — צריך לתמחר (מחשבון) ואז לשלוח ללקוח או למפעל."
+            ids={needsPricing.map((r) => r.id)}
+            selectedIds={needsPricing.filter((r) => selected.has(r.id)).map((r) => r.id)}
+            onToggleAll={(on) => toggleAll(needsPricing.map((r) => r.id), on)}
+            onClear={() => setSelected(new Set())}
+            bulkBusy={bulkBusy}
+            actions={
+              <BulkButton tone="bad" onClick={() => bulkDismiss(needsPricing.filter((r) => selected.has(r.id)))}>
+                הסר מהתזכורת
+              </BulkButton>
+            }
+          >
+            {needsPricing.map((r) => (
+              <AlertRow
+                key={r.id}
+                tone="sky"
+                checked={selected.has(r.id)}
+                onCheck={() => toggleRow(r.id)}
+                name={r.name ?? r.leadSid.slice(0, 20)}
+                metaBadge={
+                  r.createdBy === "sales" ? (
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-sky-500/15 text-sky-400 shrink-0">
+                      בקשה מאיש מכירות
                     </span>
-                    <span className="text-[11px] font-mono text-muted-foreground shrink-0">
-                      {r.quotationNo ?? r.id.slice(-6)}
-                    </span>
-                    <span className="text-sm font-medium truncate min-w-0">
-                      {r.name ?? r.leadSid.slice(0, 20)}
-                    </span>
-                    {r.createdBy === "sales" && (
-                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-sky-500/15 text-sky-400 shrink-0">
-                        בקשה מאיש מכירות
-                      </span>
-                    )}
-                  </div>
-                  <div className="flex flex-wrap items-center gap-0.5 shrink-0 max-w-full">
+                  ) : undefined
+                }
+                meta={
+                  <>
+                    <span className="tabular-nums">{fmtDate(r.createdAt)}</span>
+                    <span className="font-mono">{r.quotationNo ?? r.id.slice(-6)}</span>
+                  </>
+                }
+                actions={
+                  <>
                     <button
                       type="button"
                       onClick={() => setSpecRow(r)}
@@ -1106,63 +1187,69 @@ export function QuotesHistoryView({ apiToken }: { apiToken: string }) {
                     >
                       <X className="size-3.5" />
                     </button>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          </div>
+                  </>
+                }
+              />
+            ))}
+          </AlertShell>
         )}
 
         {needsSending.length > 0 && (
-          <div className="rounded-lg border border-red-500/40 bg-red-500/10 p-3 space-y-1.5" dir="rtl">
-            <div className="text-xs font-semibold text-red-400 flex items-center gap-1.5">
-              📤 המפעל ענה — צריך לשלוח ללקוח ({needsSending.length})
-            </div>
-            <p className="text-[10px] text-muted-foreground">
-              הצעות שהמפעל החזיר וטרם נשלחו ללקוח. <b>סופי</b> = מוכן לשליחה; <b>התקבל</b> = צריך לתמחר (finalize) ואז לשלוח.
-            </p>
-            <ul className="space-y-1">
-              {needsSending.slice(0, 12).map((r) => (
-                <li
-                  key={r.id}
-                  className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border/60 bg-background/40 px-2.5 py-1.5"
-                >
-                  <div className="flex items-center gap-2 min-w-0 flex-1 flex-wrap">
-                    {r.status === "finalized" && (
-                      <label
-                        className="shrink-0 inline-flex items-center gap-1 cursor-pointer text-[10px] text-muted-foreground hover:text-emerald-400"
-                        title="סמן כנשלח ידנית ללקוח (בלי לשלוח מהמערכת)"
-                      >
-                        <input
-                          type="checkbox"
-                          checked={false}
-                          disabled={busyId === r.id}
-                          onChange={() => handleMarkSent(r)}
-                          className="accent-emerald-500"
-                        />
-                        שלחתי כבר
-                      </label>
-                    )}
-                    <span className="text-[11px] text-muted-foreground tabular-nums shrink-0">
-                      {fmtDate(r.createdAt)}
-                    </span>
-                    <span className="text-[11px] font-mono text-muted-foreground shrink-0">
-                      {r.quotationNo ?? r.id.slice(-6)}
-                    </span>
-                    <span className="text-sm font-medium truncate min-w-0">
-                      {r.name ?? r.leadSid.slice(0, 20)}
-                    </span>
-                    <span
-                      className={`text-[10px] px-1.5 py-0.5 rounded shrink-0 ${
-                        r.status === "finalized"
-                          ? "bg-emerald-500/15 text-emerald-400"
-                          : "bg-amber-500/15 text-amber-400"
-                      }`}
-                    >
-                      {r.status === "finalized" ? "סופי — מוכן לשליחה" : "התקבל — צריך לתמחר"}
-                    </span>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-0.5 shrink-0 max-w-full">
+          <AlertShell
+            tone="red"
+            title={<>📤 המפעל ענה — צריך לשלוח ללקוח ({needsSending.length})</>}
+            hint="הצעות שהמפעל החזיר וטרם נשלחו ללקוח. «סופי» = מוכן לשליחה; «התקבל» = צריך לתמחר ואז לשלוח."
+            ids={needsSending.map((r) => r.id)}
+            selectedIds={needsSending.filter((r) => selected.has(r.id)).map((r) => r.id)}
+            onToggleAll={(on) => toggleAll(needsSending.map((r) => r.id), on)}
+            onClear={() => setSelected(new Set())}
+            bulkBusy={bulkBusy}
+            actions={
+              <>
+                {/* Only finalized rows can be "already sent" — a quote with no
+                    price was never sent to anyone. */}
+                {needsSending.some((r) => selected.has(r.id) && r.status === "finalized") && (
+                  <BulkButton
+                    tone="good"
+                    onClick={() =>
+                      bulkMarkSent(needsSending.filter((r) => selected.has(r.id) && r.status === "finalized"))
+                    }
+                  >
+                    שלחתי כבר
+                  </BulkButton>
+                )}
+                <BulkButton tone="bad" onClick={() => bulkDismiss(needsSending.filter((r) => selected.has(r.id)))}>
+                  הסר מהתזכורת
+                </BulkButton>
+              </>
+            }
+          >
+            {needsSending.map((r) => (
+              <AlertRow
+                key={r.id}
+                tone="red"
+                checked={selected.has(r.id)}
+                onCheck={() => toggleRow(r.id)}
+                name={r.name ?? r.leadSid.slice(0, 20)}
+                metaBadge={
+                  <span
+                    className={`text-[10px] px-1.5 py-0.5 rounded shrink-0 ${
+                      r.status === "finalized"
+                        ? "bg-emerald-500/15 text-emerald-400"
+                        : "bg-amber-500/15 text-amber-400"
+                    }`}
+                  >
+                    {r.status === "finalized" ? "סופי — מוכן לשליחה" : "התקבל — צריך לתמחר"}
+                  </span>
+                }
+                meta={
+                  <>
+                    <span className="tabular-nums">{fmtDate(r.createdAt)}</span>
+                    <span className="font-mono">{r.quotationNo ?? r.id.slice(-6)}</span>
+                  </>
+                }
+                actions={
+                  <>
                     <button
                       type="button"
                       onClick={() => (r.finalPricing ? setOpened(r) : setSpecRow(r))}
@@ -1173,15 +1260,26 @@ export function QuotesHistoryView({ apiToken }: { apiToken: string }) {
                       <Eye className="size-3.5" />
                     </button>
                     {r.status === "finalized" && (
-                      <button
-                        type="button"
-                        onClick={() => handleSendWhatsApp(r)}
-                        disabled={busyId === r.id}
-                        title="שלח את ההצעה ללקוח ב-WhatsApp"
-                        className="size-7 rounded grid place-items-center text-emerald-400 hover:bg-emerald-500/10 disabled:opacity-50"
-                      >
-                        {busyId === r.id ? <Loader2 className="size-3.5 animate-spin" /> : <MessageCircle className="size-3.5" />}
-                      </button>
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => handleSendWhatsApp(r)}
+                          disabled={busyId === r.id}
+                          title="שלח את ההצעה ללקוח ב-WhatsApp"
+                          className="size-7 rounded grid place-items-center text-emerald-400 hover:bg-emerald-500/10 disabled:opacity-50"
+                        >
+                          {busyId === r.id ? <Loader2 className="size-3.5 animate-spin" /> : <MessageCircle className="size-3.5" />}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleMarkSent(r)}
+                          disabled={busyId === r.id}
+                          title="סמן כנשלח ידנית (בלי לשלוח מהמערכת)"
+                          className="size-7 rounded grid place-items-center text-muted-foreground hover:text-emerald-400 hover:bg-emerald-500/10 disabled:opacity-50"
+                        >
+                          <Check className="size-3.5" />
+                        </button>
+                      </>
                     )}
                     <button
                       type="button"
@@ -1192,55 +1290,49 @@ export function QuotesHistoryView({ apiToken }: { apiToken: string }) {
                     >
                       <X className="size-3.5" />
                     </button>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          </div>
+                  </>
+                }
+              />
+            ))}
+          </AlertShell>
         )}
 
         {unsentDrafts.length > 0 && (
-          <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 space-y-1.5" dir="rtl">
-            <div className="text-xs font-semibold text-amber-400 flex items-center gap-1.5">
-              🔔 טיוטות שטרם נשלחו ללקוח ({unsentDrafts.length})
-            </div>
-            <p className="text-[10px] text-muted-foreground">
-              אומדנים שחישבת אך עוד לא נשלחו — שלח ללקוח או אשר ושלח למפעל.
-            </p>
-            <ul className="space-y-1">
-              {unsentDrafts.slice(0, 12).map((r) => (
-                <li
-                  key={r.id}
-                  className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border/60 bg-background/40 px-2.5 py-1.5"
-                >
-                  <div className="flex items-center gap-2 min-w-0 flex-1 flex-wrap">
-                    <label
-                      className="shrink-0 inline-flex items-center gap-1 cursor-pointer text-[10px] text-muted-foreground hover:text-emerald-400"
-                      title="סמן כנשלח ידנית ללקוח (בלי לשלוח מהמערכת)"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={false}
-                        disabled={busyId === r.id}
-                        onChange={() => handleMarkSent(r)}
-                        className="accent-emerald-500"
-                      />
-                      שלחתי כבר
-                    </label>
-                    <span className="text-[11px] text-muted-foreground tabular-nums shrink-0">
-                      {fmtDate(r.createdAt)}
-                    </span>
-                    <span className="text-[11px] font-mono text-muted-foreground shrink-0">
-                      {r.quotationNo ?? r.id.slice(-6)}
-                    </span>
-                    <span className="text-sm font-medium truncate min-w-0">
-                      {r.name ?? r.leadSid.slice(0, 20)}
-                    </span>
-                    <span className="text-[11px] tabular-nums text-muted-foreground shrink-0" title="מחיר משוער">
-                      ~{fmtMoney(displayTotal(r.finalPricing as Record<string, unknown>))}
-                    </span>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-0.5 shrink-0 max-w-full">
+          <AlertShell
+            tone="amber"
+            title={<>🔔 טיוטות שטרם נשלחו ללקוח ({unsentDrafts.length})</>}
+            hint="אומדנים שחישבת אך עוד לא נשלחו — שלח ללקוח או אשר ושלח למפעל."
+            ids={unsentDrafts.map((r) => r.id)}
+            selectedIds={unsentDrafts.filter((r) => selected.has(r.id)).map((r) => r.id)}
+            onToggleAll={(on) => toggleAll(unsentDrafts.map((r) => r.id), on)}
+            onClear={() => setSelected(new Set())}
+            bulkBusy={bulkBusy}
+            actions={
+              <BulkButton tone="good" onClick={() => bulkMarkSent(unsentDrafts.filter((r) => selected.has(r.id)))}>
+                שלחתי כבר
+              </BulkButton>
+            }
+          >
+            {unsentDrafts.map((r) => (
+              <AlertRow
+                key={r.id}
+                tone="amber"
+                checked={selected.has(r.id)}
+                onCheck={() => toggleRow(r.id)}
+                name={r.name ?? r.leadSid.slice(0, 20)}
+                metaBadge={
+                  <span className="tabular-nums text-foreground/80" title="מחיר משוער">
+                    ~{fmtMoney(displayTotal(r.finalPricing as Record<string, unknown>))}
+                  </span>
+                }
+                meta={
+                  <>
+                    <span className="tabular-nums">{fmtDate(r.createdAt)}</span>
+                    <span className="font-mono">{r.quotationNo ?? r.id.slice(-6)}</span>
+                  </>
+                }
+                actions={
+                  <>
                     <button
                       type="button"
                       onClick={() => (r.finalPricing ? setOpened(r) : setSpecRow(r))}
@@ -1259,11 +1351,20 @@ export function QuotesHistoryView({ apiToken }: { apiToken: string }) {
                     >
                       {busyId === r.id ? <Loader2 className="size-3.5 animate-spin" /> : <MessageCircle className="size-3.5" />}
                     </button>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          </div>
+                    <button
+                      type="button"
+                      onClick={() => handleMarkSent(r)}
+                      disabled={busyId === r.id}
+                      title="סמן כנשלח ידנית (בלי לשלוח מהמערכת)"
+                      className="size-7 rounded grid place-items-center text-muted-foreground hover:text-emerald-400 hover:bg-emerald-500/10 disabled:opacity-50"
+                    >
+                      <Check className="size-3.5" />
+                    </button>
+                  </>
+                }
+              />
+            ))}
+          </AlertShell>
         )}
 
         <div className="flex gap-2 flex-wrap">
@@ -1783,6 +1884,161 @@ function DraftVsFactoryStrip({ rows }: { rows: ApiQuoteRow[] }) {
         })}
       </div>
     </div>
+  );
+}
+
+
+/**
+ * The reminder panels — one shell, three uses.
+ *
+ * They used to be three hand-rolled <ul>s of flex-wrap rows, so every row
+ * wrapped at a different point and the whole thing read as a pile (Eli 02/09:
+ * "זה רשימה נערמת"). Now every row is the same two-line block on a fixed grid,
+ * the list scrolls instead of silently cutting off at 12, and each panel can
+ * be worked in one pass: tick "בחל הכל", then one action for the lot.
+ */
+const TONES = {
+  sky: { border: "border-sky-500/40", bg: "bg-sky-500/10", text: "text-sky-400", accent: "accent-sky-500" },
+  red: { border: "border-red-500/40", bg: "bg-red-500/10", text: "text-red-400", accent: "accent-red-500" },
+  amber: { border: "border-amber-500/40", bg: "bg-amber-500/10", text: "text-amber-400", accent: "accent-amber-500" },
+} as const;
+
+function AlertShell({
+  tone,
+  title,
+  hint,
+  ids,
+  selectedIds,
+  onToggleAll,
+  onClear,
+  bulkBusy,
+  actions,
+  children,
+}: {
+  tone: keyof typeof TONES;
+  title: React.ReactNode;
+  hint: string;
+  ids: string[];
+  selectedIds: string[];
+  onToggleAll: (on: boolean) => void;
+  onClear: () => void;
+  bulkBusy: string | null;
+  /** Bulk buttons — rendered only while something is ticked. */
+  actions?: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  const t = TONES[tone];
+  const allOn = ids.length > 0 && selectedIds.length === ids.length;
+  return (
+    <div className={`rounded-lg border ${t.border} ${t.bg} p-3 space-y-2`} dir="rtl">
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <div className={`text-xs font-semibold ${t.text} flex items-center gap-1.5`}>{title}</div>
+        <label className="inline-flex items-center gap-1.5 cursor-pointer text-[11px] text-muted-foreground hover:text-foreground">
+          <input
+            type="checkbox"
+            checked={allOn}
+            onChange={(e) => onToggleAll(e.target.checked)}
+            className={`${t.accent} size-3.5`}
+          />
+          בחר הכל
+        </label>
+      </div>
+      <p className="text-[10px] text-muted-foreground">{hint}</p>
+
+      {selectedIds.length > 0 && (
+        <div className="flex items-center gap-2 flex-wrap rounded-md border border-border/60 bg-background/60 px-2.5 py-1.5">
+          <span className="text-[11px] font-medium tabular-nums">{selectedIds.length} מסומנות</span>
+          {bulkBusy ? (
+            <span className="text-[11px] text-muted-foreground inline-flex items-center gap-1.5">
+              <Loader2 className="size-3 animate-spin" />
+              {bulkBusy}
+            </span>
+          ) : (
+            <>
+              {actions}
+              <button
+                type="button"
+                onClick={onClear}
+                className="text-[11px] px-2 py-1 rounded-md border border-border text-muted-foreground hover:bg-secondary"
+              >
+                נקה בחירה
+              </button>
+            </>
+          )}
+        </div>
+      )}
+
+      <ul className="space-y-1 max-h-80 overflow-y-auto">{children}</ul>
+    </div>
+  );
+}
+
+function BulkButton({
+  onClick,
+  children,
+  tone = "neutral",
+}: {
+  onClick: () => void;
+  children: React.ReactNode;
+  tone?: "neutral" | "good" | "bad";
+}) {
+  const cls =
+    tone === "good"
+      ? "border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/10"
+      : tone === "bad"
+        ? "border-red-500/40 text-red-400 hover:bg-red-500/10"
+        : "border-border text-muted-foreground hover:bg-secondary";
+  return (
+    <button type="button" onClick={onClick} className={`text-[11px] px-2 py-1 rounded-md border ${cls}`}>
+      {children}
+    </button>
+  );
+}
+
+/** One reminder row: tick · two lines of detail · the row's own actions. */
+function AlertRow({
+  tone,
+  checked,
+  onCheck,
+  name,
+  meta,
+  metaBadge,
+  actions,
+}: {
+  tone: keyof typeof TONES;
+  checked: boolean;
+  onCheck: () => void;
+  name: string;
+  meta: React.ReactNode;
+  /** Price / status — on the second line, so the customer name keeps the full
+   *  width of the row. On a phone anything sharing that line squeezed the name
+   *  down to "שלמה …". */
+  metaBadge?: React.ReactNode;
+  actions: React.ReactNode;
+}) {
+  return (
+    <li
+      className={`flex items-center gap-2 rounded-md border px-2.5 py-2 transition-colors ${
+        checked ? "border-border bg-background/70" : "border-border/60 bg-background/40"
+      }`}
+    >
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={onCheck}
+        className={`${TONES[tone].accent} size-3.5 shrink-0`}
+      />
+      <div className="min-w-0 flex-1">
+        <div className="text-sm font-medium truncate">{name}</div>
+        {/* wrap as whole chips — without the nowrap the date and quote number
+            get squeezed to a character per line next to a status badge */}
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10.5px] text-muted-foreground [&_span]:whitespace-nowrap">
+          {meta}
+          {metaBadge}
+        </div>
+      </div>
+      <div className="flex items-center gap-0.5 shrink-0">{actions}</div>
+    </li>
   );
 }
 
