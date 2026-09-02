@@ -748,12 +748,18 @@ export function QuotesHistoryView({ apiToken }: { apiToken: string }) {
               <Sparkles className="size-3.5" />
             </button>
           )}
-          {r.pdfUrl && (
+          {/* The PDF the CUSTOMER gets — always through the route, never the
+              stored Blob. That Blob was rendered at finalize time, before any
+              payment plan existed, so opening it showed a quote with no
+              schedule and no bank details while the sent one had them (Eli
+              02/09: "אני מציג את ה-PDF ולא רואה תנאי ופרטי תשלום"). The route
+              re-renders with the current terms. */}
+          {(r.pdfUrl || r.finalPricing) && (
             <a
-              href={r.pdfUrl}
+              href={`/api/factory/${r.id}/pdf`}
               target="_blank"
               rel="noopener noreferrer"
-              title="הורד PDF"
+              title="ה-PDF שהלקוח מקבל (כולל תנאי תשלום)"
               className="size-7 rounded grid place-items-center text-muted-foreground hover:text-foreground hover:bg-secondary"
             >
               <Download className="size-3.5" />
