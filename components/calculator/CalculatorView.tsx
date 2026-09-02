@@ -94,6 +94,38 @@ const r2 = (n: number) => Math.round(n * 100) / 100;
 const ils = (n: number) =>
   n.toLocaleString("he-IL", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+
+/**
+ * The payment plan the picker should start on.
+ *
+ * The settings screen has a toggle — "צרף תנאי תשלום להצעות כברירת מחדל" — and
+ * the quotes list honours it, but this screen hard-coded "ללא תנאי תשלום" and
+ * then POSTed that choice explicitly. `resolveEffectivePlanId` treats an
+ * explicit "none" as a deliberate refusal, so the setting could never win: a
+ * quote sent from the calculator went out with no schedule and no bank details
+ * no matter what the toggle said (Eli 02/09: "כשאני שולח PDF ללקוח לא נשלחים
+ * תנאי תשלום, גם פרטי חשבון בנק לא מופיעים"). An unwired setting is a lie.
+ */
+function usePaymentPlanDefault(apiToken: string | undefined): string {
+  const [planId, setPlanId] = useState<string>(NO_PAYMENT_PLAN_ID);
+  useEffect(() => {
+    (async () => {
+      try {
+        const url = apiToken
+          ? `/api/widget/factory/config?widget_token=${encodeURIComponent(apiToken)}`
+          : "/api/factory/config";
+        const r = await fetch(url, { cache: "no-store" });
+        const j = await r.json();
+        const pt = j?.config?.paymentTerms ?? j?.paymentTerms;
+        if (pt?.includeByDefault) setPlanId(pt.defaultPlanId || DEFAULT_PAYMENT_PLAN_ID);
+      } catch {
+        /* keep it off — a config we can't read must not attach bank details */
+      }
+    })();
+  }, [apiToken]);
+  return planId;
+}
+
 export function CalculatorView({ products, quantityTiers, shippingOptions, initialMargins, apiToken, sid, leadName, initialTab, estimatePrefill, operatorPrefill, draftId }: Props) {
   const [productId, setProductId] = useState(operatorPrefill?.productId ?? products[0]?.id ?? "p1");
   const [qtyId, setQtyId]         = useState(quantityTiers[0]?.id ?? "q0");
@@ -103,10 +135,20 @@ export function CalculatorView({ products, quantityTiers, shippingOptions, initi
   const [shippingId, setShippingId] = useState(shippingOptions.find((s) => s.type === "sea")?.id ?? shippingOptions[0]?.id ?? "s2");
   const [splitMode, setSplitMode] = useState(false);
   const [operatorSplit, setOperatorSplit] = useState<SplitReport | null>(null);
-  // Payment schedule quoted at the end of the customer message.
-  // Default OFF (Eli 2026-08-03): a quote goes out WITHOUT payment terms; the
-  // salesperson picks a plan here only when he wants to attach them.
+  // Payment schedule quoted at the end of the customer message. Starts on the
+  // operator's configured default when "צרף תנאי תשלום כברירת מחדל" is on, and
+  // on "ללא תנאי תשלום" when it isn't (Eli 2026-08-03) — either way one click
+  // changes it, and a manual pick is never overwritten by the config arriving.
+  const payPlanDefault = usePaymentPlanDefault(apiToken);
   const [payPlanId, setPayPlanId] = useState<string>(NO_PAYMENT_PLAN_ID);
+  const payPlanTouched = useRef(false);
+  useEffect(() => {
+    if (!payPlanTouched.current) setPayPlanId(payPlanDefault);
+  }, [payPlanDefault]);
+  const pickPayPlan = (id: string) => {
+    payPlanTouched.current = true;
+    setPayPlanId(id);
+  };
   const hasAirAndSea =
     shippingOptions.some((s) => s.type === "air" && s.enabled) &&
     shippingOptions.some((s) => s.type === "sea" && s.enabled);
@@ -928,7 +970,7 @@ export function CalculatorView({ products, quantityTiers, shippingOptions, initi
                 quoteText={operatorQuoteText}
                 share={share}
                 paymentPlanId={payPlanId}
-                onPaymentPlanChange={setPayPlanId}
+                onPaymentPlanChange={pickPayPlan}
               />
               <DetailedBreakdown
                 unitCost={c.productionPerUnitIls}
@@ -1154,9 +1196,18 @@ function EstimateTab({ apiToken, shippingOptions, sid, leadName, initialMargins,
   const [shippingId, setShippingId] = useState(shippingOptions.find((s) => s.type === "sea")?.id ?? shippingOptions[0]?.id ?? "s2");
   const [splitMode, setSplitMode] = useState(false);
   const [estimateSplit, setEstimateSplit] = useState<SplitReport | null>(null);
-  // Default OFF (Eli 2026-08-03): a quote goes out WITHOUT payment terms; the
-  // salesperson picks a plan here only when he wants to attach them.
+  // Same as the exact calculator above: starts on the operator's configured
+  // default when include-by-default is on, otherwise "ללא תנאי תשלום".
+  const payPlanDefault = usePaymentPlanDefault(apiToken);
   const [payPlanId, setPayPlanId] = useState<string>(NO_PAYMENT_PLAN_ID);
+  const payPlanTouched = useRef(false);
+  useEffect(() => {
+    if (!payPlanTouched.current) setPayPlanId(payPlanDefault);
+  }, [payPlanDefault]);
+  const pickPayPlan = (id: string) => {
+    payPlanTouched.current = true;
+    setPayPlanId(id);
+  };
   const hasAirAndSea =
     shippingOptions.some((s) => s.type === "air" && s.enabled) &&
     shippingOptions.some((s) => s.type === "sea" && s.enabled);
@@ -1541,7 +1592,7 @@ function EstimateTab({ apiToken, shippingOptions, sid, leadName, initialMargins,
             estimate={estimateCtx}
             share={share}
             paymentPlanId={payPlanId}
-            onPaymentPlanChange={setPayPlanId}
+            onPaymentPlanChange={pickPayPlan}
           />
           <div className="rounded-xl border border-border bg-card p-4 flex flex-wrap items-center gap-3">
             <span className="text-sm font-medium">מפעל מומלץ:</span>
@@ -2750,10 +2801,21 @@ function QuoteShareCard(props: {
       </div>
 
       {props.onPaymentPlanChange && (
-        <PaymentPlanPicker
-          planId={props.paymentPlanId ?? NO_PAYMENT_PLAN_ID}
-          onChange={props.onPaymentPlanChange}
-        />
+        <>
+          <PaymentPlanPicker
+            planId={props.paymentPlanId ?? NO_PAYMENT_PLAN_ID}
+            onChange={props.onPaymentPlanChange}
+          />
+          {/* Say what is about to go out. The picker defaults to "ללא", which
+              looks like just another selected chip — so a quote left the CRM
+              with no schedule and no bank details and nobody noticed until a
+              customer had to ask (Eli 02/09). */}
+          {(props.paymentPlanId ?? NO_PAYMENT_PLAN_ID) === NO_PAYMENT_PLAN_ID && (
+            <p className="text-[11px] text-muted-foreground -mt-1">
+              ההצעה תישלח <b className="text-foreground">בלי תנאי תשלום ובלי פרטי חשבון בנק</b> — בחר פריסה למעלה כדי לצרף אותם להודעה ול-PDF.
+            </p>
+          )}
+        </>
       )}
 
       {/* Lead picker */}
