@@ -46,6 +46,10 @@ export interface CompRow {
 interface OurRow {
   id: number;
   unitIls: number | null;
+  /** Our plates for this row — ¥1,000 per colour, once. */
+  moldsIls: number | null;
+  /** unit × quantity + plates. */
+  totalIls: number | null;
   leadDays: number | null;
   source: "calculator" | "estimator" | null;
   refused?: string;
@@ -57,6 +61,29 @@ const SOURCE_SHORT: Record<string, string> = {
 };
 
 const nis = (n: number) => "₪" + n.toFixed(2);
+const nisWhole = (n: number) => "₪" + Math.round(n).toLocaleString("he-IL");
+
+/**
+ * What the whole order costs THEM — unit × quantity, plus the plates when the
+ * competitor charges them separately.
+ *
+ * Apples to apples has to include the plates, and the three quotes we hold
+ * treat them three different ways: חביב folds the plate into the per-unit
+ * price, גאלרי באג adds ₪500 per colour on top, and our own per-unit price
+ * carries no plate at all. Comparing the unit prices alone compares three
+ * different things (Eli, 02/09: "צריך להשוות תפוחים לתפוחים").
+ */
+function theirTotal(r: CompRow): number | null {
+  if (r.competitorPrice == null || !r.quantity) return null;
+  const colors = r.logoColors ?? 1;
+  // A USD plate is left out rather than converted at a rate we would be
+  // inventing here — the cell still shows it, so nothing is hidden.
+  const plates =
+    r.competitorPlateFee != null && r.competitorPlateFeeCurrency !== "USD"
+      ? r.competitorPlateFee * colors
+      : 0;
+  return r.competitorPrice * r.quantity + plates;
+}
 
 /**
  * Where the bag is made — and therefore how long the customer waits. Eli thinks
@@ -384,7 +411,7 @@ export default function SizeComparisonTable({
               <th style={{ ...th, color: "var(--lux-champagne)", background: "rgba(214,196,172,0.06)", borderInlineStart: mineEdge, borderInlineEnd: mineEdge }}>
                 אנחנו
               </th>
-              <th style={th}>פער</th>
+              <th style={th}>פער בהזמנה</th>
               <th style={th}>גלופה</th>
               <th style={th}>משלוח</th>
               <th style={th}>אספקה</th>
@@ -394,7 +421,11 @@ export default function SizeComparisonTable({
             {visible.map((r, i) => {
               const mine = ours.get(r.id);
               const theirs = r.competitorPrice;
-              const gap = mine?.unitIls != null && theirs != null ? theirs - mine.unitIls : null;
+              const theirsTotal = theirTotal(r);
+              const ourTotal = mine?.totalIls ?? null;
+              // The gap is on the ORDER, not the unit — that is the number
+              // that decides a deal, and the only one that can carry plates.
+              const gap = ourTotal != null && theirsTotal != null ? theirsTotal - ourTotal : null;
               const isCheapest = theirs != null && cheapest != null && theirs === cheapest;
               const zebra = i % 2 ? "rgba(255,255,255,0.015)" : "transparent";
               const line = { borderTop: "1px solid var(--lux-line)" };
@@ -417,14 +448,20 @@ export default function SizeComparisonTable({
                   <td style={{ ...soft, ...line }}>{specOf(r)}</td>
                   <td style={{ ...td, ...line }}>
                     <Num>{theirs != null ? nis(theirs) : "—"}</Num>
+                    {theirsTotal != null && (
+                      <span style={{ display: "block", fontSize: 10, color: "var(--lux-muted)" }}>
+                        <Num>{nisWhole(theirsTotal)}</Num>
+                      </span>
+                    )}
                   </td>
                   <td style={{ ...mineCell, ...line, borderTopColor: "rgba(214,196,172,0.18)" }}>
                     {mine?.unitIls != null ? (
                       <>
                         <Num bold>{nis(mine.unitIls)}</Num>
                         <span style={{ display: "block", fontSize: 10, color: "var(--lux-muted)" }}>
+                          {ourTotal != null && <Num>{nisWhole(ourTotal)}</Num>}
+                          {" · "}
                           {SOURCE_SHORT[mine.source ?? ""] ?? ""}
-                          {mine.leadDays != null && ` · כ-${mine.leadDays} ימים`}
                         </span>
                       </>
                     ) : (
@@ -443,7 +480,7 @@ export default function SizeComparisonTable({
                       color: gap == null ? "var(--lux-muted)" : gap > 0 ? "#a8c0a0" : "#e8b4b4",
                     }}
                   >
-                    <Num>{gap == null ? "—" : (gap > 0 ? "−" : "+") + nis(Math.abs(gap))}</Num>
+                    <Num>{gap == null ? "—" : (gap > 0 ? "−" : "+") + nisWhole(Math.abs(gap))}</Num>
                   </td>
                   <td style={{ ...soft, ...line }}>
                     <Num>
@@ -465,9 +502,12 @@ export default function SizeComparisonTable({
       </div>
 
       <p style={{ marginTop: 10, fontSize: 11.5, color: "var(--lux-muted)", lineHeight: 1.7, maxWidth: "72ch" }}>
-        הצד שלנו מחושב חי במחשבון, במשלוח ימי, לאותה כמות בדיוק. «מדויק» = המידה בקטלוג.
-        «משוער» = מודל האומדן. «צריך מחיר מהמפעל» = האומדן סירב, ולא נמציא מספר במקומו.
-        פער שלילי (ירוק) = אנחנו זולים מהם.
+        הצד שלנו מחושב חי במחשבון, במשלוח ימי, לאותה כמות ולאותו מפרט בדיוק.
+        השורה הקטנה מתחת לכל מחיר היא <b style={{ color: "var(--lux-ink)" }}>סה״כ להזמנה כולל גלופות</b> —
+        אצלנו ¥1,000 לצבע, אצלם לפי מה שמסרו (מי שכולל אותן במחיר ליחידה רשום ₪0).
+        <b style={{ color: "var(--lux-ink)" }}> הפער מחושב על הסה״כ</b>, כי זה מה שהלקוח משלם.
+        «מדויק» = המידה בקטלוג. «משוער» = מודל האומדן. «צריך מחיר מהמפעל» = האומדן סירב,
+        ולא נמציא מספר במקומו. פער שלילי (ירוק) = אנחנו זולים מהם.
         {origin === "IL" && (
           <>
             {" "}

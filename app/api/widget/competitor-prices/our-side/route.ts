@@ -25,6 +25,7 @@ import { getFactoryConfig } from "@/lib/factory/config";
 import { catalogQuoteForProduct } from "@/lib/factory/server/catalog-quote";
 import { estimateQuoteForSpec } from "@/lib/factory/server/estimate-quote";
 import { matchCatalogProduct } from "@/lib/factory/catalog-dims";
+import { moldsCostCnyFor } from "@/lib/factory/molds";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -71,6 +72,17 @@ export function parseSize(
 export interface OurSideRow {
   id: number;
   unitIls: number | null;
+  /**
+   * Our printing plates for this row — ¥1,000 per colour, once per order.
+   *
+   * Apples to apples means the plates too. חביב quotes a per-unit price with
+   * the plate already inside it; גאלרי באג quotes ₪500 per colour on top; our
+   * per-unit price carries neither. Comparing the three unit prices alone
+   * compares three different things.
+   */
+  moldsIls: number | null;
+  /** unit × quantity + plates — what the order actually costs, both sides. */
+  totalIls: number | null;
   leadDays: number | null;
   source: "calculator" | "estimator" | null;
   /** Present when we deliberately have no number. */
@@ -107,7 +119,7 @@ export async function GET(req: NextRequest) {
       const handlesText = (row.handles ?? "").trim();
       const hasHandles = !handlesText || !/^בלי|^ללא|^none/i.test(handlesText);
       if (!dims) {
-        out.push({ id: row.id, unitIls: null, leadDays: null, source: null, refused: "אין מידה" });
+        out.push({ id: row.id, unitIls: null, moldsIls: null, totalIls: null, leadDays: null, source: null, refused: "אין מידה" });
         continue;
       }
 
@@ -130,15 +142,18 @@ export async function GET(req: NextRequest) {
             hasLamination,
             shippingOptionId: SHIPPING,
             marginOverride,
+            moldsCostCny: moldsCostCnyFor(colors),
           });
           res = q
             ? {
                 id: row.id,
                 unitIls: q.sellingPricePerUnitIls ?? null,
+                moldsIls: q.moldsTotalSellingPriceIls ?? 0,
+                totalIls: q.totalOrderPriceIls ?? null,
                 leadDays: q.shippingOption?.deliveryDays ?? null,
                 source: "calculator",
               }
-            : { id: row.id, unitIls: null, leadDays: null, source: null, refused: "החישוב נכשל" };
+            : { id: row.id, unitIls: null, moldsIls: null, totalIls: null, leadDays: null, source: null, refused: "החישוב נכשל" };
         } else {
           const q = await estimateQuoteForSpec({
             spec: {
@@ -152,18 +167,23 @@ export async function GET(req: NextRequest) {
             },
             shippingOptionId: SHIPPING,
             marginOverride,
+            moldsCostCny: moldsCostCnyFor(colors),
           });
           res =
             q.ok && q.result
               ? {
                   id: row.id,
                   unitIls: q.result.sellingPricePerUnitIls ?? null,
+                  moldsIls: q.result.moldsTotalSellingPriceIls ?? 0,
+                  totalIls: q.result.totalOrderPriceIls ?? null,
                   leadDays: q.result.shippingOption?.deliveryDays ?? null,
                   source: "estimator",
                 }
               : {
                   id: row.id,
                   unitIls: null,
+                  moldsIls: null,
+                  totalIls: null,
                   leadDays: null,
                   source: null,
                   refused: q.refused ?? q.estimate?.refused ?? "האומדן סירב",
@@ -173,6 +193,8 @@ export async function GET(req: NextRequest) {
         res = {
           id: row.id,
           unitIls: null,
+          moldsIls: null,
+          totalIls: null,
           leadDays: null,
           source: null,
           refused: e instanceof Error ? e.message : "שגיאה",
