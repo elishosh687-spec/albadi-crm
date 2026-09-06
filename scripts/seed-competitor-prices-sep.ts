@@ -27,7 +27,7 @@ interface Quote {
   price: number;
   logoColors: number;
   lamination: "בלי" | "מבריקה";
-  handles: string;
+  handles: string | null;
   plateFee: number | null;
   plateCurrency: "ILS" | "USD";
   leadText: string | null;
@@ -55,13 +55,14 @@ for (const [colors, lam, p5, p10] of [
       price,
       logoColors: colors,
       lamination: lam,
-      handles: "גופיה",
+      // Their offer never stated a handle type — see the fabric-weight note.
+      handles: null,
       plateFee: 0,
       plateCurrency: "ILS",
       leadText: "60-90 ימים",
       leadDays: 90,
       shippingIncluded: true,
-      notes: HAVIV_NOTE,
+      notes: HAVIV_NOTE + " לא נמסר: סוג הידית ומספר צדדי ההדפסה.",
     });
   }
 }
@@ -76,7 +77,7 @@ for (const [qty, price] of [[5000, 2.5], [10000, 2.4]] as [number, number][]) {
     price,
     logoColors: 1,
     lamination: "בלי",
-    handles: "גופיה מחוזקת",
+    handles: "מחוזקת (כפי שנמסר)",
     plateFee: 0,
     plateCurrency: "ILS",
     leadText: "60-90 ימים",
