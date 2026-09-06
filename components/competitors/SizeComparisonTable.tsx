@@ -51,13 +51,17 @@ interface OurRow {
   /** unit × quantity + plates. */
   totalIls: number | null;
   leadDays: number | null;
-  source: "calculator" | "estimator" | null;
+  source: "calculator" | "estimator" | "proxy" | null;
+  proxyLabel?: string;
+  proxyAreaPct?: number;
+  proxyVolPct?: number;
   refused?: string;
 }
 
 const SOURCE_SHORT: Record<string, string> = {
   calculator: "מדויק",
   estimator: "משוער",
+  proxy: "לפי מידה דומה",
 };
 
 const nis = (n: number) => "₪" + n.toFixed(2);
@@ -497,6 +501,19 @@ export default function SizeComparisonTable({
                           {" · "}
                           {SOURCE_SHORT[mine.source ?? ""] ?? ""}
                         </span>
+                        {/* A price taken from a different bag must name that
+                            bag, and say which way it leans — a proxy 4% smaller
+                            understates what the real size would cost. */}
+                        {mine.source === "proxy" && mine.proxyLabel && (
+                          <span
+                            style={{ display: "block", fontSize: 10, color: "var(--lux-champagne)", whiteSpace: "normal" }}
+                            title={`שטח בד ${(mine.proxyAreaPct ?? 0) > 0 ? "+" : ""}${mine.proxyAreaPct}% · נפח ${(mine.proxyVolPct ?? 0) > 0 ? "+" : ""}${mine.proxyVolPct}% מול המידה המבוקשת`}
+                          >
+                            <Num>{mine.proxyLabel}</Num>
+                            {" "}
+                            (<Num>{`${(mine.proxyAreaPct ?? 0) > 0 ? "+" : ""}${mine.proxyAreaPct}%`}</Num> בד)
+                          </span>
+                        )}
                       </>
                     ) : (
                       <span
@@ -561,8 +578,11 @@ export default function SizeComparisonTable({
         השורה הקטנה מתחת לכל מחיר היא <b style={{ color: "var(--lux-ink)" }}>סה״כ להזמנה כולל גלופות</b> —
         אצלנו ¥1,000 לצבע, אצלם לפי מה שמסרו (מי שכולל אותן במחיר ליחידה רשום ₪0).
         <b style={{ color: "var(--lux-ink)" }}> הפער מחושב על הסה״כ</b>, כי זה מה שהלקוח משלם.
-        «מדויק» = המידה בקטלוג. «משוער» = מודל האומדן. «צריך מחיר מהמפעל» = האומדן סירב,
-        ולא נמציא מספר במקומו. פער שלילי (ירוק) = אנחנו זולים מהם.
+        «מדויק» = המידה בקטלוג. «משוער» = מודל האומדן.
+        «לפי מידה דומה» = אין לנו מחיר למידה הזו, אז זה המחיר של המידה הקרובה ביותר שיש לנו —
+        היא רשומה מתחת למספר, יחד עם כמה בד יש בה יותר או פחות. פער בד שלילי אומר שהמידה
+        האמיתית תעלה אצלנו קצת יותר מהמוצג. «צריך מחיר מהמפעל» = גם זה לא היה אפשרי,
+        ולא נמציא מספר. פער שלילי (ירוק) = אנחנו זולים מהם.
         {origin === "IL" && (
           <>
             {" "}

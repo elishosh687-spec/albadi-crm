@@ -26,6 +26,8 @@ import { catalogQuoteForProduct } from "@/lib/factory/server/catalog-quote";
 import { estimateQuoteForSpec } from "@/lib/factory/server/estimate-quote";
 import { matchCatalogProduct } from "@/lib/factory/catalog-dims";
 import { moldsCostCnyFor } from "@/lib/factory/molds";
+import { nearestCatalogSize } from "@/lib/factory/nearest-size";
+import { validateBagGeometry } from "@/lib/factory/bag-geometry";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -84,9 +86,70 @@ export interface OurSideRow {
   /** unit × quantity + plates — what the order actually costs, both sides. */
   totalIls: number | null;
   leadDays: number | null;
-  source: "calculator" | "estimator" | null;
+  source: "calculator" | "estimator" | "proxy" | null;
+  /**
+   * For a "proxy" price: the catalogue size it was actually taken from, and
+   * how far that size is from the one asked about. Never render the number
+   * without it — a price for a different bag has to say so.
+   */
+  proxyLabel?: string;
+  proxyAreaPct?: number;
+  proxyVolPct?: number;
   /** Present when we deliberately have no number. */
   refused?: string;
+}
+
+
+/**
+ * Last resort: price the nearest catalogue size instead, clearly labelled.
+ *
+ * Only when the estimator has refused — it is fitted on the real thing and
+ * beats a lookalike whenever it will answer — and only when our factory can
+ * actually make the bag that was asked about. Quoting a proxy for a shape the
+ * machines cannot produce would be a price for a bag that will never exist.
+ */
+async function proxyQuote(
+  id: number,
+  dims: { h: number; d: number; w: number },
+  qty: number,
+  colors: number,
+  hasHandles: boolean,
+  hasLamination: boolean,
+  marginOverride: number | null,
+  refusal: string
+): Promise<OurSideRow> {
+  const none: OurSideRow = {
+    id, unitIls: null, moldsIls: null, totalIls: null, leadDays: null, source: null, refused: refusal,
+  };
+  if (validateBagGeometry(dims.w, dims.d, dims.h).length > 0) return none;
+  const near = nearestCatalogSize(dims.h, dims.d, dims.w);
+  if (!near) return none;
+  try {
+    const q = await catalogQuoteForProduct({
+      productId: near.productId,
+      quantity: qty,
+      logoColors: colors,
+      hasHandles,
+      hasLamination,
+      shippingOptionId: SHIPPING,
+      marginOverride,
+      moldsCostCny: moldsCostCnyFor(colors),
+    });
+    if (!q) return none;
+    return {
+      id,
+      unitIls: q.sellingPricePerUnitIls ?? null,
+      moldsIls: q.moldsTotalSellingPriceIls ?? 0,
+      totalIls: q.totalOrderPriceIls ?? null,
+      leadDays: q.shippingOption?.deliveryDays ?? null,
+      source: "proxy",
+      proxyLabel: near.label,
+      proxyAreaPct: near.areaPct,
+      proxyVolPct: near.volPct,
+    };
+  } catch {
+    return none;
+  }
 }
 
 export async function GET(req: NextRequest) {
@@ -179,15 +242,8 @@ export async function GET(req: NextRequest) {
                   leadDays: q.result.shippingOption?.deliveryDays ?? null,
                   source: "estimator",
                 }
-              : {
-                  id: row.id,
-                  unitIls: null,
-                  moldsIls: null,
-                  totalIls: null,
-                  leadDays: null,
-                  source: null,
-                  refused: q.refused ?? q.estimate?.refused ?? "האומדן סירב",
-                };
+              : await proxyQuote(row.id, dims, qty, colors, hasHandles, hasLamination, marginOverride,
+                  q.refused ?? q.estimate?.refused ?? "האומדן סירב");
         }
       } catch (e) {
         res = {
