@@ -77,13 +77,13 @@ const nisWhole = (n: number) => "₪" + Math.round(n).toLocaleString("he-IL");
  * carries no plate at all. Comparing the unit prices alone compares three
  * different things (Eli, 02/09: "צריך להשוות תפוחים לתפוחים").
  */
-function theirTotal(r: CompRow): number | null {
+function theirTotal(r: CompRow, withPlates: boolean): number | null {
   if (r.competitorPrice == null || !r.quantity) return null;
   const colors = r.logoColors ?? 1;
   // A USD plate is left out rather than converted at a rate we would be
   // inventing here — the cell still shows it, so nothing is hidden.
   const plates =
-    r.competitorPlateFee != null && r.competitorPlateFeeCurrency !== "USD"
+    withPlates && r.competitorPlateFee != null && r.competitorPlateFeeCurrency !== "USD"
       ? r.competitorPlateFee * colors
       : 0;
   return r.competitorPrice * r.quantity + plates;
@@ -165,6 +165,16 @@ export default function SizeComparisonTable({
    * without them. Tap to open, because this is read on a phone.
    */
   const [openNote, setOpenNote] = useState<number | null>(null);
+  /**
+   * Whether the printing plates count in the totals. OFF by default.
+   *
+   * Our ¥1,000 per colour is negotiating room Eli gives back, not a cost he
+   * defends (Eli 02/09: "זה רק מחיר מיקוח"), so counting it against a
+   * competitor makes us look dearer than we will actually be at the close. The
+   * toggle is here rather than a fixed rule because the plates ARE real money
+   * on a small order, where they can be a tenth of the bill.
+   */
+  const [withPlates, setWithPlates] = useState(false);
 
   const originCounts = useMemo(() => {
     const c = { all: rows.length, IL: 0, CN: 0 };
@@ -390,6 +400,31 @@ export default function SizeComparisonTable({
         {pricing && <span style={{ fontSize: 11, color: "var(--lux-muted)" }}>מחשב…</span>}
       </div>
 
+      {/* Plates in or out of the totals. */}
+      <div
+        className="lux-wrap-sm"
+        style={{ display: "flex", alignItems: "center", gap: 7, flexWrap: "wrap", marginBottom: 14 }}
+      >
+        <span style={{ fontSize: 12, color: "var(--lux-muted)" }}>גלופות</span>
+        {[
+          { on: false, label: "ללא", hint: "מיקוח" },
+          { on: true, label: "כולל", hint: "¥1,000 לצבע" },
+        ].map((o) => (
+          <button
+            key={String(o.on)}
+            type="button"
+            onClick={() => setWithPlates(o.on)}
+            className="lux-tap"
+            style={pill(withPlates === o.on)}
+          >
+            {o.label}
+            <span style={{ opacity: withPlates === o.on ? 0.65 : 0.5, fontSize: 11, marginInlineStart: 6 }}>
+              {o.hint}
+            </span>
+          </button>
+        ))}
+      </div>
+
       {priceErr && (
         <div style={{ fontSize: 12, color: "#e8b4b4", marginBottom: 10 }}>
           לא הצלחתי לחשב את הצד שלנו: {priceErr}
@@ -435,8 +470,14 @@ export default function SizeComparisonTable({
             {visible.map((r, i) => {
               const mine = ours.get(r.id);
               const theirs = r.competitorPrice;
-              const theirsTotal = theirTotal(r);
-              const ourTotal = mine?.totalIls ?? null;
+              const theirsTotal = theirTotal(r, withPlates);
+              // `totalIls` from the API always carries our plates; without
+              // them the order is simply unit × quantity.
+              const ourTotal = withPlates
+                ? mine?.totalIls ?? null
+                : mine?.unitIls != null && r.quantity
+                  ? mine.unitIls * r.quantity
+                  : null;
               // The gap is on the ORDER, not the unit — that is the number
               // that decides a deal, and the only one that can carry plates.
               const gap = ourTotal != null && theirsTotal != null ? theirsTotal - ourTotal : null;
@@ -575,9 +616,12 @@ export default function SizeComparisonTable({
 
       <p style={{ marginTop: 10, fontSize: 11.5, color: "var(--lux-muted)", lineHeight: 1.7, maxWidth: "72ch" }}>
         הצד שלנו מחושב חי במחשבון, במשלוח ימי, לאותה כמות ולאותו מפרט בדיוק.
-        השורה הקטנה מתחת לכל מחיר היא <b style={{ color: "var(--lux-ink)" }}>סה״כ להזמנה כולל גלופות</b> —
-        אצלנו ¥1,000 לצבע, אצלם לפי מה שמסרו (מי שכולל אותן במחיר ליחידה רשום ₪0).
-        <b style={{ color: "var(--lux-ink)" }}> הפער מחושב על הסה״כ</b>, כי זה מה שהלקוח משלם.
+        השורה הקטנה מתחת לכל מחיר היא <b style={{ color: "var(--lux-ink)" }}>סה״כ להזמנה</b>,
+        והפער מחושב עליו — כי זה מה שהלקוח משלם.
+        {withPlates
+          ? " הגלופות נספרות: אצלנו ¥1,000 לצבע, אצלם לפי מה שמסרו."
+          : " הגלופות לא נספרות — הן מרווח מיקוח, לא מחיר שנעמוד עליו."}{" "}
+        אצל מי שכולל את הגלופה בתוך המחיר ליחידה (חביב) היא בפנים כך או כך, ולא ניתן להוציא אותה.
         «מדויק» = המידה בקטלוג. «משוער» = מודל האומדן.
         «לפי מידה דומה» = אין לנו מחיר למידה הזו, אז זה המחיר של המידה הקרובה ביותר שיש לנו —
         היא רשומה מתחת למספר, יחד עם כמה בד יש בה יותר או פחות. פער בד שלילי אומר שהמידה
