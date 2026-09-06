@@ -23,6 +23,7 @@ import { computeCommission } from "@/lib/factory/commission";
 import { isOverCbmConsolidationThreshold, cbmConsolidationAlert } from "@/lib/factory/sea-carriers";
 import { customerBreakdownIls, customerRoundedTotalIls } from "@/lib/factory/calculator/customer-breakdown";
 import { customerTotalExVat } from "@/lib/factory/customer-total";
+import { MOLD_CNY_PER_COLOR } from "@/lib/factory/molds";
 import { DetailedBreakdown } from "./DetailedBreakdown";
 import { SplitShipmentPanel, type SplitReport } from "@/components/factory-flow/SplitShipmentPanel";
 import { CommissionControl } from "@/components/factory-flow/CommissionControl";
@@ -84,9 +85,8 @@ interface PreviewResult {
   };
 }
 
-// Default one-time mold/tooling fee per logo colour (¥ CNY). Each colour needs
-// its own printing mold, so the calculator pre-fills ¥500 × colours (Eli 2026-07-23).
-const MOLD_CNY_PER_COLOR = 1000;
+// One-time mold/tooling fee per logo colour (¥ CNY) — shared with the bot and
+// the sales form via lib/factory/molds.ts, so the three surfaces cannot drift.
 // Max selectable logo colours across every calculator surface (Eli 2026-07-23).
 const MAX_LOGO_COLORS = 6;
 

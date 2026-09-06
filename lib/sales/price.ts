@@ -6,6 +6,7 @@
  * commission/CBM/FX. That's the "hard hiding" (Eli 2026-08-04).
  */
 import { calculateQuoteByCodes } from "@/lib/factory/calculator";
+import { MOLD_CNY_PER_COLOR } from "@/lib/factory/molds";
 import { quoteResultToPricing } from "@/lib/factory/calculator/to-pricing";
 import { getFactoryConfig } from "@/lib/factory/config";
 import { customerTotalExVat } from "@/lib/factory/customer-total";
@@ -20,7 +21,7 @@ const r2 = (n: number) => Math.round(n * 100) / 100;
  *  room to discount), editable per quote down to 0. NOTE: the boss calculator's
  *  default is ¥500/colour — a sales quote left at this default prices slightly
  *  higher than a boss one until/unless the two defaults are aligned. */
-const SALES_DEFAULT_MOLD_CNY_PER_COLOR = 1000;
+const SALES_DEFAULT_MOLD_CNY_PER_COLOR = MOLD_CNY_PER_COLOR;
 
 export interface SalesCatalogInput {
   productId: string; // p1..p13

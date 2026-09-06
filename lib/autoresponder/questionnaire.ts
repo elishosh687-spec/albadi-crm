@@ -28,6 +28,7 @@ import { ensureAutoTaskForStage } from "../crm-tasks/auto-task";
 import { sendBridgeMessage, sendCompanyTemplate } from "../bridge/client";
 import { sendEliDM } from "../notify/eli";
 import { calculateQuoteByCodes } from "../factory/calculator";
+import { moldsCostCnyFor } from "../factory/molds";
 import { buildQuoteMessage } from "../factory/calculator/message";
 import { resolveLamination } from "../factory/calculator/lamination";
 import {
@@ -655,6 +656,7 @@ async function fetchCustomSizeQuote(
     hasLamination,
     logoColors: Number(state.colors) || 1,
     shippingOptionId: state.shipping ?? "s1",
+    moldsCostCny: moldsCostCnyFor(Number(state.colors) || 1),
   });
   if (!outcome.ok) {
     console.warn("[questionnaire] custom size not priceable", outcome.reason, outcome.detail);
@@ -673,6 +675,7 @@ async function fetchCustomSizeQuote(
     shippingDays: result.shippingOption?.deliveryDays ?? "",
     pricePerUnit: result.sellingPricePerUnitIls,
     totalOrder: result.totalOrderPriceIls,
+    moldsIls: result.moldsTotalSellingPriceIls,
     currency: result.currency,
     appUrl: "https://albadi.ecobrotherss.com",
     alt:
@@ -731,6 +734,10 @@ async function fetchQuote(state: QState): Promise<QuoteCalcOutput> {
     state.quantity === "custom"
       ? parseCustomQuantity(state.quantityCustom)
       : null;
+  // Printing plates, ¥1,000 per colour, once per order — the same fee every
+  // manual quote charges. Until 2026-09-02 the bot alone left it out, so its
+  // auto-quote was below the price Eli would actually honour.
+  const moldsCostCny = moldsCostCnyFor(Number(state.colors) || 1);
   const calc = await calculateQuoteByCodes({
     productId: state.product,
     quantityTierId: state.quantity,
@@ -739,6 +746,7 @@ async function fetchQuote(state: QState): Promise<QuoteCalcOutput> {
     logoColors: Number(state.colors) || 1,
     hasLamination,
     shippingOptionId: state.shipping,
+    moldsCostCny,
   });
   if (!calc) {
     throw new Error(
@@ -759,6 +767,7 @@ async function fetchQuote(state: QState): Promise<QuoteCalcOutput> {
     shippingDays: calc.result.shippingOption?.deliveryDays ?? "",
     pricePerUnit: calc.result.sellingPricePerUnitIls,
     totalOrder: calc.result.totalOrderPriceIls,
+    moldsIls: calc.result.moldsTotalSellingPriceIls,
     currency: calc.result.currency,
     appUrl: "https://albadi.ecobrotherss.com",
     alt: calc.altResult

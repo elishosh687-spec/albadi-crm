@@ -24,6 +24,8 @@ export interface CustomSizeInput {
   hasLamination: boolean;
   logoColors: number;
   shippingOptionId: string;
+  /** One-time plate fee (¥) — same rule as the catalog path. */
+  moldsCostCny?: number;
 }
 
 export type CustomSizeOutcome =
@@ -159,6 +161,7 @@ export async function quoteCustomSize(
       logoColors: input.logoColors,
     },
     shippingOptionId: input.shippingOptionId,
+    moldsCostCny: input.moldsCostCny ?? 0,
   });
 
   if (!out.ok || !out.result) {

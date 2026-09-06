@@ -32,6 +32,13 @@ export interface QuoteMessageParams {
   shippingDays: number | string;
   pricePerUnit: number;
   totalOrder: number;
+  /**
+   * One-time plate/mold fee in ILS, already converted by the engine
+   * (`moldsTotalSellingPriceIls`). Printed as its own line and added to the
+   * total — the per-unit price never carries it, so without the line the
+   * customer's own "ליחידה × כמות" would not reach the total we print.
+   */
+  moldsIls?: number;
   currency: string;
   appUrl: string;
   alt?: {
@@ -61,6 +68,7 @@ export function buildQuoteMessage(params: QuoteMessageParams): string {
     shippingName,
     shippingDays,
     pricePerUnit,
+    moldsIls = 0,
     currency,
     appUrl,
     alt: altRaw,
@@ -76,8 +84,10 @@ export function buildQuoteMessage(params: QuoteMessageParams): string {
   const fp = (n: number) => formatPrice(n, currency);
   // Show a total that equals the rounded per-unit × qty (not the precise
   // per-unit × qty), so the customer's own arithmetic reconciles.
-  const totalShown = customerRoundedTotalIls(pricePerUnit, quantity);
-  const altTotalShown = alt ? customerRoundedTotalIls(alt.pricePerUnit, quantity) : 0;
+  const molds = moldsIls > 0 ? moldsIls : 0;
+  const totalShown = customerRoundedTotalIls(pricePerUnit, quantity, molds);
+  // The plates are ordered once; the shipping choice doesn't change them.
+  const altTotalShown = alt ? customerRoundedTotalIls(alt.pricePerUnit, quantity, molds) : 0;
   const savings = alt && altTotalShown < totalShown ? totalShown - altTotalShown : 0;
 
   // A range reads as an estimate; an exact number reads as a commitment. Which
@@ -105,6 +115,7 @@ export function buildQuoteMessage(params: QuoteMessageParams): string {
     `למינציה: ${laminationText}\n` +
     `כמות: ${quantity.toLocaleString()} | ${logoColors} צבעי הדפסה\n` +
     `משלוח: ${shippingName} (~${shippingDays} ימים)\n` +
+    (molds > 0 ? `🧩 תבניות / מולדים (חד פעמי): ${fp(molds)}\n` : "") +
     `💰 ליחידה: ${band(pricePerUnit)} | סה״כ: ${band(totalShown)}\n` +
     altBlock +
     `המחיר לא כולל מעמ\n` +
