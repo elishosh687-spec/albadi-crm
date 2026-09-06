@@ -168,10 +168,10 @@ async function main() {
       handles: q.handles,
       logoColors: q.logoColors,
       lamination: q.lamination,
-      // 80g on both sides — Eli asked them directly on 02/09. It matters: it
-      // is the biggest single driver of a non-woven bag's cost, and it is the
-      // reason the חביב gap below cannot be explained away as a thinner bag.
-      gsm: 80,
+      // Nobody has told us a fabric weight. It was asked of all three on
+      // 06/09 and none has answered — and it is the largest single driver of
+      // what a bag costs, so it must not be filled in from our own standard.
+      gsm: null,
       origin: q.origin,
       shippingIncluded: q.shippingIncluded,
       leadTimeText: q.leadText,
