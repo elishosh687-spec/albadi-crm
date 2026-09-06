@@ -124,6 +124,18 @@ export const CONFIGURATOR_PRODUCTS = DEFAULT_CONFIG.products.map((p) => ({
   description: p.description,
 }));
 
+/**
+ * `deliveryDays` is part of the catalogue on purpose: the website prints
+ * "כ-25 יום / כ-90 יום" beside each shipping choice, and without it here that
+ * label is a number the site has to keep for itself — which is how a second
+ * copy of our data starts.
+ */
 export const CONFIGURATOR_SHIPPING_OPTIONS = DEFAULT_CONFIG.shippingOptions
   .filter((s) => s.enabled)
-  .map((s) => ({ id: s.id, name: s.name, description: s.description }));
+  .map((s) => ({
+    id: s.id,
+    name: s.name,
+    description: s.description,
+    type: s.type,
+    deliveryDays: s.deliveryDays,
+  }));
