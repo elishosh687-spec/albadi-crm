@@ -99,12 +99,19 @@ export async function GET(req: NextRequest) {
       const dims = parseSize(row.size);
       const qty = row.quantity ?? 5000;
       const colors = row.logoColors ?? 1;
+      // Match the competitor's SPEC, not a default one. A laminated quote
+      // priced against our un-laminated bag is not a comparison — and the
+      // fields are free text, so "בלי" is the only reliable negative.
+      const lamination = (row.lamination ?? "").trim();
+      const hasLamination = !!lamination && !/^בלי|^ללא|^none/i.test(lamination);
+      const handlesText = (row.handles ?? "").trim();
+      const hasHandles = !handlesText || !/^בלי|^ללא|^none/i.test(handlesText);
       if (!dims) {
         out.push({ id: row.id, unitIls: null, leadDays: null, source: null, refused: "אין מידה" });
         continue;
       }
 
-      const key = `${dims.h}/${dims.d}/${dims.w}/${qty}/${colors}/${marginOverride ?? "def"}`;
+      const key = `${dims.h}/${dims.d}/${dims.w}/${qty}/${colors}/${hasLamination}/${hasHandles}/${marginOverride ?? "def"}`;
       const hit = cache.get(key);
       if (hit) {
         out.push({ ...hit, id: row.id });
@@ -119,7 +126,8 @@ export async function GET(req: NextRequest) {
             productId: catalog.id,
             quantity: qty,
             logoColors: colors,
-            hasHandles: true,
+            hasHandles,
+            hasLamination,
             shippingOptionId: SHIPPING,
             marginOverride,
           });
@@ -138,8 +146,8 @@ export async function GET(req: NextRequest) {
               depthCm: dims.d,
               widthCm: dims.w,
               quantity: qty,
-              hasHandles: true,
-              hasLamination: false,
+              hasHandles,
+              hasLamination,
               logoColors: colors,
             },
             shippingOptionId: SHIPPING,
