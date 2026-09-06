@@ -1880,6 +1880,27 @@ The עסקאות (deals) tab shows, per product in each closed deal: an inline p
 of that customer PDF (`?stream=1`, fresh render) PLUS the full "פירוט מלא לבוס"
 breakdown — the sent quote and the internal numbers side by side.
 
+## Printing plates — ¥1,000 per colour, one definition (2026-09-06)
+
+[lib/factory/molds.ts](lib/factory/molds.ts) is the only place the number
+lives; the calculator screen, the sales form and the bot all import it. It had
+been two separate literals and **nothing at all in the bot**, so the
+questionnaire's auto-quote was the one path that never charged the plates —
+₪4,020 where the calculator said ₪4,467 for the same 3,000 bags in one colour.
+
+The fee is one-time per ORDER, never per unit: the engine adds it to
+`totalOrderPriceIls` and leaves `sellingPricePerUnitIls` alone. So any message
+that prints the fee must ALSO print it as its own line, or the customer's own
+"ליחידה × כמות" will not reach the total — `buildQuoteMessage` takes `moldsIls`
+and renders "🧩 תבניות / מולדים (חד פעמי)", worded exactly as the manual
+caption words it. The alternative-shipping block carries the same figure;
+plates are ordered once whichever way the goods travel.
+
+⚠️ **It is negotiating room, not a cost we defend** (Eli: "זה רק מחיר מיקוח").
+Customer-facing quotes carry it; the competitor comparison does NOT count it by
+default, because measuring ourselves against a rival with our own padding
+included makes us look dearer than we close at. See [[competitor-price-tab]].
+
 ## Negotiation buffer — "מרווח מיקוח" (built 2026-08-03)
 
 Settings knob (רווחיות ועמלות section) `negotiationBufferAgorot` — X **agorot per
