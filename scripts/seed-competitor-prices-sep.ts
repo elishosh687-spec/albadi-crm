@@ -168,10 +168,10 @@ async function main() {
       handles: q.handles,
       logoColors: q.logoColors,
       lamination: q.lamination,
-      // Nobody has told us a fabric weight. It was asked of all three on
-      // 06/09 and none has answered — and it is the largest single driver of
-      // what a bag costs, so it must not be filled in from our own standard.
-      gsm: null,
+      // 80g is what the whole market quotes against — Eli's call. The field
+      // carries it so the comparison can use it; the note says no supplier has
+      // confirmed it in writing, because the two are not the same thing.
+      gsm: 80,
       origin: q.origin,
       shippingIncluded: q.shippingIncluded,
       leadTimeText: q.leadText,
