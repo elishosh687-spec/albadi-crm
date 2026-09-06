@@ -167,7 +167,10 @@ async function main() {
       handles: q.handles,
       logoColors: q.logoColors,
       lamination: q.lamination,
-      gsm: 80,
+      // Neither quote stated a fabric weight, and it is the biggest single
+      // driver of a bag's cost — assuming Albadi's 80g would make the row look
+      // like a like-for-like it has not earned.
+      gsm: null,
       origin: q.origin,
       shippingIncluded: q.shippingIncluded,
       leadTimeText: q.leadText,
