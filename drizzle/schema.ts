@@ -852,6 +852,8 @@ export const competitorPrices = pgTable(
     // "ILS" | "USD". One competitor quotes the plate in dollars — storing a
     // bare 150 next to a bare 500 would be a 3.7× error.
     competitorPlateFeeCurrency: text("competitor_plate_fee_currency"),
+    /** "color" (per colour, the usual) or "order" (one fee per size). */
+    competitorPlatePer: text("competitor_plate_per"),
     // Where it is made — "ישראל" / "סין". The single biggest driver in Eli's
     // own survey: the same 30×40 bag is ₪6.45 in Israel and ₪2.49 in China.
     origin: text("origin"),

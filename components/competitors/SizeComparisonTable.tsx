@@ -39,6 +39,8 @@ export interface CompRow {
   competitorPrice: number | null;
   competitorPlateFee: number | null;
   competitorPlateFeeCurrency: string | null;
+  /** "order" = one fee for the whole job, not per colour (פרינט טק). */
+  competitorPlatePer: string | null;
   handles: string | null;
   notes: string | null;
 }
@@ -82,9 +84,12 @@ function theirTotal(r: CompRow, withPlates: boolean): number | null {
   const colors = r.logoColors ?? 1;
   // A USD plate is left out rather than converted at a rate we would be
   // inventing here — the cell still shows it, so nothing is hidden.
+  // Most quote a plate per colour; פרינט טק charge ₪880 once for the whole
+  // size. Multiplying that by the colour count invents ₪880 of cost.
+  const perOrder = r.competitorPlatePer === "order";
   const plates =
     withPlates && r.competitorPlateFee != null && r.competitorPlateFeeCurrency !== "USD"
-      ? r.competitorPlateFee * colors
+      ? r.competitorPlateFee * (perOrder ? 1 : colors)
       : 0;
   return r.competitorPrice * r.quantity + plates;
 }
@@ -579,7 +584,8 @@ export default function SizeComparisonTable({
                       {r.competitorPlateFee == null
                         ? "—"
                         : (r.competitorPlateFeeCurrency === "USD" ? "$" : "₪") +
-                          Math.round(r.competitorPlateFee)}
+                          Math.round(r.competitorPlateFee) +
+                          (r.competitorPlatePer === "order" ? " למידה" : "")}
                     </Num>
                   </td>
                   <td style={{ ...soft, ...line }}>
