@@ -31,6 +31,8 @@ export interface CompRow {
   quantity: number | null;
   origin: string | null;
   gsm: number | null;
+  logoColors: number | null;
+  lamination: string | null;
   shippingIncluded: boolean | null;
   leadTimeText: string | null;
   competitorLeadDays: number | null;
@@ -76,6 +78,26 @@ const ORIGIN_TABS: { id: "all" | OriginBucket; label: string; hint: string }[] =
   { id: "IL", label: "ייצור בארץ", hint: "עד חודש" },
   { id: "CN", label: "ייצור בחו״ל", hint: "כ-3 חודשים" },
 ];
+
+
+/**
+ * What makes this row different from the row above it.
+ *
+ * Colours and lamination move the price more than anything else a competitor
+ * varies, and both were invisible in the table until quotes started arriving
+ * as matrices (חביב sent ten rows for one bag). Handles appear only when they
+ * are not the plain default, so the cell stays short.
+ */
+function specOf(r: CompRow): string {
+  const parts: string[] = [];
+  const colors = r.logoColors ?? 1;
+  parts.push(colors === 1 ? "צבע אחד" : `${colors} צבעים`);
+  const lam = (r.lamination ?? "").trim();
+  parts.push(lam && !/^בלי|^ללא/.test(lam) ? `למינציה ${lam === "מבריקה" ? "" : lam}`.trim() : "ללא למינציה");
+  const handles = (r.handles ?? "").trim();
+  if (handles && handles !== "גופיה") parts.push(handles);
+  return parts.join(" · ");
+}
 
 /** A Latin/number string inside an RTL cell — isolated so "₪" stays in front. */
 function Num({ children, bold }: { children: React.ReactNode; bold?: boolean }) {
@@ -181,11 +203,12 @@ export default function SizeComparisonTable({
   }, [visible]);
 
   const spec = visible[0];
+  // Only what every row in this size actually shares. Colours, lamination and
+  // handles now vary row to row and are shown per row instead.
   const specLine = spec
     ? [
         (spec.size?.split(/[×x*]/).length ?? 0) > 2 ? "תלת־ממדי" : "שטוח",
         spec.gsm ? `${spec.gsm} גרם` : null,
-        spec.handles,
       ]
         .filter(Boolean)
         .join(" · ")
@@ -344,7 +367,7 @@ export default function SizeComparisonTable({
         className="lux-scroll-x"
         style={{ overflowX: "auto", borderRadius: 8, boxShadow: "inset 0 0 0 1px var(--lux-line)" }}
       >
-        <table style={{ width: "100%", minWidth: origin === "all" ? 640 : 560, borderCollapse: "collapse" }}>
+        <table style={{ width: "100%", minWidth: origin === "all" ? 720 : 640, borderCollapse: "collapse" }}>
           <thead>
             <tr style={{ background: "rgba(255,255,255,0.03)" }}>
               <th style={th}>ספק</th>
@@ -352,6 +375,11 @@ export default function SizeComparisonTable({
                   "אנחנו" column into view on a phone without side-scrolling */}
               {origin === "all" && <th style={th}>ייצור</th>}
               <th style={th}>כמות</th>
+              {/* Competitors quote a MATRIX — the same bag at two quantities,
+                  with and without lamination, at one or two colours. Without
+                  this column those rows are indistinguishable and the table
+                  reads as one price contradicting itself. */}
+              <th style={th}>מפרט</th>
               <th style={th}>שלהם</th>
               <th style={{ ...th, color: "var(--lux-champagne)", background: "rgba(214,196,172,0.06)", borderInlineStart: mineEdge, borderInlineEnd: mineEdge }}>
                 אנחנו
@@ -386,6 +414,7 @@ export default function SizeComparisonTable({
                   <td style={{ ...td, ...line }}>
                     <Num>{r.quantity?.toLocaleString("he-IL") ?? "—"}</Num>
                   </td>
+                  <td style={{ ...soft, ...line }}>{specOf(r)}</td>
                   <td style={{ ...td, ...line }}>
                     <Num>{theirs != null ? nis(theirs) : "—"}</Num>
                   </td>
