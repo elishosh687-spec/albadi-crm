@@ -90,7 +90,12 @@ for (const [qty, price] of [[5000, 2.5], [10000, 2.4]] as [number, number][]) {
 // gap below is a real one and not a 15% artefact. The extra colour is a ₪500
 // LUMP, i.e. a plate fee, not a per-unit uplift.
 const GALLERY_NOTE =
-  'המחיר לפני מע״מ — אלי אישר 02/09/2026, אותו בסיס כמו שלנו. "שחור-לבן" = הדפסה בצבע אחד (אלי אישר 02/09). צבע נוסף: ₪500 סכום חד-פעמי לצבע.';
+  "ידית רגילה (כפי שנמסר — לא גופיה). הדפסה משני הצדדים. " +
+  'צבע בסיס = אחד (שחור על רקע לבן); כל צבע נוסף ₪500 סכום קבוע, לא ליחידה. ' +
+  "למינציה = +₪0.15 ליחידה. המחיר ל-5,000 הוא מחיר ה-10,000 +₪0.20. " +
+  "מע״מ לא צוין בהצעה; אלי מעריך שהמחיר לפני מע״מ. זמן אספקה לא נמסר. " +
+  "הציעו הדמיית לוגו / פגישה — לא ענינו. הזכירו אפשרות אלומיניום בפנים למזון, בלי מחיר.";
+
 const galleryRows: Quote[] = [];
 for (const [lam, p5, p10] of [
   ["בלי", 1.4, 1.2],
@@ -105,7 +110,7 @@ for (const [lam, p5, p10] of [
       price,
       logoColors: 1,
       lamination: lam,
-      handles: "גופיה",
+      handles: "ידית רגילה",
       plateFee: 500,
       plateCurrency: "ILS",
       leadText: null,
