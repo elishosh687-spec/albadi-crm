@@ -21,7 +21,7 @@
  * without moving the column.
  */
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 
 export interface CompRow {
   id: number;
@@ -151,6 +151,16 @@ export default function SizeComparisonTable({
   token: string;
 }) {
   const [origin, setOrigin] = useState<"all" | OriginBucket>("all");
+  /**
+   * Which row's note is open.
+   *
+   * The notes carry what makes a row trustworthy or not — "80 גרם, אלי בירר
+   * מולם", "לא נמסר: סוג הידית", "מע״מ לא צוין בהצעה" — and they were visible
+   * only in the cards view, which is not the one anyone opens. A comparison
+   * whose caveats live on another screen is a comparison that will be quoted
+   * without them. Tap to open, because this is read on a phone.
+   */
+  const [openNote, setOpenNote] = useState<number | null>(null);
 
   const originCounts = useMemo(() => {
     const c = { all: rows.length, IL: 0, CN: 0 };
@@ -430,7 +440,8 @@ export default function SizeComparisonTable({
               const zebra = i % 2 ? "rgba(255,255,255,0.015)" : "transparent";
               const line = { borderTop: "1px solid var(--lux-line)" };
               return (
-                <tr key={r.id} style={{ background: zebra }}>
+                <Fragment key={r.id}>
+                <tr style={{ background: zebra }}>
                   <td style={{ ...td, ...line }}>
                     {r.competitor}
                     {isCheapest && (
@@ -445,7 +456,30 @@ export default function SizeComparisonTable({
                   <td style={{ ...td, ...line }}>
                     <Num>{r.quantity?.toLocaleString("he-IL") ?? "—"}</Num>
                   </td>
-                  <td style={{ ...soft, ...line }}>{specOf(r)}</td>
+                  <td style={{ ...soft, ...line }}>
+                    {specOf(r)}
+                    {r.notes && (
+                      <button
+                        type="button"
+                        onClick={() => setOpenNote(openNote === r.id ? null : r.id)}
+                        title="מה בדיוק נמסר"
+                        className="lux-tap"
+                        style={{
+                          marginInlineStart: 6,
+                          border: "none",
+                          background: "transparent",
+                          cursor: "pointer",
+                          fontSize: 11,
+                          fontFamily: "inherit",
+                          color: openNote === r.id ? "var(--lux-champagne)" : "var(--lux-muted)",
+                          textDecoration: "underline",
+                          padding: 0,
+                        }}
+                      >
+                        פרטים
+                      </button>
+                    )}
+                  </td>
                   <td style={{ ...td, ...line }}>
                     <Num>{theirs != null ? nis(theirs) : "—"}</Num>
                     {theirsTotal != null && (
@@ -495,6 +529,27 @@ export default function SizeComparisonTable({
                   </td>
                   <td style={{ ...soft, ...line }}>{r.leadTimeText ?? "—"}</td>
                 </tr>
+                {/* Its own row rather than a tooltip: a tooltip needs a hover
+                    this screen does not have. */}
+                {openNote === r.id && r.notes && (
+                  <tr style={{ background: "rgba(214,196,172,0.05)" }}>
+                    <td
+                      colSpan={origin === "all" ? 10 : 9}
+                      style={{
+                        ...td,
+                        borderTop: "1px solid var(--lux-line)",
+                        whiteSpace: "normal",
+                        fontSize: 12,
+                        color: "var(--lux-muted)",
+                        lineHeight: 1.7,
+                      }}
+                    >
+                      <b style={{ color: "var(--lux-ink)" }}>{r.competitor} · מה נמסר: </b>
+                      {r.notes}
+                    </td>
+                  </tr>
+                )}
+                </Fragment>
               );
             })}
           </tbody>
