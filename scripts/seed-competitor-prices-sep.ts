@@ -168,10 +168,10 @@ async function main() {
       handles: q.handles,
       logoColors: q.logoColors,
       lamination: q.lamination,
-      // Neither quote stated a fabric weight, and it is the biggest single
-      // driver of a bag's cost — assuming Albadi's 80g would make the row look
-      // like a like-for-like it has not earned.
-      gsm: null,
+      // 80g on both sides — Eli asked them directly on 02/09. It matters: it
+      // is the biggest single driver of a non-woven bag's cost, and it is the
+      // reason the חביב gap below cannot be explained away as a thinner bag.
+      gsm: 80,
       origin: q.origin,
       shippingIncluded: q.shippingIncluded,
       leadTimeText: q.leadText,
