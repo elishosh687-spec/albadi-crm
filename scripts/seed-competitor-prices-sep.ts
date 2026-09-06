@@ -86,10 +86,11 @@ for (const [qty, price] of [[5000, 2.5], [10000, 2.4]] as [number, number][]) {
   });
 }
 
-// גאלרי באג: VAT not stated (so the basis may not match ours), and the extra
-// colour is a ₪500 LUMP, i.e. a plate fee, not a per-unit uplift.
+// גאלרי באג: ex-VAT (Eli confirmed 02/09) — the same basis as ours, so the
+// gap below is a real one and not a 15% artefact. The extra colour is a ₪500
+// LUMP, i.e. a plate fee, not a per-unit uplift.
 const GALLERY_NOTE =
-  'לא ציינו אם המחיר כולל מע״מ. "שחור-לבן" כפי שנמסר — לא ברור אם הכוונה להדפסה בשני צבעים. צבע נוסף: ₪500 סכום חד-פעמי לצבע.';
+  'המחיר לפני מע״מ — אלי אישר 02/09/2026, אותו בסיס כמו שלנו. "שחור-לבן" כפי שנמסר — לא ברור אם הכוונה להדפסה בשני צבעים. צבע נוסף: ₪500 סכום חד-פעמי לצבע.';
 const galleryRows: Quote[] = [];
 for (const [lam, p5, p10] of [
   ["בלי", 1.4, 1.2],
