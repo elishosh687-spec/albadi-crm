@@ -1,0 +1,91 @@
+# Turn a GreenAPI webhook type on or off.
+#
+# MANUAL ONLY — no schedule. This mutates the live instance, so it should never
+# fire on its own.
+#
+# WHY IT IS A WORKFLOW AND NOT A CURL: the GREEN_API_* credentials are
+# production-only and encrypted, and BOT_SECRET lives here as a repo secret. So
+# this is the one place that can reach the endpoint without a human pasting a
+# token into a terminal or a chat window.
+#
+# ⚠️ setSettings REBOOTS the instance (up to ~5 min). Acceptable because this
+# instance already restarts several times a day by itself, but do not run it
+# casually in the middle of a busy afternoon.
+#
+# The endpoint only accepts webhook-type flags — webhookUrl and tokens are
+# refused server-side, so this workflow cannot sever inbound by mistake.
+name: greenapi-settings
+on:
+  workflow_dispatch:
+    inputs:
+      flag:
+        description: "Which webhook type to change"
+        type: choice
+        required: true
+        default: outgoingMessageStatusWebhook
+        options:
+          - outgoingMessageStatusWebhook
+          - incomingWebhook
+          - outgoingMessageWebhook
+          - outgoingAPIMessageWebhook
+          - stateWebhook
+          - pollMessageWebhook
+          - editedMessageWebhook
+          - deletedMessageWebhook
+          - incomingBlockWebhook
+      value:
+        description: "yes / no"
+        type: choice
+        required: true
+        default: "yes"
+        options: ["yes", "no"]
+      apply:
+        description: "Actually write it. Unchecked = read current settings only."
+        type: boolean
+        default: false
+
+jobs:
+  settings:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Read, and optionally change, GreenAPI settings
+        run: |
+          set -uo pipefail
+          BASE="https://albadi-crm.vercel.app/api/admin/greenapi-settings"
+          AUTH="Authorization: Bearer ${{ secrets.BOT_SECRET }}"
+
+          echo "--- current settings ---"
+          curl -sS "$BASE" -H "$AUTH" --max-time 45 -o /tmp/before.json \
+            -w 'HTTP %{http_code}\n'
+          python3 -m json.tool /tmp/before.json || cat /tmp/before.json
+
+          if [ "${{ inputs.apply }}" != "true" ]; then
+            echo
+            echo "Read-only run. Re-run with 'apply' checked to write."
+            exit 0
+          fi
+
+          echo
+          echo "--- setting ${{ inputs.flag }} = ${{ inputs.value }} ---"
+          echo "The instance reboots to apply; the endpoint polls until it confirms."
+          curl -sS -X POST "$BASE" -H "$AUTH" \
+            -H 'Content-Type: application/json' \
+            -d '{"set":{"${{ inputs.flag }}":"${{ inputs.value }}"}}' \
+            --max-time 90 -o /tmp/after.json -w 'HTTP %{http_code}\n'
+          python3 -m json.tool /tmp/after.json || cat /tmp/after.json
+
+          python3 - <<'PY'
+          import json, sys
+          d = json.load(open("/tmp/after.json"))
+          if d.get("unexpected"):
+              # A partial update that moved something we did not ask for is the
+              # thing worth shouting about — it means setSettings is not the
+              # partial write we assumed, and other flags may need restoring.
+              print(f"::error::setSettings changed fields we did NOT request: "
+                    f"{d['unexpected']}. Review 'changed' above and restore them.")
+              sys.exit(1)
+          if not d.get("ok"):
+              print(f"::error::not confirmed — {d.get('note') or d.get('error')}")
+              sys.exit(1)
+          print("::notice::confirmed " + json.dumps(d.get("requested", {})))
+          PY
