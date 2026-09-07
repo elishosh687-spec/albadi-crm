@@ -10,6 +10,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { widgetAuthed } from "@/lib/widget/auth";
 import { db } from "@/lib/db";
 import { sql } from "drizzle-orm";
+import { assessGreenHealth } from "@/lib/greenapi/health";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -19,6 +20,11 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
   try {
+    // Kicked off first so the Green API round-trip overlaps the DB work, and
+    // capped tight: this is a screen, not a cron. A failure here must never
+    // take the map down, so it resolves to null instead of throwing.
+    const whatsappHealth = assessGreenHealth({ timeoutMs: 5_000 }).catch(() => null);
+
     const cursorRows = await db.execute(sql`
       SELECT key, updated_at FROM app_config
       WHERE key IN ('call_recordings.last_polled_at','elevenlabs.last_polled_unix','followups.lock')`);
@@ -73,6 +79,7 @@ export async function GET(req: NextRequest) {
         reason: string; n: number;
       }[],
       futureQuota: await readFutureQuota(),
+      whatsapp: await whatsappHealth,
     });
   } catch (e) {
     return NextResponse.json(

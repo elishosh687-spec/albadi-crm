@@ -39,6 +39,53 @@ interface Pulse {
   byStage?: { stage: string; n: number; paused: number; quoted: number; dated: number }[];
   parkedPausedByReason?: { reason: string; n: number }[];
   futureQuota?: { day: string; sent: number } | null;
+  whatsapp?: {
+    ok: boolean;
+    reason: string | null;
+    state: string | null;
+    incomingWebhook: string | null;
+    inboundSilentHours: number | null;
+    lastInboundAt: string | null;
+    configured: boolean;
+  } | null;
+}
+
+function WhatsAppStrip({
+  w,
+}: {
+  w: Pulse["whatsapp"];
+}) {
+  if (!w) return null;
+  // Locally the Green API keys are absent (they are production-only), so
+  // "unconfigured" here is not an outage — say so rather than crying wolf.
+  const unknown = !w.configured;
+  const bad = !unknown && !w.ok;
+  const silent =
+    w.inboundSilentHours === null ? "—" : `${w.inboundSilentHours.toFixed(1)} שעות`;
+  return (
+    <div
+      style={{
+        ...card,
+        marginBottom: 10,
+        borderColor: bad ? "rgba(224,160,160,0.45)" : C.border,
+        background: bad ? "rgba(224,120,120,0.06)" : C.card,
+      }}
+    >
+      <div style={{ ...cardHead, color: bad ? "#e0a0a0" : C.dim }}>
+        {unknown
+          ? "קליטת וואטסאפ — לא ניתן לבדוק מכאן"
+          : bad
+            ? "🚨 תקלה בקליטת וואטסאפ"
+            : "✅ קליטת וואטסאפ תקינה"}
+      </div>
+      {bad && w.reason && (
+        <div style={{ fontSize: 12.5, color: "#e0a0a0", marginBottom: 6 }}>{w.reason}</div>
+      )}
+      <Row k="הודעה נכנסת אחרונה" v={`לפני ${silent}`} />
+      {!unknown && <Row k="מצב האינסטנס" v={w.state ?? "לא ידוע"} />}
+      {!unknown && <Row k="incomingWebhook" v={w.incomingWebhook ?? "לא ידוע"} />}
+    </div>
+  );
 }
 
 export default function BotMapPanel({
@@ -95,6 +142,12 @@ export default function BotMapPanel({
         <Tag kind="edit">ניתן לעריכה</Tag> נפתח בלחיצה.
       </p>
       {err && <div style={{ ...card, color: "#e0a0a0", marginBottom: 10 }}>{err}</div>}
+
+      {/* ---------- WhatsApp reception ----------
+          Above everything else on purpose. On 06/09/2026 inbound died at 22:31
+          and nothing said so for a whole working day; while it is down every
+          other number on this page describes a bot nobody can reach. */}
+      <WhatsAppStrip w={pulse?.whatsapp ?? null} />
 
       {/* ---------- pulse ---------- */}
       <H>דופק</H>

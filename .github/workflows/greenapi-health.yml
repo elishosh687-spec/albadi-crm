@@ -1,0 +1,75 @@
+# Watches that WhatsApp messages are still REACHING us.
+#
+# WHY THIS EXISTS: on 06/09/2026 at 22:31 inbound stopped dead and nobody
+# noticed until the following evening — a whole working day in which every
+# customer who wrote got no reply and nothing reached the CRM. Nothing errored.
+# The system simply went deaf, and no screen said so.
+#
+# ⚠️ THE ALERT DELIBERATELY DOES NOT TRAVEL BY WHATSAPP. A WhatsApp DM about a
+# broken WhatsApp is circular: if the device is unlinked the DM never arrives,
+# and delivery receipts are effectively off (outgoingMessageStatus: 11 events in
+# 21 days), so we would not even learn that it hadn't. The real channel is THIS
+# JOB FAILING — GitHub emails on a failed scheduled run, over infrastructure
+# that has nothing to do with the thing being watched. `?alert=1` adds a DM on
+# top as a nicety; it is never load-bearing.
+#
+# Quiet by design: the endpoint only reports a fault for a disabled webhook, an
+# unauthorized instance, or "we are sending but hearing nothing" during Israeli
+# working hours on a working day. A genuinely quiet afternoon is not a fault.
+name: greenapi-health
+on:
+  schedule:
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
+
+jobs:
+  health:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check WhatsApp inbound is alive
+        run: |
+          set -uo pipefail
+          URL="https://albadi-crm.vercel.app/api/admin/greenapi-health?alert=1"
+
+          call() {
+            curl -sS "$URL" \
+              -H "Authorization: Bearer ${{ secrets.BOT_SECRET }}" \
+              --max-time 45 -o /tmp/green.json -w '%{http_code}' || echo 000
+          }
+
+          CODE="$(call)"
+          # A cold lambda or a Vercel blip is not a WhatsApp outage. Retry once
+          # before emailing — the check is read-only, so a retry costs nothing.
+          if [ ! -s /tmp/green.json ] || [ "$CODE" = "000" ] || [ "${CODE:0:1}" = "5" ]; then
+            echo "::warning::attempt 1 returned HTTP $CODE — retrying once in 20s"
+            sleep 20
+            CODE="$(call)"
+          fi
+
+          if [ ! -s /tmp/green.json ] || [ "$CODE" != "200" ]; then
+            echo "::error::health endpoint unreachable (HTTP $CODE)."
+            echo "This is NOT proof WhatsApp is down — the check itself failed."
+            head -c 800 /tmp/green.json 2>/dev/null || true
+            exit 1
+          fi
+
+          python3 - <<'PY'
+          import json, sys
+          d = json.load(open("/tmp/green.json"))
+          print(d.get("summary", ""))
+          print(f"  state={d.get('state')} incomingWebhook={d.get('incomingWebhook')} "
+                f"outgoingMessageWebhook={d.get('outgoingMessageWebhook')}")
+          print(f"  inbound silent: {d.get('inboundSilentHours')}h | "
+                f"outbound in window: {d.get('outboundInWindow')} | "
+                f"muted(hours/Sabbath): {d.get('windowMuted')}")
+          for k, v in sorted((d.get("lastByType") or {}).items()):
+              print(f"    last {k}: {v}")
+          if d.get("errors"):
+              print(f"  errors: {d['errors']}")
+          if not d.get("ok"):
+              # The message body IS the email. Make it say what to go and do.
+              print(f"::error::WhatsApp inbound fault — {d.get('reason')}. "
+                    f"Last inbound: {d.get('lastInboundAt')}. "
+                    f"Check getSettings + getStateInstance in the GreenAPI console.")
+              sys.exit(1)
+          PY

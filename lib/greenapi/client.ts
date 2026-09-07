@@ -48,6 +48,24 @@ function mediaEndpoint(path: string): string {
   return `${MEDIA_URL}/waInstance${ID_INSTANCE}/${path}/${API_TOKEN}`;
 }
 
+/**
+ * Exported so lib/greenapi/health.ts can reach the read-only diagnostic
+ * endpoints without a second copy of the URL construction.
+ *
+ * ⚠️ Read-only GETs ONLY (getStateInstance / getSettings / getWaSettings).
+ * NEVER build `receiveNotification` with this — that endpoint DEQUEUES, so
+ * polling it from a health check would destroy the very messages the check
+ * exists to prove are arriving.
+ */
+export function greenEndpoint(path: string): string {
+  return endpoint(path);
+}
+
+/** True when the three Green API env vars are present (prod only). */
+export function greenConfigured(): boolean {
+  return !!(API_URL && ID_INSTANCE && API_TOKEN);
+}
+
 async function greenPost<T = unknown>(
   path: string,
   body: Record<string, unknown>,

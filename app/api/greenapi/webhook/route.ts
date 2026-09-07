@@ -38,6 +38,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { bridgeEvents, leads, messages as messagesTable } from "@/drizzle/schema";
 import { and, eq, gt, ne, sql } from "drizzle-orm";
+import {
+  extractMessageText,
+  isAttachmentType,
+  isFileType,
+} from "@/lib/greenapi/extract-text";
 import { handleInbound, type QState } from "@/lib/autoresponder/questionnaire";
 import { handleDecisionInbound } from "@/lib/autoresponder/decision";
 import { handleCallbackReply } from "@/lib/autoresponder/callback-request";
@@ -167,24 +172,6 @@ async function auditLog(
     // Never let an audit failure swallow a real customer message.
     return true;
   }
-}
-
-function extractInboundText(msg: GreenWebhook["messageData"]): string | null {
-  if (!msg) return null;
-  const t = msg.typeMessage;
-  if (t === "textMessage") return msg.textMessageData?.textMessage ?? null;
-  if (t === "extendedTextMessage") {
-    return (
-      msg.extendedTextMessageData?.text ??
-      msg.extendedTextMessageData?.description ??
-      null
-    );
-  }
-  if (t === "imageMessage" || t === "videoMessage" || t === "documentMessage") {
-    return msg.fileMessageData?.caption ?? `[${t}]`;
-  }
-  if (t === "audioMessage") return "[audio]";
-  return null;
 }
 
 /**
@@ -408,23 +395,26 @@ async function handleIncoming(evt: GreenWebhook): Promise<void> {
     const voted = extractVotedOption(msg, chatId);
     textForRouting = voted;
     textToStore = voted ?? "[poll vote]";
-  } else if (
-    typeMessage === "imageMessage" ||
-    typeMessage === "videoMessage" ||
-    typeMessage === "documentMessage" ||
-    typeMessage === "audioMessage"
-  ) {
-    hasMedia = true;
+  } else if (isFileType(typeMessage)) {
+    // Stickers carry a file but are NOT an attachment — see ATTACHMENT_TYPES.
+    hasMedia = isAttachmentType(typeMessage);
     mediaUrl = msg?.fileMessageData?.downloadUrl ?? null;
     mediaFilename = msg?.fileMessageData?.fileName ?? null;
     mediaMimeType = msg?.fileMessageData?.mimeType ?? null;
-    const t = extractInboundText(msg);
-    textForRouting = t;
-    textToStore = t;
+    const t = extractMessageText(msg);
+    textToStore = t.store;
+    // DELIBERATE: media keeps routing its "[imageMessage]" placeholder, exactly
+    // as it did before the extractor was rewritten. Routing null instead would
+    // send a captionless image down the empty-string path — the same
+    // "new conversation" restart this change exists to stop. Whether a
+    // captionless image should route at all is a separate decision.
+    textForRouting = t.route ?? t.store;
   } else {
-    const t = extractInboundText(msg);
-    textForRouting = t;
-    textToStore = t;
+    const t = extractMessageText(msg);
+    textToStore = t.store;
+    // Real text only. A `[type]` placeholder must never reach the bot as if the
+    // customer had typed it.
+    textForRouting = t.route;
   }
 
   const insertedMessage = await insertGreenMessage({
@@ -499,6 +489,18 @@ async function handleIncoming(evt: GreenWebhook): Promise<void> {
   // Otherwise we feed empty text into handleInbound and trigger the cold-
   // start path (re-sends OPENING + first question).
   if (typeMessage === "pollUpdateMessage" && !textForRouting) {
+    return;
+  }
+
+  // A reaction is acknowledgement, not a message to answer.
+  //
+  // `extendedTextMessageData.text` on a reactionMessage is the emoji itself
+  // (verified against real payloads: "👍", "🙏"), so it IS worth storing — the
+  // thread should show that the customer reacted. But routing it would have the
+  // bot reply to a thumbs-up, and inside the questionnaire a "👍" is an
+  // unparseable answer that earns a "לא הצלחתי להבין" and a re-ask. Storing
+  // without routing is the same trade the poll guard above makes.
+  if (typeMessage === "reactionMessage") {
     return;
   }
 
@@ -918,19 +920,15 @@ async function handleOutgoingManual(evt: GreenWebhook): Promise<void> {
   let mediaFilename: string | null = null;
   let mediaMimeType: string | null = null;
 
-  if (
-    typeMessage === "imageMessage" ||
-    typeMessage === "videoMessage" ||
-    typeMessage === "documentMessage" ||
-    typeMessage === "audioMessage"
-  ) {
+  if (isFileType(typeMessage)) {
     mediaUrl = msg?.fileMessageData?.downloadUrl ?? null;
     mediaFilename = msg?.fileMessageData?.fileName ?? null;
     mediaMimeType = msg?.fileMessageData?.mimeType ?? null;
-    textToStore = msg?.fileMessageData?.caption ?? null;
-  } else {
-    textToStore = extractInboundText(msg);
   }
+  // Outbound is never routed to the bot, so `store` is all we need — and it
+  // carries the placeholder that `caption ?? null` used to drop. That silent
+  // null is where 643 of the 1,064 blank rows came from.
+  textToStore = extractMessageText(msg).store;
 
   await insertGreenMessage({
     chatId: canonicalSid,
