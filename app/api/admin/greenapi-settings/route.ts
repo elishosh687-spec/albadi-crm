@@ -204,25 +204,41 @@ export async function POST(req: NextRequest) {
 
   const beforeView = safeView(before);
   const afterView = safeView(after);
+
+  // A missing baseline is NOT evidence of a change. The first live run of this
+  // endpoint proved why that distinction matters: the before-read came back
+  // empty, so every key "differed" from nothing and the workflow reported all
+  // 28 settings as unexpectedly modified — when in fact only the one requested
+  // flag had moved. An alarm that fires on its own blind spot is worse than no
+  // alarm, because the next real one gets ignored.
+  const baselineAvailable = before !== null;
   const changed: Record<string, { from: unknown; to: unknown }> = {};
-  for (const k of new Set([...Object.keys(beforeView), ...Object.keys(afterView)])) {
-    if (String(beforeView[k]) !== String(afterView[k])) {
-      changed[k] = { from: beforeView[k], to: afterView[k] };
+  if (baselineAvailable) {
+    for (const k of new Set([...Object.keys(beforeView), ...Object.keys(afterView)])) {
+      if (String(beforeView[k]) !== String(afterView[k])) {
+        changed[k] = { from: beforeView[k], to: afterView[k] };
+      }
     }
   }
-  // Anything that moved which we did not ask to move.
-  const unexpected = Object.keys(changed).filter((k) => !(k in set));
+  // Anything that moved which we did not ask to move. Only meaningful when we
+  // actually have something to compare against.
+  const unexpected = baselineAvailable
+    ? Object.keys(changed).filter((k) => !(k in set))
+    : [];
 
   return NextResponse.json({
     ok: confirmed,
     requested: set,
     applied: applyText.slice(0, 200),
     confirmed,
+    baselineAvailable,
     changed,
     unexpected,
-    note: confirmed
-      ? "Instance reboots to apply; inbound may pause briefly."
-      : "Not confirmed yet — the instance may still be restarting. Re-run GET in a few minutes.",
+    note: !baselineAvailable
+      ? "Applied, but the before-snapshot could not be read, so no drift check was possible — compare against a prior GET by hand."
+      : confirmed
+        ? "Instance reboots to apply; inbound may pause briefly."
+        : "Not confirmed yet — the instance may still be restarting. Re-run GET in a few minutes.",
     settings: afterView,
   });
 }

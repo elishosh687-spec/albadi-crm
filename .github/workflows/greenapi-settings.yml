@@ -82,6 +82,12 @@ jobs:
           python3 - <<'PY'
           import json, sys
           d = json.load(open("/tmp/after.json"))
+          if not d.get("baselineAvailable", True):
+              # Say it plainly rather than inventing a drift report out of an
+              # empty baseline — that misfire is what made the first live run
+              # claim all 28 settings had changed.
+              print("::warning::before-snapshot unreadable, so no drift check ran. "
+                    "Compare the settings above with an earlier read by hand.")
           if d.get("unexpected"):
               # A partial update that moved something we did not ask for is the
               # thing worth shouting about — it means setSettings is not the
