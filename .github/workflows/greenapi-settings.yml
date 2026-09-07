@@ -22,13 +22,18 @@ on:
         description: "Which webhook type to change"
         type: choice
         required: true
-        default: outgoingMessageStatusWebhook
+        # `outgoingWebhook` IS the delivery-receipt flag — sent/delivered/read
+        # for messages we send. There is no `outgoingMessageStatusWebhook`;
+        # names here come from a live getSettings read, not from memory.
+        default: outgoingWebhook
         options:
-          - outgoingMessageStatusWebhook
+          - outgoingWebhook
           - incomingWebhook
           - outgoingMessageWebhook
           - outgoingAPIMessageWebhook
+          - incomingMessageStatusWebhook
           - stateWebhook
+          - statusInstanceWebhook
           - pollMessageWebhook
           - editedMessageWebhook
           - deletedMessageWebhook

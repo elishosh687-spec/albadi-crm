@@ -31,20 +31,38 @@ export const runtime = "nodejs";
 export const maxDuration = 60;
 export const dynamic = "force-dynamic";
 
-/** The only keys this endpoint may write. Webhook TYPE toggles, nothing else. */
+/**
+ * The only keys this endpoint may write — webhook TYPE toggles, nothing else.
+ *
+ * Taken from a live getSettings read (2026-09-07), not from memory. There is no
+ * `outgoingMessageStatusWebhook`: the flag that governs the
+ * `outgoingMessageStatus` webhook — sent / delivered / read receipts for
+ * messages WE send — is plain **`outgoingWebhook`**, and it was "no". That is
+ * why 21 days produced 11 status events and why we could not confirm delivery
+ * of anything sent during the outage.
+ *
+ * Deliberately excluded even though they are settings: `webhookUrl` (severing
+ * it is the outage), `delaySendMessagesMilliseconds`, `proxyInstance`,
+ * `sharedSession`, `enableLidMode`, `enableMessagesHistory`, `linkPreview`,
+ * `autoTyping`, `markIncomingMessagesReaded*`. Those change behaviour rather
+ * than observability, so they stay a human decision in the console.
+ */
 const WRITABLE = new Set([
   "incomingWebhook",
   "outgoingWebhook",
   "outgoingMessageWebhook",
   "outgoingAPIMessageWebhook",
-  "outgoingMessageStatusWebhook",
+  "incomingMessageStatusWebhook",
   "stateWebhook",
+  "statusInstanceWebhook",
   "deviceWebhook",
   "incomingCallWebhook",
+  "outgoingCallWebhook",
   "editedMessageWebhook",
   "deletedMessageWebhook",
   "pollMessageWebhook",
   "incomingBlockWebhook",
+  "catalogWebhook",
 ]);
 
 function authorized(req: NextRequest): boolean {
@@ -70,13 +88,42 @@ async function readSettings(): Promise<Record<string, unknown> | null> {
   }
 }
 
-/** Never echo a token back out, whatever GreenAPI decides to include. */
+/**
+ * Never echo a credential back out, whatever GreenAPI decides to include.
+ *
+ * ⚠️ Filtering by KEY NAME is not enough, and this was learned the hard way on
+ * 2026-09-07: the first read of this endpoint printed
+ * `webhookUrl: ".../api/greenapi/webhook?secret=<50-hex>"` straight into a
+ * GitHub Actions log. The key is called "webhookUrl" — it contains no "token"
+ * — but the auth secret rides in its query string. The run was deleted and the
+ * token rotated.
+ *
+ * So: strip the query string off every URL-shaped value, and redact any long
+ * hex/base62 run that looks like a secret regardless of the key it sits under.
+ */
+function redact(v: unknown): unknown {
+  if (typeof v !== "string") return v;
+  let s = v;
+  if (/^https?:\/\//i.test(s)) {
+    try {
+      const u = new URL(s);
+      // Keep origin + path — that is what we actually need to eyeball. Never
+      // the query, which is where the secret lives.
+      s = u.searchParams.toString() ? `${u.origin}${u.pathname}?<redacted>` : s;
+    } catch {
+      s = "<unparseable url — redacted>";
+    }
+  }
+  // Any remaining long opaque run is treated as a credential.
+  return s.replace(/[A-Za-z0-9]{24,}/g, "<redacted>");
+}
+
 function safeView(s: Record<string, unknown> | null): Record<string, unknown> {
   if (!s) return {};
   const out: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(s)) {
-    if (k.toLowerCase().includes("token")) continue;
-    out[k] = v;
+    if (/token|secret|password|apikey/i.test(k)) continue;
+    out[k] = redact(v);
   }
   return out;
 }
