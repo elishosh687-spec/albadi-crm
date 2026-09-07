@@ -114,15 +114,24 @@ async function main() {
     process.exit(0);
   }
 
+  // Batched: one round-trip per row is minutes over Neon's HTTP driver.
+  // Every row still re-checks that it is blank, so a re-run after a timeout
+  // resumes cleanly and can never overwrite text that has since arrived.
+  const CHUNK = 200;
   let n = 0;
-  for (const { row, text } of toWrite) {
-    // text ONLY. payload, sender and received_at are the original record.
-    await db.execute(sql`
-      UPDATE messages SET text = ${text}
-      WHERE id = ${row.id} AND btrim(coalesce(text, '')) = ''
+  for (let i = 0; i < toWrite.length; i += CHUNK) {
+    const chunk = toWrite.slice(i, i + CHUNK);
+    const values = sql.join(
+      chunk.map((c) => sql`(${c.row.id}::int, ${c.text}::text)`),
+      sql`, `,
+    );
+    const res = await db.execute(sql`
+      UPDATE messages m SET text = v.text
+      FROM (VALUES ${values}) AS v(id, text)
+      WHERE m.id = v.id AND btrim(coalesce(m.text, '')) = ''
     `);
-    n++;
-    if (n % 100 === 0) console.log(`  …${n}/${toWrite.length}`);
+    n += Number((res as { rowCount?: number }).rowCount ?? chunk.length);
+    console.log(`  …${Math.min(i + CHUNK, toWrite.length)}/${toWrite.length}`);
   }
   console.log(`\nupdated ${n} rows.`);
   process.exit(0);
