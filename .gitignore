@@ -23,3 +23,6 @@ test-output.pdf
 _stitch/
 studio/node_modules
 studio/package-lock.json
+
+# Playwright MCP session snapshots (1.8MB of yml, regenerated every run)
+.playwright-mcp/

@@ -9,6 +9,22 @@ Next.js app deployed on Vercel. Neon PostgreSQL via Drizzle ORM. WhatsApp messag
 **ManyChat account:** see `MANYCHAT_TOKEN` in `.env`
 **Bridge tenant:** see `BRIDGE_BASE` + `BRIDGE_TENANT_TOKEN` in `.env`
 
+## Project layout & logging (tidied 2026-09-09)
+
+- Root holds only config + `CLAUDE.md` / `README.md`. `AGENTS.md` is a symlink
+  to `CLAUDE.md`. Screenshots, the May-2026 ManyChat-era docs, research
+  exports and the xlsx sources live under `docs/archive/` (see its README).
+- `scripts/`: `name.ts` = reusable tool, `_name.ts` = scratch that something
+  still references, `scripts/_archive/` = unreferenced scratch (160 moved on
+  2026-09-09). Convention in [scripts/README.md](scripts/README.md).
+- **Logging goes through [lib/observability/log.ts](lib/observability/log.ts)
+  — `logger(feature)` + `withRequestLog(feature, handler)` for routes.** One
+  JSON line per event with `feature` / `event` / `sid` / `request_id`; console
+  always, Axiom ingest when `AXIOM_TOKEN` + `AXIOM_DATASET` are set. `feature`
+  is a closed list (`FEATURES`) — extend it, don't invent strings. New code
+  must not add bare `console.log`; the ~400 existing ones are being migrated
+  feature by feature.
+
 ## Key API Routes
 
 | Route | Purpose |

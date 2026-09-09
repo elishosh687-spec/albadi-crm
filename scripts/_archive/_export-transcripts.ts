@@ -14,7 +14,7 @@ async function main() {
     ORDER BY c.ghl_contact_id, c.call_started_at
   `) as any[];
 
-  mkdirSync("_research-sales-3w", { recursive: true });
+  mkdirSync("docs/archive/research/sales-3w", { recursive: true });
 
   // group by contact
   const byContact = new Map<string, any[]>();
@@ -45,7 +45,7 @@ async function main() {
     sizes[i] += b.length;
   }
   chunks.forEach((c, i) => {
-    writeFileSync(`_research-sales-3w/transcripts-${i + 1}.txt`, c.join(""));
+    writeFileSync(`docs/archive/research/sales-3w/transcripts-${i + 1}.txt`, c.join(""));
     console.log(`chunk ${i + 1}: ${sizes[i]} chars, ${c.length} leads`);
   });
   console.log(`total leads: ${byContact.size}, calls: ${rows.length}`);

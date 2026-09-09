@@ -9,7 +9,7 @@ import { DEFAULT_CONFIG } from "../lib/factory/calculator/constants";
 import { calculateQuote } from "../lib/factory/calculator/engine";
 import type { QuoteFormData } from "../lib/factory/calculator/types";
 
-const FILE = path.resolve(process.cwd(), "newfactory.xlsx");
+const FILE = path.resolve(process.cwd(), "docs/archive/data/newfactory.xlsx");
 
 function dimKey(s: string): string {
   return s

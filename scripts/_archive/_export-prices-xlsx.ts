@@ -28,6 +28,6 @@ for (const p of DEFAULT_CONFIG.products) {
 const ws = XLSX.utils.json_to_sheet(rows);
 const wb = XLSX.utils.book_new();
 XLSX.utils.book_append_sheet(wb, ws, "מחירי מפעל (¥ ליחידה)");
-const out = "current-factory-prices.xlsx";
+const out = "docs/archive/data/current-factory-prices.xlsx";
 XLSX.writeFile(wb, out);
 console.log(`✓ נכתב ${out} — ${rows.length} שורות (${DEFAULT_CONFIG.products.length} מוצרים × 2 וריאנטים)`);

@@ -1,71 +1,48 @@
-# Albadi CRM — Lead Bot
+# Albadi CRM
 
-מערכת ניהול לידים אוטומטית עבור עסק האריזות אלבדי. בוט שעובד מעל ManyChat, מסווג לידים, עונה ללקוחות בשם הבעלים, ומסלים אליו רק כשצריך.
+CRM + WhatsApp sales bot for Albadi (custom non-woven bags). Next.js on Vercel,
+Neon Postgres via Drizzle, GreenAPI for WhatsApp, GHL as the operator UI, Feishu
+sheets for the Chinese factories, Zoho Books for the money.
 
-**מסמך עיקרי:** [PRD-lead-bot.md](./PRD-lead-bot.md)
+**The operating manual is [CLAUDE.md](CLAUDE.md)** — architecture, every
+integration, every footgun, deploy and CLI recipes. Start there.
+`AGENTS.md` is a symlink to it (for Codex), so the two can never drift.
 
-## Stack
+## Layout
 
-- Next.js 16 + TypeScript (Dashboard מקומי בלבד)
-- Drizzle ORM + Neon Postgres (project: `albadi-crm` / `fragrant-morning-71359670`)
-- ManyChat REST API
-- **Claude Code session + `/loop 1h /albadi-bot-run`** — מנוע ה-AI. אין Anthropic SDK, אין Vercel deploy, אין GitHub Actions.
+| Path | What lives there |
+|---|---|
+| `app/widget/*` | the ONLY live UI — the GHL widget hub (11 tabs), used from a phone too |
+| `app/api/*` | 156 route handlers: `widget/` (UI data), `factory/`, `bot/`, `cron/`, webhooks (`greenapi/`, `ghl/`, `bridge/`), `admin/` |
+| `app/dashboard/v3` | dead (2026-07-01). Don't build here. |
+| `lib/` | all domain code, one folder per feature (`setter/`, `autoresponder/`, `factory/`, `zoho/`, `meta/`, `ghl/`…) |
+| `lib/observability/log.ts` | **the one logger** — every feature logs through it (→ Axiom) |
+| `integrations/ghl/` | GHL OAuth client, sync, audit |
+| `components/` | widget UI; `widget-ui/lux/` are the shared primitives |
+| `drizzle/schema.ts` | DB schema (some tables were created by direct DDL — see CLAUDE.md) |
+| `scripts/` | maintenance CLIs. Convention in [scripts/README.md](scripts/README.md) |
+| `docs/` | ARCHITECTURE, CUSTOMER-FLOW, SALES-PLAYBOOK, runbooks; `archive/` holds history |
+| `bot design/` | the bot's design notes + `09-bot-map.md` |
+| `studio/` | local-only Bag Studio (runs on Eli's Mac, not deployed) |
+| `.github/workflows/` | the sub-daily crons — Vercel's plan only fires crons once a day |
 
-## מבנה
-
-```
-.claude/skills/albadi-bot-run/   ← הסקיל שרץ ב-/loop 1h
-app/dashboard/                   ← UI ראשי
-lib/manychat/                    ← API client + config
-lib/db.ts                        ← Neon connection
-drizzle/                         ← schema + migrations
-scripts/                         ← bot:pull-messages / list-leads / apply-tag / save-decision / notify-eli
-legacy/                          ← daily_calls.py + תוכנית-סידור-ManyChat.md
-```
-
-## הפעלת הבוט
-
-**ידני דרך הדאשבורד:** לחץ "הרץ בוט עכשיו" ב-`/dashboard`.
-
-**הזרימה:**
-1. הבוט שולף לידים מ-ManyChat
-2. מסווג לפי חוקים (rule-based, no Claude)
-3. הסלמות חדשות נוצרות עם `analyze_requested=true` אוטומטית
-4. כתוב "תנתח הסלמות albadi" בצ'אט / הרץ `/loop` → Claude מפיק summary + 3 אופציות + (כשרלוונטי) suggested_tag
-5. תפתח דאשבורד → לחץ "השתמש בזו" / "אשר תג" / "סגור הסלמה"
-
-לראות את ה-dashboard:
-```
-npm run dev
-```
-פותח http://localhost:3000/dashboard
-
-## פיתוח
+## Run locally
 
 ```bash
 npm install
-cp .env.example .env       # מלא את הערכים
-npm run db:generate
-npm run db:migrate
+cp .env.example .env
 npm run dev
 ```
 
-## ENV vars
+`vercel env pull` masks every secret to an empty string — for a screen that
+needs real data use the `albadi-crm-data-dev` launch config (neonctl resolves
+`DATABASE_URL` at launch time; see CLAUDE.md "How to check a DATA screen locally").
 
-| key | מטרה |
-|-----|------|
-| `DATABASE_URL` | Neon connection string |
-| `MANYCHAT_TOKEN` | ManyChat API token |
-| `MANYCHAT_BASE` | (default `https://api.manychat.com/fb`) |
-| `ADMIN_SUBSCRIBER_ID` | ManyChat ID של אלי לקבלת התראות |
-| `TEMPLATE_*` | IDs של templates מאושרי מטא (Phase 3+, לא בשימוש ב-MVP) |
+## Deploy
 
-## מצב
+Push to `main` → Vercel. The GitHub→Vercel hook sometimes silently doesn't fire;
+check `vercel ls` and if the top deployment is older than your commit:
 
-Phase 0 — Foundation (פעיל).
-
-ראה [PRD סעיף 6](./PRD-lead-bot.md) לתכנית phases.
-
-## פיצ'ר ישן — `call-update` skill
-
-הסקיל ב-`~/.claude/skills/call-update/SKILL.md` נשאר פעיל. הוא משלים את הבוט ב-edge cases של עדכון אחרי שיחת טלפון ידנית.
+```bash
+vercel deploy --prod --yes
+```

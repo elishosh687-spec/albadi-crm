@@ -3,7 +3,7 @@ import { sql } from "drizzle-orm";
 import * as fs from "fs";
 import * as path from "path";
 
-const OUT = path.join(process.cwd(), "_research-objections");
+const OUT = path.join(process.cwd(), "docs/archive/research/objections");
 
 async function main() {
   fs.mkdirSync(OUT, { recursive: true });

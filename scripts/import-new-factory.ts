@@ -9,7 +9,7 @@
 import * as XLSX from "xlsx";
 import * as path from "path";
 
-const FILE = path.resolve(process.cwd(), "newfactory.xlsx");
+const FILE = path.resolve(process.cwd(), "docs/archive/data/newfactory.xlsx");
 
 // Map canonical dimension key → existing { id, description, sortOrder } from
 // current constants.ts so the new data preserves IDs and descriptions when the

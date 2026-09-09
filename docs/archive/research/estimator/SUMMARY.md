@@ -79,7 +79,7 @@ DATABASE_URL="$(...)" npx tsx scripts/_eval-eli-formula.ts   # נוסחת אלי
   `PBKystZ1dhCsZgtp4qgc2nzxnMf`. הצעות אמת: `factory_quote_requests` (43 שורות, 19 standard_like 3D-ish).
 
 ## הכנה לפגישת המפעל (2026-07-03)
-מטריצת הסתירות המלאה — **`_research-estimator/MATRIX-2D-3D.md`** (2D/3D × מחיר/שילוח, כל תא
+מטריצת הסתירות המלאה — **`docs/archive/research/estimator/MATRIX-2D-3D.md`** (2D/3D × מחיר/שילוח, כל תא
 מפריד "איפה המפעל טועה" מ"איפה המחשבון טועה"). תמצית:
 - **3D:** מחיר-מפעל נקי · שילוח-מפעל = **רק 3 שקיות קטנות** (KYLWS12A 30×20, 55HETX5D 28×28,
   KTTUDAJI 5×40) נארזות 1.0–1.33מ״מ מול 0.84מ״מ. לא למינציה — **גודל** (<2,600 ס״מ²). המחשבון
