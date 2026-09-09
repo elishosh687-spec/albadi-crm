@@ -18,7 +18,21 @@ import type { FactoryPricingConfig } from "../types";
 
 export interface EstimateQuoteInput {
   spec: EstimateSpec;
-  /** Shipping option id from the factory config (e.g. "sea-standard"). */
+  /**
+   * ⚠️ CALCULATOR id — `"s1"` (air/אקספרס) or `"s2"` (sea/רגיל). NOT the
+   * factory-config id (`"air-express"` / `"sea-standard"`), which this comment
+   * used to name and which is silently wrong: `buildConfig` below keeps
+   * DEFAULT_CONFIG's own shipping options (s1/s2) and merges only the DB
+   * RATES onto them by `type`. An unmatched id therefore finds no option and
+   * `calculateQuote` charges **zero shipping** — on a 5,000-bag order that is
+   * a ₪2,500 hole in the quote, with nothing logged.
+   *
+   * The same namespace confusion in the opposite direction already cost a real
+   * quote ~₪1,874 (see `resolveShippingOption` in ../pricing.ts, which now
+   * translates legacy ids rather than falling back to nothing). Every live
+   * caller here passes s1/s2 correctly; this comment was the only thing
+   * pointing the wrong way.
+   */
   shippingOptionId: string;
   marginOverride?: number | null;
   moldsCostCny?: number;
