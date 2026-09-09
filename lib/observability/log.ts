@@ -205,11 +205,11 @@ export function logger(feature: Feature, bound: LogFields = {}): Logger {
  * The handler receives a child logger already bound to request_id + route,
  * so its own lines correlate with the request line in Axiom.
  */
-export function withRequestLog<Ctx = unknown>(
+export function withRequestLog<Req extends Request = Request, Ctx = unknown>(
   feature: Feature,
-  handler: (req: Request, log: Logger, ctx: Ctx) => Promise<Response>,
-): (req: Request, ctx: Ctx) => Promise<Response> {
-  return async (req, ctx) => {
+  handler: (req: Req, log: Logger, ctx: Ctx) => Promise<Response>,
+): (req: Req, ctx: Ctx) => Promise<Response> {
+  return async (req: Req, ctx: Ctx) => {
     const started = Date.now();
     const request_id =
       req.headers.get("x-vercel-id") ?? req.headers.get("x-request-id") ?? Math.random().toString(36).slice(2, 10);
@@ -224,6 +224,48 @@ export function withRequestLog<Ctx = unknown>(
       return Response.json({ ok: false, error: "internal_error", request_id }, { status: 500 });
     }
   };
+}
+
+/**
+ * Best-effort feature for a request path — used by instrumentation.ts to tag
+ * uncaught errors from routes that were never wrapped. Order matters: the
+ * more specific prefix must come first.
+ */
+export function featureForPath(pathname: string): Feature {
+  const rules: Array<[string, Feature]> = [
+    ["/api/greenapi", "webhook.green"],
+    ["/api/bridge", "webhook.bridge"],
+    ["/api/ghl", "webhook.ghl"],
+    ["/api/integrations", "webhook.ghl"],
+    ["/api/bot/followups", "followups"],
+    ["/api/bot/callback-requests", "followups"],
+    ["/api/bot/process-recordings", "calls"],
+    ["/api/bot", "bot"],
+    ["/api/elevenlabs", "elevenlabs"],
+    ["/api/cron/refresh-fx", "fx"],
+    ["/api/cron/enrich-meta-attribution", "meta"],
+    ["/api/cron/analyze-active-leads", "analysis"],
+    ["/api/cron", "cron"],
+    ["/api/widget/zoho", "zoho"],
+    ["/api/widget/factory", "factory"],
+    ["/api/widget/calculator", "calculator"],
+    ["/api/widget/analy", "analysis"],
+    ["/api/widget/pipeline-audit", "analysis"],
+    ["/api/widget/ads", "meta"],
+    ["/api/widget", "widget"],
+    ["/api/factory", "factory"],
+    ["/api/sales", "calculator"],
+    ["/api/leads", "leads"],
+    ["/api/configurator", "configurator"],
+    ["/api/admin/meta", "meta"],
+    ["/api/admin", "admin"],
+    ["/api/drafts", "bot"],
+    ["/api/auth", "auth"],
+    ["/api/ai", "setter"],
+    ["/widget", "widget"],
+  ];
+  for (const [prefix, feature] of rules) if (pathname.startsWith(prefix)) return feature;
+  return "app";
 }
 
 function safePath(url: string): string {
