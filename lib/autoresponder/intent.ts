@@ -20,6 +20,10 @@
  * Soft-fails to "other" on any error so a flaky API never blocks the webhook.
  */
 
+import { logger } from "@/lib/observability/log";
+
+const log = logger("bot");
+
 const OPENAI_URL = "https://api.openai.com/v1/chat/completions";
 const TIMEOUT_MS = 8000;
 
@@ -86,7 +90,7 @@ export interface ClassifyInput {
 export async function classifyIntent(input: ClassifyInput): Promise<IntentResult> {
   const apiKey = readEnv("OPENAI_API_KEY");
   if (!apiKey) {
-    console.warn("[intent] OPENAI_API_KEY missing — defaulting to 'other'");
+    log.warn("intent.api_key_missing", { msg: "defaulting to other" });
     return { intent: "other", confidence: 0 };
   }
   const model = readEnv("OPENAI_MODEL") || "gpt-4o-mini";
@@ -132,7 +136,7 @@ export async function classifyIntent(input: ClassifyInput): Promise<IntentResult
     clearTimeout(timer);
     if (!res.ok) {
       const txt = await res.text();
-      console.error("[intent] openai non-2xx", res.status, txt.slice(0, 200));
+      log.error("intent.openai_non_2xx", undefined, { status: res.status, body: txt.slice(0, 200) });
       return { intent: "other", confidence: 0 };
     }
     const data = (await res.json()) as {
@@ -140,14 +144,14 @@ export async function classifyIntent(input: ClassifyInput): Promise<IntentResult
     };
     const raw = data.choices?.[0]?.message?.content;
     if (!raw) {
-      console.error("[intent] openai empty response", data);
+      log.error("intent.openai_empty_response", undefined, { choices: data.choices?.length ?? 0 });
       return { intent: "other", confidence: 0 };
     }
     let parsed: any;
     try {
       parsed = JSON.parse(raw);
     } catch {
-      console.error("[intent] non-JSON response", raw.slice(0, 200));
+      log.error("intent.non_json_response", undefined, { raw: raw.slice(0, 200) });
       return { intent: "other", confidence: 0 };
     }
     const intent = normalizeIntent(parsed.intent);
@@ -161,7 +165,7 @@ export async function classifyIntent(input: ClassifyInput): Promise<IntentResult
         : undefined;
     return { intent, confidence, summary };
   } catch (e) {
-    console.error("[intent] classify error", e);
+    log.error("intent.classify_failed", e);
     return { intent: "other", confidence: 0 };
   }
 }

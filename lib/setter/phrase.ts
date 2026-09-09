@@ -18,6 +18,9 @@
  */
 import { runSetter } from "./index";
 import { getBotSettings } from "../bot-settings/store";
+import { logger, serializeError } from "@/lib/observability/log";
+
+const log = logger("setter");
 
 export interface PhraseInput {
   sid: string;
@@ -58,15 +61,13 @@ export async function phraseStateReply(input: PhraseInput): Promise<string> {
 
     for (const word of input.mustMention ?? []) {
       if (!text.includes(word)) {
-        console.warn(
-          `[setter.phrase] dropped rewrite for ${input.trigger} — lost "${word}"`
-        );
+        log.warn("phrase.rewrite_dropped", { trigger: input.trigger, lostWord: word });
         return input.fallback;
       }
     }
     return text;
   } catch (e) {
-    console.warn(`[setter.phrase] failed for ${input.trigger}, using fallback`, e);
+    log.warn("phrase.failed", { trigger: input.trigger, msg: "using fallback", ...serializeError(e) });
     return input.fallback;
   }
 }

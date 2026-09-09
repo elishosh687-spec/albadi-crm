@@ -25,6 +25,7 @@ import {
   messages as messagesTable,
 } from "@/drizzle/schema";
 import { sql } from "drizzle-orm";
+import { withRequestLog } from "@/lib/observability/log";
 
 export const runtime = "nodejs";
 
@@ -33,11 +34,9 @@ function authorized(req: NextRequest): boolean {
   return !!cookie && cookie.value === process.env.ADMIN_PASSWORD;
 }
 
-export async function DELETE(
-  req: NextRequest,
-  { params }: { params: Promise<{ sid: string }> }
-) {
+export const DELETE = withRequestLog("leads", async (req: NextRequest, log, { params }: { params: Promise<{ sid: string }> }) => {
   if (!authorized(req)) {
+    log.warn("unauthorized");
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
   const { sid: raw } = await params;
@@ -97,8 +96,10 @@ export async function DELETE(
     // Children might still have been swept, but if the parent row was already
     // gone we treat the whole call as a 404 so the UI can surface "not found"
     // distinctly from a successful delete.
+    log.warn("lead.delete_not_found", { sid, deleted: counts });
     return NextResponse.json({ error: "not_found", deleted: counts }, { status: 404 });
   }
 
+  log.info("lead.deleted", { sid, deleted: counts });
   return NextResponse.json({ ok: true, deleted: counts });
-}
+});

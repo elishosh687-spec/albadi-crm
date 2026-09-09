@@ -25,6 +25,9 @@
  */
 import { callLLM } from "./openai-client";
 import { buildLLMContext, renderContextForPrompt } from "./llm-context";
+import { logger } from "@/lib/observability/log";
+
+const log = logger("bot");
 
 const BOM = "﻿";
 function envFlag(key: string): boolean {
@@ -226,10 +229,11 @@ function normalize(
   // Post-validation — guard against the LLM accidentally citing a price.
   // If it did and we were going to send the reply, downgrade to escalate.
   if (action === "reply" && replyText && containsPriceLike(replyText)) {
-    console.warn(
-      "[unmatch-agent] reply contained price-like content — downgrading to escalate",
-      replyText
-    );
+    log.warn("unmatch_agent.reply_contained_price", {
+      msg: "downgrading to escalate",
+      replyLen: replyText.length,
+      replyPrefix: replyText.slice(0, 60),
+    });
     return {
       action: "escalate",
       kind: kind ?? "generic",

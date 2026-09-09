@@ -28,6 +28,9 @@ import {
   type LeadSignalSnapshot,
   type SignalKind,
 } from "./derive";
+import { logger, serializeError } from "@/lib/observability/log";
+
+const log = logger("ghl");
 
 async function loadSnapshot(sid: string): Promise<{
   ghlContactId: string;
@@ -208,11 +211,13 @@ export async function reconcileGHLTasksForLead(
       try {
         await deleteContactTask(ghlContactId, cur.ghlTaskId);
       } catch (e) {
-        console.warn(
-          "[ghl-tasks] deleteContactTask failed (continuing)",
-          cur.ghlTaskId,
-          e
-        );
+        log.warn("tasks.delete_failed", {
+          sid,
+          contactId: ghlContactId,
+          taskId: cur.ghlTaskId,
+          msg: "continuing",
+          ...serializeError(e),
+        });
       }
       await db.delete(ghlLeadTasks).where(eq(ghlLeadTasks.id, cur.id));
       deleted++;
@@ -225,7 +230,7 @@ export async function reconcileGHLTasksForLead(
       ownerTag: null,
     };
   } catch (err) {
-    console.error("[ghl-tasks] reconcile failed", sid, err);
+    log.error("tasks.reconcile_failed", err, { sid });
     return null;
   }
 }

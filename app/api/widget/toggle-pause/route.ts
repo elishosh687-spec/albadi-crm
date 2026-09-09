@@ -15,12 +15,14 @@ import { setBotPaused } from "@/app/actions/v2";
 import { db } from "@/lib/db";
 import { leads } from "@/drizzle/schema";
 import { sql } from "drizzle-orm";
+import { withRequestLog } from "@/lib/observability/log";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-export async function POST(req: NextRequest) {
+export const POST = withRequestLog("widget", async (req: NextRequest, log) => {
   if (!widgetAuthed(req)) {
+    log.warn("unauthorized");
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
 
@@ -37,6 +39,7 @@ export async function POST(req: NextRequest) {
 
   const result = await setBotPaused(sid, paused);
   if (!result.ok) {
+    log.error("bot_pause.toggle_failed", undefined, { sid, paused, err_msg: result.error });
     return NextResponse.json({ ok: false, error: result.error }, { status: 500 });
   }
 
@@ -50,5 +53,6 @@ export async function POST(req: NextRequest) {
       .where(sql`trim(${leads.manychatSubId}) = ${sid}`);
   }
 
+  log.info("bot_pause.toggled", { sid, paused, sticky });
   return NextResponse.json({ ok: true, paused, sticky });
-}
+});

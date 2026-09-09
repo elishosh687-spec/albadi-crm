@@ -16,6 +16,7 @@ import { widgetAuthed } from "@/lib/widget/auth";
 import { db } from "@/lib/db";
 import { leads, messageTemplates } from "@/drizzle/schema";
 import { sendBridgeMessage, sendCtaUrlMessage } from "@/lib/bridge/client";
+import { withRequestLog } from "@/lib/observability/log";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
@@ -25,8 +26,9 @@ const BodySchema = z.object({
   templateId: z.number().int().positive(),
 });
 
-export async function POST(req: NextRequest) {
+export const POST = withRequestLog("messaging", async (req: NextRequest, log) => {
   if (!widgetAuthed(req)) {
+    log.warn("unauthorized");
     return NextResponse.json(
       { ok: false, error: "unauthorized" },
       { status: 401 }
@@ -98,10 +100,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, sent: true, name: tmpl.name });
   } catch (err) {
     const detail = err instanceof Error ? err.message : String(err);
-    console.error("[widget.send-template] failed", { sid: cleanSid, templateId: body.templateId, detail });
+    log.error("template.send_failed", err, { sid: cleanSid, templateId: body.templateId });
     return NextResponse.json(
       { ok: false, error: "send_failed", detail },
       { status: 500 }
     );
   }
-}
+});

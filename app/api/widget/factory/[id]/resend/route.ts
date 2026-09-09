@@ -4,6 +4,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { withRequestLog } from "@/lib/observability/log";
 import { db } from "@/lib/db";
 import { factoryQuoteRequests, leads } from "@/drizzle/schema";
 import { eq } from "drizzle-orm";
@@ -14,10 +15,11 @@ import { widgetAuthed } from "@/lib/widget/auth";
 export const runtime = "nodejs";
 export const maxDuration = 30;
 
-export async function POST(
+export const POST = withRequestLog("factory", async (
   req: NextRequest,
+  log,
   ctx: { params: Promise<{ id: string }> }
-) {
+) => {
   if (!widgetAuthed(req)) {
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
@@ -44,7 +46,7 @@ export async function POST(
     });
     return NextResponse.json({ ok: true, ...result });
   } catch (err) {
-    console.error("[widget/factory/resend] failed", err);
+    log.error("resend.failed", err, { quoteId: id, sid: src.manychatSubId });
     return NextResponse.json(
       {
         ok: false,
@@ -54,4 +56,4 @@ export async function POST(
       { status: 502 }
     );
   }
-}
+});

@@ -4,16 +4,18 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { withRequestLog } from "@/lib/observability/log";
 import { widgetAuthed } from "@/lib/widget/auth";
 import { promoteDraftToFeishu } from "@/lib/factory/create-request";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
 
-export async function POST(
+export const POST = withRequestLog("factory", async (
   req: NextRequest,
+  log,
   ctx: { params: Promise<{ id: string }> }
-) {
+) => {
   if (!widgetAuthed(req)) {
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
@@ -29,10 +31,10 @@ export async function POST(
     if (msg.startsWith("row is not a draft")) {
       return NextResponse.json({ ok: false, error: "not_draft", detail: msg }, { status: 409 });
     }
-    console.error("[widget/factory/send-to-feishu] failed", err);
+    log.error("send_to_feishu.failed", err, { quoteId: id });
     return NextResponse.json(
       { ok: false, error: "feishu_append_failed", detail: msg },
       { status: 502 }
     );
   }
-}
+});

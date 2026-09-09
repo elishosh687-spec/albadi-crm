@@ -4,6 +4,9 @@
 // so a per-invocation fetch is acceptable). Israeli holidays only.
 
 import { JERUSALEM_TZ } from "./quiet-hours";
+import { logger, serializeError } from "@/lib/observability/log";
+
+const log = logger("bot");
 
 interface HebcalItem {
   date: string;
@@ -81,7 +84,7 @@ async function loadYear(year: number): Promise<Set<string>> {
   } catch (e) {
     // Soft-fail: better to send a follow-up on a holiday than to never send.
     // Log and return an empty set so callers fall back to weekday-only rules.
-    console.warn("[hebcal] failed to load year", year, e);
+    log.warn("hebcal.load_year_failed", { year, ...serializeError(e) });
     const empty = new Set<string>();
     cache.set(year, { fetchedAt: Date.now(), holidayDates: empty });
     return empty;

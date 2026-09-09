@@ -18,6 +18,9 @@ import {
   leadTags,
 } from "../../drizzle/schema";
 import { desc, eq, sql } from "drizzle-orm";
+import { logger, serializeError } from "@/lib/observability/log";
+
+const log = logger("bot");
 
 const HISTORY_LIMIT = 20;
 
@@ -54,10 +57,10 @@ function loadFaq(): string {
     const path = join(process.cwd(), "docs", "PRODUCT-FAQ.md");
     cachedFaq = readFileSync(path, "utf-8");
   } catch (e) {
-    console.warn(
-      "[llm-context] PRODUCT-FAQ.md not readable — continuing without FAQ",
-      e instanceof Error ? e.message : e
-    );
+    log.warn("llm_context.faq_not_readable", {
+      msg: "continuing without FAQ",
+      ...serializeError(e),
+    });
     cachedFaq = "";
   }
   return cachedFaq;

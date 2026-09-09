@@ -8,12 +8,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { widgetAuthed } from "@/lib/widget/auth";
 import { listDecisions } from "@/lib/supervisor/server/listDecisions";
+import { withRequestLog } from "@/lib/observability/log";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-export async function GET(req: NextRequest) {
+export const GET = withRequestLog("widget", async (req: NextRequest, log) => {
   if (!widgetAuthed(req)) {
+    log.warn("unauthorized");
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
   const url = new URL(req.url);
@@ -25,4 +27,4 @@ export async function GET(req: NextRequest) {
     limit,
   });
   return NextResponse.json({ ok: true, count: rows.length, rows });
-}
+});

@@ -7,6 +7,7 @@
  * new factory_quote_requests, and publishes only if accuracy holds. DMs Eli.
  */
 import { NextRequest, NextResponse } from "next/server";
+import { withRequestLog } from "@/lib/observability/log";
 import { refitEstimator } from "@/lib/factory/server/refit-estimator";
 
 export const runtime = "nodejs";
@@ -18,20 +19,22 @@ function authed(req: NextRequest): boolean {
   return accepted.includes(req.headers.get("authorization") ?? "");
 }
 
-export async function GET(req: NextRequest) {
+export const GET = withRequestLog("calculator", async (req: NextRequest, log) => {
   if (!authed(req)) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   try {
     return NextResponse.json(await refitEstimator());
   } catch (e) {
+    log.error("refit.failed", e);
     return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : String(e) }, { status: 500 });
   }
-}
+});
 
 // Cookie-auth (middleware) manual trigger from the dashboard.
-export async function POST() {
+export const POST = withRequestLog("calculator", async (_req: NextRequest, log) => {
   try {
     return NextResponse.json(await refitEstimator());
   } catch (e) {
+    log.error("refit.failed", e);
     return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : String(e) }, { status: 500 });
   }
-}
+});

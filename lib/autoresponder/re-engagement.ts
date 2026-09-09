@@ -18,6 +18,9 @@ import { desc, eq, sql } from "drizzle-orm";
 import { callLLM } from "./openai-client";
 import { sendEliDM } from "../notify/eli";
 import { pauseFields } from "./bot-pause";
+import { logger, serializeError } from "@/lib/observability/log";
+
+const log = logger("followups");
 
 export const RE_ENGAGEMENT_OPT_OUT_FOOTER =
   "\n\n_אם אינך מעוניין/ת לקבל הודעות נוספות, השב/י 'הסר' ולא אטריד שוב._";
@@ -136,7 +139,7 @@ export async function buildReEngagementMessage(
       return { text: body + RE_ENGAGEMENT_OPT_OUT_FOOTER, llmAuthored: true };
     }
   } catch (e) {
-    console.warn("[re-engagement] LLM error, falling back:", e);
+    log.warn("re_engagement.llm_failed", { msg: "falling back", ...serializeError(e) });
   }
   return { text: FALLBACK_BODY + RE_ENGAGEMENT_OPT_OUT_FOOTER, llmAuthored: false };
 }
@@ -208,7 +211,7 @@ export async function classifyReengagementReply(
       };
     }
   } catch (e) {
-    console.warn("[re-engagement] classifier error, falling back:", e);
+    log.warn("re_engagement.classifier_failed", { msg: "falling back", ...serializeError(e) });
   }
   return fallback;
 }
@@ -282,7 +285,7 @@ export async function handleReengagementInbound(input: {
   try {
     await sendEliDM(dm);
   } catch (e) {
-    console.warn("[re-engagement] eli DM failed", e);
+    log.warn("re_engagement.eli_dm_failed", { ...serializeError(e) });
   }
 
   // An artifact, not just a notification. Skipped for "removal" — that lead
@@ -306,7 +309,7 @@ export async function handleReengagementInbound(input: {
         .returning({ id: crmTasks.id });
       if (task?.id) await syncTaskToGHL(task.id);
     } catch (e) {
-      console.warn("[re-engagement] task creation failed", sid, e);
+      log.warn("re_engagement.task_creation_failed", { sid, ...serializeError(e) });
     }
   }
   return true;

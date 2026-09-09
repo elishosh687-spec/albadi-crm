@@ -9,6 +9,9 @@
 import { sendBridgeMessage, resolveJidFromPhone } from "../bridge/client";
 import { isJid } from "../bridge/jid";
 import { loadQuoteNotify } from "./quote-notify-config";
+import { logger, serializeError } from "@/lib/observability/log";
+
+const log = logger("notify");
 
 function readEnv(key: string): string {
   const raw = process.env[key] ?? "";
@@ -55,7 +58,11 @@ export async function notifyItayQuoteSent(opts: {
     const text = `📤 נשלחה הצעה ללקוח\n${name}${qno}\nסוג: ${kindLabel}${money}`;
     await sendItayDM(text);
   } catch (e) {
-    console.warn("[notify.quote] notifyItayQuoteSent failed (ignored)", e);
+    log.warn("quote_notify.compose_failed", {
+      kind: opts.kind,
+      quotationNo: opts.quotationNo ?? null,
+      ...serializeError(e),
+    });
   }
 }
 
@@ -68,24 +75,23 @@ export async function sendItayDM(
     // Settings target wins; the env var is the legacy fallback.
     const target = (cfg.phone ?? "").trim() || readEnv("ITAY_NOTIFY_JID").trim();
     if (!target) {
-      console.warn("[notify.quote] enabled but no recipient configured — skipping");
+      log.warn("quote_notify.no_recipient");
       return "no_jid";
     }
     if (process.env.BRIDGE_DRY_RUN === "1") {
-      const preview = text.length > 100 ? `${text.slice(0, 100)}…` : text;
-      console.log(`[notify.quote.dryrun] → ${preview.replace(/\n/g, " ⏎ ")}`);
+      log.info("quote_notify.dry_run", { textPreview: text.slice(0, 80) });
       return "dry_run";
     }
     const jid = await resolveTargetJid(target);
     if (!jid) {
-      console.warn("[notify.quote] recipient unresolvable — skipping DM");
+      log.warn("quote_notify.no_jid", { reason: "recipient unresolvable" });
       return "no_jid";
     }
     await sendBridgeMessage(jid, text);
-    console.log("[notify.quote] DM sent OK");
+    log.info("quote_notify.sent", { chatId: jid });
     return "sent";
   } catch (e) {
-    console.error("[notify.quote] failed to send:", e);
+    log.error("quote_notify.send_failed", e);
     return "error";
   }
 }

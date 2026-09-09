@@ -8,6 +8,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { withRequestLog } from "@/lib/observability/log";
 import { widgetAuthed } from "@/lib/widget/auth";
 import {
   appendDealFile,
@@ -25,10 +26,11 @@ const STAGE_HE: Record<FileStage, string> = {
   layout: "פריסה",
 };
 
-export async function POST(
+export const POST = withRequestLog("deals", async (
   req: NextRequest,
+  log,
   { params }: { params: Promise<{ id: string }> }
-) {
+) => {
   if (!widgetAuthed(req)) {
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
@@ -91,10 +93,10 @@ export async function POST(
     ]);
     return NextResponse.json({ ok: true, url: blob.url, milestones: merged });
   } catch (e) {
-    console.error("[deal-upload] failed", e);
+    log.error("deal_upload.failed", e, { dealId: id, stage, fileName: file.name, size: file.size });
     return NextResponse.json(
       { ok: false, error: e instanceof Error ? e.message : "upload_failed" },
       { status: 500 }
     );
   }
-}
+});

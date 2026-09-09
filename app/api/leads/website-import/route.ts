@@ -41,6 +41,7 @@ import { sendBridgeMessage } from "@/lib/bridge/client";
 import { OPENING, kickstartQuestionnaire } from "@/lib/autoresponder/questionnaire";
 import { getBotSettings } from "@/lib/bot-settings/store";
 import { syncLeadToGHL } from "@/integrations/ghl/sync";
+import { serializeError, withRequestLog } from "@/lib/observability/log";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
@@ -131,7 +132,7 @@ function buildAttributionNote(body: Body): string {
   return lines.join("\n");
 }
 
-export async function POST(req: NextRequest) {
+export const POST = withRequestLog("leads", async (req: NextRequest, log) => {
   const secret = (process.env.WEBSITE_IMPORT_SECRET ?? "").trim();
   if (!secret) {
     return NextResponse.json(
@@ -220,7 +221,7 @@ export async function POST(req: NextRequest) {
     // pushEmail: the customer just typed this address into the form, so it is
     // newer than whatever the GHL contact card holds.
     void syncLeadToGHL(row.sid, { pushEmail: Boolean(email) }).catch((e) =>
-      console.warn("[website-import] syncLeadToGHL failed", row.sid, e),
+      log.warn("website_import.ghl_sync_failed", { sid: row.sid, ...serializeError(e) }),
     );
 
     return NextResponse.json({
@@ -262,13 +263,13 @@ export async function POST(req: NextRequest) {
     await db.insert(leadTags).values({ manychatSubId: jid, tag: NEW_LEAD_TAG });
   } catch (err) {
     // Non-fatal — the lead row exists, which is what matters.
-    console.warn("[website-import] tag insert failed", err);
+    log.warn("website_import.tag_insert_failed", { sid: jid, ...serializeError(err) });
   }
 
   // Push to GHL immediately so the lead appears in the pipeline even if the
   // customer never replies. Fire-and-forget: the website shouldn't wait on GHL.
   void syncLeadToGHL(jid, { pushEmail: Boolean(email) }).catch((e) =>
-    console.warn("[website-import] syncLeadToGHL failed", jid, e),
+    log.warn("website_import.ghl_sync_failed", { sid: jid, ...serializeError(e) }),
   );
 
   if (!SEND_OPENING) {
@@ -298,4 +299,4 @@ export async function POST(req: NextRequest) {
   }
 
   return NextResponse.json({ status: "sent", sid: jid, phone, name });
-}
+});

@@ -14,6 +14,10 @@
  * MUST size-check before invoking — see TranscribeError.kind === "too_large".
  */
 
+import { logger, serializeError } from "@/lib/observability/log";
+
+const log = logger("calls");
+
 const OPENAI_URL = "https://api.openai.com/v1/audio/transcriptions";
 const DEFAULT_MODEL = "whisper-1";
 const MAX_BYTES = 25 * 1024 * 1024; // OpenAI hard limit
@@ -81,9 +85,9 @@ export async function transcribeAudio(
         }
       );
       if (text) return text;
-      console.warn("[transcribe] scribe returned nothing — falling back to OpenAI");
+      log.warn("transcribe.scribe_empty", { msg: "falling back to OpenAI" });
     } catch (e) {
-      console.warn("[transcribe] scribe failed, falling back to OpenAI", e);
+      log.warn("transcribe.scribe_failed", { msg: "falling back to OpenAI", ...serializeError(e) });
     }
   }
 

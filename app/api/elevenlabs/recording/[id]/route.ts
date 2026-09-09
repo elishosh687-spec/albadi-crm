@@ -14,6 +14,7 @@
  */
 import { NextRequest, NextResponse } from "next/server";
 import { fetchConversationAudio } from "@/lib/elevenlabs/client";
+import { withRequestLog, type Logger } from "@/lib/observability/log";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -24,10 +25,9 @@ function conversationIdFromParam(raw: string): string {
   return dot > 0 ? raw.slice(0, dot) : raw;
 }
 
-export async function GET(
-  _req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-): Promise<Response> {
+type Ctx = { params: Promise<{ id: string }> };
+
+async function serveRecording(log: Logger, { params }: Ctx): Promise<Response> {
   const { id } = await params;
   const conversationId = conversationIdFromParam(decodeURIComponent(id));
   if (!conversationId.startsWith("conv_")) {
@@ -38,11 +38,13 @@ export async function GET(
   try {
     audio = await fetchConversationAudio(conversationId);
   } catch (e) {
+    log.error("recording.upstream_failed", e, { conversationId });
     return new NextResponse(
       `upstream error: ${e instanceof Error ? e.message : String(e)}`,
       { status: 502 }
     );
   }
+  log.debug("recording.served", { conversationId, bytes: audio.buffer.length });
 
   return new NextResponse(new Uint8Array(audio.buffer), {
     status: 200,
@@ -61,15 +63,14 @@ export async function GET(
   });
 }
 
-export async function HEAD(
-  req: NextRequest,
-  ctx: { params: Promise<{ id: string }> }
-): Promise<Response> {
-  const res = await GET(req, ctx);
-  return new NextResponse(null, { status: res.status, headers: res.headers });
-}
+export const GET = withRequestLog("elevenlabs", async (_req: NextRequest, log, ctx: Ctx) => serveRecording(log, ctx));
 
-export async function OPTIONS(): Promise<Response> {
+export const HEAD = withRequestLog("elevenlabs", async (_req: NextRequest, log, ctx: Ctx) => {
+  const res = await serveRecording(log, ctx);
+  return new NextResponse(null, { status: res.status, headers: res.headers });
+});
+
+export const OPTIONS = withRequestLog("elevenlabs", async () => {
   return new NextResponse(null, {
     status: 204,
     headers: {
@@ -79,4 +80,4 @@ export async function OPTIONS(): Promise<Response> {
       "Access-Control-Max-Age": "86400",
     },
   });
-}
+});

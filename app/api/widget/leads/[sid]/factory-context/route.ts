@@ -14,15 +14,14 @@ import { leads } from "@/drizzle/schema";
 import { sql } from "drizzle-orm";
 import { widgetAuthed } from "@/lib/widget/auth";
 import { listFactoryQuotes } from "@/lib/factory/server/list";
+import { withRequestLog } from "@/lib/observability/log";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-export async function GET(
-  req: NextRequest,
-  ctx: { params: Promise<{ sid: string }> }
-) {
+export const GET = withRequestLog("widget", async (req: NextRequest, log, ctx: { params: Promise<{ sid: string }> }) => {
   if (!widgetAuthed(req)) {
+    log.warn("unauthorized");
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
   const { sid } = await ctx.params;
@@ -48,4 +47,4 @@ export async function GET(
   const requests = await listFactoryQuotes({ lead: sid });
 
   return NextResponse.json({ ok: true, lead, requests });
-}
+});

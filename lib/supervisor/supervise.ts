@@ -16,6 +16,9 @@
  */
 import type { CandidateAction } from "./candidate";
 import { sendEliDM } from "../notify/eli";
+import { logger } from "@/lib/observability/log";
+
+const log = logger("bot");
 
 const BOM = "﻿";
 function readEnv(key: string): string {
@@ -340,7 +343,7 @@ export async function superviseIncomingMessage(
 
     if (!res.ok) {
       const txt = await res.text();
-      console.error("[supervisor] non-2xx", res.status, txt.slice(0, 300));
+      log.error("supervisor.non_2xx", undefined, { status: res.status, body: txt.slice(0, 300) });
       return await onSupervisorFailure(
         input,
         `OpenAI ${res.status}: ${txt.slice(0, 200)}`,
@@ -360,7 +363,7 @@ export async function superviseIncomingMessage(
     try {
       parsed = JSON.parse(raw);
     } catch {
-      console.error("[supervisor] non-JSON", raw.slice(0, 200));
+      log.error("supervisor.non_json_response", undefined, { raw: raw.slice(0, 200) });
       return await onSupervisorFailure(input, "LLM returned non-JSON", model);
     }
 
@@ -406,7 +409,7 @@ async function onSupervisorFailure(
       `⚠️ Supervisor failed for ${who}\nError: ${errorDetail}\nInbound: "${input.inboundText.slice(0, 200)}"\nBot will NOT respond automatically. Please reply manually from the CRM.`
     );
   } catch (e) {
-    console.error("[supervisor] failed to DM Eli on supervisor error", e);
+    log.error("supervisor.eli_dm_failed", e);
   }
   return {
     recommended: "supervisor_error",

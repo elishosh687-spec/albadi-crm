@@ -29,6 +29,9 @@ import { clampToWorkWindow } from "@/lib/clock/callback-window";
 import { getBotSettings } from "@/lib/bot-settings/store";
 import { computeCallPrep, prepForSalesperson } from "./call-prep";
 import type { QState } from "./questionnaire";
+import { logger, serializeError } from "@/lib/observability/log";
+
+const log = logger("followups");
 
 /**
  * Kill switch. The env var still forces it off so an emergency stop doesn't
@@ -309,7 +312,7 @@ export async function runCallbackRequests(opts: { dry: boolean }): Promise<RunRe
         await markCallbackAsked(c.sid);
         sent = true;
       } catch (e) {
-        console.error("[callback-request] send failed", c.sid, e);
+        log.error("callback_request.send_failed", e, { sid: c.sid });
       }
     }
     items.push({ sid: c.sid, name: c.name, reason: c.reason, message, sent });
@@ -367,7 +370,7 @@ export async function armCallbackReply(
       .where(eq(sql`trim(${leads.manychatSubId})`, sid.trim()));
     return true;
   } catch (e) {
-    console.warn("[callback-request] arm failed", sid, e);
+    log.warn("callback_request.arm_failed", { sid, ...serializeError(e) });
     return false;
   }
 }
@@ -496,7 +499,7 @@ export async function handleCallbackReply(input: {
         .set({ followUpDate: dueAt.toISOString().slice(0, 10), updatedAt: new Date() })
         .where(eq(sql`trim(${leads.manychatSubId})`, input.sid.trim()));
     } catch (e) {
-      console.warn("[callback-request] follow_up_date write failed", input.sid, e);
+      log.warn("callback_request.follow_up_date_write_failed", { sid: input.sid, ...serializeError(e) });
     }
   }
 
@@ -511,13 +514,13 @@ export async function handleCallbackReply(input: {
     }
     await sendBridgeMessage(input.recipient, confirm);
   } catch (e) {
-    console.error("[callback-request] confirm send failed", input.sid, e);
+    log.error("callback_request.confirm_send_failed", e, { sid: input.sid });
   }
   if (task?.id) {
     try {
       await syncTaskToGHL(task.id);
     } catch (e) {
-      console.error("[callback-request] task GHL sync failed", task.id, e);
+      log.error("callback_request.task_ghl_sync_failed", e, { taskId: task.id });
     }
   }
   return true;

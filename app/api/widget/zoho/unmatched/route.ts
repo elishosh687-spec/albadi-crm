@@ -7,6 +7,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { withRequestLog } from "@/lib/observability/log";
 import { widgetAuthed } from "@/lib/widget/auth";
 import { db } from "@/lib/db";
 import { factoryQuoteRequests } from "@/drizzle/schema";
@@ -22,7 +23,7 @@ import type { QuoteActualCosts } from "@/lib/factory/types";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-export async function GET(req: NextRequest) {
+export const GET = withRequestLog("zoho", async (req: NextRequest, log) => {
   if (!widgetAuthed(req)) {
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
@@ -56,10 +57,10 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({ ok: true, configured: true, unmatched });
   } catch (err) {
-    console.error("[zoho/unmatched] failed", err);
+    log.error("unmatched.failed", err);
     return NextResponse.json(
       { ok: false, error: err instanceof Error ? err.message : "zoho fetch failed" },
       { status: 502 }
     );
   }
-}
+});

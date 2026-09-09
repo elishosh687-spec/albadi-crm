@@ -4,6 +4,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { withRequestLog } from "@/lib/observability/log";
 import { z } from "zod";
 import { widgetAuthed } from "@/lib/widget/auth";
 import { finalizeQuote } from "@/lib/factory/server/finalize";
@@ -41,10 +42,11 @@ const BodySchema = z.object({
     .optional(),
 });
 
-export async function POST(
+export const POST = withRequestLog("factory", async (
   req: NextRequest,
+  log,
   ctx: { params: Promise<{ id: string }> }
-) {
+) => {
   if (!widgetAuthed(req)) {
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
@@ -53,6 +55,7 @@ export async function POST(
   try {
     body = BodySchema.parse(await req.json().catch(() => ({})));
   } catch (err) {
+    log.error("finalize.invalid_body", err, { id });
     return NextResponse.json(
       { error: "invalid_body", detail: String(err) },
       { status: 400 }
@@ -66,4 +69,4 @@ export async function POST(
     );
   }
   return NextResponse.json(result);
-}
+});

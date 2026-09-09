@@ -7,6 +7,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { withRequestLog } from "@/lib/observability/log";
 import { db } from "@/lib/db";
 import { factoryQuoteRequests } from "@/drizzle/schema";
 import { eq } from "drizzle-orm";
@@ -17,10 +18,11 @@ import type { FactoryProductSpec } from "@/lib/factory/types";
 export const runtime = "nodejs";
 export const maxDuration = 30;
 
-export async function POST(
+export const POST = withRequestLog("factory", async (
   _req: NextRequest,
+  log,
   { params }: { params: Promise<{ id: string }> }
-) {
+) => {
   const { id } = await params;
   const rows = await db
     .select()
@@ -70,4 +72,4 @@ export async function POST(
     .where(eq(factoryQuoteRequests.id, id));
 
   return NextResponse.json({ ok: true, url });
-}
+});

@@ -29,6 +29,9 @@ import {
   rowAnswers,
   type FbFormColumns,
 } from "@/lib/sheets/fb-form-columns";
+import { logger, serializeError } from "@/lib/observability/log";
+
+const log = logger("meta");
 
 // Every Meta form sheet we know of. These are ALWAYS read, and the env var
 // adds to them rather than replacing them: a form sheet silently dropping out
@@ -127,12 +130,12 @@ export async function enrichMetaAttribution(): Promise<EnrichResult> {
     try {
       const resp = await fetch(url, { redirect: "follow" });
       if (!resp.ok) {
-        console.warn(`[meta-enrich] sheet ${id} HTTP ${resp.status}`);
+        log.warn("enrich.sheet_http_error", { spreadsheetId: id, status: resp.status });
         continue;
       }
       text = await resp.text();
     } catch (e) {
-      console.warn(`[meta-enrich] sheet ${id} fetch failed`, e);
+      log.warn("enrich.sheet_fetch_failed", { spreadsheetId: id, ...serializeError(e) });
       continue;
     }
     sheetsOk++;
@@ -141,7 +144,7 @@ export async function enrichMetaAttribution(): Promise<EnrichResult> {
     if (!cols.resolvedByName) {
       // Not fatal — the fallback indices still apply — but it means Meta
       // renamed a header, and the next shift will be read wrong. Say so.
-      console.warn(`[meta-enrich] sheet ${id}: some columns fell back to fixed positions`);
+      log.warn("enrich.columns_fell_back_to_fixed", { spreadsheetId: id, msg: "some columns fell back to fixed positions — Meta renamed a header" });
     }
     const rows = parsed.slice(1); // drop header
     for (const r of rows) {

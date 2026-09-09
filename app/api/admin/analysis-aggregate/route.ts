@@ -9,6 +9,7 @@
  */
 import { NextRequest, NextResponse } from "next/server";
 import { aggregateAnalyses } from "@/lib/analysis/aggregate";
+import { withRequestLog } from "@/lib/observability/log";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -20,10 +21,11 @@ function authorized(req: NextRequest): boolean {
   return req.headers.get("authorization") === `Bearer ${secret}`;
 }
 
-export async function GET(req: NextRequest) {
+export const GET = withRequestLog("admin", async (req: NextRequest, log) => {
   if (!authorized(req)) {
+    log.warn("unauthorized");
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
   const aggregate = await aggregateAnalyses();
   return NextResponse.json({ ok: true, aggregate });
-}
+});

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { saveConfiguratorDesign } from "@/lib/configurator/sessions";
 import { logLeadEvent } from "@/lib/events/lead-events";
+import { withRequestLog } from "@/lib/observability/log";
 
 export const runtime = "nodejs";
 
@@ -16,7 +17,7 @@ export async function OPTIONS() {
   return new NextResponse(null, { status: 204, headers: corsHeaders() });
 }
 
-export async function POST(req: NextRequest) {
+export const POST = withRequestLog("configurator", async (req: NextRequest, log) => {
   let body: Record<string, unknown>;
   try {
     body = (await req.json()) as Record<string, unknown>;
@@ -97,7 +98,11 @@ export async function POST(req: NextRequest) {
       { headers: corsHeaders() }
     );
   } catch (err) {
-    console.error("[configurator/designs] save failed", err);
+    log.error("design.save_failed", err, {
+      sid: str("manychatSubId") || null,
+      productId: str("productId") || "p1",
+      source: str("source") || null,
+    });
     return NextResponse.json(
       {
         ok: false,
@@ -107,4 +112,4 @@ export async function POST(req: NextRequest) {
       { status: 500, headers: corsHeaders() }
     );
   }
-}
+});

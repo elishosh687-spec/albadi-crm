@@ -7,6 +7,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { withRequestLog } from "@/lib/observability/log";
 import { widgetAuthed } from "@/lib/widget/auth";
 import { db } from "@/lib/db";
 import { factoryQuoteRequests } from "@/drizzle/schema";
@@ -14,10 +15,11 @@ import { eq } from "drizzle-orm";
 
 export const runtime = "nodejs";
 
-export async function POST(
+export const POST = withRequestLog("factory", async (
   req: NextRequest,
+  log,
   ctx: { params: Promise<{ id: string }> }
-) {
+) => {
   if (!widgetAuthed(req)) {
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
@@ -32,4 +34,4 @@ export async function POST(
     return NextResponse.json({ ok: false, error: "not_found" }, { status: 404 });
   }
   return NextResponse.json({ ok: true, id });
-}
+});

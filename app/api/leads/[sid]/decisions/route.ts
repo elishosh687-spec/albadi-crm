@@ -8,6 +8,7 @@
  */
 import { NextRequest, NextResponse } from "next/server";
 import { listDecisions } from "@/lib/supervisor/server/listDecisions";
+import { withRequestLog } from "@/lib/observability/log";
 
 export const runtime = "nodejs";
 
@@ -18,11 +19,9 @@ function authorized(req: NextRequest): boolean {
   return auth === `Bearer ${secret}`;
 }
 
-export async function GET(
-  req: NextRequest,
-  { params }: { params: Promise<{ sid: string }> }
-) {
+export const GET = withRequestLog("leads", async (req: NextRequest, log, { params }: { params: Promise<{ sid: string }> }) => {
   if (!authorized(req)) {
+    log.warn("unauthorized");
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
   const { sid } = await params;
@@ -39,4 +38,4 @@ export async function GET(
     count: rows.length,
     rows,
   });
-}
+});

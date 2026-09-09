@@ -5,6 +5,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { withRequestLog } from "@/lib/observability/log";
 import { cloneFactoryQuote } from "@/lib/factory/clone-quote";
 
 export const runtime = "nodejs";
@@ -14,10 +15,11 @@ function authorized(req: NextRequest): boolean {
   return !!cookie && cookie.value === process.env.ADMIN_PASSWORD;
 }
 
-export async function POST(
+export const POST = withRequestLog("factory", async (
   req: NextRequest,
+  log,
   { params }: { params: Promise<{ id: string }> }
-) {
+) => {
   if (!authorized(req)) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
@@ -27,4 +29,4 @@ export async function POST(
     return NextResponse.json({ ok: false, error: result.error }, { status: result.status });
   }
   return NextResponse.json({ ok: true, ...result.result });
-}
+});

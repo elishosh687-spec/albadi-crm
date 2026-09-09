@@ -16,13 +16,15 @@ import { db } from "@/lib/db";
 import { leads } from "@/drizzle/schema";
 import { eq } from "drizzle-orm";
 import { verifyWidgetToken } from "@/integrations/ghl/widget-auth";
+import { withRequestLog } from "@/lib/observability/log";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-export async function GET(req: NextRequest) {
+export const GET = withRequestLog("widget", async (req: NextRequest, log) => {
   const token = req.nextUrl.searchParams.get("widget_token");
   if (!verifyWidgetToken(token)) {
+    log.warn("unauthorized");
     return NextResponse.json(
       { ok: false, error: "unauthorized" },
       { status: 401 }
@@ -61,6 +63,7 @@ export async function GET(req: NextRequest) {
     .limit(1);
 
   if (!row) {
+    log.warn("lead.not_found", { contactId });
     return NextResponse.json(
       { ok: false, error: "lead not found for ghl_contact_id=" + contactId },
       { status: 404 }
@@ -68,4 +71,4 @@ export async function GET(req: NextRequest) {
   }
 
   return NextResponse.json({ ok: true, lead: row });
-}
+});

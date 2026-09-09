@@ -12,12 +12,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { widgetAuthed } from "@/lib/widget/auth";
 import { sendConfiguratorLinkAction } from "@/app/actions/v2";
+import { withRequestLog } from "@/lib/observability/log";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-export async function POST(req: NextRequest) {
+export const POST = withRequestLog("messaging", async (req: NextRequest, log) => {
   if (!widgetAuthed(req)) {
+    log.warn("unauthorized");
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
 
@@ -33,7 +35,9 @@ export async function POST(req: NextRequest) {
 
   const result = await sendConfiguratorLinkAction(sid);
   if (!result.ok) {
+    log.error("configurator.send_failed", undefined, { sid, err_msg: result.error });
     return NextResponse.json({ ok: false, error: result.error }, { status: 500 });
   }
+  log.info("configurator.link_sent", { sid });
   return NextResponse.json({ ok: true, message: result.message ?? "נשלח מעצב 3D" });
-}
+});

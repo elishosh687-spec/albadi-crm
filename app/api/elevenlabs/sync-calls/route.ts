@@ -39,6 +39,7 @@ import {
 } from "@/integrations/ghl/config";
 import { getValidAccessToken } from "@/integrations/ghl/oauth";
 import { analyzeCall, type CallAnalysis } from "@/lib/autoresponder/call-analysis";
+import { withRequestLog } from "@/lib/observability/log";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -397,7 +398,7 @@ async function stagePost(): Promise<number> {
   return done;
 }
 
-export async function POST(req: NextRequest): Promise<NextResponse> {
+const run = withRequestLog("elevenlabs", async (req: NextRequest, log) => {
   if (!authorized(req)) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
@@ -406,6 +407,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     const enriched = await stageEnrich();
     const analyzed = await stageAnalyze();
     const posted = await stagePost();
+    log.info("sync_calls.run", { discovered, enriched, analyzed, posted });
     return NextResponse.json({
       ok: true,
       discovered,
@@ -414,14 +416,14 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       posted,
     });
   } catch (e) {
+    log.error("sync_calls.failed", e);
     return NextResponse.json(
       { ok: false, error: e instanceof Error ? e.message : String(e) },
       { status: 500 }
     );
   }
-}
+});
 
+export const POST = run;
 // Allow manual GET trigger for testing (same auth).
-export async function GET(req: NextRequest): Promise<NextResponse> {
-  return POST(req);
-}
+export const GET = run;

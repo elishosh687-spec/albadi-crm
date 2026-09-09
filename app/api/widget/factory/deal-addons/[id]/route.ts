@@ -10,6 +10,7 @@
  * grandTotalExVat → payment schedule → Zoho invoice via listClosedQuotes.
  */
 import { NextRequest, NextResponse } from "next/server";
+import { withRequestLog } from "@/lib/observability/log";
 import { widgetAuthed } from "@/lib/widget/auth";
 import { db } from "@/lib/db";
 import { factoryQuoteRequests } from "@/drizzle/schema";
@@ -19,10 +20,11 @@ import type { DealAddon } from "@/lib/factory/types";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-export async function PUT(
+export const PUT = withRequestLog("deals", async (
   req: NextRequest,
+  log,
   ctx: { params: Promise<{ id: string }> },
-) {
+) => {
   if (!widgetAuthed(req)) {
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
@@ -58,4 +60,4 @@ export async function PUT(
     addons: clean,
     totalIls: Math.round(clean.reduce((s, a) => s + a.amountIls, 0) * 100) / 100,
   });
-}
+});

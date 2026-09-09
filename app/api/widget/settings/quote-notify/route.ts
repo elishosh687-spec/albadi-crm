@@ -10,12 +10,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { widgetAuthed } from "@/lib/widget/auth";
 import { loadQuoteNotify, setQuoteNotify } from "@/lib/notify/quote-notify-config";
+import { withRequestLog } from "@/lib/observability/log";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-export async function GET(req: NextRequest) {
+export const GET = withRequestLog("widget", async (req: NextRequest, log) => {
   if (!widgetAuthed(req)) {
+    log.warn("unauthorized");
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
   return NextResponse.json({
@@ -23,10 +25,11 @@ export async function GET(req: NextRequest) {
     current: await loadQuoteNotify(),
     envFallback: (process.env.ITAY_NOTIFY_JID ?? "").trim() || null,
   });
-}
+});
 
-export async function PUT(req: NextRequest) {
+export const PUT = withRequestLog("widget", async (req: NextRequest, log) => {
   if (!widgetAuthed(req)) {
+    log.warn("unauthorized");
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
   const body = await req.json().catch(() => ({} as Record<string, unknown>));
@@ -40,5 +43,7 @@ export async function PUT(req: NextRequest) {
     );
   }
   await setQuoteNotify({ enabled, phone, name });
+  // Phone deliberately not logged.
+  log.info("quote_notify.saved", { enabled, hasPhone: Boolean(phone) });
   return NextResponse.json({ ok: true, current: await loadQuoteNotify() });
-}
+});

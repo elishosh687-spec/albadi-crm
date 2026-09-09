@@ -6,12 +6,13 @@
  * lamination, shipping?, customerName? }.
  */
 import { NextRequest, NextResponse } from "next/server";
+import { withRequestLog } from "@/lib/observability/log";
 import { sendEstimateToCustomer } from "@/lib/factory/server/sendEstimateToCustomer";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
 
-export async function POST(req: NextRequest) {
+export const POST = withRequestLog("calculator", async (req: NextRequest, log) => {
   const b = await req.json().catch(() => ({}));
   const sid = typeof b.sid === "string" ? b.sid.trim() : "";
   if (!sid) return NextResponse.json({ ok: false, error: "missing_sid", message: "בחר/י ליד לפני שליחה." }, { status: 400 });
@@ -34,4 +35,4 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: result.error, ...(result.message ? { message: result.message } : {}) }, { status: result.status });
   }
   return NextResponse.json(result);
-}
+});

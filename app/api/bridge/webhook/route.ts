@@ -55,6 +55,9 @@ import {
   syncLeadToGHL,
 } from "@/integrations/ghl/sync";
 import { pauseFields } from "@/lib/autoresponder/bot-pause";
+import { logger, serializeError, withRequestLog } from "@/lib/observability/log";
+
+const log = logger("webhook.bridge");
 
 export const runtime = "nodejs";
 export const maxDuration = 15;
@@ -163,7 +166,7 @@ async function handleMessageReceived(evt: BridgeEnvelope): Promise<void> {
         source: "eli_outbound_from_wa_app",
       });
     } catch (e) {
-      console.error("[bridge.webhook] upsert from is_from_me failed", e);
+      log.error("echo.upsert_failed", e, { sid: jid, waMessageId });
     }
     const inserted = await insertBridgeMessage({
       jid,
@@ -225,7 +228,7 @@ async function handleMessageReceived(evt: BridgeEnvelope): Promise<void> {
         voteOptionText = sel[0];
       }
     } catch (e) {
-      console.warn("[bridge.webhook] poll_vote parse failed", waMessageId, e);
+      log.warn("inbound.poll_vote_parse_failed", { sid: jid, waMessageId, ...serializeError(e) });
     }
   }
   // `text` is what we persist to the messages row. For poll votes we store
@@ -313,7 +316,7 @@ async function handleMessageReceived(evt: BridgeEnvelope): Promise<void> {
       try {
         await sendBridgeMessage(bridgeJid, STOP_WORD_REPLY);
       } catch (sendErr) {
-        console.error("[bridge.webhook] stop-word reply failed", bridgeJid, sendErr);
+        log.error("stop_word.reply_failed", sendErr, { sid, chatId: bridgeJid });
       }
       await sendEliDM(
         eliEscalationTemplate({
@@ -328,11 +331,11 @@ async function handleMessageReceived(evt: BridgeEnvelope): Promise<void> {
         const { syncLeadToGHL } = await import("@/integrations/ghl/sync");
         await syncLeadToGHL(sid);
       } catch (e) {
-        console.warn("[bridge.webhook] stop-word syncLeadToGHL failed", sid, e);
+        log.warn("stop_word.ghl_sync_failed", { sid, ...serializeError(e) });
       }
-      console.log("[bridge.webhook] stop-word escalation", sid);
+      log.info("stop_word.escalated", { sid });
     } catch (e) {
-      console.error("[bridge.webhook] stop-word handler error", sid, e);
+      log.error("stop_word.failed", e, { sid });
     }
     await logDecision({
       manychatSubId: sid,
@@ -366,7 +369,7 @@ async function handleMessageReceived(evt: BridgeEnvelope): Promise<void> {
       })
       .where(sql`trim(${leads.manychatSubId}) = ${sid.trim()}`);
   } catch (e) {
-    console.error("[bridge.webhook] counter reset error", sid, e);
+    log.error("inbound.counter_reset_failed", e, { sid });
   }
 
   if (wasBotPaused) {
@@ -404,9 +407,9 @@ async function handleMessageReceived(evt: BridgeEnvelope): Promise<void> {
           updatedAt: new Date(),
         })
         .where(sql`trim(${leads.manychatSubId}) = ${sid.trim()}`);
-      console.log("[bridge.webhook] test-jid reset", sid);
+      log.info("inbound.test_jid_reset", { sid });
     } catch (e) {
-      console.error("[bridge.webhook] test-jid reset error", sid, e);
+      log.error("inbound.test_jid_reset_failed", e, { sid });
     }
   }
 
@@ -424,7 +427,7 @@ async function handleMessageReceived(evt: BridgeEnvelope): Promise<void> {
       leadSnapshot,
     });
   } catch (e) {
-    console.error("[bridge.webhook] supervisor routing error", sid, e);
+    log.error("supervisor.route_failed", e, { sid });
     // Best-effort: log the failure so it's visible in the dashboard.
     await logDecision({
       manychatSubId: sid,
@@ -529,14 +532,15 @@ async function routeThroughSupervisor(input: SupervisorRouteInput): Promise<void
       priorInboundAt &&
       Date.now() - new Date(priorInboundAt).getTime() > NEW_CONVO_GAP_MS
     ) {
-      console.log(
-        `[bridge.webhook] new-conversation reset for ${sid} (gap ${Math.round((Date.now() - new Date(priorInboundAt).getTime()) / 86_400_000)}d) — restarting questionnaire`
-      );
+      log.info("inbound.new_conversation_reset", {
+        sid,
+        gapDays: Math.round((Date.now() - new Date(priorInboundAt).getTime()) / 86_400_000),
+      });
       try {
         const { restartQuestionnaire } = await import("@/lib/autoresponder/questionnaire");
         await restartQuestionnaire(sid, "שלום 👋 בוא נמלא יחד שאלון קצר כדי שאוכל להכין הצעת מחיר.");
       } catch (e) {
-        console.error("[bridge.webhook] new-conversation restart failed", e);
+        log.error("inbound.restart_failed", e, { sid });
       }
       return;
     }
@@ -583,7 +587,7 @@ async function routeThroughSupervisor(input: SupervisorRouteInput): Promise<void
         });
         return;
       } catch (e) {
-        console.error("[supervisor.route] FACTORY_WAIT/awaiting_logo media handler error", e);
+        log.error("supervisor.logo_media_handler_failed", e, { sid, stage });
       }
     }
     // Other stages with empty text — let the legacy handler decide (it usually escalates).
@@ -646,13 +650,12 @@ async function routeThroughSupervisor(input: SupervisorRouteInput): Promise<void
     (candidate.intentConfidence ?? 0) >= 0.85 &&
     (verdict.confidence ?? 0) < 0.6 // only override LOW-confidence escalations
   ) {
-    console.log(
-      "[supervisor.route] auto-send override:",
+    log.info("supervisor.auto_send_override", {
       sid,
-      candidate.intent,
-      `cand.conf=${candidate.intentConfidence}`,
-      `sup.conf=${verdict.confidence}`
-    );
+      intent: candidate.intent,
+      candidateConfidence: candidate.intentConfidence,
+      supervisorConfidence: verdict.confidence,
+    });
     verdict.recommended = "approve_code";
     verdict.reason = `auto_send_lane: ${candidate.intent} is a safe canned reply, supervisor escalation overruled. Original reason: ${verdict.reason}`;
     verdict.riskFlags = [...verdict.riskFlags, "auto_send_override"];
@@ -719,7 +722,7 @@ async function routeThroughSupervisor(input: SupervisorRouteInput): Promise<void
         triggerMessageId: inboundMessageId,
       });
     } catch (e) {
-      console.error("[supervisor.route] draft generation failed", e);
+      log.error("supervisor.draft_failed", e, { sid });
     }
     try {
       const who = freshLead?.name?.trim() || freshLead?.phone || sid;
@@ -730,7 +733,7 @@ async function routeThroughSupervisor(input: SupervisorRouteInput): Promise<void
           (draftId ? `Draft #${draftId} ready in /dashboard/v3/drafts` : "Draft generation failed — reply manually from CRM.")
       );
     } catch (e) {
-      console.error("[supervisor.route] eli DM failed", e);
+      log.error("supervisor.eli_dm_failed", e, { sid });
     }
 
     // No auto-ack to customer — escalation is silent on the WhatsApp side
@@ -750,12 +753,12 @@ async function routeThroughSupervisor(input: SupervisorRouteInput): Promise<void
   if (verdict.recommended === "override_with_text") {
     if (!verdict.overrideText) {
       // LLM said override but didn't supply text. Treat as approve_code.
-      console.warn("[supervisor.route] override_with_text with no text — falling back to approve_code");
+      log.warn("supervisor.override_without_text", { sid, reason: "falling back to approve_code" });
     } else {
       try {
         await sendBridgeMessage(bridgeJid, verdict.overrideText);
       } catch (e) {
-        console.error("[supervisor.route] override send failed", e);
+        log.error("supervisor.override_send_failed", e, { sid, chatId: bridgeJid });
         await logDecision({
           ...logBase,
           decidedBy: "llm_override",
@@ -858,10 +861,10 @@ async function runLegacyHandlerAndLog(args: {
       // WON / LOST — supervisor said approve_code but there's no handler.
       // This is a no_op the supervisor probably should have escalated; log
       // it so we catch the case.
-      console.log("[supervisor.route] approve_code for silent stage — no handler", sid, stage);
+      log.info("supervisor.approve_code_no_handler", { sid, stage });
     }
   } catch (e) {
-    console.error("[supervisor.route] legacy handler error", handlerName, e);
+    log.error("supervisor.legacy_handler_failed", e, { sid, handler: handlerName });
   }
 
   // Reload stage AFTER the handler runs so we capture stage transitions.
@@ -876,11 +879,7 @@ async function runLegacyHandlerAndLog(args: {
     handlerAction === "no_op" &&
     (args.supervisor?.recommended === "approve_code" || !args.supervisor);
   if (handlerSilent && inboundLogText !== "(empty)" && inboundLogText !== "(media-only)") {
-    console.warn(
-      "[supervisor.route] safety net: handler silent after approve_code, escalating",
-      sid,
-      handlerName
-    );
+    log.warn("supervisor.safety_net_escalating", { sid, handler: handlerName });
     let draftId: number | null = null;
     try {
       const [leadRow] = await db
@@ -898,7 +897,7 @@ async function runLegacyHandlerAndLog(args: {
           triggerMessageId: inboundMessageId,
         });
       } catch (e) {
-        console.error("[supervisor.route] safety-net draft generation failed", e);
+        log.error("supervisor.safety_net_draft_failed", e, { sid });
       }
       try {
         const who = leadRow?.name?.trim() || leadRow?.phone || sid;
@@ -911,10 +910,10 @@ async function runLegacyHandlerAndLog(args: {
               : "Draft generation failed — reply manually from CRM.")
         );
       } catch (e) {
-        console.error("[supervisor.route] safety-net Eli DM failed", e);
+        log.error("supervisor.safety_net_eli_dm_failed", e, { sid });
       }
     } catch (e) {
-      console.error("[supervisor.route] safety-net escalation failed", e);
+      log.error("supervisor.safety_net_failed", e, { sid });
     }
 
     // No auto-ack to customer — Eli handles via draft/manual reply.
@@ -1032,9 +1031,10 @@ async function handleMessageSent(evt: BridgeEnvelope): Promise<void> {
   }
 }
 
-export async function POST(req: NextRequest) {
+export const POST = withRequestLog<NextRequest>("webhook.bridge", async (req, log) => {
   const secret = BRIDGE_WEBHOOK_SECRET;
   if (!secret) {
+    log.warn("not_configured", { reason: "BRIDGE_WEBHOOK_SECRET missing" });
     return NextResponse.json(
       { error: "BRIDGE_WEBHOOK_SECRET not configured" },
       { status: 503 }
@@ -1093,17 +1093,17 @@ export async function POST(req: NextRequest) {
         break;
     }
   } catch (e) {
-    console.error("[bridge.webhook] handler error", envelope.type, e);
+    log.error("handler.failed", e, { evtId: envelope.id, eventType: envelope.type });
     return NextResponse.json({ ok: true, handler_error: String(e) });
   }
 
   return NextResponse.json({ ok: true });
-}
+});
 
-export async function GET() {
+export const GET = withRequestLog<NextRequest>("webhook.bridge", async () => {
   return NextResponse.json({
     ok: true,
     endpoint: "bridge webhook receiver",
     configured: Boolean(process.env.BRIDGE_WEBHOOK_SECRET),
   });
-}
+});

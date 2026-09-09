@@ -32,6 +32,9 @@ import {
   isThinDossier,
   type LeadDossier,
 } from "./build-dossier";
+import { logger } from "@/lib/observability/log";
+
+const log = logger("analysis");
 
 export const ANALYSIS_VERSION = "v1";
 const NOTE_MARKER_PREFIX = "[LEAD-ANALYSIS v1]";
@@ -344,7 +347,7 @@ async function postGhlNote(
     if (existing.some((n) => (n.body ?? "").includes(marker))) return;
     await addContactNote(d.ghlContactId, renderNoteBody(verdict, marker));
   } catch (e) {
-    console.error("[analyze-lead] GHL note failed", e);
+    log.error("analyze_lead.ghl_note_failed", e, { sid: d.sid, contactId: d.ghlContactId });
   }
 }
 

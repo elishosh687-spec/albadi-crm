@@ -19,6 +19,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { widgetAuthed } from "@/lib/widget/auth";
 import { getTenantAccessToken, getFeishuBaseUrl } from "@/lib/feishu/client";
+import { withRequestLog } from "@/lib/observability/log";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -48,8 +49,9 @@ function cellText(c: unknown): string {
 const cellNum = (c: unknown): number =>
   typeof c === "number" ? c : Number(String(cellText(c)).replace(/,/g, "")) || 0;
 
-export async function GET(req: NextRequest) {
+export const GET = withRequestLog("widget", async (req: NextRequest, log) => {
   if (!widgetAuthed(req)) {
+    log.warn("unauthorized");
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
   if (!WORKBOOK) {
@@ -79,13 +81,15 @@ export async function GET(req: NextRequest) {
     data?: { valueRange?: { values?: unknown[][] } };
   };
   if (json.code) {
+    log.error("feishu.read_failed", undefined, { tab, code: json.code, msg: json.msg });
     return NextResponse.json({ ok: false, error: `feishu ${json.code}: ${json.msg}` }, { status: 502 });
   }
   const grid = json.data?.valueRange?.values ?? [];
+  log.debug("feishu.tab_read", { tab, rows: grid.length });
 
   if (tab === "shipping") return NextResponse.json(shipping(grid, label, q));
   return NextResponse.json(generic(grid, tab, label, q));
-}
+});
 
 /**
  * The shipping tab, grouped the way it is actually used: one destination per

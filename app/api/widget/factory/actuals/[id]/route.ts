@@ -5,6 +5,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { withRequestLog } from "@/lib/observability/log";
 import { widgetAuthed } from "@/lib/widget/auth";
 import { saveActualCosts } from "@/lib/factory/server/closed";
 import type { QuoteActualCosts } from "@/lib/factory/types";
@@ -12,10 +13,11 @@ import type { QuoteActualCosts } from "@/lib/factory/types";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-export async function PUT(
+export const PUT = withRequestLog("deals", async (
   req: NextRequest,
+  log,
   { params }: { params: Promise<{ id: string }> }
-) {
+) => {
   if (!widgetAuthed(req)) {
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
@@ -28,9 +30,10 @@ export async function PUT(
     await saveActualCosts(id, body);
     return NextResponse.json({ ok: true });
   } catch (err) {
+    log.error("actuals.save_failed", err, { id });
     return NextResponse.json(
       { ok: false, error: "invalid_body", detail: String(err) },
       { status: 400 }
     );
   }
-}
+});

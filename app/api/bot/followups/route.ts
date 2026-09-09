@@ -61,9 +61,12 @@ import {
   type FutureGateCtx,
   type GateSkip,
 } from "@/lib/autoresponder/future-followup";
+import { logger, serializeError, withRequestLog } from "@/lib/observability/log";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
+
+const log = logger("followups");
 
 const HOUR_MS = 60 * 60 * 1000;
 const DAY_MS = 24 * HOUR_MS;
@@ -312,9 +315,11 @@ async function escalateLead(input: {
     .where(sql`trim(${leads.manychatSubId}) = ${input.sid.trim()}`);
 
   if (alreadyEscalated) {
-    console.log(
-      `[followups] re-escalated ${input.sid} — already NEEDS_ELI, DM suppressed`
-    );
+    log.info("escalate.dm_suppressed", {
+      sid: input.sid,
+      stage: input.stage,
+      reason: "already_needs_eli",
+    });
     return;
   }
   await sendEliDM(
@@ -679,7 +684,7 @@ async function processCustomerLead(row: {
         botSummary: verdict.reason,
       });
     } catch (e) {
-      console.error("[followups] draft generation failed", e);
+      log.error("escalate.draft_failed", e, { sid: row.sid, stage: row.pipelineStage, attempt });
     }
     try {
       const who = row.name?.trim() || row.phone || row.sid;
@@ -689,7 +694,7 @@ async function processCustomerLead(row: {
           (draftId ? `Draft #${draftId} ready in /dashboard/v3/drafts` : "Draft generation failed — handle manually.")
       );
     } catch (e) {
-      console.error("[followups] eli DM failed", e);
+      log.error("escalate.eli_dm_failed", e, { sid: row.sid, stage: row.pipelineStage, attempt });
     }
     // Mark as escalated state on the lead.
     await escalateLead({
@@ -733,7 +738,7 @@ async function processCustomerLead(row: {
     decidedBy = "llm_override";
   } else {
     if (verdict.recommended === "override_with_text" && setterAuthored) {
-      console.log("[followups] supervisor rewrite declined — setter authored", row.sid);
+      log.info("supervisor.rewrite_declined", { sid: row.sid, attempt, reason: "setter_authored" });
     }
     textToSend = candidateText;
     decidedBy = "code";
@@ -856,13 +861,14 @@ async function processFactoryLead(row: {
   return { sid: row.sid, action: "sent", detail: "factory_reminder" };
 }
 
-export async function POST(req: NextRequest) {
+const run = withRequestLog("followups", async (req: NextRequest, log) => {
   const auth = req.headers.get("authorization");
   // Vercel cron sends `Bearer $CRON_SECRET`; manual triggers use `BOT_SECRET`.
   const accepted = [process.env.BOT_SECRET, process.env.CRON_SECRET]
     .filter(Boolean)
     .map((s) => `Bearer ${s}`);
   if (accepted.length === 0 || !accepted.includes(auth ?? "")) {
+    log.warn("unauthorized");
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
@@ -916,7 +922,7 @@ export async function POST(req: NextRequest) {
     RETURNING key`);
   const gotLock = (((claim as any).rows ?? claim) as unknown[]).length > 0;
   if (!gotLock) {
-    console.log("[followups] another run is in flight — skipping");
+    log.info("run.already_running", { skipped: "already_running" });
     return NextResponse.json({ ok: true, skipped: "already_running" });
   }
 
@@ -1064,12 +1070,22 @@ export async function POST(req: NextRequest) {
         lines.push("https://albadi-crm.vercel.app/dashboard/v3/leads?stage=GAPS");
         await sendEliDM(lines.join("\n"));
       } else {
-        console.log("[followups] gap alert suppressed — unchanged within 24h");
+        log.info("gap_alert.suppressed", { total: gaps.total, reason: "unchanged_within_24h" });
       }
     }
   } catch (e) {
-    console.warn("[followups] sheet-gap alert failed", e);
+    log.warn("gap_alert.failed", { ...serializeError(e) });
   }
+
+  // The per-tick summary — this is how a dead cron gets noticed.
+  log.info("tick.summary", {
+    dryRun,
+    maxFollowups,
+    customer_total: customerResults.length,
+    factory_total: factoryResults.length,
+    customer_by: summarize(customerResults),
+    factory_by: summarize(factoryResults),
+  });
 
   return NextResponse.json({
     ok: true,
@@ -1118,10 +1134,9 @@ export async function POST(req: NextRequest) {
             SET value = jsonb_build_object('at', now() - interval '1 hour')
             WHERE key = 'followups.lock'`
       )
-      .catch((e) => console.warn("[followups] lock release failed", e));
+      .catch((e) => log.warn("lock.release_failed", { ...serializeError(e) }));
   }
-}
+});
 
-export async function GET(req: NextRequest) {
-  return POST(req);
-}
+export const POST = run;
+export const GET = run;

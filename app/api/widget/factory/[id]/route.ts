@@ -5,6 +5,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { withRequestLog } from "@/lib/observability/log";
 import { db } from "@/lib/db";
 import { factoryQuoteRequests } from "@/drizzle/schema";
 import { and, eq, isNull } from "drizzle-orm";
@@ -12,10 +13,11 @@ import { widgetAuthed } from "@/lib/widget/auth";
 
 export const runtime = "nodejs";
 
-export async function DELETE(
+export const DELETE = withRequestLog("factory", async (
   req: NextRequest,
+  log,
   ctx: { params: Promise<{ id: string }> }
-) {
+) => {
   if (!widgetAuthed(req)) {
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
@@ -40,4 +42,4 @@ export async function DELETE(
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
   return NextResponse.json({ ok: true });
-}
+});

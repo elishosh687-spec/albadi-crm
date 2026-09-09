@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { withRequestLog } from "@/lib/observability/log";
 import { loadConfiguratorSession } from "@/lib/configurator/sessions";
 
 export const runtime = "nodejs";
@@ -11,14 +12,15 @@ function corsHeaders(): HeadersInit {
   };
 }
 
-export async function OPTIONS() {
+export const OPTIONS = withRequestLog("configurator", async (_req: NextRequest, log) => {
   return new NextResponse(null, { status: 204, headers: corsHeaders() });
-}
+});
 
-export async function GET(
+export const GET = withRequestLog("configurator", async (
   _req: NextRequest,
+  log,
   { params }: { params: Promise<{ token: string }> }
-) {
+) => {
   const { token } = await params;
   const session = await loadConfiguratorSession(token);
   if (!session) {
@@ -38,4 +40,4 @@ export async function GET(
     },
     { headers: corsHeaders() }
   );
-}
+});

@@ -6,6 +6,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { withRequestLog } from "@/lib/observability/log";
 import { widgetAuthed } from "@/lib/widget/auth";
 import {
   mirrorDealEventToGhl,
@@ -17,10 +18,11 @@ import type { DealMilestones } from "@/lib/factory/types";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-export async function PUT(
+export const PUT = withRequestLog("deals", async (
   req: NextRequest,
+  log,
   { params }: { params: Promise<{ id: string }> }
-) {
+) => {
   if (!widgetAuthed(req)) {
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
@@ -39,9 +41,10 @@ export async function PUT(
     }
     return NextResponse.json({ ok: true, milestones: merged });
   } catch (err) {
+    log.error("milestones.save_failed", err, { id });
     return NextResponse.json(
       { ok: false, error: err instanceof Error ? err.message : "save_failed" },
       { status: 400 }
     );
   }
-}
+});

@@ -14,15 +14,14 @@ import { db } from "@/lib/db";
 import { botDrafts } from "@/drizzle/schema";
 import { eq } from "drizzle-orm";
 import { logLeadEvent } from "@/lib/events/lead-events";
+import { withRequestLog } from "@/lib/observability/log";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
 
-export async function POST(
-  req: NextRequest,
-  ctx: { params: Promise<{ id: string }> }
-) {
+export const POST = withRequestLog("widget", async (req: NextRequest, log, ctx: { params: Promise<{ id: string }> }) => {
   if (!widgetAuthed(req)) {
+    log.warn("unauthorized");
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
   const { id } = await ctx.params;
@@ -41,8 +40,10 @@ export async function POST(
 
   const r = await approveDraft(draftId, editedText);
   if (!r.ok) {
+    log.warn("draft.approve_failed", { draftId, err_msg: r.error });
     return NextResponse.json({ ok: false, error: r.error }, { status: 400 });
   }
+  log.info("draft.approved", { draftId, edited: Boolean(editedText), waMessageId: r.waMessageId ?? null });
 
   // Mirror the dashboard server action's event logging side-effect.
   try {
@@ -61,4 +62,4 @@ export async function POST(
   } catch {}
 
   return NextResponse.json({ ok: true, message: "נשלח", waMessageId: r.waMessageId });
-}
+});

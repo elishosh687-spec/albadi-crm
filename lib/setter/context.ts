@@ -10,6 +10,9 @@ import { db } from "../db";
 import { leads, messages, botQuotes } from "../../drizzle/schema";
 import { desc, eq, sql } from "drizzle-orm";
 import { computeCallPrep, type PrepItem } from "../autoresponder/call-prep";
+import { logger, serializeError } from "@/lib/observability/log";
+
+const log = logger("setter");
 
 export interface SalesContext {
   sid: string;
@@ -194,7 +197,7 @@ async function findNewerCustomerQuote(
         AND deleted_at IS NULL`);
     consider((((f as any).rows ?? f) as any[])[0]?.at);
   } catch (e) {
-    console.warn("[setter.context] factory quote read failed", e);
+    log.warn("context.factory_quote_read_failed", { ...serializeError(e) });
   }
 
   try {
@@ -206,7 +209,7 @@ async function findNewerCustomerQuote(
         AND text ILIKE '%הצעת מחיר%' AND text LIKE '%₪%'`);
     consider((((m as any).rows ?? m) as any[])[0]?.at);
   } catch (e) {
-    console.warn("[setter.context] manual quote read failed", e);
+    log.warn("context.manual_quote_read_failed", { ...serializeError(e) });
   }
 
   return newest ? (newest as Date).toISOString() : null;
@@ -277,7 +280,7 @@ async function loadDossier(
       };
     }
   } catch (e) {
-    console.warn("[setter.context] verdict read failed", e);
+    log.warn("context.verdict_read_failed", { ...serializeError(e) });
   }
 
   if (ghlContactId) {
@@ -302,7 +305,7 @@ async function loadDossier(
         };
       }
     } catch (e) {
-      console.warn("[setter.context] call read failed", e);
+      log.warn("context.call_read_failed", { ...serializeError(e) });
     }
   }
 

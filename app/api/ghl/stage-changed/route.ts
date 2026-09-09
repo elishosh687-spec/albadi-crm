@@ -33,6 +33,7 @@ import { leads } from "@/drizzle/schema";
 import { eq, or, sql } from "drizzle-orm";
 import { GHL_STAGE_IDS, GHL_PIPELINE_ID } from "@/integrations/ghl/config";
 import { findOpportunityForContact, getOpportunity } from "@/integrations/ghl/client";
+import { serializeError, withRequestLog } from "@/lib/observability/log";
 
 export const runtime = "nodejs";
 export const maxDuration = 15;
@@ -76,7 +77,7 @@ function reverseLookupStage(stageId: string): string | null {
   return null;
 }
 
-export async function POST(req: NextRequest): Promise<NextResponse> {
+export const POST = withRequestLog("webhook.ghl", async (req: NextRequest, log): Promise<NextResponse> => {
   const auth = req.headers.get("authorization") || "";
   const secret = process.env.BOT_SECRET || "";
   if (!secret || auth !== `Bearer ${secret}`) {
@@ -84,7 +85,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   }
 
   const rawBody = await req.text();
-  console.log("[ghl.stage-changed] raw body", rawBody.slice(0, 800));
+  log.debug("payload.received", { bytes: rawBody.length });
 
   let payload: Payload;
   try {
@@ -100,7 +101,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   let stageId = pickStageId(payload);
   const stageName = pickStageName(payload);
 
-  console.log("[ghl.stage-changed] parsed", {
+  log.info("payload.parsed", {
     contactId,
     opportunityId,
     stageId,
@@ -128,20 +129,21 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       if (opportunityId) {
         const opp = await getOpportunity(opportunityId);
         stageId = opp.pipelineStageId;
-        console.log("[ghl.stage-changed] fetched stageId via getOpportunity", { stageId });
+        log.info("stage.fetched_via_opportunity", { stageId, opportunityId });
       } else if (contactId && GHL_PIPELINE_ID) {
         const opp = await findOpportunityForContact(contactId, GHL_PIPELINE_ID);
         if (opp) {
           stageId = opp.pipelineStageId;
           opportunityId = opp.id;
-          console.log("[ghl.stage-changed] fetched via findOpportunityForContact", {
+          log.info("stage.fetched_via_contact", {
             stageId,
             opportunityId,
+            contactId,
           });
         }
       }
     } catch (e) {
-      console.warn("[ghl.stage-changed] GHL API lookup failed", e);
+      log.warn("stage.lookup_failed", { contactId, opportunityId, ...serializeError(e) });
     }
   }
 
@@ -154,7 +156,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
   const localStage = reverseLookupStage(stageId);
   if (!localStage) {
-    console.warn("[ghl.stage-changed] unknown stage id", { stageId, stageName });
+    log.warn("stage.unknown", { stageId, stageName, contactId, opportunityId });
     return NextResponse.json(
       { error: "unknown_stage_id", stageId, stageName },
       { status: 422 }
@@ -181,9 +183,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         { status: 404 }
       );
     }
-    console.log("[ghl.stage-changed] set NEEDS_ELI flag", {
-      sid: result[0].sid,
-    });
+    log.info("flag.needs_eli_set", { sid: result[0].sid, contactId, opportunityId });
     // Eli set NEEDS_ELI ⇒ owner tag flips + escalation task surfaces.
     try {
       const { reconcileGHLTasksForLead } = await import(
@@ -191,7 +191,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       );
       void reconcileGHLTasksForLead(result[0].sid);
     } catch (e) {
-      console.warn("[ghl.stage-changed] ghl tasks reconcile failed", e);
+      log.warn("tasks.reconcile_failed", { sid: result[0].sid, ...serializeError(e) });
     }
     return NextResponse.json({
       ok: true,
@@ -221,19 +221,19 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     .returning({ sid: leads.manychatSubId });
 
   if (result.length === 0) {
-    console.warn("[ghl.stage-changed] no lead matched", {
-      contactId,
-      opportunityId,
-    });
+    log.warn("lead.not_matched", { contactId, opportunityId, stage: localStage });
     return NextResponse.json(
       { error: "no_lead_matched", contactId, opportunityId },
       { status: 404 }
     );
   }
 
-  console.log("[ghl.stage-changed] updated", {
+  log.info("stage.changed", {
     sid: result[0].sid,
-    pipelineStage: localStage,
+    stage: localStage,
+    previousStage: beforeUpdate?.stage ?? null,
+    contactId,
+    opportunityId,
   });
   // Dragging a card into "להתקשר בעתיד" starts a new follow-up loop — reset the
   // counter, or a lead arriving from an exhausted INTAKE (followUpCount=3)
@@ -245,7 +245,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       );
       await enterFutureFollowUp(result[0].sid, "ghl_drag", beforeUpdate?.stage ?? null);
     } catch (e) {
-      console.warn("[ghl.stage-changed] parked-clock reset failed", e);
+      log.warn("parked_clock.reset_failed", { sid: result[0].sid, ...serializeError(e) });
     }
   }
   // Report lead-quality progression to Meta (CAPI-for-CRM), so the ad algorithm
@@ -260,7 +260,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         localStage === "DISCAVERY" ? "Qualified" : "QuoteSent",
       );
     } catch (e) {
-      console.warn("[ghl.stage-changed] meta capi report failed", e);
+      log.warn("meta.report_failed", { sid: result[0].sid, stage: localStage, ...serializeError(e) });
     }
   }
   // Re-evaluate signal-derived tasks (e.g. big_quote_close at CONSIDERATION,
@@ -271,11 +271,11 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     );
     void reconcileGHLTasksForLead(result[0].sid);
   } catch (e) {
-    console.warn("[ghl.stage-changed] ghl tasks reconcile failed", e);
+    log.warn("tasks.reconcile_failed", { sid: result[0].sid, stage: localStage, ...serializeError(e) });
   }
   return NextResponse.json({
     ok: true,
     sid: result[0].sid,
     pipelineStage: localStage,
   });
-}
+});

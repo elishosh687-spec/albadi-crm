@@ -16,6 +16,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { leads, messages } from "@/drizzle/schema";
 import { and, desc, eq, isNull, sql } from "drizzle-orm";
+import { withRequestLog } from "@/lib/observability/log";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
@@ -26,8 +27,9 @@ function authorized(req: NextRequest): boolean {
   return req.headers.get("authorization") === `Bearer ${secret}`;
 }
 
-export async function GET(req: NextRequest) {
+export const GET = withRequestLog("admin", async (req: NextRequest, log) => {
   if (!authorized(req)) {
+    log.warn("unauthorized");
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
@@ -68,4 +70,4 @@ export async function GET(req: NextRequest) {
     },
     leads: shown,
   });
-}
+});

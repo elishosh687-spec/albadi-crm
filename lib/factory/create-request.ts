@@ -19,6 +19,9 @@ import {
   FEISHU_ROW_HEIGHT_PX,
 } from "@/lib/feishu/sheets";
 import type { FactoryProductSpec, FactoryPricingResult } from "./types";
+import { logger, serializeError } from "@/lib/observability/log";
+
+const log = logger("factory");
 
 // The factory works the Feishu sheet in English/Chinese — the description column
 // must never carry Hebrew (Eli 2026-07-16). The customer NAME (col A) stays
@@ -108,10 +111,7 @@ export async function createFactoryRequest(
   try {
     await setRowHeight(feishuRowIndex, FEISHU_ROW_HEIGHT_PX);
   } catch (err) {
-    console.warn(
-      "[factory/create-request] setRowHeight failed (non-fatal)",
-      err
-    );
+    log.warn("create_request.set_row_height_failed", { rowIndex: feishuRowIndex, ...serializeError(err) });
   }
 
   // Format column C (the date cell we just wrote as an Excel serial) so it
@@ -120,10 +120,7 @@ export async function createFactoryRequest(
   try {
     await setCellDateFormat(feishuRowIndex, "C");
   } catch (err) {
-    console.warn(
-      "[factory/create-request] setCellDateFormat failed (non-fatal)",
-      err
-    );
+    log.warn("create_request.set_cell_date_format_failed", { rowIndex: feishuRowIndex, ...serializeError(err) });
   }
 
   // Operator's "הערות למפעל" → the Remark column (S). appendRow only writes
@@ -134,10 +131,7 @@ export async function createFactoryRequest(
     try {
       await setCellValue(feishuRowIndex, "S", factoryNote);
     } catch (err) {
-      console.warn(
-        "[factory/create-request] remark write (col S) failed (non-fatal)",
-        err
-      );
+      log.warn("create_request.remark_write_failed", { rowIndex: feishuRowIndex, column: "S", ...serializeError(err) });
     }
   }
 
@@ -274,10 +268,7 @@ export async function promoteDraftToFeishu(
   try {
     await setRowHeight(feishuRowIndex, FEISHU_ROW_HEIGHT_PX);
   } catch (err) {
-    console.warn(
-      "[factory/promote-draft] setRowHeight failed (non-fatal)",
-      err
-    );
+    log.warn("promote_draft.set_row_height_failed", { rowIndex: feishuRowIndex, ...serializeError(err) });
   }
 
   if (isPriced) {

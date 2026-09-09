@@ -46,6 +46,9 @@ import {
   pickStageId,
   type LocalLeadSnapshot,
 } from "./mapping";
+import { logger } from "@/lib/observability/log";
+
+const log = logger("ghl");
 
 interface Args {
   dryRun: boolean;
@@ -334,7 +337,7 @@ async function processChat(
     return;
   }
   if (!lead.ghlContactId) {
-    console.warn(`[skip] ${lead.manychatSubId} — chat-to-inbox but no ghl_contact_id`);
+    log.warn("backfill.chat_skipped_no_contact", { sid: lead.manychatSubId });
     return;
   }
 
@@ -342,9 +345,11 @@ async function processChat(
   const realMsgs = msgRows.filter((r) => r.text?.trim());
 
   if (args.dryRun) {
-    console.log(
-      `[dry-chat] ${lead.manychatSubId} name=${buildLeadDisplayName(lead)} msgs=${realMsgs.length}`
-    );
+    log.info("backfill.chat_dry_run", {
+      sid: lead.manychatSubId,
+      name: buildLeadDisplayName(lead),
+      count: realMsgs.length,
+    });
     return;
   }
 
@@ -370,14 +375,19 @@ async function processChat(
     } catch (err) {
       leadErr++;
       stats.errors++;
-      console.error(
-        `[err msg] ${lead.manychatSubId} ${m.direction} ${new Date(m.receivedAt).toISOString()}`,
-        err instanceof Error ? err.message : err
-      );
+      log.error("backfill.message_failed", err, {
+        sid: lead.manychatSubId,
+        direction: m.direction,
+        receivedAt: new Date(m.receivedAt).toISOString(),
+      });
       // Stop spamming if same lead hits >5 consecutive errors (likely
       // GHL rejected the channel entirely for this contact).
       if (leadErr >= 5) {
-        console.error(`[abort lead] too many errors on ${lead.manychatSubId}`);
+        log.error("backfill.lead_aborted", undefined, {
+          sid: lead.manychatSubId,
+          count: leadErr,
+          msg: "too many consecutive errors",
+        });
         return;
       }
     }
@@ -402,9 +412,11 @@ async function processLead(
 
   const stageId = pickStageId(lead);
   if (!stageId) {
-    console.warn(
-      `[skip] ${lead.manychatSubId} — no stage id (stage=${lead.pipelineStage} flag=${lead.pipelineFlag})`
-    );
+    log.warn("backfill.skipped_no_stage", {
+      sid: lead.manychatSubId,
+      stage: lead.pipelineStage,
+      flag: lead.pipelineFlag,
+    });
     stats.skippedNoStage++;
     return;
   }
@@ -424,9 +436,17 @@ async function processLead(
   const eventsNote = formatEventsNote(eventRows);
 
   if (args.dryRun) {
-    console.log(
-      `[dry] ${lead.manychatSubId} name=${name} stage=${lead.pipelineStage ?? "NEW"} value=${monetary ?? "-"} notes=${hasNotes} msgs=${msgRows.length} decisions=${decisionRows.length} events=${eventRows.length} summary=${!!summaryNote}`
-    );
+    log.info("backfill.dry_run", {
+      sid: lead.manychatSubId,
+      name,
+      stage: lead.pipelineStage ?? "NEW",
+      value: monetary ?? null,
+      hasNotes,
+      msgs: msgRows.length,
+      decisions: decisionRows.length,
+      events: eventRows.length,
+      hasSummary: !!summaryNote,
+    });
     return;
   }
 
@@ -434,7 +454,7 @@ async function processLead(
   let contactId = lead.ghlContactId;
   if (args.extrasOnly) {
     if (!contactId) {
-      console.warn(`[skip] ${lead.manychatSubId} — extras-only but no ghl_contact_id`);
+      log.warn("backfill.extras_skipped_no_contact", { sid: lead.manychatSubId });
       return;
     }
   } else {
@@ -452,7 +472,7 @@ async function processLead(
       }
       stats.contactsUpserted++;
     } catch (err) {
-      console.error(`[err contact] ${lead.manychatSubId}`, err);
+      log.error("backfill.contact_failed", err, { sid: lead.manychatSubId });
       stats.errors++;
       return;
     }
@@ -466,7 +486,7 @@ async function processLead(
       stats.notesWritten++;
       await sleep(RATE_DELAY_MS);
     } catch (err) {
-      console.error(`[err notes] ${lead.manychatSubId}`, err);
+      log.error("backfill.notes_failed", err, { sid: lead.manychatSubId });
       stats.errors++;
     }
   }
@@ -478,7 +498,7 @@ async function processLead(
       stats.historyNotesWritten++;
       await sleep(RATE_DELAY_MS);
     } catch (err) {
-      console.error(`[err history] ${lead.manychatSubId}`, err);
+      log.error("backfill.history_failed", err, { sid: lead.manychatSubId });
       stats.errors++;
     }
   }
@@ -490,7 +510,7 @@ async function processLead(
       stats.summaryNotesWritten++;
       await sleep(RATE_DELAY_MS);
     } catch (err) {
-      console.error(`[err summary] ${lead.manychatSubId}`, err);
+      log.error("backfill.summary_failed", err, { sid: lead.manychatSubId });
       stats.errors++;
     }
   }
@@ -502,7 +522,7 @@ async function processLead(
       stats.decisionNotesWritten++;
       await sleep(RATE_DELAY_MS);
     } catch (err) {
-      console.error(`[err decisions] ${lead.manychatSubId}`, err);
+      log.error("backfill.decisions_failed", err, { sid: lead.manychatSubId });
       stats.errors++;
     }
   }
@@ -514,7 +534,7 @@ async function processLead(
       stats.activityNotesWritten++;
       await sleep(RATE_DELAY_MS);
     } catch (err) {
-      console.error(`[err activity] ${lead.manychatSubId}`, err);
+      log.error("backfill.activity_failed", err, { sid: lead.manychatSubId });
       stats.errors++;
     }
   }
@@ -525,7 +545,7 @@ async function processLead(
     return;
   }
   if (!GHL_PIPELINE_ID) {
-    console.warn("GHL_PIPELINE_ID not set — skipping opportunity step");
+    log.warn("backfill.pipeline_id_missing", { msg: "GHL_PIPELINE_ID not set — skipping opportunity step" });
     await markBackfilled(lead.manychatSubId);
     return;
   }
@@ -582,7 +602,7 @@ async function processLead(
       }
     }
   } catch (err) {
-    console.error(`[err opp] ${lead.manychatSubId}`, err);
+    log.error("backfill.opportunity_failed", err, { sid: lead.manychatSubId });
     stats.errors++;
   }
 
@@ -593,19 +613,21 @@ async function processLead(
 
 async function main(): Promise<void> {
   const args = parseArgs();
-  console.log(
-    `[backfill] dry-run=${args.dryRun} resume=${args.resume} extras-only=${args.extrasOnly} limit=${args.limit ?? "none"}`
-  );
+  log.info("backfill.start", {
+    dryRun: args.dryRun,
+    resume: args.resume,
+    extrasOnly: args.extrasOnly,
+    chatToInbox: args.chatToInbox,
+    limit: args.limit,
+  });
 
   let rows = await loadLeads(args);
   if (args.extrasOnly || args.chatToInbox) {
     rows = rows.filter((r) => r.ghlContactId);
     const mode = args.chatToInbox ? "chat-to-inbox" : "extras-only";
-    console.log(
-      `[backfill] ${mode}: ${rows.length} leads with cached ghl_contact_id`
-    );
+    log.info("backfill.leads_loaded", { mode, count: rows.length, msg: "leads with cached ghl_contact_id" });
   } else {
-    console.log(`[backfill] loaded ${rows.length} active leads with phone/jid`);
+    log.info("backfill.leads_loaded", { mode: "full", count: rows.length, msg: "active leads with phone/jid" });
   }
 
   const stats: Stats = {
@@ -628,9 +650,15 @@ async function main(): Promise<void> {
   for (const lead of rows) {
     stats.scanned++;
     if (stats.scanned % 25 === 0) {
-      console.log(
-        `[progress] ${stats.scanned}/${rows.length} — contacts=${stats.contactsUpserted} opps+=${stats.opportunitiesCreated} opps~=${stats.opportunitiesUpdated} skipped=${stats.skippedResume + stats.skippedNoStage} errors=${stats.errors}`
-      );
+      log.info("backfill.progress", {
+        scanned: stats.scanned,
+        total: rows.length,
+        contacts: stats.contactsUpserted,
+        oppsCreated: stats.opportunitiesCreated,
+        oppsUpdated: stats.opportunitiesUpdated,
+        skipped: stats.skippedResume + stats.skippedNoStage,
+        errors: stats.errors,
+      });
     }
     if (args.chatToInbox) {
       await processChat(lead, args, stats);
@@ -639,12 +667,11 @@ async function main(): Promise<void> {
     }
   }
 
-  console.log("\n=== done ===");
-  console.log(JSON.stringify(stats, null, 2));
+  log.info("backfill.done", { ...stats });
   process.exit(stats.errors > 0 ? 1 : 0);
 }
 
 main().catch((e) => {
-  console.error("[backfill] fatal", e);
+  log.error("backfill.fatal", e);
   process.exit(1);
 });

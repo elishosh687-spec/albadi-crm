@@ -36,6 +36,9 @@ import {
   type V2FlagName,
 } from "./config";
 import { isJid, jidToPhone, phoneToJid } from "./jid";
+import { logger, serializeError } from "@/lib/observability/log";
+
+const log = logger("messaging");
 
 // When USE_GREEN_API=1, every public send delegates to lib/greenapi/client
 // instead of hitting the Yehuda bridge. Bridge code stays intact so we can
@@ -282,8 +285,7 @@ export async function sendBridgeMessage(
   // scripts/test-stage*.ts). NEVER set this in Vercel/prod.
   if (process.env.BRIDGE_DRY_RUN === "1") {
     const fakeId = `dryrun:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`;
-    const preview = message.length > 100 ? `${message.slice(0, 100)}…` : message;
-    console.log(`[bridge.dryrun] → ${recipient}: ${preview.replace(/\n/g, " ⏎ ")}`);
+    log.info("send.dry_run", { recipient, textPreview: message.slice(0, 80) });
     return { wa_message_id: fakeId, status: "dryrun" };
   }
   if (useGreenApi()) {
@@ -358,7 +360,7 @@ export async function sendBridgeMessage(
       sender,
     });
   } catch (e) {
-    console.warn("[sendBridgeMessage] outbound pre-insert failed", e);
+    log.warn("outbound.preinsert_failed", { sid: jid, sender, ...serializeError(e) });
   }
 
   // A human just spoke to this customer — stand down.
@@ -393,7 +395,7 @@ export async function sendBridgeMessage(
           OR (${digits} <> '' AND regexp_replace(coalesce(${leads.phoneE164}, ''), '\\D', '', 'g') = ${digits})
         `);
     } catch (e) {
-      console.warn("[sendBridgeMessage] auto-pause on human send failed", e);
+      log.warn("auto_pause.failed", { sid: jid, ...serializeError(e) });
     }
   }
 
@@ -429,7 +431,7 @@ export async function sendBridgeMessage(
           mediaUrl: mediaPath ?? null,
           mediaFilename: mediaFilename ?? null,
         }).catch((e) => {
-          console.warn("[sendBridgeMessage] ghl forward failed", e);
+          log.warn("ghl_forward.failed", { sid: jid, ...serializeError(e) });
         })
       );
     } catch (e) {
@@ -447,7 +449,7 @@ export async function sendBridgeMessage(
           mediaFilename: mediaFilename ?? null,
         });
       } catch (e2) {
-        console.warn("[sendBridgeMessage] ghl forward failed (sync fallback)", e2);
+        log.warn("ghl_forward.sync_fallback_failed", { sid: jid, ...serializeError(e2) });
       }
     }
   }
@@ -516,7 +518,7 @@ export async function sendCompanyTemplate(jid: string): Promise<void> {
       e instanceof BridgeError
         ? `status=${e.status} body=${e.body.slice(0, 400)}`
         : (e as Error)?.message;
-    console.warn("[sendCompanyTemplate] tier1 (video) failed:", detail);
+    log.warn("company_template.tier1_failed", { sid: jid, detail, ...serializeError(e) });
   }
 
   // TIER 2 — cta_url WITHOUT a header (still gets the Instagram button).
@@ -531,7 +533,7 @@ export async function sendCompanyTemplate(jid: string): Promise<void> {
       e instanceof BridgeError
         ? `status=${e.status} body=${e.body.slice(0, 400)}`
         : (e as Error)?.message;
-    console.warn("[sendCompanyTemplate] tier2 (cta_url) failed:", detail);
+    log.warn("company_template.tier2_failed", { sid: jid, detail, ...serializeError(e) });
   }
 
   // TIER 3 — plain text. Always succeeds (if bridge is up at all).
@@ -741,7 +743,7 @@ export async function upsertLeadFromBridgeEvent(input: {
         enrichedPhone = enrichedPhone ?? phoneFromBridgePn(contact.pn);
       }
     } catch (e) {
-      console.warn("[upsertLeadFromBridgeEvent] contact fetch failed", sid, e);
+      log.warn("contact.fetch_failed", { sid, ...serializeError(e) });
     }
   }
 
@@ -840,7 +842,7 @@ async function mergeLeadInto(fromSid: string, toSid: string): Promise<void> {
     db.update(factoryQuoteRequests).set({ manychatSubId: toSid }).where(eq(factoryQuoteRequests.manychatSubId, fromSid)),
   ]);
   await db.delete(leads).where(eq(leads.manychatSubId, fromSid));
-  console.log(`[mergeLeadInto] merged @lid stub ${fromSid} → canonical ${toSid}`);
+  log.info("lead.merged", { fromSid, toSid });
 }
 
 export async function insertBridgeMessage(input: {

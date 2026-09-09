@@ -31,6 +31,9 @@ import { normalizeStage, type V2PipelineStage } from "@/lib/manychat/stages";
 import { reconcileStagesFromGhl } from "./reconcile-stages";
 import { reconcileTasksFromGhl } from "./reconcile-tasks";
 import type { LeadAnalysis } from "./analyze-lead";
+import { logger, serializeError } from "@/lib/observability/log";
+
+const log = logger("analysis");
 
 // Stages considered "active" — a lead here should have a next action lined up.
 // NULL is included because pre-quote leads legitimately sit at pipeline_stage
@@ -426,15 +429,24 @@ export async function runPipelineAudit(): Promise<PipelineAudit> {
     // produce ZERO output, so the audit silently rendered a drifted DB as if it
     // were fresh. Never let a failed reconcile look like a clean one.
     if (!stageRec.ok) {
-      console.warn(`[pipeline-audit] STAGE RECONCILE FAILED (${stageRec.reason}) — panel is showing the DB as-is, which may be stale`);
+      log.warn("audit.stage_reconcile_failed", {
+        reason: stageRec.reason,
+        msg: "panel is showing the DB as-is, which may be stale",
+      });
     } else {
-      console.log(`[pipeline-audit] stage reconcile ok — checked ${stageRec.checked}, updated ${stageRec.updated.length}`);
+      log.info("audit.stage_reconcile_ok", {
+        checked: stageRec.checked,
+        updated: stageRec.updated.length,
+      });
     }
     if (taskRec.tasksClosed) {
-      console.log(`[pipeline-audit] closed ${taskRec.tasksClosed} stale-open tasks from GHL (${taskRec.contactsChecked} contacts)`);
+      log.info("audit.stale_tasks_closed", {
+        count: taskRec.tasksClosed,
+        contactsChecked: taskRec.contactsChecked,
+      });
     }
   } catch (e) {
-    console.warn("[pipeline-audit] reconcile failed — using DB as-is", e);
+    log.warn("audit.reconcile_failed", { msg: "using DB as-is", ...serializeError(e) });
   }
 
   const [noTask, stageLag] = await Promise.all([

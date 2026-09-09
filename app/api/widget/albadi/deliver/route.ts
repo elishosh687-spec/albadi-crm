@@ -19,6 +19,7 @@ import { sendBridgeMessage } from "@/lib/bridge/client";
 import { db } from "@/lib/db";
 import { leads, factoryQuoteRequests } from "@/drizzle/schema";
 import { ilike, eq, desc, and, isNotNull } from "drizzle-orm";
+import { withRequestLog } from "@/lib/observability/log";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -83,20 +84,27 @@ async function lookupCustomers(name: string) {
   return out;
 }
 
-export async function GET(req: NextRequest) {
-  if (!widgetAuthed(req)) return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
+export const GET = withRequestLog("widget", async (req: NextRequest, log) => {
+  if (!widgetAuthed(req)) {
+    log.warn("unauthorized");
+    return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
+  }
   const customer = req.nextUrl.searchParams.get("customer") || "";
   if (!customer) return NextResponse.json({ ok: false, error: "missing customer" }, { status: 400 });
   try {
     const [orders, customers] = await Promise.all([findOrderRows(customer), lookupCustomers(customer)]);
     return NextResponse.json({ ok: true, orders, customers });
   } catch (e) {
+    log.error("deliver.lookup_failed", e);
     return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : "failed" }, { status: 500 });
   }
-}
+});
 
-export async function POST(req: NextRequest) {
-  if (!widgetAuthed(req)) return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
+export const POST = withRequestLog("widget", async (req: NextRequest, log) => {
+  if (!widgetAuthed(req)) {
+    log.warn("unauthorized");
+    return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
+  }
   let form: FormData;
   try { form = await req.formData(); } catch { return NextResponse.json({ ok: false, error: "expected multipart/form-data" }, { status: 400 }); }
 
@@ -141,12 +149,21 @@ export async function POST(req: NextRequest) {
         const r = await sendBridgeMessage(customerSid, caption, blob.url, "eli", fileName);
         wa = { sent: true, waMessageId: r.wa_message_id ?? null };
       } catch (e) {
+        log.error("deliver.whatsapp_failed", e, { sid: customerSid, kind });
         wa = { sent: false, error: e instanceof Error ? e.message : "send failed" };
       }
     }
 
+    log.info("deliver.done", {
+      sid: customerSid || null,
+      kind,
+      bytes: file.size,
+      feishuOk: feishu.ok,
+      waSent: wa.sent,
+    });
     return NextResponse.json({ ok: true, url: blob.url, feishu, wa });
   } catch (e) {
+    log.error("deliver.failed", e, { sid: customerSid || null, kind });
     return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : "failed" }, { status: 500 });
   }
-}
+});

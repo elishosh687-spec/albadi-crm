@@ -13,6 +13,9 @@ import { buildSalesContext, type SalesContext } from "./context";
 import { classifySalesState, type SalesClassification } from "./classify";
 import { planStrategy, type SalesStrategy } from "./strategy";
 import { generateMessage, type GeneratedMessage } from "./generate";
+import { logger } from "@/lib/observability/log";
+
+const log = logger("setter");
 
 export interface SetterRun {
   ok: boolean;
@@ -83,7 +86,7 @@ export async function runSetter(
     decisionId = row?.id;
   } catch (e) {
     // Logging must never break the pipeline — but say so loudly.
-    console.error("[setter] decision log insert failed", e);
+    log.error("decision_log.insert_failed", e);
   }
 
   return { ok: true, context, classification, strategy, message, decisionId };

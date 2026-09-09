@@ -9,6 +9,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { withRequestLog } from "@/lib/observability/log";
 import { db } from "@/lib/db";
 import { factoryQuoteRequests, leads } from "@/drizzle/schema";
 import { eq } from "drizzle-orm";
@@ -24,10 +25,11 @@ import type {
 export const runtime = "nodejs";
 export const maxDuration = 30;
 
-export async function GET(
+export const GET = withRequestLog("factory", async (
   req: NextRequest,
+  log,
   { params }: { params: Promise<{ id: string }> }
-) {
+) => {
   const { id } = await params;
   // ?stream=1 proxies the PDF bytes through this endpoint instead of redirecting
   // to the Blob URL. Used by the in-app iframe preview because vercel-storage
@@ -89,7 +91,7 @@ export async function GET(
         },
       });
     } catch (err) {
-      console.error("[factory/pdf] stream proxy failed", { id, err });
+      log.error("pdf.stream_proxy_failed", err, { quoteId: id, quotationNo: row.quotationNo });
       // fall through to re-render
     }
   }
@@ -132,7 +134,7 @@ export async function GET(
       },
     });
   } catch (err) {
-    console.error("[factory/pdf] render failed", { id, err });
+    log.error("pdf.render_failed", err, { quoteId: id, quotationNo: row.quotationNo });
     return NextResponse.json(
       {
         error: "pdf_render_failed",
@@ -142,4 +144,4 @@ export async function GET(
       { status: 500 }
     );
   }
-}
+});

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { leads } from "@/drizzle/schema";
 import { eq, isNull } from "drizzle-orm";
+import { withRequestLog } from "@/lib/observability/log";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
@@ -61,9 +62,12 @@ function buildLeadContext(rows: Awaited<ReturnType<typeof fetchLeads>>) {
     .join("\n\n");
 }
 
-export async function POST(req: NextRequest) {
+export const POST = withRequestLog("setter", async (req: NextRequest, log) => {
   const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) return NextResponse.json({ error: "no api key" }, { status: 503 });
+  if (!apiKey) {
+    log.warn("chat.api_key_missing");
+    return NextResponse.json({ error: "no api key" }, { status: 503 });
+  }
 
   let body: { message: string; stage?: string; history?: { role: "user" | "assistant"; content: string }[] };
   try {
@@ -102,6 +106,7 @@ ${leadContext}`;
 
   if (!upstream.ok || !upstream.body) {
     const err = await upstream.text();
+    log.error("chat.openai_non_2xx", undefined, { status: upstream.status, model, body: err.slice(0, 200) });
     return NextResponse.json({ error: err }, { status: 502 });
   }
 
@@ -140,4 +145,4 @@ ${leadContext}`;
   return new Response(readable, {
     headers: { "Content-Type": "text/plain; charset=utf-8" },
   });
-}
+});

@@ -16,6 +16,9 @@
 import { db } from "@/lib/db";
 import { leads, sourceTouches } from "@/drizzle/schema";
 import { sql } from "drizzle-orm";
+import { logger, serializeError } from "@/lib/observability/log";
+
+const log = logger("leads");
 
 export interface WebsiteOrigin {
   /** Which button they pressed — useful on its own. */
@@ -89,10 +92,13 @@ export async function recordWebsiteOrigin(
       sourceDetail2: origin.page,
       recordSource: "whatsapp_prefill",
     });
-    console.log(
-      `[origin.website] ${sid} → ${origin.kind}${origin.page ? ` (${origin.page})` : ""}`,
-    );
+    log.info("website_origin.recorded", { sid, kind: origin.kind, page: origin.page });
   } catch (e) {
-    console.warn("[origin.website] failed to record (ignored)", e);
+    log.warn("website_origin.record_failed", {
+      sid,
+      kind: origin.kind,
+      msg: "ignored",
+      ...serializeError(e),
+    });
   }
 }

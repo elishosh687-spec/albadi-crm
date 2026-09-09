@@ -7,6 +7,7 @@ import { loadConfiguratorSession } from "@/lib/configurator/sessions";
 import { sendBridgeMessage } from "@/lib/bridge/client";
 import { logLeadEvent } from "@/lib/events/lead-events";
 import { verifyWidgetToken } from "@/integrations/ghl/widget-auth";
+import { withRequestLog } from "@/lib/observability/log";
 
 export const runtime = "nodejs";
 
@@ -49,7 +50,7 @@ function resolveMedia(
   return { contentType: fallbackContentType || "image/png", extension: "png" };
 }
 
-export async function POST(req: NextRequest) {
+export const POST = withRequestLog("configurator", async (req: NextRequest, log) => {
   // Payload bound by parsing either multipart/form-data (raw bytes — preferred
   // for video) or the legacy JSON body with a base64 image data URL.
   let sessionToken: string | null = null;
@@ -228,7 +229,7 @@ export async function POST(req: NextRequest) {
       { headers: corsHeaders() }
     );
   } catch (err) {
-    console.error("[configurator/send-to-customer] failed", err);
+    log.error("mockup.send_failed", err, { sid: manychatSubId, mediaType });
     return NextResponse.json(
       {
         ok: false,
@@ -238,4 +239,4 @@ export async function POST(req: NextRequest) {
       { status: 500, headers: corsHeaders() }
     );
   }
-}
+});

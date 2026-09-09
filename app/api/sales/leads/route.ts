@@ -5,6 +5,7 @@
  * — no pipeline/stage/quote/boss data. Matches name or phone digits.
  */
 import { NextRequest, NextResponse } from "next/server";
+import { withRequestLog } from "@/lib/observability/log";
 import { salesAuthed } from "@/lib/widget/sales-auth";
 import { db } from "@/lib/db";
 import { leads } from "@/drizzle/schema";
@@ -13,7 +14,7 @@ import { or, ilike, sql, desc } from "drizzle-orm";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-export async function GET(req: NextRequest) {
+export const GET = withRequestLog("calculator", async (req: NextRequest, log) => {
   if (!salesAuthed(req)) {
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
@@ -37,7 +38,7 @@ export async function GET(req: NextRequest) {
       .limit(20);
     return NextResponse.json({ ok: true, leads: rows.filter((r) => r.name || r.phone) });
   } catch (err) {
-    console.error("[sales/leads] failed", err);
+    log.error("sales.leads_search_failed", err);
     return NextResponse.json({ ok: false, error: "server_error" }, { status: 500 });
   }
-}
+});

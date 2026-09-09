@@ -10,6 +10,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { withRequestLog } from "@/lib/observability/log";
 import { db } from "@/lib/db";
 import { factoryQuoteRequests, leads } from "@/drizzle/schema";
 import { eq } from "drizzle-orm";
@@ -24,10 +25,11 @@ function authorized(req: NextRequest): boolean {
   return !!cookie && cookie.value === process.env.ADMIN_PASSWORD;
 }
 
-export async function POST(
+export const POST = withRequestLog("factory", async (
   req: NextRequest,
+  log,
   { params }: { params: Promise<{ id: string }> }
-) {
+) => {
   if (!authorized(req)) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
@@ -57,7 +59,7 @@ export async function POST(
     });
     return NextResponse.json({ ok: true, ...result });
   } catch (err) {
-    console.error("[factory/resend] failed", err);
+    log.error("resend.failed", err, { quoteId: id, sid: src.manychatSubId });
     return NextResponse.json(
       {
         ok: false,
@@ -67,4 +69,4 @@ export async function POST(
       { status: 502 }
     );
   }
-}
+});

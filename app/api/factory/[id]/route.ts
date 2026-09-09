@@ -12,6 +12,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { withRequestLog } from "@/lib/observability/log";
 import { db } from "@/lib/db";
 import { factoryQuoteRequests } from "@/drizzle/schema";
 import { and, eq, isNull } from "drizzle-orm";
@@ -33,10 +34,11 @@ function authorized(req: NextRequest): boolean {
   return false;
 }
 
-export async function DELETE(
+export const DELETE = withRequestLog("factory", async (
   req: NextRequest,
+  log,
   { params }: { params: Promise<{ id: string }> }
-) {
+) => {
   if (!authorized(req)) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
@@ -63,4 +65,4 @@ export async function DELETE(
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
   return NextResponse.json({ ok: true });
-}
+});

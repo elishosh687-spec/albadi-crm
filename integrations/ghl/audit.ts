@@ -8,6 +8,9 @@
 //   ORDER BY occurred_at DESC;
 import { db } from "@/lib/db";
 import { bridgeEvents } from "@/drizzle/schema";
+import { logger, serializeError } from "@/lib/observability/log";
+
+const log = logger("ghl");
 
 export type MirrorStage =
   | "attempt"
@@ -37,10 +40,6 @@ export async function auditMirror(
       .onConflictDoNothing();
   } catch (e) {
     // Never block the mirror path on an audit hiccup.
-    console.warn(
-      "[ghl_mirror.audit] insert failed",
-      stage,
-      e instanceof Error ? e.message : String(e)
-    );
+    log.warn("mirror_audit.insert_failed", { sid, stage, ...serializeError(e) });
   }
 }

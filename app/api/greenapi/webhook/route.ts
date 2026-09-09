@@ -68,6 +68,9 @@ import {
   forwardMessage as ghlForwardMessage,
   syncLeadToGHL,
 } from "@/integrations/ghl/sync";
+import { logger, serializeError, withRequestLog } from "@/lib/observability/log";
+
+const log = logger("webhook.green");
 
 export const runtime = "nodejs";
 // 60, not 15. At 15 the setter's LLM reply + the GHL mirror finished at ~15.0s
@@ -168,7 +171,7 @@ async function auditLog(
       .returning({ id: bridgeEvents.id });
     return rows.length > 0;
   } catch (e) {
-    console.warn("[green.webhook] audit insert failed", e);
+    log.warn("audit.insert_failed", { evtId, eventType: type, ...serializeError(e) });
     // Never let an audit failure swallow a real customer message.
     return true;
   }
@@ -338,7 +341,7 @@ async function isDuplicatePollVote(
     return prior.length > 0;
   } catch (e) {
     // A failure here must never swallow a customer's message.
-    console.error("[greenapi.webhook] duplicate check failed, routing anyway", e);
+    log.error("inbound.duplicate_check_failed", e, { sid, reason: "routing anyway" });
     return false;
   }
 }
@@ -364,9 +367,7 @@ async function handleIncoming(evt: GreenWebhook): Promise<void> {
   // the bot. Nothing below this line should run for a teammate.
   const teamMember = await findTeamMemberByPhone(chatId);
   if (teamMember) {
-    console.log(
-      `[green.webhook] inbound from teammate ${teamMember.name} (${chatId}) — no lead, no bot`,
-    );
+    log.info("inbound.teammate_skipped", { chatId, member: teamMember.id });
     return;
   }
 
@@ -450,10 +451,10 @@ async function handleIncoming(evt: GreenWebhook): Promise<void> {
     textForRouting?.trim() &&
     (await isDuplicatePollVote(canonicalSid, textForRouting, inboundMessageId))
   ) {
-    console.log("[greenapi.webhook] duplicate poll vote — stored but not routed", {
+    log.info("inbound.duplicate_poll_vote", {
       sid: canonicalSid,
       waMessageId,
-      text: textForRouting.slice(0, 60),
+      textPreview: textForRouting.slice(0, 60),
     });
     return;
   }
@@ -475,12 +476,12 @@ async function handleIncoming(evt: GreenWebhook): Promise<void> {
       mediaFilename,
       mediaMimeType,
     }).catch((e) => {
-      console.warn("[greenapi.webhook] ghl forward (in) failed", e);
+      log.warn("ghl_forward.in_failed", { sid: canonicalSid, ...serializeError(e) });
     })
   );
   after(() =>
     syncLeadToGHL(canonicalSid).catch((e) => {
-      console.warn("[greenapi.webhook] syncLeadToGHL failed", e);
+      log.warn("ghl_sync.failed", { sid: canonicalSid, ...serializeError(e) });
     })
   );
 
@@ -538,9 +539,7 @@ async function handleIncoming(evt: GreenWebhook): Promise<void> {
       .from(messagesTable)
       .where(sql`trim(${messagesTable.manychatSubId}) = ${canonicalSid.trim()} AND ${messagesTable.direction} = 'out'`);
     if (existing && (existing.qState || (spoken?.n ?? 0) > 0)) {
-      console.log("[greenapi.webhook] lead-form greeting — stored, not treated as an answer", {
-        sid: canonicalSid,
-      });
+      log.info("inbound.lead_form_greeting_skipped", { sid: canonicalSid });
       return;
     }
   }
@@ -568,7 +567,7 @@ async function handleIncoming(evt: GreenWebhook): Promise<void> {
         const settings = await getBotSettings();
         await sendBridgeMessage(canonicalSid, settings.humanHandoffReply);
       } catch (e) {
-        console.error("[green.webhook] human-handoff reply failed", e);
+        log.error("human_handoff.reply_failed", e, { sid: canonicalSid });
       }
       await sendEliDM(
         `🙋 ${snap?.name ?? snap?.phone ?? "ליד"} ביקש לדבר עם בן אדם — הבוט הושתק.\n` +
@@ -578,10 +577,10 @@ async function handleIncoming(evt: GreenWebhook): Promise<void> {
       try {
         await syncLeadToGHL(canonicalSid);
       } catch (e) {
-        console.warn("[green.webhook] sync after human handoff failed", e);
+        log.warn("human_handoff.ghl_sync_failed", { sid: canonicalSid, ...serializeError(e) });
       }
     } catch (e) {
-      console.error("[green.webhook] human-handoff handling failed", e);
+      log.error("human_handoff.failed", e, { sid: canonicalSid });
     }
     return;
   }
@@ -615,7 +614,7 @@ async function handleIncoming(evt: GreenWebhook): Promise<void> {
       try {
         await sendBridgeMessage(canonicalSid, STOP_WORD_REPLY);
       } catch (e) {
-        console.error("[green.webhook] stop-word reply failed", e);
+        log.error("stop_word.reply_failed", e, { sid: canonicalSid });
       }
       await sendEliDM(
         eliEscalationTemplate({
@@ -629,10 +628,10 @@ async function handleIncoming(evt: GreenWebhook): Promise<void> {
       try {
         await syncLeadToGHL(canonicalSid);
       } catch (e) {
-        console.warn("[green.webhook] stop-word syncLeadToGHL failed", e);
+        log.warn("stop_word.ghl_sync_failed", { sid: canonicalSid, ...serializeError(e) });
       }
     } catch (e) {
-      console.error("[green.webhook] stop-word path failed", e);
+      log.error("stop_word.failed", e, { sid: canonicalSid });
     }
     return;
   }
@@ -662,7 +661,7 @@ async function handleIncoming(evt: GreenWebhook): Promise<void> {
     // No supervisor / no reply — inbound is already persisted; the dashboard
     // surfaces it via the messages timeline. Eli toggles pause off when he
     // wants the bot back.
-    console.log(`[green.webhook] sticky-pause hit for ${canonicalSid} — no auto-resume, no reply`);
+    log.info("inbound.sticky_pause", { sid: canonicalSid });
     return;
   }
 
@@ -713,14 +712,15 @@ async function handleIncoming(evt: GreenWebhook): Promise<void> {
     stage === "NO_RESPONSE_REENGAGE" || stage === "FUTURE_FOLLOW_UP" || armedForCallback;
 
   if (isNewConversation && !skipRestart) {
-    console.log(
-      `[green.webhook] new-conversation reset for ${canonicalSid} (gap ${Math.round((Date.now() - new Date(priorInboundAt!).getTime()) / 86_400_000)}d) — restarting questionnaire`
-    );
+    log.info("inbound.new_conversation_reset", {
+      sid: canonicalSid,
+      gapDays: Math.round((Date.now() - new Date(priorInboundAt!).getTime()) / 86_400_000),
+    });
     try {
       const { restartQuestionnaire } = await import("@/lib/autoresponder/questionnaire");
       await restartQuestionnaire(canonicalSid, "שלום 👋 בוא נמלא יחד שאלון קצר כדי שאוכל להכין הצעת מחיר.");
     } catch (e) {
-      console.error("[green.webhook] new-conversation restart failed", e);
+      log.error("inbound.restart_failed", e, { sid: canonicalSid });
     }
     return;
   }
@@ -742,7 +742,7 @@ async function handleIncoming(evt: GreenWebhook): Promise<void> {
     .where(sql`trim(${leads.manychatSubId}) = ${canonicalSid.trim()}`)
     .limit(1);
   if (latePause?.botPaused === true) {
-    console.log(`[green.webhook] late-pause hit for ${canonicalSid} — human took over mid-inbound, bot stays silent`);
+    log.info("inbound.late_pause", { sid: canonicalSid });
     return;
   }
 
@@ -766,7 +766,7 @@ async function handleIncoming(evt: GreenWebhook): Promise<void> {
       });
       if (handled) return;
     } catch (e) {
-      console.error("[green.webhook] callback reply handler failed", e);
+      log.error("callback_reply.failed", e, { sid: canonicalSid });
     }
   }
 
@@ -861,7 +861,7 @@ async function handleIncoming(evt: GreenWebhook): Promise<void> {
     }
     // WON / LOST → no-op
   } catch (e) {
-    console.error("[green.webhook] handler failed", e);
+    log.error("inbound.handler_failed", e, { sid: canonicalSid, stage });
   }
 
   // Recompute next_action after handlers updated state (stage transition,
@@ -872,7 +872,7 @@ async function handleIncoming(evt: GreenWebhook): Promise<void> {
       await syncLeadToGHL(canonicalSid);
     }
   } catch (e) {
-    console.warn("[green.webhook] next_action refresh failed", (e as Error).message);
+    log.warn("next_action.refresh_failed", { sid: canonicalSid, ...serializeError(e) });
   }
 }
 
@@ -899,9 +899,7 @@ async function handleOutgoingManual(evt: GreenWebhook): Promise<void> {
   // must not create a lead either.
   const teamMember = await findTeamMemberByPhone(chatId);
   if (teamMember) {
-    console.log(
-      `[green.webhook] manual outbound to teammate ${teamMember.name} — no lead`,
-    );
+    log.info("outbound_manual.teammate_skipped", { chatId, member: teamMember.id });
     return;
   }
 
@@ -954,15 +952,13 @@ async function handleOutgoingManual(evt: GreenWebhook): Promise<void> {
       )
       .returning({ sid: leads.manychatSubId });
     if (paused.length > 0) {
-      console.log(
-        `[green.webhook] salesperson replied on WhatsApp → bot paused for ${canonicalSid}`
-      );
+      log.info("outbound_manual.bot_paused", { sid: canonicalSid });
       void syncLeadToGHL(canonicalSid).catch((e) =>
-        console.warn("[green.webhook] pause-on-manual syncLeadToGHL failed", e)
+        log.warn("outbound_manual.ghl_sync_failed", { sid: canonicalSid, ...serializeError(e) })
       );
     }
   } catch (e) {
-    console.warn("[green.webhook] pause-on-manual-reply failed", e);
+    log.warn("outbound_manual.pause_failed", { sid: canonicalSid, ...serializeError(e) });
   }
 
   // Deferred via Next 16 `after()` — keeps the lambda alive past the HTTP
@@ -981,13 +977,14 @@ async function handleOutgoingManual(evt: GreenWebhook): Promise<void> {
       mediaFilename,
       mediaMimeType,
     }).catch((e) => {
-      console.warn("[greenapi.webhook] ghl forward (out) failed", e);
+      log.warn("ghl_forward.out_failed", { sid: canonicalSid, ...serializeError(e) });
     })
   );
 }
 
-export async function POST(req: NextRequest): Promise<NextResponse> {
+export const POST = withRequestLog<NextRequest>("webhook.green", async (req, log): Promise<NextResponse> => {
   if (!authOk(req)) {
+    log.warn("unauthorized");
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
@@ -1021,9 +1018,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   // per message; envelopes without one get a random evtId and so never collide.
   const claimed = await auditLog(evtId, body.typeWebhook ?? "unknown", body);
   if (!claimed) {
-    console.warn(
-      `[green.webhook] duplicate delivery ignored — evt=${evtId} type=${body.typeWebhook}`,
-    );
+    log.warn("delivery.duplicate_ignored", { evtId, eventType: body.typeWebhook });
     return NextResponse.json({ ok: true, deduped: true });
   }
 
@@ -1045,12 +1040,12 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         break;
     }
   } catch (e) {
-    console.error("[green.webhook] handler error", e);
+    log.error("handler.failed", e, { evtId, eventType: body.typeWebhook });
   }
 
   return NextResponse.json({ ok: true });
-}
+});
 
-export async function GET(): Promise<NextResponse> {
+export const GET = withRequestLog<NextRequest>("webhook.green", async (): Promise<NextResponse> => {
   return NextResponse.json({ ok: true, info: "Green API webhook endpoint" });
-}
+});

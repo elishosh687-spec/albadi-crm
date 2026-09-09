@@ -5,15 +5,16 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { withRequestLog } from "@/lib/observability/log";
 import { listFactoryQuotes } from "@/lib/factory/server/list";
 
 export const runtime = "nodejs";
 
-export async function GET(req: NextRequest) {
+export const GET = withRequestLog("factory", async (req: NextRequest, log) => {
   const url = new URL(req.url);
   const requests = await listFactoryQuotes({
     status: url.searchParams.get("status") ?? undefined,
     lead: url.searchParams.get("lead") ?? undefined,
   });
   return NextResponse.json({ ok: true, requests });
-}
+});

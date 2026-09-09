@@ -8,17 +8,19 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyWidgetToken } from "@/integrations/ghl/widget-auth";
 import { analyzeBatch, type LeadFilter } from "@/lib/analysis/batch";
+import { withRequestLog } from "@/lib/observability/log";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
 
-export async function POST(req: NextRequest) {
+export const POST = withRequestLog("analysis", async (req: NextRequest, log) => {
   const token =
     req.nextUrl.searchParams.get("widget_token") ||
     req.headers.get("authorization")?.replace(/^Bearer\s+/i, "") ||
     null;
   if (!verifyWidgetToken(token)) {
+    log.warn("unauthorized");
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
 
@@ -40,11 +42,13 @@ export async function POST(req: NextRequest) {
 
   try {
     const progress = await analyzeBatch(filter, limit, force);
+    log.info("batch.done", { limit, force, ...progress });
     return NextResponse.json({ ok: true, ...progress });
   } catch (e) {
+    log.error("batch.failed", e, { limit, force });
     return NextResponse.json(
       { ok: false, error: e instanceof Error ? e.message : "batch failed" },
       { status: 500 }
     );
   }
-}
+});

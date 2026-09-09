@@ -21,6 +21,9 @@ import "dotenv/config";
 import { upsertConversationProvider } from "./client";
 import { getValidAccessToken } from "./oauth";
 import { requireGHLLocationId } from "./config";
+import { logger } from "@/lib/observability/log";
+
+const log = logger("ghl");
 
 const BOM = "﻿";
 function readEnv(key: string): string {
@@ -34,7 +37,7 @@ async function main(): Promise<void> {
     "https://albadi-crm.vercel.app/api/integrations/outbound";
   const name = readEnv("GHL_CONVERSATION_PROVIDER_NAME") || "Albadi WhatsApp";
 
-  console.log(`[register] name="${name}" delivery=${deliveryUrl}`);
+  log.info("register_provider.start", { name, deliveryUrl });
 
   const locationId = requireGHLLocationId();
   const accessToken = await getValidAccessToken(locationId);
@@ -51,14 +54,14 @@ async function main(): Promise<void> {
     accessToken,
   });
 
-  console.log("\n=== provider ready ===");
-  console.log(JSON.stringify(provider, null, 2));
+  log.info("register_provider.ready", { providerId: provider.id, provider });
+  // Paste-able output for the operator — stays on stdout on purpose.
   console.log("\nAdd to .env + Vercel:");
   console.log(`GHL_CONVERSATION_PROVIDER_ID=${provider.id}`);
   process.exit(0);
 }
 
 main().catch((e) => {
-  console.error("[register] fatal", e);
+  log.error("register_provider.fatal", e);
   process.exit(1);
 });

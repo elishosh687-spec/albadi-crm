@@ -14,6 +14,9 @@
  */
 
 import { getBotSettings } from "../bot-settings/store";
+import { logger } from "@/lib/observability/log";
+
+const log = logger("bot");
 
 const OPENAI_URL = "https://api.openai.com/v1/chat/completions";
 const DEFAULT_TIMEOUT_MS = 10000;
@@ -47,12 +50,12 @@ export interface CallLLMError {
 
 /**
  * Returns parsed JSON (if jsonMode) or raw string. Returns null on any failure.
- * Logs the failure to console.error so we can grep production logs.
+ * Logs the failure via the structured logger so we can query production logs.
  */
 export async function callLLM<T = unknown>(input: CallLLMInput): Promise<T | null> {
   const apiKey = readEnv("OPENAI_API_KEY");
   if (!apiKey) {
-    console.warn("[openai-client] OPENAI_API_KEY missing — returning null");
+    log.warn("openai_client.api_key_missing", { msg: "returning null" });
     return null;
   }
   // Settings win over env so the model can be swapped from the bot-settings
@@ -107,10 +110,12 @@ export async function callLLM<T = unknown>(input: CallLLMInput): Promise<T | nul
 
       if (!res.ok) {
         const txt = await res.text();
-        console.error(
-          `[openai-client] non-2xx ${res.status} (attempt ${attempt + 1}/${maxRetries + 1})`,
-          txt.slice(0, 200)
-        );
+        log.error("openai_client.non_2xx", undefined, {
+          status: res.status,
+          attempt: attempt + 1,
+          maxAttempts: maxRetries + 1,
+          body: txt.slice(0, 200),
+        });
         // Unknown-parameter 400 → drop the offending param and retry once,
         // so a future model family can't silently kill every LLM call again.
         if (
@@ -131,7 +136,7 @@ export async function callLLM<T = unknown>(input: CallLLMInput): Promise<T | nul
       };
       const raw = data.choices?.[0]?.message?.content;
       if (!raw) {
-        console.error(`[openai-client] empty response (attempt ${attempt + 1})`);
+        log.error("openai_client.empty_response", undefined, { attempt: attempt + 1 });
         if (attempt < maxRetries) continue;
         return null;
       }
@@ -143,20 +148,21 @@ export async function callLLM<T = unknown>(input: CallLLMInput): Promise<T | nul
       try {
         return JSON.parse(raw) as T;
       } catch {
-        console.error(
-          `[openai-client] non-JSON response (attempt ${attempt + 1})`,
-          raw.slice(0, 200)
-        );
+        log.error("openai_client.non_json_response", undefined, {
+          attempt: attempt + 1,
+          raw: raw.slice(0, 200),
+        });
         if (attempt < maxRetries) continue;
         return null;
       }
     } catch (e) {
       clearTimeout(timer);
       const reason = abortedBy === "timeout" ? "timeout" : "network";
-      console.error(
-        `[openai-client] ${reason} (attempt ${attempt + 1}/${maxRetries + 1})`,
-        e instanceof Error ? e.message : e
-      );
+      log.error("openai_client.request_failed", e, {
+        reason,
+        attempt: attempt + 1,
+        maxAttempts: maxRetries + 1,
+      });
       if (attempt < maxRetries) continue;
       return null;
     }

@@ -11,11 +11,12 @@
  */
 import { NextRequest, NextResponse } from "next/server";
 import { resyncContact } from "@/lib/ghl/resync-helper";
+import { withRequestLog } from "@/lib/observability/log";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
 
-export async function POST(req: NextRequest): Promise<NextResponse> {
+export const POST = withRequestLog("webhook.ghl", async (req: NextRequest, log): Promise<NextResponse> => {
   const auth = req.headers.get("authorization") || "";
   const secret = process.env.BOT_SECRET || "";
   if (!secret || auth !== `Bearer ${secret}`) {
@@ -38,7 +39,8 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   const result = await resyncContact(contactId, "ghl_workflow");
   if (!result.ok) {
     const status = result.error === "no_lead_matched" ? 404 : 502;
+    log.warn("resync.failed", { contactId, error: result.error, status });
     return NextResponse.json(result, { status });
   }
   return NextResponse.json(result);
-}
+});

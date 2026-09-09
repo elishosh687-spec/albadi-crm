@@ -11,17 +11,19 @@
  */
 import { NextRequest, NextResponse } from "next/server";
 import { exchangeCodeForTokens } from "@/integrations/ghl/oauth";
+import { withRequestLog } from "@/lib/observability/log";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-export async function GET(req: NextRequest): Promise<NextResponse> {
+export const GET = withRequestLog("auth", async (req: NextRequest, log): Promise<NextResponse> => {
   const code = req.nextUrl.searchParams.get("code");
   if (!code) {
     return new NextResponse("missing code", { status: 400 });
   }
   try {
     const { locationId } = await exchangeCodeForTokens(code);
+    log.info("oauth.installed", { locationId });
     const html = `<!doctype html>
 <html lang="he" dir="rtl">
 <head><meta charset="utf-8"><title>GHL Installed</title>
@@ -38,7 +40,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    console.error("[ghl.oauth] callback failed", msg);
+    log.error("oauth.callback_failed", err);
     return new NextResponse("OAuth exchange failed: " + msg, { status: 500 });
   }
-}
+});

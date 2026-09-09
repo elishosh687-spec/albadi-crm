@@ -15,6 +15,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { botDrafts, leads, messages } from "@/drizzle/schema";
 import { and, desc, eq, sql } from "drizzle-orm";
+import { withRequestLog } from "@/lib/observability/log";
 
 export const runtime = "nodejs";
 export const maxDuration = 10;
@@ -25,7 +26,7 @@ function authorized(req: NextRequest): boolean {
   return req.headers.get("authorization") === `Bearer ${secret}`;
 }
 
-export async function GET(req: NextRequest) {
+export const GET = withRequestLog("bot", async (req: NextRequest, log) => {
   if (!authorized(req)) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
@@ -131,5 +132,6 @@ export async function GET(req: NextRequest) {
     };
   });
 
+  log.debug("drafts.pending_listed", { count: enriched.length, filtered: Boolean(leadFilter) });
   return NextResponse.json({ ok: true, drafts: enriched });
-}
+});

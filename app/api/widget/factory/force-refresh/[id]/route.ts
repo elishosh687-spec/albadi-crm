@@ -6,16 +6,18 @@
  * only; never re-prices. See lib/factory/server/force-refresh.ts.
  */
 import { NextRequest, NextResponse } from "next/server";
+import { withRequestLog } from "@/lib/observability/log";
 import { widgetAuthed } from "@/lib/widget/auth";
 import { forceRefreshQuote } from "@/lib/factory/server/force-refresh";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
-export async function POST(
+export const POST = withRequestLog("factory", async (
   req: NextRequest,
+  log,
   ctx: { params: Promise<{ id: string }> },
-) {
+) => {
   if (!widgetAuthed(req)) {
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
@@ -25,4 +27,4 @@ export async function POST(
   }
   const result = await forceRefreshQuote(id);
   return NextResponse.json(result, { status: result.ok ? 200 : 422 });
-}
+});

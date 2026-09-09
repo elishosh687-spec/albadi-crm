@@ -11,6 +11,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { enrichMetaAttribution } from "@/lib/sheets/meta-attribution";
 import { pollGoodLeads } from "@/lib/meta/good-lead-poll";
 import { postFormAnswerNotes } from "@/lib/sheets/form-answers-note";
+import { serializeError, withRequestLog } from "@/lib/observability/log";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -27,8 +28,9 @@ function authorized(req: NextRequest): boolean {
   return accepted.some((s) => header === `Bearer ${s}`);
 }
 
-export async function POST(req: NextRequest) {
+const run = withRequestLog("meta", async (req: NextRequest, log) => {
   if (!authorized(req)) {
+    log.warn("unauthorized");
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
   // ?dry=1 — answer "did my tagging reach Meta?" WITHOUT sending anything.
@@ -49,7 +51,7 @@ export async function POST(req: NextRequest) {
     try {
       goodLeads = await pollGoodLeads();
     } catch (e) {
-      console.warn("[enrich-meta-attribution] good-lead poll failed", e);
+      log.warn("good_lead_poll.failed", { ...serializeError(e) });
       goodLeads = { error: e instanceof Error ? e.message : String(e) };
     }
     // The form answers reach the DB above; this puts them in front of whoever
@@ -60,17 +62,18 @@ export async function POST(req: NextRequest) {
     } catch (e) {
       formNotes = { error: e instanceof Error ? e.message : String(e) };
     }
+    // The per-tick summary — this is how a dead cron gets noticed.
+    log.info("tick.summary", { ...result });
     return NextResponse.json({ ok: true, ...result, goodLeads, formNotes });
   } catch (e) {
-    console.error("[enrich-meta-attribution] failed", e);
+    log.error("enrich.failed", e);
     return NextResponse.json(
       { ok: false, error: e instanceof Error ? e.message : String(e) },
       { status: 500 },
     );
   }
-}
+});
 
+export const POST = run;
 // Vercel Cron issues GET; accept it too.
-export async function GET(req: NextRequest) {
-  return POST(req);
-}
+export const GET = run;

@@ -12,6 +12,7 @@
  */
 import { NextRequest, NextResponse } from "next/server";
 import { analyzeBatch, type LeadFilter } from "@/lib/analysis/batch";
+import { withRequestLog } from "@/lib/observability/log";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -23,8 +24,9 @@ function authorized(req: NextRequest): boolean {
   return req.headers.get("authorization") === `Bearer ${secret}`;
 }
 
-export async function POST(req: NextRequest) {
+export const POST = withRequestLog("admin", async (req: NextRequest, log) => {
   if (!authorized(req)) {
+    log.warn("unauthorized");
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
   const sp = req.nextUrl.searchParams;
@@ -46,8 +48,9 @@ export async function POST(req: NextRequest) {
   const force = bool(body.force ?? sp.get("force"));
 
   const progress = await analyzeBatch(filter, limit, force);
+  log.info("batch.done", { limit, force, ...progress });
   return NextResponse.json({ ok: true, ...progress });
-}
+});
 
 function parseList(v: unknown): string[] | undefined {
   if (Array.isArray(v)) return v.map(String).filter(Boolean);

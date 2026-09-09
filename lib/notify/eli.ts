@@ -5,6 +5,9 @@
 import { sendBridgeMessage, resolveJidFromPhone } from "../bridge/client";
 import { isJid } from "../bridge/jid";
 import { captureSend } from "../bot-playground/capture";
+import { logger } from "@/lib/observability/log";
+
+const log = logger("notify");
 
 function readEnv(key: string): string {
   const raw = process.env[key] ?? "";
@@ -41,22 +44,21 @@ export async function sendEliDM(text: string): Promise<"sent" | "dry_run" | "no_
   // Test-only short-circuit (mirrors sendBridgeMessage dry-run). Skips JID
   // resolution AND send so test scripts run without network access.
   if (process.env.BRIDGE_DRY_RUN === "1") {
-    const preview = text.length > 100 ? `${text.slice(0, 100)}…` : text;
-    console.log(`[notify.eli.dryrun] → ${preview.replace(/\n/g, " ⏎ ")}`);
+    log.info("eli_dm.dry_run", { textPreview: text.slice(0, 80) });
     return "dry_run";
   }
   try {
     const jid = await resolveEliJid();
     if (!jid) {
-      console.warn("[notify.eli] ELI_NOTIFY_JID not set or unresolvable — skipping DM");
+      log.warn("eli_dm.no_jid", { reason: "ELI_NOTIFY_JID not set or unresolvable" });
       return "no_jid";
     }
-    console.log(`[notify.eli] sending DM → jid=${jid.slice(0, 20)}…`);
+    log.info("eli_dm.sending", { chatId: jid });
     await sendBridgeMessage(jid, text);
-    console.log(`[notify.eli] DM sent OK`);
+    log.info("eli_dm.sent", { chatId: jid });
     return "sent";
   } catch (e) {
-    console.error("[notify.eli] failed to send:", e);
+    log.error("eli_dm.failed", e);
     return "error";
   }
 }

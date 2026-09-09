@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { leads } from "@/drizzle/schema";
+import { withRequestLog } from "@/lib/observability/log";
 
 export const runtime = "nodejs";
 
-export async function POST(req: NextRequest) {
+export const POST = withRequestLog("bot", async (req: NextRequest, log) => {
   const auth = req.headers.get("authorization");
   if (!process.env.BOT_SECRET || auth !== `Bearer ${process.env.BOT_SECRET}`) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
@@ -18,5 +19,6 @@ export async function POST(req: NextRequest) {
     name: body.name ?? null,
     source: "manychat_webhook",
   }).onConflictDoNothing();
+  log.info("lead.registered", { sid: body.subscriber_id, hasName: Boolean(body.name) });
   return NextResponse.json({ ok: true });
-}
+});

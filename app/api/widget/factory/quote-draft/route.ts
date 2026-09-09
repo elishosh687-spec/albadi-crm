@@ -6,6 +6,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { withRequestLog } from "@/lib/observability/log";
 import { z } from "zod";
 import { widgetAuthed } from "@/lib/widget/auth";
 import { createFactoryDraft, updateFactoryDraft } from "@/lib/factory/create-request";
@@ -52,7 +53,7 @@ const BodySchema = z.object({
   draftId: z.string().optional(),
 });
 
-export async function POST(req: NextRequest) {
+export const POST = withRequestLog("factory", async (req: NextRequest, log) => {
   if (!widgetAuthed(req)) {
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
@@ -87,7 +88,7 @@ export async function POST(req: NextRequest) {
     });
     return NextResponse.json({ ok: true, ...result });
   } catch (err) {
-    console.error("[widget/factory/quote-draft] failed", err);
+    log.error("quote_draft.failed", err, { sid: body.manychatSubId, draftId: body.draftId });
     return NextResponse.json(
       {
         ok: false,
@@ -97,4 +98,4 @@ export async function POST(req: NextRequest) {
       { status: 500 }
     );
   }
-}
+});

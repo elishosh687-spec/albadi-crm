@@ -42,9 +42,12 @@ import {
   analyzeCall,
   type CallAnalysis,
 } from "@/lib/autoresponder/call-analysis";
+import { logger, serializeError, withRequestLog } from "@/lib/observability/log";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
+
+const log = logger("calls");
 
 const CURSOR_KEY = "call_recordings.last_polled_at";
 const CURSOR_OVERLAP_MS = 30 * 60 * 1000; // 30min belt-and-suspenders rewind
@@ -110,10 +113,12 @@ async function ensureCallbackTask(row: {
     const seed = existing.find((t) => (t.body ?? "").includes("[BACKFILL v1]"));
     if (seed) {
       await deleteContactTask(row.ghlContactId, seed.id).catch((e) =>
-        console.warn(
-          `[process-recordings] backfill seed cleanup failed for ${row.ghlContactId}:`,
-          e instanceof Error ? e.message : String(e),
-        ),
+        log.warn("callback_task.seed_cleanup_failed", {
+          contactId: row.ghlContactId,
+          messageId: row.ghlMessageId,
+          taskId: seed.id,
+          ...serializeError(e),
+        }),
       );
     }
 
@@ -161,10 +166,11 @@ async function ensureCallbackTask(row: {
     // Non-fatal: the note still posts. We log loudly because once
     // posted_back_at is set the cron won't retry this row, so a lost callback
     // task needs human visibility.
-    console.warn(
-      `[process-recordings] callback task creation failed for msg=${row.ghlMessageId}:`,
-      err instanceof Error ? err.message : String(err),
-    );
+    log.warn("callback_task.create_failed", {
+      contactId: row.ghlContactId,
+      messageId: row.ghlMessageId,
+      ...serializeError(err),
+    });
   }
 }
 
@@ -336,7 +342,7 @@ async function stage1Discover(): Promise<{ inserted: number; scanned: number }> 
       // Likely unique violation on ghl_message_id — that's the dedupe path.
       const msg = e instanceof Error ? e.message : String(e);
       if (!msg.includes("duplicate") && !msg.includes("unique")) {
-        console.error(`[process-recordings] insert failed for ${c.id}:`, msg);
+        log.error("discover.insert_failed", e, { messageId: c.id, contactId: c.contactId ?? null });
       }
     }
   }
@@ -507,7 +513,7 @@ async function stampLastCall(contactId: string): Promise<void> {
       ],
     });
   } catch (err) {
-    console.warn("[process-recordings] stampLastCall failed (non-fatal)", err);
+    log.warn("last_call.stamp_failed", { contactId, ...serializeError(err) });
   }
 }
 
@@ -601,27 +607,28 @@ async function stage4PostBack(): Promise<{ done: number }> {
 // ===========================================================================
 // Handler.
 // ===========================================================================
-export async function POST(req: NextRequest) {
+const run = withRequestLog("calls", async (req: NextRequest, log) => {
   if (!authorized(req)) {
+    log.warn("unauthorized");
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
   const startedAt = Date.now();
 
   const discovered = await stage1Discover().catch((e) => {
-    console.error("[process-recordings] stage1 failed", e);
+    log.error("discover.failed", e, { stage: "discover" });
     return { inserted: 0, scanned: 0, error: String(e) };
   });
   const transcribed = await stage2Transcribe().catch((e) => {
-    console.error("[process-recordings] stage2 failed", e);
+    log.error("transcribe.failed", e, { stage: "transcribe" });
     return { done: 0, error: String(e) };
   });
   const analyzed = await stage3Analyze().catch((e) => {
-    console.error("[process-recordings] stage3 failed", e);
+    log.error("analyze.failed", e, { stage: "analyze" });
     return { done: 0, error: String(e) };
   });
   const posted = await stage4PostBack().catch((e) => {
-    console.error("[process-recordings] stage4 failed", e);
+    log.error("post_back.failed", e, { stage: "post_back" });
     return { done: 0, error: String(e) };
   });
 
@@ -644,7 +651,7 @@ export async function POST(req: NextRequest) {
     });
     elevenlabs = await r.json().catch(() => ({ ok: r.ok, status: r.status }));
   } catch (e) {
-    console.warn("[process-recordings] elevenlabs sync piggyback failed", e);
+    log.warn("elevenlabs.piggyback_failed", { ...serializeError(e) });
     elevenlabs = { ok: false, error: String(e) };
   }
 
@@ -658,9 +665,19 @@ export async function POST(req: NextRequest) {
     const { refreshFromFeishu } = await import("@/lib/factory/server/refresh");
     factory = await refreshFromFeishu();
   } catch (e) {
-    console.warn("[process-recordings] factory refresh piggyback failed", e);
+    log.warn("factory_refresh.piggyback_failed", { ...serializeError(e) });
     factory = { ok: false, error: String(e) };
   }
+
+  // The per-tick summary — this is how a dead cron gets noticed.
+  log.info("tick.summary", {
+    scanned: discovered.scanned,
+    inserted: discovered.inserted,
+    transcribed: transcribed.done,
+    analyzed: analyzed.done,
+    posted: posted.done,
+    duration_ms: Date.now() - startedAt,
+  });
 
   return NextResponse.json({
     elapsedMs: Date.now() - startedAt,
@@ -671,9 +688,8 @@ export async function POST(req: NextRequest) {
     elevenlabs,
     factory,
   });
-}
+});
 
+export const POST = run;
 // Allow GET for the same handler so the Cloud Routine doesn't need a body.
-export async function GET(req: NextRequest) {
-  return POST(req);
-}
+export const GET = run;

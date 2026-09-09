@@ -19,6 +19,9 @@ const TIMEOUT_MS = 12000;
 
 const BOM = "﻿";
 import { getBotSettings } from "../bot-settings/store";
+import { logger } from "@/lib/observability/log";
+
+const log = logger("bot");
 
 function readEnv(key: string): string {
   const raw = process.env[key] ?? "";
@@ -61,7 +64,7 @@ export async function suggestReplies(
 ): Promise<string[]> {
   const apiKey = readEnv("OPENAI_API_KEY");
   if (!apiKey) {
-    console.warn("[suggest-reply] OPENAI_API_KEY missing");
+    log.warn("suggest_reply.api_key_missing");
     return [];
   }
   // Follow the "מודל שיחה" setting. This used to hardcode a previous-
@@ -115,7 +118,7 @@ export async function suggestReplies(
     clearTimeout(timer);
     if (!res.ok) {
       const txt = await res.text();
-      console.error("[suggest-reply] openai non-2xx", res.status, txt.slice(0, 200));
+      log.error("suggest_reply.openai_non_2xx", undefined, { status: res.status, body: txt.slice(0, 200) });
       return [];
     }
     const data = (await res.json()) as {
@@ -123,14 +126,14 @@ export async function suggestReplies(
     };
     const raw = data.choices?.[0]?.message?.content;
     if (!raw) {
-      console.error("[suggest-reply] openai empty response");
+      log.error("suggest_reply.openai_empty_response");
       return [];
     }
     let parsed: any;
     try {
       parsed = JSON.parse(raw);
     } catch {
-      console.error("[suggest-reply] non-JSON response", raw.slice(0, 200));
+      log.error("suggest_reply.non_json_response", undefined, { raw: raw.slice(0, 200) });
       return [];
     }
     const arr = Array.isArray(parsed?.replies) ? parsed.replies : [];
@@ -139,7 +142,7 @@ export async function suggestReplies(
       .map((s: string) => s.trim())
       .slice(0, 3);
   } catch (e) {
-    console.error("[suggest-reply] error", e);
+    log.error("suggest_reply.failed", e);
     return [];
   }
 }
@@ -185,7 +188,7 @@ export async function draftMoneyReply(
 ): Promise<string | null> {
   const apiKey = readEnv("OPENAI_API_KEY");
   if (!apiKey) {
-    console.warn("[draft-money-reply] OPENAI_API_KEY missing");
+    log.warn("draft_money_reply.api_key_missing");
     return null;
   }
   // Follow the "מודל שיחה" setting. This used to hardcode a previous-
@@ -235,11 +238,10 @@ export async function draftMoneyReply(
     });
     clearTimeout(timer);
     if (!res.ok) {
-      console.error(
-        "[draft-money-reply] openai non-2xx",
-        res.status,
-        (await res.text()).slice(0, 200)
-      );
+      log.error("draft_money_reply.openai_non_2xx", undefined, {
+        status: res.status,
+        body: (await res.text()).slice(0, 200),
+      });
       return null;
     }
     const data = (await res.json()) as {
@@ -256,7 +258,7 @@ export async function draftMoneyReply(
     const reply = typeof parsed?.reply === "string" ? parsed.reply.trim() : "";
     return reply || null;
   } catch (e) {
-    console.error("[draft-money-reply] error", e);
+    log.error("draft_money_reply.failed", e);
     return null;
   }
 }

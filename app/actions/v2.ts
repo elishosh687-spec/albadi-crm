@@ -60,6 +60,9 @@ import {
 import { attachEliFeedback } from "@/lib/supervisor/log";
 import { logLeadEvent, loadLeadEvents, type LeadEventRow } from "@/lib/events/lead-events";
 import { pauseFields, resumeFields } from "@/lib/autoresponder/bot-pause";
+import { logger, serializeError } from "@/lib/observability/log";
+
+const log = logger("bot");
 
 export interface SimpleResult {
   ok: boolean;
@@ -190,7 +193,7 @@ export async function setLeadStage(
       });
       // Auto-create the follow-up task for the new stage (best-effort).
       void createAutoTaskForStage(cleanSid, input.stage).catch((e) => {
-        console.warn("[setLeadStage] createAutoTaskForStage failed", e);
+        log.warn("stage.auto_task_failed", { sid: cleanSid, stage: input.stage, ...serializeError(e) });
       });
       // Parking a lead in "להתקשר בעתיד" starts a NEW follow-up loop, so its
       // counter has to start at zero. A lead dragged in from an exhausted

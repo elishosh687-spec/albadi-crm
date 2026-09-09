@@ -11,14 +11,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { widgetAuthed } from "@/lib/widget/auth";
 import { overrideDecisionStage } from "@/lib/supervisor/server/feedback";
+import { withRequestLog } from "@/lib/observability/log";
 
 export const runtime = "nodejs";
 
-export async function POST(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export const POST = withRequestLog("widget", async (req: NextRequest, log, { params }: { params: Promise<{ id: string }> }) => {
   if (!widgetAuthed(req)) {
+    log.warn("unauthorized");
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
   const { id } = await params;
@@ -26,5 +25,6 @@ export async function POST(
   const body = await req.json().catch(() => ({}));
   const stage = typeof body?.stage === "string" ? body.stage : "";
   const r = await overrideDecisionStage(rowId, stage);
+  log.info("decision.stage_overridden", { rowId, stage, ok: r.ok });
   return NextResponse.json(r, { status: r.ok ? 200 : 400 });
-}
+});

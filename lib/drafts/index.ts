@@ -14,6 +14,9 @@ import { and, desc, eq, sql } from "drizzle-orm";
 import { sendBridgeMessage } from "@/lib/bridge/client";
 import { resolveBridgeRecipient } from "@/lib/bridge/jid";
 import { attachEliFeedback } from "@/lib/supervisor/log";
+import { logger, serializeError } from "@/lib/observability/log";
+
+const log = logger("bot");
 
 export type DraftStatus = "pending" | "approved" | "rejected" | "sent" | "failed";
 
@@ -97,7 +100,7 @@ async function reconcileGHLTasksLazy(sid: string): Promise<void> {
     const { reconcileGHLTasksForLead } = await import("@/lib/ghl-tasks/reconcile");
     await reconcileGHLTasksForLead(sid);
   } catch (e) {
-    console.warn("[drafts] reconcileGHLTasks failed (lazy)", sid, e);
+    log.warn("drafts.reconcile_ghl_tasks_failed", { sid, ...serializeError(e) });
   }
 }
 
@@ -311,7 +314,7 @@ export async function generateAndQueueDraft(input: {
       // Setter declined or failed validation → fall through to the legacy path.
     }
   } catch (e) {
-    console.warn("[generateAndQueueDraft] setter path failed, falling back", e);
+    log.warn("drafts.generate.setter_path_failed", { msg: "falling back", ...serializeError(e) });
   }
 
   try {
@@ -363,7 +366,7 @@ export async function generateAndQueueDraft(input: {
     });
     return draft.id;
   } catch (e) {
-    console.warn("[generateAndQueueDraft] best-effort failure", e);
+    log.warn("drafts.generate.best_effort_failed", { ...serializeError(e) });
     return null;
   }
 }

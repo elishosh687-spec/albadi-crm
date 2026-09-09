@@ -15,6 +15,9 @@
  * call. The LLM cannot bypass it.
  */
 import { sendEliDM } from "../notify/eli";
+import { logger } from "@/lib/observability/log";
+
+const log = logger("followups");
 
 const BOM = "﻿";
 function readEnv(key: string): string {
@@ -264,7 +267,7 @@ export async function superviseFollowup(
 
     if (!res.ok) {
       const txt = await res.text();
-      console.error("[followup-supervisor] non-2xx", res.status, txt.slice(0, 200));
+      log.error("followup_supervisor.non_2xx", undefined, { status: res.status, body: txt.slice(0, 200) });
       return onFailure(input, `OpenAI ${res.status}`, model);
     }
 
@@ -321,7 +324,7 @@ async function onFailure(
       `⚠️ Followup supervisor failed for ${who} (stage=${input.stage ?? "?"}, attempt=${input.attempt})\nError: ${detail}\nNo follow-up sent.`
     );
   } catch (e) {
-    console.error("[followup-supervisor] failed to DM Eli on supervisor error", e);
+    log.error("followup_supervisor.eli_dm_failed", e);
   }
   return {
     recommended: "supervisor_error",

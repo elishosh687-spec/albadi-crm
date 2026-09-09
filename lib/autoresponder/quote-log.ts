@@ -11,6 +11,9 @@
 import { db } from "../db";
 import { botQuotes } from "../../drizzle/schema";
 import type { QState } from "./questionnaire";
+import { logger, serializeError } from "@/lib/observability/log";
+
+const log = logger("bot");
 
 export type BotQuoteSource = "initial" | "requote";
 
@@ -32,11 +35,10 @@ export async function logBotQuote(input: {
       quoteAltTotalIls: input.altTotalIls,
     });
   } catch (e) {
-    console.warn(
-      "[quote-log] insert failed",
-      input.leadSid,
-      input.source,
-      e instanceof Error ? e.message : e
-    );
+    log.warn("quote_log.insert_failed", {
+      sid: input.leadSid,
+      source: input.source,
+      ...serializeError(e),
+    });
   }
 }

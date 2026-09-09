@@ -12,12 +12,14 @@ import { leads } from "@/drizzle/schema";
 import { desc, or, ilike, sql } from "drizzle-orm";
 import { widgetAuthed } from "@/lib/widget/auth";
 import { salesAuthed } from "@/lib/widget/sales-auth";
+import { withRequestLog } from "@/lib/observability/log";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-export async function GET(req: NextRequest) {
+export const GET = withRequestLog("widget", async (req: NextRequest, log) => {
   if (!widgetAuthed(req) && !salesAuthed(req)) {
+    log.warn("unauthorized");
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
   const url = new URL(req.url);
@@ -51,4 +53,4 @@ export async function GET(req: NextRequest) {
     : await baseSelect.orderBy(desc(leads.updatedAt)).limit(limit);
 
   return NextResponse.json({ ok: true, leads: rows });
-}
+});

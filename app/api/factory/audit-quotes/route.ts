@@ -13,6 +13,7 @@
  * Auth: Bearer BOT_SECRET.
  */
 import { NextRequest, NextResponse } from "next/server";
+import { withRequestLog } from "@/lib/observability/log";
 import { db } from "@/lib/db";
 import { factoryQuoteRequests } from "@/drizzle/schema";
 import { sql } from "drizzle-orm";
@@ -48,7 +49,7 @@ async function probeRow(rowIndex: string | null) {
   }
 }
 
-export async function GET(req: NextRequest) {
+export const GET = withRequestLog("factory", async (req: NextRequest, log) => {
   if (!authorized(req)) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
@@ -137,4 +138,4 @@ export async function GET(req: NextRequest) {
   );
 
   return NextResponse.json({ ok: true, results });
-}
+});

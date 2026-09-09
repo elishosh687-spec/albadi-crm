@@ -18,6 +18,9 @@ import { sql } from "drizzle-orm";
 import { leads } from "@/drizzle/schema";
 import { searchContactsByTag } from "@/integrations/ghl/client";
 import { sendMetaCrmEvent } from "@/lib/meta/capi";
+import { logger, serializeError } from "@/lib/observability/log";
+
+const log = logger("meta");
 
 /** Tag spellings Eli might use. All mean the same thing. */
 export const GOOD_LEAD_TAGS = ["ליד טוב", "ליד_טוב", "good lead", "qualified"];
@@ -53,7 +56,7 @@ export async function pollGoodLeads(
       const rows = await searchContactsByTag(tag);
       rows.forEach((c) => c.id && contactIds.add(c.id));
     } catch (e) {
-      console.warn(`[good-lead-poll] search failed for '${tag}'`, e);
+      log.warn("good_lead_poll.tag_search_failed", { tag, ...serializeError(e) });
     }
   }
   if (contactIds.size === 0) {

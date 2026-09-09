@@ -6,13 +6,14 @@
  * view. `refused` when the spec is off-grid (→ salesperson uses the request tab).
  */
 import { NextRequest, NextResponse } from "next/server";
+import { withRequestLog } from "@/lib/observability/log";
 import { salesAuthed } from "@/lib/widget/sales-auth";
 import { computeEstimateSales, type SalesEstimateInput } from "@/lib/sales/price";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-export async function POST(req: NextRequest) {
+export const POST = withRequestLog("calculator", async (req: NextRequest, log) => {
   if (!salesAuthed(req)) {
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
@@ -45,7 +46,7 @@ export async function POST(req: NextRequest) {
     }
     return NextResponse.json({ ok: true, refused: false, quote: out.customer });
   } catch (err) {
-    console.error("[sales/estimate] failed", err);
+    log.error("sales.estimate_failed", err, { quantity: body.quantity });
     return NextResponse.json({ ok: false, error: "server_error" }, { status: 500 });
   }
-}
+});

@@ -15,6 +15,9 @@ import { crmTasks } from "@/drizzle/schema";
 import { resolveTaskAssigneeForSid } from "@/lib/crm-tasks/assignee";
 import { syncTaskToGHL } from "@/integrations/ghl/sync";
 import type { V2AssignableStage } from "@/lib/manychat/stages";
+import { logger } from "@/lib/observability/log";
+
+const log = logger("ghl");
 
 export const AUTO_TASK_BY_STAGE: Partial<
   Record<V2AssignableStage, { title: string; hoursUntilDue: number }>
@@ -71,7 +74,7 @@ export async function ensureAutoTaskForStage(
     try {
       await syncTaskToGHL(inserted.id);
     } catch (e) {
-      console.error("[auto-task] GHL sync failed", inserted.id, e);
+      log.error("auto_task.sync_failed", e, { sid, taskId: inserted.id, stage });
     }
   }
   return { created: true };

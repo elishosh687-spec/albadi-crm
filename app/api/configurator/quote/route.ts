@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { withRequestLog } from "@/lib/observability/log";
 import {
   buildConfiguratorQuote,
   CONFIGURATOR_PRODUCTS,
@@ -15,11 +16,11 @@ function corsHeaders(): HeadersInit {
   };
 }
 
-export async function OPTIONS() {
+export const OPTIONS = withRequestLog("configurator", async (_req: NextRequest, log) => {
   return new NextResponse(null, { status: 204, headers: corsHeaders() });
-}
+});
 
-export async function GET(req: NextRequest) {
+export const GET = withRequestLog("configurator", async (req: NextRequest, log) => {
   const sp = req.nextUrl.searchParams;
 
   if (sp.get("catalog") === "1") {
@@ -60,4 +61,4 @@ export async function GET(req: NextRequest) {
   }
 
   return NextResponse.json(quote, { headers: corsHeaders() });
-}
+});

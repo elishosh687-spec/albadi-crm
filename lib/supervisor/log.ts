@@ -12,6 +12,9 @@
 import { db } from "../db";
 import { botDecisionLog } from "../../drizzle/schema";
 import { and, desc, eq, gt, isNull, sql } from "drizzle-orm";
+import { logger, serializeError } from "@/lib/observability/log";
+
+const log = logger("bot");
 
 export type DecidedBy =
   | "code"
@@ -139,7 +142,7 @@ export async function logDecision(
       .returning({ id: botDecisionLog.id });
     return row?.id ?? null;
   } catch (e) {
-    console.warn("[logDecision] best-effort write failed", e);
+    log.warn("decision_log.write_failed", { ...serializeError(e) });
     return null;
   }
 }
@@ -203,7 +206,7 @@ export async function attachEliFeedback(
 
     return row.id;
   } catch (e) {
-    console.warn("[attachEliFeedback] best-effort write failed", e);
+    log.warn("decision_log.feedback_write_failed", { ...serializeError(e) });
     return null;
   }
 }

@@ -53,6 +53,9 @@ import {
 } from "./spec-extractor";
 import { buildLLMContext, renderContextForPrompt } from "./llm-context";
 import { logBotQuote } from "./quote-log";
+import { logger, serializeError } from "@/lib/observability/log";
+
+const log = logger("bot");
 
 type ListOption = { value: string; label: string };
 
@@ -659,7 +662,7 @@ async function fetchCustomSizeQuote(
     moldsCostCny: moldsCostCnyFor(Number(state.colors) || 1),
   });
   if (!outcome.ok) {
-    console.warn("[questionnaire] custom size not priceable", outcome.reason, outcome.detail);
+    log.warn("questionnaire.custom_size_not_priceable", { reason: outcome.reason, detail: outcome.detail });
     return null;
   }
 
@@ -984,7 +987,7 @@ function summarizeForFactory(state: QState, name: string | null, phone: string |
 function mirrorAnswersToGhl(sid: string, state: QState): void {
   void import("@/lib/autoresponder/ghl-questionnaire-note")
     .then((m) => m.postQuestionnaireNote(sid, state))
-    .catch((e) => console.warn("[q-note] mirror failed", sid, e));
+    .catch((e) => log.warn("q_note.mirror_failed", { sid, ...serializeError(e) }));
 }
 
 async function routeToFactory(
@@ -1148,10 +1151,7 @@ export async function requoteWithUpdatedSpec(input: {
     if (S.sendDecisionPrompt) await sendBridgeMessage(input.jid, S.decisionPrompt);
     return true;
   } catch (e) {
-    console.error(
-      "[questionnaire] requoteWithUpdatedSpec failed",
-      e instanceof Error ? e.message : e
-    );
+    log.error("questionnaire.requote_with_updated_spec_failed", e);
     return false;
   }
 }
@@ -1348,7 +1348,7 @@ export async function handleInbound(input: {
         if (llm.productCustom) llmCustomProduct = llm.productCustom;
       }
     } catch (e) {
-      console.error("[questionnaire] spec-extractor fallback error", e);
+      log.error("questionnaire.spec_extractor_fallback_failed", e);
     }
   }
 
@@ -1548,7 +1548,7 @@ async function handleConfirmationStep(
     try {
       extracted = await extractSpecFromText({ text });
     } catch (e) {
-      console.error("[questionnaire] spec-extractor freetext error", e);
+      log.error("questionnaire.spec_extractor_freetext_failed", e);
     }
 
     // Bump attempts whether we succeeded or not — protects against infinite
@@ -1640,7 +1640,7 @@ async function handleConfirmationStep(
       if (verdict === "proceed") isProceed = true;
       else if (verdict === "change") isChange = true;
     } catch (e) {
-      console.error("[questionnaire] classifyConfirmation error", e);
+      log.error("questionnaire.classify_confirmation_failed", e);
     }
   }
 

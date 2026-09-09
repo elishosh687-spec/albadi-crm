@@ -18,6 +18,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { eq, inArray } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { messageTemplates } from "@/drizzle/schema";
+import { withRequestLog } from "@/lib/observability/log";
 
 export const runtime = "nodejs";
 
@@ -42,7 +43,7 @@ const BODY = [
   "אם השקית שטוחה — העומק הוא 0.",
 ].join("\n");
 
-export async function POST(req: NextRequest) {
+export const POST = withRequestLog("admin", async (req: NextRequest, log) => {
   // /api/admin/* is NOT covered by the middleware auth gate — enforce auth
   // here directly. Accepts either:
   //   1. The admin cookie (`albadi_auth`) — when called from a signed-in
@@ -140,10 +141,10 @@ export async function POST(req: NextRequest) {
     });
   } catch (e) {
     const detail = e instanceof Error ? e.message : String(e);
-    console.error("[admin.seed-bag-dimensions-template] failed", detail);
+    log.error("seed_template.failed", e, { template: TEMPLATE_NAME });
     return NextResponse.json(
       { ok: false, error: "seed_failed", detail },
       { status: 500 }
     );
   }
-}
+});

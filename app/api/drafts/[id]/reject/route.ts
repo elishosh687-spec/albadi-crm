@@ -10,6 +10,7 @@
  */
 import { NextRequest, NextResponse } from "next/server";
 import { rejectDraft } from "@/lib/drafts";
+import { withRequestLog } from "@/lib/observability/log";
 
 export const runtime = "nodejs";
 export const maxDuration = 10;
@@ -20,10 +21,7 @@ function authorized(req: NextRequest): boolean {
   return req.headers.get("authorization") === `Bearer ${secret}`;
 }
 
-export async function POST(
-  req: NextRequest,
-  ctx: { params: Promise<{ id: string }> }
-) {
+export const POST = withRequestLog("bot", async (req: NextRequest, log, ctx: { params: Promise<{ id: string }> }) => {
   if (!authorized(req)) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
@@ -48,7 +46,9 @@ export async function POST(
   );
 
   if (!result.ok) {
+    log.warn("draft.reject_failed", { draftId, error: (result as { error?: string }).error });
     return NextResponse.json(result, { status: 400 });
   }
+  log.info("draft.rejected", { draftId, hasReason: typeof body.reason === "string" });
   return NextResponse.json(result);
-}
+});

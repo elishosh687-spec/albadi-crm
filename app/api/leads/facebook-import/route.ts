@@ -28,6 +28,7 @@ import { sendBridgeMessage } from "@/lib/bridge/client";
 import { OPENING, kickstartQuestionnaire } from "@/lib/autoresponder/questionnaire";
 import { getBotSettings } from "@/lib/bot-settings/store";
 import { syncLeadToGHL } from "@/integrations/ghl/sync";
+import { serializeError, withRequestLog } from "@/lib/observability/log";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
@@ -63,7 +64,7 @@ function jidFromPhone(phone: string): string {
   return `${digitsOnly(phone)}@s.whatsapp.net`;
 }
 
-export async function POST(req: NextRequest) {
+export const POST = withRequestLog("leads", async (req: NextRequest, log) => {
   const secret = (process.env.FB_IMPORT_SECRET ?? "").trim();
   if (!secret) {
     return NextResponse.json(
@@ -205,7 +206,7 @@ export async function POST(req: NextRequest) {
     await db.insert(leadTags).values({ manychatSubId: jid, tag: FB_LEAD_TAG });
   } catch (err) {
     // Tag insert failure is non-fatal — the lead row exists.
-    console.warn("[fb-import] tag insert failed", err);
+    log.warn("fb_import.tag_insert_failed", { sid: jid, ...serializeError(err) });
   }
 
   // Push to GHL right after the row lands so the lead shows up in the
@@ -214,7 +215,7 @@ export async function POST(req: NextRequest) {
   // the opportunity is created in the first visible column. Fire-and-forget
   // (no await) so Apps Script doesn't pay the GHL latency on each row.
   void syncLeadToGHL(jid).catch((e) =>
-    console.warn("[fb-import] syncLeadToGHL failed", jid, e),
+    log.warn("fb_import.ghl_sync_failed", { sid: jid, ...serializeError(e) }),
   );
 
   try {
@@ -246,4 +247,4 @@ export async function POST(req: NextRequest) {
     phone,
     name,
   });
-}
+});

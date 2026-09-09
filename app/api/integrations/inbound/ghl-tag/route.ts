@@ -30,6 +30,7 @@ import { and, eq, sql } from "drizzle-orm";
 import { GHL_INBOUND_SECRET } from "@/integrations/ghl/config";
 import { restartQuestionnaire } from "@/lib/autoresponder/questionnaire";
 import { removeContactTags } from "@/integrations/ghl/client";
+import { serializeError, withRequestLog } from "@/lib/observability/log";
 
 export const runtime = "nodejs";
 
@@ -101,13 +102,13 @@ function isRestartTag(tag: string): boolean {
   return RESTART_QUESTIONNAIRE_TAG_NAMES.has(normalize(tag));
 }
 
-export async function POST(req: NextRequest) {
+export const POST = withRequestLog("webhook.ghl", async (req: NextRequest, log) => {
   if (!verifyAuth(req)) {
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
 
   const rawBody = await req.text();
-  console.log("[ghl-tag] raw body", rawBody.slice(0, 500));
+  log.debug("payload.received", { bytes: rawBody.length });
 
   let body: Record<string, unknown>;
   try {
@@ -149,7 +150,7 @@ export async function POST(req: NextRequest) {
     .limit(1);
 
   if (!row) {
-    console.warn("[ghl-tag] no lead found", { contactId, rawPhone });
+    log.warn("lead.not_found", { contactId, phone: rawPhone, tag, action });
     return NextResponse.json({ ok: false, error: "lead not found" }, { status: 404 });
   }
 
@@ -180,9 +181,9 @@ export async function POST(req: NextRequest) {
     try {
       const { sendMetaCrmEvent } = await import("@/lib/meta/capi");
       void sendMetaCrmEvent(sid, "Qualified");
-      console.log(`[ghl-tag] good-lead → Meta Qualified for ${sid}`);
+      log.info("good_lead.meta_qualified", { sid, tag });
     } catch (e) {
-      console.warn("[ghl-tag] meta qualified report failed", e);
+      log.warn("good_lead.meta_report_failed", { sid, tag, ...serializeError(e) });
     }
     return NextResponse.json({ ok: true, sid, tag, action, metaEvent: "Qualified" });
   }
@@ -194,7 +195,7 @@ export async function POST(req: NextRequest) {
       .update(leads)
       .set({ botPaused: paused, updatedAt: new Date() })
       .where(eq(leads.manychatSubId, sid));
-    console.log(`[ghl-tag] bot_paused=${paused} for ${sid} via tag '${tag}'`);
+    log.info("bot_paused.set", { sid, tag, action, paused });
     return NextResponse.json({
       ok: true,
       sid,
@@ -211,7 +212,7 @@ export async function POST(req: NextRequest) {
       try {
         await removeContactTags(contactId, [tag]);
       } catch (err) {
-        console.warn(`[ghl-tag] removeContactTags failed for ${contactId}`, err);
+        log.warn("restart.remove_tag_failed", { sid, contactId, tag, ...serializeError(err) });
       }
     }
     try {
@@ -219,16 +220,16 @@ export async function POST(req: NextRequest) {
         .delete(leadTags)
         .where(and(sql`trim(${leadTags.manychatSubId}) = ${sid.trim()}`, eq(leadTags.tag, tag)));
     } catch (err) {
-      console.warn(`[ghl-tag] local tag cleanup failed for ${sid}`, err);
+      log.warn("restart.local_tag_cleanup_failed", { sid, tag, ...serializeError(err) });
     }
     try {
       await restartQuestionnaire(
         sid,
         "שולח לך את השאלון שוב 🙂 ענה על מה שהשתנה ואכין הצעה חדשה."
       );
-      console.log(`[ghl-tag] restart-questionnaire fired for ${sid} via tag '${tag}'`);
+      log.info("restart.fired", { sid, tag });
     } catch (err) {
-      console.error(`[ghl-tag] restart-questionnaire failed for ${sid}`, err);
+      log.error("restart.failed", err, { sid, tag });
       return NextResponse.json(
         {
           ok: false,
@@ -251,6 +252,6 @@ export async function POST(req: NextRequest) {
   }
 
   // Unknown tag — still mirrored above, but no side effect.
-  console.log(`[ghl-tag] mirrored tag '${tag}' (${action}) for ${sid} — no special semantics`);
+  log.info("tag.mirrored", { sid, tag, action });
   return NextResponse.json({ ok: true, sid, tag, action, applied: "tag_only" });
-}
+});

@@ -10,6 +10,7 @@
  * Auth: ?widget_token=<GHL_WIDGET_TOKEN> (or Bearer for external callers).
  */
 import { NextRequest, NextResponse } from "next/server";
+import { withRequestLog } from "@/lib/observability/log";
 import { desc } from "drizzle-orm";
 import { verifyWidgetToken } from "@/integrations/ghl/widget-auth";
 import { db } from "@/lib/db";
@@ -51,7 +52,7 @@ function str(v: unknown): string | null {
   return s.length ? s : null;
 }
 
-export async function GET(req: NextRequest) {
+export const GET = withRequestLog("calculator", async (req: NextRequest, log) => {
   if (!auth(req)) {
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
@@ -62,15 +63,15 @@ export async function GET(req: NextRequest) {
       .orderBy(desc(competitorPrices.createdAt));
     return NextResponse.json({ ok: true, rows });
   } catch (e) {
-    console.error("[widget/competitor-prices] list failed", e);
+    log.error("competitor_prices.list_failed", e);
     return NextResponse.json(
       { ok: false, error: e instanceof Error ? e.message : "list failed" },
       { status: 500 }
     );
   }
-}
+});
 
-export async function POST(req: NextRequest) {
+export const POST = withRequestLog("calculator", async (req: NextRequest, log) => {
   if (!auth(req)) {
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
@@ -119,10 +120,10 @@ export async function POST(req: NextRequest) {
       .returning();
     return NextResponse.json({ ok: true, row });
   } catch (e) {
-    console.error("[widget/competitor-prices] insert failed", e);
+    log.error("competitor_prices.insert_failed", e, { product, competitor });
     return NextResponse.json(
       { ok: false, error: e instanceof Error ? e.message : "insert failed" },
       { status: 500 }
     );
   }
-}
+});

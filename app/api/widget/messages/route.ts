@@ -12,13 +12,15 @@ import { verifyWidgetToken } from "@/integrations/ghl/widget-auth";
 import { db } from "@/lib/db";
 import { messages } from "@/drizzle/schema";
 import { sql, desc } from "drizzle-orm";
+import { withRequestLog } from "@/lib/observability/log";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-export async function GET(req: NextRequest) {
+export const GET = withRequestLog("widget", async (req: NextRequest, log) => {
   const token = req.nextUrl.searchParams.get("widget_token") ?? "";
   if (!verifyWidgetToken(token)) {
+    log.warn("unauthorized");
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
   const sid = (req.nextUrl.searchParams.get("sid") ?? "").trim();
@@ -41,4 +43,4 @@ export async function GET(req: NextRequest) {
     .limit(60);
 
   return NextResponse.json({ ok: true, messages: rows.reverse() });
-}
+});

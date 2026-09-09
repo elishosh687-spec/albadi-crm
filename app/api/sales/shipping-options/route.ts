@@ -8,13 +8,14 @@
  * financial fields.
  */
 import { NextRequest, NextResponse } from "next/server";
+import { withRequestLog } from "@/lib/observability/log";
 import { salesAuthed } from "@/lib/widget/sales-auth";
 import { getFactoryConfig } from "@/lib/factory/config";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-export async function GET(req: NextRequest) {
+export const GET = withRequestLog("calculator", async (req: NextRequest, log) => {
   if (!salesAuthed(req)) {
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
@@ -28,7 +29,7 @@ export async function GET(req: NextRequest) {
     }));
     return NextResponse.json({ ok: true, shippingOptions });
   } catch (err) {
-    console.error("[sales/shipping-options] failed", err);
+    log.error("sales.shipping_options_failed", err);
     return NextResponse.json({ ok: false, error: "server_error" }, { status: 500 });
   }
-}
+});

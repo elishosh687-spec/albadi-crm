@@ -35,14 +35,16 @@ import { dealLineName, dealLineDescription, dealSizeLabel } from "@/lib/factory/
 import { VAT_PCT } from "@/lib/factory/payment-terms";
 import { getFactoryConfig } from "@/lib/factory/config";
 import type { FactoryProductSpec } from "@/lib/factory/types";
+import { withRequestLog } from "@/lib/observability/log";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
 
-export async function GET(req: NextRequest) {
+export const GET = withRequestLog("widget", async (req: NextRequest, log) => {
   if (!widgetAuthed(req)) {
+    log.warn("unauthorized");
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
   const url = new URL(req.url);
@@ -230,4 +232,4 @@ export async function GET(req: NextRequest) {
     total_closed_deals: all.length,
     deals,
   });
-}
+});

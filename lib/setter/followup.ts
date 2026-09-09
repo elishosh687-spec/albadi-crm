@@ -17,6 +17,9 @@
  */
 import { runSetter } from "./index";
 import { getBotSettings } from "../bot-settings/store";
+import { logger, serializeError } from "@/lib/observability/log";
+
+const log = logger("setter");
 
 /** Hebrew hints so the generator knows what this particular nudge is FOR. */
 const STAGE_INTENT: Record<string, string> = {
@@ -83,7 +86,7 @@ export async function composeSetterFollowup(input: {
       holdBack: run.strategy?.goal === "hold_back",
     };
   } catch (e) {
-    console.warn("[setter.followup] compose failed, falling back to template", e);
+    log.warn("followup.compose_failed", { msg: "falling back to template", ...serializeError(e) });
     return null;
   }
 }

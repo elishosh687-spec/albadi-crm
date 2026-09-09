@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
+import { withRequestLog } from "@/lib/observability/log";
 
-export async function POST(req: NextRequest) {
+export const POST = withRequestLog("auth", async (req: NextRequest, log) => {
   const body = (await req.json()) as { password?: string };
   const password = body?.password;
 
@@ -10,6 +11,7 @@ export async function POST(req: NextRequest) {
 
   const expected = process.env.ADMIN_PASSWORD;
   if (!expected) {
+    log.error("login.not_configured", undefined, { reason: "ADMIN_PASSWORD unset" });
     return NextResponse.json(
       { error: "ADMIN_PASSWORD לא הוגדר בשרת" },
       { status: 500 }
@@ -17,6 +19,7 @@ export async function POST(req: NextRequest) {
   }
 
   if (password !== expected) {
+    log.warn("login.rejected");
     return NextResponse.json({ error: "סיסמה שגויה" }, { status: 401 });
   }
 
@@ -28,5 +31,6 @@ export async function POST(req: NextRequest) {
     path: "/",
     maxAge: 60 * 60 * 24 * 30, // 30 days
   });
+  log.info("login.ok");
   return res;
-}
+});

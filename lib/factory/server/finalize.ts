@@ -22,6 +22,9 @@ import type {
   FactoryPricingResult,
   ShippingOption,
 } from "@/lib/factory/types";
+import { logger, serializeError } from "@/lib/observability/log";
+
+const log = logger("factory");
 
 /** Pick the first defined+non-empty+non-zero value. Used for merging fresh Feishu
  *  data over a stored factory_response — fresh wins when present, stored is the
@@ -202,10 +205,7 @@ export async function finalizeQuote(
           .where(eq(factoryQuoteRequests.id, id));
       }
     } catch (err) {
-      console.warn(
-        `[factory/finalize] re-pull from Feishu failed for id=${id} row=${reqRow.feishuRowIndex}:`,
-        err
-      );
+      log.warn("finalize.feishu_repull_failed", { quoteId: id, rowIndex: reqRow.feishuRowIndex, ...serializeError(err) });
     }
   }
 
@@ -331,7 +331,7 @@ export async function finalizeQuote(
       pdfUrl = `${proto}://${host}/api/factory/${id}/pdf`;
     }
   } catch (err) {
-    console.error("[factory/finalize] PDF render/upload failed", err);
+    log.error("finalize.pdf_failed", err, { quoteId: id });
   }
 
   await db
@@ -354,7 +354,7 @@ export async function finalizeQuote(
     );
     void reconcileGHLTasksForLead(reqRow.manychatSubId);
   } catch (e) {
-    console.warn("[factory/finalize] ghl tasks reconcile failed", e);
+    log.warn("finalize.ghl_tasks_reconcile_failed", { quoteId: id, sid: reqRow.manychatSubId, ...serializeError(e) });
   }
 
   return {

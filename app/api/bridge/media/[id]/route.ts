@@ -22,6 +22,7 @@ import crypto from "crypto";
 import { db } from "@/lib/db";
 import { messages } from "@/drizzle/schema";
 import { eq } from "drizzle-orm";
+import { withRequestLog } from "@/lib/observability/log";
 
 export const dynamic = "force-dynamic";
 // Node runtime — we need `node:crypto` for HKDF + AES.
@@ -104,10 +105,9 @@ function contentTypeFor(mediaType: string, filename: string | null): string {
   return "application/octet-stream";
 }
 
-export async function GET(
-  _req: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export const GET = withRequestLog(
+  "webhook.bridge",
+  async (_req: Request, log, { params }: { params: Promise<{ id: string }> }) => {
   const { id } = await params;
   const msgId = parseInt(id, 10);
   if (!Number.isFinite(msgId)) {
@@ -135,6 +135,7 @@ export async function GET(
   if (typeof greenApiUrl === "string" && greenApiUrl.length > 0) {
     const r = await fetch(greenApiUrl);
     if (!r.ok) {
+      log.warn("media.cdn_fetch_failed", { messageId: msgId, source: "greenapi", status: r.status });
       return NextResponse.json(
         { error: `greenapi-cdn ${r.status}` },
         { status: 502 }
@@ -180,6 +181,7 @@ export async function GET(
     { headers: { Authorization: `Bearer ${token}` } }
   );
   if (!detailRes.ok) {
+    log.warn("media.bridge_detail_failed", { messageId: msgId, status: detailRes.status });
     return NextResponse.json(
       { error: `bridge detail ${detailRes.status}` },
       { status: 502 }
@@ -205,6 +207,7 @@ export async function GET(
   // Download encrypted bytes from WA CDN.
   const encRes = await fetch(url);
   if (!encRes.ok) {
+    log.warn("media.cdn_fetch_failed", { messageId: msgId, source: "wa", status: encRes.status });
     return NextResponse.json(
       { error: `wa-cdn ${encRes.status}` },
       { status: 502 }
@@ -216,6 +219,7 @@ export async function GET(
   try {
     plaintext = decryptWaMedia(encrypted, mediaKey, mediaType);
   } catch (e) {
+    log.error("media.decrypt_failed", e, { messageId: msgId, mediaType });
     return NextResponse.json(
       { error: `decrypt failed: ${(e as Error).message}` },
       { status: 500 }
@@ -232,4 +236,5 @@ export async function GET(
       "Cache-Control": "private, max-age=86400",
     },
   });
-}
+  },
+);

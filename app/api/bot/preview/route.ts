@@ -8,6 +8,7 @@ import { db } from "@/lib/db";
 import { leads, botDrafts, factoryQuoteRequests } from "@/drizzle/schema";
 import { eq, and, sql } from "drizzle-orm";
 import { verifyWidgetToken } from "@/integrations/ghl/widget-auth";
+import { withRequestLog } from "@/lib/observability/log";
 
 export const runtime = "nodejs";
 
@@ -36,7 +37,7 @@ function nextSendAt(lastFollowUpAt: Date | null, cadenceHours: number, base: Dat
   return candidate;
 }
 
-export async function GET(req: NextRequest): Promise<NextResponse> {
+export const GET = withRequestLog("bot", async (req: NextRequest, log) => {
   const token = req.nextUrl.searchParams.get("widget_token") ?? "";
   // Also accept bearer for sanity.
   const bearer = (req.headers.get("authorization") ?? "").replace(/^Bearer\s+/, "");
@@ -106,6 +107,12 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
   const paused = await db.select({ sid: leads.manychatSubId, name: leads.name, stage: leads.pipelineStage, ghlContactId: leads.ghlContactId }).from(leads).where(eq(leads.botPaused, true));
   const pausedRows = paused.map(p => ({ ...p, ghlUrl: p.ghlContactId ? `${ghlBase}${p.ghlContactId}` : null }));
 
+  log.debug("preview.built", {
+    upcoming: upcoming.length,
+    drafts: draftRows.length,
+    factory: factoryRows.length,
+    paused: pausedRows.length,
+  });
   return NextResponse.json({
     now: now.toISOString(),
     upcoming,
@@ -113,4 +120,4 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     factory: factoryRows,
     paused: pausedRows,
   });
-}
+});

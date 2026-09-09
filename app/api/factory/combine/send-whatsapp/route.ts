@@ -9,12 +9,13 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { withRequestLog } from "@/lib/observability/log";
 import { sendCombinedQuoteWhatsapp } from "@/lib/factory/server/sendCombinedWhatsapp";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
 
-export async function POST(req: NextRequest): Promise<NextResponse> {
+export const POST = withRequestLog("factory", async (req: NextRequest, log): Promise<NextResponse> => {
   const sp = req.nextUrl.searchParams;
   const ids = (sp.get("ids") ?? "")
     .split(",")
@@ -45,4 +46,4 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     );
   }
   return NextResponse.json(result);
-}
+});

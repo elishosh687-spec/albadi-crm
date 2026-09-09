@@ -6,12 +6,13 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { withRequestLog } from "@/lib/observability/log";
 import { assignImportedQuote } from "@/lib/factory/server/import-from-feishu";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
 
-export async function POST(req: NextRequest) {
+export const POST = withRequestLog("factory", async (req: NextRequest, log) => {
   const body = await req.json().catch(() => ({}));
   const quotationNo = String(body?.quotationNo ?? "").trim();
   const leadSid = String(body?.leadSid ?? "").trim();
@@ -22,10 +23,10 @@ export async function POST(req: NextRequest) {
     const result = await assignImportedQuote(quotationNo, leadSid);
     return NextResponse.json(result, { status: result.ok ? 200 : 409 });
   } catch (e) {
-    console.error("[factory/import-feishu/assign] failed", e);
+    log.error("import_feishu.assign_failed", e, { quotationNo, sid: leadSid });
     return NextResponse.json(
       { ok: false, error: e instanceof Error ? e.message : "assign_failed" },
       { status: 500 }
     );
   }
-}
+});

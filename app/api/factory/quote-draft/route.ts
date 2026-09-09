@@ -9,6 +9,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { withRequestLog } from "@/lib/observability/log";
 import { z } from "zod";
 import { createFactoryDraft, updateFactoryDraft } from "@/lib/factory/create-request";
 
@@ -50,7 +51,7 @@ const BodySchema = z.object({
   draftId: z.string().optional(),
 });
 
-export async function POST(req: NextRequest) {
+export const POST = withRequestLog("factory", async (req: NextRequest, log) => {
   let body: z.infer<typeof BodySchema>;
   try {
     body = BodySchema.parse(await req.json());
@@ -83,7 +84,7 @@ export async function POST(req: NextRequest) {
     });
     return NextResponse.json({ ok: true, ...result });
   } catch (err) {
-    console.error("[factory/quote-draft] failed", err);
+    log.error("quote_draft.failed", err, { sid: body.manychatSubId, draftId: body.draftId });
     return NextResponse.json(
       {
         ok: false,
@@ -93,4 +94,4 @@ export async function POST(req: NextRequest) {
       { status: 500 }
     );
   }
-}
+});

@@ -11,6 +11,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { withRequestLog } from "@/lib/observability/log";
 import { db } from "@/lib/db";
 import { factoryQuoteRequests, leads } from "@/drizzle/schema";
 import { eq, inArray } from "drizzle-orm";
@@ -35,7 +36,7 @@ function r2(n: number): number {
 export const runtime = "nodejs";
 export const maxDuration = 30;
 
-export async function GET(req: NextRequest) {
+export const GET = withRequestLog("factory", async (req: NextRequest, log) => {
   const idsParam = req.nextUrl.searchParams.get("ids") ?? "";
   const ids = idsParam
     .split(",")
@@ -165,7 +166,7 @@ export async function GET(req: NextRequest) {
       },
     });
   } catch (err) {
-    console.error("[factory/combine/pdf] render failed", { ids, err });
+    log.error("combine.pdf.render_failed", err, { quoteIds: ids, sid: sub });
     return NextResponse.json(
       {
         error: "pdf_render_failed",
@@ -174,4 +175,4 @@ export async function GET(req: NextRequest) {
       { status: 500 }
     );
   }
-}
+});

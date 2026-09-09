@@ -23,6 +23,9 @@
  */
 
 import { feishuFetch } from "./client";
+import { logger } from "@/lib/observability/log";
+
+const log = logger("feishu");
 
 export function getSpreadsheetToken(): string {
   const t = process.env.FEISHU_SHEET_TOKEN;
@@ -525,13 +528,38 @@ export function parseFactoryResponseRow(
   }
 
   // If CBM not provided but dims are, derive: (L*W*H) cm / 1,000,000 = m³
-  if (
-    cartonCbm === undefined &&
-    cartonLen !== undefined &&
-    cartonWid !== undefined &&
-    cartonHei !== undefined
-  ) {
-    cartonCbm = (cartonLen * cartonWid * cartonHei) / 1_000_000;
+  const dimsCbm =
+    cartonLen !== undefined && cartonWid !== undefined && cartonHei !== undefined
+      ? (cartonLen * cartonWid * cartonHei) / 1_000_000
+      : undefined;
+  if (cartonCbm === undefined && dimsCbm !== undefined) {
+    cartonCbm = dimsCbm;
+  }
+
+  // Column-shift tripwire (see CLAUDE.md "Feishu factory-quote parser"). When
+  // the factory inserts a column, every field lands one slot off: cbm reads a
+  // cm dimension (hundreds instead of ~0.0X), unitCost reads the quantity,
+  // supplier becomes a bare number. This has corrupted quotes THREE times and
+  // was only ever caught by eye in the FinalizeModal. Same 25% rule the modal's
+  // `cbmWarn` uses; logged, never thrown — the parse still returns so nothing
+  // downstream changes behaviour.
+  if (unitCost !== undefined && unitCost > 0) {
+    const cbmMismatch =
+      dimsCbm !== undefined && dimsCbm > 0 && toNum(row[16]) !== undefined &&
+      Math.abs((toNum(row[16]) as number) - dimsCbm) / dimsCbm > 0.25;
+    const supplierIsNumber = supplier !== undefined && /^\d+(\.\d+)?$/.test(supplier);
+    if (cbmMismatch || supplierIsNumber) {
+      log.warn("sheet.column_shift_suspected", {
+        quotationNo: toStr(row[1]) ?? null,
+        unitCostCny: unitCost,
+        cartonQty: cartonQty ?? null,
+        cartonCbm: toNum(row[16]) ?? null,
+        dimsCbm: dimsCbm !== undefined ? Math.round(dimsCbm * 1000) / 1000 : null,
+        weightKg: weight ?? null,
+        supplier: supplier ?? null,
+        reasons: [cbmMismatch ? "cbm_vs_dims" : null, supplierIsNumber ? "supplier_numeric" : null].filter(Boolean),
+      });
+    }
   }
 
   return {

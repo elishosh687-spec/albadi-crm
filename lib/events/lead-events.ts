@@ -14,6 +14,9 @@
 import { db } from "@/lib/db";
 import { leadEvents } from "@/drizzle/schema";
 import { sql } from "drizzle-orm";
+import { logger, serializeError } from "@/lib/observability/log";
+
+const log = logger("bot");
 
 let bootstrapped = false;
 
@@ -36,7 +39,7 @@ async function ensureTable(): Promise<void> {
     `);
     bootstrapped = true;
   } catch (e) {
-    console.warn("[lead-events] ensureTable failed", e);
+    log.warn("lead_events.ensure_table_failed", { ...serializeError(e) });
   }
 }
 
@@ -77,7 +80,7 @@ export async function logLeadEvent(input: {
     });
   } catch (e) {
     // Audit log is best-effort.
-    console.warn("[lead-events] logLeadEvent failed", e);
+    log.warn("lead_events.log_failed", { ...serializeError(e) });
   }
 }
 
@@ -110,7 +113,7 @@ export async function loadLeadEvents(sid: string, limit = 50): Promise<LeadEvent
       createdAt: new Date(r.createdAt).toISOString(),
     }));
   } catch (e) {
-    console.warn("[lead-events] loadLeadEvents failed", e);
+    log.warn("lead_events.load_failed", { ...serializeError(e) });
     return [];
   }
 }

@@ -31,6 +31,7 @@ import {
   type V2FlagName,
   type V2PipelineStage,
 } from "@/lib/manychat/stages";
+import { withRequestLog } from "@/lib/observability/log";
 
 export const runtime = "nodejs";
 export const maxDuration = 10;
@@ -49,11 +50,9 @@ interface OverrideBody {
   pipeline_flag?: string | null;
 }
 
-export async function POST(
-  req: NextRequest,
-  ctx: { params: Promise<{ sid: string }> }
-) {
+export const POST = withRequestLog("leads", async (req: NextRequest, log, ctx: { params: Promise<{ sid: string }> }) => {
   if (!authorized(req)) {
+    log.warn("unauthorized");
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
@@ -171,5 +170,6 @@ export async function POST(
       .where(sql`trim(${leads.manychatSubId}) = ${sid}`);
   }
 
+  log.info("lead.overridden", { sid, applied, flag_diff: flagDiff });
   return NextResponse.json({ ok: true, applied, flag_diff: flagDiff });
-}
+});

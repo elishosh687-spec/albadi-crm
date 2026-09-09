@@ -9,14 +9,16 @@ import { NextRequest, NextResponse } from "next/server";
 import { verifyWidgetToken } from "@/integrations/ghl/widget-auth";
 import { aggregateAnalyses } from "@/lib/analysis/aggregate";
 import { selectMatched, type LeadFilter } from "@/lib/analysis/batch";
+import { withRequestLog } from "@/lib/observability/log";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 30;
 
-export async function GET(req: NextRequest) {
+export const GET = withRequestLog("analysis", async (req: NextRequest, log) => {
   const token = req.nextUrl.searchParams.get("widget_token");
   if (!verifyWidgetToken(token)) {
+    log.warn("unauthorized");
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
   const sp = req.nextUrl.searchParams;
@@ -38,4 +40,4 @@ export async function GET(req: NextRequest) {
     matched_total: matched.length,
     matched_analyzed: matched.filter((m) => m.analyzed).length,
   });
-}
+});

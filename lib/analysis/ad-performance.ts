@@ -14,6 +14,9 @@
 import { db } from "@/lib/db";
 import { sql } from "drizzle-orm";
 import { fetchAdSpend } from "@/lib/meta/ads-insights";
+import { logger, serializeError } from "@/lib/observability/log";
+
+const log = logger("analysis");
 
 export interface AdPerformanceRow {
   adName: string;
@@ -113,7 +116,10 @@ export async function buildAdPerformance(
       if (nm && !dealNameBySid.has(sid)) dealNameBySid.set(sid, nm);
     }
   } catch (e) {
-    console.warn("[ad-performance] closed-deal lookup failed (showing 0)", e);
+    log.warn("ad_performance.closed_deals_lookup_failed", {
+      msg: "revenue shown as 0",
+      ...serializeError(e),
+    });
   }
   // Which ad each revenue-carrying lead came from.
   const adBySid = new Map<string, string>();

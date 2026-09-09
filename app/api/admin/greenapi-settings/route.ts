@@ -26,6 +26,7 @@
  */
 import { NextRequest, NextResponse } from "next/server";
 import { greenConfigured, greenEndpoint } from "@/lib/greenapi/client";
+import { withRequestLog } from "@/lib/observability/log";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -128,18 +129,20 @@ function safeView(s: Record<string, unknown> | null): Record<string, unknown> {
   return out;
 }
 
-export async function GET(req: NextRequest) {
+export const GET = withRequestLog("admin", async (req: NextRequest, log) => {
   if (!authorized(req)) {
+    log.warn("unauthorized");
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
   if (!greenConfigured()) {
     return NextResponse.json({ ok: false, error: "green_not_configured" });
   }
   return NextResponse.json({ ok: true, settings: safeView(await readSettings()) });
-}
+});
 
-export async function POST(req: NextRequest) {
+export const POST = withRequestLog("admin", async (req: NextRequest, log) => {
   if (!authorized(req)) {
+    log.warn("unauthorized");
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
   if (!greenConfigured()) {
@@ -226,6 +229,13 @@ export async function POST(req: NextRequest) {
     ? Object.keys(changed).filter((k) => !(k in set))
     : [];
 
+  // Keys only — never the values (webhookUrl carries the instance token).
+  log.info("green.settings_applied", {
+    requestedKeys: Object.keys(set),
+    confirmed,
+    baselineAvailable,
+    unexpected,
+  });
   return NextResponse.json({
     ok: confirmed,
     requested: set,
@@ -241,4 +251,4 @@ export async function POST(req: NextRequest) {
         : "Not confirmed yet — the instance may still be restarting. Re-run GET in a few minutes.",
     settings: afterView,
   });
-}
+});

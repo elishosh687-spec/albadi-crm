@@ -10,13 +10,14 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { withRequestLog } from "@/lib/observability/log";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
 
 const MAX_BYTES = 8_000_000;
 
-export async function POST(req: NextRequest) {
+export const POST = withRequestLog("factory", async (req: NextRequest, log) => {
   let form: FormData;
   try {
     form = await req.formData();
@@ -60,10 +61,10 @@ export async function POST(req: NextRequest) {
     });
     return NextResponse.json({ ok: true, url: blob.url });
   } catch (e) {
-    console.error("[factory/upload-image] failed", e);
+    log.error("upload_image.failed", e, { fileName: file.name, size: file.size });
     return NextResponse.json(
       { ok: false, error: e instanceof Error ? e.message : "upload_failed" },
       { status: 500 }
     );
   }
-}
+});

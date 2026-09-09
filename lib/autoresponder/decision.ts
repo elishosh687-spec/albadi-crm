@@ -52,6 +52,9 @@ import {
 import { generateAndQueueDraft, type MoneyReason } from "../drafts";
 import { pauseFields } from "./bot-pause";
 import { phraseStateReply } from "../setter/phrase";
+import { logger } from "@/lib/observability/log";
+
+const log = logger("bot");
 
 const ESCALATION_KIND_TO_MONEY_REASON: Partial<
   Record<"reject" | "negotiating" | "spec_change" | "question" | "generic", MoneyReason>
@@ -312,7 +315,7 @@ async function runUnmatchAgent(
       reason: reasonLabel,
     });
   } catch (e) {
-    console.error("[decision] unmatch agent threw", e);
+    log.error("decision.unmatch_agent_threw", e);
     // Treat any thrown error as an escalation — same as the agent's own
     // soft-fail path.
     result = {
@@ -643,7 +646,7 @@ async function maybeSetterReply(
       detail: `goal=${run.strategy?.goal}`,
     };
   } catch (e) {
-    console.error("[decision] setter live path failed, falling back to scripted", e);
+    log.error("decision.setter_live_path_failed", e, { msg: "falling back to scripted" });
     return null;
   }
 }

@@ -13,12 +13,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { widgetAuthed } from "@/lib/widget/auth";
 import { createConfiguratorSession } from "@/lib/configurator/sessions";
+import { withRequestLog } from "@/lib/observability/log";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-export async function POST(req: NextRequest) {
+export const POST = withRequestLog("widget", async (req: NextRequest, log) => {
   if (!widgetAuthed(req)) {
+    log.warn("unauthorized");
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
 
@@ -34,11 +36,13 @@ export async function POST(req: NextRequest) {
 
   try {
     const { link } = await createConfiguratorSession(sid);
+    log.info("configurator.session_created", { sid });
     return NextResponse.json({ ok: true, link });
   } catch (e) {
+    log.error("configurator.session_failed", e, { sid });
     return NextResponse.json(
       { ok: false, error: e instanceof Error ? e.message : "failed" },
       { status: 500 }
     );
   }
-}
+});

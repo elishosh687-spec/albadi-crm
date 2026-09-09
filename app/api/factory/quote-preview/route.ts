@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { withRequestLog } from "@/lib/observability/log";
 import { calculateQuote } from "@/lib/factory/calculator/engine";
 import { DEFAULT_CONFIG } from "@/lib/factory/calculator/constants";
 import { getFactoryConfig } from "@/lib/factory/config";
@@ -54,7 +55,7 @@ function buildCustomProduct(sp: URLSearchParams): Product | null {
   };
 }
 
-export async function GET(req: NextRequest) {
+export const GET = withRequestLog("calculator", async (req: NextRequest, log) => {
   const sp = req.nextUrl.searchParams;
   const product  = sp.get("product");
   const qty      = sp.get("qty");
@@ -124,4 +125,4 @@ export async function GET(req: NextRequest) {
     altResult,
     computed: { productionPerUnitIls, shippingPerUnitIls, usdToIls, usdToCny: dbConfig.usdToCny, commissionPct: dbConfig.commissionPct },
   });
-}
+});

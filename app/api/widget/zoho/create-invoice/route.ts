@@ -12,6 +12,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { withRequestLog, serializeError } from "@/lib/observability/log";
 import { widgetAuthed } from "@/lib/widget/auth";
 import { db } from "@/lib/db";
 import { factoryQuoteRequests, leads } from "@/drizzle/schema";
@@ -48,7 +49,7 @@ function lineFromSpec(spec: FactoryProductSpec | null, fp: FactoryPricingResult)
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
-export async function POST(req: NextRequest) {
+export const POST = withRequestLog("zoho", async (req: NextRequest, log) => {
   if (!widgetAuthed(req)) {
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
@@ -169,7 +170,7 @@ export async function POST(req: NextRequest) {
           uploadedAt: new Date().toISOString(),
         });
       } catch (e) {
-        console.warn("[zoho/create-invoice] pdf attach failed (non-fatal)", e);
+        log.warn("invoice.pdf_attach_failed", { dealId: row.id, invoiceNumber: result.invoiceNumber, ...serializeError(e) });
       }
     }
 
@@ -216,10 +217,10 @@ export async function POST(req: NextRequest) {
       tagApplied: result.tagApplied,
     });
   } catch (err) {
-    console.error("[zoho/create-invoice] failed", err);
+    log.error("invoice.create_failed", err, { dealId: body.dealId, quotationNo: row.quotationNo });
     return NextResponse.json(
       { ok: false, error: err instanceof Error ? err.message : "invoice_failed" },
       { status: 502 }
     );
   }
-}
+});

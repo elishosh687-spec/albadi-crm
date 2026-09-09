@@ -24,6 +24,9 @@ import { db } from "../db";
 import { messages as messagesTable, leads } from "../../drizzle/schema";
 import { sql } from "drizzle-orm";
 import { getBotSettings } from "../bot-settings/store";
+import { logger, serializeError } from "@/lib/observability/log";
+
+const log = logger("messaging");
 
 const API_URL = (process.env.GREEN_API_API_URL ?? "").replace(/\/$/, "");
 const ID_INSTANCE = process.env.GREEN_API_ID_INSTANCE ?? "";
@@ -197,10 +200,9 @@ async function insertGreenOutbound(p: InsertOutboundParams): Promise<void> {
       payload: p.payload ?? { from: "greenapi" },
     });
   } catch (e) {
-    console.error("[greenapi] insertGreenOutbound failed", {
+    log.error("outbound.insert_failed", e, {
       chatId: p.chatId,
       waMessageId: p.waMessageId,
-      err: e instanceof Error ? e.message : String(e),
     });
   }
 }
@@ -231,7 +233,7 @@ export async function sendGreenMessage(
 ): Promise<GreenSendResult> {
   if (process.env.BRIDGE_DRY_RUN === "1") {
     const fakeId = `dryrun:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`;
-    console.log(`[green.dryrun] → ${recipient}: ${message.slice(0, 100)}`);
+    log.info("send.dry_run", { recipient, textPreview: message.slice(0, 80) });
     return { wa_message_id: fakeId, status: "dryrun" };
   }
   const chatId = await recipientToChatId(recipient);
@@ -360,7 +362,7 @@ async function mirrorOutboundToGHL(input: {
       mediaMimeType: input.mediaMimeType ?? null,
     });
   } catch (e) {
-    console.warn("[green.client] ghl forward failed", e);
+    log.warn("ghl_forward.failed", { chatId: input.chatId, ...serializeError(e) });
   }
 }
 
@@ -427,10 +429,7 @@ export async function sendGreenCompanyTemplate(recipient: string): Promise<void>
     });
     videoSent = true;
   } catch (err) {
-    console.warn(
-      "[greenapi] company video send failed",
-      err instanceof Error ? err.message : err
-    );
+    log.warn("company_template.video_failed", { chatId, ...serializeError(err) });
   }
 
   // 2. Interactive buttons with Instagram URL.
@@ -456,10 +455,7 @@ export async function sendGreenCompanyTemplate(recipient: string): Promise<void>
     });
     return;
   } catch (err) {
-    console.warn(
-      "[greenapi] interactive buttons failed, sending text fallback",
-      err instanceof Error ? err.message : err
-    );
+    log.warn("company_template.buttons_failed", { chatId, ...serializeError(err) });
   }
 
   // 3. Last-resort: plain text containing everything (only if buttons failed).
@@ -568,7 +564,7 @@ export async function getGreenContactInfo(
       avatar: r.avatar,
     };
   } catch (err) {
-    console.warn("[greenapi] getContactInfo failed", err);
+    log.warn("contact_info.failed", { chatId, ...serializeError(err) });
     return null;
   }
 }

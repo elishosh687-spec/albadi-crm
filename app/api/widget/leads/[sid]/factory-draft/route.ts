@@ -9,6 +9,7 @@ import { leads } from "@/drizzle/schema";
 import { sql } from "drizzle-orm";
 import { z } from "zod";
 import { widgetAuthed } from "@/lib/widget/auth";
+import { withRequestLog } from "@/lib/observability/log";
 
 export const runtime = "nodejs";
 
@@ -24,11 +25,9 @@ const DraftSchema = z.object({
   notes: z.string().default(""),
 });
 
-export async function PUT(
-  req: NextRequest,
-  ctx: { params: Promise<{ sid: string }> }
-) {
+export const PUT = withRequestLog("widget", async (req: NextRequest, log, ctx: { params: Promise<{ sid: string }> }) => {
   if (!widgetAuthed(req)) {
+    log.warn("unauthorized");
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
   const { sid } = await ctx.params;
@@ -45,14 +44,13 @@ export async function PUT(
     .update(leads)
     .set({ factorySpecDraft: body, updatedAt: new Date() })
     .where(sql`trim(${leads.manychatSubId}) = ${sid}`);
+  log.info("factory_draft.saved", { sid });
   return NextResponse.json({ ok: true, draft: body });
-}
+});
 
-export async function DELETE(
-  req: NextRequest,
-  ctx: { params: Promise<{ sid: string }> }
-) {
+export const DELETE = withRequestLog("widget", async (req: NextRequest, log, ctx: { params: Promise<{ sid: string }> }) => {
   if (!widgetAuthed(req)) {
+    log.warn("unauthorized");
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
   const { sid } = await ctx.params;
@@ -60,5 +58,6 @@ export async function DELETE(
     .update(leads)
     .set({ factorySpecDraft: null, updatedAt: new Date() })
     .where(sql`trim(${leads.manychatSubId}) = ${sid}`);
+  log.info("factory_draft.cleared", { sid });
   return NextResponse.json({ ok: true });
-}
+});

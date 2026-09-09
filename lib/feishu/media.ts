@@ -6,6 +6,9 @@
  */
 
 import { getFeishuBaseUrl, getTenantAccessToken } from "./client";
+import { logger, serializeError } from "@/lib/observability/log";
+
+const log = logger("feishu");
 
 /** Pull the fileToken out of a sheet image cell (object or array of objects). */
 export function extractFeishuFileToken(cell: unknown): string | null {
@@ -38,7 +41,7 @@ export async function downloadFeishuMedia(
       headers: { Authorization: `Bearer ${token}` },
     });
     if (!resp.ok) {
-      console.warn(`[feishu/media] download ${fileToken} → HTTP ${resp.status}`);
+      log.warn("media.download_http_error", { fileToken, status: resp.status });
       return null;
     }
     const ctRaw = resp.headers.get("content-type") ?? "";
@@ -47,7 +50,7 @@ export async function downloadFeishuMedia(
     if (buffer.byteLength === 0 || buffer.byteLength > 12_000_000) return null;
     return { buffer, contentType };
   } catch (e) {
-    console.warn("[feishu/media] download failed", e);
+    log.warn("media.download_failed", { fileToken, ...serializeError(e) });
     return null;
   }
 }
@@ -71,7 +74,7 @@ export async function feishuImageToBlobUrl(
     );
     return blob.url;
   } catch (e) {
-    console.warn("[feishu/media] blob upload failed", e);
+    log.warn("media.blob_upload_failed", { fileToken, ...serializeError(e) });
     return null;
   }
 }

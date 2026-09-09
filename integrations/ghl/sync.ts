@@ -1,6 +1,6 @@
 // GoHighLevel sync orchestrator.
 //
-// Public API (fire-and-forget — all errors swallowed + console.error'd):
+// Public API (fire-and-forget — all errors swallowed + logged via log.error):
 //   - upsertGHLContact(lead)            → ensure contact exists, cache id in DB
 //   - createOrUpdateGHLOpportunity(lead) → ensure opportunity, move to right stage
 //   - syncLeadToGHL(sid)                → load lead → upsert contact + opportunity
@@ -38,6 +38,9 @@ import {
 import { auditMirror } from "./audit";
 import { getValidAccessToken } from "./oauth";
 import { jidToPhone } from "@/lib/bridge/jid";
+import { logger, serializeError } from "@/lib/observability/log";
+
+const log = logger("ghl");
 import {
   buildCustomFieldsPayload,
   buildLeadDisplayName,
@@ -257,11 +260,7 @@ export async function upsertGHLContact(
     }
     return contactId;
   } catch (err) {
-    console.error(
-      "[ghl.sync] upsertGHLContact failed",
-      lead.manychatSubId,
-      err
-    );
+    log.error("sync.upsert_contact_failed", err, { sid: lead.manychatSubId });
     return null;
   }
 }
@@ -286,19 +285,16 @@ export async function createOrUpdateGHLOpportunity(
 ): Promise<string | null> {
   if (!ENABLE_GHL_SYNC) return null;
   if (!GHL_PIPELINE_ID) {
-    console.warn("[ghl.sync] GHL_PIPELINE_ID not set — skipping opportunity");
+    log.warn("sync.pipeline_id_missing", { msg: "GHL_PIPELINE_ID not set — skipping opportunity" });
     return null;
   }
   const stageId = pickStageId(lead);
   if (!stageId) {
-    console.warn(
-      "[ghl.sync] no stage id for",
-      lead.manychatSubId,
-      "stage=",
-      lead.pipelineStage,
-      "flag=",
-      lead.pipelineFlag
-    );
+    log.warn("sync.no_stage_id", {
+      sid: lead.manychatSubId,
+      stage: lead.pipelineStage,
+      flag: lead.pipelineFlag,
+    });
     return null;
   }
 
@@ -339,11 +335,7 @@ export async function createOrUpdateGHLOpportunity(
     await cacheOpportunityId(lead.manychatSubId, created.id);
     return created.id;
   } catch (err) {
-    console.error(
-      "[ghl.sync] createOrUpdateGHLOpportunity failed",
-      lead.manychatSubId,
-      err
-    );
+    log.error("sync.opportunity_failed", err, { sid: lead.manychatSubId });
     return null;
   }
 }
@@ -401,7 +393,7 @@ export async function syncLeadToGHL(
     const { ensureNewLeadTask } = await import("@/lib/ghl-tasks/new-lead-task");
     void ensureNewLeadTask(sid, contactId);
   } catch (err) {
-    console.error("[ghl.sync] syncLeadToGHL failed", sid, err);
+    log.error("sync.lead_failed", err, { sid });
   }
 }
 
@@ -442,10 +434,7 @@ export async function syncTaskToGHL(taskId: number): Promise<void> {
       .where(sql`trim(${leads.manychatSubId}) = ${task.sid.trim()}`)
       .limit(1);
     if (!leadRow?.ghlContactId) {
-      console.warn("[ghl.sync] syncTaskToGHL skipped — no ghl_contact_id", {
-        taskId,
-        sid: task.sid,
-      });
+      log.warn("sync.task_skipped_no_contact", { taskId, sid: task.sid });
       return;
     }
     const contactId = leadRow.ghlContactId;
@@ -486,7 +475,7 @@ export async function syncTaskToGHL(taskId: number): Promise<void> {
       assignedTo: taskOwner,
     });
   } catch (err) {
-    console.error("[ghl.sync] syncTaskToGHL failed", taskId, err);
+    log.error("sync.task_failed", err, { taskId });
   }
 }
 
@@ -587,10 +576,11 @@ export async function forwardMessage(opts: {
           });
           attachments = [uploaded.url];
         } catch (uploadErr) {
-          console.warn(
-            "[ghl.sync] media upload failed, falling back to proxy url",
-            uploadErr
-          );
+          log.warn("sync.media_upload_failed", {
+            sid: opts.sid,
+            msg: "falling back to proxy url",
+            ...serializeError(uploadErr),
+          });
           attachments = [proxyUrl];
         }
       } else {
@@ -654,10 +644,11 @@ export async function forwardMessage(opts: {
         message:
           msgErr instanceof Error ? msgErr.message : String(msgErr),
       };
-      console.warn(
-        "[ghl.sync] message endpoint failed, falling back to note",
-        msgErr
-      );
+      log.warn("sync.message_endpoint_failed", {
+        sid: opts.sid,
+        msg: "falling back to note",
+        ...serializeError(msgErr),
+      });
       try {
         const note = await addContactNote(contactId, body);
         await auditMirror("fallback_note", opts.sid, {
@@ -674,7 +665,7 @@ export async function forwardMessage(opts: {
       }
     }
   } catch (err) {
-    console.error("[ghl.sync] forwardMessage failed", opts.sid, err);
+    log.error("sync.forward_message_failed", err, { sid: opts.sid });
     const e = err as
       | (Error & { status?: number; responseBody?: string; ghlPath?: string; stack?: string })
       | unknown;
@@ -710,6 +701,6 @@ export async function forwardEvent(opts: {
     if (!contactId) return;
     await addContactNote(contactId, `[${opts.kind}] ${opts.detail}`);
   } catch (err) {
-    console.error("[ghl.sync] forwardEvent failed", opts.sid, err);
+    log.error("sync.forward_event_failed", err, { sid: opts.sid, kind: opts.kind });
   }
 }

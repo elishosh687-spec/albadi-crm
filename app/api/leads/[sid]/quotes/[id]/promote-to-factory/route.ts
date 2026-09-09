@@ -19,6 +19,7 @@ import { botQuotes, leads } from "@/drizzle/schema";
 import { and, eq, sql } from "drizzle-orm";
 import { qStateToFactoryProductSpec } from "@/lib/factory/qstate-decode";
 import { createFactoryDraft } from "@/lib/factory/create-request";
+import { withRequestLog } from "@/lib/observability/log";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
@@ -28,11 +29,11 @@ function authorized(req: NextRequest): boolean {
   return !!cookie && cookie.value === process.env.ADMIN_PASSWORD;
 }
 
-export async function POST(
-  req: NextRequest,
-  { params }: { params: Promise<{ sid: string; id: string }> }
-) {
+type RouteCtx = { params: Promise<{ sid: string; id: string }> };
+
+export const POST = withRequestLog<NextRequest, RouteCtx>("leads", async (req, log, { params }) => {
   if (!authorized(req)) {
+    log.warn("unauthorized");
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
@@ -102,10 +103,7 @@ export async function POST(
       ...result,
     });
   } catch (err) {
-    console.error(
-      "[promote-to-factory] createFactoryDraft failed",
-      err
-    );
+    log.error("promote_to_factory.draft_create_failed", err, { sid, quoteId });
     return NextResponse.json(
       {
         ok: false,
@@ -115,4 +113,4 @@ export async function POST(
       { status: 500 }
     );
   }
-}
+});

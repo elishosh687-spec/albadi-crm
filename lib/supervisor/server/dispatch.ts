@@ -23,6 +23,9 @@ import { logDecision } from "@/lib/supervisor/log";
 import { generateAndQueueDraft } from "@/lib/drafts";
 import { sendBridgeMessage } from "@/lib/bridge/client";
 import { sendEliDM } from "@/lib/notify/eli";
+import { logger } from "@/lib/observability/log";
+
+const log = logger("bot");
 
 export interface DispatchInput {
   sid: string;
@@ -235,7 +238,7 @@ export async function dispatchSupervisor(
         triggerMessageId: inboundMessageId,
       });
     } catch (e) {
-      console.error("[supervisor.dispatch] draft generation failed", e);
+      log.error("supervisor.dispatch.draft_generation_failed", e, { sid });
     }
     try {
       const who = freshLead?.name?.trim() || freshLead?.phone || sid;
@@ -246,7 +249,7 @@ export async function dispatchSupervisor(
           (draftId ? `Draft #${draftId} ready in /widget/drafts` : "Draft generation failed — reply manually from CRM.")
       );
     } catch (e) {
-      console.error("[supervisor.dispatch] eli DM failed", e);
+      log.error("supervisor.dispatch.eli_dm_failed", e, { sid });
     }
     await logDecision({
       ...logBase,
@@ -261,12 +264,12 @@ export async function dispatchSupervisor(
 
   if (verdict.recommended === "override_with_text") {
     if (!verdict.overrideText) {
-      console.warn("[supervisor.dispatch] override_with_text with no text — falling back to approve_code");
+      log.warn("supervisor.dispatch.override_without_text", { sid, msg: "falling back to approve_code" });
     } else {
       try {
         await sendBridgeMessage(bridgeJid, verdict.overrideText);
       } catch (e) {
-        console.error("[supervisor.dispatch] override send failed", e);
+        log.error("supervisor.dispatch.override_send_failed", e, { sid });
         await logDecision({
           ...logBase,
           decidedBy: "llm_override",

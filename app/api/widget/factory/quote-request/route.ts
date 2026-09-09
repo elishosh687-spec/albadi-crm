@@ -6,6 +6,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { withRequestLog } from "@/lib/observability/log";
 import { z } from "zod";
 import { widgetAuthed } from "@/lib/widget/auth";
 import { createFactoryRequest } from "@/lib/factory/create-request";
@@ -47,7 +48,7 @@ const BodySchema = z.object({
   productSpec: ProductSpecSchema,
 });
 
-export async function POST(req: NextRequest) {
+export const POST = withRequestLog("factory", async (req: NextRequest, log) => {
   if (!widgetAuthed(req)) {
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
@@ -70,7 +71,7 @@ export async function POST(req: NextRequest) {
     });
     return NextResponse.json({ ok: true, ...result });
   } catch (err) {
-    console.error("[widget/factory/quote-request] failed", err);
+    log.error("quote_request.failed", err, { sid: body.manychatSubId, quotationNo: body.quotationNo });
     return NextResponse.json(
       {
         ok: false,
@@ -80,4 +81,4 @@ export async function POST(req: NextRequest) {
       { status: 502 }
     );
   }
-}
+});

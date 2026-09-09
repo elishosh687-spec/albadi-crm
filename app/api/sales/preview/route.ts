@@ -7,6 +7,7 @@
  * own message).
  */
 import { NextRequest, NextResponse } from "next/server";
+import { withRequestLog } from "@/lib/observability/log";
 import { salesAuthed } from "@/lib/widget/sales-auth";
 import { computeCatalogSales, computeEstimateSales, type SalesCatalogInput, type SalesEstimateInput } from "@/lib/sales/price";
 import { buildCaption } from "@/lib/factory/server/sendWhatsapp";
@@ -22,7 +23,7 @@ interface Body extends Partial<SalesCatalogInput>, Partial<SalesEstimateInput> {
   paymentPlanId?: string | null;
 }
 
-export async function POST(req: NextRequest) {
+export const POST = withRequestLog("calculator", async (req: NextRequest, log) => {
   if (!salesAuthed(req)) {
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
@@ -79,7 +80,7 @@ export async function POST(req: NextRequest) {
     });
     return NextResponse.json({ ok: true, text });
   } catch (err) {
-    console.error("[sales/preview] failed", err);
+    log.error("sales.preview_failed", err, { mode: body.mode });
     return NextResponse.json({ ok: false, error: "server_error" }, { status: 500 });
   }
-}
+});

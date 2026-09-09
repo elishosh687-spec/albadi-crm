@@ -8,26 +8,28 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { withRequestLog } from "@/lib/observability/log";
 import { getFactoryConfig, setFactoryConfig } from "@/lib/factory/config";
 
 export const runtime = "nodejs";
 
-export async function GET() {
+export const GET = withRequestLog("factory", async (_req: NextRequest, log) => {
   // Admin UI (FinalizeModal, Settings reload-after-save) — always bypass the
   // in-process cache so the latest write is visible immediately.
   const config = await getFactoryConfig({ fresh: true });
   return NextResponse.json({ ok: true, config });
-}
+});
 
-export async function PUT(req: NextRequest) {
+export const PUT = withRequestLog("factory", async (req: NextRequest, log) => {
   try {
     const body = await req.json();
     await setFactoryConfig(body);
     return NextResponse.json({ ok: true });
   } catch (err) {
+    log.error("config.save_failed", err);
     return NextResponse.json(
       { error: "invalid_body", detail: String(err) },
       { status: 400 }
     );
   }
-}
+});

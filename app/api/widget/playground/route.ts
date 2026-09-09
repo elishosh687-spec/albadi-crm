@@ -38,6 +38,7 @@ import {
 import { runSetter } from "@/lib/setter";
 import { isHumanHandoffRequest } from "@/lib/messaging/templates";
 import { getBotSettings } from "@/lib/bot-settings/store";
+import { withRequestLog } from "@/lib/observability/log";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 120;
@@ -46,9 +47,12 @@ function unauthorized() {
   return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
 }
 
-export async function GET(req: NextRequest) {
+export const GET = withRequestLog("setter", async (req: NextRequest, log) => {
   const token = req.nextUrl.searchParams.get("widget_token") ?? "";
-  if (!verifyWidgetToken(token)) return unauthorized();
+  if (!verifyWidgetToken(token)) {
+    log.warn("unauthorized");
+    return unauthorized();
+  }
 
   await ensurePlaygroundLead();
   const [transcript, lead, settings] = await Promise.all([
@@ -57,11 +61,14 @@ export async function GET(req: NextRequest) {
     loadEffectiveSettings(),
   ]);
   return NextResponse.json({ ok: true, transcript, lead, settings });
-}
+});
 
-export async function POST(req: NextRequest) {
+export const POST = withRequestLog("setter", async (req: NextRequest, log) => {
   const token = req.nextUrl.searchParams.get("widget_token") ?? "";
-  if (!verifyWidgetToken(token)) return unauthorized();
+  if (!verifyWidgetToken(token)) {
+    log.warn("unauthorized");
+    return unauthorized();
+  }
 
   const body = (await req.json().catch(() => ({}))) as {
     action?: string;
@@ -204,7 +211,7 @@ export async function POST(req: NextRequest) {
       // WON / LOST → no-op, same as production.
     } catch (e) {
       error = e instanceof Error ? e.message : String(e);
-      console.error("[playground] handler error", e);
+      log.error("playground.handler_failed", e, { sid: PLAYGROUND_SID, routedTo, stage });
     }
   });
 
@@ -220,4 +227,4 @@ export async function POST(req: NextRequest) {
     transcript,
     lead,
   });
-}
+});

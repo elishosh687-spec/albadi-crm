@@ -23,19 +23,21 @@ import {
 } from "@/lib/crm-tasks/assignee";
 import { listLocationUsers } from "@/integrations/ghl/client";
 import { GHL_SALESPERSON_USER_ID } from "@/integrations/ghl/config";
+import { serializeError, withRequestLog } from "@/lib/observability/log";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-export async function GET(req: NextRequest) {
+export const GET = withRequestLog("widget", async (req: NextRequest, log) => {
   if (!widgetAuthed(req)) {
+    log.warn("unauthorized");
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
   const current = await loadAssignee();
   // A GHL outage must not blank the screen — fall back to an empty roster and
   // let the UI show the stored selection on its own.
   const users = await listLocationUsers().catch((err) => {
-    console.warn("[settings/assignee] GHL user list failed (non-fatal)", err);
+    log.warn("assignee.ghl_user_list_failed", { msg: "non-fatal, empty roster", ...serializeError(err) });
     return [] as Awaited<ReturnType<typeof listLocationUsers>>;
   });
   return NextResponse.json({
@@ -44,10 +46,11 @@ export async function GET(req: NextRequest) {
     current,
     envDefault: GHL_SALESPERSON_USER_ID || null,
   });
-}
+});
 
-export async function PUT(req: NextRequest) {
+export const PUT = withRequestLog("widget", async (req: NextRequest, log) => {
   if (!widgetAuthed(req)) {
+    log.warn("unauthorized");
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
   const body = (await req.json().catch(() => ({}))) as {
@@ -77,9 +80,10 @@ export async function PUT(req: NextRequest) {
     await setAssignee(userId, body.name?.trim() || undefined);
     return NextResponse.json({ ok: true, current: await loadAssignee() });
   } catch (err) {
+    log.error("assignee.save_failed", err, { mode: body.mode ?? "single" });
     return NextResponse.json(
       { ok: false, error: err instanceof Error ? err.message : "failed" },
       { status: 500 }
     );
   }
-}
+});

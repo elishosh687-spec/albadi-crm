@@ -8,6 +8,9 @@ import { db } from "@/lib/db";
 import { factoryQuoteRequests, leads } from "@/drizzle/schema";
 import { eq, sql } from "drizzle-orm";
 import type { DealMilestoneFile, DealMilestones } from "@/lib/factory/types";
+import { logger, serializeError } from "@/lib/observability/log";
+
+const log = logger("deals");
 
 const STAMP_KEYS = [
   "mockupSentAt",
@@ -149,6 +152,6 @@ export async function mirrorDealEventToGhl(
     ].join("\n");
     await addContactNote(lead.ghlContactId, body);
   } catch (err) {
-    console.warn("[deal-file] GHL mirror failed (non-fatal)", err);
+    log.warn("deal_file.ghl_mirror_failed", { quoteId, ...serializeError(err) });
   }
 }

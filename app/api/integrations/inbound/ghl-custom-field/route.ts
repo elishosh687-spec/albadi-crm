@@ -30,6 +30,7 @@ import { leads } from "@/drizzle/schema";
 import { eq } from "drizzle-orm";
 import { GHL_INBOUND_SECRET } from "@/integrations/ghl/config";
 import { applyGhlPause } from "@/lib/autoresponder/bot-pause";
+import { withRequestLog } from "@/lib/observability/log";
 
 export const runtime = "nodejs";
 
@@ -40,7 +41,7 @@ function verifyAuth(req: NextRequest): boolean {
   return token === GHL_INBOUND_SECRET;
 }
 
-export async function POST(req: NextRequest) {
+export const POST = withRequestLog("webhook.ghl", async (req: NextRequest, log) => {
   if (!verifyAuth(req)) {
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
@@ -81,16 +82,19 @@ export async function POST(req: NextRequest) {
         : value === "Paused" || value === "true" || value === "1";
     const outcome = await applyGhlPause(whereClause, paused);
     if (outcome === "not_found") {
-      console.warn("[ghl-custom-field] no lead found for contactId", contactId);
+      log.warn("lead.not_found", { contactId, field: fieldName });
       return NextResponse.json({ ok: false, error: "lead not found" }, { status: 404 });
     }
     if (outcome === "refused") {
-      console.log(
-        `[ghl-custom-field] refused to un-pause (${fieldName}=${value}) — the customer asked us to stop`
-      );
+      log.info("pause.unpause_refused", {
+        contactId,
+        field: fieldName,
+        value,
+        reason: "customer_opt_out",
+      });
       return NextResponse.json({ ok: true, updated: 0, refused: "customer_opt_out" });
     }
-    console.log(`[ghl-custom-field] ${fieldName}=${value} → paused=${paused} (GHL ${contactId})`);
+    log.info("pause.applied", { contactId, field: fieldName, value, paused });
     return NextResponse.json({ ok: true, updated: 1 });
   }
 
@@ -110,4 +114,4 @@ export async function POST(req: NextRequest) {
   }
 
   return NextResponse.json({ ok: false, error: `unknown fieldName: ${fieldName}` }, { status: 400 });
-}
+});

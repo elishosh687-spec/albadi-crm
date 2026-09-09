@@ -13,6 +13,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { sendEliDM } from "@/lib/notify/eli";
+import { withRequestLog } from "@/lib/observability/log";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -35,13 +36,16 @@ const REMINDER =
   "⚠️ אם הגיעה סחורה — מע\"מ היבוא מעמיל המכס הוא תשומה מוכרת, תשמור את המסמכים.\n\n" +
   "תגיד ל-Claude \"תחשב לי מע\"מ\" והוא יעשה את כל החישוב.";
 
-async function run(req: NextRequest) {
+const run = withRequestLog("cron", async (req: NextRequest, log) => {
+  const jlog = log.child({ job: "vat-reminder" });
   if (!authed(req)) {
+    jlog.warn("unauthorized");
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
   const result = await sendEliDM(REMINDER);
+  jlog.info("reminder.sent", { notify: result });
   return NextResponse.json({ ok: true, notify: result });
-}
+});
 
 export const GET = run;
 export const POST = run;

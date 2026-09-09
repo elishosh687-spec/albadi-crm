@@ -6,16 +6,18 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { withRequestLog } from "@/lib/observability/log";
 import { widgetAuthed } from "@/lib/widget/auth";
 import { savePaymentsReceived } from "@/lib/factory/server/closed";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-export async function PUT(
+export const PUT = withRequestLog("deals", async (
   req: NextRequest,
+  log,
   { params }: { params: Promise<{ id: string }> }
-) {
+) => {
   if (!widgetAuthed(req)) {
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
@@ -28,9 +30,10 @@ export async function PUT(
     await savePaymentsReceived(id, body?.received ?? []);
     return NextResponse.json({ ok: true });
   } catch (err) {
+    log.error("payments.save_failed", err, { id });
     return NextResponse.json(
       { ok: false, error: "invalid_body", detail: String(err) },
       { status: 400 }
     );
   }
-}
+});

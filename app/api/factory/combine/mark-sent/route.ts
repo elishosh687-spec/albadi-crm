@@ -7,13 +7,14 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { withRequestLog } from "@/lib/observability/log";
 import { db } from "@/lib/db";
 import { factoryQuoteRequests } from "@/drizzle/schema";
 import { inArray } from "drizzle-orm";
 
 export const runtime = "nodejs";
 
-export async function POST(req: NextRequest): Promise<NextResponse> {
+export const POST = withRequestLog("factory", async (req: NextRequest, log): Promise<NextResponse> => {
   const ids = (req.nextUrl.searchParams.get("ids") ?? "")
     .split(",")
     .map((s) => s.trim())
@@ -27,4 +28,4 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     .set({ sentToCustomerAt: now, updatedAt: now })
     .where(inArray(factoryQuoteRequests.id, ids));
   return NextResponse.json({ ok: true, marked: ids.length });
-}
+});

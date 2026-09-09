@@ -13,6 +13,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { withRequestLog } from "@/lib/observability/log";
 import { widgetAuthed } from "@/lib/widget/auth";
 import { db } from "@/lib/db";
 import { factoryQuoteRequests, leads } from "@/drizzle/schema";
@@ -25,7 +26,7 @@ import type { QuoteActualCosts } from "@/lib/factory/types";
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
-export async function GET(req: NextRequest) {
+export const GET = withRequestLog("zoho", async (req: NextRequest, log) => {
   if (!widgetAuthed(req)) {
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
@@ -39,9 +40,9 @@ export async function GET(req: NextRequest) {
       { status: 502 }
     );
   }
-}
+});
 
-export async function POST(req: NextRequest) {
+export const POST = withRequestLog("zoho", async (req: NextRequest, log) => {
   if (!widgetAuthed(req)) {
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
@@ -126,10 +127,10 @@ export async function POST(req: NextRequest) {
       tagApplied: result.tagApplied,
     });
   } catch (err) {
-    console.error("[zoho/create-expense] failed", err);
+    log.error("expense.create_failed", err, { dealId: body.dealId, category: body.category, currency: body.currency, amount: body.amount });
     return NextResponse.json(
       { ok: false, error: err instanceof Error ? err.message : "expense_failed" },
       { status: 502 }
     );
   }
-}
+});

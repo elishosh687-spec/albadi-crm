@@ -13,6 +13,7 @@
  */
 import { NextRequest, NextResponse } from "next/server";
 import { sendMetaCrmEvent, metaCapiConfigured, pingMetaDataset, MetaEventName } from "@/lib/meta/capi";
+import { withRequestLog } from "@/lib/observability/log";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -37,16 +38,19 @@ const VALID: MetaEventName[] = ["Qualified", "QuoteSent", "Purchase"];
  * see THIS dataset, and sends no event. The one-command answer to "how do I
  * know there's really a connection", without opening the ads tab.
  */
-export async function GET(req: NextRequest) {
+export const GET = withRequestLog("meta", async (req: NextRequest, log) => {
   if (!authorized(req)) {
+    log.warn("unauthorized");
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
   const ping = await pingMetaDataset();
+  log.info("capi.ping", { ok: ping.ok });
   return NextResponse.json(ping, { status: ping.ok ? 200 : 502 });
-}
+});
 
-export async function POST(req: NextRequest) {
+export const POST = withRequestLog("meta", async (req: NextRequest, log) => {
   if (!authorized(req)) {
+    log.warn("unauthorized");
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
   if (!metaCapiConfigured()) {
@@ -72,5 +76,6 @@ export async function POST(req: NextRequest) {
     eventId: `test:${sid}:${eventName}:${body.testEventCode ?? "live"}`,
     preview,
   });
+  log.info("capi.test_event", { sid, eventName, preview, ok: result.ok });
   return NextResponse.json(result, { status: result.ok ? 200 : 502 });
-}
+});

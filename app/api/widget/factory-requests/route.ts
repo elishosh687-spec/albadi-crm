@@ -10,6 +10,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { withRequestLog } from "@/lib/observability/log";
 import { z } from "zod";
 import { widgetAuthed } from "@/lib/widget/auth";
 import { salesAuthed } from "@/lib/widget/sales-auth";
@@ -86,7 +87,7 @@ async function resolveShippingLabel(
   }
 }
 
-export async function POST(req: NextRequest) {
+export const POST = withRequestLog("factory", async (req: NextRequest, log) => {
   if (!widgetAuthed(req) && !salesAuthed(req)) {
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
@@ -117,7 +118,7 @@ export async function POST(req: NextRequest) {
     await sendEliDM(buildEliSummary(body.customerName, body.productSpec, shippingLabel));
     return NextResponse.json({ ok: true, ...result });
   } catch (err) {
-    console.error("[widget/factory-requests] failed", err);
+    log.error("factory_requests.failed", err, { sid: body.manychatSubId });
     return NextResponse.json(
       {
         ok: false,
@@ -127,4 +128,4 @@ export async function POST(req: NextRequest) {
       { status: 500 }
     );
   }
-}
+});

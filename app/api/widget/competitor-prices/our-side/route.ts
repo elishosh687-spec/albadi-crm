@@ -18,6 +18,7 @@
  * Auth: ?widget_token=<GHL_WIDGET_TOKEN> (or Bearer).
  */
 import { NextRequest, NextResponse } from "next/server";
+import { withRequestLog } from "@/lib/observability/log";
 import { verifyWidgetToken } from "@/integrations/ghl/widget-auth";
 import { db } from "@/lib/db";
 import { competitorPrices } from "@/drizzle/schema";
@@ -152,7 +153,7 @@ async function proxyQuote(
   }
 }
 
-export async function GET(req: NextRequest) {
+export const GET = withRequestLog("calculator", async (req: NextRequest, log) => {
   if (!auth(req)) {
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
@@ -268,10 +269,10 @@ export async function GET(req: NextRequest) {
       rows: out,
     });
   } catch (e) {
-    console.error("[widget/competitor-prices/our-side] failed", e);
+    log.error("competitor_prices.our_side_failed", e, { marginOverride });
     return NextResponse.json(
       { ok: false, error: e instanceof Error ? e.message : "failed" },
       { status: 500 },
     );
   }
-}
+});

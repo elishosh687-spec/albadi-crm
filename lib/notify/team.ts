@@ -17,6 +17,9 @@ import { appConfig } from "@/drizzle/schema";
 import { eq } from "drizzle-orm";
 import { sendBridgeMessage, resolveJidFromPhone } from "../bridge/client";
 import { isJid } from "../bridge/jid";
+import { logger } from "@/lib/observability/log";
+
+const log = logger("notify");
 
 const KEY = "crm.team";
 
@@ -151,10 +154,7 @@ export async function sendTeamDM(
     if (!member) return { ok: false, status: "unknown_member" };
 
     if (process.env.BRIDGE_DRY_RUN === "1") {
-      const preview = text.length > 120 ? `${text.slice(0, 120)}…` : text;
-      console.log(
-        `[notify.team.dryrun] → ${member.name}: ${preview.replace(/\n/g, " ⏎ ")}`,
-      );
+      log.info("team_dm.dry_run", { member: member.id, textPreview: text.slice(0, 80) });
       return { ok: true, status: "dry_run", member };
     }
 
@@ -163,10 +163,10 @@ export async function sendTeamDM(
 
     // sender='eli' — this is Eli writing to a colleague, not the bot talking.
     await sendBridgeMessage(jid, text, undefined, "eli");
-    console.log(`[notify.team] DM sent to ${member.name}`);
+    log.info("team_dm.sent", { member: member.id });
     return { ok: true, status: "sent", member };
   } catch (e) {
-    console.error("[notify.team] send failed:", e);
+    log.error("team_dm.failed", e, { query });
     return { ok: false, status: "error", error: String(e) };
   }
 }

@@ -37,6 +37,7 @@ import { db } from "@/lib/db";
 import { leads, messages, bridgeEvents } from "@/drizzle/schema";
 import { and, desc, eq, gt, or, sql } from "drizzle-orm";
 import { sendBridgeMessage } from "@/lib/bridge/client";
+import { withRequestLog } from "@/lib/observability/log";
 
 export const runtime = "nodejs";
 export const maxDuration = 15;
@@ -106,10 +107,10 @@ function stripMirrorLabel(text: string): { body: string; wasLabelled: boolean } 
   return { body: text, wasLabelled: false };
 }
 
-export async function POST(req: NextRequest): Promise<NextResponse> {
+export const POST = withRequestLog("webhook.ghl", async (req: NextRequest, log): Promise<NextResponse> => {
   const auth = checkAuth(req);
   if (!auth.ok) {
-    console.warn("[ghl.outbound] rejected — bad or missing secret");
+    log.warn("auth.rejected", { reason: "bad_or_missing_secret" });
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
@@ -125,9 +126,11 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       headerSnapshot[k] = v;
     }
   });
-  console.log("[ghl.outbound] hit", {
-    headers: headerSnapshot,
-    body: rawBody.slice(0, 1000),
+  log.info("delivery.received", {
+    authMode: auth.mode,
+    bytes: rawBody.length,
+    headerKeys: Object.keys(headerSnapshot),
+    userAgent: headerSnapshot["user-agent"] ?? null,
   });
 
   let payload: GHLOutboundPayload;
@@ -143,7 +146,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   // secret is still unset.
   const ourLocation = process.env.GHL_LOCATION_ID?.trim();
   if (ourLocation && payload.locationId && payload.locationId.trim() !== ourLocation) {
-    console.warn("[ghl.outbound] rejected — foreign locationId", payload.locationId);
+    log.warn("auth.rejected", { reason: "foreign_location", locationId: payload.locationId });
     return NextResponse.json({ error: "unknown location" }, { status: 403 });
   }
 
@@ -151,11 +154,12 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   // per hit, so "is anyone still calling this without the secret?" is a query,
   // not a guess.
   if (auth.mode === "unconfigured") {
-    console.warn(
-      "[ghl.outbound] UNAUTHENTICATED HIT — GHL_OUTBOUND_SECRET is not set; " +
-        "this endpoint sends real WhatsApp messages. Set the env var and append " +
-        "?secret=… to the provider delivery URL in GHL."
-    );
+    log.warn("auth.unconfigured", {
+      contactId: payload.contactId ?? null,
+      msg:
+        "UNAUTHENTICATED HIT — GHL_OUTBOUND_SECRET is not set; this endpoint sends real " +
+        "WhatsApp messages. Set the env var and append ?secret=… to the provider delivery URL in GHL.",
+    });
     try {
       await db.insert(bridgeEvents).values({
         evtId: `ghl_outbound_open:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`,
@@ -180,14 +184,11 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     : [];
   const mediaUrl = attachments[0] ?? null;
   if (attachments.length > 1) {
-    console.warn(
-      "[ghl.outbound] multiple attachments — only first will be sent",
-      attachments.length
-    );
+    log.warn("attachments.extra_dropped", { contactId, count: attachments.length });
   }
 
   if (!text && !mediaUrl) {
-    console.warn("[ghl.outbound] no text or media in payload", payload);
+    log.warn("payload.empty", { contactId, messageId: payload.messageId, keys: Object.keys(payload) });
     return NextResponse.json({ error: "missing message" }, { status: 400 });
   }
   if (!contactId && !phone) {
@@ -214,7 +215,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     .limit(1);
 
   if (!lead) {
-    console.warn("[ghl.outbound] lead not found", { contactId, phone });
+    log.warn("lead.not_found", { contactId, phone });
     return NextResponse.json(
       { error: "lead not found", contactId, phone },
       { status: 404 }
@@ -254,7 +255,8 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       )
       .limit(1);
     if (seen.length > 0) {
-      console.log("[ghl.outbound] dedup skip — messageId is our own mirror", {
+      log.info("dedup.skip", {
+        reason: "own_mirror_message_id",
         sid: lead.manychatSubId,
         ghlMessageId,
       });
@@ -280,7 +282,8 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   if (text) {
     const { wasLabelled } = stripMirrorLabel(text);
     if (wasLabelled) {
-      console.log("[ghl.outbound] dedup skip — payload carries our mirror label", {
+      log.info("dedup.skip", {
+        reason: "mirror_label",
         sid: lead.manychatSubId,
         preview: text.slice(0, 60),
       });
@@ -309,7 +312,8 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       .orderBy(desc(messages.receivedAt))
       .limit(1);
     if (recent.length > 0) {
-      console.log("[ghl.outbound] dedup skip — recent text match", {
+      log.info("dedup.skip", {
+        reason: "recent_text_match",
         sid: lead.manychatSubId,
         wa_message_id: recent[0].waMessageId,
       });
@@ -333,9 +337,11 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       undefined,
       { skipGhlMirror: true }
     );
-    console.log("[ghl.outbound] sent", {
+    log.info("message.sent", {
       sid: lead.manychatSubId,
+      contactId,
       wa_message_id: result.wa_message_id,
+      hasMedia: Boolean(mediaUrl),
     });
     return NextResponse.json({
       ok: true,
@@ -344,10 +350,10 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    console.error("[ghl.outbound] send failed", lead.manychatSubId, msg);
+    log.error("send.failed", err, { sid: lead.manychatSubId, contactId });
     return NextResponse.json(
       { error: "send failed", detail: msg },
       { status: 502 }
     );
   }
-}
+});

@@ -16,12 +16,13 @@ import { leads } from "@/drizzle/schema";
 import { eq } from "drizzle-orm";
 import { verifyWidgetToken } from "@/integrations/ghl/widget-auth";
 import { analyzeLead } from "@/lib/analysis/analyze-lead";
+import { withRequestLog } from "@/lib/observability/log";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 120;
 
-export async function POST(req: NextRequest) {
+export const POST = withRequestLog("analysis", async (req: NextRequest, log) => {
   const token =
     req.nextUrl.searchParams.get("widget_token") ||
     req.headers.get("authorization")?.replace(/^Bearer\s+/i, "") ||
@@ -63,10 +64,10 @@ export async function POST(req: NextRequest) {
     }
     return NextResponse.json({ ok: true, ...result });
   } catch (e) {
-    console.error("[widget/analyze-lead] failed", e);
+    log.error("analyze_lead.failed", e, { sid, force: !!body.force });
     return NextResponse.json(
       { ok: false, error: e instanceof Error ? e.message : "analysis failed" },
       { status: 500 }
     );
   }
-}
+});

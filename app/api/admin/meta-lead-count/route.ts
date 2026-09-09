@@ -28,6 +28,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { sql } from "drizzle-orm";
+import { withRequestLog } from "@/lib/observability/log";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -46,8 +47,9 @@ function authorized(req: NextRequest): boolean {
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 
-export async function GET(req: NextRequest) {
+export const GET = withRequestLog("meta", async (req: NextRequest, log) => {
   if (!authorized(req)) {
+    log.warn("unauthorized");
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
   const url = new URL(req.url);
@@ -105,4 +107,4 @@ export async function GET(req: NextRequest) {
     // Every channel by name. `google` = the landing-page form carried a gclid.
     bySource,
   });
-}
+});

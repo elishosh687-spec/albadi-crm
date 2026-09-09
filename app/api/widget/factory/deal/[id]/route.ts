@@ -6,6 +6,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { withRequestLog } from "@/lib/observability/log";
 import { widgetAuthed } from "@/lib/widget/auth";
 import { db } from "@/lib/db";
 import { factoryQuoteRequests, leads } from "@/drizzle/schema";
@@ -14,10 +15,11 @@ import { eq, sql } from "drizzle-orm";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-export async function GET(
+export const GET = withRequestLog("deals", async (
   req: NextRequest,
+  log,
   { params }: { params: Promise<{ id: string }> }
-) {
+) => {
   if (!widgetAuthed(req)) {
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
@@ -37,4 +39,4 @@ export async function GET(
     .limit(1);
   if (!row) return NextResponse.json({ ok: false, error: "not found" }, { status: 404 });
   return NextResponse.json({ ok: true, deal: row });
-}
+});

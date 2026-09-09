@@ -11,6 +11,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { withRequestLog } from "@/lib/observability/log";
 import { z } from "zod";
 import { finalizeQuote } from "@/lib/factory/server/finalize";
 
@@ -46,15 +47,17 @@ const BodySchema = z.object({
     .optional(),
 });
 
-export async function POST(
+export const POST = withRequestLog("factory", async (
   req: NextRequest,
+  log,
   { params }: { params: Promise<{ id: string }> }
-) {
+) => {
   const { id } = await params;
   let body: z.infer<typeof BodySchema>;
   try {
     body = BodySchema.parse(await req.json().catch(() => ({})));
   } catch (err) {
+    log.error("finalize.invalid_body", err, { id });
     return NextResponse.json(
       { error: "invalid_body", detail: String(err) },
       { status: 400 }
@@ -69,4 +72,4 @@ export async function POST(
     );
   }
   return NextResponse.json(result);
-}
+});

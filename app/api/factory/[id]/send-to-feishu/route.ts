@@ -9,6 +9,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { withRequestLog } from "@/lib/observability/log";
 import { promoteDraftToFeishu } from "@/lib/factory/create-request";
 
 export const runtime = "nodejs";
@@ -19,10 +20,11 @@ function authorized(req: NextRequest): boolean {
   return !!cookie && cookie.value === process.env.ADMIN_PASSWORD;
 }
 
-export async function POST(
+export const POST = withRequestLog("factory", async (
   req: NextRequest,
+  log,
   { params }: { params: Promise<{ id: string }> }
-) {
+) => {
   if (!authorized(req)) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
@@ -39,10 +41,10 @@ export async function POST(
     if (msg.startsWith("row is not a draft")) {
       return NextResponse.json({ ok: false, error: "not_draft", detail: msg }, { status: 409 });
     }
-    console.error("[factory/send-to-feishu] failed", err);
+    log.error("send_to_feishu.failed", err, { quoteId: id });
     return NextResponse.json(
       { ok: false, error: "feishu_append_failed", detail: msg },
       { status: 502 }
     );
   }
-}
+});

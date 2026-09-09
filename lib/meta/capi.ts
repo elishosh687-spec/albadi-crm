@@ -12,6 +12,9 @@
 import { createHash } from "crypto";
 import { db } from "@/lib/db";
 import { sql } from "drizzle-orm";
+import { logger } from "@/lib/observability/log";
+
+const log = logger("meta");
 
 export type MetaEventName = "Qualified" | "QuoteSent" | "Purchase";
 
@@ -238,10 +241,11 @@ export async function sendMetaCrmEvent(
     // run of value-less events looks like from its side. If we get here the
     // caller failed to resolve the deal total, so say so loudly rather than
     // shipping a silent placeholder.
-    console.error(
-      `[meta] Purchase for ${sid} has no value (got ${String(opts.valueIls)}) — ` +
-        "reporting it would corrupt ROAS. Fix the caller's total lookup.",
-    );
+    log.error("capi.purchase_without_value", undefined, {
+      sid,
+      valueIls: opts.valueIls ?? null,
+      msg: "reporting it would corrupt ROAS. Fix the caller's total lookup.",
+    });
     return { ok: false, skipped: "purchase_without_value" };
   }
 

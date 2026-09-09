@@ -29,6 +29,9 @@ import {
   type PaymentPlan,
 } from "@/lib/factory/payment-terms";
 import type { FactoryProductSpec, FactoryPricingResult } from "@/lib/factory/types";
+import { logger, serializeError } from "@/lib/observability/log";
+
+const log = logger("calculator");
 
 const fmtIls = (n: number) => `₪${n.toLocaleString("he-IL", { maximumFractionDigits: 2 })}`;
 
@@ -216,7 +219,7 @@ export async function sendEstimateToCustomer(input: SendEstimateInput): Promise<
       pdfUrl = blob.url;
     }
   } catch (err) {
-    console.warn("[estimate/send-customer] PDF render/upload failed — sending text only", err);
+    log.warn("estimate.send_customer.pdf_failed", { sid: input.sid, msg: "sending text only", ...serializeError(err) });
   }
 
   let result: { wa_message_id: string; status?: string };

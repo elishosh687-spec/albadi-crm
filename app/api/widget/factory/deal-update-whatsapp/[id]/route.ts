@@ -7,16 +7,18 @@
  * (dry=1) and asks before the real send — this message goes to a customer.
  */
 import { NextRequest, NextResponse } from "next/server";
+import { withRequestLog } from "@/lib/observability/log";
 import { widgetAuthed } from "@/lib/widget/auth";
 import { sendDealUpdate } from "@/lib/factory/server/sendDealUpdate";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
-export async function POST(
+export const POST = withRequestLog("deals", async (
   req: NextRequest,
+  log,
   ctx: { params: Promise<{ id: string }> },
-) {
+) => {
   if (!widgetAuthed(req)) {
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
@@ -24,4 +26,4 @@ export async function POST(
   const dry = new URL(req.url).searchParams.get("dry") === "1";
   const result = await sendDealUpdate(id, { dryRun: dry });
   return NextResponse.json(result, { status: result.ok ? 200 : 422 });
-}
+});

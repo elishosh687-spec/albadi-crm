@@ -46,6 +46,7 @@ import { bridgeEvents, leads, leadTags } from "@/drizzle/schema";
 import { and, eq, sql } from "drizzle-orm";
 import { restartQuestionnaire } from "@/lib/autoresponder/questionnaire";
 import { removeContactTags } from "@/integrations/ghl/client";
+import { serializeError, withRequestLog } from "@/lib/observability/log";
 
 // Cooldown window (ms) — if the same lead got a restart within this window,
 // we skip a fresh one. Defends against GHL webhook retries that fire while
@@ -155,14 +156,14 @@ function verifySignature(rawBody: string, req: NextRequest): SignatureCheck {
   return { scheme: "none", valid: false };
 }
 
-export async function POST(req: NextRequest): Promise<NextResponse> {
+export const POST = withRequestLog("webhook.ghl", async (req: NextRequest, log): Promise<NextResponse> => {
   const rawBody = await req.text();
 
   const sig = verifySignature(rawBody, req);
   if (sig.valid) {
-    console.log(`[ghl.app-webhook] signature ok (${sig.scheme})`);
+    log.info("signature.ok", { scheme: sig.scheme });
   } else {
-    console.warn("[ghl.app-webhook] signature check FAILED", {
+    log.warn("signature.failed", {
       scheme: sig.scheme,
       enforcing: ENFORCE_SIGNATURE,
     });
@@ -195,12 +196,12 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     .onConflictDoNothing({ target: bridgeEvents.evtId })
     .returning({ evtId: bridgeEvents.evtId });
   if (inserted.length === 0) {
-    console.log(`[ghl.app-webhook] dedup skip evtId=${evtId}`);
+    log.info("event.deduped", { evtId, eventType: event.type });
     return NextResponse.json({ ok: true, deduped: true });
   }
 
   const type = event.type;
-  console.log(`[ghl.app-webhook] ${type}`, { id: event.id, contactId: event.contactId });
+  log.info("event.received", { eventType: type, id: event.id, contactId: event.contactId });
 
   // ============================================================
   // Contact-tag updates — first check for restart-questionnaire trigger
@@ -221,7 +222,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         .where(eq(leads.ghlContactId, contactId))
         .limit(1);
       if (!row) {
-        console.warn(`[ghl.app-webhook] restart tag '${restartTag}' but no lead for contactId=${contactId}`);
+        log.warn("restart.lead_not_found", { tag: restartTag, contactId });
         return NextResponse.json({ ok: false, error: "lead_not_found" }, { status: 404 });
       }
       const sid = row.sid;
@@ -233,13 +234,19 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         row.lastFollowUpAt &&
         Date.now() - new Date(row.lastFollowUpAt).getTime() < RESTART_COOLDOWN_MS;
       if (recentlyRestarted) {
-        console.log(`[ghl.app-webhook] restart cooldown active for sid=${sid}, skipping`);
+        log.info("restart.cooldown_skip", { sid, contactId, tag: restartTag });
         // Still attempt the tag removal — the previous run may have failed
         // there and we don't want the tag stranded on the contact.
         try {
           await removeContactTags(contactId, [restartTag]);
         } catch (err) {
-          console.warn(`[ghl.app-webhook] removeContactTags (cooldown branch) failed`, err);
+          log.warn("restart.remove_tag_failed", {
+            sid,
+            contactId,
+            tag: restartTag,
+            branch: "cooldown",
+            ...serializeError(err),
+          });
         }
         return NextResponse.json({
           ok: true,
@@ -255,14 +262,14 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       try {
         await removeContactTags(contactId, [restartTag]);
       } catch (err) {
-        console.warn(`[ghl.app-webhook] removeContactTags failed for ${contactId}`, err);
+        log.warn("restart.remove_tag_failed", { sid, contactId, tag: restartTag, ...serializeError(err) });
       }
       try {
         await db
           .delete(leadTags)
           .where(and(sql`trim(${leadTags.manychatSubId}) = ${sid.trim()}`, eq(leadTags.tag, restartTag)));
       } catch (err) {
-        console.warn(`[ghl.app-webhook] local tag cleanup failed for ${sid}`, err);
+        log.warn("restart.local_tag_cleanup_failed", { sid, tag: restartTag, ...serializeError(err) });
       }
 
       try {
@@ -274,9 +281,9 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
           sid,
           "שולח לך את השאלון שוב 🙂 ענה על מה שהשתנה ואכין הצעה חדשה."
         );
-        console.log(`[ghl.app-webhook] restart-questionnaire fired for sid=${sid} via tag '${restartTag}'`);
+        log.info("restart.fired", { sid, contactId, tag: restartTag });
       } catch (err) {
-        console.error(`[ghl.app-webhook] restart-questionnaire failed for ${sid}`, err);
+        log.error("restart.failed", err, { sid, contactId, tag: restartTag });
         return NextResponse.json(
           {
             ok: false,
@@ -367,9 +374,9 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   // Unknown / unhandled — audit-log already done, return ok.
   // ============================================================
   return NextResponse.json({ ok: true, type, noted: true, handled: false });
-}
+});
 
 // GHL may probe with GET on the URL during setup.
-export async function GET(): Promise<NextResponse> {
+export const GET = withRequestLog("webhook.ghl", async (): Promise<NextResponse> => {
   return NextResponse.json({ ok: true, endpoint: "ghl.app-webhook" });
-}
+});

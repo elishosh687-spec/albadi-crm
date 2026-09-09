@@ -20,6 +20,9 @@ import { eq } from "drizzle-orm";
 import { listContactTasks, createContactTask } from "@/integrations/ghl/client";
 import { resolveAssigneeUserId } from "@/lib/crm-tasks/assignee";
 import { clampToWorkWindow } from "@/lib/clock/callback-window";
+import { logger, serializeError } from "@/lib/observability/log";
+
+const log = logger("ghl");
 
 const MARKER = "[NEWLEAD v1]";
 // If the lead already has any of these, it's already on the board — don't add.
@@ -83,10 +86,6 @@ export async function ensureNewLeadTask(
       assignedTo: (await resolveAssigneeUserId()) ?? undefined,
     });
   } catch (e) {
-    console.warn(
-      "[new-lead-task] failed",
-      sid,
-      e instanceof Error ? e.message : String(e),
-    );
+    log.warn("new_lead_task.failed", { sid, contactId, ...serializeError(e) });
   }
 }

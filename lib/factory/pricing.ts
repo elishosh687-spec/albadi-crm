@@ -32,6 +32,9 @@ import {
   seaPerOrderUsd,
   DEFAULT_ASSUMED_SHIPMENT_CBM,
 } from "./sea-carriers";
+import { logger } from "@/lib/observability/log";
+
+const log = logger("factory");
 
 function r2(n: number): number {
   return Math.round(n * 100) / 100;
@@ -136,10 +139,19 @@ export function resolveShippingOption(
     );
     if (match) return match;
   }
-  console.warn(
-    `[pricing] unknown shippingOptionId "${id}" — falling back to a sea option instead of zero shipping`
-  );
-  return opts.find((s) => /sea|ים/i.test(`${s.id} ${s.name ?? ""}`)) ?? opts[0] ?? null;
+  const fallback = opts.find((s) => /sea|ים/i.test(`${s.id} ${s.name ?? ""}`)) ?? opts[0] ?? null;
+  // The ₪0-shipping bug (PUGPA6BQ) was invisible for months because nothing
+  // said so. This line is the tell: an unknown id means a quote is being
+  // priced on a guessed shipping option — or, when `fallbackId` is null, on
+  // NO shipping at all.
+  log.warn("shipping.fallback", {
+    shippingOptionId: id,
+    fallbackId: fallback?.id ?? null,
+    fallbackName: fallback?.name ?? null,
+    knownIds: opts.map((s) => s.id),
+    msg: fallback ? "unknown shipping id — priced on a sea option instead of zero shipping" : "unknown shipping id and NO shipping options configured — shipping will be ₪0",
+  });
+  return fallback;
 }
 
 export function priceFactoryQuote(

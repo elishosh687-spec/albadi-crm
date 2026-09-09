@@ -25,6 +25,9 @@ import {
   type StoredDealPlan,
 } from "@/lib/factory/payment-terms";
 import type { FactoryPricingResult } from "@/lib/factory/types";
+import { logger, serializeError } from "@/lib/observability/log";
+
+const log = logger("factory");
 
 function r2(n: number): number {
   return Math.round(n * 100) / 100;
@@ -253,7 +256,7 @@ export async function sendCombinedQuoteWhatsapp(
       pdfFilename
     );
   } catch (err) {
-    console.error("[factory/combine/send-whatsapp] bridge send failed", err);
+    log.error("combine.send_whatsapp.bridge_send_failed", err, { sid: recipient, quoteIds: ids });
     return {
       ok: false,
       status: 502,
@@ -270,10 +273,7 @@ export async function sendCombinedQuoteWhatsapp(
       .set({ sentToCustomerAt: now, updatedAt: now })
       .where(inArray(factoryQuoteRequests.id, ids));
   } catch (err) {
-    console.warn(
-      "[factory/combine/send-whatsapp] db update failed after bridge send",
-      err
-    );
+    log.warn("combine.send_whatsapp.db_update_failed", { sid: recipient, quoteIds: ids, msg: "after bridge send", ...serializeError(err) });
   }
 
   // Ping Itay on every quote sent (Eli 2026-07-22). Non-fatal.

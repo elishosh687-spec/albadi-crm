@@ -19,6 +19,9 @@ import { leads } from "../../drizzle/schema";
 import { sql } from "drizzle-orm";
 import { getBotSettings } from "../bot-settings/store";
 import { AUTO_RESUMABLE_REASONS } from "./bot-pause";
+import { logger } from "@/lib/observability/log";
+
+const log = logger("followups");
 
 export interface ResumeSweepResult {
   enabled: boolean;
@@ -83,7 +86,7 @@ export async function runResumeSweep(opts?: {
       .select({ n: sql<number>`count(*)::int` })
       .from(leads)
       .where(expired);
-    console.log("[resume-sweep] disabled — would have resumed", would?.n ?? 0);
+    log.info("resume_sweep.disabled", { wouldResume: would?.n ?? 0 });
     return base;
   }
 
@@ -129,9 +132,11 @@ export async function runResumeSweep(opts?: {
   }
 
   if (resumed.length > 0 || legacyResumed > 0) {
-    console.log(
-      `[resume-sweep] resumed ${resumed.length} expired + ${legacyResumed} legacy (after ${hours}h)`
-    );
+    log.info("resume_sweep.resumed", {
+      expired: resumed.length,
+      legacy: legacyResumed,
+      afterHours: hours,
+    });
   }
 
   return {

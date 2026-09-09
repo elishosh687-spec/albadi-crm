@@ -16,11 +16,12 @@ import { leads } from "@/drizzle/schema";
 import { sql } from "drizzle-orm";
 import { sendCompanyTemplate } from "@/lib/bridge/client";
 import { phoneToJid } from "@/lib/bridge/jid";
+import { withRequestLog } from "@/lib/observability/log";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
 
-export async function POST(req: NextRequest) {
+export const POST = withRequestLog("messaging", async (req: NextRequest, log) => {
   // Two auth paths: widget_token (from the GHL iframe), or
   // Authorization: Bearer $CRON_SECRET (from CLI / admin scripts).
   const token = req.nextUrl.searchParams.get("widget_token") ?? "";
@@ -28,6 +29,7 @@ export async function POST(req: NextRequest) {
   const cronBearer =
     process.env.CRON_SECRET && bearer === `Bearer ${process.env.CRON_SECRET}`;
   if (!verifyWidgetToken(token) && !cronBearer) {
+    log.warn("unauthorized");
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
 
@@ -65,7 +67,7 @@ export async function POST(req: NextRequest) {
     await sendCompanyTemplate(recipient);
     return NextResponse.json({ ok: true, status: "sent" });
   } catch (err) {
-    console.error("[widget/send-company-intro] send failed", err);
+    log.error("company_intro.send_failed", err, { sid });
     return NextResponse.json(
       {
         ok: false,
@@ -75,4 +77,4 @@ export async function POST(req: NextRequest) {
       { status: 502 }
     );
   }
-}
+});

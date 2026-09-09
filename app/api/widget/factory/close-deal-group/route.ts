@@ -7,13 +7,14 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { withRequestLog } from "@/lib/observability/log";
 import { widgetAuthed } from "@/lib/widget/auth";
 import { closeDealGroup } from "@/lib/factory/server/closed";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-export async function POST(req: NextRequest) {
+export const POST = withRequestLog("deals", async (req: NextRequest, log) => {
   if (!widgetAuthed(req)) {
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
@@ -34,9 +35,10 @@ export async function POST(req: NextRequest) {
     });
     return NextResponse.json({ ok: true, groupId });
   } catch (err) {
+    log.error("deal_group.close_failed", err, { quoteIds: body.quoteIds });
     return NextResponse.json(
       { ok: false, error: err instanceof Error ? err.message : "failed" },
       { status: 500 }
     );
   }
-}
+});

@@ -29,6 +29,7 @@ import { factoryQuoteRequests } from "@/drizzle/schema";
 import { sendMetaCrmEvent, metaCapiConfigured } from "@/lib/meta/capi";
 import { listClosedQuotes } from "@/lib/factory/server/closed";
 import { pollGoodLeads } from "@/lib/meta/good-lead-poll";
+import { withRequestLog } from "@/lib/observability/log";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -65,8 +66,9 @@ function clampTs(sec: number | null | undefined): number {
   return Math.max(Math.floor(sec), floor);
 }
 
-export async function POST(req: NextRequest) {
+export const POST = withRequestLog("meta", async (req: NextRequest, log) => {
   if (!authorized(req)) {
+    log.warn("unauthorized");
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
   if (!metaCapiConfigured()) {
@@ -112,6 +114,7 @@ export async function POST(req: NextRequest) {
       });
       out.push({ name: r.name, ok: s.ok, err: s.error });
     }
+    log.info("backfill.names_done", { matched: out.length, sent: out.filter((o) => o.ok).length });
     return NextResponse.json({ ok: true, mode: "names", sent: out.filter((o) => o.ok).length, results: out });
   }
 
@@ -191,10 +194,18 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  log.info("backfill.done", {
+    force,
+    qualified_sent: qSent,
+    qualified_skipped: qSkip,
+    purchases_sent: pSent,
+    purchases_skipped: pSkip,
+    errors: errors.length,
+  });
   return NextResponse.json({
     ok: true,
     qualified: { sent: qSent, skipped: qSkip },
     purchases: { sent: pSent, skipped: pSkip },
     errors: errors.slice(0, 10),
   });
-}
+});

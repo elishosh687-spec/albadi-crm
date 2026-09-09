@@ -13,6 +13,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { botQuotes } from "@/drizzle/schema";
 import { desc, sql } from "drizzle-orm";
+import { withRequestLog } from "@/lib/observability/log";
 
 export const runtime = "nodejs";
 
@@ -21,11 +22,9 @@ function authorized(req: NextRequest): boolean {
   return !!cookie && cookie.value === process.env.ADMIN_PASSWORD;
 }
 
-export async function GET(
-  req: NextRequest,
-  { params }: { params: Promise<{ sid: string }> }
-) {
+export const GET = withRequestLog("leads", async (req: NextRequest, log, { params }: { params: Promise<{ sid: string }> }) => {
   if (!authorized(req)) {
+    log.warn("unauthorized");
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
   const { sid: raw } = await params;
@@ -50,4 +49,4 @@ export async function GET(
     .limit(50);
 
   return NextResponse.json({ ok: true, quotes: rows });
-}
+});

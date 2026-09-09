@@ -27,6 +27,9 @@ import { leads } from "@/drizzle/schema";
 import { sql } from "drizzle-orm";
 import { addContactNote, listContactNotes } from "@/integrations/ghl/client";
 import { renderAnswerLines, type QState } from "@/lib/autoresponder/questionnaire";
+import { logger, serializeError } from "@/lib/observability/log";
+
+const log = logger("bot");
 
 const MARKER = "[שאלון v1]";
 
@@ -90,7 +93,7 @@ export async function postQuestionnaireNote(
     const { id } = await addContactNote(contactId, body);
     return { ok: true, noteId: id };
   } catch (e) {
-    console.warn("[q-note] failed", sid, e);
+    log.warn("q_note.failed", { sid, ...serializeError(e) });
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
 }

@@ -22,6 +22,9 @@ import { db } from "@/lib/db";
 import { leads, messages } from "@/drizzle/schema";
 import { sql } from "drizzle-orm";
 import type { BotSettings } from "@/lib/bot-settings/schema";
+import { logger, serializeError } from "@/lib/observability/log";
+
+const log = logger("followups");
 
 /** The stage string, as stored raw in `leads.pipeline_stage`. */
 export const FUTURE_FOLLOW_UP_STAGE = "FUTURE_FOLLOW_UP";
@@ -253,6 +256,6 @@ export async function enterFutureFollowUp(
       })
       .where(sql`trim(${leads.manychatSubId}) = ${sid.trim()}`);
   } catch (e) {
-    console.warn("[future-followup] clock reset failed", sid, e);
+    log.warn("future_followup.clock_reset_failed", { sid, ...serializeError(e) });
   }
 }

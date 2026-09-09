@@ -37,7 +37,7 @@ populated.
 
 ## Failure mode
 
-If GHL is down, all sync calls fail silently into `console.error`. The bridge
+If GHL is down, all sync calls fail silently into a `feature=ghl` error log line. The bridge
 webhook keeps processing WhatsApp messages normally. DB is the source of truth;
 GHL is a view layer.
 

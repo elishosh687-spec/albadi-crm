@@ -3,6 +3,7 @@
  * Auth: ?widget_token=<GHL_WIDGET_TOKEN> (or Bearer).
  */
 import { NextRequest, NextResponse } from "next/server";
+import { withRequestLog } from "@/lib/observability/log";
 import { eq } from "drizzle-orm";
 import { verifyWidgetToken } from "@/integrations/ghl/widget-auth";
 import { db } from "@/lib/db";
@@ -19,10 +20,11 @@ function auth(req: NextRequest): boolean {
   return verifyWidgetToken(token);
 }
 
-export async function DELETE(
+export const DELETE = withRequestLog("calculator", async (
   req: NextRequest,
+  log,
   { params }: { params: Promise<{ id: string }> }
-) {
+) => {
   if (!auth(req)) {
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
@@ -35,10 +37,10 @@ export async function DELETE(
     await db.delete(competitorPrices).where(eq(competitorPrices.id, numId));
     return NextResponse.json({ ok: true });
   } catch (e) {
-    console.error("[widget/competitor-prices] delete failed", e);
+    log.error("competitor_prices.delete_failed", e, { id: numId });
     return NextResponse.json(
       { ok: false, error: e instanceof Error ? e.message : "delete failed" },
       { status: 500 }
     );
   }
-}
+});

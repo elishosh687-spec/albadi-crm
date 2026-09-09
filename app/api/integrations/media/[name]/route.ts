@@ -17,6 +17,7 @@
  * already expose the file by random uuid, so this proxy adds no leakage.
  */
 import { NextRequest, NextResponse } from "next/server";
+import { withRequestLog, type Logger } from "@/lib/observability/log";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -45,9 +46,12 @@ function decodeBase64Url(s: string): string {
   return Buffer.from(std, "base64").toString("utf8");
 }
 
-export async function GET(
+type MediaCtx = { params: Promise<{ name: string }> };
+
+async function serveMedia(
   _req: NextRequest,
-  { params }: { params: Promise<{ name: string }> }
+  log: Logger,
+  { params }: MediaCtx
 ): Promise<Response> {
   const { name } = await params;
   const dot = name.lastIndexOf(".");
@@ -68,6 +72,7 @@ export async function GET(
 
   const upstream = await fetch(srcUrl);
   if (!upstream.ok) {
+    log.warn("media.upstream_failed", { ext, status: upstream.status });
     return new NextResponse(`upstream ${upstream.status}`, {
       status: 502,
     });
@@ -98,17 +103,16 @@ export async function GET(
   });
 }
 
-export async function HEAD(
-  req: NextRequest,
-  ctx: { params: Promise<{ name: string }> }
-): Promise<Response> {
+export const GET = withRequestLog<NextRequest, MediaCtx>("ghl", serveMedia);
+
+export const HEAD = withRequestLog<NextRequest, MediaCtx>("ghl", async (req, log, ctx) => {
   // Many audio players issue HEAD before GET to discover Content-Length.
   // Reuse the GET path but discard the body.
-  const res = await GET(req, ctx);
+  const res = await serveMedia(req, log, ctx);
   return new NextResponse(null, { status: res.status, headers: res.headers });
-}
+});
 
-export async function OPTIONS(): Promise<Response> {
+export const OPTIONS = withRequestLog("ghl", async (): Promise<Response> => {
   return new NextResponse(null, {
     status: 204,
     headers: {
@@ -118,4 +122,4 @@ export async function OPTIONS(): Promise<Response> {
       "Access-Control-Max-Age": "86400",
     },
   });
-}
+});

@@ -7,13 +7,14 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { withRequestLog } from "@/lib/observability/log";
 import { sendBridgeMessage, resolveJidFromPhone } from "@/lib/bridge/client";
 import { isJid } from "@/lib/bridge/jid";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
 
-export async function GET(_req: NextRequest) {
+export const GET = withRequestLog("factory", async (_req: NextRequest, log) => {
   // Auth delegated to middleware (cookie or CRON_SECRET bearer both pass through).
 
   const raw = (process.env.ELI_NOTIFY_JID ?? "").replace(/^﻿/, "").trim();
@@ -49,6 +50,7 @@ export async function GET(_req: NextRequest) {
       sendResult,
     });
   } catch (err) {
+    log.error("test_dm.failed", err);
     return NextResponse.json(
       {
         ...result,
@@ -59,4 +61,4 @@ export async function GET(_req: NextRequest) {
       { status: 500 }
     );
   }
-}
+});

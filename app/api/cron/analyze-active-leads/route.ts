@@ -20,10 +20,13 @@ import { resolveAssigneeUserId } from "@/lib/crm-tasks/assignee";
 import { updateContactTask } from "@/integrations/ghl/client";
 import { syncTaskToGHL } from "@/integrations/ghl/sync";
 import { leads } from "@/drizzle/schema";
+import { logger, serializeError, withRequestLog } from "@/lib/observability/log";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
+
+const log = logger("analysis");
 
 const FRESHNESS_HOURS = 24;
 // Cap per invocation. gpt-4o ~ 30k TPM tier + concurrency 3 → ~30 leads fit
@@ -44,8 +47,9 @@ function authorized(req: NextRequest): boolean {
   return accepted.some((s) => header === `Bearer ${s}`);
 }
 
-export async function POST(req: NextRequest) {
+const run = withRequestLog("analysis", async (req: NextRequest, log) => {
   if (!authorized(req)) {
+    log.warn("unauthorized");
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
 
@@ -110,6 +114,18 @@ export async function POST(req: NextRequest) {
   // only after the task was made.
   const pushSweep = await pushUnsyncedTasks();
 
+  // The per-tick summary — this is how a dead cron gets noticed.
+  log.info("tick.summary", {
+    processed: results.length,
+    ok_count: okCount,
+    fail_count: results.length - okCount,
+    more_remaining: queue.length === MAX_PER_TICK,
+    orphan_found: ownerSweep.found,
+    orphan_ghl_pushed: ownerSweep.ghlPushed,
+    unsynced_found: pushSweep.found,
+    unsynced_pushed: pushSweep.pushed,
+  });
+
   return NextResponse.json({
     ok: true,
     processed: results.length,
@@ -120,7 +136,11 @@ export async function POST(req: NextRequest) {
     push_sweep: pushSweep,
     results,
   });
-}
+});
+
+export const POST = run;
+// Vercel Cron pings GET. Alias to POST so a single implementation drives both.
+export const GET = run;
 
 /**
  * Create in GHL any OPEN crm_task that never got pushed (ghl_task_id IS NULL),
@@ -150,7 +170,7 @@ async function pushUnsyncedTasks(): Promise<{ found: number; pushed: number }> {
       await syncTaskToGHL(r.id);
       pushed++;
     } catch (e) {
-      console.warn("[analyze-active-leads] task create-push failed", r.id, e);
+      log.warn("task.create_push_failed", { taskId: r.id, ...serializeError(e) });
     }
   }
   return { found: rows.length, pushed };
@@ -204,13 +224,8 @@ async function sweepOrphanTasks(): Promise<{
       });
       ghlPushed++;
     } catch (e) {
-      console.warn("[analyze-active-leads] task push failed", r.id, e);
+      log.warn("task.push_failed", { taskId: r.id, contactId: r.ghlContactId, ...serializeError(e) });
     }
   }
   return { found: rows.length, updated: rows.length, ghlPushed };
-}
-
-// Vercel Cron pings GET. Alias to POST so a single implementation drives both.
-export async function GET(req: NextRequest) {
-  return POST(req);
 }

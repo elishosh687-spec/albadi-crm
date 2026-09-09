@@ -5,13 +5,14 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { withRequestLog } from "@/lib/observability/log";
 import { widgetAuthed } from "@/lib/widget/auth";
 import { listFactoryQuotes } from "@/lib/factory/server/list";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-export async function GET(req: NextRequest) {
+export const GET = withRequestLog("factory", async (req: NextRequest, log) => {
   if (!widgetAuthed(req)) {
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
@@ -21,4 +22,4 @@ export async function GET(req: NextRequest) {
     lead: url.searchParams.get("lead") ?? undefined,
   });
   return NextResponse.json({ ok: true, requests });
-}
+});

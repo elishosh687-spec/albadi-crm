@@ -19,6 +19,9 @@ import { appConfig, leads } from "@/drizzle/schema";
 import { eq, sql } from "drizzle-orm";
 import { GHL_SALESPERSON_USER_ID } from "@/integrations/ghl/config";
 import { getContact } from "@/integrations/ghl/client";
+import { logger } from "@/lib/observability/log";
+
+const log = logger("ghl");
 
 const KEY = "crm.assignee";
 
@@ -184,7 +187,7 @@ export async function assignNextLeadOwner(sid: string): Promise<string | null> {
     }
     return owner;
   } catch (err) {
-    console.error("[assignee] assignNextLeadOwner failed", sid, err);
+    log.error("assignee.next_owner_failed", err, { sid });
     return resolveAssigneeUserId();
   }
 }

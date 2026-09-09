@@ -11,12 +11,14 @@ import { db } from "@/lib/db";
 import { factoryQuoteRequests, leads } from "@/drizzle/schema";
 import { desc, isNotNull, isNull, sql } from "drizzle-orm";
 import { verifyWidgetToken } from "@/integrations/ghl/widget-auth";
+import { withRequestLog } from "@/lib/observability/log";
 
 export const runtime = "nodejs";
 
-export async function GET(req: NextRequest): Promise<NextResponse> {
+export const GET = withRequestLog("widget", async (req: NextRequest, log): Promise<NextResponse> => {
   const token = req.nextUrl.searchParams.get("widget_token") ?? "";
   if (!verifyWidgetToken(token)) {
+    log.warn("unauthorized");
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
   const limit = Math.min(Number(req.nextUrl.searchParams.get("limit") ?? "200"), 500);
@@ -83,4 +85,4 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
   }));
 
   return NextResponse.json({ ok: true, quotes: out, total: out.length });
-}
+});

@@ -17,13 +17,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { widgetAuthed } from "@/lib/widget/auth";
 import { loadTeam, sendTeamDM } from "@/lib/notify/team";
+import { withRequestLog } from "@/lib/observability/log";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 30;
 
-export async function GET(req: NextRequest) {
+export const GET = withRequestLog("widget", async (req: NextRequest, log) => {
   if (!widgetAuthed(req)) {
+    log.warn("unauthorized");
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
   const { members, updatedAt } = await loadTeam();
@@ -39,10 +41,11 @@ export async function GET(req: NextRequest) {
       aliases: aliases ?? [],
     })),
   });
-}
+});
 
-export async function POST(req: NextRequest) {
+export const POST = withRequestLog("widget", async (req: NextRequest, log) => {
   if (!widgetAuthed(req)) {
+    log.warn("unauthorized");
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
 
@@ -81,11 +84,13 @@ export async function POST(req: NextRequest) {
   const res = await sendTeamDM(to, text);
   if (!res.ok) {
     const code = res.status === "unknown_member" ? 404 : 502;
+    log.warn("team_dm.failed", { to, status: res.status, chars: text.length });
     return NextResponse.json(res, { status: code });
   }
+  log.info("team_dm.sent", { member: res.member.id, status: res.status, chars: text.length });
   return NextResponse.json({
     ok: true,
     status: res.status,
     member: { id: res.member.id, name: res.member.name },
   });
-}
+});

@@ -11,6 +11,9 @@
  */
 import { resolveFbFormColumns } from "@/lib/sheets/fb-form-columns";
 import { metaSheetIds } from "@/lib/sheets/meta-attribution";
+import { logger, serializeError } from "@/lib/observability/log";
+
+const log = logger("leads");
 
 export interface SheetGapRow {
   rowIndex: number; // 1-based, matches Sheet row number
@@ -156,7 +159,7 @@ export async function loadSheetGaps(
   const sheetIds = metaSheetIds();
 
   if (sheetIds.length === 0) {
-    console.warn("[sheets.lead-gaps] no sheet ids — returning empty snapshot");
+    log.warn("lead_gaps.no_sheet_ids", { msg: "returning empty snapshot" });
     const empty = EMPTY_SNAPSHOT();
     cache = { at: Date.now(), snap: empty };
     return empty;
@@ -176,7 +179,7 @@ export async function loadSheetGaps(
     const resp = await fetch(url, { redirect: "follow" });
     // One unreadable sheet must not blank the whole panel.
     if (!resp.ok) {
-      console.warn(`[sheets.lead-gaps] ${spreadsheetId}: HTTP ${resp.status} — skipped`);
+      log.warn("lead_gaps.sheet_http_error", { spreadsheetId, status: resp.status, msg: "skipped" });
       continue;
     }
     const text = await resp.text();
@@ -234,7 +237,7 @@ export async function loadSheetGaps(
     cache = { at: Date.now(), snap };
     return snap;
   } catch (e) {
-    console.warn("[sheets.lead-gaps] fetch failed — returning empty snapshot", e);
+    log.warn("lead_gaps.fetch_failed", { msg: "returning empty snapshot", ...serializeError(e) });
     const empty = EMPTY_SNAPSHOT();
     empty.spreadsheetId = primaryId;
     cache = { at: Date.now(), snap: empty };
@@ -296,7 +299,7 @@ export async function loadFormGapsVsDb(): Promise<FormGapVsDbSnapshot> {
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
       perSheet.push({ id, lines: (await resp.text()).split(/\r?\n/) });
     } catch (e) {
-      console.warn(`[sheets.form-gaps] ${id}: fetch failed — skipped`, e);
+      log.warn("form_gaps.sheet_fetch_failed", { spreadsheetId: id, msg: "skipped", ...serializeError(e) });
     }
   }
   if (perSheet.length === 0) return empty();

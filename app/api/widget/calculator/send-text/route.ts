@@ -11,6 +11,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { withRequestLog } from "@/lib/observability/log";
 import { verifyWidgetToken } from "@/integrations/ghl/widget-auth";
 import { db } from "@/lib/db";
 import { leads } from "@/drizzle/schema";
@@ -24,7 +25,7 @@ export const maxDuration = 30;
 
 const NOTIFY_KINDS = new Set(["draft", "factory", "estimate", "combined"]);
 
-export async function POST(req: NextRequest) {
+export const POST = withRequestLog("calculator", async (req: NextRequest, log) => {
   const token = req.nextUrl.searchParams.get("widget_token") ?? "";
   if (!verifyWidgetToken(token)) {
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
@@ -91,7 +92,7 @@ export async function POST(req: NextRequest) {
       status: result.status ?? "sent",
     });
   } catch (err) {
-    console.error("[widget/calculator/send-text] bridge send failed", err);
+    log.error("send_text.bridge_send_failed", err, { sid, totalIls: body.totalIls ?? null });
     return NextResponse.json(
       {
         ok: false,
@@ -101,4 +102,4 @@ export async function POST(req: NextRequest) {
       { status: 502 }
     );
   }
-}
+});

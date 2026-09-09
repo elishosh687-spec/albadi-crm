@@ -5,6 +5,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { withRequestLog } from "@/lib/observability/log";
 import { widgetAuthed } from "@/lib/widget/auth";
 import {
   verifyQuoteAgainstFeishu,
@@ -13,10 +14,11 @@ import {
 
 export const runtime = "nodejs";
 
-export async function GET(
+export const GET = withRequestLog("factory", async (
   req: NextRequest,
+  log,
   ctx: { params: Promise<{ id: string }> }
-) {
+) => {
   if (!widgetAuthed(req)) {
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
@@ -25,17 +27,19 @@ export async function GET(
     const result = await verifyQuoteAgainstFeishu(id);
     return NextResponse.json(result);
   } catch (e) {
+    log.error("verify.failed", e, { id });
     return NextResponse.json(
       { ok: false, error: "verify_failed", detail: e instanceof Error ? e.message : String(e) },
       { status: 502 }
     );
   }
-}
+});
 
-export async function POST(
+export const POST = withRequestLog("factory", async (
   req: NextRequest,
+  log,
   ctx: { params: Promise<{ id: string }> }
-) {
+) => {
   if (!widgetAuthed(req)) {
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
@@ -45,9 +49,10 @@ export async function POST(
     const status = result.ok ? 200 : 422;
     return NextResponse.json(result, { status });
   } catch (e) {
+    log.error("refresh.failed", e, { id });
     return NextResponse.json(
       { ok: false, error: "refresh_failed", detail: e instanceof Error ? e.message : String(e) },
       { status: 502 }
     );
   }
-}
+});

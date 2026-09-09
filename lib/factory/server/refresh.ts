@@ -17,6 +17,9 @@ import {
 } from "@/lib/feishu/sheets";
 import { sendEliDM } from "@/lib/notify/eli";
 import type { FactoryResponse } from "@/lib/factory/types";
+import { logger, serializeError } from "@/lib/observability/log";
+
+const log = logger("factory");
 
 /** Same merge logic as finalize.ts. Fresh wins for any field where it has a
  *  real value; stored is the fallback. Returns the merged response and whether
@@ -113,14 +116,20 @@ export async function refreshFromFeishu(): Promise<RefreshResult> {
       if (row.quotationNo) {
         const found = await findRowByQuotationNo(row.quotationNo);
         if (found && found !== row.feishuRowIndex) {
-          console.log(
-            `[factory/refresh] row index drifted: id=${row.id} quote=${row.quotationNo} stored=${row.feishuRowIndex} actual=${found}`
-          );
+          log.info("refresh.row_index_drifted", {
+            quoteId: row.id,
+            quotationNo: row.quotationNo,
+            storedRowIndex: row.feishuRowIndex,
+            rowIndex: found,
+          });
           activeIndex = found;
         } else if (!found) {
-          console.warn(
-            `[factory/refresh] quote ${row.quotationNo} not found in sheet — using stored idx ${row.feishuRowIndex}`
-          );
+          log.warn("refresh.row_not_found", {
+            quoteId: row.id,
+            quotationNo: row.quotationNo,
+            rowIndex: row.feishuRowIndex,
+            msg: "using stored row index",
+          });
         }
       }
       const cells = await readRow(activeIndex);
@@ -155,9 +164,14 @@ export async function refreshFromFeishu(): Promise<RefreshResult> {
               updatedAt: new Date(),
             })
             .where(eq(factoryQuoteRequests.id, row.id));
-          console.log(
-            `[factory/refresh] ${row.quotationNo ?? row.id}: price present but carton master incomplete — kept pending (qty=${merged.cartonQty ?? "—"} kg=${merged.weightKg ?? "—"} cbm=${merged.cartonCbm ?? "—"})`
-          );
+          log.info("refresh.carton_master_incomplete", {
+            quoteId: row.id,
+            quotationNo: row.quotationNo,
+            msg: "price present but carton master incomplete — kept pending",
+            cartonQty: merged.cartonQty ?? null,
+            weightKg: merged.weightKg ?? null,
+            cartonCbm: merged.cartonCbm ?? null,
+          });
         }
         continue;
       }
@@ -192,10 +206,12 @@ export async function refreshFromFeishu(): Promise<RefreshResult> {
         });
       }
     } catch (err) {
-      console.warn(
-        `[factory/refresh] readRow failed for id=${row.id} row=${row.feishuRowIndex}:`,
-        err
-      );
+      log.warn("refresh.read_row_failed", {
+        quoteId: row.id,
+        quotationNo: row.quotationNo,
+        rowIndex: row.feishuRowIndex,
+        ...serializeError(err),
+      });
     }
   }
 
@@ -217,7 +233,7 @@ export async function refreshFromFeishu(): Promise<RefreshResult> {
       const dmStatus = await sendEliDM(lines.join("\n"));
       dmResults.push({ id: t.id, dmStatus });
     } catch (err) {
-      console.warn("[factory/refresh] notify Eli failed", err);
+      log.warn("refresh.notify_eli_failed", { quoteId: t.id, quotationNo: t.quotationNo, sid: t.manychatSubId, ...serializeError(err) });
       dmResults.push({ id: t.id, dmStatus: "error" });
     }
   }
@@ -233,7 +249,7 @@ export async function refreshFromFeishu(): Promise<RefreshResult> {
         void reconcileGHLTasksForLead(t.manychatSubId);
       }
     } catch (e) {
-      console.warn("[factory/refresh] ghl tasks reconcile failed", e);
+      log.warn("refresh.ghl_tasks_reconcile_failed", { count: transitioned.length, ...serializeError(e) });
     }
   }
 

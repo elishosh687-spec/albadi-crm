@@ -21,9 +21,20 @@ Next.js app deployed on Vercel. Neon PostgreSQL via Drizzle ORM. WhatsApp messag
   — `logger(feature)` + `withRequestLog(feature, handler)` for routes.** One
   JSON line per event with `feature` / `event` / `sid` / `request_id`; console
   always, Axiom ingest when `AXIOM_TOKEN` + `AXIOM_DATASET` are set. `feature`
-  is a closed list (`FEATURES`) — extend it, don't invent strings. New code
-  must not add bare `console.log`; the ~400 existing ones are being migrated
-  feature by feature.
+  is a closed list (`FEATURES`) — extend it, don't invent strings. **Every
+  `app/api/**/route.ts` (156) is wrapped and every `console.*` in app/lib/
+  integrations is migrated (done 2026-09-09)**; the only survivors are the
+  operator-stdout lines in the two one-shot CLIs (`integrations/ghl/bootstrap.ts`,
+  `register-conversation-provider.ts`). [instrumentation.ts](instrumentation.ts)
+  (`onRequestError`) is the safety net under everything else — an unhandled
+  server error still lands as one tagged line. A new route MUST use
+  `withRequestLog`; a new `console.log` is a regression.
+- **Verify coverage** with the two greps in `scripts/README.md` spirit:
+  `grep -rE 'console\.(log|error|warn|info)\(' app lib integrations` → only the
+  two CLIs; `for f in $(find app/api -name route.ts); do grep -q withRequestLog $f || echo $f; done` → nothing.
+- Axiom: the Vercel↔Axiom log drain (once installed on the `albadi-crm`
+  project) ships every console line; `AXIOM_TOKEN` + `AXIOM_DATASET` add direct
+  ingest from crons/scripts. Query by `feature` / `event` / `sid`.
 
 ## Key API Routes
 

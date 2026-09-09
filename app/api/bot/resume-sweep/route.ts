@@ -12,6 +12,7 @@
  */
 import { NextRequest, NextResponse } from "next/server";
 import { runResumeSweep } from "@/lib/autoresponder/resume-sweep";
+import { withRequestLog } from "@/lib/observability/log";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -28,7 +29,7 @@ function authorized(req: NextRequest): boolean {
   return accepted.length > 0 && accepted.includes(auth);
 }
 
-export async function POST(req: NextRequest) {
+export const POST = withRequestLog("followups", async (req: NextRequest, log) => {
   if (!authorized(req)) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
@@ -39,9 +40,10 @@ export async function POST(req: NextRequest) {
     });
     return NextResponse.json({ ok: true, ...result });
   } catch (e) {
+    log.error("resume_sweep.failed", e);
     return NextResponse.json(
       { ok: false, error: e instanceof Error ? e.message : String(e) },
       { status: 500 }
     );
   }
-}
+});

@@ -27,6 +27,9 @@ import {
   type StoredDealPlan,
   type PaymentSchedule,
 } from "@/lib/factory/payment-terms";
+import { logger, serializeError } from "@/lib/observability/log";
+
+const log = logger("deals");
 
 /** One product line inside a deal (a deal has 1, or N when combined). Shaped as
  *  a full FactoryQuoteRow so the deal card can render the SAME quote preview
@@ -448,7 +451,7 @@ export async function closeDealGroup(
       if (prow?.sid) void reportPurchaseToMeta(prow.sid, combined.grandTotalIls, primaryId);
     }
   } catch (err) {
-    console.warn("[closeDealGroup] combined pricing snapshot failed (non-fatal)", err);
+    log.warn("close_deal_group.combined_pricing_snapshot_failed", { groupId, quoteIds: ids, ...serializeError(err) });
   }
   return groupId;
 }
@@ -574,7 +577,7 @@ async function reportPurchaseToMeta(
       )
       .where(eq(factoryQuoteRequests.id, dealId));
   } catch (e) {
-    console.warn("[closed] meta purchase report failed (non-fatal)", e);
+    log.warn("closed.meta_purchase_report_failed", { dealId, ...serializeError(e) });
     if (dealId) {
       await db
         .update(factoryQuoteRequests)

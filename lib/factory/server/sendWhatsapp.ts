@@ -28,6 +28,9 @@ import {
   buildPaymentBlock,
   type PaymentPlan,
 } from "@/lib/factory/payment-terms";
+import { logger, serializeError } from "@/lib/observability/log";
+
+const log = logger("factory");
 
 function formatIls(n: number): string {
   return `₪${n.toLocaleString("he-IL", { maximumFractionDigits: 2 })}`;
@@ -220,7 +223,7 @@ export async function sendQuoteWhatsapp(
       pdfFilename
     );
   } catch (err) {
-    console.error("[factory/send-whatsapp] bridge send failed", err);
+    log.error("send_whatsapp.bridge_send_failed", err, { sid: recipient, quoteId: id });
     return {
       ok: false,
       status: 502,
@@ -235,7 +238,7 @@ export async function sendQuoteWhatsapp(
       .set({ sentToCustomerAt: new Date(), updatedAt: new Date() })
       .where(eq(factoryQuoteRequests.id, id));
   } catch (err) {
-    console.warn("[factory/send-whatsapp] db update failed after bridge send", err);
+    log.warn("send_whatsapp.db_update_failed", { sid: recipient, quoteId: id, msg: "after bridge send", ...serializeError(err) });
   }
 
   // Ping Itay (the salesperson) on every quote sent (Eli 2026-07-22). Non-fatal.

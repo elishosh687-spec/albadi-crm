@@ -7,20 +7,21 @@
  */
 
 import { NextResponse } from "next/server";
+import { withRequestLog } from "@/lib/observability/log";
 import { importFromFeishu } from "@/lib/factory/server/import-from-feishu";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
-export async function POST() {
+export const POST = withRequestLog("factory", async (_req, log) => {
   try {
     const result = await importFromFeishu();
     return NextResponse.json(result);
   } catch (e) {
-    console.error("[factory/import-feishu] failed", e);
+    log.error("import_feishu.failed", e);
     return NextResponse.json(
       { ok: false, error: e instanceof Error ? e.message : "import_failed" },
       { status: 500 }
     );
   }
-}
+});

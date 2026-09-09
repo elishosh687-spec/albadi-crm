@@ -5,15 +5,17 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { withRequestLog } from "@/lib/observability/log";
 import { widgetAuthed } from "@/lib/widget/auth";
 import { cloneFactoryQuote } from "@/lib/factory/clone-quote";
 
 export const runtime = "nodejs";
 
-export async function POST(
+export const POST = withRequestLog("factory", async (
   req: NextRequest,
+  log,
   ctx: { params: Promise<{ id: string }> }
-) {
+) => {
   if (!widgetAuthed(req)) {
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
@@ -23,4 +25,4 @@ export async function POST(
     return NextResponse.json({ ok: false, error: result.error }, { status: result.status });
   }
   return NextResponse.json({ ok: true, ...result.result });
-}
+});

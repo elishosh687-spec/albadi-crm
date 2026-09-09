@@ -11,16 +11,18 @@
  */
 import { NextRequest, NextResponse } from "next/server";
 import { runLivePathCheck, runSetterEval } from "@/lib/setter/eval";
+import { withRequestLog } from "@/lib/observability/log";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
 
-export async function POST(req: NextRequest) {
+export const POST = withRequestLog("admin", async (req: NextRequest, log) => {
   const auth = req.headers.get("authorization");
   const accepted = [process.env.BOT_SECRET, process.env.CRON_SECRET]
     .filter(Boolean)
     .map((s) => `Bearer ${s}`);
   if (accepted.length === 0 || !accepted.includes(auth ?? "")) {
+    log.warn("unauthorized");
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
@@ -37,9 +39,10 @@ export async function POST(req: NextRequest) {
     const report = await runSetterEval({ only });
     return NextResponse.json({ ok: true, ...report });
   } catch (e) {
+    log.error("setter_eval.failed", e, { only });
     return NextResponse.json(
       { ok: false, error: e instanceof Error ? e.message : String(e) },
       { status: 500 }
     );
   }
-}
+});

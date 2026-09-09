@@ -6,15 +6,17 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { withRequestLog } from "@/lib/observability/log";
 import { sendQuoteWhatsapp } from "@/lib/factory/server/sendWhatsapp";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
 
-export async function POST(
+export const POST = withRequestLog("factory", async (
   req: NextRequest,
+  log,
   { params }: { params: Promise<{ id: string }> }
-) {
+) => {
   const { id } = await params;
   // Optional body — the payment schedule picked for THIS send; absent falls
   // back to the operator's configured default (so old callers keep working).
@@ -33,4 +35,4 @@ export async function POST(
     );
   }
   return NextResponse.json(result);
-}
+});

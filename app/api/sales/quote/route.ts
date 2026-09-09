@@ -6,13 +6,14 @@
  * commission never cross this boundary. See lib/sales/price.ts.
  */
 import { NextRequest, NextResponse } from "next/server";
+import { withRequestLog } from "@/lib/observability/log";
 import { salesAuthed } from "@/lib/widget/sales-auth";
 import { computeCatalogSales, type SalesCatalogInput } from "@/lib/sales/price";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-export async function POST(req: NextRequest) {
+export const POST = withRequestLog("calculator", async (req: NextRequest, log) => {
   if (!salesAuthed(req)) {
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
@@ -42,7 +43,7 @@ export async function POST(req: NextRequest) {
     // Return ONLY the customer view — never `out.full`.
     return NextResponse.json({ ok: true, quote: out.customer });
   } catch (err) {
-    console.error("[sales/quote] failed", err);
+    log.error("sales.quote_failed", err, { productId: body.productId, shippingOptionId: body.shippingOptionId });
     return NextResponse.json({ ok: false, error: "server_error" }, { status: 500 });
   }
-}
+});

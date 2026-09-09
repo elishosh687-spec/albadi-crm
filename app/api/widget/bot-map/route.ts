@@ -11,12 +11,14 @@ import { widgetAuthed } from "@/lib/widget/auth";
 import { db } from "@/lib/db";
 import { sql } from "drizzle-orm";
 import { assessGreenHealth } from "@/lib/greenapi/health";
+import { withRequestLog } from "@/lib/observability/log";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-export async function GET(req: NextRequest) {
+export const GET = withRequestLog("widget", async (req: NextRequest, log) => {
   if (!widgetAuthed(req)) {
+    log.warn("unauthorized");
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
   try {
@@ -82,9 +84,10 @@ export async function GET(req: NextRequest) {
       whatsapp: await whatsappHealth,
     });
   } catch (e) {
+    log.error("bot_map.failed", e);
     return NextResponse.json(
       { ok: false, error: e instanceof Error ? e.message : String(e) },
       { status: 500 }
     );
   }
-}
+});

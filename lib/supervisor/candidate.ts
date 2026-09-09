@@ -18,6 +18,9 @@
  * awaiting_factory_estimate / awaiting_final_decision).
  */
 import { classifyIntent, type Intent } from "../autoresponder/intent";
+import { logger, serializeError } from "@/lib/observability/log";
+
+const log = logger("bot");
 
 export type CandidateKind =
   | "questionnaire_step" // pre-quote (no stage) — bot will advance the questionnaire
@@ -293,7 +296,7 @@ async function classifySafe(
     });
     return result;
   } catch (e) {
-    console.warn("[candidate] classifyIntent failed", e);
+    log.warn("candidate.classify_intent_failed", { ...serializeError(e) });
     return { intent: "other", confidence: 0 };
   }
 }

@@ -17,6 +17,9 @@ import {
   DEFAULT_BOT_SETTINGS,
   normalizeBotSettings,
 } from "./schema";
+import { logger } from "@/lib/observability/log";
+
+const log = logger("bot");
 
 const KEY = "bot.settings";
 const TTL_MS = 5000;
@@ -37,7 +40,7 @@ export async function getBotSettings(opts?: { fresh?: boolean }): Promise<BotSet
   } catch (e) {
     // Never let a settings read break the bot — fall back to the defaults that
     // were hardcoded before this table existed.
-    console.error("[bot-settings] load failed, using defaults", e);
+    log.error("bot_settings.load_failed", e, { msg: "using defaults" });
     return DEFAULT_BOT_SETTINGS;
   }
 }

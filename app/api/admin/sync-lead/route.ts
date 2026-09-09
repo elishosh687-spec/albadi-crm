@@ -14,6 +14,7 @@ import { db } from "@/lib/db";
 import { leads } from "@/drizzle/schema";
 import { sql } from "drizzle-orm";
 import { syncLeadToGHL } from "@/integrations/ghl/sync";
+import { withRequestLog } from "@/lib/observability/log";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
@@ -26,8 +27,9 @@ function authorized(req: NextRequest): boolean {
   return accepted.some((s) => header === `Bearer ${s}`);
 }
 
-export async function POST(req: NextRequest) {
+export const POST = withRequestLog("admin", async (req: NextRequest, log) => {
   if (!authorized(req)) {
+    log.warn("unauthorized");
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
   let body: { sid?: string };
@@ -59,6 +61,7 @@ export async function POST(req: NextRequest) {
   try {
     await syncLeadToGHL(sid);
   } catch (err) {
+    log.error("lead.sync_failed", err, { sid });
     return NextResponse.json(
       { error: "sync_failed", detail: err instanceof Error ? err.message : String(err) },
       { status: 500 },
@@ -75,6 +78,7 @@ export async function POST(req: NextRequest) {
     .where(sql`trim(${leads.manychatSubId}) = ${sid}`)
     .limit(1);
 
+  log.info("lead.synced", { sid, ghlContactId: after[0]?.ghlContactId, ghlOpportunityId: after[0]?.ghlOpportunityId });
   return NextResponse.json({
     sid,
     name: before[0].name,
@@ -85,4 +89,4 @@ export async function POST(req: NextRequest) {
     },
     after: after[0],
   });
-}
+});

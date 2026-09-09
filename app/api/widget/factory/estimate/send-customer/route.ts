@@ -3,13 +3,14 @@
  * Widget variant of the preliminary-estimate sender (see the dashboard route).
  */
 import { NextRequest, NextResponse } from "next/server";
+import { withRequestLog } from "@/lib/observability/log";
 import { widgetAuthed } from "@/lib/widget/auth";
 import { sendEstimateToCustomer } from "@/lib/factory/server/sendEstimateToCustomer";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
 
-export async function POST(req: NextRequest) {
+export const POST = withRequestLog("calculator", async (req: NextRequest, log) => {
   if (!widgetAuthed(req)) return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   const b = await req.json().catch(() => ({}));
   const sid = typeof b.sid === "string" ? b.sid.trim() : "";
@@ -48,4 +49,4 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: result.error, ...(result.message ? { message: result.message } : {}) }, { status: result.status });
   }
   return NextResponse.json(result);
-}
+});

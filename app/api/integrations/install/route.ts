@@ -13,15 +13,17 @@
  */
 import { NextResponse } from "next/server";
 import { buildInstallUrl, DEFAULT_SCOPES } from "@/integrations/ghl/oauth";
+import { withRequestLog } from "@/lib/observability/log";
 
 export const runtime = "nodejs";
 
-export async function GET(): Promise<NextResponse> {
+export const GET = withRequestLog("auth", async (_req, log): Promise<NextResponse> => {
   try {
     const url = buildInstallUrl([...DEFAULT_SCOPES]);
     return NextResponse.redirect(url);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
+    log.error("oauth.install_not_configured", err);
     return new NextResponse(`OAuth not configured: ${msg}`, { status: 500 });
   }
-}
+});

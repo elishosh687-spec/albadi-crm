@@ -25,6 +25,9 @@ import {
 import { GHL_FIELD_IDS, GHL_STAGE_IDS } from "@/integrations/ghl/config";
 import { ghlPauseChange } from "@/lib/autoresponder/bot-pause";
 import { normalizeAlbadiLeadScore } from "@/lib/ghl/albadi-lead-score";
+import { logger } from "@/lib/observability/log";
+
+const log = logger("ghl");
 
 export interface ResyncResult {
   ok: true;
@@ -206,9 +209,11 @@ export async function resyncContact(
     const change = ghlPauseChange(ghlWantsPaused, pauseRow?.reason);
     if (change) Object.assign(updateSet, change);
     else {
-      console.log(
-        `[ghl.resync] refused to un-pause ${sid} — the customer asked us to stop`
-      );
+      log.info("resync.unpause_refused", {
+        sid,
+        reason: pauseRow?.reason ?? null,
+        msg: "the customer asked us to stop",
+      });
     }
   }
   if (cf.follow_up_date !== undefined) {

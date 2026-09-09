@@ -8,6 +8,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { verifyWidgetToken } from "@/integrations/ghl/widget-auth";
 import { runPipelineAudit } from "@/lib/analysis/pipeline-audit";
 import { V2_ASSIGNABLE_STAGES, type V2AssignableStage } from "@/lib/manychat/stages";
+import { serializeError, withRequestLog } from "@/lib/observability/log";
 // setLeadStage is imported lazily inside POST — its transitive imports
 // (lib/manychat/config) throw at module-eval when MANYCHAT_TOKEN is missing,
 // which breaks GET even for reads that don't need it. See CLAUDE.md
@@ -25,24 +26,26 @@ function auth(req: NextRequest): boolean {
   return verifyWidgetToken(token);
 }
 
-export async function GET(req: NextRequest) {
+export const GET = withRequestLog("analysis", async (req: NextRequest, log) => {
   if (!auth(req)) {
+    log.warn("unauthorized");
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
   try {
     const audit = await runPipelineAudit();
     return NextResponse.json({ ok: true, ...audit });
   } catch (e) {
-    console.error("[widget/pipeline-audit] failed", e);
+    log.error("audit.failed", e);
     return NextResponse.json(
       { ok: false, error: e instanceof Error ? e.message : "audit failed" },
       { status: 500 }
     );
   }
-}
+});
 
-export async function POST(req: NextRequest) {
+export const POST = withRequestLog("analysis", async (req: NextRequest, log) => {
   if (!auth(req)) {
+    log.warn("unauthorized");
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
   let body: { sid?: string; targetStage?: string; action?: string } = {};
@@ -81,11 +84,16 @@ export async function POST(req: NextRequest) {
         const { syncTaskToGHL } = await import("@/integrations/ghl/sync");
         await syncTaskToGHL(inserted.id);
       } catch (err) {
-        console.warn("[pipeline-audit] syncTaskToGHL failed (task saved in DB)", err);
+        log.warn("create_task.ghl_sync_failed", {
+          sid,
+          taskId: inserted.id,
+          msg: "task saved in DB",
+          ...serializeError(err),
+        });
       }
       return NextResponse.json({ ok: true, taskId: inserted.id });
     } catch (e) {
-      console.error("[pipeline-audit] create_task failed", e);
+      log.error("create_task.failed", e, { sid });
       return NextResponse.json(
         { ok: false, error: e instanceof Error ? e.message : "task failed" },
         { status: 500 }
@@ -117,4 +125,4 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: result.error }, { status: 500 });
   }
   return NextResponse.json({ ok: true });
-}
+});

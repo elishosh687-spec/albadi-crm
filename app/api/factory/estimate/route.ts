@@ -9,6 +9,7 @@
  * (factory, confidence, reasoning) alongside the full QuoteResult.
  */
 import { NextRequest, NextResponse } from "next/server";
+import { withRequestLog } from "@/lib/observability/log";
 import { calculateQuote } from "@/lib/factory/calculator/engine";
 import { DEFAULT_CONFIG } from "@/lib/factory/calculator/constants";
 import { getFactoryConfig } from "@/lib/factory/config";
@@ -38,7 +39,7 @@ function buildConfig(dbConfig: Awaited<ReturnType<typeof getFactoryConfig>>, cus
   };
 }
 
-export async function GET(req: NextRequest) {
+export const GET = withRequestLog("calculator", async (req: NextRequest, log) => {
   const sp = req.nextUrl.searchParams;
   const num = (k: string) => { const v = parseFloat(sp.get(k) ?? ""); return Number.isFinite(v) ? v : 0; };
   const spec: EstimateSpec = {
@@ -132,4 +133,4 @@ export async function GET(req: NextRequest) {
     ok: true, estimate: est, result, altResult,
     computed: { productionPerUnitIls: result.unitProductionUsd * dbConfig.usdToIls, shippingPerUnitIls: result.shippingPerUnitUsd * dbConfig.usdToIls, usdToIls: dbConfig.usdToIls, usdToCny: dbConfig.usdToCny, commissionPct: dbConfig.commissionPct },
   });
-}
+});

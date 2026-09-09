@@ -5,6 +5,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { withRequestLog, serializeError } from "@/lib/observability/log";
 import { widgetAuthed } from "@/lib/widget/auth";
 import { listClosedQuotes } from "@/lib/factory/server/closed";
 import { computeAccuracyStats } from "@/lib/factory/server/accuracy";
@@ -12,7 +13,7 @@ import { computeAccuracyStats } from "@/lib/factory/server/accuracy";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-export async function GET(req: NextRequest) {
+export const GET = withRequestLog("deals", async (req: NextRequest, log) => {
   if (!widgetAuthed(req)) {
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
@@ -20,9 +21,9 @@ export async function GET(req: NextRequest) {
     listClosedQuotes(),
     // Accuracy strip is decoration — never fail the screen over it.
     computeAccuracyStats().catch((err) => {
-      console.warn("[factory/closed] accuracy stats failed (non-fatal)", err);
+      log.warn("closed.accuracy_stats_failed", { ...serializeError(err) });
       return null;
     }),
   ]);
   return NextResponse.json({ ok: true, quotes, stats });
-}
+});
