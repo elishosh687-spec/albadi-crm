@@ -32,9 +32,16 @@ Next.js app deployed on Vercel. Neon PostgreSQL via Drizzle ORM. WhatsApp messag
 - **Verify coverage** with the two greps in `scripts/README.md` spirit:
   `grep -rE 'console\.(log|error|warn|info)\(' app lib integrations` → only the
   two CLIs; `for f in $(find app/api -name route.ts); do grep -q withRequestLog $f || echo $f; done` → nothing.
-- Axiom: the Vercel↔Axiom log drain (once installed on the `albadi-crm`
-  project) ships every console line; `AXIOM_TOKEN` + `AXIOM_DATASET` add direct
-  ingest from crons/scripts. Query by `feature` / `event` / `sid`.
+- **Axiom is LIVE via direct ingest (2026-09-09):** org `eli-azsm`, dataset
+  **`albadi_crm`** (underscore), stream at
+  https://app.axiom.co/eli-azsm/stream/albadi_crm. `AXIOM_TOKEN` (token
+  "albadi-crm ingest", ingest-only, scoped to that dataset) + `AXIOM_DATASET`
+  are Production env vars. The Vercel↔Axiom Marketplace integration (log
+  drain) was tried and **refused** ("The installation could not be started") —
+  it is Pro/Enterprise-only and this team is Hobby, so don't retry it; the
+  logger's own ingest is the path. An ingest token cannot QUERY (403 on
+  `_apl`); read the data in the Axiom UI or mint a separate query token.
+  Query by `feature` / `event` / `sid` / `request_id`.
 
 ## Key API Routes
 
