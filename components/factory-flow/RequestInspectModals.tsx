@@ -28,6 +28,9 @@ export interface RequestSpec {
   finishing?: string;
   notes?: string;
   shippingOptionId?: string;
+  // Present only on quotes built in the calculator's manual-product mode. Its
+  // presence is what routes "חשב מחדש" back to the operator tab.
+  customInput?: { unitCostCny?: number } | null;
 }
 
 export interface RequestRow {
@@ -66,7 +69,13 @@ export function fullCalculatorHref(row: RequestRow, token: string, catalog: Cata
   const { colors, handles, lamination } = decodeSpecFeatures(s);
   const p = new URLSearchParams({ widget_token: token });
   if (draftId) p.set("draftId", draftId);
-  if (catalog) {
+  // A manual-product quote carries its own ¥ cost + carton; the calculator page
+  // reads them off the draft itself, so it just needs the operator tab. Sending
+  // it to the estimate tab (the old "no catalog match" fallback) re-priced it
+  // from the model and lost what the operator typed (Eli 2026-09-09).
+  if (draftId && Number(s.customInput?.unitCostCny) > 0) {
+    p.set("tab", "operator");
+  } else if (catalog) {
     p.set("tab", "operator");
     p.set("opProduct", catalog.id);
     p.set("opQty", String(s.quantity ?? ""));

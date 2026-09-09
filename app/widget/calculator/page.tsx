@@ -14,8 +14,10 @@ import { CalculatorWithSettings } from "@/components/calculator/CalculatorWithSe
 import SendCompanyIntroButton from "@/components/widget/SendCompanyIntroButton";
 import { verifyWidgetToken } from "@/integrations/ghl/widget-auth";
 import { db } from "@/lib/db";
-import { leads } from "@/drizzle/schema";
+import { leads, factoryQuoteRequests } from "@/drizzle/schema";
 import { eq, sql } from "drizzle-orm";
+import type { ManualPrefill } from "@/components/calculator/CalculatorView";
+import type { FactoryPricingResult, FactoryProductSpec } from "@/lib/factory/types";
 
 export const dynamic = "force-dynamic";
 
@@ -75,6 +77,50 @@ async function loadLead(
   return row ?? null;
 }
 
+/**
+ * Reopening a MANUAL-product quote ("מוצר ידני"). The ¥ unit cost and the master
+ * carton live ONLY in `product_spec.customInput` — dims alone are not enough to
+ * reprice, and without them "חשב מחדש" silently fell through to the estimate tab
+ * and quoted a model-derived number instead of the one the operator saved
+ * (Eli 2026-09-09). Returns null for catalog / estimator quotes, which keep
+ * their existing URL-param prefill.
+ */
+async function loadManualPrefill(draftId: string): Promise<ManualPrefill | null> {
+  const [row] = await db
+    .select({
+      productSpec: factoryQuoteRequests.productSpec,
+      finalPricing: factoryQuoteRequests.finalPricing,
+    })
+    .from(factoryQuoteRequests)
+    .where(eq(factoryQuoteRequests.id, draftId))
+    .limit(1);
+  const spec = row?.productSpec as FactoryProductSpec | null;
+  const ci = spec?.customInput;
+  if (!ci || !(ci.unitCostCny > 0)) return null;
+
+  const pricing = row?.finalPricing as FactoryPricingResult | null;
+  const str = (n: number | null | undefined) =>
+    typeof n === "number" && Number.isFinite(n) && n > 0 ? String(n) : undefined;
+
+  return {
+    desc: spec?.description || undefined,
+    h: str(spec?.heightCm),
+    d: str(spec?.depthCm),
+    w: str(spec?.widthCm),
+    cny: String(ci.unitCostCny),
+    cartonQty: str(ci.cartonQty),
+    cartonWeight: str(ci.cartonWeightKg),
+    cartonL: str(ci.cartonLengthCm),
+    cartonW: str(ci.cartonWidthCm),
+    cartonH: str(ci.cartonHeightCm),
+    // Priced-with context — reproduce the saved number, not today's defaults.
+    qty: str(spec?.quantity),
+    margin: str(pricing?.profitMarginPct),
+    moldsCny: str(pricing?.moldsTotalCny),
+    shippingId: spec?.shippingOptionId || pricing?.shippingOptionId || undefined,
+  };
+}
+
 export default async function CalculatorWidgetPage({
   searchParams,
 }: {
@@ -109,6 +155,9 @@ export default async function CalculatorWidgetPage({
         (err instanceof Error ? err.message : String(err));
     }
   }
+
+  const draftId = params.draftId?.trim() || undefined;
+  const manualPrefill = draftId ? await loadManualPrefill(draftId).catch(() => null) : null;
 
   // Load factory config — same as /dashboard/v3/calculator/page.tsx.
   const dbConfig = await getFactoryConfig({ fresh: true });
@@ -196,8 +245,9 @@ export default async function CalculatorWidgetPage({
         apiToken={token}
         sid={lead?.sid ?? sid ?? undefined}
         leadName={lead?.name ?? null}
-        draftId={params.draftId?.trim() || undefined}
-        initialTab={params.tab === "estimate" ? "estimate" : params.tab === "operator" ? "operator" : undefined}
+        draftId={draftId}
+        manualPrefill={manualPrefill ?? undefined}
+        initialTab={manualPrefill ? "operator" : params.tab === "estimate" ? "estimate" : params.tab === "operator" ? "operator" : undefined}
         operatorPrefill={
           params.opProduct
             ? {
@@ -210,7 +260,7 @@ export default async function CalculatorWidgetPage({
             : undefined
         }
         estimatePrefill={
-          params.estH || params.estW
+          !manualPrefill && (params.estH || params.estW)
             ? {
                 h: params.estH,
                 d: params.estD,

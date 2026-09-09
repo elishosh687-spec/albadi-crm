@@ -5,7 +5,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { Loader2, Send, Copy, Check, Search, X, ChevronDown, Calculator, Pencil, Ship, Plane, Repeat, Minus, Plus } from "lucide-react";
 import { cn } from "@/lib/cn";
 import type { Product, QuantityTier, ShippingOption, QuoteResult } from "@/lib/factory/calculator/types";
-import type { FactoryPricingResult, ShippingSplit } from "@/lib/factory/types";
+import type { FactoryCustomInput, FactoryPricingResult, ShippingSplit } from "@/lib/factory/types";
 import { quoteResultToPricing } from "@/lib/factory/calculator/to-pricing";
 import { applyShippingSplit, splitCustomerView } from "@/lib/factory/shipping-split";
 import {
@@ -50,6 +50,10 @@ interface Props {
   initialTab?: "operator" | "estimate";
   estimatePrefill?: EstimatePrefill;
   operatorPrefill?: OperatorPrefill;
+  // Reopening a MANUAL-product quote: everything the operator typed by hand,
+  // replayed so "חשב מחדש" recomputes the same price instead of falling through
+  // to the model estimator (Eli 2026-09-09). Its presence opens manual mode.
+  manualPrefill?: ManualPrefill;
   // When opened from an existing draft (recalculate), its factory_quote_requests
   // id — makes "שמור כטיוטה" update in place and "שלח אומדן" mark it sent.
   draftId?: string;
@@ -71,6 +75,27 @@ export interface OperatorPrefill {
   colors?: number;
   handles?: boolean;
   lam?: boolean;
+}
+
+/** Operator-tab prefill for a MANUAL product. Strings because they seed text
+ *  inputs verbatim — an empty string must stay empty, not become 0. */
+export interface ManualPrefill {
+  desc?: string;
+  h?: string;
+  d?: string;
+  w?: string;
+  cny?: string;
+  cartonQty?: string;
+  cartonWeight?: string;
+  cartonL?: string;
+  cartonW?: string;
+  cartonH?: string;
+  // Priced-with context, so the reopened quote reproduces the saved number
+  // rather than today's defaults.
+  qty?: string;
+  margin?: string;
+  moldsCny?: string;
+  shippingId?: string;
 }
 
 interface PreviewResult {
@@ -126,13 +151,13 @@ function usePaymentPlanDefault(apiToken: string | undefined): string {
   return planId;
 }
 
-export function CalculatorView({ products, quantityTiers, shippingOptions, initialMargins, apiToken, sid, leadName, initialTab, estimatePrefill, operatorPrefill, draftId }: Props) {
+export function CalculatorView({ products, quantityTiers, shippingOptions, initialMargins, apiToken, sid, leadName, initialTab, estimatePrefill, operatorPrefill, manualPrefill, draftId }: Props) {
   const [productId, setProductId] = useState(operatorPrefill?.productId ?? products[0]?.id ?? "p1");
   const [qtyId, setQtyId]         = useState(quantityTiers[0]?.id ?? "q0");
   const [handles, setHandles]     = useState(operatorPrefill?.handles ?? true);
   const [lamination, setLamination] = useState(operatorPrefill?.lam ?? false);
   const [colors, setColors]       = useState(operatorPrefill?.colors ?? 1);
-  const [shippingId, setShippingId] = useState(shippingOptions.find((s) => s.type === "sea")?.id ?? shippingOptions[0]?.id ?? "s2");
+  const [shippingId, setShippingId] = useState(manualPrefill?.shippingId ?? shippingOptions.find((s) => s.type === "sea")?.id ?? shippingOptions[0]?.id ?? "s2");
   const [splitMode, setSplitMode] = useState(false);
   const [operatorSplit, setOperatorSplit] = useState<SplitReport | null>(null);
   // Payment schedule quoted at the end of the customer message. Starts on the
@@ -152,13 +177,13 @@ export function CalculatorView({ products, quantityTiers, shippingOptions, initi
   const hasAirAndSea =
     shippingOptions.some((s) => s.type === "air" && s.enabled) &&
     shippingOptions.some((s) => s.type === "sea" && s.enabled);
-  const [qtyOverride, setQtyOverride] = useState<string>(operatorPrefill?.qty ?? "");
-  const [marginOverride, setMarginOverride] = useState<string>("");
+  const [qtyOverride, setQtyOverride] = useState<string>(manualPrefill?.qty ?? operatorPrefill?.qty ?? "");
+  const [marginOverride, setMarginOverride] = useState<string>(manualPrefill?.margin ?? "");
   const [minProfit, setMinProfit] = useState<string>("");
   // One-time mold/tooling fee (¥ CNY). Defaults to ¥500 per logo colour and
   // auto-recomputes when the colour count changes (Eli 2026-07-23) — each colour
   // needs its own mold. Still fully editable; clear to remove the cost.
-  const [moldsCost, setMoldsCost] = useState<string>(String(MOLD_CNY_PER_COLOR * (operatorPrefill?.colors ?? 1)));
+  const [moldsCost, setMoldsCost] = useState<string>(manualPrefill?.moldsCny ?? String(MOLD_CNY_PER_COLOR * (operatorPrefill?.colors ?? 1)));
   const [reverseMode, setReverseMode] = useState<"total" | "unit" | "profit">("total");
   const [reverseInput, setReverseInput] = useState<string>("");
   // UI-only: reveal the reverse-margin calculator inline (reference §IV toggle).
@@ -171,17 +196,19 @@ export function CalculatorView({ products, quantityTiers, shippingOptions, initi
   const [tab, setTab] = useState<"operator" | "estimate">(initialTab ?? "operator");
 
   // Manual product mode — user enters dims + CNY + carton, no catalog match.
-  const [manualMode, setManualMode] = useState(false);
-  const [manualDesc, setManualDesc] = useState<string>("");
-  const [manualW, setManualW] = useState<string>("");
-  const [manualH, setManualH] = useState<string>("");
-  const [manualD, setManualD] = useState<string>("");
-  const [manualCny, setManualCny] = useState<string>("");
-  const [manualCartonQty, setManualCartonQty] = useState<string>("250");
-  const [manualCartonWeight, setManualCartonWeight] = useState<string>("");
-  const [manualCartonL, setManualCartonL] = useState<string>("");
-  const [manualCartonW, setManualCartonW] = useState<string>("");
-  const [manualCartonH, setManualCartonH] = useState<string>("");
+  // Seeded from `manualPrefill` when the calculator was reopened from a manual
+  // quote, so the operator lands back on his own numbers.
+  const [manualMode, setManualMode] = useState(!!manualPrefill);
+  const [manualDesc, setManualDesc] = useState<string>(manualPrefill?.desc ?? "");
+  const [manualW, setManualW] = useState<string>(manualPrefill?.w ?? "");
+  const [manualH, setManualH] = useState<string>(manualPrefill?.h ?? "");
+  const [manualD, setManualD] = useState<string>(manualPrefill?.d ?? "");
+  const [manualCny, setManualCny] = useState<string>(manualPrefill?.cny ?? "");
+  const [manualCartonQty, setManualCartonQty] = useState<string>(manualPrefill?.cartonQty ?? "250");
+  const [manualCartonWeight, setManualCartonWeight] = useState<string>(manualPrefill?.cartonWeight ?? "");
+  const [manualCartonL, setManualCartonL] = useState<string>(manualPrefill?.cartonL ?? "");
+  const [manualCartonW, setManualCartonW] = useState<string>(manualPrefill?.cartonW ?? "");
+  const [manualCartonH, setManualCartonH] = useState<string>(manualPrefill?.cartonH ?? "");
 
   const manualCnyNum = parseFloat(manualCny);
   const manualValid = manualMode && Number.isFinite(manualCnyNum) && manualCnyNum > 0;
@@ -442,6 +469,18 @@ export function CalculatorView({ products, quantityTiers, shippingOptions, initi
           handles,
           lamination,
           shippingOptionId: shippingId || undefined,
+          ...(manualMode && manualValid
+            ? {
+                customInput: {
+                  unitCostCny: manualCnyNum,
+                  ...(num(manualCartonQty) ? { cartonQty: num(manualCartonQty) } : {}),
+                  ...(num(manualCartonWeight) ? { cartonWeightKg: num(manualCartonWeight) } : {}),
+                  ...(num(manualCartonL) ? { cartonLengthCm: num(manualCartonL) } : {}),
+                  ...(num(manualCartonW) ? { cartonWidthCm: num(manualCartonW) } : {}),
+                  ...(num(manualCartonH) ? { cartonHeightCm: num(manualCartonH) } : {}),
+                },
+              }
+            : {}),
         };
       })()
     : null;
@@ -2407,6 +2446,9 @@ interface FactorySpecContext {
   widthCm: number; heightCm: number; depthCm: number;
   quantity: number; colors: number; handles: boolean; lamination: boolean;
   shippingOptionId?: string;
+  // Manual-product mode only: the ¥ cost + carton the operator typed. Stored on
+  // the spec so the quote can be reopened and recalculated (Eli 2026-09-09).
+  customInput?: FactoryCustomInput;
 }
 // Shared share-flow state + actions. Extracted verbatim from QuoteShareCard so
 // BOTH the sticky summary-card CTAs and the full share card can fire the SAME
@@ -2638,6 +2680,7 @@ function useQuoteShare({
         printing: `${fs.colors} color(s)`,
         finishing: `${fs.handles ? "With handles" : "No handles"} / ${fs.lamination ? "Laminated" : "Not laminated"}`,
         ...(fs.shippingOptionId ? { shippingOptionId: fs.shippingOptionId } : {}),
+        ...(fs.customInput ? { customInput: fs.customInput } : {}),
       };
       const res = await fetch(apiBase("/api/widget/factory/quote-request", "/api/factory/quote-request"), {
         method: "POST", headers: { "Content-Type": "application/json" },
@@ -2666,6 +2709,7 @@ function useQuoteShare({
         printing: `${fs.colors} color(s)`,
         finishing: `${fs.handles ? "With handles" : "No handles"} / ${fs.lamination ? "Laminated" : "Not laminated"}`,
         ...(fs.shippingOptionId ? { shippingOptionId: fs.shippingOptionId } : {}),
+        ...(fs.customInput ? { customInput: fs.customInput } : {}),
       };
       const res = await fetch(apiBase("/api/widget/factory/quote-draft", "/api/factory/quote-draft"), {
         method: "POST", headers: { "Content-Type": "application/json" },

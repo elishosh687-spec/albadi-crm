@@ -33,6 +33,26 @@ export interface FactoryProductSpec {
   // to land on express even when the lead chose sea). Optional for back-compat
   // with rows written before this field existed.
   shippingOptionId?: string;
+  // The raw inputs of the calculator's MANUAL product mode ("מוצר ידני"): the
+  // ¥ unit cost and the master-carton block the operator typed by hand. Nothing
+  // else holds them — the rest of this spec carries only dims, and final_pricing
+  // carries DERIVED ₪ figures — so without this a manual quote could not be
+  // reopened or recalculated: "חשב מחדש" fell back to the model estimator and
+  // quietly priced a different product (Eli 2026-09-09). Absent on catalog and
+  // estimator quotes.
+  customInput?: FactoryCustomInput;
+}
+
+/** What the operator typed into the manual-product calculator. Mirrors the
+ *  `custom*` query params `/api/factory/quote-preview` rebuilds the product
+ *  from, so a stored spec can be replayed into the same price. */
+export interface FactoryCustomInput {
+  unitCostCny: number;
+  cartonQty?: number;
+  cartonWeightKg?: number;
+  cartonLengthCm?: number;
+  cartonWidthCm?: number;
+  cartonHeightCm?: number;
 }
 
 export interface FactoryResponse {

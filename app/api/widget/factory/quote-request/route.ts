@@ -24,6 +24,19 @@ const ProductSpecSchema = z.object({
   finishing: z.string().default(""),
   picUrl: z.string().optional(),
   notes: z.string().optional(),
+  // The manual-calculator inputs (¥ unit cost + master carton). Zod strips
+  // unknown keys, so a field missing here is silently dropped on save — which is
+  // how manual quotes lost everything the operator typed (Eli 2026-09-09).
+  customInput: z
+    .object({
+      unitCostCny: z.number().positive(),
+      cartonQty: z.number().positive().optional(),
+      cartonWeightKg: z.number().nonnegative().optional(),
+      cartonLengthCm: z.number().nonnegative().optional(),
+      cartonWidthCm: z.number().nonnegative().optional(),
+      cartonHeightCm: z.number().nonnegative().optional(),
+    })
+    .optional(),
   shippingOptionId: z.string().optional(),
 });
 
