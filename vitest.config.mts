@@ -55,8 +55,29 @@ export default defineConfig({
           name: "integration",
           include: ["tests/integration/**/*.test.ts"],
           exclude: EXCLUDE,
-          env: { ...ENV },
+          // DATABASE_URL comes from the shell (a throwaway Neon branch — the
+          // setup file refuses the production endpoint). Everything that could
+          // reach a customer is neutralised: BRIDGE_DRY_RUN short-circuits every
+          // WhatsApp send, and no GreenAPI / GHL / OpenAI credential is set, so
+          // a path that slips past a mock fails loudly instead of sending.
+          env: {
+            ...ENV,
+            BRIDGE_DRY_RUN: "1",
+            GREEN_WEBHOOK_TOKEN: "ci-green-token",
+            BOT_SECRET: "ci-bot-secret",
+            CRON_SECRET: "ci-cron-secret",
+            CALL_TRIGGER_SECRET: "ci-call-secret",
+            GHL_WIDGET_TOKEN: "ci-widget-token",
+            WIDGET_SALES_TOKEN: "ci-sales-token",
+            ADMIN_PASSWORD: "ci-admin-password",
+            SUPERVISOR_BYPASS: "1", // followups supervisor: approve the template, no LLM
+          },
           setupFiles: ["tests/setup.integration.ts"],
+          // Tests share one database and a few rows (app_config) — run files
+          // one at a time, and give network round-trips room.
+          fileParallelism: false,
+          testTimeout: 60_000,
+          hookTimeout: 60_000,
           passWithNoTests: true,
         },
       },

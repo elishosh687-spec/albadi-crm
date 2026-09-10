@@ -86,10 +86,42 @@ gate** — Vercel deploys the push regardless (Eli's call). A failure on `main`
 POSTs `/api/admin/ci-alert` with `CALL_TRIGGER_SECRET`, which `sendEliDM`s the
 short sha + commit line + run URL. `?dry=1` returns the text without sending.
 
-**Phases B and C are planned, not built:** route tests on a throwaway Neon
-branch per CI run (`tests/integration/`, project `integration`, needs
-`NEON_API_KEY`), then 5 Playwright flows on the widget. Plan file:
-`~/.claude/plans/immutable-sprouting-walrus.md`.
+**Phase B — route tests on a real database (built 2026-09-10).**
+`npm run test:integration` runs `tests/integration/` (project `integration`)
+against `DATABASE_URL`, which must be a **throwaway Neon branch**:
+`tests/setup.integration.ts` refuses the production endpoint
+(`ep-misty-bread-akwno7u7`) outright. Locally:
+
+```bash
+N=~/.local/node/bin/neonctl; P="fragrant-morning-71359670"
+$N branches create --project-id $P --org-id org-frosty-star-50411125 --name ci-local --parent main
+DATABASE_URL="$($N connection-string --project-id $P --org-id org-frosty-star-50411125 --branch ci-local)" npm run test:integration
+$N branches delete ci-local --project-id $P --org-id org-frosty-star-50411125
+```
+
+Five files, ~60 tests: the GreenAPI webhook (401, idempotency claim in
+`bridge_events`, **a team member never becomes a lead**, website prefill →
+`lead_source` + `source_touches`, quotedMessage keeps its text), the job
+heartbeat + `checkJobs` on the real `app_config` row, the follow-ups run-lock
+(held / expired / two concurrent ticks), `closeDealGroup` freezing the combined
+offer + `removeDeal` + `setDealClosed`, and a **sweep that calls every route
+declaring `authorized()`/`authed()` with no bearer and expects 401** — it found
+`POST /api/factory/refit-estimator` on day one, which is legitimately gated by
+the middleware cookie and is now an explicit, verified exemption in the test.
+Only edges that leave the system are stubbed (GHL, supervisor, questionnaire,
+LLM composer, Meta, Eli's DM); `BRIDGE_DRY_RUN=1` is forced and no GreenAPI /
+GHL / OpenAI credential is set, so a path that slips a stub fails loudly rather
+than messaging anyone. The branch is a full copy of production — tests seed
+their own `test:ci-*` rows and never print customer data.
+
+**CI:** the `integration` job in `test.yml` creates `ci-<run_id>` from `main`,
+runs, and deletes it in `if: always()` (plus a sweep of `ci-*` branches older
+than a day — the free tier caps at 10). It needs **`NEON_API_KEY`** as a repo
+secret (Neon console → Account settings → API keys) and skips itself with a
+notice until that exists. Not run on PRs (the branch is a prod copy).
+
+**Phase C — Playwright — still planned, not built:** 5 flows on the widget.
+Plan file: `~/.claude/plans/immutable-sprouting-walrus.md`.
 
 **Two `it.fails` are findings, not flakes** (2026-09-10): four
 `console.error` calls survive in the dead `/dashboard/v3` tree, and the hour

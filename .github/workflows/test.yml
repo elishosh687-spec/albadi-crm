@@ -5,6 +5,12 @@
 # hot fix hostage). A failure on main is WhatsApped to Eli through the CRM's
 # own /api/admin/ci-alert (project rule: alerts go to WhatsApp, never email).
 # CALL_TRIGGER_SECRET is the same repo secret the crons use.
+#
+# The `integration` job runs the DB-backed tests against a THROWAWAY Neon branch
+# of production, created for the run and deleted in `if: always()`. It needs
+# NEON_API_KEY (Neon console → Account settings → API keys) as a repo secret and
+# is skipped without it. No GreenAPI / GHL / OpenAI credential reaches the job
+# and BRIDGE_DRY_RUN=1 is forced, so a customer can never be messaged from CI.
 name: test
 on:
   push:
@@ -45,6 +51,84 @@ jobs:
           MSG: ${{ github.event.head_commit.message }}
         run: |
           body=$(jq -n --arg w test --arg sha "$SHA" --arg url "$RUN_URL" --arg msg "$MSG" \
+            '{workflow:$w, sha:$sha, run_url:$url, message:$msg, status:"failure"}')
+          curl -sS -X POST "$CRM/api/admin/ci-alert" \
+            -H "Authorization: Bearer $SECRET" \
+            -H "Content-Type: application/json" \
+            --max-time 30 \
+            -d "$body" || echo "ci-alert POST failed (the test failure above is the real news)"
+
+  integration:
+    needs: unit
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      NEON_PROJECT_ID: fragrant-morning-71359670
+      NEON_BRANCH: ci-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install deps
+        run: npm ci --no-audit --no-fund
+
+      - name: Skip without NEON_API_KEY
+        id: gate
+        env:
+          KEY: ${{ secrets.NEON_API_KEY }}
+        run: |
+          if [ -z "$KEY" ]; then
+            echo "NEON_API_KEY is not set — integration tests skipped (add it: Neon console → Account settings → API keys → repo secret)"
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create a throwaway Neon branch
+        if: steps.gate.outputs.run == 'true'
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+        run: |
+          npm i -g neonctl@2 >/dev/null 2>&1
+          neonctl branches create --project-id "$NEON_PROJECT_ID" --name "$NEON_BRANCH" --parent main --output json > /dev/null
+          url=$(neonctl connection-string --project-id "$NEON_PROJECT_ID" --branch "$NEON_BRANCH")
+          echo "::add-mask::$url"
+          echo "DATABASE_URL=$url" >> "$GITHUB_ENV"
+
+      - name: Integration tests
+        if: steps.gate.outputs.run == 'true'
+        run: npm run test:integration
+
+      - name: Delete the branch (always)
+        if: always() && steps.gate.outputs.run == 'true'
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+        run: |
+          neonctl branches delete "$NEON_BRANCH" --project-id "$NEON_PROJECT_ID" || echo "branch delete failed — the sweep below catches it next run"
+          # Sweep ci-* branches older than a day left by a killed run (free tier caps branches at 10).
+          neonctl branches list --project-id "$NEON_PROJECT_ID" --output json \
+            | node -e '
+              const rows = JSON.parse(require("fs").readFileSync(0, "utf8"));
+              const cutoff = Date.now() - 24 * 3600 * 1000;
+              for (const b of rows) if (/^ci-/.test(b.name) && Date.parse(b.created_at) < cutoff) console.log(b.name);
+            ' \
+            | while read -r b; do neonctl branches delete "$b" --project-id "$NEON_PROJECT_ID" || true; done
+
+      - name: WhatsApp Eli on a red main
+        if: failure() && github.ref == 'refs/heads/main'
+        env:
+          CRM: https://albadi-crm.vercel.app
+          SECRET: ${{ secrets.CALL_TRIGGER_SECRET }}
+          SHA: ${{ github.sha }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          MSG: ${{ github.event.head_commit.message }}
+        run: |
+          body=$(jq -n --arg w integration --arg sha "$SHA" --arg url "$RUN_URL" --arg msg "$MSG" \
             '{workflow:$w, sha:$sha, run_url:$url, message:$msg, status:"failure"}')
           curl -sS -X POST "$CRM/api/admin/ci-alert" \
             -H "Authorization: Bearer $SECRET" \
