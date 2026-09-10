@@ -1,6 +1,7 @@
 "use client";
 
 import { useLaminationDefault } from "@/lib/factory/calculator/use-lamination-default";
+import { resolveLamination } from "@/lib/factory/calculator/lamination";
 import { THERMAL_LABEL, THERMAL_LINING_PCT, withThermalToken } from "@/lib/factory/thermal";
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { Loader2, Send, Copy, Check, Search, X, ChevronDown, Calculator, Pencil, Ship, Plane, Repeat, Minus, Plus } from "lucide-react";
@@ -158,7 +159,7 @@ export function CalculatorView({ products, quantityTiers, shippingOptions, initi
   const [productId, setProductId] = useState(operatorPrefill?.productId ?? products[0]?.id ?? "p1");
   const [qtyId, setQtyId]         = useState(quantityTiers[0]?.id ?? "q0");
   const [handles, setHandles]     = useState(operatorPrefill?.handles ?? true);
-  const [lamination, setLamination] = useState(operatorPrefill?.lam ?? false);
+  const [lamination, setLamination] = useState(() => resolveLamination(operatorPrefill?.lam, operatorPrefill?.colors ?? 1));
   // "שומר קור" — +10% on the bag cost only (lib/factory/thermal.ts).
   const [thermal, setThermal] = useState(operatorPrefill?.thermal ?? false);
   const [colors, setColors]       = useState(operatorPrefill?.colors ?? 1);
@@ -1246,7 +1247,7 @@ function EstimateTab({ apiToken, shippingOptions, sid, leadName, initialMargins,
   const [qty, setQty] = useState(prefill?.qty ?? "5000");
   const [colors, setColors] = useState(prefill?.colors ?? 1);
   const [handles, setHandles] = useState(prefill?.handles ?? true);
-  const [lam, setLam] = useState(prefill?.lam ?? false);
+  const [lam, setLam] = useState(() => resolveLamination(prefill?.lam, prefill?.colors ?? 1));
   const [thermal, setThermal] = useState(prefill?.thermal ?? false);
   const [construction, setConstruction] = useState<"heat_press" | "sewing">("heat_press");
   const [shippingId, setShippingId] = useState(shippingOptions.find((s) => s.type === "sea")?.id ?? shippingOptions[0]?.id ?? "s2");
