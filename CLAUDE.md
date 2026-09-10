@@ -75,6 +75,11 @@ word. Eli: *"לוגים רציניים בלי התראה זה לא שווה, ו�
   in the factory config); the old hardcoded 30% for laminated is gone. Simon's
   factory-by-construction table (heat-press 3D → CHEN/MANDY; sewing and 2D →
   WEIWEI/CHEN) checked against 44 quote-log rows: zero contradictions.
+  Since 2026-09-10 the estimator PICKS BY IT (`construction` on
+  `EstimateSpec`, `allowedFactoriesFor`): heat-press 3D → Mandy, heat-press
+  2D / any sewn bag → 亚森; CHEN has no price model, so a bag only CHEN would
+  make (or a laminated sewn bag) is refused → factory. "סוג ייצור" selector
+  on both estimate screens; the bot defaults to heat-press.
 
 ## Key API Routes
 
