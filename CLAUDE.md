@@ -43,6 +43,35 @@ Next.js app deployed on Vercel. Neon PostgreSQL via Drizzle ORM. WhatsApp messag
   `_apl`); read the data in the Axiom UI or mint a separate query token.
   Query by `feature` / `event` / `sid` / `request_id`.
 
+## Scheduled jobs ring a phone — heartbeats + watchdog (built 2026-09-10)
+
+**Why:** the estimator refit cron was dead from 2026-06-24 to 2026-09-09 —
+`middleware.ts` 307'd Vercel's daily GET to `/api/factory/refit-estimator`
+(only `refresh`/`test-dm` were on the bearer allow-list) — and nothing said a
+word. Eli: *"לוגים רציניים בלי התראה זה לא שווה, ורק בוואטסאפ"*.
+
+- Every scheduled route is wrapped with **`withJob(job, feature, handler)`**
+  ([lib/observability/jobs.ts](lib/observability/jobs.ts)) instead of bare
+  `withRequestLog`: 2xx = success heartbeat, 5xx/throw = failure, 401/307 =
+  not a run. Names + schedules live in `JOBS`; state in `app_config`
+  `jobs.status` (per-job `jsonb_set`).
+- **`/api/cron/job-watchdog`** runs every 30 min from
+  `.github/workflows/job-watchdog.yml` (`CALL_TRIGGER_SECRET`) and **WhatsApps
+  Eli** (`sendEliDM`) once per incident when a job is late (3 missed ticks, or
+  6h past a daily slot) or failed, and once on recovery. `?dry=1` previews.
+  A new cron MUST be added to `JOBS` and wrapped with `withJob`, or it is
+  invisible again.
+- **Any bearer-authed job under `/api/factory/*` must ALSO be added to the
+  allow-list in `middleware.ts`** — the route's own auth is never reached
+  otherwise. `CRON_SECRET` and `CALL_TRIGGER_SECRET` are readable via
+  `vercel env pull`; `BOT_SECRET` is not, so trigger crons by hand with those.
+- **Refit gate reality (2026-09-10):** with the Aug–Sep quotes the LOO median
+  is 7.3% vs the 6% gate, so the refit runs and *keeps the June coefficients*.
+  The rows that push it over are narrow-tall bags (D≤10, e.g. H50×D9×W33 at
+  ¥2.20 vs model ¥1.12) and 1,000-qty quotes. Until those shapes are refused
+  (routed to the factory) the estimator will not re-fit — raising the gate
+  would just publish a worse model.
+
 ## Key API Routes
 
 | Route | Purpose |
