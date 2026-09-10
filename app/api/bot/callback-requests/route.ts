@@ -22,12 +22,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { isQuietNow } from "@/lib/clock/quiet-hours";
 import { isNoSendDay } from "@/lib/clock/hebcal";
 import { runCallbackRequests } from "@/lib/autoresponder/callback-request";
-import { withRequestLog } from "@/lib/observability/log";
+import { withJob } from "@/lib/observability/jobs";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
 
-export const POST = withRequestLog("followups", async (req: NextRequest, log) => {
+export const POST = withJob("callback-requests", "followups", async (req: NextRequest, log) => {
   const auth = req.headers.get("authorization");
   const accepted = [process.env.BOT_SECRET, process.env.CRON_SECRET]
     .filter(Boolean)
@@ -61,7 +61,7 @@ export const POST = withRequestLog("followups", async (req: NextRequest, log) =>
       { status: 500 }
     );
   }
-}, { job: "callback-requests" });
+});
 
 /** Counts only — the report carries composed customer messages. */
 function summarizeReport(report: unknown): Record<string, unknown> {

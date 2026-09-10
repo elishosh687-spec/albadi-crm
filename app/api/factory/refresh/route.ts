@@ -7,6 +7,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { withRequestLog } from "@/lib/observability/log";
+import { withJob } from "@/lib/observability/jobs";
 import { refreshFromFeishu } from "@/lib/factory/server/refresh";
 
 export const runtime = "nodejs";
@@ -17,7 +18,7 @@ export const POST = withRequestLog("factory", async (_req: NextRequest, log) => 
   return NextResponse.json(result);
 });
 
-export const GET = withRequestLog("factory", async (req: NextRequest, log) => {
+export const GET = withJob("factory-refresh", "factory", async (req: NextRequest, log) => {
   const secret = process.env.CRON_SECRET;
   if (secret) {
     const auth = req.headers.get("authorization");
@@ -27,4 +28,4 @@ export const GET = withRequestLog("factory", async (req: NextRequest, log) => {
   }
   const result = await refreshFromFeishu();
   return NextResponse.json(result);
-}, { job: "factory-refresh" });
+});

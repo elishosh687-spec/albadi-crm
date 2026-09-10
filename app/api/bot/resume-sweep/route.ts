@@ -12,7 +12,7 @@
  */
 import { NextRequest, NextResponse } from "next/server";
 import { runResumeSweep } from "@/lib/autoresponder/resume-sweep";
-import { withRequestLog } from "@/lib/observability/log";
+import { withJob } from "@/lib/observability/jobs";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -29,7 +29,7 @@ function authorized(req: NextRequest): boolean {
   return accepted.length > 0 && accepted.includes(auth);
 }
 
-export const POST = withRequestLog("followups", async (req: NextRequest, log) => {
+export const POST = withJob("resume-sweep", "followups", async (req: NextRequest, log) => {
   if (!authorized(req)) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
@@ -46,4 +46,4 @@ export const POST = withRequestLog("followups", async (req: NextRequest, log) =>
       { status: 500 }
     );
   }
-}, { job: "resume-sweep" });
+});

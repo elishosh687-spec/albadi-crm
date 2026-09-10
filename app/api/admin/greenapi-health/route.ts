@@ -19,7 +19,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { assessGreenHealth, formatGreenHealth } from "@/lib/greenapi/health";
 import { sendEliDM } from "@/lib/notify/eli";
-import { withRequestLog } from "@/lib/observability/log";
+import { withJob } from "@/lib/observability/jobs";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
@@ -34,7 +34,7 @@ function authorized(req: NextRequest): boolean {
   return false;
 }
 
-export const GET = withRequestLog("admin", async (req: NextRequest, log) => {
+export const GET = withJob("greenapi-health", "admin", async (req: NextRequest, log) => {
   if (!authorized(req)) {
     log.warn("unauthorized");
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
@@ -55,4 +55,4 @@ export const GET = withRequestLog("admin", async (req: NextRequest, log) => {
   }
 
   return NextResponse.json({ ...health, summary: formatGreenHealth(health), alerted });
-}, { job: "greenapi-health" });
+});

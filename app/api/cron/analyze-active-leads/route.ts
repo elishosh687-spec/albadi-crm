@@ -20,7 +20,8 @@ import { resolveAssigneeUserId } from "@/lib/crm-tasks/assignee";
 import { updateContactTask } from "@/integrations/ghl/client";
 import { syncTaskToGHL } from "@/integrations/ghl/sync";
 import { leads } from "@/drizzle/schema";
-import { logger, serializeError, withRequestLog } from "@/lib/observability/log";
+import { logger, serializeError } from "@/lib/observability/log";
+import { withJob } from "@/lib/observability/jobs";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -47,7 +48,7 @@ function authorized(req: NextRequest): boolean {
   return accepted.some((s) => header === `Bearer ${s}`);
 }
 
-const run = withRequestLog("analysis", async (req: NextRequest, log) => {
+const run = withJob("analyze-active-leads", "analysis", async (req: NextRequest, log) => {
   if (!authorized(req)) {
     log.warn("unauthorized");
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
@@ -136,7 +137,7 @@ const run = withRequestLog("analysis", async (req: NextRequest, log) => {
     push_sweep: pushSweep,
     results,
   });
-}, { job: "analyze-active-leads" });
+});
 
 export const POST = run;
 // Vercel Cron pings GET. Alias to POST so a single implementation drives both.

@@ -42,7 +42,8 @@ import {
   analyzeCall,
   type CallAnalysis,
 } from "@/lib/autoresponder/call-analysis";
-import { logger, serializeError, withRequestLog } from "@/lib/observability/log";
+import { logger, serializeError } from "@/lib/observability/log";
+import { withJob } from "@/lib/observability/jobs";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -607,7 +608,7 @@ async function stage4PostBack(): Promise<{ done: number }> {
 // ===========================================================================
 // Handler.
 // ===========================================================================
-const run = withRequestLog("calls", async (req: NextRequest, log) => {
+const run = withJob("process-recordings", "calls", async (req: NextRequest, log) => {
   if (!authorized(req)) {
     log.warn("unauthorized");
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
@@ -688,7 +689,7 @@ const run = withRequestLog("calls", async (req: NextRequest, log) => {
     elevenlabs,
     factory,
   });
-}, { job: "process-recordings" });
+});
 
 export const POST = run;
 // Allow GET for the same handler so the Cloud Routine doesn't need a body.

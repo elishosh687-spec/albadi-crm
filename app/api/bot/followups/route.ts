@@ -61,7 +61,8 @@ import {
   type FutureGateCtx,
   type GateSkip,
 } from "@/lib/autoresponder/future-followup";
-import { logger, serializeError, withRequestLog } from "@/lib/observability/log";
+import { logger, serializeError } from "@/lib/observability/log";
+import { withJob } from "@/lib/observability/jobs";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
@@ -861,7 +862,7 @@ async function processFactoryLead(row: {
   return { sid: row.sid, action: "sent", detail: "factory_reminder" };
 }
 
-const run = withRequestLog("followups", async (req: NextRequest, log) => {
+const run = withJob("followups", "followups", async (req: NextRequest, log) => {
   const auth = req.headers.get("authorization");
   // Vercel cron sends `Bearer $CRON_SECRET`; manual triggers use `BOT_SECRET`.
   const accepted = [process.env.BOT_SECRET, process.env.CRON_SECRET]
@@ -1136,7 +1137,7 @@ const run = withRequestLog("followups", async (req: NextRequest, log) => {
       )
       .catch((e) => log.warn("lock.release_failed", { ...serializeError(e) }));
   }
-}, { job: "followups" });
+});
 
 export const POST = run;
 export const GET = run;

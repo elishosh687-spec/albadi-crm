@@ -8,6 +8,7 @@
  */
 import { NextRequest, NextResponse } from "next/server";
 import { withRequestLog } from "@/lib/observability/log";
+import { withJob } from "@/lib/observability/jobs";
 import { refitEstimator } from "@/lib/factory/server/refit-estimator";
 
 export const runtime = "nodejs";
@@ -19,7 +20,7 @@ function authed(req: NextRequest): boolean {
   return accepted.includes(req.headers.get("authorization") ?? "");
 }
 
-export const GET = withRequestLog("calculator", async (req: NextRequest, log) => {
+export const GET = withJob("refit-estimator", "calculator", async (req: NextRequest, log) => {
   if (!authed(req)) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   try {
     return NextResponse.json(await refitEstimator());
@@ -27,7 +28,7 @@ export const GET = withRequestLog("calculator", async (req: NextRequest, log) =>
     log.error("refit.failed", e);
     return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : String(e) }, { status: 500 });
   }
-}, { job: "refit-estimator" });
+});
 
 // Cookie-auth (middleware) manual trigger from the dashboard.
 export const POST = withRequestLog("calculator", async (_req: NextRequest, log) => {

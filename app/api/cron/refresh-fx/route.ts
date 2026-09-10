@@ -8,7 +8,7 @@
 
 import { NextResponse } from "next/server";
 import { applyLiveFxToConfig } from "@/lib/fx/live-rates";
-import { withRequestLog } from "@/lib/observability/log";
+import { withJob } from "@/lib/observability/jobs";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -20,7 +20,7 @@ function authed(req: Request): boolean {
   return accepted.includes(req.headers.get("authorization") ?? "");
 }
 
-const run = withRequestLog("fx", async (req, log) => {
+const run = withJob("refresh-fx", "fx", async (req, log) => {
   if (!authed(req)) {
     log.warn("unauthorized");
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
@@ -28,7 +28,7 @@ const run = withRequestLog("fx", async (req, log) => {
   const result = await applyLiveFxToConfig();
   log.info("fx.refreshed", { ...result });
   return NextResponse.json({ ok: true, ...result });
-}, { job: "refresh-fx" });
+});
 
 export const GET = run;
 export const POST = run;

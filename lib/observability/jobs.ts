@@ -19,7 +19,7 @@
  */
 import { db } from "@/lib/db";
 import { sql } from "drizzle-orm";
-import { logger } from "./log";
+import { logger, withRequestLog, type Feature, type Logger } from "./log";
 
 const log = logger("cron");
 const KEY = "jobs.status";
@@ -107,6 +107,33 @@ export async function recordJobRun(
   } catch (e) {
     log.warn("job.heartbeat_write_failed", { job, err: e instanceof Error ? e.message : String(e) });
   }
+}
+
+/**
+ * Route wrapper for a scheduled job: withRequestLog + a heartbeat. A 2xx
+ * records a success, a 5xx or a throw records a failure; a 401 from a probe
+ * or a 307 is not a run and is ignored.
+ *
+ *   export const GET = withJob("refresh-fx", "fx", async (req: NextRequest, log) => { ... });
+ */
+export function withJob<Req extends Request = Request, Ctx = unknown>(
+  job: JobName,
+  feature: Feature,
+  handler: (req: Req, log: Logger, ctx: Ctx) => Promise<Response>,
+): (req: Req, ctx: Ctx) => Promise<Response> {
+  return withRequestLog<Req, Ctx>(feature, async (req, log, ctx) => {
+    const started = Date.now();
+    try {
+      const res = await handler(req, log, ctx);
+      const durationMs = Date.now() - started;
+      if (res.status >= 200 && res.status < 300) void recordJobRun(job, { ok: true, status: res.status, durationMs });
+      else if (res.status >= 500) void recordJobRun(job, { ok: false, status: res.status, durationMs });
+      return res;
+    } catch (err) {
+      void recordJobRun(job, { ok: false, status: 500, error: err instanceof Error ? err.message : String(err), durationMs: Date.now() - started });
+      throw err; // withRequestLog logs it and answers 500
+    }
+  });
 }
 
 export interface JobCheck {

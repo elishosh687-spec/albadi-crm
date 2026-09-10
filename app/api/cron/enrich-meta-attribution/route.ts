@@ -11,7 +11,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { enrichMetaAttribution } from "@/lib/sheets/meta-attribution";
 import { pollGoodLeads } from "@/lib/meta/good-lead-poll";
 import { postFormAnswerNotes } from "@/lib/sheets/form-answers-note";
-import { serializeError, withRequestLog } from "@/lib/observability/log";
+import { serializeError } from "@/lib/observability/log";
+import { withJob } from "@/lib/observability/jobs";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -28,7 +29,7 @@ function authorized(req: NextRequest): boolean {
   return accepted.some((s) => header === `Bearer ${s}`);
 }
 
-const run = withRequestLog("meta", async (req: NextRequest, log) => {
+const run = withJob("enrich-meta-attribution", "meta", async (req: NextRequest, log) => {
   if (!authorized(req)) {
     log.warn("unauthorized");
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
@@ -72,7 +73,7 @@ const run = withRequestLog("meta", async (req: NextRequest, log) => {
       { status: 500 },
     );
   }
-}, { job: "enrich-meta-attribution" });
+});
 
 export const POST = run;
 // Vercel Cron issues GET; accept it too.

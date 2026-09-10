@@ -6,8 +6,7 @@
  * Auth: Bearer BOT_SECRET / CRON_SECRET / CALL_TRIGGER_SECRET.
  */
 import { NextRequest, NextResponse } from "next/server";
-import { withRequestLog } from "@/lib/observability/log";
-import { runWatchdog } from "@/lib/observability/jobs";
+import { runWatchdog, withJob } from "@/lib/observability/jobs";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -20,9 +19,7 @@ function authed(req: NextRequest): boolean {
   return accepted.includes(req.headers.get("authorization") ?? "");
 }
 
-const run = withRequestLog(
-  "cron",
-  async (req: NextRequest, log) => {
+const run = withJob("job-watchdog", "cron", async (req: NextRequest, log) => {
     if (!authed(req)) {
       log.warn("unauthorized");
       return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
@@ -31,8 +28,6 @@ const run = withRequestLog(
     const result = await runWatchdog({ dry });
     log.info("watchdog.run", { job: "job-watchdog", dry, unhealthy: result.unhealthy.length, alerted: result.alerted.length, recovered: result.recovered.length });
     return NextResponse.json(result);
-  },
-  { job: "job-watchdog" },
-);
+});
 export const GET = run;
 export const POST = run;
