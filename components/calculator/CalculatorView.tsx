@@ -1232,6 +1232,7 @@ function EstimateTab({ apiToken, shippingOptions, sid, leadName, initialMargins,
   const [colors, setColors] = useState(prefill?.colors ?? 1);
   const [handles, setHandles] = useState(prefill?.handles ?? true);
   const [lam, setLam] = useState(prefill?.lam ?? false);
+  const [construction, setConstruction] = useState<"heat_press" | "sewing">("heat_press");
   const [shippingId, setShippingId] = useState(shippingOptions.find((s) => s.type === "sea")?.id ?? shippingOptions[0]?.id ?? "s2");
   const [splitMode, setSplitMode] = useState(false);
   const [estimateSplit, setEstimateSplit] = useState<SplitReport | null>(null);
@@ -1281,7 +1282,7 @@ function EstimateTab({ apiToken, shippingOptions, sid, leadName, initialMargins,
     if (!valid || geoBlocked) { setData(null); return; }
     setLoading(true); setErr(null);
     try {
-      const p = new URLSearchParams({ heightCm: h, depthCm: d || "0", widthCm: w, qty, colors: String(colors), handles: String(handles), lamination: String(lam), shipping: shippingId });
+      const p = new URLSearchParams({ heightCm: h, depthCm: d || "0", widthCm: w, qty, colors: String(colors), handles: String(handles), lamination: String(lam), construction, shipping: shippingId });
       if (moldsValid) p.set("moldsCostCny", String(moldsParsed));
       if (marginOverrideValid) p.set("margin", String(marginOverrideParsed));
       if (apiToken) p.set("widget_token", apiToken);
@@ -1308,7 +1309,7 @@ function EstimateTab({ apiToken, shippingOptions, sid, leadName, initialMargins,
   // Split-shipment: price one portion's shipment (ILS) via the estimate endpoint,
   // varying only quantity + shipping method (same dims/spec/margin).
   const priceEstimateShipmentIls = useCallback(async (q: number, shipId: string) => {
-    const p = new URLSearchParams({ heightCm: h, depthCm: d || "0", widthCm: w, qty: String(q), colors: String(colors), handles: String(handles), lamination: String(lam), shipping: shipId });
+    const p = new URLSearchParams({ heightCm: h, depthCm: d || "0", widthCm: w, qty: String(q), colors: String(colors), handles: String(handles), lamination: String(lam), construction, shipping: shipId });
     if (moldsValid) p.set("moldsCostCny", String(moldsParsed));
     if (marginOverrideValid) p.set("margin", String(marginOverrideParsed));
     if (apiToken) p.set("widget_token", apiToken);
@@ -1500,9 +1501,17 @@ function EstimateTab({ apiToken, shippingOptions, sid, leadName, initialMargins,
                 ))}
               </select>
             </div>
-            <div className="flex gap-6">
+            <div className="flex gap-6 lux-wrap-sm">
               <Toggle label="ידיות" value={handles} onChange={setHandles} />
               <Toggle label="למינציה" value={lam} onChange={setLam} />
+              <div className="flex flex-col gap-1">
+                <label className="text-sm font-medium">סוג ייצור</label>
+                <select value={construction} onChange={(e) => setConstruction(e.target.value as "heat_press" | "sewing")} className={SELECT_CLS}>
+                  <option value="heat_press">חום (heat-press)</option>
+                  <option value="sewing">תפירה ידנית</option>
+                </select>
+                <span className="text-[11px] text-muted-foreground">קובע איזה מפעל מתמחר (לפי הטבלה של סיימון)</span>
+              </div>
             </div>
 
             {/* One-time mold/tooling fee (¥ CNY) — added on top of the auto plate fee, amortized across the order */}

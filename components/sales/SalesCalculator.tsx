@@ -58,6 +58,7 @@ export function SalesCalculator({ token }: { token: string }) {
   const [handles, setHandles] = useState(true);
   const [colors, setColors] = useState(1);
   const [lamination, setLamination] = useState(false);
+  const [construction, setConstruction] = useState<"heat_press" | "sewing">("heat_press");
   const [shippingId, setShippingId] = useState(SHIPPING.find((s) => s.id === "s2")?.id ?? SHIPPING[0]?.id ?? "s2");
   const [moldPerColor, setMoldPerColor] = useState<string>("1000"); // ¥ per colour, editable, 0 = none
   const [payPlan, setPayPlan] = useState<string>(NO_PAYMENT_PLAN_ID);
@@ -77,6 +78,7 @@ export function SalesCalculator({ token }: { token: string }) {
       hasHandles: handles,
       logoColors: colors,
       hasLamination: lamination,
+      construction,
       shippingOptionId: shippingId,
       moldPerColorCny: moldPerColor.trim() === "" ? undefined : Math.max(0, parseInt(moldPerColor, 10) || 0),
     };
@@ -97,7 +99,7 @@ export function SalesCalculator({ token }: { token: string }) {
       quantityOverride: custom || null,
       ...common,
     };
-  }, [mode, productId, dimH, dimD, dimW, tierId, customQty, handles, colors, lamination, shippingId, moldPerColor]);
+  }, [mode, productId, dimH, dimD, dimW, tierId, customQty, handles, colors, lamination, construction, shippingId, moldPerColor]);
 
   const estimateReady = mode !== "estimate" || (Number(dimW) > 0 && Number(dimH) > 0);
 
@@ -281,6 +283,15 @@ export function SalesCalculator({ token }: { token: string }) {
           </span>
         ) : (
           <Toggle on={lamination} set={setLamination} label="למינציה" />
+        )}
+        {mode === "estimate" && (
+          <label className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-border bg-card/40 text-sm">
+            <span className="text-muted-foreground">סוג ייצור</span>
+            <select value={construction} onChange={(e) => setConstruction(e.target.value as "heat_press" | "sewing")} className="bg-transparent text-sm outline-none">
+              <option value="heat_press">חום (heat-press)</option>
+              <option value="sewing">תפירה ידנית</option>
+            </select>
+          </label>
         )}
         <div className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-border bg-card/40">
           <span className="text-sm text-muted-foreground">צבעים</span>

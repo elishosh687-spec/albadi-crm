@@ -48,6 +48,7 @@ export const GET = withRequestLog("calculator", async (req: NextRequest, log) =>
     hasHandles: sp.get("handles") === "true",
     hasLamination: sp.get("lamination") === "true",
     logoColors: Math.max(1, parseInt(sp.get("colors") ?? "1", 10) || 1),
+    construction: sp.get("construction") === "sewing" ? "sewing" : "heat_press",
   };
   const shipping = sp.get("shipping") || "s1";
   // Optional operator overrides (mirror the regular calculator):

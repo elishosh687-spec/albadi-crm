@@ -46,6 +46,7 @@ export const POST = withRequestLog("calculator", async (req: NextRequest, log) =
           hasHandles: !!body.hasHandles,
           logoColors: Number(body.logoColors) || 1,
           hasLamination: !!body.hasLamination,
+        construction: body.construction === "sewing" ? "sewing" : "heat_press",
           shippingOptionId: String(body.shippingOptionId || "s2"),
           moldPerColorCny,
         },

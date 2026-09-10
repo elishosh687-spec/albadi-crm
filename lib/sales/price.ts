@@ -130,6 +130,8 @@ export interface SalesEstimateInput {
   hasHandles: boolean;
   logoColors: number;
   hasLamination: boolean;
+  /** heat_press (default) | sewing — picks the factory per Simon's table. */
+  construction?: "heat_press" | "sewing";
   shippingOptionId: string; // s1 | s2
   moldPerColorCny?: number;
 }
@@ -163,6 +165,7 @@ export async function computeEstimateSales(
     qty: String(Math.max(1, Math.round(input.quantity))),
     handles: String(input.hasHandles),
     lamination: String(input.hasLamination),
+    construction: input.construction ?? "heat_press",
     colors: String(colors),
     shipping: input.shippingOptionId || "s2",
     moldsCostCny: String(r2(perColor * colors)),

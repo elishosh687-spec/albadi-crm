@@ -34,6 +34,28 @@ export interface EstimateSpec {
   hasHandles: boolean;
   hasLamination: boolean;
   logoColors: number; // 1..3+
+  /**
+   * How the bag is made. Simon assigns factories by construction, not by
+   * price (his table, verified on 44 quotes 2026-09-10): heat-press 3D → CHEN
+   * or MANDY; heat-press 2D and any hand-sewn bag → WEIWEI or CHEN. Absent =
+   * heat-press (Albadi's default product).
+   */
+  construction?: Construction;
+}
+export type Construction = "heat_press" | "sewing";
+export const CONSTRUCTION_LABELS: Record<Construction, string> = { heat_press: "חום (heat-press)", sewing: "תפירה ידנית" };
+
+/**
+ * Which MODELLED factories may quote this bag, per Simon's classification.
+ * CHEN (鼎驰) sits in every cell of his table but has no price model (the
+ * catalog only carries Mandy + 亚森), so it never appears here; when the only
+ * fit is CHEN the estimator refuses and the quote goes to the factory.
+ */
+export function allowedFactoriesFor(spec: Pick<EstimateSpec, "depthCm" | "construction">): string[] {
+  const is3D = spec.depthCm > 2;
+  const construction = spec.construction ?? "heat_press";
+  if (construction === "heat_press") return is3D ? ["Mandy"] : ["亚森"];
+  return ["亚森"]; // hand-sewn, 2D or 3D — Mandy does not sew
 }
 
 export interface EstimateBreakdown {
@@ -180,8 +202,12 @@ export async function estimateFactoryCny(
   // but force the top TIER explicitly when anchoring so the intent is clear.
   const tier = anchoredQty ? (TIERS[TIERS.length - 1] as number) : snapTier(spec.quantity);
 
+  const allowed = allowedFactoriesFor(spec);
   const candidates: { factory: string; unitCny: number; inRange: boolean; bd: EstimateBreakdown; fc: FactoryCoef }[] = [];
   for (const [name, fc] of Object.entries(coeffs.factories)) {
+    // measure=true scores the raw model against a quote's ACTUAL supplier, so
+    // the construction gate applies only to live quoting.
+    if (!opts?.measure && !allowed.includes(name)) continue;
     const p = predictFactory(fc, tier, spec, area);
     if (!p) continue;
     const inRange = area >= fc.areaMin * 0.9 && area <= fc.areaMax * 1.1;
@@ -190,7 +216,13 @@ export async function estimateFactoryCny(
   const summary = candidates.map((c) => ({ factory: c.factory, unitCny: r2(c.unitCny), inRange: c.inRange }));
 
   if (candidates.length === 0) {
-    return { ok: false, refused: spec.hasLamination ? "אף מפעל מוכר לא מייצר למינציה בהדפסה למידה הזו — שלח למפעל" : "אין מפעל מוכר שמתמחר את הצירוף הזה — שלח למפעל", areaCm2: r2(area), tier, candidates: summary };
+    const cons = CONSTRUCTION_LABELS[spec.construction ?? "heat_press"];
+    const refused = spec.hasLamination && (spec.construction ?? "heat_press") === "sewing"
+      ? `למינציה על שקית תפורה — WEIWEI לא מלמנת ו-CHEN לא ממודל, שלח למפעל`
+      : spec.hasLamination
+        ? "אף מפעל מוכר לא מייצר למינציה בהדפסה למידה הזו — שלח למפעל"
+        : `אין מפעל ממודל שמייצר ${cons} במידה הזו (המפעל המתאים לפי סיימון, CHEN, בלי טבלת מחירים) — שלח למפעל`;
+    return { ok: false, refused, areaCm2: r2(area), tier, candidates: summary };
   }
   // prefer in-range; among them the cheapest. If none in range → still pick cheapest but flag low.
   const inRange = candidates.filter((c) => c.inRange);
@@ -224,7 +256,8 @@ export async function estimateFactoryCny(
 
   const reasoning: string[] = [
     `שטח השקית = 2·H·W + 2·H·D + W·D = 2·${spec.heightCm}·${spec.widthCm} + 2·${spec.heightCm}·${spec.depthCm} + ${spec.widthCm}·${spec.depthCm} = ${Math.round(area)} ס״מ²`,
-    `מפעל נבחר: ${winner.factory} (הזול מבין ${candidates.length} שמייצרים, כמות ${tier})`,
+    `סוג ייצור: ${CONSTRUCTION_LABELS[spec.construction ?? "heat_press"]}${spec.depthCm > 2 ? " תלת-ממד" : " שטוח"} → לפי הטבלה של סיימון מתאים: ${allowed.join("/")}${" + CHEN (ללא טבלת מחירים)"}`,
+    `מפעל נבחר: ${winner.factory} (כמות ${tier})`,
     spec.hasLamination
       ? `חומר גלם + למינציה = ¥${winner.bd.baseCny.toFixed(3)}`
       : `חומר גלם (בסיס, 1 צבע) = ¥${winner.bd.baseCny.toFixed(3)}`,
