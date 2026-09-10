@@ -46,6 +46,10 @@ export const JOBS = {
   "callback-requests": { label: "בקשות זמן לשיחה", everyMin: 30, via: "github" },
   "elevenlabs-sync": { label: "סנכרון שיחות הסוכן הקולי", everyMin: 5, via: "github" },
   "job-watchdog": { label: "השומר עצמו", everyMin: 30, via: "github" },
+  // Monthly reminders (3rd / 10th). everyMin is the longest month so a 31-day
+  // gap is nominal; lateAfterMin then adds the daily 6h grace on top.
+  "expense-reminder": { label: "תזכורת חודשית — הוצאות", everyMin: 31 * 24 * 60, via: "vercel" },
+  "vat-reminder": { label: "תזכורת חודשית — דיווח מע\"מ", everyMin: 31 * 24 * 60, via: "vercel" },
 } as const satisfies Record<string, JobDef>;
 export type JobName = keyof typeof JOBS;
 

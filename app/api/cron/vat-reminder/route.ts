@@ -7,13 +7,14 @@
  * not in Zoho — the message says exactly which report to open. Full method:
  * zoho project PLAYBOOK.md § דיווח מע"מ + memory `vat-reporting`.
  *
- * Auth: Bearer CRON_SECRET / BOT_SECRET (same as the other crons).
+ * Auth: Bearer CRON_SECRET / BOT_SECRET (same as the other crons). Heartbeat
+ * via withJob → the watchdog WhatsApps Eli if a month passes with no send.
  * Also POST-able for a manual kick with the same auth.
  */
 
 import { NextRequest, NextResponse } from "next/server";
 import { sendEliDM } from "@/lib/notify/eli";
-import { withRequestLog } from "@/lib/observability/log";
+import { withJob } from "@/lib/observability/jobs";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -36,13 +37,19 @@ const REMINDER =
   "⚠️ אם הגיעה סחורה — מע\"מ היבוא מעמיל המכס הוא תשומה מוכרת, תשמור את המסמכים.\n\n" +
   "תגיד ל-Claude \"תחשב לי מע\"מ\" והוא יעשה את כל החישוב.";
 
-const run = withRequestLog("cron", async (req: NextRequest, log) => {
+const run = withJob("vat-reminder", "cron", async (req: NextRequest, log) => {
   const jlog = log.child({ job: "vat-reminder" });
   if (!authed(req)) {
     jlog.warn("unauthorized");
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
   const result = await sendEliDM(REMINDER);
+  // A reminder that never reached the phone is a failed run — say so with a
+  // 5xx, so the heartbeat (withJob) records a failure and the watchdog rings.
+  if (result === "no_jid" || result === "error") {
+    jlog.error("reminder.not_sent", undefined, { notify: result });
+    return NextResponse.json({ ok: false, notify: result }, { status: 500 });
+  }
   jlog.info("reminder.sent", { notify: result });
   return NextResponse.json({ ok: true, notify: result });
 });

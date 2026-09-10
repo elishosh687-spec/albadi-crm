@@ -124,25 +124,10 @@ describe("scheduled jobs: JOBS ↔ withJob ↔ middleware ↔ vercel.json ↔ wo
     ).toEqual([]);
   });
 
-  // ⚠️ REAL VIOLATION TODAY (2026-09-10) — marked `it.fails`, not weakened.
-  // Two monthly Vercel crons are plain withRequestLog routes with no JOBS
-  // entry and no withJob, so the watchdog cannot see them:
-  //   /api/cron/expense-reminder  (3rd of the month, 09:00 UTC)
-  //   /api/cron/vat-reminder      (10th of the month, 09:00 UTC)
-  // Both only WhatsApp Eli a reminder — if either silently stops, the month
-  // close and the VAT filing simply don't get their nudge. Fix: add them to
-  // JOBS (everyMin ≈ 30 days; lateAfterMin gives +6h grace) and wrap with
-  // withJob. Then drop the `.fails` here.
-  it.fails("every vercel.json cron path is a withJob route with a JOBS entry", () => {
+  it("every vercel.json cron path is a withJob route with a JOBS entry", () => {
     const jobPaths = new Set([...routes.values()].flat().map((s) => s.route));
     const unwrapped = vercelCronPaths().filter((p) => !jobPaths.has(p));
     expect(unwrapped, `vercel crons invisible to the watchdog:\n${unwrapped.join("\n")}`).toEqual([]);
-  });
-
-  it("no NEW vercel cron beyond the two known unwrapped ones", () => {
-    const jobPaths = new Set([...routes.values()].flat().map((s) => s.route));
-    const unwrapped = vercelCronPaths().filter((p) => !jobPaths.has(p));
-    expect(unwrapped.sort()).toEqual(["/api/cron/expense-reminder", "/api/cron/vat-reminder"]);
   });
 
   it("every vercel cron route exists", () => {

@@ -91,12 +91,12 @@ branch per CI run (`tests/integration/`, project `integration`, needs
 `NEON_API_KEY`), then 5 Playwright flows on the widget. Plan file:
 `~/.claude/plans/immutable-sprouting-walrus.md`.
 
-**Three `it.fails` are findings, not flakes** (2026-09-10): the two monthly
-Vercel crons `/api/cron/expense-reminder` and `/api/cron/vat-reminder` have no
-`JOBS` entry and no `withJob`, so the watchdog cannot see them; four
-`console.error` calls survive in the dead `/dashboard/v3` tree; and the hour
+**Two `it.fails` are findings, not flakes** (2026-09-10): four
+`console.error` calls survive in the dead `/dashboard/v3` tree, and the hour
 guard's 4-character form (`9:00`) is unreachable while `HOUR_POOL` starts at
 10. When one is fixed the test "fails" by passing — drop the `.fails` then.
+(A third — the two monthly reminder crons missing from `JOBS` — was found by
+the allow-list test and fixed the same day.)
 
 **Known gaps:** `npm run lint` is dead (`next lint` was removed in Next 16 and
 no eslint config exists); `scripts/` is neither type-checked nor tested.
