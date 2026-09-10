@@ -246,6 +246,9 @@ export interface FactoryPricingInput {
    *  orders where the real packing volume differs from the naive per-carton sum.
    *  Weight is unaffected (air pricing is weight-based). Optional. */
   totalCbmOverride?: number;
+  /** "שומר קור" — +10% on factoryUnitCostCny only (lib/factory/thermal.ts).
+   *  ⚠️ On a factory quote the factory may already have priced the lining. */
+  thermalLining?: boolean;
 }
 
 export interface FactoryPricingResult {
@@ -318,6 +321,9 @@ export interface FactoryPricingResult {
   platePerUnitIls?: number;
   plateFeeTotalCostIls?: number;
   plateFeeLogoColors?: number;
+  /** "שומר קור" priced in; thermalAddonCny = the lining's share of the unit cost. */
+  thermalLining?: boolean;
+  thermalAddonCny?: number;
 
   // Split shipment — present only when the operator split the order into an
   // air portion and a sea portion. When set, the customer PDF + WhatsApp caption

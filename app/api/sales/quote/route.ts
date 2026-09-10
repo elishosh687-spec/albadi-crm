@@ -34,6 +34,7 @@ export const POST = withRequestLog("calculator", async (req: NextRequest, log) =
       hasHandles: !!body.hasHandles,
       logoColors: Number(body.logoColors) || 1,
       hasLamination: !!body.hasLamination,
+      thermalLining: !!body.thermalLining,
       shippingOptionId: String(body.shippingOptionId),
       moldPerColorCny: typeof body.moldPerColorCny === "number" ? body.moldPerColorCny : undefined,
     });

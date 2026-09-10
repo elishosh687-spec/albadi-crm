@@ -34,6 +34,8 @@ export interface SalesCatalogInput {
   /** One-time mold in ¥ PER COLOUR — the salesperson can lower it (down to 0) as
    *  negotiation room. Undefined → the sales default (¥1000/colour). */
   moldPerColorCny?: number;
+  /** "שומר קור" — +10% on the bag cost (lib/factory/thermal.ts). */
+  thermalLining?: boolean;
 }
 
 /** The ONLY shape the sales client ever receives for a price. */
@@ -61,7 +63,8 @@ function buildSpec(
   };
   const finishing =
     (input.hasHandles ? "with handles" : "no handles") +
-    (input.hasLamination ? " · laminated" : "");
+    (input.hasLamination ? " · laminated" : "") +
+    (input.thermalLining ? " · thermal lining" : "");
   return {
     description: description || "שקית אלבדי",
     material: "80g non-woven",
@@ -96,6 +99,7 @@ export async function computeCatalogSales(
     hasLamination: input.hasLamination,
     shippingOptionId: input.shippingOptionId,
     moldsCostCny: r2(perColor * colors),
+    thermalLining: input.thermalLining,
   });
   if (!calc?.result) return null;
   const r = calc.result;
@@ -134,6 +138,7 @@ export interface SalesEstimateInput {
   construction?: "heat_press" | "sewing";
   shippingOptionId: string; // s1 | s2
   moldPerColorCny?: number;
+  thermalLining?: boolean;
 }
 
 /**
@@ -166,6 +171,7 @@ export async function computeEstimateSales(
     handles: String(input.hasHandles),
     lamination: String(input.hasLamination),
     construction: input.construction ?? "heat_press",
+    thermal: String(!!input.thermalLining),
     colors: String(colors),
     shipping: input.shippingOptionId || "s2",
     moldsCostCny: String(r2(perColor * colors)),
@@ -198,7 +204,9 @@ export async function computeEstimateSales(
     quantity: full.quantity,
     printing: `${colors} colours`,
     finishing:
-      (input.hasHandles ? "with handles" : "no handles") + (input.hasLamination ? " · laminated" : ""),
+      (input.hasHandles ? "with handles" : "no handles") +
+      (input.hasLamination ? " · laminated" : "") +
+      (input.thermalLining ? " · thermal lining" : ""),
   } as FactoryProductSpec;
   const totalOrderIls = customerTotalExVat(full) ?? r2(full.totalSellingPrice);
   const customer: SalesCustomerQuote = {

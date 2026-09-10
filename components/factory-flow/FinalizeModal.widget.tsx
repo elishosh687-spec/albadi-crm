@@ -5,6 +5,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { hasThermal, looksAlreadyThermal, THERMAL_LABEL, THERMAL_LINING_PCT, withThermalToken } from "@/lib/factory/thermal";
 import { Loader2, X, Sparkles } from "lucide-react";
 import type { FactoryQuoteRow } from "./types";
 import type {
@@ -126,6 +127,9 @@ export function FinalizeModalWidget({
   const [qtyStr, setQtyStr] = useState<string>(s0.quantity ? String(s0.quantity) : "");
   const [printing, setPrinting] = useState<string>(s0.printing ?? "");
   const [finishing, setFinishing] = useState<string>(s0.finishing ?? "");
+  // "שומר קור" lives IN the finishing string, so finalize saves it with the spec
+  // and every later reader (PDF, caption, server re-price) sees the same thing.
+  const thermalOn = hasThermal(finishing);
   const [customerNotes, setCustomerNotes] = useState<string>(s0.customerNotes ?? "");
   const qtyNum = Math.max(1, Math.floor(Number(qtyStr) || s0.quantity || 1));
 
@@ -239,6 +243,7 @@ export function FinalizeModalWidget({
         platePerColorCny: effFr.platePerColorCny,
         logoColors,
         totalCbmOverride: cbmOverrideValid ? cbmOverrideParsed : undefined,
+        thermalLining: thermalOn,
       },
       config
     );
@@ -262,7 +267,7 @@ export function FinalizeModalWidget({
       });
     }
     return base;
-  }, [config, effFr, shippingOptionId, margin, moldsValid, moldsParsed, qtyNum, logoColors, cbmOverrideValid, cbmOverrideParsed, splitMode, splitInput]);
+  }, [config, effFr, shippingOptionId, margin, moldsValid, moldsParsed, qtyNum, logoColors, cbmOverrideValid, cbmOverrideParsed, splitMode, splitInput, thermalOn]);
 
   // Split-shipment: price one portion's shipment (ILS) on the factory carton/CBM
   // data, varying only quantity + shipping method. priceFactoryQuote.totalShipping
@@ -585,6 +590,35 @@ export function FinalizeModalWidget({
                 <div className="grid grid-cols-2 gap-2">
                   <SpecField label="הדפסה" value={printing} onChange={setPrinting} />
                   <SpecField label="גימור" value={finishing} onChange={setFinishing} />
+                </div>
+                {/* "שומר קור" — the price here is the FACTORY's. If we asked them
+                    for a lined bag it is already in their number, and +10% on top
+                    charges the customer twice. Warn, never block: Eli decides. */}
+                <div className="space-y-1">
+                  <label className="flex items-center gap-2 text-[12px] cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={thermalOn}
+                      onChange={(e) => setFinishing(withThermalToken(finishing, e.target.checked))}
+                    />
+                    <span>{THERMAL_LABEL} (+{THERMAL_LINING_PCT}% על עלות השקית)</span>
+                  </label>
+                  {thermalOn &&
+                    (looksAlreadyThermal(
+                      s0.description,
+                      material,
+                      printing,
+                      withThermalToken(finishing, false),
+                      effFr?.notes,
+                    ) ? (
+                      <div className="rounded-md px-2 py-1 text-[11px]" style={{ background: "rgba(224,110,110,0.12)", color: "#e08a8a" }}>
+                        ⚠️ המפעל כנראה כבר תמחר שומר קור (מופיע במפרט/בהערות) — ה-{THERMAL_LINING_PCT}% יחייבו את הלקוח פעמיים.
+                      </div>
+                    ) : (
+                      <div className="rounded-md px-2 py-1 text-[11px]" style={{ background: "rgba(224,169,109,0.12)", color: "#e0a96d" }}>
+                        המחיר מהמפעל הוא לשקית רגילה? אם ביקשת ממנו שומר קור — זה חיוב כפול.
+                      </div>
+                    ))}
                 </div>
                 <div>
                   <label className="block text-[11px] text-muted-foreground mb-0.5">הערות ללקוח (ב‑PDF)</label>

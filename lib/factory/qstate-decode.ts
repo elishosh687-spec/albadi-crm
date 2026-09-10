@@ -1,3 +1,5 @@
+import { hasThermal, THERMAL_LABEL } from "./thermal";
+
 /**
  * Maps the bot's questionnaire option-codes to human labels. Source of truth:
  * lib/autoresponder/questionnaire.ts QUESTIONS array. Keep these in sync if the
@@ -111,6 +113,9 @@ export function humanizeFinishing(en: string): string {
   else if (noHandles) parts.push("ללא ידיות");
   if (laminated) parts.push("עם למינציה");
   else if (notLam) parts.push("ללא למינציה");
+  // Anything beyond handles/lamination used to be DROPPED here, so a thermal
+  // lining would have vanished from every PDF while the customer paid for it.
+  if (hasThermal(en)) parts.push(THERMAL_LABEL);
   return parts.length ? parts.join(", ") : en;
 }
 

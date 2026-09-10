@@ -36,6 +36,9 @@ export interface EstimateQuoteInput {
   shippingOptionId: string;
   marginOverride?: number | null;
   moldsCostCny?: number;
+  /** "שומר קור" — applied ONCE, in calculateQuote. Never in estimateFactoryCny,
+   *  or the lining would be charged twice (×1.21). */
+  thermalLining?: boolean;
 }
 
 export interface EstimateQuoteOutput {
@@ -146,6 +149,7 @@ export async function estimateQuoteForSpec(
     shippingOptionId: input.shippingOptionId,
     selectedFeatureIds: spec.hasLamination ? ["f1"] : [],
     moldsCostCny: input.moldsCostCny ?? 0,
+    thermalLining: input.thermalLining,
   };
 
   const result = calculateQuote(form, cfg);

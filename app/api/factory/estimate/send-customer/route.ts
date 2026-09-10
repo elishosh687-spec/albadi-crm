@@ -27,6 +27,7 @@ export const POST = withRequestLog("calculator", async (req: NextRequest, log) =
       logoColors: Math.max(1, parseInt(String(b.colors ?? "1"), 10) || 1),
     },
     shippingOptionId: typeof b.shipping === "string" ? b.shipping : null,
+    thermalLining: b.thermal === true || b.thermal === "true",
     customerName: typeof b.customerName === "string" ? b.customerName : undefined,
     hostHeader: req.headers.get("host"),
     draftId: typeof b.draftId === "string" && b.draftId ? b.draftId : undefined,

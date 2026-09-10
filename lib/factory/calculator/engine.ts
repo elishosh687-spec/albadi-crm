@@ -6,6 +6,7 @@
  */
 
 import { ceilAgorot } from "@/lib/factory/rounding";
+import { thermalMultiplier } from "../thermal";
 import { colorAddonFromTable } from "./color-addon";
 import type {
   AppConfig,
@@ -110,8 +111,13 @@ export function calculateQuote(
   // into per-bag price. The customer sees "תבניות (חד פעמי)" as a separate row.
   const moldsTotalCny = Math.max(formData.moldsCostCny ?? 0, 0);
   const moldsPerUnitCny = moldsTotalCny > 0 ? moldsTotalCny / quantity : 0;
-  const unitProductionCny =
-    effectiveBaseCny + colorAddonCny + laminationColorCostCny;
+  // Thermal lining (שומר קור): +10% on the BAG — base + colour add-on, with
+  // handles and lamination already inside the base — never on the plate term,
+  // shipping or molds. The estimator's cost arrives here as the base, so it is
+  // applied exactly once. See lib/factory/thermal.ts.
+  const bagCny = effectiveBaseCny + colorAddonCny;
+  const thermalAddonCny = bagCny * (thermalMultiplier(formData.thermalLining) - 1);
+  const unitProductionCny = bagCny + thermalAddonCny + laminationColorCostCny;
   const unitProductionUsd = unitProductionCny / exchangeRates.usdToCny;
 
   // Step 4: Logistics
@@ -260,6 +266,8 @@ export function calculateQuote(
     laminationAddonCny: r2(laminationAddonCny),
     logoAddonCny: r2(logoAddonCny),
     plateFeeCny: r2(plateFeeCny),
+    thermalLining: !!formData.thermalLining,
+    thermalAddonCny: Math.round(thermalAddonCny * 1000) / 1000,
     moldsTotalCny: r2(moldsTotalCny),
     moldsPerUnitCny: r3(moldsPerUnitCny),
     moldsTotalCostIls: r2(moldsTotalCostIlsExact),

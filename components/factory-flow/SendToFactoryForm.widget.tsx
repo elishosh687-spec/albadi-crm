@@ -12,6 +12,7 @@
  */
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { hasThermal, THERMAL_FINISHING_TOKEN, THERMAL_LABEL } from "@/lib/factory/thermal";
 import { Loader2, Send, ClipboardCheck } from "lucide-react";
 import { PRODUCT_LABEL, PRODUCT_DIMS, QUANTITY_VALUE } from "@/lib/factory/qstate-decode";
 import { widgetUrl } from "./widget-url";
@@ -124,6 +125,7 @@ export function SendToFactoryFormWidget({
         logoColors: clampColors(d.printing),
         hasHandles: /with handles/i.test(String(d.finishing ?? "")),
         hasLamination: /laminated/i.test(String(d.finishing ?? "")) && !/not laminated/i.test(String(d.finishing ?? "")),
+        hasThermal: hasThermal(String(d.finishing ?? "")),
         notes: String(d.notes ?? ""),
       };
     }
@@ -155,6 +157,7 @@ export function SendToFactoryFormWidget({
       logoColors: colorsNum,
       hasHandles: handles,
       hasLamination: false,
+      hasThermal: false,
       notes: "",
     };
   }, [qState, draft]);
@@ -169,6 +172,7 @@ export function SendToFactoryFormWidget({
   const [logoColors, setLogoColors] = useState<number>(presets.logoColors);
   const [hasHandles, setHasHandles] = useState<boolean>(presets.hasHandles);
   const [hasLamination, setHasLamination] = useState<boolean>(presets.hasLamination);
+  const [thermalOn, setThermalOn] = useState<boolean>(presets.hasThermal);
   const [notes, setNotes] = useState(presets.notes ?? "");
   const [submitting, setSubmitting] = useState(false);
   const [savingDraft, setSavingDraft] = useState(false);
@@ -220,6 +224,8 @@ export function SendToFactoryFormWidget({
     const finishingParts: string[] = [];
     finishingParts.push(hasHandles ? "With handles" : "No handles");
     finishingParts.push(hasLamination ? "Laminated" : "Not laminated");
+    // Asks the factory for the lining, so their price includes it.
+    if (thermalOn) finishingParts.push(THERMAL_FINISHING_TOKEN);
     return {
       description: description.trim(),
       material: material.trim(),
@@ -407,6 +413,15 @@ export function SendToFactoryFormWidget({
           options={[
             { value: "no", label: "ללא" },
             { value: "yes", label: "עם למינציה" },
+          ]}
+        />
+        <SelectField
+          label={THERMAL_LABEL}
+          value={thermalOn ? "yes" : "no"}
+          onChange={(v) => setThermalOn(v === "yes")}
+          options={[
+            { value: "no", label: "ללא" },
+            { value: "yes", label: `עם ${THERMAL_LABEL}` },
           ]}
         />
       </div>

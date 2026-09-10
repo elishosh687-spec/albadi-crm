@@ -15,6 +15,7 @@
  */
 
 import { useEffect, useMemo, useState } from "react";
+import { hasThermal } from "@/lib/factory/thermal";
 import { Loader2, X, Sparkles, ChevronDown, MessageCircle, Ship, Plane, Copy, Check } from "lucide-react";
 import { cn } from "@/lib/cn";
 import type { FactoryQuoteRow } from "./types";
@@ -251,6 +252,8 @@ export function CombinedCalcModalWidget({
           },
           profitMarginOverride: st.margin,
           moldsCostCny: moldsValid ? molds : 0,
+          // Same source as the single finalize: the lining lives in finishing.
+          thermalLining: hasThermal(st.finishing),
         },
         config
       );

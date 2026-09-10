@@ -21,6 +21,7 @@
  */
 
 import { ceilAgorot } from "@/lib/factory/rounding";
+import { thermalMultiplier } from "./thermal";
 import type {
   FactoryPricingConfig,
   FactoryPricingInput,
@@ -205,7 +206,12 @@ export function priceFactoryQuote(
   const platePerUnitCny =
     plateFeeTotalCny > 0 ? plateFeeTotalCny / quantity : 0;
 
-  const unitProductionCny = input.factoryUnitCostCny;
+  // Thermal lining (שומר קור): +10% on the factory's BAG cost only — shipping,
+  // the plate fee and molds are all computed separately. ⚠️ On a factory quote
+  // the factory may have priced the lining already; the finalize screen warns
+  // (looksAlreadyThermal) because this line cannot know.
+  const thermalAddonCny = input.factoryUnitCostCny * (thermalMultiplier(input.thermalLining) - 1);
+  const unitProductionCny = input.factoryUnitCostCny + thermalAddonCny;
   const unitCostUsd = unitProductionCny * cnyToUsd;
   const unitShippingUsd = computeShippingPerUnitUsd(
     shipping,
@@ -311,6 +317,9 @@ export function priceFactoryQuote(
           plateFeeTotalCostIls: r2(plateFeeTotalCostIlsExact),
           plateFeeLogoColors: logoColorsIn,
         }
+      : {}),
+    ...(input.thermalLining
+      ? { thermalLining: true, thermalAddonCny: Math.round(thermalAddonCny * 1000) / 1000 }
       : {}),
   };
 }

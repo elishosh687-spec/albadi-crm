@@ -1,6 +1,7 @@
 "use client";
 
 import { useLaminationDefault } from "@/lib/factory/calculator/use-lamination-default";
+import { THERMAL_LABEL, THERMAL_LINING_PCT, withThermalToken } from "@/lib/factory/thermal";
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { Loader2, Send, Copy, Check, Search, X, ChevronDown, Calculator, Pencil, Ship, Plane, Repeat, Minus, Plus } from "lucide-react";
 import { cn } from "@/lib/cn";
@@ -67,6 +68,7 @@ export interface EstimatePrefill {
   colors?: number;
   handles?: boolean;
   lam?: boolean;
+  thermal?: boolean;
 }
 
 export interface OperatorPrefill {
@@ -75,6 +77,7 @@ export interface OperatorPrefill {
   colors?: number;
   handles?: boolean;
   lam?: boolean;
+  thermal?: boolean;
 }
 
 /** Operator-tab prefill for a MANUAL product. Strings because they seed text
@@ -156,6 +159,8 @@ export function CalculatorView({ products, quantityTiers, shippingOptions, initi
   const [qtyId, setQtyId]         = useState(quantityTiers[0]?.id ?? "q0");
   const [handles, setHandles]     = useState(operatorPrefill?.handles ?? true);
   const [lamination, setLamination] = useState(operatorPrefill?.lam ?? false);
+  // "שומר קור" — +10% on the bag cost only (lib/factory/thermal.ts).
+  const [thermal, setThermal] = useState(operatorPrefill?.thermal ?? false);
   const [colors, setColors]       = useState(operatorPrefill?.colors ?? 1);
   const [shippingId, setShippingId] = useState(manualPrefill?.shippingId ?? shippingOptions.find((s) => s.type === "sea")?.id ?? shippingOptions[0]?.id ?? "s2");
   const [splitMode, setSplitMode] = useState(false);
@@ -243,6 +248,7 @@ export function CalculatorView({ products, quantityTiers, shippingOptions, initi
         qty: qtyId,
         handles: String(manualMode ? false : handles),
         lamination: String(manualMode ? false : lamination),
+        thermal: String(thermal),
         colors: String(manualMode ? 1 : colors),
         shipping: opts.shippingId,
         margin: String(currentMargin),
@@ -265,7 +271,7 @@ export function CalculatorView({ products, quantityTiers, shippingOptions, initi
       return params;
     },
     [
-      manualMode, productId, qtyId, handles, lamination, colors, currentMargin,
+      manualMode, productId, qtyId, handles, lamination, thermal, colors, currentMargin,
       moldsValid, moldsParsed, manualCnyNum, manualDesc,
       manualW, manualH, manualD,
       manualCartonQty, manualCartonWeight, manualCartonL, manualCartonW, manualCartonH,
@@ -466,6 +472,7 @@ export function CalculatorView({ products, quantityTiers, shippingOptions, initi
           colors,
           handles,
           lamination,
+          thermal,
           shippingOptionId: shippingId || undefined,
           ...(manualMode && manualValid
             ? {
@@ -847,6 +854,16 @@ export function CalculatorView({ products, quantityTiers, shippingOptions, initi
                   />
                 </AddonField>
               )}
+
+              {/* thermal lining — +10% on the bag cost; shipping, plates and molds untouched */}
+              <AddonField label={THERMAL_LABEL}>
+                <OptionRow
+                  label="בטנה תרמית"
+                  delta={`+${THERMAL_LINING_PCT}% על השקית`}
+                  active={thermal}
+                  onToggle={() => setThermal(!thermal)}
+                />
+              </AddonField>
             </div>
           </Section>
 
@@ -1230,6 +1247,7 @@ function EstimateTab({ apiToken, shippingOptions, sid, leadName, initialMargins,
   const [colors, setColors] = useState(prefill?.colors ?? 1);
   const [handles, setHandles] = useState(prefill?.handles ?? true);
   const [lam, setLam] = useState(prefill?.lam ?? false);
+  const [thermal, setThermal] = useState(prefill?.thermal ?? false);
   const [construction, setConstruction] = useState<"heat_press" | "sewing">("heat_press");
   const [shippingId, setShippingId] = useState(shippingOptions.find((s) => s.type === "sea")?.id ?? shippingOptions[0]?.id ?? "s2");
   const [splitMode, setSplitMode] = useState(false);
@@ -1280,7 +1298,7 @@ function EstimateTab({ apiToken, shippingOptions, sid, leadName, initialMargins,
     if (!valid || geoBlocked) { setData(null); return; }
     setLoading(true); setErr(null);
     try {
-      const p = new URLSearchParams({ heightCm: h, depthCm: d || "0", widthCm: w, qty, colors: String(colors), handles: String(handles), lamination: String(lam), construction, shipping: shippingId });
+      const p = new URLSearchParams({ heightCm: h, depthCm: d || "0", widthCm: w, qty, colors: String(colors), handles: String(handles), lamination: String(lam), thermal: String(thermal), construction, shipping: shippingId });
       if (moldsValid) p.set("moldsCostCny", String(moldsParsed));
       if (marginOverrideValid) p.set("margin", String(marginOverrideParsed));
       if (apiToken) p.set("widget_token", apiToken);
@@ -1289,7 +1307,7 @@ function EstimateTab({ apiToken, shippingOptions, sid, leadName, initialMargins,
       if (!res.ok || !j.ok) { setErr(j.error ?? `HTTP ${res.status}`); setData(null); return; }
       setData(j);
     } catch (e) { setErr(e instanceof Error ? e.message : String(e)); setData(null); } finally { setLoading(false); }
-  }, [valid, geoBlocked, h, d, w, qty, colors, handles, lam, shippingId, apiToken, moldsValid, moldsParsed, marginOverrideValid, marginOverrideParsed]);
+  }, [valid, geoBlocked, h, d, w, qty, colors, handles, lam, thermal, shippingId, apiToken, moldsValid, moldsParsed, marginOverrideValid, marginOverrideParsed]);
 
   useEffect(() => { run(); }, [run]);
 
@@ -1304,7 +1322,7 @@ function EstimateTab({ apiToken, shippingOptions, sid, leadName, initialMargins,
   // Split-shipment: price one portion's shipment (ILS) via the estimate endpoint,
   // varying only quantity + shipping method (same dims/spec/margin).
   const priceEstimateShipmentIls = useCallback(async (q: number, shipId: string) => {
-    const p = new URLSearchParams({ heightCm: h, depthCm: d || "0", widthCm: w, qty: String(q), colors: String(colors), handles: String(handles), lamination: String(lam), construction, shipping: shipId });
+    const p = new URLSearchParams({ heightCm: h, depthCm: d || "0", widthCm: w, qty: String(q), colors: String(colors), handles: String(handles), lamination: String(lam), thermal: String(thermal), construction, shipping: shipId });
     if (moldsValid) p.set("moldsCostCny", String(moldsParsed));
     if (marginOverrideValid) p.set("margin", String(marginOverrideParsed));
     if (apiToken) p.set("widget_token", apiToken);
@@ -1317,7 +1335,7 @@ function EstimateTab({ apiToken, shippingOptions, sid, leadName, initialMargins,
       cbm: j.result?.totalCbm,
       weightKg: j.result?.totalWeightKg,
     };
-  }, [h, d, w, colors, handles, lam, apiToken, moldsValid, moldsParsed, marginOverrideValid, marginOverrideParsed]);
+  }, [h, d, w, colors, handles, lam, thermal, apiToken, moldsValid, moldsParsed, marginOverrideValid, marginOverrideParsed]);
 
   const est = data?.estimate;
   const r = data?.result; const c = data?.computed;
@@ -1387,6 +1405,7 @@ function EstimateTab({ apiToken, shippingOptions, sid, leadName, initialMargins,
         colors,
         handles,
         lamination: lam,
+        thermal,
         shipping: shippingId,
         cartonConfidence: est.carton?.confidence,
         totalIls: r.totalOrderPriceIls,
@@ -1499,6 +1518,7 @@ function EstimateTab({ apiToken, shippingOptions, sid, leadName, initialMargins,
             <div className="flex gap-6 lux-wrap-sm">
               <Toggle label="ידיות" value={handles} onChange={setHandles} />
               <Toggle label="למינציה" value={lam} onChange={(v) => { markLamTouched(); setLam(v); }} />
+              <Toggle label={`${THERMAL_LABEL} (+${THERMAL_LINING_PCT}%)`} value={thermal} onChange={setThermal} />
               <div className="flex flex-col gap-1">
                 <label className="text-sm font-medium">סוג ייצור</label>
                 <select value={construction} onChange={(e) => setConstruction(e.target.value as "heat_press" | "sewing")} className={SELECT_CLS}>
@@ -2350,6 +2370,9 @@ function buildQuoteText(opts: {
     `צבעי לוגו: ${logoColors}`,
     `ידיות: ${opts.result.hasHandles ? "כן" : "ללא"}`,
     `למינציה: ${hasLamination ? "כן" : "ללא"}`,
+    // Priced in, so the spec must name it — otherwise the customer pays 10% for
+    // something the quote never mentions.
+    opts.result.thermalLining ? `${THERMAL_LABEL}: כן` : null,
     split
       ? `שיטת שילוח: מפוצל — ✈️ ${split.airLabel} + 🚢 ${split.seaLabel}`
       : shippingMethod
@@ -2422,6 +2445,7 @@ interface LeadPickerOption {
 interface EstimateSendContext {
   heightCm: number; depthCm: number; widthCm: number; qty: number;
   colors: number; handles: boolean; lamination: boolean; shipping: string;
+  thermal?: boolean;
   cartonConfidence?: "high" | "low";
   totalIls?: number;
   /** Part-air/part-sea split, when configured. Sent to the estimate endpoint so
@@ -2448,6 +2472,7 @@ interface FactorySpecContext {
   material: string;
   widthCm: number; heightCm: number; depthCm: number;
   quantity: number; colors: number; handles: boolean; lamination: boolean;
+  thermal?: boolean;
   shippingOptionId?: string;
   // Manual-product mode only: the ¥ cost + carton the operator typed. Stored on
   // the spec so the quote can be reopened and recalculated (Eli 2026-09-09).
@@ -2642,7 +2667,7 @@ function useQuoteShare({
     try {
       const res = await fetch(apiBase("/api/widget/factory/estimate/send-customer", "/api/factory/estimate/send-customer"), {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sid: pickedSid, customerName: pickedName, heightCm: estimate.heightCm, depthCm: estimate.depthCm, widthCm: estimate.widthCm, qty: estimate.qty, colors: estimate.colors, handles: estimate.handles, lamination: estimate.lamination, shipping: estimate.shipping, split: estimate.split ?? null, paymentPlanId: estimate.paymentPlanId }),
+        body: JSON.stringify({ sid: pickedSid, customerName: pickedName, heightCm: estimate.heightCm, depthCm: estimate.depthCm, widthCm: estimate.widthCm, qty: estimate.qty, colors: estimate.colors, handles: estimate.handles, lamination: estimate.lamination, thermal: estimate.thermal, shipping: estimate.shipping, split: estimate.split ?? null, paymentPlanId: estimate.paymentPlanId }),
       });
       const j = await res.json().catch(() => ({}));
       if (!res.ok || !j?.ok) { setError(j?.message ?? j?.error ?? `HTTP ${res.status}`); return; }
@@ -2666,6 +2691,7 @@ function useQuoteShare({
           colors: estimate.colors,
           handles: estimate.handles,
           lamination: estimate.lamination,
+          thermal: estimate.thermal,
           shippingOptionId: estimate.shipping,
         }
       : null);
@@ -2681,7 +2707,9 @@ function useQuoteShare({
         description: fs.description, material: fs.material,
         widthCm: fs.widthCm, heightCm: fs.heightCm, depthCm: fs.depthCm, quantity: fs.quantity,
         printing: `${fs.colors} color(s)`,
-        finishing: `${fs.handles ? "With handles" : "No handles"} / ${fs.lamination ? "Laminated" : "Not laminated"}`,
+        // The lining rides the finishing string so it reaches the factory and
+        // survives every save schema (lib/factory/thermal.ts).
+        finishing: withThermalToken(`${fs.handles ? "With handles" : "No handles"} / ${fs.lamination ? "Laminated" : "Not laminated"}`, !!fs.thermal),
         ...(fs.shippingOptionId ? { shippingOptionId: fs.shippingOptionId } : {}),
         ...(fs.customInput ? { customInput: fs.customInput } : {}),
       };
@@ -2710,7 +2738,9 @@ function useQuoteShare({
         description: fs.description, material: fs.material,
         widthCm: fs.widthCm, heightCm: fs.heightCm, depthCm: fs.depthCm, quantity: fs.quantity,
         printing: `${fs.colors} color(s)`,
-        finishing: `${fs.handles ? "With handles" : "No handles"} / ${fs.lamination ? "Laminated" : "Not laminated"}`,
+        // The lining rides the finishing string so it reaches the factory and
+        // survives every save schema (lib/factory/thermal.ts).
+        finishing: withThermalToken(`${fs.handles ? "With handles" : "No handles"} / ${fs.lamination ? "Laminated" : "Not laminated"}`, !!fs.thermal),
         ...(fs.shippingOptionId ? { shippingOptionId: fs.shippingOptionId } : {}),
         ...(fs.customInput ? { customInput: fs.customInput } : {}),
       };

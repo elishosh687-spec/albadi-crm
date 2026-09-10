@@ -11,6 +11,7 @@
  */
 
 import { priceFactoryQuote } from "./pricing";
+import { hasThermal } from "./thermal";
 import { customerTotalExVat } from "./customer-total";
 import { ceilAgorot } from "./rounding";
 import {
@@ -116,6 +117,7 @@ export function priceQuoteForCombine(
       },
       profitMarginOverride: margin,
       moldsCostCny: 0,
+      thermalLining: hasThermal(q.productSpec.finishing),
     },
     config
   );

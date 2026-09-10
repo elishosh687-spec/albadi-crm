@@ -9,6 +9,7 @@
  */
 
 import { db } from "@/lib/db";
+import { hasThermal } from "@/lib/factory/thermal";
 import { factoryQuoteRequests, leads } from "@/drizzle/schema";
 import { eq } from "drizzle-orm";
 import { priceFactoryQuote } from "@/lib/factory/pricing";
@@ -255,6 +256,9 @@ export async function finalizeQuote(
     platePerColorCny: resp.platePerColorCny,
     logoColors,
     totalCbmOverride: body.totalCbmOverride,
+    // Read from the SAVED finishing — the modal toggles the lining by editing
+    // that string, so the price saved here is the price the modal showed.
+    thermalLining: hasThermal(spec.finishing),
   };
   let pricing = priceFactoryQuote(baseInput, config);
 

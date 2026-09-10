@@ -10,6 +10,7 @@
  */
 
 import { useLaminationDefault } from "@/lib/factory/calculator/use-lamination-default";
+import { THERMAL_LABEL, THERMAL_LINING_PCT } from "@/lib/factory/thermal";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Loader2, Search, Check, Send, Package, User } from "lucide-react";
 import { cn } from "@/lib/cn";
@@ -58,6 +59,7 @@ export function SalesCalculator({ token }: { token: string }) {
   const [handles, setHandles] = useState(true);
   const [colors, setColors] = useState(1);
   const [lamination, setLamination] = useState(false);
+  const [thermal, setThermal] = useState(false); // "שומר קור" +10% on the bag
   const [construction, setConstruction] = useState<"heat_press" | "sewing">("heat_press");
   const [shippingId, setShippingId] = useState(SHIPPING.find((s) => s.id === "s2")?.id ?? SHIPPING[0]?.id ?? "s2");
   const [moldPerColor, setMoldPerColor] = useState<string>("1000"); // ¥ per colour, editable, 0 = none
@@ -78,6 +80,7 @@ export function SalesCalculator({ token }: { token: string }) {
       hasHandles: handles,
       logoColors: colors,
       hasLamination: lamination,
+      thermalLining: thermal,
       construction,
       shippingOptionId: shippingId,
       moldPerColorCny: moldPerColor.trim() === "" ? undefined : Math.max(0, parseInt(moldPerColor, 10) || 0),
@@ -99,7 +102,7 @@ export function SalesCalculator({ token }: { token: string }) {
       quantityOverride: custom || null,
       ...common,
     };
-  }, [mode, productId, dimH, dimD, dimW, tierId, customQty, handles, colors, lamination, construction, shippingId, moldPerColor]);
+  }, [mode, productId, dimH, dimD, dimW, tierId, customQty, handles, colors, lamination, thermal, construction, shippingId, moldPerColor]);
 
   const estimateReady = mode !== "estimate" || (Number(dimW) > 0 && Number(dimH) > 0);
 
@@ -276,6 +279,7 @@ export function SalesCalculator({ token }: { token: string }) {
       <div className="flex flex-wrap gap-2">
         <Toggle on={handles} set={setHandles} label="ידיות" />
         <Toggle on={lamination} set={(v) => { markLamTouched(); setLamination(v); }} label="למינציה" />
+        <Toggle on={thermal} set={setThermal} label={`${THERMAL_LABEL} (+${THERMAL_LINING_PCT}%)`} />
         {mode === "estimate" && (
           <label className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-border bg-card/40 text-sm">
             <span className="text-muted-foreground">סוג ייצור</span>

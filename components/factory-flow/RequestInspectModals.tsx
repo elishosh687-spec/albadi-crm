@@ -14,6 +14,7 @@
  */
 
 import { useEffect, useState } from "react";
+import { hasThermal } from "@/lib/factory/thermal";
 import { X, Loader2, Sparkles, Send, ExternalLink, BookMarked } from "lucide-react";
 import { matchCatalogProduct, type CatalogDim } from "@/lib/factory/catalog-dims";
 
@@ -82,6 +83,7 @@ export function fullCalculatorHref(row: RequestRow, token: string, catalog: Cata
     p.set("opColors", String(colors));
     p.set("opHandles", String(handles));
     p.set("opLam", String(lamination));
+    p.set("opThermal", String(hasThermal(s.finishing)));
   } else {
     p.set("tab", "estimate");
     p.set("estH", String(s.heightCm ?? ""));
@@ -91,6 +93,7 @@ export function fullCalculatorHref(row: RequestRow, token: string, catalog: Cata
     p.set("estColors", String(colors));
     p.set("estHandles", String(handles));
     p.set("estLam", String(lamination));
+    p.set("estThermal", String(hasThermal(s.finishing)));
   }
   if (row.leadSid && !row.leadSid.startsWith("manual_")) p.set("sid", row.leadSid);
   return `/widget/calculator?${p.toString()}`;

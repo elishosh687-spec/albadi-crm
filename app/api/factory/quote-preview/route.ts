@@ -73,6 +73,7 @@ export const GET = withRequestLog("calculator", async (req: NextRequest, log) =>
   const handles    = sp.get("handles") === "true";
   const lamination = sp.get("lamination") === "true";
   const colors     = Math.max(1, parseInt(sp.get("colors") ?? "1", 10) || 1);
+  const thermal    = sp.get("thermal") === "true";
   const marginRaw = sp.get("margin");
   const marginOverride = marginRaw !== null ? parseFloat(marginRaw) : null;
   const qtyOverrideRaw = sp.get("qtyOverride");
@@ -98,6 +99,8 @@ export const GET = withRequestLog("calculator", async (req: NextRequest, log) =>
     shippingOptionId: shipping,
     selectedFeatureIds: isCustom ? [] : lamination ? ["f1"] : [],
     moldsCostCny,
+    // Applies to a hand-typed ¥ cost too: the operator ticks it deliberately.
+    thermalLining: thermal,
   };
 
   const result = calculateQuote(form, cfg);

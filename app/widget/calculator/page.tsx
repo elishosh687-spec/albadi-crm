@@ -35,12 +35,14 @@ interface SearchParams {
   estColors?: string;
   estHandles?: string;
   estLam?: string;
+  estThermal?: string;
   // Operator-tab (catalog) prefill: a known SKU + qty/features.
   opProduct?: string;
   opQty?: string;
   opColors?: string;
   opHandles?: string;
   opLam?: string;
+  opThermal?: string;
   // Recalculate an existing draft: its factory_quote_requests id. "שמור כטיוטה"
   // updates it in place; "שלח אומדן ללקוח" marks it sent.
   draftId?: string;
@@ -256,6 +258,7 @@ export default async function CalculatorWidgetPage({
                 colors: params.opColors ? parseInt(params.opColors, 10) || 1 : undefined,
                 handles: params.opHandles === "true" ? true : params.opHandles === "false" ? false : undefined,
                 lam: params.opLam === "true" ? true : params.opLam === "false" ? false : undefined,
+                thermal: params.opThermal === "true",
               }
             : undefined
         }
@@ -269,6 +272,7 @@ export default async function CalculatorWidgetPage({
                 colors: params.estColors ? parseInt(params.estColors, 10) || 1 : undefined,
                 handles: params.estHandles === "true" ? true : params.estHandles === "false" ? false : undefined,
                 lam: params.estLam === "true" ? true : params.estLam === "false" ? false : undefined,
+                thermal: params.estThermal === "true",
               }
             : undefined
         }

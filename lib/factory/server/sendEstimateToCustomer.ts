@@ -8,6 +8,7 @@
  * Used by POST /api/factory/estimate/send-customer (+ widget variant).
  */
 import { db } from "@/lib/db";
+import { hasThermal, THERMAL_LABEL, withThermalToken } from "@/lib/factory/thermal";
 import { leads } from "@/drizzle/schema";
 import { eq } from "drizzle-orm";
 import { sendBridgeMessage } from "@/lib/bridge/client";
@@ -58,6 +59,7 @@ function buildEstimateCaption(
     `צבעי לוגו: ${colors}`,
     `ידיות: ${hasHandles ? "כן" : "ללא"}`,
     `למינציה: ${hasLam ? "כן" : "ללא"}`,
+    hasThermal(spec.finishing) ? `${THERMAL_LABEL}: כן` : null,
     "",
     ...(pricing.shippingSplit
       ? (() => {
@@ -120,6 +122,8 @@ export interface SendEstimateInput {
   /** Payment schedule for THIS send (preset id or `custom_NN`); omitted → the
    *  operator's configured default. */
   paymentPlanId?: string | null;
+  /** "שומר קור" — +10% on the bag cost (lib/factory/thermal.ts). */
+  thermalLining?: boolean;
 }
 export type SendEstimateResult =
   | { ok: true; wa_message_id: string; status: string; unitIls: number; totalIls: number; pdf: boolean }
@@ -146,6 +150,7 @@ export async function sendEstimateToCustomer(input: SendEstimateInput): Promise<
         heightCm: est.carton.heightCm,
       },
       moldsCostCny: est.plateFeeOneTimeCny ?? 0,
+      thermalLining: input.thermalLining,
     },
     config
   );
@@ -179,7 +184,10 @@ export async function sendEstimateToCustomer(input: SendEstimateInput): Promise<
     // Exactly the flag that was PRICED. The caption and the PDF both read this
     // string, so re-deriving lamination from the colour count here is how a
     // quote comes to say "עם למינציה" while priced without it.
-    finishing: `${s.hasHandles ? "With handles" : "No handles"} / ${s.hasLamination ? "Laminated" : "Not laminated"}`,
+    finishing: withThermalToken(
+      `${s.hasHandles ? "With handles" : "No handles"} / ${s.hasLamination ? "Laminated" : "Not laminated"}`,
+      !!input.thermalLining,
+    ),
     shippingOptionId: shippingOptionId ?? undefined,
   };
 

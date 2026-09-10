@@ -11,6 +11,7 @@
 
 import { suggestsLamination } from "@/lib/factory/calculator/lamination";
 import { useLaminationDefault } from "@/lib/factory/calculator/use-lamination-default";
+import { THERMAL_FINISHING_TOKEN, THERMAL_LABEL } from "@/lib/factory/thermal";
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import { Loader2, Send, CheckCircle2, Search, X, User } from "lucide-react";
 import { LuxShell, LuxTitle, LuxAccent, LuxCTA, Section } from "@/components/widget-ui/lux";
@@ -70,6 +71,7 @@ const EMPTY_SPEC = {
   logoColors: 1,
   hasHandles: true,
   hasLamination: false,
+  hasThermal: false,
   notes: "",
 };
 
@@ -228,6 +230,8 @@ export function SalesQuoteRequestForm({ apiToken, salesMode = false }: { apiToke
       const finishingParts = [
         f.hasHandles ? "With handles" : "No handles",
         f.hasLamination ? "Laminated" : "Not laminated",
+        // Tells the factory we want the lining, so THEIR price includes it.
+        ...(f.hasThermal ? [THERMAL_FINISHING_TOKEN] : []),
       ];
 
       // The salesperson's request is parked SPEC-ONLY — no price (Eli 2026-07-23).
@@ -511,6 +515,15 @@ export function SalesQuoteRequestForm({ apiToken, salesMode = false }: { apiToke
               options={[
                 { value: "no", label: "ללא" },
                 { value: "yes", label: "עם למינציה" },
+              ]}
+            />
+            <SelectField
+              label={THERMAL_LABEL}
+              value={f.hasThermal ? "yes" : "no"}
+              onChange={(v) => set("hasThermal", v === "yes")}
+              options={[
+                { value: "no", label: "ללא" },
+                { value: "yes", label: `עם ${THERMAL_LABEL}` },
               ]}
             />
           </div>

@@ -51,6 +51,8 @@ export const GET = withRequestLog("calculator", async (req: NextRequest, log) =>
     construction: sp.get("construction") === "sewing" ? "sewing" : "heat_press",
   };
   const shipping = sp.get("shipping") || "s1";
+  // "שומר קור" — rides the engine form; estimateFactoryCny never sees it.
+  const thermalLining = sp.get("thermal") === "true";
   // Optional operator overrides (mirror the regular calculator):
   //   margin       — target profit % override (null → system tier margins)
   //   moldsCostCny — Eli's own one-time mold/template fee, ADDED on top of the
@@ -104,6 +106,7 @@ export const GET = withRequestLog("calculator", async (req: NextRequest, log) =>
     shippingOptionId: shipping,
     selectedFeatureIds: spec.hasLamination ? ["f1"] : [],
     moldsCostCny: userMoldsCny,
+    thermalLining,
   };
   const result = calculateQuote(form, cfg);
   if (!result) return NextResponse.json({ ok: true, estimate: { ...est, ok: false, refused: "החישוב נכשל — שלח למפעל" } });

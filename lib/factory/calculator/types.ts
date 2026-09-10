@@ -112,6 +112,8 @@ export interface QuoteFormData {
   // one-time line in the quote (not amortized into per-bag price). The same
   // margin applies, but it surfaces as its own row in the PDF and breakdown.
   moldsCostCny?: number;
+  /** "שומר קור" — +10% on the bag cost only (lib/factory/thermal.ts). */
+  thermalLining?: boolean;
 }
 
 export interface QuoteResult {
@@ -167,6 +169,12 @@ export interface QuoteResult {
 
   /** Negotiation cushion baked into sellingPricePerUnitIls, ILS per bag. 0=off. */
   negotiationBufferPerUnitIls: number;
+
+  /** "שומר קור" priced in. thermalAddonCny is the lining's share of
+   *  unitProductionCny, so the boss breakdown can name it instead of letting it
+   *  vanish into the "bag" remainder. */
+  thermalLining: boolean;
+  thermalAddonCny: number;
 
   currency: string;
 }

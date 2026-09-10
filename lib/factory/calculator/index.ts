@@ -193,6 +193,8 @@ export interface CalculateByCodesInput {
    *  ¥500 × colours; the bot auto-quote leaves it 0. Forwarded to the engine so
    *  a caller (e.g. the sales screen) can price IDENTICALLY to quote-preview. */
   moldsCostCny?: number;
+  /** "שומר קור" — +10% on the bag cost (lib/factory/thermal.ts). */
+  thermalLining?: boolean;
 }
 
 export interface CalculateByCodesOutput {
@@ -256,6 +258,7 @@ export async function calculateQuoteByCodes(
     shippingOptionId: input.shippingOptionId,
     selectedFeatureIds: input.hasLamination ? ["f1"] : [],
     moldsCostCny: input.moldsCostCny,
+    thermalLining: input.thermalLining,
   };
 
   const cfg = await buildMergedConfig();

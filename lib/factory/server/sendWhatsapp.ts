@@ -6,6 +6,7 @@
  */
 
 import { db } from "@/lib/db";
+import { hasThermal, THERMAL_LABEL } from "@/lib/factory/thermal";
 import { factoryQuoteRequests, leads } from "@/drizzle/schema";
 import { eq } from "drizzle-orm";
 import { sendBridgeMessage } from "@/lib/bridge/client";
@@ -77,6 +78,8 @@ export function buildCaption(opts: {
     `צבעי לוגו: ${colors}`,
     `ידיות: ${hasHandles ? "כן" : "ללא"}`,
     `למינציה: ${hasLam ? "כן" : "ללא"}`,
+    // Only when ordered: the price already includes it, so the spec must say so.
+    hasThermal(spec.finishing) ? `${THERMAL_LABEL}: כן` : null,
     "",
   ];
   const split = pricing.shippingSplit;
