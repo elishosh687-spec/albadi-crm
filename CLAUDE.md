@@ -65,12 +65,16 @@ word. Eli: *"לוגים רציניים בלי התראה זה לא שווה, ו�
   allow-list in `middleware.ts`** — the route's own auth is never reached
   otherwise. `CRON_SECRET` and `CALL_TRIGGER_SECRET` are readable via
   `vercel env pull`; `BOT_SECRET` is not, so trigger crons by hand with those.
-- **Refit gate reality (2026-09-10):** with the Aug–Sep quotes the LOO median
-  is 7.3% vs the 6% gate, so the refit runs and *keeps the June coefficients*.
-  The rows that push it over are narrow-tall bags (D≤10, e.g. H50×D9×W33 at
-  ¥2.20 vs model ¥1.12) and 1,000-qty quotes. Until those shapes are refused
-  (routed to the factory) the estimator will not re-fit — raising the gate
-  would just publish a worse model.
+- **Refit gate (2026-09-10):** with the Aug–Sep quotes the LOO median was
+  7.3% vs the 6% gate — the rows pushing it over were narrow-tall (wine) bags
+  and 1,000-qty runs, which the estimator now REFUSES (`isNarrowTall`,
+  `MIN_QTY` in [lib/factory/estimator.ts](lib/factory/estimator.ts)) and the
+  LOO mirrors. First publish since June landed the same day: median 4.5% on
+  56 quote-log + 33 DB points. The estimator's shipping buffers are settings
+  now (`estimatorShippingBufferPct` 15 / `estimatorShippingBufferLamPct` 10,
+  in the factory config); the old hardcoded 30% for laminated is gone. Simon's
+  factory-by-construction table (heat-press 3D → CHEN/MANDY; sewing and 2D →
+  WEIWEI/CHEN) checked against 44 quote-log rows: zero contradictions.
 
 ## Key API Routes
 
