@@ -154,6 +154,16 @@ function fallbackAddon(fc: FactoryCoef, pick: (t: FactoryCoef["tiers"][string]) 
 function predictFactory(fc: FactoryCoef, tier: number, spec: EstimateSpec, area: number): { unit: number; bd: EstimateBreakdown } | null {
   const t = fc.tiers[String(tier)];
   if (!t) return null;
+  if (spec.construction === "sewing") {
+    // Hand-sewn: the catalog only prices sewn LAMINATED bags, and only at
+    // 3,000 pcs — a bigger run is priced at that tier (conservative).
+    if (!spec.hasLamination) return null;
+    const st = t.sewnLam ? t : fc.tiers["3000"];
+    if (!st?.sewnLam) return null;
+    const base = st.sewnLam.makeFee + st.sewnLam.perCm2 * area;
+    const handle = spec.hasHandles ? (st.sewnLamHandle ?? 0) : 0;
+    return { unit: base + handle, bd: { baseCny: r3(base), colorCny: 0, handleCny: r3(handle), lamCny: 0 } };
+  }
   if (spec.hasLamination) {
     if (!t.lam) return null; // factory doesn't laminate (heat-press) → can't model
     const lamBase = t.lam.makeFee + t.lam.perCm2 * area;
@@ -217,8 +227,10 @@ export async function estimateFactoryCny(
 
   if (candidates.length === 0) {
     const cons = CONSTRUCTION_LABELS[spec.construction ?? "heat_press"];
-    const refused = spec.hasLamination && (spec.construction ?? "heat_press") === "sewing"
-      ? `למינציה על שקית תפורה — WEIWEI לא מלמנת ו-CHEN לא ממודל, שלח למפעל`
+    const refused = (spec.construction ?? "heat_press") === "sewing"
+      ? (spec.hasLamination
+          ? "תפירה עם למינציה — אין עדיין מקדמי תפירה (הרץ כיול), שלח למפעל"
+          : "שקית תפורה בלי למינציה — בקטלוג יש מחירי תפירה רק עם למינציה, שלח למפעל")
       : spec.hasLamination
         ? "אף מפעל מוכר לא מייצר למינציה בהדפסה למידה הזו — שלח למפעל"
         : `אין מפעל ממודל שמייצר ${cons} במידה הזו (המפעל המתאים לפי סיימון, CHEN, בלי טבלת מחירים) — שלח למפעל`;

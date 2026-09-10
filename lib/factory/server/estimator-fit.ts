@@ -34,7 +34,7 @@ function colorsOf(s: string): number | null { if (/\//.test(s)) return null; con
 export function colorsFromText(s: string) { const m = s.match(/(\d+)/); return m ? +m[1] : 1; }
 export function normSupplier(s: string) { if (/华庆|mandy/i.test(s)) return "Mandy"; if (/亚森/.test(s)) return "亚森"; if (/永驰/.test(s)) return "永驰"; if (/亚宁/.test(s)) return "亚宁"; if (/鼎驰/.test(s)) return "鼎驰"; return s.trim().slice(0, 6) || "?"; }
 
-export interface Pt { factory: string; size: string; area: number; colors: number | null; hasHandle: boolean; hasLam: boolean; qty: number; price: number; plateFee?: number | null; src: "catalog" | "quote" | "db" }
+export interface Pt { factory: string; size: string; area: number; colors: number | null; hasHandle: boolean; hasLam: boolean; qty: number; price: number; plateFee?: number | null; src: "catalog" | "quote" | "db"; /** 热压 (default) | 车缝 — the catalog quotes both; sewn rows were ignored until 2026-09-10 */ construction?: "heat_press" | "sewing" }
 
 async function exportXlsx(): Promise<XLSX.WorkBook> {
   const c = await feishuFetch<{ data: { ticket: string } }>(`/open-apis/drive/v1/export_tasks`, { method: "POST", body: JSON.stringify({ file_extension: "xlsx", token: CAT, type: "sheet" }) });
@@ -58,12 +58,13 @@ function parseTab(title: string, vals: unknown[][], ws: XLSX.WorkSheet, onMisali
     const f = txt(row[4]).trim().toLowerCase(); if (f === "non" || f === "laminating") fin = f as "non" | "laminating";
     const price = numOf(row[7]); const qcell = txt(row[5]);
     if (price == null || !handle) continue;
-    if (!/热压/.test(qcell)) continue; const qm = qcell.match(/(\d{3,6})/); if (!qm) continue;
-    const q = +qm[1]; if (!(TIERS as readonly number[]).includes(q)) continue;
+    const sewn = /车缝/.test(qcell);
+    if (!sewn && !/热压/.test(qcell)) continue; const qm = qcell.match(/(\d{3,6})/); if (!qm) continue;
+    const q = +qm[1]; if (!(TIERS as readonly number[]).includes(q)) continue; // sewn 1000pcs rows fall out here (below MOQ)
     const xp = numOf(xv(i, 7));
     if (xp != null && Math.abs(xp - price) > 0.005) { onMisalign(); continue; }
     const factory = COLOR_FACTORY[xcolor(i)]; if (!factory) continue;
-    out.push({ factory, size: title, area: bagAreaCm2(dm.h, dm.d, dm.w), colors: colorsOf(txt(row[3])), hasHandle: handle === "Handle", hasLam: fin === "laminating", qty: q, price, plateFee: plateOf(txt(row[6])), src: "catalog" });
+    out.push({ factory, size: title, area: bagAreaCm2(dm.h, dm.d, dm.w), colors: colorsOf(txt(row[3])), hasHandle: handle === "Handle", hasLam: fin === "laminating", qty: q, price, plateFee: plateOf(txt(row[6])), src: "catalog", construction: sewn ? "sewing" : "heat_press" });
   }
   return out;
 }
@@ -102,13 +103,30 @@ export function pct(es: number[]) { const a = es.map(Math.abs).sort((x, y) => x 
 export const snapTier = (q: number) => { let t = TIERS[0] as number; for (const x of TIERS) if (x <= q) t = x; return t; };
 
 export interface FacModel {
+  /** Hand-sewn laminated bags (车缝 rows; 亚森 only, quoted at 3000 pcs). Keyed by tier like the rest. */
+  sewnLam: Record<number, ReturnType<typeof affine>>; sewnLamHandle: Record<number, number>;
   base: Record<number, ReturnType<typeof affine>>; lam: Record<number, ReturnType<typeof affine>>;
   color: Record<number, Record<number, number>>; lamColor: Record<number, Record<number, number>>;
   handle: Record<number, number>; lamHandle: Record<number, number>;
   plate: ReturnType<typeof affine>; areaMin: number; areaMax: number;
 }
 export function buildModel(catAll: Pt[], qlAll: Pt[], fac: string, dropQuoteKey?: string): FacModel {
-  const cat = catAll.filter((p) => p.factory === fac);
+  // Heat-press points drive every existing coefficient; sewn (车缝) points get
+  // their own line so a sewn price never leaks into the heat-press fit.
+  const cat = catAll.filter((p) => p.factory === fac && (p.construction ?? "heat_press") === "heat_press");
+  const catSewn = catAll.filter((p) => p.factory === fac && p.construction === "sewing" && p.hasLam);
+  const sewnLam: FacModel["sewnLam"] = {}, sewnLamHandle: FacModel["sewnLamHandle"] = {};
+  for (const q of TIERS) {
+    const nh: number[] = [];
+    for (const size of new Set(catSewn.map((p) => p.size))) {
+      const a = catSewn.find((p) => p.size === size && p.qty === q && !p.hasHandle)?.price;
+      const b = catSewn.find((p) => p.size === size && p.qty === q && p.hasHandle)?.price;
+      if (a != null && b != null) nh.push(b - a);
+    }
+    sewnLamHandle[q] = nh.length ? nh.reduce((x, y) => x + y, 0) / nh.length : 0;
+    const pts = catSewn.filter((p) => p.qty === q);
+    sewnLam[q] = affine(pts.map((p) => p.area), pts.map((p) => p.price - (p.hasHandle ? sewnLamHandle[q] : 0)));
+  }
   const ql = qlAll.filter((p) => p.factory === fac && p.qty <= MAX_QTY && (!dropQuoteKey || `${p.size}|${p.qty}|${p.hasLam}|${p.hasHandle}` !== dropQuoteKey));
   const base: FacModel["base"] = {}, lam: FacModel["lam"] = {}, color: FacModel["color"] = {}, lamColor: FacModel["lamColor"] = {}, handle: FacModel["handle"] = {}, lamHandle: FacModel["lamHandle"] = {};
   for (const q of TIERS) {
@@ -160,7 +178,7 @@ export function buildModel(catAll: Pt[], qlAll: Pt[], fac: string, dropQuoteKey?
   const plateP = cat.filter((p) => p.hasLam && p.plateFee != null && p.plateFee! > 0);
   const plate = affine(plateP.map((p) => p.area), plateP.map((p) => p.plateFee!));
   const areas = cat.map((p) => p.area);
-  return { base, lam, color, lamColor, handle, lamHandle, plate, areaMin: areas.length ? Math.min(...areas) : 0, areaMax: areas.length ? Math.max(...areas) : 0 };
+  return { sewnLam, sewnLamHandle, base, lam, color, lamColor, handle, lamHandle, plate, areaMin: areas.length ? Math.min(...areas) : 0, areaMax: areas.length ? Math.max(...areas) : 0 };
 }
 
 export function predict(m: FacModel, p: { area: number; qty: number; hasHandle: boolean; hasLam: boolean; colors: number | null }): { unit: number; conf: "high" | "low" } | null {
@@ -276,6 +294,8 @@ export function toCoeffs(cat: Pt[], ql: Pt[], loo: LooResult, fittedAt: string, 
         color: { "2": r3(m.color[q][2] ?? 0), "3": r3(m.color[q][3] ?? 0) },
         lamColor: f === "亚森" ? {} : { ...(m.lamColor[q][2] != null ? { "2": r3(m.lamColor[q][2]) } : {}), ...(m.lamColor[q][3] != null ? { "3": r3(m.lamColor[q][3]) } : {}) },
         handle: r3(m.handle[q]), lamHandle: r3(m.lamHandle[q]),
+        sewnLam: m.sewnLam[q] ? { makeFee: r3(m.sewnLam[q]!.intercept), perCm2: m.sewnLam[q]!.slope } : null,
+        sewnLamHandle: r3(m.sewnLamHandle[q] ?? 0),
       }])),
     };
   }

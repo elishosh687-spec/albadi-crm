@@ -35,6 +35,10 @@ export interface TierCoef {
                                       // per-colour 版费 (plate fee). Auto-fills if such quotes arrive.
   handle: number;
   lamHandle: number;
+  /** Hand-sewn laminated line (车缝 catalog rows). 亚森 only; the catalog quotes
+   *  sewing at 3000 pcs, so larger runs are priced at the 3000 tier. */
+  sewnLam?: AffineCoef | null;
+  sewnLamHandle?: number;
 }
 export interface FactoryCoef {
   areaMin: number;
