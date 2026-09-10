@@ -43,6 +43,64 @@ Next.js app deployed on Vercel. Neon PostgreSQL via Drizzle ORM. WhatsApp messag
   `_apl`); read the data in the Axiom UI or mint a separate query token.
   Query by `feature` / `event` / `sid` / `request_id`.
 
+## Tests (built 2026-09-10) — vitest, no DB, alerts on WhatsApp
+
+**Run:** `npm test` (unit), `npm run test:watch`, `npm run typecheck`. Config is
+[vitest.config.mts](vitest.config.mts) (`.mts` because `package.json` has no
+`"type"`). Tests sit **next to their module** (`lib/factory/pricing.test.ts`);
+architecture tests live in `tests/unit/architecture/`; shared fixtures in
+`tests/fixtures/`. `studio/`, `legacy/`, `scripts/`, `bot design/` are excluded.
+
+**The one rule that keeps the suite honest: an incident with a "symptom to watch"
+in this file gets a regression test.** The suite was seeded from the incidents
+above — ₪0 shipping on `s2`, three totals for one quote, the Feishu column
+shift, "היום ב-17:00" at 19:20, opt-out un-paused from GHL, the refit cron
+dead behind the middleware allow-list. When you fix the next one, add the test
+in the same commit; don't write a paragraph here instead of a test.
+
+**No database in unit tests, by construction.** `tests/setup.unit.ts` replaces
+`@/lib/db` with a Proxy that throws `"DB touched in a unit test"` on any access.
+That is what lets `estimator.ts`, the setter validator, `website-origin`,
+`lead-gaps` load without `DATABASE_URL`, and it means a unit test that reaches
+the DB fails in one line instead of hanging on HTTP. The pure defaults live in
+[lib/factory/config-defaults.ts](lib/factory/config-defaults.ts) and
+[lib/factory/estimator-defaults.ts](lib/factory/estimator-defaults.ts) so
+fixtures never import `config.ts` (which drags the DB in). Never import
+`lib/factory/calculator/index.ts` from a test for the same reason — use
+`calculator/constants.ts`.
+
+**What is tested, in order of value:** the money maths (`pricing`, `engine`,
+`payment-terms`, `customer-total`, `shipping-split`, `combined`, `molds`,
+`message`, `estimator`); the parsers and validators (Feishu row parser, GreenAPI
+text extractor, follow-up cadence, bot-pause, call slots, `validateMessage`,
+stages, FB-form columns, lead-gap classifier, website origin, follow-up drop);
+and three architecture tests that turn CLAUDE.md rules into assertions — no
+`"use client"` file reaches `lib/db`/`manychat/config` transitively, every
+`app/api/**/route.ts` is wrapped, and every `/api/factory/*` job is in the
+middleware allow-list. LLM output is NOT unit-tested — that is what
+`setter-eval` (manual, spends money) is for.
+
+**CI:** [.github/workflows/test.yml](.github/workflows/test.yml) runs `tsc` +
+`npm test` on every push to `main` and every PR. **It informs, it does not
+gate** — Vercel deploys the push regardless (Eli's call). A failure on `main`
+POSTs `/api/admin/ci-alert` with `CALL_TRIGGER_SECRET`, which `sendEliDM`s the
+short sha + commit line + run URL. `?dry=1` returns the text without sending.
+
+**Phases B and C are planned, not built:** route tests on a throwaway Neon
+branch per CI run (`tests/integration/`, project `integration`, needs
+`NEON_API_KEY`), then 5 Playwright flows on the widget. Plan file:
+`~/.claude/plans/immutable-sprouting-walrus.md`.
+
+**Three `it.fails` are findings, not flakes** (2026-09-10): the two monthly
+Vercel crons `/api/cron/expense-reminder` and `/api/cron/vat-reminder` have no
+`JOBS` entry and no `withJob`, so the watchdog cannot see them; four
+`console.error` calls survive in the dead `/dashboard/v3` tree; and the hour
+guard's 4-character form (`9:00`) is unreachable while `HOUR_POOL` starts at
+10. When one is fixed the test "fails" by passing — drop the `.fails` then.
+
+**Known gaps:** `npm run lint` is dead (`next lint` was removed in Next 16 and
+no eslint config exists); `scripts/` is neither type-checked nor tested.
+
 ## Scheduled jobs ring a phone — heartbeats + watchdog (built 2026-09-10)
 
 **Why:** the estimator refit cron was dead from 2026-06-24 to 2026-09-09 —

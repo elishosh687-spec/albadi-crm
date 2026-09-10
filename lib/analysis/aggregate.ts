@@ -121,7 +121,24 @@ export async function aggregateAnalyses(
   };
 }
 
-const FOLLOWUP_DROP_DAYS = 3;
+export const FOLLOWUP_DROP_DAYS = 3;
+
+/**
+ * The follow-up-drop rule, as a pure predicate: the lead's LATEST message was
+ * sent by the customer (`direction === "in"`) and more than FOLLOWUP_DROP_DAYS
+ * have passed since. Deterministic on purpose — the LLM version of this read
+ * ~92% where the truth was ~13%.
+ */
+export function isFollowupDrop(
+  direction: string | null | undefined,
+  receivedAt: string | Date | null | undefined,
+  now: number = Date.now()
+): boolean {
+  if (direction !== "in" || receivedAt == null) return false;
+  const t = new Date(receivedAt as string).getTime();
+  if (!Number.isFinite(t)) return false;
+  return now - t > FOLLOWUP_DROP_DAYS * 86400000;
+}
 
 /** A drop = the customer's message is the latest one and it's been >N days. */
 async function deterministicFollowupDrops(
@@ -135,13 +152,10 @@ async function deterministicFollowupDrops(
     WHERE manychat_sub_id IN (${sql.join(sids.map((s) => sql`${s}`), sql`, `)})
     ORDER BY manychat_sub_id, received_at DESC
   `);
-  const cutoffMs = FOLLOWUP_DROP_DAYS * 86400000;
+  const now = Date.now();
   const drops: LeadRef[] = [];
   for (const r of rows.rows as { manychat_sub_id: string; direction: string; received_at: unknown }[]) {
-    if (
-      r.direction === "in" &&
-      Date.now() - new Date(r.received_at as string).getTime() > cutoffMs
-    ) {
+    if (isFollowupDrop(r.direction, r.received_at as string, now)) {
       drops.push({ sid: r.manychat_sub_id, name: nameBySid.get(r.manychat_sub_id) ?? null });
     }
   }
@@ -154,7 +168,7 @@ function push(m: Map<string, LeadRef[]>, key: string, ref: LeadRef): void {
   m.set(key, arr);
 }
 
-function toPatterns(
+export function toPatterns(
   m: Map<string, LeadRef[]>,
   labelFor: (k: string) => string
 ): Pattern[] {

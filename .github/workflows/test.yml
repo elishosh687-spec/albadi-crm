@@ -1,0 +1,53 @@
+# Unit tests + typecheck on every push to main and every PR.
+#
+# This workflow INFORMS, it does not gate: Vercel deploys the push regardless
+# (Eli's decision, 2026-09-10 — the suite is young; a red test must not hold a
+# hot fix hostage). A failure on main is WhatsApped to Eli through the CRM's
+# own /api/admin/ci-alert (project rule: alerts go to WhatsApp, never email).
+# CALL_TRIGGER_SECRET is the same repo secret the crons use.
+name: test
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  unit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install deps
+        run: npm ci --no-audit --no-fund
+
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+      - name: Unit tests
+        run: npm test
+
+      - name: WhatsApp Eli on a red main
+        if: failure() && github.ref == 'refs/heads/main'
+        env:
+          CRM: https://albadi-crm.vercel.app
+          SECRET: ${{ secrets.CALL_TRIGGER_SECRET }}
+          SHA: ${{ github.sha }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          # Passed through env, not interpolated into the script, so a commit
+          # message with quotes cannot break (or inject into) the JSON.
+          MSG: ${{ github.event.head_commit.message }}
+        run: |
+          body=$(jq -n --arg w test --arg sha "$SHA" --arg url "$RUN_URL" --arg msg "$MSG" \
+            '{workflow:$w, sha:$sha, run_url:$url, message:$msg, status:"failure"}')
+          curl -sS -X POST "$CRM/api/admin/ci-alert" \
+            -H "Authorization: Bearer $SECRET" \
+            -H "Content-Type: application/json" \
+            --max-time 30 \
+            -d "$body" || echo "ci-alert POST failed (the test failure above is the real news)"

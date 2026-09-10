@@ -7,6 +7,10 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --project unit",
+    "test:watch": "vitest --project unit",
+    "test:integration": "vitest run --project integration",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:studio": "drizzle-kit studio",
@@ -49,6 +53,7 @@
     "tailwindcss": "^4.3.0",
     "tsx": "^4.19.2",
     "typescript": "^5.7.2",
+    "vitest": "^5.0.0",
     "xlsx": "^0.18.5"
   }
 }

@@ -13,6 +13,9 @@ import {
   DEFAULT_ASSUMED_SHIPMENT_CBM,
   isSimplifiedCarrier,
 } from "./sea-carriers";
+import { DEFAULT_FACTORY_CONFIG } from "./config-defaults";
+
+export { DEFAULT_FACTORY_CONFIG };
 
 const KEY = "factory_pricing";
 const TTL_MS = 60_000;
@@ -24,44 +27,6 @@ interface CacheEntry {
 
 let cache: CacheEntry | null = null;
 
-export const DEFAULT_FACTORY_CONFIG: FactoryPricingConfig = {
-  shippingOptions: [
-    {
-      id: "sea-standard",
-      name: "ים — סטנדרט",
-      type: "sea",
-      enabled: true,
-      seaRate: 500, // USD per CBM — LEGACY fallback only; the active sea carrier
-      // profile (seaCarriers) drives real sea pricing.
-    },
-    {
-      id: "air-express",
-      name: "אוויר — אקספרס",
-      type: "air",
-      enabled: true,
-      airRates: {
-        thresholdKg: 100,
-        rateBelowThreshold: 8.5,
-        rateAboveThreshold: 6.5,
-      },
-    },
-  ],
-  seaCarriers: [YEADIM_CARRIER],
-  activeSeaCarrierId: YEADIM_CARRIER.id,
-  assumedShipmentCbm: DEFAULT_ASSUMED_SHIPMENT_CBM,
-  usdToIls: 3.7,
-  usdToCny: 7.2,
-  ilsToCny: 1.95,
-  defaultProfitMargin: 40,
-  profitMarginByQuantity: { "1000": 40, "3000": 40, "5000": 40, "10000": 40 },
-  commissionPct: 10,
-  negotiationBufferAgorot: 0,
-  estimatorShippingBufferPct: 15,
-  estimatorShippingBufferLamPct: 10,
-  laminationPlateFeePerColorCny: 500,
-  currency: "ILS",
-  paymentTerms: { defaultPlanId: DEFAULT_PAYMENT_PLAN_ID, vatPct: VAT_PCT },
-};
 
 /**
  * Back-compat normalizer: rows written before `profitMarginByQuantity` existed

@@ -82,7 +82,7 @@ interface GapCols {
   sid: number;
 }
 
-function resolveGapCols(header: string[]): GapCols {
+export function resolveGapCols(header: string[]): GapCols {
   const base = resolveFbFormColumns(header);
   const norm = (v: string) => v.trim().toLowerCase().replace(/\s+/g, "_");
   const normalised = header.map(norm);
@@ -105,7 +105,7 @@ function readEnv(key: string): string {
   return raw.startsWith("﻿") ? raw.slice(1) : raw;
 }
 
-function parseCSVLine(line: string): string[] {
+export function parseCSVLine(line: string): string[] {
   const result: string[] = [];
   let current = "";
   let inQuotes = false;
@@ -129,7 +129,7 @@ function parseCSVLine(line: string): string[] {
   return result;
 }
 
-function classifyRow(
+export function classifyRow(
   lastStatus: string | null,
   sent: string | null
 ): SheetGapRow["category"] | null {
