@@ -688,7 +688,7 @@ const run = withRequestLog("calls", async (req: NextRequest, log) => {
     elevenlabs,
     factory,
   });
-});
+}, { job: "process-recordings" });
 
 export const POST = run;
 // Allow GET for the same handler so the Cloud Routine doesn't need a body.

@@ -1,0 +1,28 @@
+name: job-watchdog
+
+# Every 30 minutes: ask the CRM whether each scheduled job succeeded recently,
+# and let IT WhatsApp Eli when one hasn't (lib/observability/jobs.ts). This is
+# the alert layer for every other cron in this folder — a dead workflow here
+# is the one failure it cannot report, so GitHub's own failure e-mail stays on.
+on:
+  schedule:
+    - cron: "7,37 * * * *"
+  workflow_dispatch:
+
+jobs:
+  watchdog:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Run the watchdog
+        env:
+          URL: https://albadi-crm.vercel.app/api/cron/job-watchdog
+        run: |
+          set -o pipefail
+          body=$(curl -sS --max-time 90 -X POST "$URL" \
+            -H "Authorization: Bearer ${{ secrets.CALL_TRIGGER_SECRET }}" \
+            -w '\n%{http_code}')
+          code=$(printf '%s' "$body" | tail -n1)
+          json=$(printf '%s' "$body" | sed '$d')
+          echo "$json"
+          [ "$code" = "200" ] || { echo "watchdog HTTP $code"; exit 1; }

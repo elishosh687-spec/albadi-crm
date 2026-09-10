@@ -136,7 +136,7 @@ const run = withRequestLog("analysis", async (req: NextRequest, log) => {
     push_sweep: pushSweep,
     results,
   });
-});
+}, { job: "analyze-active-leads" });
 
 export const POST = run;
 // Vercel Cron pings GET. Alias to POST so a single implementation drives both.

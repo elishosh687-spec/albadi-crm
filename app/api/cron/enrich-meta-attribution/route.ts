@@ -72,7 +72,7 @@ const run = withRequestLog("meta", async (req: NextRequest, log) => {
       { status: 500 },
     );
   }
-});
+}, { job: "enrich-meta-attribution" });
 
 export const POST = run;
 // Vercel Cron issues GET; accept it too.

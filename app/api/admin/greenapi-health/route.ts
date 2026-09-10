@@ -55,4 +55,4 @@ export const GET = withRequestLog("admin", async (req: NextRequest, log) => {
   }
 
   return NextResponse.json({ ...health, summary: formatGreenHealth(health), alerted });
-});
+}, { job: "greenapi-health" });

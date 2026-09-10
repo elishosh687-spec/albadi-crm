@@ -46,4 +46,4 @@ export const POST = withRequestLog("followups", async (req: NextRequest, log) =>
       { status: 500 }
     );
   }
-});
+}, { job: "resume-sweep" });

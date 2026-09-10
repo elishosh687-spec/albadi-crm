@@ -61,7 +61,7 @@ export const POST = withRequestLog("followups", async (req: NextRequest, log) =>
       { status: 500 }
     );
   }
-});
+}, { job: "callback-requests" });
 
 /** Counts only — the report carries composed customer messages. */
 function summarizeReport(report: unknown): Record<string, unknown> {

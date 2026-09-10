@@ -1136,7 +1136,7 @@ const run = withRequestLog("followups", async (req: NextRequest, log) => {
       )
       .catch((e) => log.warn("lock.release_failed", { ...serializeError(e) }));
   }
-});
+}, { job: "followups" });
 
 export const POST = run;
 export const GET = run;

@@ -30,11 +30,18 @@ export function middleware(req: NextRequest) {
   // External cron + admin debug: GitHub Actions hits /api/factory/refresh
   // with Authorization: Bearer ${CRON_SECRET}. Same bearer also unlocks
   // /api/factory/test-dm for one-shot bridge sanity checks.
+  // ⚠️ refit-estimator was MISSING from this list from 2026-06-24 to
+  // 2026-09-09: Vercel's daily cron GET got a 307 to /login and the estimator
+  // ran on June coefficients for 2.5 months with no error anywhere. Any new
+  // bearer-authed job under /api/factory/ must be added here too (the route's
+  // own auth still runs after this).
+  const cronBearers = [process.env.CRON_SECRET, process.env.BOT_SECRET]
+    .filter(Boolean)
+    .map((s) => `Bearer ${s}`);
   if (
-    (path === "/api/factory/refresh" || path === "/api/factory/test-dm") &&
-    req.method === "GET" &&
-    process.env.CRON_SECRET &&
-    req.headers.get("authorization") === `Bearer ${process.env.CRON_SECRET}`
+    (path === "/api/factory/refresh" || path === "/api/factory/test-dm" || path === "/api/factory/refit-estimator") &&
+    (req.method === "GET" || req.method === "POST") &&
+    cronBearers.includes(req.headers.get("authorization") ?? "")
   ) {
     return NextResponse.next();
   }

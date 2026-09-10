@@ -208,7 +208,22 @@ export function logger(feature: Feature, bound: LogFields = {}): Logger {
 export function withRequestLog<Req extends Request = Request, Ctx = unknown>(
   feature: Feature,
   handler: (req: Req, log: Logger, ctx: Ctx) => Promise<Response>,
+  opts?: {
+    /**
+     * Name this route as a scheduled JOB (see lib/observability/jobs.ts). A 2xx
+     * records a success heartbeat, a 5xx or a throw records a failure; anything
+     * else (401 from a probe, 307) is not a run and is ignored. The watchdog
+     * turns a missing heartbeat into a WhatsApp to Eli.
+     */
+    job?: import("./jobs").JobName;
+  },
 ): (req: Req, ctx: Ctx) => Promise<Response> {
+  const heartbeat = (ok: boolean, status: number, error?: string, durationMs?: number) => {
+    if (!opts?.job) return;
+    void import("./jobs")
+      .then((m) => m.recordJobRun(opts.job!, { ok, status, error, durationMs }))
+      .catch(() => undefined);
+  };
   return async (req: Req, ctx: Ctx) => {
     const started = Date.now();
     const request_id =
@@ -217,10 +232,15 @@ export function withRequestLog<Req extends Request = Request, Ctx = unknown>(
     const log = logger(feature, { request_id, route });
     try {
       const res = await handler(req, log, ctx);
-      log.info("request", { method: req.method, status: res.status, duration_ms: Date.now() - started });
+      const duration_ms = Date.now() - started;
+      log.info("request", { method: req.method, status: res.status, duration_ms });
+      if (res.status >= 200 && res.status < 300) heartbeat(true, res.status, undefined, duration_ms);
+      else if (res.status >= 500) heartbeat(false, res.status, undefined, duration_ms);
       return res;
     } catch (err) {
-      log.error("request.failed", err, { method: req.method, duration_ms: Date.now() - started });
+      const duration_ms = Date.now() - started;
+      log.error("request.failed", err, { method: req.method, duration_ms });
+      heartbeat(false, 500, err instanceof Error ? err.message : String(err), duration_ms);
       return Response.json({ ok: false, error: "internal_error", request_id }, { status: 500 });
     }
   };

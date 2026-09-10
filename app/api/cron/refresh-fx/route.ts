@@ -28,7 +28,7 @@ const run = withRequestLog("fx", async (req, log) => {
   const result = await applyLiveFxToConfig();
   log.info("fx.refreshed", { ...result });
   return NextResponse.json({ ok: true, ...result });
-});
+}, { job: "refresh-fx" });
 
 export const GET = run;
 export const POST = run;

@@ -422,7 +422,7 @@ const run = withRequestLog("elevenlabs", async (req: NextRequest, log) => {
       { status: 500 }
     );
   }
-});
+}, { job: "elevenlabs-sync" });
 
 export const POST = run;
 // Allow manual GET trigger for testing (same auth).

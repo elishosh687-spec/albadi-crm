@@ -27,7 +27,7 @@ export const GET = withRequestLog("calculator", async (req: NextRequest, log) =>
     log.error("refit.failed", e);
     return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : String(e) }, { status: 500 });
   }
-});
+}, { job: "refit-estimator" });
 
 // Cookie-auth (middleware) manual trigger from the dashboard.
 export const POST = withRequestLog("calculator", async (_req: NextRequest, log) => {

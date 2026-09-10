@@ -27,4 +27,4 @@ export const GET = withRequestLog("factory", async (req: NextRequest, log) => {
   }
   const result = await refreshFromFeishu();
   return NextResponse.json(result);
-});
+}, { job: "factory-refresh" });
