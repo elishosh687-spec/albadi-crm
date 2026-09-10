@@ -7,7 +7,6 @@
  *
  * Used by POST /api/factory/estimate/send-customer (+ widget variant).
  */
-import { resolveLamination } from "@/lib/factory/calculator/lamination";
 import { db } from "@/lib/db";
 import { leads } from "@/drizzle/schema";
 import { eq } from "drizzle-orm";
@@ -177,9 +176,10 @@ export async function sendEstimateToCustomer(input: SendEstimateInput): Promise<
     depthCm: s.depthCm,
     quantity: s.quantity,
     printing: `${s.logoColors} color(s)`,
-    // 3+ logo colours are always laminated (factory rule) — force it so the
-    // caption AND the PDF (both read this finishing string) never contradict it.
-    finishing: `${s.hasHandles ? "With handles" : "No handles"} / ${resolveLamination(s.hasLamination, s.logoColors) ? "Laminated" : "Not laminated"}`,
+    // Exactly the flag that was PRICED. The caption and the PDF both read this
+    // string, so re-deriving lamination from the colour count here is how a
+    // quote comes to say "עם למינציה" while priced without it.
+    finishing: `${s.hasHandles ? "With handles" : "No handles"} / ${s.hasLamination ? "Laminated" : "Not laminated"}`,
     shippingOptionId: shippingOptionId ?? undefined,
   };
 

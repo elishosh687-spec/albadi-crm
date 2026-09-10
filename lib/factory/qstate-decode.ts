@@ -114,17 +114,11 @@ export function humanizeFinishing(en: string): string {
   return parts.length ? parts.join(", ") : en;
 }
 
-/** 3+ logo colours are ALWAYS laminated (factory rule, Eli 2026-07-22). Rewrite
- *  an English finishing string so it reads "Laminated" when the colour count
- *  forces it — keeps every customer-facing surface (quote text + PDF) consistent
- *  with the pricing, even if the upstream lamination flag was never set. */
-export function forceLaminationForColors(finishing: string, logoColors: number): string {
-  if (!Number.isFinite(logoColors) || logoColors < 3) return finishing;
-  const f = finishing ?? "";
-  if (/not\s+laminated/i.test(f)) return f.replace(/not\s+laminated/i, "Laminated");
-  if (/laminated/i.test(f)) return f;
-  return f.trim() ? `${f} / Laminated` : "Laminated";
-}
+// `forceLaminationForColors` used to live here: a SECOND copy of the 3-colour
+// rule (hard-coded `< 3`) that rewrote "Not laminated" to "Laminated" on every
+// PDF. Removed 2026-09-10 — lamination is a default from 4 colours now, not a
+// rule, so a display path that forces it would print "עם למינציה" on a quote
+// that is honestly priced without it. What is priced is what is printed.
 
 // Common factory material phrases → Hebrew. Longest/most-specific first so a
 // whole phrase ("food grade white card") wins over its parts ("white", "card").

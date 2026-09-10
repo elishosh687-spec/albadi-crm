@@ -27,7 +27,6 @@ import {
   humanizePrinting,
   humanizeFinishing,
   humanizeMaterial,
-  forceLaminationForColors,
 } from "./qstate-decode";
 import { splitCustomerView } from "./shipping-split";
 import {
@@ -37,10 +36,6 @@ import {
   type StoredDealPlan,
 } from "./payment-terms";
 
-/** Colour count encoded in a printing spec ("3 color(s)" / "3 צבעים") → int. */
-function colorsFromPrinting(printing: string | null | undefined): number {
-  return parseInt(String(printing ?? "").match(/(\d+)/)?.[1] ?? "1", 10) || 1;
-}
 import type { QuoteBreakdown } from "./calculator";
 
 // Register Heebo for Hebrew rendering. TTFs are bundled under public/fonts/
@@ -373,7 +368,7 @@ function CustomerQuotePDF(props: CustomerQuotePdfProps) {
   // the customer-facing PDF must be Hebrew-only.
   const stripCjk = (s: string) => (/[　-鿿＀-￯]/.test(s) ? "" : s);
   const printingHe = stripCjk(spec.printing ? humanizePrinting(spec.printing) : "");
-  const finishingHe = stripCjk(spec.finishing ? humanizeFinishing(forceLaminationForColors(spec.finishing, colorsFromPrinting(spec.printing))) : "");
+  const finishingHe = stripCjk(spec.finishing ? humanizeFinishing(spec.finishing) : "");
   const materialHe = stripCjk(spec.material ? humanizeMaterial(spec.material) : "");
   const qty = breakdown?.quantity ?? pricing.quantity;
 
@@ -725,7 +720,7 @@ function CombinedQuotePDF({
   for (const it of items) {
     const { spec, pricing } = it;
     const printingHe = stripCjk(spec.printing ? humanizePrinting(spec.printing) : "");
-    const finishingHe = stripCjk(spec.finishing ? humanizeFinishing(forceLaminationForColors(spec.finishing, colorsFromPrinting(spec.printing))) : "");
+    const finishingHe = stripCjk(spec.finishing ? humanizeFinishing(spec.finishing) : "");
     const materialHe = stripCjk(spec.material ? humanizeMaterial(spec.material) : "");
     // No fabricated default name. With a name: name is the title and the
     // labeled dimensions are the first spec line. Without: the labeled

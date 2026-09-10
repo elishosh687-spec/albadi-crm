@@ -216,6 +216,14 @@ function applyRetiredFieldDefaults(state: QState): QState {
   };
 }
 
+/** The lamination answer as a CHOICE — null when nothing was recorded, so the
+ *  colour-count default in resolveLamination can apply. The bot only offers
+ *  1–3 colours, so today that default never fires here and 3 colours follows
+ *  `laminationDefault` like everything else (Eli, 2026-09-10). */
+function chosenLamination(state: QState): boolean | null {
+  return state.lamination == null ? null : state.lamination === "true";
+}
+
 
 // Sent immediately after the quote so the customer has trust-building
 // context (who we are, where to verify us) before they decide. Also
@@ -447,7 +455,7 @@ export function renderAnswerLines(state: QState): string[] {
   const handles = state.handles === "true" ? "כן" : "לא";
   // Same resolution as the quote — otherwise the customer confirms
   // "למינציה: לא" and is then sent a quote headed "עם למינציה".
-  const lamination = resolveLamination(state.lamination === "true", Number(state.colors) || 1)
+  const lamination = resolveLamination(chosenLamination(state), Number(state.colors) || 1)
     ? "כן"
     : "לא";
 
@@ -713,10 +721,10 @@ async function fetchQuote(state: QState): Promise<QuoteCalcOutput> {
       `calc missing required state: product=${state.product} quantity=${state.quantity} shipping=${state.shipping}`
     );
   }
-  // 3+ colours force lamination — resolved HERE so the engine and the message
-  // get the same value. This line is the bug fix of 2026-08-19.
+  // Resolved HERE, once, so the engine and the message get the same value —
+  // the fix of 2026-08-19. Since 2026-09-10 it is a default, not a rule.
   const hasLamination = resolveLamination(
-    state.lamination === "true",
+    chosenLamination(state),
     Number(state.colors) || 1,
   );
 
@@ -969,7 +977,7 @@ function summarizeForFactory(state: QState, name: string | null, phone: string |
     `צבעים: ${state.colors ?? "?"}`,
   ];
   lines.push(
-    `למינציה: ${resolveLamination(state.lamination === "true", Number(state.colors) || 1) ? "כן" : "לא"}`,
+    `למינציה: ${resolveLamination(chosenLamination(state), Number(state.colors) || 1) ? "כן" : "לא"}`,
   );
   if (state.orderNotes) {
     lines.push(`📝 הערות לקוח: ${state.orderNotes}`);

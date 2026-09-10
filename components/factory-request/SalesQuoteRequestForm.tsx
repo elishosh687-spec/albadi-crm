@@ -9,7 +9,8 @@
  * the "הצעות מהמפעל" tab (draft filter).
  */
 
-import { requiresLamination } from "@/lib/factory/calculator/lamination";
+import { suggestsLamination } from "@/lib/factory/calculator/lamination";
+import { useLaminationDefault } from "@/lib/factory/calculator/use-lamination-default";
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import { Loader2, Send, CheckCircle2, Search, X, User } from "lucide-react";
 import { LuxShell, LuxTitle, LuxAccent, LuxCTA, Section } from "@/components/widget-ui/lux";
@@ -132,13 +133,14 @@ export function SalesQuoteRequestForm({ apiToken, salesMode = false }: { apiToke
   const set = <K extends keyof typeof EMPTY_SPEC>(key: K, val: (typeof EMPTY_SPEC)[K]) =>
     setF((prev) => ({ ...prev, [key]: val }));
 
-  // 3 colours or more REQUIRE lamination (factory rule, Eli 2026-07-22). Auto-turn
-  // it on so the spec sent to the factory is consistent (the "3+" option = 4).
-  useEffect(() => {
-    if (requiresLamination(f.logoColors) && !f.hasLamination) {
-      setF((prev) => ({ ...prev, hasLamination: true }));
-    }
-  }, [f.logoColors, f.hasLamination]);
+  // From 4 colours lamination is the default, not a lock (Eli 2026-09-10) — the
+  // "3+" option carries value 4, so picking it pre-selects lamination, and the
+  // salesperson can still choose "ללא".
+  const setLaminationDefault = useCallback(
+    (on: boolean) => setF((prev) => ({ ...prev, hasLamination: on })),
+    [],
+  );
+  const markLamTouched = useLaminationDefault(f.logoColors, setLaminationDefault);
 
   const runSearch = useCallback(
     async (q: string) => {
@@ -505,16 +507,16 @@ export function SalesQuoteRequestForm({ apiToken, salesMode = false }: { apiToke
             <SelectField
               label="למינציה"
               value={f.hasLamination ? "yes" : "no"}
-              onChange={(v) => set("hasLamination", v === "yes")}
+              onChange={(v) => { markLamTouched(); set("hasLamination", v === "yes"); }}
               options={[
                 { value: "no", label: "ללא" },
                 { value: "yes", label: "עם למינציה" },
               ]}
             />
           </div>
-          {requiresLamination(f.logoColors) && (
+          {suggestsLamination(f.logoColors) && (
             <div className="text-[10px] text-right" style={{ color: "#e0a96d" }}>
-              3 צבעים ומעלה מחייבים למינציה — סומן אוטומטית.
+              4 צבעים ומעלה — למינציה מסומנת כברירת מחדל. אפשר לבחור "ללא".
             </div>
           )}
 

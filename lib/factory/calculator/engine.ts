@@ -6,6 +6,7 @@
  */
 
 import { ceilAgorot } from "@/lib/factory/rounding";
+import { colorAddonFromTable } from "./color-addon";
 import type {
   AppConfig,
   ProductVariant,
@@ -92,13 +93,17 @@ export function calculateQuote(
     ? (platePerColorCny * formData.logoColors) / quantity
     : 0;
 
-  // Color addon per unit CNY (regular bags only — logo colors)
-  const colorAddon = hasLamination
-    ? null
-    : colorAddons.find((c) => c.colors === formData.logoColors);
-  const colorAddonCny = colorAddon
-    ? findClosestPrice(colorAddon.pricesByQuantity, quantityKey)
-    : 0;
+  // Color addon per unit CNY (regular bags only — logo colors). The table has
+  // rows for 1–3 colours; past that the step continues (see color-addon.ts) —
+  // a bare find() returned ¥0 for 4 colours, i.e. priced it like ONE colour.
+  const colorAddonCny = hasLamination
+    ? 0
+    : colorAddonFromTable(
+        new Map(
+          colorAddons.map((c) => [c.colors, findClosestPrice(c.pricesByQuantity, quantityKey)]),
+        ),
+        formData.logoColors,
+      );
 
   // Step 3: Unit production cost — bag only. The one-time mold/tooling fee is
   // priced as its OWN line at the bottom (see "Step 11" below) and never folded

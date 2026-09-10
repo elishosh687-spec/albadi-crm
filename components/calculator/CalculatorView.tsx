@@ -1,6 +1,6 @@
 "use client";
 
-import { requiresLamination } from "@/lib/factory/calculator/lamination";
+import { useLaminationDefault } from "@/lib/factory/calculator/use-lamination-default";
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { Loader2, Send, Copy, Check, Search, X, ChevronDown, Calculator, Pencil, Ship, Plane, Repeat, Minus, Plus } from "lucide-react";
 import { cn } from "@/lib/cn";
@@ -306,12 +306,10 @@ export function CalculatorView({ products, quantityTiers, shippingOptions, initi
     fetchPreview();
   }, [fetchPreview]);
 
-  // 3 colours or more REQUIRE lamination (factory rule, Eli 2026-07-22): a
-  // 3+-colour print must be laminated. So instead of clamping colours down, turn
-  // lamination ON automatically once colours reach 3 (never silently drop colours).
-  useEffect(() => {
-    if (requiresLamination(colors) && !lamination) setLamination(true);
-  }, [colors, lamination]);
+  // From 4 colours lamination is the DEFAULT, not a lock (Eli 2026-09-10): it
+  // follows the colour count until the operator touches the toggle, then never
+  // again. The old snap-back effect made turning it off impossible.
+  const markLamTouched = useLaminationDefault(colors, setLamination);
 
   // Mold fee tracks the colour count: ¥500 × colours (Eli 2026-07-23). Recomputes
   // whenever colours change; a manual edit sticks until the next colour change.
@@ -845,7 +843,7 @@ export function CalculatorView({ products, quantityTiers, shippingOptions, initi
                     label="מאט (F1)"
                     delta={r && r.laminationAddonCny > 0 ? `+¥${r2(r.laminationAddonCny).toFixed(2)}` : "+¥0.45"}
                     active={lamination}
-                    onToggle={() => setLamination(!lamination)}
+                    onToggle={() => { markLamTouched(); setLamination(!lamination); }}
                   />
                 </AddonField>
               )}
@@ -1295,11 +1293,8 @@ function EstimateTab({ apiToken, shippingOptions, sid, leadName, initialMargins,
 
   useEffect(() => { run(); }, [run]);
 
-  // 3 colours or more REQUIRE lamination (factory rule, Eli 2026-07-22). Turn
-  // lamination ON automatically once colours reach 3 instead of clamping colours.
-  useEffect(() => {
-    if (requiresLamination(colors) && !lam) setLam(true);
-  }, [colors, lam]);
+  // From 4 colours lamination is the default, not a lock (Eli 2026-09-10).
+  const markLamTouched = useLaminationDefault(colors, setLam);
 
   // Mold fee tracks the colour count: ¥500 × colours (Eli 2026-07-23).
   useEffect(() => {
@@ -1503,7 +1498,7 @@ function EstimateTab({ apiToken, shippingOptions, sid, leadName, initialMargins,
             </div>
             <div className="flex gap-6 lux-wrap-sm">
               <Toggle label="ידיות" value={handles} onChange={setHandles} />
-              <Toggle label="למינציה" value={lam} onChange={setLam} />
+              <Toggle label="למינציה" value={lam} onChange={(v) => { markLamTouched(); setLam(v); }} />
               <div className="flex flex-col gap-1">
                 <label className="text-sm font-medium">סוג ייצור</label>
                 <select value={construction} onChange={(e) => setConstruction(e.target.value as "heat_press" | "sewing")} className={SELECT_CLS}>
@@ -2329,10 +2324,9 @@ function buildQuoteText(opts: {
   // customer sees exactly what lamination / handles / colours add.
   const b = customerBreakdownIls(opts.result);
   const logoColors = opts.result.logoColors;
-  // 3+ logo colours are always laminated (factory rule) — show it even if the
-  // priced feature flag didn't carry through, so the text never says "ללא".
-  const hasLamination =
-    logoColors >= 3 || opts.result.selectedFeatures.some((f) => f.id === "f1");
+  // Exactly what was priced. Re-deriving it from the colour count here is the
+  // third copy of the old rule that let the text and the price disagree.
+  const hasLamination = opts.result.selectedFeatures.some((f) => f.id === "f1");
 
   const split = opts.shippingSplit ?? null;
   const molds = opts.oneTimeMoldsIls ?? 0;

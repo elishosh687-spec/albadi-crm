@@ -9,7 +9,7 @@
  * Phase A: catalog products. Estimate + history come next.
  */
 
-import { requiresLamination } from "@/lib/factory/calculator/lamination";
+import { useLaminationDefault } from "@/lib/factory/calculator/use-lamination-default";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Loader2, Search, Check, Send, Package, User } from "lucide-react";
 import { cn } from "@/lib/cn";
@@ -103,11 +103,9 @@ export function SalesCalculator({ token }: { token: string }) {
 
   const estimateReady = mode !== "estimate" || (Number(dimW) > 0 && Number(dimH) > 0);
 
-  // 3+ colours REQUIRE lamination (factory rule, Eli 2026-07-22) — auto-turn on.
-  const laminationForced = requiresLamination(colors);
-  useEffect(() => {
-    if (laminationForced && !lamination) setLamination(true);
-  }, [laminationForced, lamination]);
+  // From 4 colours lamination is the default, not a lock (Eli 2026-09-10) — the
+  // toggle used to be replaced by a "חובה" badge at 3+, so it could not be undone.
+  const markLamTouched = useLaminationDefault(colors, setLamination);
 
   // live customer price (debounced)
   useEffect(() => {
@@ -277,13 +275,7 @@ export function SalesCalculator({ token }: { token: string }) {
       {/* Spec toggles */}
       <div className="flex flex-wrap gap-2">
         <Toggle on={handles} set={setHandles} label="ידיות" />
-        {laminationForced ? (
-          <span className="px-3 py-2 rounded-lg border border-primary/50 bg-primary/10 text-sm text-primary" title="3 צבעים ומעלה מחייבים למינציה">
-            למינציה: חובה (3+ צבעים)
-          </span>
-        ) : (
-          <Toggle on={lamination} set={setLamination} label="למינציה" />
-        )}
+        <Toggle on={lamination} set={(v) => { markLamTouched(); setLamination(v); }} label="למינציה" />
         {mode === "estimate" && (
           <label className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-border bg-card/40 text-sm">
             <span className="text-muted-foreground">סוג ייצור</span>

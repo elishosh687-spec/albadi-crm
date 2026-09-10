@@ -10,6 +10,7 @@
  */
 
 import { getEstimatorCoeffs, DEFAULT_CARTON_COEF, type EstimatorCoeffs, type FactoryCoef, type CartonCoef } from "./estimator-config";
+import { colorAddonFromTable, colorTableFromRecord } from "./calculator/color-addon";
 import { getFactoryConfig } from "./config";
 
 const TIERS = [3000, 5000, 10000] as const;
@@ -169,15 +170,18 @@ function predictFactory(fc: FactoryCoef, tier: number, spec: EstimateSpec, area:
     const lamBase = t.lam.makeFee + t.lam.perCm2 * area;
     // Per-unit laminated colour add-on. Empty today (no multi-colour lam price data) → colours
     // are priced via the per-colour 版费 (plate fee) below; this auto-activates if such data arrives.
-    const colorKey = String(Math.min(3, Math.max(1, spec.logoColors)));
-    const lamColor = spec.logoColors > 1 ? (t.lamColor?.[colorKey] ?? t.lamColor?.["3"] ?? 0) : 0;
+    // Past 3 colours the step continues rather than clamping to 3 (color-addon.ts).
+    const lamColor = spec.logoColors > 1 ? colorAddonFromTable(colorTableFromRecord(t.lamColor), spec.logoColors) : 0;
     const handle = spec.hasHandles ? fallbackAddon(fc, (x) => x.lamHandle, t.lamHandle) : 0;
     return { unit: lamBase + lamColor + handle, bd: { baseCny: r3(lamBase), colorCny: r3(lamColor), handleCny: r3(handle), lamCny: 0 } };
   }
   if (!t.base) return null;
   const base = t.base.makeFee + t.base.perCm2 * area;
-  const colorKey = String(Math.min(3, Math.max(1, spec.logoColors)));
-  const color = spec.logoColors > 1 ? fallbackAddon(fc, (x) => x.color[colorKey] ?? x.color["3"] ?? 0, t.color[colorKey] ?? t.color["3"] ?? 0) : 0;
+  // Past 3 colours the step continues rather than clamping to 3 (color-addon.ts):
+  // an unlaminated 4-colour bag used to be priced exactly like a 3-colour one.
+  const colorOf = (rec: Record<string, number> | undefined) =>
+    colorAddonFromTable(colorTableFromRecord(rec), spec.logoColors);
+  const color = spec.logoColors > 1 ? fallbackAddon(fc, (x) => colorOf(x.color), colorOf(t.color)) : 0;
   const handle = spec.hasHandles ? fallbackAddon(fc, (x) => x.handle, t.handle) : 0;
   return { unit: base + color + handle, bd: { baseCny: r3(base), colorCny: r3(color), handleCny: r3(handle), lamCny: 0 } };
 }
