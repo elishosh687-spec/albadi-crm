@@ -10,17 +10,21 @@
  */
 
 import { getEstimatorCoeffs, DEFAULT_CARTON_COEF, type EstimatorCoeffs, type FactoryCoef, type CartonCoef } from "./estimator-config";
+import { getFactoryConfig } from "./config";
 
 const TIERS = [3000, 5000, 10000] as const;
 
-// Shipping safety buffer (Eli 2026-07-02). The carton CBM model under-estimates
-// on small / laminated bags, and sea shipping is pass-through — a low estimate is
-// a DIRECT loss. We inflate the quoted CBM so we rarely under-quote. Laminated
-// bags pack denser (stiffer) than the flat-stack model assumes → a larger buffer.
-// Validated on 13 confidence-high 3D quotes (scripts/_compare-3-models.ts): raw
-// shipping under-quoted >10% on 2 of them; these buffers pull that to ~0. Tunable.
-const SHIPPING_BUFFER_BASE = 0.15;
-const SHIPPING_BUFFER_LAM = 0.30;
+// Shipping safety buffer — % added to the physical CBM/bag so we rarely
+// under-quote pass-through shipping. Set 2026-07-02 as 15%/30% on 2 quotes;
+// re-measured 2026-09-09 on 44 factory cartons: the raw model sits 5–9% under,
+// 15% centres plain bags at +4.6%, and 30% on laminated bags put 10 of 15
+// quotes 10–45% OVER (laminated 10% → +4%). Live values come from the factory
+// config (settings screen); these are only the fallback.
+const DEFAULT_SHIPPING_BUFFER_BASE = 0.15;
+const DEFAULT_SHIPPING_BUFFER_LAM = 0.10;
+// Below the first price tier the catalog has no data and factories quote small
+// runs at 1.5–2× — the 1,000-qty rows in the quote log sit 50% above the model.
+const MIN_QTY = 3000;
 
 export interface EstimateSpec {
   widthCm: number;
@@ -69,6 +73,10 @@ export interface EstimateResult {
 const r2 = (n: number) => Math.round(n * 100) / 100;
 const r3 = (n: number) => Math.round(n * 1000) / 1000;
 
+/** Wine/bottle-style geometry the area model cannot price — see MIN_QTY note. */
+export function isNarrowTall(s: { heightCm: number; depthCm: number; widthCm: number }): boolean {
+  return s.depthCm > 0 && s.depthCm <= 10 && s.heightCm >= 1.5 * s.widthCm;
+}
 export function bagAreaCm2(h: number, d: number, w: number): number {
   return 2 * h * w + 2 * h * d + w * d;
 }
@@ -157,6 +165,16 @@ export async function estimateFactoryCny(
   if (spec.quantity > SANE_MAX_QTY) {
     return { ok: false, refused: `כמות ${spec.quantity} חריגה (מעל ${SANE_MAX_QTY.toLocaleString("he-IL")}) — שלח למפעל`, areaCm2: r2(area) };
   }
+  if (!opts?.measure && spec.quantity < MIN_QTY) {
+    return { ok: false, refused: `כמות ${spec.quantity.toLocaleString("he-IL")} מתחת למינימום ${MIN_QTY.toLocaleString("he-IL")} — אין נתוני מחיר, שלח למפעל`, areaCm2: r2(area) };
+  }
+  // Narrow-and-tall gusseted bags (wine / bottle style: depth ≤ 10 cm, height ≥
+  // 1.5× width) are a different construction — every one in the quote log came
+  // in 40–50% ABOVE the area model (H50×D9×W33: ¥2.20 vs ¥1.12), and they are
+  // also what pushed the refit over its accuracy gate. Send them to the factory.
+  if (!opts?.measure && isNarrowTall(spec)) {
+    return { ok: false, refused: "שקית צרה וגבוהה (עומק ≤ 10, גובה ≥ 1.5× רוחב) — המודל מפספס בצורה הזו, שלח למפעל", areaCm2: r2(area) };
+  }
   const anchoredQty = spec.quantity > coeffs.maxQty;
   // snapTier already picks the largest tier ≤ qty (→ 10k for anything above),
   // but force the top TIER explicitly when anchoring so the intent is clear.
@@ -186,7 +204,14 @@ export async function estimateFactoryCny(
 
   const platePer = winner.fc.plateFeePerColor ? Math.max(0, winner.fc.plateFeePerColor.makeFee + winner.fc.plateFeePerColor.perCm2 * area) : 0;
   const plateOneTime = spec.hasLamination ? r2(platePer * Math.max(1, spec.logoColors)) : 0;
-  const shippingBuffer = opts?.measure ? 0 : (spec.hasLamination ? SHIPPING_BUFFER_LAM : SHIPPING_BUFFER_BASE);
+  let shippingBuffer = 0;
+  if (!opts?.measure) {
+    const cfg = await getFactoryConfig().catch(() => null);
+    const pct = spec.hasLamination
+      ? (cfg?.estimatorShippingBufferLamPct ?? DEFAULT_SHIPPING_BUFFER_LAM * 100)
+      : (cfg?.estimatorShippingBufferPct ?? DEFAULT_SHIPPING_BUFFER_BASE * 100);
+    shippingBuffer = Math.max(0, pct) / 100;
+  }
   const carton = predictCarton(area, spec, winner.factory, coeffs.carton ?? DEFAULT_CARTON_COEF, shippingBuffer);
 
   // Flat / tray / out-of-envelope geometry → the CBM (hence shipping) is not

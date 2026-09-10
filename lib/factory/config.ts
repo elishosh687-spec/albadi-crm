@@ -56,6 +56,8 @@ export const DEFAULT_FACTORY_CONFIG: FactoryPricingConfig = {
   profitMarginByQuantity: { "1000": 40, "3000": 40, "5000": 40, "10000": 40 },
   commissionPct: 10,
   negotiationBufferAgorot: 0,
+  estimatorShippingBufferPct: 15,
+  estimatorShippingBufferLamPct: 10,
   laminationPlateFeePerColorCny: 500,
   currency: "ILS",
   paymentTerms: { defaultPlanId: DEFAULT_PAYMENT_PLAN_ID, vatPct: VAT_PCT },
@@ -96,6 +98,13 @@ function normalizeConfig(raw: FactoryPricingConfig): FactoryPricingConfig {
       ...out,
       seaCarriers: [YEADIM_CARRIER],
       activeSeaCarrierId: YEADIM_CARRIER.id,
+    };
+  }
+  if (out.estimatorShippingBufferPct === undefined || out.estimatorShippingBufferLamPct === undefined) {
+    out = {
+      ...out,
+      estimatorShippingBufferPct: out.estimatorShippingBufferPct ?? 15,
+      estimatorShippingBufferLamPct: out.estimatorShippingBufferLamPct ?? 10,
     };
   }
   if (out.assumedShipmentCbm === undefined) {

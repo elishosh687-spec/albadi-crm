@@ -178,6 +178,13 @@ export function looValidate(cat: Pt[], ql: Pt[]): LooResult {
   const baseModels: Record<string, FacModel> = {}; for (const f of FACS) baseModels[f] = buildModel(cat, ql, f);
   for (const m of ql.filter((p) => p.qty <= MAX_QTY)) {
     if (!(FACS as readonly string[]).includes(m.factory)) { refused.push(`${m.size} ${m.factory} (no grid)`); continue; }
+    // Mirror the estimator's own refusals (lib/factory/estimator.ts): rows it
+    // would never quote must not score it. Before this, 1,000-qty and
+    // narrow-tall (wine) bags pushed the LOO median to 7.3% > the 6% gate and
+    // froze the coefficients on the June fit.
+    if (m.qty < 3000) { refused.push(`${m.size} q${m.qty} (below MOQ)`); continue; }
+    const dm = dimsStr(m.size);
+    if (dm && dm.d > 0 && dm.d <= 10 && dm.h >= 1.5 * dm.w) { refused.push(`${m.size} (narrow-tall)`); continue; }
     const model = m.hasLam ? buildModel(cat, ql, m.factory, `${m.size}|${m.qty}|${m.hasLam}|${m.hasHandle}`) : baseModels[m.factory];
     const pr = predict(model, m);
     if (!pr) { refused.push(`${m.size} ${m.factory} (combo)`); continue; }

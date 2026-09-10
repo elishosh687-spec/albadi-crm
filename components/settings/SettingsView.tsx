@@ -117,7 +117,7 @@ export function SettingsView({ apiToken }: { apiToken: string }) {
   };
 
   const updateNumber = (
-    key: "usdToIls" | "usdToCny" | "ilsToCny" | "defaultProfitMargin" | "commissionPct" | "negotiationBufferAgorot" | "laminationPlateFeePerColorCny",
+    key: "usdToIls" | "usdToCny" | "ilsToCny" | "defaultProfitMargin" | "commissionPct" | "negotiationBufferAgorot" | "laminationPlateFeePerColorCny" | "estimatorShippingBufferPct" | "estimatorShippingBufferLamPct",
     v: string
   ) => {
     const num = Number(v);
@@ -432,6 +432,8 @@ export function SettingsView({ apiToken }: { apiToken: string }) {
           <NumField label="רווח ברירת מחדל" suffix="%" hint="נופל-חזרה כשאין ערך בטבלת הכמויות (לכמויות חופשיות)" value={state.defaultProfitMargin} step={1} onChange={(v) => updateNumber("defaultProfitMargin", v)} error={errors.defaultProfitMargin as string | undefined} />
           <NumField label="עמלת מכירות" suffix="%" badge="לבוס בלבד" accent hint="אחוז מסכום העסקה הכולל — לא משפיע על מחיר הלקוח." value={state.commissionPct ?? 10} step={0.5} onChange={(v) => updateNumber("commissionPct", v)} error={errors.commissionPct as string | undefined} />
           <NumField label="מרווח מיקוח" suffix="אג׳/שקית" hint="מתווסף למחיר כל שקית (בוט + ידני) כמקום לרדת בהתמקחות. 0 = כבוי." value={state.negotiationBufferAgorot ?? 0} step={1} onChange={(v) => updateNumber("negotiationBufferAgorot", v)} error={errors.negotiationBufferAgorot as string | undefined} />
+          <NumField label="מרווח ביטחון שילוח — משוער" suffix="%" hint="המחשבון המשוער מנפח את נפח האריזה (CBM) באחוז הזה לפני חישוב השילוח, כדי לא לתמחר נמוך. נמדד 9.9.26: המודל הפיזי נמוך ב-5–9% מהמציאות, 15% מרכז אותו. 0 = בלי מרווח." value={state.estimatorShippingBufferPct ?? 15} step={1} onChange={(v) => updateNumber("estimatorShippingBufferPct", v)} error={errors.estimatorShippingBufferPct as string | undefined} />
+          <NumField label="מרווח ביטחון שילוח — משוער, למינציה" suffix="%" hint="אותו דבר לשקיות למינציה. היה 30% (נקבע על 2 הצעות) והוציא 10 מ-15 הצעות ב-10–45% מעל האמת; 10% מרכז אותן ב-+4%." value={state.estimatorShippingBufferLamPct ?? 10} step={1} onChange={(v) => updateNumber("estimatorShippingBufferLamPct", v)} error={errors.estimatorShippingBufferLamPct as string | undefined} />
           <NumField label="עמלת למינציה (פלייט)" suffix="¥/צבע" hint="עלות המפעל לפלייט למינציה, פר צבע (חד-פעמי, רק על שקיות עם למינציה). ברירת מחדל ¥500." value={state.laminationPlateFeePerColorCny ?? 500} step={50} onChange={(v) => updateNumber("laminationPlateFeePerColorCny", v)} error={errors.laminationPlateFeePerColorCny as string | undefined} />
         </div>
         <div className="mt-4 rounded-lg border border-border/60 bg-background/30 p-3">
@@ -765,6 +767,10 @@ function validate(s: FactoryPricingConfig): Record<string, unknown> {
     errors.commissionPct = "חובה 0–100";
   if (s.negotiationBufferAgorot !== undefined && !(s.negotiationBufferAgorot >= 0 && s.negotiationBufferAgorot <= 1000))
     errors.negotiationBufferAgorot = "חובה 0–1000";
+  for (const k of ["estimatorShippingBufferPct", "estimatorShippingBufferLamPct"] as const) {
+    const v = s[k];
+    if (v !== undefined && !(v >= 0 && v <= 100)) errors[k] = "חובה 0–100";
+  }
   if (s.laminationPlateFeePerColorCny !== undefined && !(s.laminationPlateFeePerColorCny >= 0))
     errors.laminationPlateFeePerColorCny = "חובה ≥ 0";
   if (s.profitMarginByQuantity) {

@@ -185,6 +185,15 @@ export interface FactoryPricingConfig {
    */
   negotiationBufferAgorot?: number;
   /**
+   * Estimator ("מחשבון משוער") shipping safety buffers, % added to the physical
+   * CBM/bag before shipping is priced. Measured 2026-09-09 on 44 factory
+   * cartons: the raw model sits ~5–9% UNDER reality, so 15% (plain) centres it
+   * at +4.6% and 10% (laminated) at +4%. The old hardcoded 30% for laminated
+   * put 10 of 15 quotes 10–45% over. 0 = raw model.
+   */
+  estimatorShippingBufferPct?: number;
+  estimatorShippingBufferLamPct?: number;
+  /**
    * Factory lamination plate fee, ¥ PER COLOUR (one-time), charged only on
    * laminated bags. Eli 2026-08-04: a single global default (¥500) editable in
    * settings, replacing the varying per-product catalog values. Optional —
