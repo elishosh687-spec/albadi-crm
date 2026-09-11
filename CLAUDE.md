@@ -114,6 +114,28 @@ GHL / OpenAI credential is set, so a path that slips a stub fails loudly rather
 than messaging anyone. The branch is a full copy of production — tests seed
 their own `test:ci-*` rows and never print customer data.
 
+**Who guards every door — `tests/integration/route-gates.test.ts` (2026-09-11).**
+Every `app/api/**/route.ts` must fall into exactly ONE bucket: `bearer`
+(declares `authorized()`/`authed()`, exercised by the sweep), `own-gate`
+(widgetAuthed / salesAuthed / verifyWidgetToken / an import secret / a webhook
+signature / inline BOT_SECRET — exercised: every method, no credential → 401),
+`middleware` (no check of its own, `/api/factory/*` behind the cookie — asserted
+against `middleware.ts`), `public` (an explicit reason each: the login, the
+customer 3D configurator, the media proxies GHL fetches, OAuth), or
+`unprotected` (a finding, `it.fails` until fixed). A new route that matches
+nothing fails the coverage test. Two findings on day one, both real:
+`POST /api/ai/chat` (no auth, feeds lead names/phones/notes to an LLM and streams
+the answer; only caller is the dead v3 dashboard) and `/api/integrations/outbound`
+(fails OPEN by design while `GHL_OUTBOUND_SECRET` is unset — and it is unset in
+production a month later; a POST makes the CRM WhatsApp a lead).
+Two test-env facts worth knowing: `lib/messaging/index.ts` picks its backend with
+a CommonJS `require`, which vitest cannot resolve, so the integration project
+aliases `@/lib/messaging` to `tests/shims/messaging.ts`; and
+`lib/manychat/config.ts` still throws at import without `MANYCHAT_TOKEN`, which
+`app/actions/v2.ts` drags into several widget routes — the variable is set in
+prod, so it is set in the test env too. Removing it from Vercel would break
+those routes at import.
+
 **CI:** the `integration` job in `test.yml` creates `ci-<run_id>` from `main`,
 runs, and deletes it in `if: always()` (plus a sweep of `ci-*` branches older
 than a day — the free tier caps at 10). It needs **`NEON_API_KEY`** as a repo

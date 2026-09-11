@@ -11,6 +11,9 @@
  * (.mts because package.json has no "type":"module".)
  */
 import { defineConfig } from "vitest/config";
+import { fileURLToPath } from "node:url";
+
+const here = fileURLToPath(new URL(".", import.meta.url));
 
 const EXCLUDE = [
   "**/node_modules/**",
@@ -51,6 +54,12 @@ export default defineConfig({
       },
       {
         extends: true,
+        resolve: {
+          alias: [
+            // The messaging adapter `require()`s its backend — see tests/shims/messaging.ts.
+            { find: /^@\/lib\/messaging$/, replacement: `${here}tests/shims/messaging.ts` },
+          ],
+        },
         test: {
           name: "integration",
           include: ["tests/integration/**/*.test.ts"],
@@ -71,6 +80,18 @@ export default defineConfig({
             WIDGET_SALES_TOKEN: "ci-sales-token",
             ADMIN_PASSWORD: "ci-admin-password",
             SUPERVISOR_BYPASS: "1", // followups supervisor: approve the template, no LLM
+            // Custom-gate secrets, so "no credential → 401" is a real check and
+            // not the accidental result of an unset variable.
+            GHL_INBOUND_SECRET: "ci-ghl-inbound",
+            GHL_OUTBOUND_SECRET: "ci-ghl-outbound",
+            FB_IMPORT_SECRET: "ci-fb-import",
+            WEBSITE_IMPORT_SECRET: "ci-website-import",
+            BRIDGE_WEBHOOK_SECRET: "ci-bridge-webhook",
+            GHL_WEBHOOK_ENFORCE: "1",
+            // Dead ManyChat path, but lib/manychat/config.ts still throws at import
+            // without it and app/actions/v2.ts drags it in — set in prod, so set here.
+            MANYCHAT_TOKEN: "ci-manychat-legacy",
+            USE_BRIDGE: "1", // permanent in prod; without it the adapter requires the dead ManyChat client
           },
           setupFiles: ["tests/setup.integration.ts"],
           // Tests share one database and a few rows (app_config) — run files
