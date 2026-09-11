@@ -25,12 +25,14 @@
  *   https://…/api/integrations/outbound?secret=<GHL_OUTBOUND_SECRET>
  * `Authorization: Bearer <secret>` is accepted too.
  *
- * It fails OPEN while GHL_OUTBOUND_SECRET is unset, because this path carries
- * live traffic (tens of Eli's Inbox replies a day) and a hard requirement
- * shipped ahead of the configuration would silently stop his replies reaching
- * customers. Unauthenticated hits are logged loudly and audited to
- * `bridge_events` so the gap is visible rather than assumed closed. Setting
- * the env var and appending the query param closes it, in either order.
+ * It fails CLOSED (2026-09-11). It failed OPEN from 2026-08-16 while
+ * GHL_OUTBOUND_SECRET was "about to be" configured — and a month later it still
+ * was not, so anyone who knew a ghl_contact_id could make the CRM WhatsApp that
+ * customer. The route-gates test found it. Now: no secret configured → 401 with
+ * a distinct error, so a missing env var stops Eli's Inbox replies LOUDLY
+ * (watchdog + logs) instead of silently leaving the door open. Order of
+ * deployment matters: the provider's delivery URL in GHL carries the secret
+ * first, the env var second, this code third.
  */
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
@@ -73,18 +75,20 @@ function secretMatches(given: string, expected: string): boolean {
   return diff === 0;
 }
 
-type AuthOutcome = { ok: true; mode: "verified" | "unconfigured" } | { ok: false };
+type AuthOutcome = { ok: true; mode: "verified" } | { ok: false; reason: "unconfigured" | "bad_or_missing_secret" };
 
 function checkAuth(req: NextRequest): AuthOutcome {
   const expected = process.env.GHL_OUTBOUND_SECRET?.trim();
-  if (!expected) return { ok: true, mode: "unconfigured" };
+  // No secret configured = the door stays shut. A misconfiguration must never
+  // become an open endpoint that sends WhatsApp messages.
+  if (!expected) return { ok: false, reason: "unconfigured" };
   const fromQuery = req.nextUrl.searchParams.get("secret")?.trim() ?? "";
   const fromHeader = (req.headers.get("authorization") ?? "")
     .replace(/^Bearer\s+/i, "")
     .trim();
   const given = fromQuery || fromHeader;
   if (given && secretMatches(given, expected)) return { ok: true, mode: "verified" };
-  return { ok: false };
+  return { ok: false, reason: "bad_or_missing_secret" };
 }
 
 function extractText(p: GHLOutboundPayload): string | null {
@@ -110,7 +114,14 @@ function stripMirrorLabel(text: string): { body: string; wasLabelled: boolean } 
 export const POST = withRequestLog("webhook.ghl", async (req: NextRequest, log): Promise<NextResponse> => {
   const auth = checkAuth(req);
   if (!auth.ok) {
-    log.warn("auth.rejected", { reason: "bad_or_missing_secret" });
+    if (auth.reason === "unconfigured") {
+      // Eli's Inbox replies are NOT reaching customers right now. Loud on purpose.
+      log.error("auth.unconfigured_refused", undefined, {
+        msg: "GHL_OUTBOUND_SECRET is not set — every GHL Inbox reply is being refused. Set the env var (and the ?secret= on the provider delivery URL in GHL).",
+      });
+      return NextResponse.json({ error: "unauthorized", reason: "secret_not_configured" }, { status: 401 });
+    }
+    log.warn("auth.rejected", { reason: auth.reason });
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
@@ -150,31 +161,6 @@ export const POST = withRequestLog("webhook.ghl", async (req: NextRequest, log):
     return NextResponse.json({ error: "unknown location" }, { status: 403 });
   }
 
-  // Make the unauthenticated state visible instead of assumed-closed. One row
-  // per hit, so "is anyone still calling this without the secret?" is a query,
-  // not a guess.
-  if (auth.mode === "unconfigured") {
-    log.warn("auth.unconfigured", {
-      contactId: payload.contactId ?? null,
-      msg:
-        "UNAUTHENTICATED HIT — GHL_OUTBOUND_SECRET is not set; this endpoint sends real " +
-        "WhatsApp messages. Set the env var and append ?secret=… to the provider delivery URL in GHL.",
-    });
-    try {
-      await db.insert(bridgeEvents).values({
-        evtId: `ghl_outbound_open:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`,
-        type: "ghl_outbound.unauthenticated",
-        occurredAt: new Date(),
-        payload: {
-          contactId: payload.contactId ?? null,
-          locationId: payload.locationId ?? null,
-          userAgent: headerSnapshot["user-agent"] ?? null,
-        } as unknown as Record<string, unknown>,
-      });
-    } catch {
-      // Auditing must never block a legitimate reply from reaching a customer.
-    }
-  }
 
   const contactId = payload.contactId?.trim();
   const phone = payload.phone ? normalizePhone(payload.phone) : null;

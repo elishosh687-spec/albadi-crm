@@ -224,12 +224,11 @@ describe("findings (it.fails until fixed — reported, not weakened)", () => {
     expect([401, 403]).toContain(res.status);
   });
 
-  // ⚠️ REAL — 2026-09-11. /api/integrations/outbound is the GHL conversation-
-  // provider hook: a POST makes the CRM send a WhatsApp to a lead. Its check
-  // reads GHL_OUTBOUND_SECRET and, when the variable is UNSET, returns
-  // {ok:true, mode:"unconfigured"} — and it is unset in production. Fix: set
-  // the secret in Vercel + GHL, and make "unconfigured" refuse. Flip when fixed.
-  it.fails("POST /api/integrations/outbound refuses when GHL_OUTBOUND_SECRET is unset", async () => {
+  // Fixed 2026-09-11 (was a finding: the GHL conversation-provider hook — a
+  // POST makes the CRM WhatsApp a lead — failed OPEN while GHL_OUTBOUND_SECRET
+  // was unset, and it was unset in production for a month). Now a missing
+  // secret refuses with a distinct reason. Plain test so it cannot regress.
+  it("POST /api/integrations/outbound refuses when GHL_OUTBOUND_SECRET is unset", async () => {
     const saved = process.env.GHL_OUTBOUND_SECRET;
     delete process.env.GHL_OUTBOUND_SECRET;
     try {
@@ -238,7 +237,8 @@ describe("findings (it.fails until fixed — reported, not weakened)", () => {
         new NextRequest(new URL("http://localhost/api/integrations/outbound"), { method: "POST", body: "{}", headers: { "content-type": "application/json" } }),
         undefined,
       );
-      expect([401, 403]).toContain(res.status);
+      expect(res.status).toBe(401);
+      expect(await res.json()).toMatchObject({ reason: "secret_not_configured" });
     } finally {
       process.env.GHL_OUTBOUND_SECRET = saved;
     }
