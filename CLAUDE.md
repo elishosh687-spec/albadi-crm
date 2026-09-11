@@ -123,11 +123,17 @@ signature / inline BOT_SECRET — exercised: every method, no credential → 401
 against `middleware.ts`), `public` (an explicit reason each: the login, the
 customer 3D configurator, the media proxies GHL fetches, OAuth), or
 `unprotected` (a finding, `it.fails` until fixed). A new route that matches
-nothing fails the coverage test. Two findings on day one, both real:
-`POST /api/ai/chat` (no auth, feeds lead names/phones/notes to an LLM and streams
-the answer; only caller is the dead v3 dashboard) and `/api/integrations/outbound`
-(fails OPEN by design while `GHL_OUTBOUND_SECRET` is unset — and it is unset in
-production a month later; a POST makes the CRM WhatsApp a lead).
+nothing fails the coverage test. Two findings on day one, both real and both
+**fixed the same day** (now plain regression tests): `POST /api/ai/chat` had no
+auth at all (fed lead names/phones/notes to an LLM and streamed the answer; only
+caller is the dead v3 dashboard) — it takes the dashboard cookie or a Bearer
+BOT_SECRET now; and `/api/integrations/outbound` (the GHL conversation-provider
+hook — a POST makes the CRM WhatsApp a lead) failed OPEN while
+`GHL_OUTBOUND_SECRET` was unset, which it still was a month after that was
+declared temporary. **It fails CLOSED now:** no secret → 401
+`secret_not_configured` + an error log line. The secret is in Vercel and on the
+provider's Delivery URL in the GHL Marketplace app (`?secret=…`); rotate both
+together, GHL first, or Eli's Inbox replies stop — loudly, which is the point.
 Two test-env facts worth knowing: `lib/messaging/index.ts` picks its backend with
 a CommonJS `require`, which vitest cannot resolve, so the integration project
 aliases `@/lib/messaging` to `tests/shims/messaging.ts`; and
