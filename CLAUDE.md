@@ -134,6 +134,12 @@ declared temporary. **It fails CLOSED now:** no secret → 401
 `secret_not_configured` + an error log line. The secret is in Vercel and on the
 provider's Delivery URL in the GHL Marketplace app (`?secret=…`); rotate both
 together, GHL first, or Eli's Inbox replies stop — loudly, which is the point.
+**Where that URL lives:** there is NO API for it (`/conversations/providers`
+answers 400 in API version 2021-07-28). marketplace.gohighlevel.com → My apps →
+"Albadi WhatsApp" (Live) → Modules → Conversation Providers → ⋯ → View details.
+The form is editable even on the LIVE version; Save applies immediately. A GHL
+reply that hits a wrong URL shows as `ghl_app.OutboundMessage` with
+`status:"failed"` in `bridge_events` — that is the tell (2026-09-11).
 Two test-env facts worth knowing: `lib/messaging/index.ts` picks its backend with
 a CommonJS `require`, which vitest cannot resolve, so the integration project
 aliases `@/lib/messaging` to `tests/shims/messaging.ts`; and
