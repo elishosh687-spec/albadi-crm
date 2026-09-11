@@ -1,3 +1,12 @@
+/**
+ * POST /api/ai/chat — the dashboard's "ask the CRM" panel. Loads every lead's
+ * name / phone / notes / quote into an LLM prompt and streams the answer.
+ *
+ * AUTH (added 2026-09-11 — until then this route had NO gate and sat outside
+ * every middleware prefix, so anyone with the URL could read an LLM digest of
+ * the whole lead table). Accepts the dashboard cookie (same-origin fetch from
+ * /dashboard sends it) or a Bearer BOT_SECRET for scripts.
+ */
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { leads } from "@/drizzle/schema";
@@ -6,6 +15,16 @@ import { withRequestLog } from "@/lib/observability/log";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
+
+function authorized(req: NextRequest): boolean {
+  const password = process.env.ADMIN_PASSWORD;
+  const cookie = req.cookies.get("albadi_auth")?.value;
+  if (password && cookie && cookie === password) return true;
+  const accepted = [process.env.BOT_SECRET, process.env.CALL_TRIGGER_SECRET]
+    .filter(Boolean)
+    .map((s) => `Bearer ${s}`);
+  return accepted.includes(req.headers.get("authorization") ?? "");
+}
 
 const OPENAI_URL = "https://api.openai.com/v1/chat/completions";
 
@@ -63,6 +82,10 @@ function buildLeadContext(rows: Awaited<ReturnType<typeof fetchLeads>>) {
 }
 
 export const POST = withRequestLog("setter", async (req: NextRequest, log) => {
+  if (!authorized(req)) {
+    log.warn("unauthorized");
+    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  }
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
     log.warn("chat.api_key_missing");

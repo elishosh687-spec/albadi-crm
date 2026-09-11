@@ -96,8 +96,9 @@ const PROBE_BODIES: Record<string, string> = {
 
 /** Findings — real gaps, reported to Eli 2026-09-11. `it.fails` until fixed. */
 const UNPROTECTED: Record<string, string> = {
-  "app/api/ai/chat/route.ts":
-    "POST has NO auth and is outside every middleware prefix: it loads lead names / phones / notes / quotes into an LLM prompt and streams the answer to whoever asked. Only caller is the dead dashboard (app/dashboard/v3/_components/AiChat.tsx).",
+  // 2026-09-11: POST /api/ai/chat was here (no auth, streamed an LLM digest of
+  // the lead table to anyone). Fixed the same day — it now requires the
+  // dashboard cookie or a Bearer BOT_SECRET and lives in the `bearer` bucket.
 };
 
 function bucketOf(rel: string): "bearer" | "own-gate" | "middleware" | "public" | "unprotected" | null {
@@ -212,9 +213,9 @@ describe("own-gate routes refuse a request with no credential", () => {
 // ---------------------------------------------------------------------------
 
 describe("findings (it.fails until fixed — reported, not weakened)", () => {
-  // ⚠️ REAL — 2026-09-11. Fix: require the dashboard cookie (or delete with
-  // the dead v3 tree). Flip to `it` when it answers 401.
-  it.fails("POST /api/ai/chat refuses a request with no credential", async () => {
+  // Fixed 2026-09-11 (was a finding: no gate at all). Kept as a plain test so
+  // the fix cannot quietly regress.
+  it("POST /api/ai/chat refuses a request with no credential", async () => {
     const mod = (await import(path.join(ROOT, "app/api/ai/chat/route.ts"))) as { POST: (r: NextRequest, c: unknown) => Promise<Response> };
     const res = await mod.POST(
       new NextRequest(new URL("http://localhost/api/ai/chat"), { method: "POST", body: JSON.stringify({ message: "מי הלידים החמים?" }), headers: { "content-type": "application/json" } }),
