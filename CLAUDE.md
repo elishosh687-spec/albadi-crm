@@ -1001,6 +1001,14 @@ repo: it is 2.8MB of real customer conversation and must never reach a git
 working tree. The run wipes and rewrites the folder, so it is always current
 and never half-stale.
 
+**The WhatsApp side exports too** — `npx tsx scripts/export-whatsapp.ts
+--with-calls` writes a file per customer to `content/albadi/whatsapp/`: every
+message AND every call transcript in ONE chronological timeline, opening with
+that lead's latest analyst verdict. That combined view is the actual story of a
+customer (the quote on WhatsApp, the call where he pushed back, the silence
+after) and is what to reach for; the calls-only export is the narrower tool.
+Eli's own alert thread is excluded unless `--include-eli`.
+
 **Dry-run before going live.** `npx tsx scripts/_test-call-pipeline.ts` (with `DATABASE_URL` set) runs all four stages inline against a real recent call and prints the note body that WOULD be posted — DB is touched (cursor stays untouched), but `addContactNote` is NOT called. Use this to validate Hebrew analysis quality before flipping the cron on.
 
 **Upgrade path for analysis quality.** If `gpt-4o-mini` underperforms on spoken Hebrew nuance, swap the LLM in `lib/autoresponder/call-analysis.ts` to a Claude-Sonnet wrapper (~30 line change behind the same `analyzeCall` signature). Don't pre-optimize — see real outputs first.
