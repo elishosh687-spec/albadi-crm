@@ -100,11 +100,56 @@ describe("recordJobRun", () => {
     expect(text).toContain("HTTP 503");
   });
 
+  it("a success REMOVES a stale lastError — a merge alone cannot delete (regression, 2026-09-13)", async () => {
+    // JSON.stringify({lastError: undefined}) is "{}" and `jsonb || '{}'` is a
+    // no-op, so the old code's "clear this field" patch silently did nothing.
+    // Same bug, worse blast radius, in the watchdog's recovery below.
+    await recordJobRun("followups", { ok: true, status: 200 });
+    const text = flatten(execute.mock.calls[0][0]);
+    expect(text).toContain("- 'lastError'");
+  });
+
   it("never throws — a heartbeat must not break the job", async () => {
     execute.mockRejectedValueOnce(new Error("db down"));
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     await expect(recordJobRun("followups", { ok: true })).resolves.toBeUndefined();
     warn.mockRestore();
+  });
+});
+
+describe("the watchdog's recovery clears its own flag", () => {
+  beforeEach(() => execute.mockClear());
+
+  it("drops alertedAt and alertKind instead of merging undefined over them (regression, 2026-09-13)", async () => {
+    // The bug: `writeJob(job, { alertedAt: undefined, alertKind: undefined })`
+    // serialised to `{}`, so the flag survived every recovery — and each later
+    // tick saw it still set and re-sent the same "✅ חזרו לעבוד" list. Eli got
+    // the same eight jobs announced as recovered over and over for days.
+    execute.mockImplementation(async (q: unknown) => {
+      const t = flatten(q);
+      if (t.includes("SELECT value FROM app_config")) {
+        return {
+          rows: [
+            {
+              value: {
+                _installedAt: new Date(Date.now() - 30 * 864e5).toISOString(),
+                followups: { lastOkAt: new Date().toISOString(), lastStatus: "ok", alertedAt: "2026-09-12T13:05:46.641Z", alertKind: "late" },
+              },
+            },
+          ],
+        };
+      }
+      return { rows: [] };
+    });
+    const { runWatchdog } = await import("./jobs");
+    const res = await runWatchdog({ dry: true });
+    expect(res.recovered).toContain("followups");
+
+    execute.mockClear();
+    await runWatchdog({ dry: false }); // dry:false also DMs, which is stubbed out below
+    const writes = execute.mock.calls.map((c) => flatten(c[0])).filter((t) => t.includes("INSERT INTO app_config"));
+    expect(writes.length).toBeGreaterThan(0);
+    expect(writes.some((t) => t.includes("- 'alertedAt'") && t.includes("- 'alertKind'"))).toBe(true);
   });
 });
 

@@ -78,8 +78,21 @@ async function readStatus(): Promise<StatusDoc> {
   return r?.value ?? {};
 }
 
-async function writeJob(job: string, patch: Partial<JobState>): Promise<void> {
+/**
+ * Merge `patch` into the job's own sub-object, and REMOVE `clear` keys.
+ *
+ * ⚠️ `clear` exists because a merge cannot delete: `JSON.stringify({a:
+ * undefined})` is `"{}"` and `jsonb || '{}'` is a no-op, so passing undefined
+ * to unset a field silently does nothing. That is exactly how the watchdog's
+ * recovery failed to clear `alertedAt` — every later tick saw the flag still
+ * set and re-sent the same "✅ חזרו לעבוד" list, for days (2026-09-13).
+ */
+async function writeJob(job: string, patch: Partial<JobState>, clear: (keyof JobState)[] = []): Promise<void> {
   const json = JSON.stringify(patch);
+  // SINGLE quotes: in Postgres "x" is an IDENTIFIER, so a double-quoted key
+  // reads as a column name and the statement dies with "column does not
+  // exist". Keys come from `keyof JobState`, and the escape keeps it true.
+  const drop = sql.raw(clear.map((k) => ` - '${String(k).replace(/'/g, "''")}'`).join(""));
   // Merge into the job's own sub-object only (|| on the nested object), so two
   // jobs finishing in the same second can't overwrite each other's fields.
   await db.execute(sql`
@@ -89,7 +102,7 @@ async function writeJob(job: string, patch: Partial<JobState>): Promise<void> {
       value = jsonb_set(
         COALESCE(app_config.value, '{}'::jsonb),
         ARRAY[${job}::text],
-        COALESCE(app_config.value -> ${job}::text, '{}'::jsonb) || ${json}::jsonb,
+        (COALESCE(app_config.value -> ${job}::text, '{}'::jsonb)${drop}) || ${json}::jsonb,
         true
       ),
       updated_at = now()`);
@@ -102,12 +115,16 @@ export async function recordJobRun(
 ): Promise<void> {
   try {
     const now = new Date().toISOString();
-    await writeJob(job, {
-      lastRunAt: now,
-      lastStatus: r.ok ? "ok" : "failed",
-      lastDurationMs: r.durationMs,
-      ...(r.ok ? { lastOkAt: now, lastError: undefined } : { lastError: (r.error ?? `HTTP ${r.status ?? "?"}`).slice(0, 300) }),
-    });
+    await writeJob(
+      job,
+      {
+        lastRunAt: now,
+        lastStatus: r.ok ? "ok" : "failed",
+        lastDurationMs: r.durationMs,
+        ...(r.ok ? { lastOkAt: now } : { lastError: (r.error ?? `HTTP ${r.status ?? "?"}`).slice(0, 300) }),
+      },
+      r.ok ? ["lastError"] : [],
+    );
   } catch (e) {
     log.warn("job.heartbeat_write_failed", { job, err: e instanceof Error ? e.message : String(e) });
   }
@@ -224,7 +241,7 @@ export async function runWatchdog(opts?: { dry?: boolean }): Promise<WatchdogRes
     } else if (alertedAt != null) {
       recoverLines.push(`• ${c.label} — חזר לעבוד (הצליח ${fmtAge(c.minutesSinceOk)})`);
       recovered.push(c.job);
-      if (!dry) await writeJob(c.job, { alertedAt: undefined, alertKind: undefined });
+      if (!dry) await writeJob(c.job, {}, ["alertedAt", "alertKind"]);
     }
   }
 

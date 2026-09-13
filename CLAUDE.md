@@ -203,7 +203,19 @@ word. Eli: *"לוגים רציניים בלי התראה זה לא שווה, ו�
      [jobs.test.ts](lib/observability/jobs.test.ts) ("awaits the heartbeat");
      the old `settle()` cushion is gone from that file on purpose, so every
      assertion there now depends on the await.
-  2. **GitHub Actions stopped honouring the crons on 2026-08-27** — repo-wide
+  2. **The recovery never cleared its own flag**, so the ✅ re-sent forever.
+     `writeJob(job, { alertedAt: undefined })` serialises to `"{}"` and
+     `jsonb || '{}'` is a no-op — a merge cannot DELETE. The flag survived
+     every recovery, so each later tick saw it still set and re-announced the
+     same eight jobs; that is why his thread held far more ✅ than 🚨.
+     `writeJob` takes a `clear` list now and removes the keys with jsonb `-`.
+     ⚠️ **Single-quote those key names** — `"x"` is an IDENTIFIER in Postgres,
+     so the first cut died with `column "lastError" does not exist`, which
+     `recordJobRun` would have swallowed into a silent heartbeat outage.
+     The same `undefined` hole was clearing `lastError` on success: also fixed.
+     **Verify jsonb surgery against the real DB, not only against a mock** —
+     the unit test was green while the statement could not run at all.
+  3. **GitHub Actions stopped honouring the crons on 2026-08-27** — repo-wide
      scheduled runs fell from 123–153/day to 11–13, recovering only to ~50.
      `process-recordings` is a `*/5` job: it ran **7 times a day**.
      `factory-refresh` and `followups`, both `*/15`: 7 a day each. No workflow
