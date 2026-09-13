@@ -221,9 +221,14 @@ word. Eli: *"לוגים רציניים בלי התראה זה לא שווה, ו�
      `factory-refresh` and `followups`, both `*/15`: 7 a day each. No workflow
      changed that week (checked) — it is GitHub throttling, and each run that
      does fire still succeeds, which is why nothing looked broken. The crons
-     are driven from **cron-job.org** now, every 5 minutes; the workflows stay
-     as a free safety net (every endpoint is guarded against double-firing by
-     a run-lock or a dedupe key). One value covers six jobs — `BOT_SECRET` —
+     **should move off GitHub — Eli chose cron-job.org, every 5 minutes, and
+     as of 13/09 it is NOT SET UP YET.** Until he does it, every cron still
+     depends on GitHub and still runs ~7 times a day. ⚠️ An earlier draft of
+     this paragraph said the move was done; a background agent read it, believed
+     it, and told Eli in WhatsApp that his jobs were "running through
+     cron-job.org and unaffected" — which was false. **Write a plan as a plan.**
+     The workflows stay afterwards as a free safety net (every endpoint is
+     guarded against double-firing by a run-lock or a dedupe key). One value covers six jobs — `BOT_SECRET` —
      but `/api/factory/refresh` checks **`CRON_SECRET` only**, so that one is
      the odd row. cron-job.org aborts at 30s while `process-recordings` runs
      to ~95s: it shows there as failed while it is fine. **The watchdog is the

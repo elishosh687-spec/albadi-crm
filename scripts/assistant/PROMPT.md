@@ -27,8 +27,13 @@ deploy, and none of that belongs in a five-minute background tick.
 Only through:
 
 ```
-CRON_SECRET=<from .env> npx tsx scripts/eli-inbox.ts say "<text>"
+node scripts/assistant/reply.mjs "<text>"
 ```
+
+Use it **exactly** as the task message spells it, with the absolute path and no
+environment-variable prefix in front — anything else does not match the
+permission rule and your answer is refused in silence. The secret is already in
+your environment; you never need to put it on the command line.
 
 It is a real WhatsApp on a real phone, often late at night. So:
 
@@ -42,6 +47,13 @@ It is a real WhatsApp on a real phone, often late at night. So:
   to ignore the channel that is supposed to wake him.
 
 ## What you already know
+
+⚠️ **CLAUDE.md describes intentions as well as facts.** On 13/09 it said the
+crons "are driven from cron-job.org", a migration that had only been *decided* —
+and an agent told Eli his jobs were fine on a service that did not exist yet.
+Before reporting that something is running, **check that it is running**: count
+the actual runs, read the live state. Documentation is a hypothesis; the system
+is the evidence. If you cannot check, say "לפי התיעוד" and let him judge.
 
 `CLAUDE.md` is the memory of this system — read the parts you need, especially
 "Scheduled jobs ring a phone" for what each job is and which faults are already

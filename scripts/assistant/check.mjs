@@ -28,6 +28,9 @@ const STATE = join(PROJECT, ".claude", "assistant-state.json");
 const CURSOR = join(PROJECT, ".claude", "assistant-cursor");
 const LOCK = join(PROJECT, ".claude", "assistant.lock");
 const LOG = `${HOME}/Library/Logs/albadi-crm-assistant.log`;
+// Absolute, so the allow-list rule and the command the agent types are the
+// same string — a mismatch here costs a silently undelivered answer.
+const REPLY = join(DIR, "reply.mjs");
 
 const log = (m) => appendFileSync(LOG, `${new Date().toISOString()}  ${m}\n`);
 const ilt = (iso) =>
@@ -90,7 +93,8 @@ const task = [
   "מה שחדש:",
   ...worth.map((m) => `[${ilt(m.at)}] ${m.who === "eli" ? "אלי" : "המערכת"}: ${m.text}`),
   "",
-  "חקור, וענה לו בוואטסאפ לפי ההנחיות. אל תתקן כלום — תשאל אותו קודם.",
+  `חקור, וענה לו רק דרך:  node ${REPLY} "<תשובה>"`,
+  "אל תתקן כלום — תשאל אותו קודם.",
 ].filter(Boolean).join("\n");
 
 // Exact allow-list. Read-only by construction: no Edit, no Write, no git, no
@@ -100,8 +104,8 @@ const allowed = [
   "Read",
   "Glob",
   "Grep",
-  "Bash(npx tsx scripts/eli-inbox.ts say:*)",
-  "Bash(npx tsx scripts/eli-inbox.ts read:*)",
+  `Bash(node ${REPLY}:*)`,
+  `Bash(npx tsx scripts/eli-inbox.ts read:*)`,
   "Bash(gh run list:*)",
   "Bash(gh run view:*)",
   "Bash(git log:*)",
@@ -134,7 +138,7 @@ if (res.status === 0) {
 // Retry is not possible — after two failures, say so rather than going quiet.
 st.attempts = (st.attempts || 0) + 1;
 if (st.attempts >= 2) {
-  spawnSync("npx", ["tsx", "scripts/eli-inbox.ts", "say", `לא הצלחתי לטפל בהתראה מ-${ilt(worth[0].at)} (פעמיים ברצף). תפתח אותי במחשב.`], { cwd: PROJECT, env });
+  spawnSync(process.execPath, [REPLY, `לא הצלחתי לטפל בהתראה מ-${ilt(worth[0].at)} (פעמיים ברצף). תפתח אותי במחשב.`], { cwd: PROJECT, env });
   log("gave up after 2 attempts — told Eli");
   st.attempts = 0;
 }
