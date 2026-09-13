@@ -130,11 +130,16 @@ export function withJob<Req extends Request = Request, Ctx = unknown>(
     try {
       const res = await handler(req, log, ctx);
       const durationMs = Date.now() - started;
-      if (res.status >= 200 && res.status < 300) void recordJobRun(job, { ok: true, status: res.status, durationMs });
-      else if (res.status >= 500) void recordJobRun(job, { ok: false, status: res.status, durationMs });
+      // AWAIT, never `void`: the response returns and the lambda freezes, so a
+      // floating write is simply dropped. Reproduced 2026-09-13 — a 200 from
+      // /api/factory/refresh left jobs.status untouched for a day, and the
+      // watchdog WhatsApped Eli about a job that was running perfectly.
+      // recordJobRun never throws, so awaiting it cannot break the job.
+      if (res.status >= 200 && res.status < 300) await recordJobRun(job, { ok: true, status: res.status, durationMs });
+      else if (res.status >= 500) await recordJobRun(job, { ok: false, status: res.status, durationMs });
       return res;
     } catch (err) {
-      void recordJobRun(job, { ok: false, status: 500, error: err instanceof Error ? err.message : String(err), durationMs: Date.now() - started });
+      await recordJobRun(job, { ok: false, status: 500, error: err instanceof Error ? err.message : String(err), durationMs: Date.now() - started });
       throw err; // withRequestLog logs it and answers 500
     }
   });
@@ -204,12 +209,15 @@ export async function runWatchdog(opts?: { dry?: boolean }): Promise<WatchdogRes
       // One message per incident; nag again after 24h if still down.
       const stale = alertedAt == null || now - alertedAt > 24 * 60 * 60 * 1000;
       if (!stale) continue;
+      // "נכשל" and "לא רץ" are different incidents and must not share wording:
+      // a late job is usually the SCHEDULER missing its tick, not broken code,
+      // and reading "לא הצליח" sent us hunting for an exception that never was.
       const why =
         c.health === "failed"
-          ? `נכשל: ${c.state.lastError ?? "?"}`
+          ? `❌ נכשל — ${c.state.lastError ?? "?"}`
           : c.health === "never"
-            ? "לא רץ אף פעם"
-            : `לא הצליח ${fmtAge(c.minutesSinceOk)} (אמור כל ${JOBS[c.job].everyMin >= 60 ? `${JOBS[c.job].everyMin / 60} שעות` : `${JOBS[c.job].everyMin} דק׳`})`;
+            ? "⏳ לא רץ אף פעם"
+            : `⏳ לא רץ ${fmtAge(c.minutesSinceOk)} (אמור כל ${JOBS[c.job].everyMin >= 60 ? `${JOBS[c.job].everyMin / 60} שעות` : `${JOBS[c.job].everyMin} דק׳`}) — הריצה האחרונה הצליחה`;
       alertLines.push(`• ${c.label} — ${why}`);
       alerted.push(c.job);
       if (!dry) await writeJob(c.job, { alertedAt: new Date().toISOString(), alertKind: c.health === "failed" ? "failed" : "late" });
