@@ -1488,6 +1488,37 @@ endpoint; the flow is Contacts → Filters → field → Apply → "Unsaved chan
 *Save as new smart list*. Note "New smart list" in the name box is a real
 VALUE, not a placeholder — clear it or the name comes out concatenated.
 
+## Eli's own WhatsApp thread is a two-way console (built 2026-09-13)
+
+Every system alert already goes to Eli by `sendEliDM`, and anything he writes
+back to the business number lands in `messages` under his JID — so the thread
+is a console that needed no new integration, only a CLI:
+
+```bash
+DATABASE_URL="$(~/.local/node/bin/neonctl connection-string --project-id fragrant-morning-71359670 --org-id org-frosty-star-50411125)" \
+  npx tsx scripts/eli-inbox.ts read            # new since the last read
+#                             read --since 3h  # a window; leaves the cursor alone
+#                             say "<text>"     # a real WhatsApp to Eli
+```
+
+The cursor lives in `.claude/eli-inbox-cursor` (gitignored, per-machine) and
+advances to when the query STARTED, so a message written mid-run is re-read
+rather than skipped. A session can poll it in the background and answer there —
+which is where Eli reads anything operational.
+
+**`say` goes through prod on purpose.** `ELI_NOTIFY_JID` and the GreenAPI
+credentials are Production-scoped and `vercel env pull` masks them to `""`, so
+a local `sendEliDM` can only ever return `no_jid`.
+[/api/admin/eli-dm](app/api/admin/eli-dm/route.ts) is the bridge, and **the
+recipient is deliberately NOT a parameter** — it always goes to
+`ELI_NOTIFY_JID`, so even a leaked bearer can text Eli and nobody else. Do not
+generalise it into send-to-anyone; customer sends have their own audited paths
+(`sendBridgeMessage`, `sendTeamDM`) that attribute and record the message.
+
+⚠️ His number carries a `leads` row ("Max Baby", `NO_RESPONSE_REENGAGE`,
+paused `manual_toggle`). Leave it paused — it is the reason the bot has never
+tried to sell him bags.
+
 ## Messaging a colleague — "שלח לסיימון הודעה" (built 2026-08-25)
 
 When Eli says *send X a message* mid-session, X is usually a **colleague, not a

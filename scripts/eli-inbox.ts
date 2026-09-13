@@ -17,7 +17,6 @@
  * Needs DATABASE_URL — see CLAUDE.md for the neonctl one-liner. `say` also
  * needs the GreenAPI credentials, so it only works with a full prod env.
  */
-import { db } from "@/lib/db";
 import { sql } from "drizzle-orm";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -60,6 +59,9 @@ async function read(sinceArg: string | undefined): Promise<void> {
   const from = explicit ?? (readCursor() ? new Date(readCursor()!) : new Date(Date.now() - 36e5));
   const startedAt = new Date().toISOString();
 
+  // Imported here, not at the top: lib/db throws at import without
+  // DATABASE_URL, and `say` must work on a machine that has only the bearer.
+  const { db } = await import("@/lib/db");
   const r = await db.execute(sql`
     SELECT received_at, direction, sender, text
     FROM messages
