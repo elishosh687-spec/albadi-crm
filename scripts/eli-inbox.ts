@@ -9,13 +9,20 @@
  *
  *   npx tsx scripts/eli-inbox.ts read            # new since the last read
  *   npx tsx scripts/eli-inbox.ts read --since 3h # a window, cursor untouched
+ *   npx tsx scripts/eli-inbox.ts read --json     # machine-readable, for check.mjs
  *   npx tsx scripts/eli-inbox.ts say "..."       # sends a real WhatsApp
  *
- * The cursor lives in .claude/ (gitignored, per-machine). `--since` never
- * moves it, so a look-back can't make the loop skip messages.
+ * The cursor lives in .claude/ (gitignored, per-machine) and `--since` never
+ * moves it, so a look-back can't make the loop skip messages. `ELI_INBOX_CURSOR`
+ * points it elsewhere — the launchd assistant keeps its OWN cursor so an
+ * interactive session and the background agent don't eat each other's messages.
  *
- * Needs DATABASE_URL — see CLAUDE.md for the neonctl one-liner. `say` also
- * needs the GreenAPI credentials, so it only works with a full prod env.
+ * ⚠️ `say` RECORDS what it sent (.claude/eli-inbox-sent.json) and `read` filters
+ * those back out. Without that the agent's own reply looks like a new outbound
+ * message on the next tick and it answers itself, forever.
+ *
+ * Needs DATABASE_URL for `read` — see CLAUDE.md for the neonctl one-liner.
+ * `say` needs only the bearer (it posts to prod; see below).
  */
 import { sql } from "drizzle-orm";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -23,7 +30,10 @@ import { dirname, join } from "node:path";
 
 /** Eli's personal WhatsApp, the target of every sendEliDM. */
 const ELI_SID = process.env.ELI_INBOX_SID ?? "972525755705@s.whatsapp.net";
-const CURSOR = join(process.cwd(), ".claude", "eli-inbox-cursor");
+const CURSOR = process.env.ELI_INBOX_CURSOR ?? join(process.cwd(), ".claude", "eli-inbox-cursor");
+const SENT_LOG = join(process.cwd(), ".claude", "eli-inbox-sent.json");
+/** How long a sent message stays in the echo filter. */
+const ECHO_WINDOW_MS = 6 * 36e5;
 
 function readCursor(): string | null {
   try {
@@ -36,6 +46,27 @@ function readCursor(): string | null {
 function writeCursor(iso: string): void {
   mkdirSync(dirname(CURSOR), { recursive: true });
   writeFileSync(CURSOR, iso);
+}
+
+interface SentEntry {
+  at: string;
+  text: string;
+}
+
+function readSent(): SentEntry[] {
+  try {
+    const all = JSON.parse(readFileSync(SENT_LOG, "utf8")) as SentEntry[];
+    const cutoff = Date.now() - ECHO_WINDOW_MS;
+    return all.filter((e) => Date.parse(e.at) > cutoff);
+  } catch {
+    return [];
+  }
+}
+
+function recordSent(text: string): void {
+  const kept = [...readSent(), { at: new Date().toISOString(), text }].slice(-50);
+  mkdirSync(dirname(SENT_LOG), { recursive: true });
+  writeFileSync(SENT_LOG, JSON.stringify(kept, null, 1));
 }
 
 function parseSince(arg: string | undefined): Date | null {
@@ -53,15 +84,22 @@ interface Row {
   text: string | null;
 }
 
-async function read(sinceArg: string | undefined): Promise<void> {
-  const explicit = parseSince(sinceArg);
+interface Msg {
+  at: string;
+  /** "eli" = he wrote it · "system" = the CRM said it */
+  who: "eli" | "system";
+  /** A 🚨 line from the watchdog — the only outbound worth waking an agent for. */
+  alert: boolean;
+  text: string;
+}
+
+async function read(opts: { since?: string; json: boolean }): Promise<void> {
+  const explicit = parseSince(opts.since);
   // First ever run with no cursor: look back an hour, not at 1069 messages.
   const from = explicit ?? (readCursor() ? new Date(readCursor()!) : new Date(Date.now() - 36e5));
   const startedAt = new Date().toISOString();
 
-  // Imported here, not at the top: lib/db throws at import without
-  // DATABASE_URL, and `say` must work on a machine that has only the bearer.
-  const { db } = await import("@/lib/db");
+  const { db } = await import("@/lib/db"); // lazy: `say` must work without DATABASE_URL
   const r = await db.execute(sql`
     SELECT received_at, direction, sender, text
     FROM messages
@@ -69,14 +107,27 @@ async function read(sinceArg: string | undefined): Promise<void> {
     ORDER BY received_at ASC`);
   const rows = (r.rows ?? []) as unknown as Row[];
 
-  console.log(`# since ${from.toISOString()} — ${rows.length} message(s)`);
-  for (const m of rows) {
-    // "אלי" is what HE wrote to us; everything else is the system talking.
-    const who = m.direction === "in" ? "אלי" : "מערכת";
-    console.log(`\n[${String(m.received_at).slice(0, 19)}] ${who}:\n${m.text ?? "(ללא טקסט)"}`);
+  const sent = readSent().map((e) => e.text.trim());
+  const msgs: Msg[] = rows
+    .map((m) => ({
+      at: new Date(m.received_at).toISOString(),
+      who: (m.direction === "in" ? "eli" : "system") as Msg["who"],
+      alert: m.direction !== "in" && (m.text ?? "").trimStart().startsWith("🚨"),
+      text: m.text ?? "",
+    }))
+    // Drop our own replies, or the agent answers itself on the next tick.
+    .filter((m) => !(m.who === "system" && sent.includes(m.text.trim())));
+
+  if (opts.json) {
+    console.log(JSON.stringify({ from: from.toISOString(), until: startedAt, messages: msgs }, null, 1));
+  } else {
+    console.log(`# since ${from.toISOString()} — ${msgs.length} message(s)`);
+    for (const m of msgs) {
+      console.log(`\n[${m.at.slice(0, 19).replace("T", " ")}] ${m.who === "eli" ? "אלי" : "מערכת"}:\n${m.text || "(ללא טקסט)"}`);
+    }
+    const fromEli = msgs.filter((m) => m.who === "eli").length;
+    console.log(`\n# ${fromEli} מאלי, ${msgs.length - fromEli} מהמערכת`);
   }
-  const fromEli = rows.filter((m) => m.direction === "in").length;
-  console.log(`\n# ${fromEli} מאלי, ${rows.length - fromEli} מהמערכת`);
 
   // Only a cursor read advances it, and it advances to when the query STARTED
   // so a message written mid-run is re-read rather than skipped.
@@ -100,6 +151,7 @@ async function say(text: string): Promise<void> {
     body: JSON.stringify({ text }),
   });
   const out = (await res.json().catch(() => ({}))) as { ok?: boolean; result?: string; error?: string };
+  if (res.ok && out.ok) recordSent(text); // before anything can read it back as "new"
   console.log(`eli-dm [${res.status}] ${JSON.stringify(out)}`);
   if (!res.ok || !out.ok) process.exitCode = 1;
 }
@@ -108,11 +160,11 @@ async function main(): Promise<void> {
   const [cmd, ...rest] = process.argv.slice(2);
   if (cmd === "read") {
     const i = rest.indexOf("--since");
-    await read(i >= 0 ? rest[i + 1] : undefined);
+    await read({ since: i >= 0 ? rest[i + 1] : undefined, json: rest.includes("--json") });
   } else if (cmd === "say") {
-    await say(rest.join(" "));
+    await say(rest.filter((a) => !a.startsWith("--")).join(" "));
   } else {
-    console.log("usage: eli-inbox.ts read [--since 3h] | say \"<text>\"");
+    console.log('usage: eli-inbox.ts read [--since 3h] [--json] | say "<text>"');
     process.exitCode = 2;
   }
 }

@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.albadi.crm-assistant</string>
+
+  <!-- Every 5 min (Eli, 13/09/2026): if a 🚨 fault alert landed in Eli's
+       WhatsApp thread, or he wrote there himself, run Claude headless in the
+       repo so it investigates and answers him in that thread.
+       REPORT ONLY — "תמיד צריך לשאול אותי לפני שמתקנים". check.mjs hands
+       Claude an allow-list with no Edit/Write/git/deploy, so the rule is
+       enforced by the tools and not only by the prompt.
+       Cheap when idle: a quiet tick costs one DB query; Claude is spawned
+       only when there is something to react to. -->
+  <key>ProgramArguments</key>
+  <array>
+    <string>/Users/eli/.local/node/bin/node</string>
+    <string>/Users/eli/Projects/albadi/albadi-crm/scripts/assistant/check.mjs</string>
+  </array>
+
+  <key>StartInterval</key>
+  <integer>300</integer>
+  <key>RunAtLoad</key>
+  <false/>
+
+  <key>WorkingDirectory</key>
+  <string>/Users/eli/Projects/albadi/albadi-crm</string>
+
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>
+    <string>/Users/eli/.local/bin:/Users/eli/.local/node/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    <key>HOME</key>
+    <string>/Users/eli</string>
+  </dict>
+
+  <key>StandardOutPath</key>
+  <string>/Users/eli/Library/Logs/albadi-crm-assistant.log</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/eli/Library/Logs/albadi-crm-assistant.log</string>
+</dict>
+</plist>
