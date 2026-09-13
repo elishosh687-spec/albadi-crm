@@ -189,6 +189,36 @@ word. Eli: *"לוגים רציניים בלי התראה זה לא שווה, ו�
   allow-list in `middleware.ts`** — the route's own auth is never reached
   otherwise. `CRON_SECRET` and `CALL_TRIGGER_SECRET` are readable via
   `vercel env pull`; `BOT_SECRET` is not, so trigger crons by hand with those.
+- **⚠️ The heartbeat must be AWAITED, and GitHub is no longer the scheduler
+  (2026-09-13).** Two faults, both silent, both found from one WhatsApp flood
+  — 11 🚨→✅ cycles in two days:
+  1. `withJob` fired `void recordJobRun(...)`. The response returned, Vercel
+     froze the lambda mid-write, and the row never reached Neon. Reproduced on
+     prod twice: `/api/factory/refresh` answered
+     `200 {"ok":true,"scanned":3}` while `jobs.status` sat a full day back, so
+     **the watchdog WhatsApped Eli about jobs that were running perfectly**.
+     `callback-requests`, the fastest route, was two days stale. It is
+     `await`ed now — `recordJobRun` swallows its own errors, so awaiting it
+     cannot break the job it measures. Regression test in
+     [jobs.test.ts](lib/observability/jobs.test.ts) ("awaits the heartbeat");
+     the old `settle()` cushion is gone from that file on purpose, so every
+     assertion there now depends on the await.
+  2. **GitHub Actions stopped honouring the crons on 2026-08-27** — repo-wide
+     scheduled runs fell from 123–153/day to 11–13, recovering only to ~50.
+     `process-recordings` is a `*/5` job: it ran **7 times a day**.
+     `factory-refresh` and `followups`, both `*/15`: 7 a day each. No workflow
+     changed that week (checked) — it is GitHub throttling, and each run that
+     does fire still succeeds, which is why nothing looked broken. The crons
+     are driven from **cron-job.org** now, every 5 minutes; the workflows stay
+     as a free safety net (every endpoint is guarded against double-firing by
+     a run-lock or a dedupe key). One value covers six jobs — `BOT_SECRET` —
+     but `/api/factory/refresh` checks **`CRON_SECRET` only**, so that one is
+     the odd row. cron-job.org aborts at 30s while `process-recordings` runs
+     to ~95s: it shows there as failed while it is fine. **The watchdog is the
+     truth, not their dashboard.**
+  A late job and a failed job are different incidents and no longer share
+  wording: `❌ נכשל` vs `⏳ לא רץ` + "הריצה האחרונה הצליחה". Reading "לא הצליח"
+  sent us hunting an exception that never existed.
 - **Refit gate (2026-09-10):** with the Aug–Sep quotes the LOO median was
   7.3% vs the 6% gate — the rows pushing it over were narrow-tall (wine) bags
   and 1,000-qty runs, which the estimator now REFUSES (`isNarrowTall`,

@@ -29,9 +29,6 @@ function flatten(chunk: unknown): string {
   return String(chunk);
 }
 
-/** `void recordJobRun(...)` is fire-and-forget — let its microtasks settle. */
-const settle = () => new Promise((r) => setTimeout(r, 0));
-
 const req = () => new Request("http://x/api/cron/y", { headers: { "x-vercel-id": "abc" } });
 
 describe("lateAfterMin", () => {
@@ -122,7 +119,6 @@ describe("withJob", () => {
   it("2xx → one heartbeat with ok:true naming the job", async () => {
     const run = withJob("refresh-fx", "fx", async () => Response.json({ ok: true }));
     const res = await run(req(), undefined);
-    await settle();
     expect(res.status).toBe(200);
     expect(execute).toHaveBeenCalledTimes(1);
     const text = flatten(execute.mock.calls[0][0]);
@@ -133,7 +129,6 @@ describe("withJob", () => {
   it("5xx → one heartbeat with ok:false", async () => {
     const run = withJob("followups", "followups", async () => Response.json({ ok: false }, { status: 500 }));
     const res = await run(req(), undefined);
-    await settle();
     expect(res.status).toBe(500);
     expect(execute).toHaveBeenCalledTimes(1);
     const text = flatten(execute.mock.calls[0][0]);
@@ -145,7 +140,6 @@ describe("withJob", () => {
   it.each([401, 307, 404])("%i is not a run — no heartbeat", async (status) => {
     const run = withJob("followups", "followups", async () => new Response(null, { status }));
     const res = await run(req(), undefined);
-    await settle();
     expect(res.status).toBe(status);
     expect(execute).not.toHaveBeenCalled();
   });
@@ -155,7 +149,6 @@ describe("withJob", () => {
       throw new Error("whisper down");
     });
     const res = await run(req(), undefined);
-    await settle();
     expect(res.status).toBe(500);
     await expect(res.json()).resolves.toEqual({ ok: false, error: "internal_error", request_id: "abc" });
     expect(execute).toHaveBeenCalledTimes(1);
@@ -165,6 +158,23 @@ describe("withJob", () => {
     // and the request line went out at error level under the job's feature
     const line = JSON.parse(errorSpy.mock.calls[0][0] as string);
     expect(line).toMatchObject({ feature: "calls", event: "request.failed", request_id: "abc", err_msg: "whisper down" });
+  });
+
+  it("awaits the heartbeat — it is not fired and forgotten (regression, 2026-09-13)", async () => {
+    // The bug was `void recordJobRun(...)`: the response returned, Vercel froze
+    // the lambda mid-write, and the row never reached Neon. /api/factory/refresh
+    // answered 200 for a day while jobs.status stayed a day behind, and the
+    // watchdog WhatsApped Eli about a job that was running perfectly.
+    // Reproduced on prod before the fix, twice.
+    let written = false;
+    execute.mockImplementationOnce(async () => {
+      await new Promise((r) => setTimeout(r, 5));
+      written = true;
+      return { rows: [] };
+    });
+    const run = withJob("factory-refresh", "factory", async () => Response.json({ ok: true }));
+    await run(req(), undefined);
+    expect(written).toBe(true); // no settling first — the wrapper must outlive the write
   });
 
   it("passes the child logger and context through to the handler", async () => {
