@@ -991,6 +991,16 @@ runs in stage 1 on new calls + stage 4 on post-back). Backfilled via
 `scripts/backfill-last-call-field.ts`. To add the column: GHL Contacts → Manage
 fields → "Last Call Date".
 
+**Reading the transcripts outside the CRM.** They live only in
+`call_recording_imports.transcript` (+ `.analysis` jsonb) and
+`elevenlabs_call_imports`. `npx tsx scripts/export-call-transcripts.ts` writes
+them out as markdown — **a file per customer** by default (every call oldest
+first, the analysis above each transcript) or `--by call`, plus an `index.md`.
+Output goes to `content/albadi/call-transcripts/`, deliberately OUTSIDE the
+repo: it is 2.8MB of real customer conversation and must never reach a git
+working tree. The run wipes and rewrites the folder, so it is always current
+and never half-stale.
+
 **Dry-run before going live.** `npx tsx scripts/_test-call-pipeline.ts` (with `DATABASE_URL` set) runs all four stages inline against a real recent call and prints the note body that WOULD be posted — DB is touched (cursor stays untouched), but `addContactNote` is NOT called. Use this to validate Hebrew analysis quality before flipping the cron on.
 
 **Upgrade path for analysis quality.** If `gpt-4o-mini` underperforms on spoken Hebrew nuance, swap the LLM in `lib/autoresponder/call-analysis.ts` to a Claude-Sonnet wrapper (~30 line change behind the same `analyzeCall` signature). Don't pre-optimize — see real outputs first.
