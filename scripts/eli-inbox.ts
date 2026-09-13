@@ -81,12 +81,25 @@ async function read(sinceArg: string | undefined): Promise<void> {
   if (!explicit) writeCursor(startedAt);
 }
 
+/**
+ * Sends through prod, not from here: ELI_NOTIFY_JID and the GreenAPI
+ * credentials are Production-scoped and `vercel env pull` masks them to "",
+ * so a local sendEliDM can only ever answer `no_jid`. CRON_SECRET is the one
+ * bearer this machine can read (see CLAUDE.md).
+ */
 async function say(text: string): Promise<void> {
   if (!text.trim()) throw new Error("say needs text");
-  const { sendEliDM } = await import("@/lib/notify/eli");
-  const res = await sendEliDM(text);
-  console.log(`sendEliDM -> ${res}`);
-  if (res !== "sent" && res !== "dry_run") process.exitCode = 1;
+  const secret = process.env.CRON_SECRET ?? process.env.BOT_SECRET ?? process.env.CALL_TRIGGER_SECRET;
+  if (!secret) throw new Error("say needs CRON_SECRET / BOT_SECRET / CALL_TRIGGER_SECRET in the env");
+  const base = process.env.CRM_BASE ?? "https://albadi-crm.vercel.app";
+  const res = await fetch(`${base}/api/admin/eli-dm`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${secret}` },
+    body: JSON.stringify({ text }),
+  });
+  const out = (await res.json().catch(() => ({}))) as { ok?: boolean; result?: string; error?: string };
+  console.log(`eli-dm [${res.status}] ${JSON.stringify(out)}`);
+  if (!res.ok || !out.ok) process.exitCode = 1;
 }
 
 async function main(): Promise<void> {
