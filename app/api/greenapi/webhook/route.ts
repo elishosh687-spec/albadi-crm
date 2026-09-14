@@ -69,6 +69,7 @@ import {
   syncLeadToGHL,
 } from "@/integrations/ghl/sync";
 import { logger, serializeError, withRequestLog } from "@/lib/observability/log";
+import { dispatchZohoBot, zohoBotRoute } from "@/lib/zoho-bot/dispatch";
 
 const log = logger("webhook.green");
 
@@ -356,6 +357,18 @@ async function handleIncoming(evt: GreenWebhook): Promise<void> {
   if (!phone) return;
   const senderName =
     sender.senderContactName || sender.senderName || sender.chatName || undefined;
+
+  // Bookkeeping bot: Shimon's receipts and Eli's "כן 1234" approvals also go to
+  // the Zoho bot (lib/zoho-bot/dispatch.ts). Additive only — the flow below runs
+  // exactly as before.
+  const zohoBotEvent = zohoBotRoute(chatId, extractMessageText(evt.messageData).store);
+  if (zohoBotEvent) {
+    await dispatchZohoBot(zohoBotEvent, {
+      idMessage: evt.idMessage,
+      typeMessage: evt.messageData?.typeMessage,
+      text: extractMessageText(evt.messageData).store,
+    });
+  }
 
   // A colleague wrote in — not a customer. Never make them a lead.
   //
