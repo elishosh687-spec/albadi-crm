@@ -41,6 +41,8 @@ export interface GreenHealth {
   inboundSilentHours: number | null;
   outboundInWindow: number;
   lastInboundAt: string | null;
+  /** Newest `messages` row from a CUSTOMER — excludes colleagues by design. */
+  lastCustomerMessageAt: string | null;
   lastByType: Record<string, string>;
   /** True when the alert rule was suppressed by hours/Sabbath, not by health. */
   windowMuted: boolean;
@@ -131,11 +133,8 @@ export async function assessGreenHealth(
     }
   ).rows[0];
 
-  const lastInboundAt = traffic?.last_inbound ?? null;
+  const lastCustomerMessageAt = traffic?.last_inbound ?? null;
   const outboundInWindow = Number(traffic?.outbound_in_window ?? 0);
-  const inboundSilentHours = lastInboundAt
-    ? (now.getTime() - new Date(lastInboundAt).getTime()) / 3_600_000
-    : null;
 
   // Last time we saw each webhook type — the asymmetry that named the fault.
   const typeRes = await db.execute(sql`
@@ -150,6 +149,28 @@ export async function assessGreenHealth(
   }).rows) {
     lastByType[r.type.replace(/^green\./, "")] = new Date(r.newest).toISOString();
   }
+
+  // ⚠️ LIVENESS IS THE WEBHOOK, NOT THE MESSAGE ROW (fixed 2026-09-14).
+  // A message from a registered colleague deliberately creates NO `messages`
+  // row — the greenapi webhook returns early for team members, which is the
+  // 30/08 fix that stopped the bot opening a Hebrew questionnaire on Simon.
+  // So a quiet night where only Simon and the Eco Brothers partner wrote looked
+  // EXACTLY like a dead webhook, and at 06:42 on 14/09 this check told Eli the
+  // inbound had "probably died again, just like 7.9". Five webhooks had landed
+  // and been handled perfectly.
+  // `incomingMessageReceived` is recorded for every inbound regardless of who
+  // sent it, so it is the honest answer to "is anything still reaching us".
+  // A false alarm on THIS alert is the expensive kind: its whole worth is that
+  // Eli believes it the day the pipe really does go deaf.
+  const lastWebhookInboundAt = lastByType["incomingMessageReceived"] ?? null;
+  const lastInboundAt =
+    [lastCustomerMessageAt, lastWebhookInboundAt]
+      .filter((x): x is string => !!x)
+      .sort()
+      .at(-1) ?? null;
+  const inboundSilentHours = lastInboundAt
+    ? (now.getTime() - new Date(lastInboundAt).getTime()) / 3_600_000
+    : null;
 
   const hour = jerusalemHour(now);
   const inWorkWindow = hour >= WORK_START_HOUR && hour < WORK_END_HOUR;
@@ -198,6 +219,7 @@ export async function assessGreenHealth(
       inboundSilentHours === null ? null : Number(inboundSilentHours.toFixed(2)),
     outboundInWindow,
     lastInboundAt: lastInboundAt ? new Date(lastInboundAt).toISOString() : null,
+    lastCustomerMessageAt: lastCustomerMessageAt ? new Date(lastCustomerMessageAt).toISOString() : null,
     lastByType,
     windowMuted,
     errors,
@@ -218,7 +240,8 @@ export function formatGreenHealth(h: GreenHealth): string {
     "",
     `מצב האינסטנס: ${h.state ?? "לא ידוע"}`,
     `incomingWebhook: ${h.incomingWebhook ?? "לא ידוע"}`,
-    `הודעה נכנסת אחרונה: ${h.lastInboundAt ?? "אין"}`,
+    `וובהוק נכנס אחרון: ${h.lastInboundAt ?? "אין"}`,
+    `הודעה אחרונה מלקוח: ${h.lastCustomerMessageAt ?? "אין"}`,
   ];
   if (h.errors.length) lines.push("", `שגיאות: ${h.errors.join("; ")}`);
   lines.push("", "לבדוק בקונסולת GreenAPI: getSettings + getStateInstance.");

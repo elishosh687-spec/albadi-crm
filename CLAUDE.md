@@ -1554,6 +1554,30 @@ generalise it into send-to-anyone; customer sends have their own audited paths
 paused `manual_toggle`). Leave it paused — it is the reason the bot has never
 tried to sell him bags.
 
+## ⚠️ A colleague's message is invisible to `messages` — and it cried wolf
+
+The team-member skip (see below) means an inbound from Simon or the Eco
+Brothers partner creates **no `messages` row at all**, by design. On 14/09 that
+collided with the WhatsApp health check, which measured "is inbound alive?" by
+the newest `messages` row: five webhooks landed between 01:19 and 02:00, all
+handled correctly, and at 06:42 the check told Eli his inbound had *"probably
+died again, just like 7.9"*.
+
+`assessGreenHealth` ([health.ts](lib/greenapi/health.ts)) now takes liveness
+from `bridge_events` type `green.incomingMessageReceived` — recorded for every
+inbound regardless of sender — and reports `lastCustomerMessageAt` separately
+for the human. Regression test in [health.test.ts](lib/greenapi/health.test.ts).
+
+**The general rule: any "is X still alive?" check must watch the signal that
+fires for EVERY case, not the one a deliberate exclusion filters.** And a false
+alarm on this particular alert is the expensive kind — its entire worth is that
+Eli believes it on the day the pipe really does go deaf.
+
+(Test-env note: `lib/greenapi/client` reads its credentials into module
+constants at import time, so a test must set them in `vi.hoisted`, before the
+import. A `vi.stubEnv` in `beforeEach` lands too late and every assertion fails
+with "GreenAPI לא מוגדר" instead of the rule under test.)
+
 ## Messaging a colleague — "שלח לסיימון הודעה" (built 2026-08-25)
 
 When Eli says *send X a message* mid-session, X is usually a **colleague, not a
