@@ -1,13 +1,14 @@
 /**
- * Thin wrapper over the Claude Agent SDK. Runs a local Claude session that has
- * the bag-mockup-video + dieline-print skills enabled, in a per-customer working
- * dir where the skills write their outputs. Yields simplified events for the
- * server to stream to the browser over SSE.
+ * Dual-provider wrapper for the local studio. Claude uses the Agent SDK; Codex
+ * uses the locally signed-in CLI. Both run in the per-customer working directory
+ * and yield the same simplified events for the server to stream over SSE.
  *
  * Multi-turn: pass the previous `sessionId` to continue the same conversation
  * (so "תגדיל את הלוגו" refers back to the last mockup).
  */
 import { query } from "@anthropic-ai/claude-agent-sdk";
+import { spawn } from "node:child_process";
+import { createInterface } from "node:readline";
 
 export type AgentEvent =
   | { kind: "text"; text: string }
@@ -29,6 +30,24 @@ const SYSTEM = `אתה עוזר הסטודיו של "אלבדי" — עסק שמ
 - ענה בעברית, קצר וענייני.`;
 
 export async function* runAgent(
+  message: string,
+  cwd: string,
+  sessionId: string | null,
+  onStderr?: (s: string) => void
+): AsyncGenerator<AgentEvent> {
+  const provider = (process.env.ALBADI_STUDIO_PROVIDER || "claude").trim().toLowerCase();
+  if (provider === "codex") {
+    yield* runCodexAgent(message, cwd, sessionId, onStderr);
+    return;
+  }
+  if (provider !== "claude") {
+    yield { kind: "error", error: `ALBADI_STUDIO_PROVIDER must be codex or claude, got ${provider}` };
+    return;
+  }
+  yield* runClaudeAgent(message, cwd, sessionId, onStderr);
+}
+
+async function* runClaudeAgent(
   message: string,
   cwd: string,
   sessionId: string | null,
@@ -71,6 +90,72 @@ export async function* runAgent(
   } catch (e) {
     yield { kind: "error", error: e instanceof Error ? e.message : String(e) };
   }
+}
+
+async function* runCodexAgent(
+  message: string,
+  cwd: string,
+  sessionId: string | null,
+  onStderr?: (s: string) => void
+): AsyncGenerator<AgentEvent> {
+  const executable = process.env.CODEX_CLI_PATH || "/Applications/ChatGPT.app/Contents/Resources/codex";
+  const args = sessionId
+    ? ["exec", "resume", "--json", "--ignore-user-config", "--disable", "hooks", "--skip-git-repo-check", sessionId, "-"]
+    : ["exec", "--json", "--ignore-user-config", "--disable", "hooks", "--cd", cwd, "--approve-for-me", "--skip-git-repo-check", "-"];
+  const prompt = sessionId ? message : `${SYSTEM}\n\nבקשת המשתמש:\n${message}`;
+  let sid = sessionId ?? "";
+  let lastText = "";
+  let spawnError = "";
+
+  const child = spawn(executable, args, { cwd, env: process.env, stdio: ["pipe", "pipe", "pipe"] });
+  child.on("error", (error) => { spawnError = error.message; });
+  child.stderr.setEncoding("utf8");
+  child.stderr.on("data", (chunk: string) => onStderr?.(chunk));
+  child.stdin.end(prompt);
+
+  const lines = createInterface({ input: child.stdout });
+  for await (const line of lines) {
+    if (!line.trim()) continue;
+    let event: Record<string, unknown>;
+    try {
+      event = JSON.parse(line) as Record<string, unknown>;
+    } catch {
+      onStderr?.(`[codex non-JSON output] ${line}\n`);
+      continue;
+    }
+    if (event.type === "thread.started" && typeof event.thread_id === "string") {
+      sid = event.thread_id;
+      continue;
+    }
+    const item = event.item as Record<string, unknown> | undefined;
+    if (event.type === "item.completed" && item?.type === "agent_message" && typeof item.text === "string") {
+      lastText = item.text;
+      yield { kind: "text", text: item.text };
+    } else if (event.type === "item.started" && item) {
+      const label = codexToolLabel(item);
+      if (label) yield { kind: "tool", label };
+    } else if (event.type === "turn.failed") {
+      const error = event.error as { message?: string } | undefined;
+      spawnError = error?.message || "Codex turn failed";
+    }
+  }
+
+  const exitCode = await new Promise<number | null>((resolve) => child.once("close", resolve));
+  if (spawnError || exitCode !== 0) {
+    yield { kind: "error", error: spawnError || `Codex exited with code ${exitCode}` };
+    return;
+  }
+  yield { kind: "done", sessionId: sid, result: lastText };
+}
+
+function codexToolLabel(item: Record<string, unknown>): string {
+  if (item.type === "command_execution") {
+    const command = String(item.command ?? "");
+    return `הרצה: ${command.slice(0, 70)}${command.length > 70 ? "…" : ""}`;
+  }
+  if (item.type === "mcp_tool_call") return `כלי: ${String(item.tool ?? "")}`;
+  if (item.type === "file_change") return "כותב קובץ…";
+  return "";
 }
 
 function toolLabel(name?: string, input?: Record<string, unknown>): string {

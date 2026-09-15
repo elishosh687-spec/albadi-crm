@@ -3,7 +3,7 @@
  *
  *   WIDGET_TOKEN=<GHL_WIDGET_TOKEN> npm start        # then open http://localhost:4747
  *
- * Serves the chat UI, runs the Claude agent (with the mockup + dieline skills)
+ * Serves the chat UI and runs the selected Claude/Codex studio agent
  * in a per-customer work dir, and proxies file push / WhatsApp send to the CRM.
  * Nothing here is deployed — it needs the local skills + your Gemini/Veo keys.
  */
