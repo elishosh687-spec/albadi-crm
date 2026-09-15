@@ -430,9 +430,6 @@ export default function CompetitorsScreen({
   leadSid: string;
 }) {
   const [rows, setRows] = useState<Row[]>([]);
-  // Table is the default: the card-per-comparison view could not be scanned
-  // one size at a time, which is the question Eli actually asks.
-  const [view, setView] = useState<"table" | "cards">("table");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -742,37 +739,9 @@ export default function CompetitorsScreen({
 
       {error && <div style={{ color: "#e8b4b4", fontSize: 13, marginBottom: 14 }}>{error}</div>}
 
-      <div className="lux-wrap-sm" style={{ display: "flex", gap: 8, flexWrap: "wrap", margin: "4px 0 16px" }}>
-        {(["table", "cards"] as const).map((v) => (
-          <button
-            key={v}
-            type="button"
-            onClick={() => setView(v)}
-            className="lux-tap"
-            style={{
-              padding: "6px 14px",
-              borderRadius: 6,
-              border: "none",
-              cursor: "pointer",
-              fontSize: 13,
-              fontFamily: "inherit",
-              color: view === v ? "#1d1b1a" : "var(--lux-ink)",
-              background: view === v ? "var(--lux-champagne)" : "var(--lux-card)",
-              boxShadow: view === v ? "none" : "inset 0 0 0 1px var(--lux-line)",
-            }}
-          >
-            {v === "table" ? "לפי מידה" : "כרטיסים"}
-          </button>
-        ))}
-      </div>
-
-      {view === "table" && !loading && rows.length > 0 && (
+      {!loading && rows.length > 0 && (
         <SizeComparisonTable rows={rows as never} token={token} />
       )}
-
-      {view === "cards" && (
-      <>
-      {/* the "where I stand" list — collapsible product groups */}
       {loading ? (
         <div style={{ color: "var(--lux-muted)", fontSize: 13 }}>טוען…</div>
       ) : rows.length === 0 ? (
@@ -781,77 +750,7 @@ export default function CompetitorsScreen({
           <br />
           לחץ על <b style={{ color: "var(--lux-champagne)" }}>"מחיר מתחרה חדש"</b> כדי לתעד את ההצעה הראשונה.
         </div>
-      ) : (
-        <div style={{ display: "grid", gap: 12 }}>
-          {groups.map(([product, groupRows]) => {
-            const isCollapsed = collapsed.has(product);
-            const prices = groupRows.map((r) => r.competitorPrice).filter((p): p is number => p != null);
-            const minP = prices.length ? Math.min(...prices) : null;
-            return (
-              <div
-                key={product}
-                style={{
-                  background: "var(--lux-card)",
-                  borderRadius: 8,
-                  boxShadow: "inset 0 0 0 1px var(--lux-line)",
-                  overflow: "hidden",
-                }}
-              >
-                {/* group header — click to collapse/expand */}
-                <div
-                  onClick={() => toggle(product)}
-                  role="button"
-                  tabIndex={0}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 10,
-                    padding: "13px 16px",
-                    cursor: "pointer",
-                    userSelect: "none",
-                  }}
-                >
-                  <span style={{ color: "var(--lux-muted)", display: "flex", flexShrink: 0 }}>
-                    {isCollapsed ? <ChevronLeft size={16} /> : <ChevronDown size={16} />}
-                  </span>
-                  <span className="lux-serif" style={{ fontSize: 15, color: "var(--lux-ink)", flex: "1 1 auto", minWidth: 0 }}>
-                    {product}
-                  </span>
-                  {minP != null && (
-                    <span style={{ fontSize: 11.5, color: "var(--lux-muted)", whiteSpace: "nowrap" }}>
-                      מתחרה מ־{nisUnit(minP)}
-                    </span>
-                  )}
-                  <span
-                    style={{
-                      fontSize: 11,
-                      padding: "2px 8px",
-                      borderRadius: 999,
-                      color: "var(--lux-champagne)",
-                      background: "rgba(214,196,172,0.12)",
-                      boxShadow: "inset 0 0 0 1px rgba(214,196,172,0.30)",
-                      whiteSpace: "nowrap",
-                      flexShrink: 0,
-                    }}
-                  >
-                    {groupRows.length} השוואות
-                  </span>
-                </div>
-
-                {!isCollapsed && (
-                  <div style={{ display: "grid", gap: 12, padding: "0 12px 12px" }}>
-                    {groupRows.map((r) => (
-                      <ComparisonCard key={r.id} row={r} onDelete={remove} />
-                    ))}
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      )}
-      </>
-      )}
+      ) : null}
     </LuxShell>
   );
 }

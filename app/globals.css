@@ -54,6 +54,106 @@
   --gg-alert: #d98a8a;
 }
 
+/* Competitor comparison: one clear decision bar instead of four unrelated
+   rows of pills. Kept global because this screen is rendered inside the widget
+   shell and needs the same mobile breakpoint as the rest of that shell. */
+.competitor-toolbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(280px, .65fr);
+  gap: 12px;
+  margin-bottom: 18px;
+}
+.competitor-toolbar__filters,
+.competitor-toolbar__scenario {
+  background: var(--lux-card);
+  border: 1px solid var(--lux-line);
+  border-radius: 10px;
+  padding: 14px;
+}
+.competitor-toolbar__filters {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(180px, .72fr);
+  gap: 14px;
+  align-items: end;
+}
+.competitor-toolbar__label {
+  display: block;
+  margin-bottom: 7px;
+  color: var(--lux-muted);
+  font-size: 11px;
+  font-weight: 600;
+}
+.competitor-segmented {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  padding: 3px;
+  border-radius: 8px;
+  background: var(--lux-inset);
+  border: 1px solid var(--lux-line);
+}
+.competitor-segmented button {
+  min-height: 38px;
+  padding: 7px 10px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--lux-muted);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.competitor-segmented button[data-active="true"] {
+  background: var(--lux-card-raised);
+  color: var(--lux-ink);
+  box-shadow: inset 0 0 0 1px rgba(214,196,172,.25);
+}
+.competitor-size-select {
+  width: 100%;
+  min-height: 44px;
+  padding: 8px 11px;
+  border: 1px solid var(--lux-line);
+  border-radius: 8px;
+  background: var(--lux-inset);
+  color: var(--lux-ink);
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+}
+.competitor-margin-heading,
+.competitor-scenario-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.competitor-margin-heading { margin-bottom: 10px; }
+.competitor-margin-heading b { display: block; font-size: 12px; }
+.competitor-margin-heading small {
+  display: block;
+  margin-top: 2px;
+  color: var(--lux-muted);
+  font-size: 10px;
+  font-weight: 400;
+}
+.competitor-margin-heading > span:last-child { font-size: 20px; color: var(--lux-champagne); }
+.competitor-scenario-footer { margin-top: 10px; color: var(--lux-muted); font-size: 10.5px; }
+.competitor-scenario-footer button {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--lux-champagne);
+  font: inherit;
+  cursor: pointer;
+}
+.competitor-check { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
+.competitor-check input { accent-color: var(--lux-champagne); }
+
+@media (max-width: 760px) {
+  .competitor-toolbar { grid-template-columns: 1fr; }
+  .competitor-toolbar__filters { grid-template-columns: 1fr; }
+  .competitor-segmented button { min-height: 44px; padding-inline: 6px; }
+}
+
 @theme {
   --font-display: var(--font-display, "Frank Ruhl Libre", ui-serif, serif);
   --font-body: var(--font-body, "Heebo", ui-sans-serif, system-ui, sans-serif);

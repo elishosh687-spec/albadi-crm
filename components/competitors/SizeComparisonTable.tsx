@@ -299,76 +299,38 @@ export default function SizeComparisonTable({
     borderInlineEnd: mineEdge,
   };
 
-  const pill = (on: boolean): React.CSSProperties => ({
-    padding: "6px 13px",
-    borderRadius: 999,
-    border: "none",
-    cursor: "pointer",
-    fontSize: 13,
-    fontFamily: "inherit",
-    color: on ? "#1d1b1a" : "var(--lux-ink)",
-    background: on ? "var(--lux-champagne)" : "var(--lux-card)",
-    boxShadow: on ? "none" : "inset 0 0 0 1px var(--lux-line)",
-  });
-
   return (
     <div>
-      {/* where it's made — the filter Eli asked for: local weeks vs overseas months */}
-      <div
-        className="lux-wrap-sm"
-        style={{ display: "flex", gap: 7, flexWrap: "wrap", alignItems: "center", marginBottom: 10 }}
-      >
-        <span style={{ fontSize: 12, color: "var(--lux-muted)", marginInlineEnd: 2 }}>ייצור</span>
-        {ORIGIN_TABS.map((t) => {
-          const n = originCounts[t.id];
-          if (t.id !== "all" && n === 0) return null;
-          const on = t.id === origin;
-          return (
-            <button key={t.id} type="button" onClick={() => setOrigin(t.id)} className="lux-tap" style={pill(on)}>
-              {t.label}
-              {t.hint && (
-                <span style={{ opacity: on ? 0.65 : 0.5, fontSize: 11, marginInlineStart: 6 }}>{t.hint}</span>
-              )}
-              <span style={{ opacity: 0.6, marginInlineStart: 6, fontSize: 11 }}>
-                <Num>{n}</Num>
-              </span>
-            </button>
-          );
-        })}
-      </div>
+      <div className="competitor-toolbar">
+        <div className="competitor-toolbar__filters">
+          <div>
+            <span className="competitor-toolbar__label">איפה מייצרים</span>
+            <div className="competitor-segmented">
+              {ORIGIN_TABS.map((t) => {
+                const n = originCounts[t.id];
+                if (t.id !== "all" && n === 0) return null;
+                const on = t.id === origin;
+                return (
+                  <button key={t.id} type="button" onClick={() => setOrigin(t.id)} className="lux-tap" data-active={on}>
+                    {t.label} <Num>{n}</Num>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+          <label>
+            <span className="competitor-toolbar__label">מידה להשוואה</span>
+            <select className="competitor-size-select" value={size} onChange={(e) => setSize(e.target.value)}>
+              {sizes.map(([s, n]) => <option key={s} value={s}>{s} · {n} הצעות</option>)}
+            </select>
+          </label>
+        </div>
 
-      {/* size picker */}
-      <div className="lux-wrap-sm" style={{ display: "flex", gap: 7, flexWrap: "wrap", alignItems: "center", marginBottom: 14 }}>
-        <span style={{ fontSize: 12, color: "var(--lux-muted)", marginInlineEnd: 2 }}>מידה</span>
-        {sizes.map(([s, n]) => {
-          const on = s === size;
-          return (
-            <button key={s} type="button" onClick={() => setSize(s)} className="lux-tap" style={pill(on)}>
-              <Num>{s}</Num>
-              <span style={{ opacity: 0.6, marginInlineStart: 6, fontSize: 11 }}>
-                <Num>{n}</Num>
-              </span>
-            </button>
-          );
-        })}
-      </div>
-
-      {/* margin control */}
-      <div
-        className="lux-wrap-sm"
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 12,
-          flexWrap: "wrap",
-          padding: "11px 13px",
-          borderRadius: 7,
-          background: "var(--lux-card)",
-          boxShadow: "inset 0 0 0 1px var(--lux-line)",
-          marginBottom: 14,
-        }}
-      >
-        <span style={{ fontSize: 12, color: "var(--lux-muted)" }}>אחוז רווחיות שלנו</span>
+        <div className="competitor-toolbar__scenario">
+          <div className="competitor-margin-heading">
+            <span><b>תרחיש שלנו</b><small>שינוי הרווח מעדכן רק את עמודת אלבדי</small></span>
+            <Num bold>{margin ?? "—"}%</Num>
+          </div>
         <input
           type="range"
           min={0}
@@ -376,58 +338,21 @@ export default function SizeComparisonTable({
           step={1}
           value={margin ?? 60}
           onChange={(e) => setMargin(Number(e.target.value))}
-          style={{ flex: "1 1 160px", minWidth: 120, accentColor: "var(--lux-champagne)" }}
+          className="lux-range"
+          style={{ width: "100%" }}
           aria-label="אחוז רווחיות"
         />
-        <span style={{ fontSize: 18, minWidth: 58 }}>
-          <Num bold>{margin ?? "—"}%</Num>
-        </span>
-        {defaultMargin != null && margin !== defaultMargin && (
-          <button
-            type="button"
-            onClick={() => setMargin(defaultMargin)}
-            className="lux-tap"
-            style={{
-              fontSize: 11,
-              padding: "4px 9px",
-              borderRadius: 5,
-              border: "none",
-              cursor: "pointer",
-              background: "transparent",
-              color: "var(--lux-champagne)",
-              boxShadow: "inset 0 0 0 1px var(--lux-line)",
-              fontFamily: "inherit",
-            }}
-          >
-            חזרה ל-{defaultMargin}%
-          </button>
-        )}
-        {pricing && <span style={{ fontSize: 11, color: "var(--lux-muted)" }}>מחשב…</span>}
-      </div>
-
-      {/* Plates in or out of the totals. */}
-      <div
-        className="lux-wrap-sm"
-        style={{ display: "flex", alignItems: "center", gap: 7, flexWrap: "wrap", marginBottom: 14 }}
-      >
-        <span style={{ fontSize: 12, color: "var(--lux-muted)" }}>גלופות</span>
-        {[
-          { on: false, label: "ללא", hint: "מיקוח" },
-          { on: true, label: "כולל", hint: "¥1,000 לצבע" },
-        ].map((o) => (
-          <button
-            key={String(o.on)}
-            type="button"
-            onClick={() => setWithPlates(o.on)}
-            className="lux-tap"
-            style={pill(withPlates === o.on)}
-          >
-            {o.label}
-            <span style={{ opacity: withPlates === o.on ? 0.65 : 0.5, fontSize: 11, marginInlineStart: 6 }}>
-              {o.hint}
-            </span>
-          </button>
-        ))}
+          <div className="competitor-scenario-footer">
+            <label className="competitor-check">
+              <input type="checkbox" checked={withPlates} onChange={(e) => setWithPlates(e.target.checked)} />
+              לכלול גלופות בסה״כ
+            </label>
+            {defaultMargin != null && margin !== defaultMargin && (
+              <button type="button" onClick={() => setMargin(defaultMargin)}>חזרה לברירת מחדל</button>
+            )}
+            {pricing && <span>מחשב…</span>}
+          </div>
+        </div>
       </div>
 
       {priceErr && (
