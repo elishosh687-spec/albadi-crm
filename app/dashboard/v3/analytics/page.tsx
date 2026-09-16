@@ -7,6 +7,9 @@ import {
   type LifecycleKey,
   type PriorityBand,
 } from "../_components/crm-insights";
+import { listClosedQuotes } from "@/lib/factory/server/closed";
+import { LEAD_QUALITY_LABELS, LOSS_REASON_LABELS } from "@/lib/manychat/stages";
+import { loadSalesTargets } from "@/lib/analytics/targets";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -19,6 +22,19 @@ const FUNNEL_ORDER = [
   "CONSIDERATION",
   "WON",
 ];
+
+const BOT_FUNNEL_ORDER = [
+  ["questionnaire_started", "התחיל שאלון"],
+  ["shipping_answered", "ענה על שיטת משלוח"],
+  ["quantity_answered", "ענה על כמות"],
+  ["size_selected", "בחר מידה"],
+  ["colors_answered", "ענה על מספר צבעים"],
+  ["spec_confirmed", "אישר מפרט"],
+  ["quote_sent", "קיבל מחיר"],
+  ["quote_replied", "הגיב אחרי המחיר"],
+  ["call_booked", "קבע שיחה"],
+  ["deal_closed", "נסגרה עסקה"],
+] as const;
 
 export default async function V3AnalyticsPage() {
   const now = new Date();
@@ -49,6 +65,9 @@ export default async function V3AnalyticsPage() {
     qStateRows,
     sourceRows,
     botFunnelRows,
+    salesOutcomes,
+    dealEconomics,
+    salesTargets,
   ] = await Promise.all([
     db
       .select({ stage: leads.pipelineStage })
@@ -187,10 +206,14 @@ export default async function V3AnalyticsPage() {
     db
       .select({
         event: botFunnelEvents.event,
-        count: sql<number>`count(*)::int`,
+        attempts: sql<number>`count(*)::int`,
+        uniqueLeads: sql<number>`count(distinct ${botFunnelEvents.leadSid})::int`,
       })
       .from(botFunnelEvents)
       .groupBy(botFunnelEvents.event),
+    loadSalesOutcomeStats(),
+    loadDealEconomics(),
+    loadSalesTargets(),
   ]);
 
   // Funnel = count of leads that EVER passed through each stage (best-effort:
@@ -219,7 +242,7 @@ export default async function V3AnalyticsPage() {
       ? Math.round((sent / totalDecidedDrafts) * 1000) / 10
       : null;
   const needsHumanCount = needsHuman[0]?.count ?? 0;
-  const botFunnelCount = new Map(botFunnelRows.map((row) => [row.event, row.count]));
+  const botFunnelCount = new Map(botFunnelRows.map((row) => [row.event, row]));
   const handoffRate =
     activeLeads.length > 0
       ? Math.round((needsHumanCount / activeLeads.length) * 1000) / 10
@@ -255,12 +278,17 @@ export default async function V3AnalyticsPage() {
       bailedQuestionnaires: qStateRows[0]?.bailed ?? 0,
       handoffRatePct: handoffRate,
     },
-    botFunnel: {
-      started: botFunnelCount.get("questionnaire_started") ?? 0,
-      completed: botFunnelCount.get("questionnaire_completed") ?? 0,
-      quoted: botFunnelCount.get("quote_sent") ?? 0,
-      replied: botFunnelCount.get("quote_replied") ?? 0,
-    },
+    botFunnel: BOT_FUNNEL_ORDER.map(([event, label]) => ({
+      event,
+      label,
+      attempts: botFunnelCount.get(event)?.attempts ?? 0,
+      uniqueLeads: botFunnelCount.get(event)?.uniqueLeads ?? 0,
+    })),
+    salesOutcomes: salesOutcomes.outcomes,
+    qualification: salesOutcomes.qualification,
+    lossReasons: salesOutcomes.lossReasons,
+    dealEconomics,
+    salesTargets,
     sourcePerformance: sourceRows.map((row) => ({
       source: row.source,
       leads: row.leads,
@@ -280,6 +308,144 @@ export default async function V3AnalyticsPage() {
   };
 
   return <AnalyticsView data={data} />;
+}
+
+async function loadSalesOutcomeStats(): Promise<{
+  outcomes: AnalyticsData["salesOutcomes"];
+  qualification: AnalyticsData["qualification"];
+  lossReasons: AnalyticsData["lossReasons"];
+}> {
+  const [outcomeResult, qualityResult, lossResult] = await Promise.all([
+    db.execute(sql`
+      WITH first_quotes AS (
+        SELECT trim(lead_sid) sid, min(sent_at) quote_at
+        FROM bot_quotes WHERE source = 'initial' GROUP BY 1
+      ), replies AS (
+        SELECT fq.sid, fq.quote_at, min(m.received_at) reply_at
+        FROM first_quotes fq
+        JOIN messages m ON trim(m.manychat_sub_id) = fq.sid
+          AND (m.sender = 'lead' OR m.direction = 'in')
+          AND m.received_at > fq.quote_at
+        GROUP BY fq.sid, fq.quote_at
+      ), outcomes AS (
+        SELECT r.sid, r.quote_at, r.reply_at, l.ghl_contact_id, l.pipeline_stage,
+          l.lead_quality, l.meta_qualified_sent_at, l.follow_up_count,
+          (SELECT min(m.received_at) FROM messages m
+             WHERE trim(m.manychat_sub_id) = r.sid
+               AND m.sender = 'eli' AND m.received_at > r.quote_at) human_at,
+          EXISTS (
+            SELECT 1 FROM call_recording_imports c
+            WHERE c.ghl_contact_id = l.ghl_contact_id
+              AND c.call_started_at > r.reply_at
+              AND coalesce(c.call_duration_sec, 0) >= 30
+          ) called,
+          EXISTS (
+            SELECT 1 FROM factory_quote_requests f
+            WHERE trim(f.manychat_sub_id) = r.sid
+              AND f.closed_deal_at IS NOT NULL
+              AND f.deal_removed_at IS NULL
+          ) deal_closed
+        FROM replies r JOIN leads l ON trim(l.manychat_sub_id) = r.sid
+      )
+      SELECT count(*)::int replied,
+        count(*) filter (where human_at is not null)::int human_returned,
+        count(*) filter (where called)::int called,
+        count(*) filter (where lead_quality in ('FIT_READY','FIT_NOT_READY')
+          or meta_qualified_sent_at is not null
+          or pipeline_stage in ('DISCAVERY','FACTORY_WAIT','CONSIDERATION','WON'))::int qualified,
+        count(*) filter (where pipeline_stage = 'WON' or deal_closed)::int closed,
+        round(avg(extract(epoch from (human_at - quote_at)) / 60)
+          filter (where human_at is not null))::int avg_human_minutes,
+        round((percentile_cont(0.5) within group
+          (order by extract(epoch from (human_at - quote_at)) / 60)
+          filter (where human_at is not null))::numeric)::int median_human_minutes,
+        round(avg(follow_up_count)::numeric, 1)::float avg_followups
+      FROM outcomes
+    `),
+    db.execute(sql`
+      SELECT coalesce(lead_quality, 'UNCLASSIFIED') key, count(*)::int count
+      FROM leads WHERE active = true GROUP BY 1
+    `),
+    db.execute(sql`
+      SELECT coalesce(loss_reason, 'UNRECORDED') key, count(*)::int count
+      FROM leads WHERE pipeline_stage = 'LOST' GROUP BY 1
+    `),
+  ]);
+  const rows = (outcomeResult as unknown as { rows?: any[] }).rows ?? [];
+  const row = rows[0] ?? {};
+  const qualityRows = (qualityResult as unknown as { rows?: any[] }).rows ?? [];
+  const lossRows = (lossResult as unknown as { rows?: any[] }).rows ?? [];
+  const qualityLabels: Record<string, string> = {
+    ...LEAD_QUALITY_LABELS,
+    UNCLASSIFIED: "טרם סווג",
+  };
+  const lossLabels: Record<string, string> = {
+    ...LOSS_REASON_LABELS,
+    "יקר_לו": "יקר לו",
+    "כמות": "כמות גדולה מדי",
+    "זמן_אספקה": "זמן אספקה",
+    "לא_ענה": "הפסיק לענות",
+    "מצא_ספק_אחר": "בחר ספק אחר",
+    "לא_רלוונטי": "סיבה אחרת",
+    opt_out: "סיבה אחרת",
+    UNRECORDED: "לא תועד",
+  };
+  return {
+    outcomes: {
+      replied: Number(row.replied ?? 0),
+      humanReturned: Number(row.human_returned ?? 0),
+      called: Number(row.called ?? 0),
+      qualified: Number(row.qualified ?? 0),
+      closed: Number(row.closed ?? 0),
+      avgHumanResponseMinutes: row.avg_human_minutes == null ? null : Number(row.avg_human_minutes),
+      medianHumanResponseMinutes: row.median_human_minutes == null ? null : Number(row.median_human_minutes),
+      avgFollowups: row.avg_followups == null ? null : Number(row.avg_followups),
+    },
+    qualification: qualityRows.map((r) => ({
+      key: String(r.key),
+      label: qualityLabels[String(r.key)] ?? String(r.key),
+      count: Number(r.count ?? 0),
+    })),
+    lossReasons: lossRows.map((r) => ({
+      key: String(r.key),
+      label: lossLabels[String(r.key)] ?? String(r.key),
+      count: Number(r.count ?? 0),
+    })),
+  };
+}
+
+async function loadDealEconomics(): Promise<AnalyticsData["dealEconomics"]> {
+  const deals = await listClosedQuotes();
+  const profits = deals
+    .map((deal) => {
+      const fp = deal.finalPricing;
+      if (!fp) return null;
+      const actual = deal.actualCosts;
+      if (!actual) return Number(fp.totalProfit ?? 0);
+      const revenue = Number(actual.actualRevenueIls ?? deal.grandTotalExVat ?? 0);
+      const factory = Number(actual.factoryTotalIls ?? fp.totalCost ?? 0);
+      const shipping = Number(actual.shippingTotalIls ?? fp.totalShipping ?? 0);
+      const commission = Number(actual.commissionIls ?? 0);
+      const other = (actual.otherCosts ?? []).reduce(
+        (sum, item) => sum + Number(item.amountIls ?? 0),
+        0
+      );
+      return revenue - factory - shipping - commission - other;
+    })
+    .filter((value): value is number => value !== null && Number.isFinite(value));
+  if (profits.length === 0) {
+    return { deals: 0, averageProfitIls: null, medianProfitIls: null };
+  }
+  const sorted = [...profits].sort((a, b) => a - b);
+  const middle = Math.floor(sorted.length / 2);
+  const median = sorted.length % 2
+    ? sorted[middle]
+    : (sorted[middle - 1] + sorted[middle]) / 2;
+  return {
+    deals: profits.length,
+    averageProfitIls: profits.reduce((sum, value) => sum + value, 0) / profits.length,
+    medianProfitIls: median,
+  };
 }
 
 async function loadCrmOpsStats(): Promise<AnalyticsData["crmOps"]> {

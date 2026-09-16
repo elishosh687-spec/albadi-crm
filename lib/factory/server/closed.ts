@@ -28,6 +28,7 @@ import {
   type PaymentSchedule,
 } from "@/lib/factory/payment-terms";
 import { logger, serializeError } from "@/lib/observability/log";
+import { recordBotFunnelEvent } from "@/lib/autoresponder/funnel-events";
 
 const log = logger("deals");
 
@@ -448,7 +449,16 @@ export async function closeDealGroup(
         .from(factoryQuoteRequests)
         .where(eq(factoryQuoteRequests.id, primaryId))
         .limit(1);
-      if (prow?.sid) void reportPurchaseToMeta(prow.sid, combined.grandTotalIls, primaryId);
+      if (prow?.sid) {
+        await recordBotFunnelEvent({
+          leadSid: prow.sid,
+          event: "deal_closed",
+          eventKey: `deal_closed:${primaryId}`,
+          quoteId: primaryId,
+          metadata: { valueIls: combined.grandTotalIls, combined: true },
+        });
+        void reportPurchaseToMeta(prow.sid, combined.grandTotalIls, primaryId);
+      }
     }
   } catch (err) {
     log.warn("close_deal_group.combined_pricing_snapshot_failed", { groupId, quoteIds: ids, ...serializeError(err) });
@@ -612,6 +622,13 @@ export async function setDealClosed(id: string, closed: boolean): Promise<void> 
       const value = row.fp
         ? memberDisplayTotalExVat(row.fp as FactoryPricingResult)
         : 0;
+      await recordBotFunnelEvent({
+        leadSid: row.sid,
+        event: "deal_closed",
+        eventKey: `deal_closed:${id}`,
+        quoteId: id,
+        metadata: { valueIls: value, combined: false },
+      });
       void reportPurchaseToMeta(row.sid, value, id);
     }
   }

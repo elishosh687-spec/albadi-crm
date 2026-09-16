@@ -46,6 +46,13 @@ import {
   type V2AssignableStage,
 } from "@/lib/manychat/config";
 import {
+  LEAD_QUALITIES,
+  LOSS_REASONS,
+  type LeadQuality,
+  type LossReason,
+} from "@/lib/manychat/stages";
+import { recordBotFunnelEvent } from "@/lib/autoresponder/funnel-events";
+import {
   addTag,
   getSubscriber,
   removeTag,
@@ -145,6 +152,7 @@ interface SetLeadStageInput {
   stage: V2AssignableStage;
   flags: V2FlagName[];
   reason?: string;
+  lossReason?: LossReason;
 }
 
 export async function setLeadStage(
@@ -164,13 +172,31 @@ export async function setLeadStage(
 
     // Capture prior stage for the supervisor feedback log.
     const [prior] = await db
-      .select({ stage: leads.pipelineStage })
+      .select({ stage: leads.pipelineStage, lossReason: leads.lossReason })
       .from(leads)
       .where(sql`trim(${leads.manychatSubId}) = ${cleanSid}`)
       .limit(1);
 
     try {
       await pushStageAndFlags(cleanSid, input.stage, input.flags);
+      if (input.stage === "LOST") {
+        const lossReason = input.lossReason ?? (prior?.lossReason as LossReason | null) ?? "OTHER";
+        await db
+          .update(leads)
+          .set({ lossReason, updatedAt: new Date() })
+          .where(sql`trim(${leads.manychatSubId}) = ${cleanSid}`);
+        await recordBotFunnelEvent({
+          leadSid: cleanSid,
+          event: "lost",
+          metadata: { reason: lossReason },
+        });
+      }
+      if (input.stage === "DISCAVERY") {
+        await recordBotFunnelEvent({ leadSid: cleanSid, event: "qualified" });
+      }
+      if (input.stage === "WON") {
+        await recordBotFunnelEvent({ leadSid: cleanSid, event: "deal_closed" });
+      }
     } catch (e) {
       safeRevalidate("/dashboard/v3", "layout");
       return {
@@ -215,6 +241,58 @@ export async function setLeadStage(
       ok: false,
       error: e instanceof Error ? e.message : "save failed",
     };
+  }
+}
+
+export async function setLeadQualityAction(
+  manychatSubId: string,
+  quality: LeadQuality
+): Promise<SimpleResult> {
+  const sid = manychatSubId.trim();
+  if (!sid || !LEAD_QUALITIES.includes(quality)) {
+    return { ok: false, error: "invalid lead quality" };
+  }
+  try {
+    await db
+      .update(leads)
+      .set({ leadQuality: quality, updatedAt: new Date() })
+      .where(sql`trim(${leads.manychatSubId}) = ${sid}`);
+    if (quality !== "UNFIT") {
+      await recordBotFunnelEvent({
+        leadSid: sid,
+        event: "qualified",
+        metadata: { quality },
+      });
+    }
+    safeRevalidate("/dashboard/v3", "layout");
+    return { ok: true, message: "איכות הליד נשמרה" };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "save failed" };
+  }
+}
+
+export async function setLeadLossReasonAction(
+  manychatSubId: string,
+  reason: LossReason
+): Promise<SimpleResult> {
+  const sid = manychatSubId.trim();
+  if (!sid || !LOSS_REASONS.includes(reason)) {
+    return { ok: false, error: "invalid loss reason" };
+  }
+  try {
+    await db
+      .update(leads)
+      .set({ lossReason: reason, updatedAt: new Date() })
+      .where(sql`trim(${leads.manychatSubId}) = ${sid}`);
+    await recordBotFunnelEvent({
+      leadSid: sid,
+      event: "lost",
+      metadata: { reason },
+    });
+    safeRevalidate("/dashboard/v3", "layout");
+    return { ok: true, message: "סיבת אי־הסגירה נשמרה" };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "save failed" };
   }
 }
 
@@ -532,6 +610,10 @@ export async function sendManualReply(
     // before the bridge `message.sent` webhook fires, so no extra logging
     // is needed here.
     await sendBridgeMessage(recipient, cleanText, undefined, "eli");
+    await recordBotFunnelEvent({
+      leadSid: cleanSid,
+      event: "human_contacted",
+    });
 
     // Pause bot so cron doesn't pile on; Eli is now driving. Recorded as
     // `human_reply` so it expires on its own — this pause means "I've got this

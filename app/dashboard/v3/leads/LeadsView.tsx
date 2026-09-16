@@ -5,8 +5,21 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Search, MessageSquare, X, ExternalLink, Trash2, Loader2 } from "lucide-react";
 import { STAGE_LABEL, STAGE_TONE } from "@/app/dashboard/v3/_components/stage-meta";
 import type { SheetGapRow } from "@/lib/sheets/lead-gaps";
-import { setLeadStage, deleteLeadAction } from "@/app/actions/v2";
-import { V2_PIPELINE_STAGES, type V2PipelineStage } from "@/lib/manychat/stages";
+import {
+  setLeadStage,
+  setLeadQualityAction,
+  setLeadLossReasonAction,
+  deleteLeadAction,
+} from "@/app/actions/v2";
+import {
+  LEAD_QUALITIES,
+  LEAD_QUALITY_LABELS,
+  LOSS_REASON_LABELS,
+  V2_PIPELINE_STAGES,
+  type LeadQuality,
+  type LossReason,
+  type V2PipelineStage,
+} from "@/lib/manychat/stages";
 
 const ALL_STAGES = [
   "ALL",
@@ -117,6 +130,8 @@ export interface LeadRow {
   pipelineFlag: string | null;
   botPaused: boolean | null;
   followUpCount: number | null;
+  leadQuality: string | null;
+  lossReason: string | null;
   updatedAt: Date | null;
 }
 
@@ -139,10 +154,45 @@ function LeadCard({
   const handleStageChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const next = e.target.value as V2PipelineStage;
     if (next === lead.stage) return;
+    let lossReason: LossReason | undefined;
+    if (next === "LOST") {
+      const options = Object.entries(LOSS_REASON_LABELS) as Array<[LossReason, string]>;
+      const answer = window.prompt(
+        `סיבת אי־הסגירה:\n${options.map(([, label], i) => `${i + 1}. ${label}`).join("\n")}`
+      );
+      if (answer === null) return;
+      const index = Number(answer) - 1;
+      lossReason = options[index]?.[0] ?? "OTHER";
+    }
     startTransition(async () => {
-      const r = await setLeadStage({ manychatSubId: lead.sid, stage: next, flags: [] });
+      const r = await setLeadStage({
+        manychatSubId: lead.sid,
+        stage: next,
+        flags: [],
+        lossReason,
+      });
       if (r.ok) router.refresh();
       else alert(`שגיאה: ${r.error}`);
+    });
+  };
+
+  const handleQualityChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const quality = e.target.value as LeadQuality;
+    if (!LEAD_QUALITIES.includes(quality)) return;
+    startTransition(async () => {
+      const r = await setLeadQualityAction(lead.sid, quality);
+      if (r.ok) router.refresh();
+      else alert(`שגיאה: ${r.error}`);
+    });
+  };
+
+  const handleLossReasonChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const reason = e.target.value as LossReason;
+    if (!(reason in LOSS_REASON_LABELS)) return;
+    startTransition(async () => {
+      const result = await setLeadLossReasonAction(lead.sid, reason);
+      if (result.ok) router.refresh();
+      else alert(`שגיאה: ${result.error}`);
     });
   };
 
@@ -236,6 +286,36 @@ function LeadCard({
         </select>
         {isPending && <Loader2 className="size-3 animate-spin text-muted-foreground" />}
       </div>
+      <div className="relative z-10">
+        <select
+          value={lead.leadQuality ?? ""}
+          onChange={handleQualityChange}
+          disabled={isPending}
+          onClick={(e) => e.stopPropagation()}
+          className="w-full text-xs rounded-md border border-border bg-muted/40 px-2 py-1 disabled:opacity-50"
+        >
+          <option value="" disabled>סיווג איכות ליד</option>
+          {LEAD_QUALITIES.map((quality) => (
+            <option key={quality} value={quality}>{LEAD_QUALITY_LABELS[quality]}</option>
+          ))}
+        </select>
+      </div>
+      {lead.stage === "LOST" && (
+        <div className="relative z-10">
+          <select
+            value={lead.lossReason ?? ""}
+            onChange={handleLossReasonChange}
+            disabled={isPending}
+            onClick={(e) => e.stopPropagation()}
+            className="w-full text-xs rounded-md border border-border bg-muted/40 px-2 py-1 disabled:opacity-50"
+          >
+            <option value="" disabled>סיבת אי־סגירה</option>
+            {Object.entries(LOSS_REASON_LABELS).map(([reason, label]) => (
+              <option key={reason} value={reason}>{label}</option>
+            ))}
+          </select>
+        </div>
+      )}
 
       {/* Actions — always visible (mobile has no hover, desktop also benefits from clarity). */}
       <div className="relative z-10 flex gap-2 pt-1">

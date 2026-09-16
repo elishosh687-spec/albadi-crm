@@ -22,7 +22,7 @@
  */
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { appConfig, callRecordingImports } from "@/drizzle/schema";
+import { appConfig, callRecordingImports, leads } from "@/drizzle/schema";
 import { and, eq, isNotNull, isNull, lte, sql } from "drizzle-orm";
 import {
   addContactNote,
@@ -33,6 +33,7 @@ import {
   listContactTasks,
   searchCallMessages,
 } from "@/integrations/ghl/client";
+import { recordBotFunnelEvent } from "@/lib/autoresponder/funnel-events";
 import { GHL_FIELD_IDS } from "@/integrations/ghl/config";
 import { resolveAssigneeUserId } from "@/lib/crm-tasks/assignee";
 import { updateContact } from "@/integrations/ghl/client";
@@ -575,6 +576,20 @@ async function stage4PostBack(): Promise<{ done: number }> {
             updatedAt: new Date(),
           })
           .where(eq(callRecordingImports.id, row.id));
+        const [lead] = await db
+          .select({ sid: leads.manychatSubId })
+          .from(leads)
+          .where(eq(leads.ghlContactId, row.ghlContactId))
+          .limit(1);
+        if (lead?.sid) {
+          await recordBotFunnelEvent({
+            leadSid: lead.sid,
+            event: "call_completed",
+            eventKey: `call_completed:ghl:${row.ghlMessageId}`,
+            occurredAt: row.callStartedAt ?? new Date(),
+            metadata: { durationSec: row.callDurationSec ?? null },
+          });
+        }
         done++;
         continue;
       }
@@ -597,6 +612,20 @@ async function stage4PostBack(): Promise<{ done: number }> {
           updatedAt: new Date(),
         })
         .where(eq(callRecordingImports.id, row.id));
+      const [lead] = await db
+        .select({ sid: leads.manychatSubId })
+        .from(leads)
+        .where(eq(leads.ghlContactId, row.ghlContactId))
+        .limit(1);
+      if (lead?.sid) {
+        await recordBotFunnelEvent({
+          leadSid: lead.sid,
+          event: "call_completed",
+          eventKey: `call_completed:ghl:${row.ghlMessageId}`,
+          occurredAt: row.callStartedAt ?? new Date(),
+          metadata: { durationSec: row.callDurationSec ?? null },
+        });
+      }
       done++;
     } catch (err) {
       await recordError(row.id, err, row.attempts + 1 >= MAX_ATTEMPTS);

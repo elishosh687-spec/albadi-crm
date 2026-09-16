@@ -34,6 +34,7 @@ import { eq, or, sql } from "drizzle-orm";
 import { GHL_STAGE_IDS, GHL_PIPELINE_ID } from "@/integrations/ghl/config";
 import { findOpportunityForContact, getOpportunity } from "@/integrations/ghl/client";
 import { serializeError, withRequestLog } from "@/lib/observability/log";
+import { recordBotFunnelEvent } from "@/lib/autoresponder/funnel-events";
 
 export const runtime = "nodejs";
 export const maxDuration = 15;
@@ -212,6 +213,9 @@ export const POST = withRequestLog("webhook.ghl", async (req: NextRequest, log):
     .update(leads)
     .set({
       pipelineStage: localStage,
+      ...(localStage === "LOST"
+        ? { lossReason: sql`coalesce(${leads.lossReason}, 'OTHER')` }
+        : {}),
       // Clear NEEDS_ELI flag when Eli explicitly moves the lead to a real
       // stage — it means he's handled the escalation.
       pipelineFlag: null,
@@ -235,6 +239,17 @@ export const POST = withRequestLog("webhook.ghl", async (req: NextRequest, log):
     contactId,
     opportunityId,
   });
+  if (localStage === "DISCAVERY") {
+    await recordBotFunnelEvent({ leadSid: result[0].sid, event: "qualified" });
+  } else if (localStage === "WON") {
+    await recordBotFunnelEvent({ leadSid: result[0].sid, event: "deal_closed" });
+  } else if (localStage === "LOST") {
+    await recordBotFunnelEvent({
+      leadSid: result[0].sid,
+      event: "lost",
+      metadata: { reason: "OTHER", source: "ghl_stage" },
+    });
+  }
   // Dragging a card into "להתקשר בעתיד" starts a new follow-up loop — reset the
   // counter, or a lead arriving from an exhausted INTAKE (followUpCount=3)
   // spends the parked bucket's whole budget on its first tick.

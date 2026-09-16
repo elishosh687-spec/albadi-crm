@@ -106,22 +106,32 @@ export function normalizeStage(
 
 // Loss reasons — set on leads.loss_reason when stage = LOST.
 export const LOSS_REASONS = [
-  "יקר_לו",
-  "לא_ענה",
-  "לא_רלוונטי",
-  "מצא_ספק_אחר",
-  "זמן_אספקה",
-  "כמות",
+  "PRICE",
+  "QUANTITY_TOO_HIGH",
+  "DELIVERY_TIME",
+  "NOT_READY",
+  "NO_RESPONSE",
+  "CHOSE_COMPETITOR",
+  "OTHER",
 ] as const;
 export type LossReason = (typeof LOSS_REASONS)[number];
 
 export const LOSS_REASON_LABELS: Record<LossReason, string> = {
-  "יקר_לו": "יקר לו",
-  "לא_ענה": "לא ענה",
-  "לא_רלוונטי": "לא רלוונטי",
-  "מצא_ספק_אחר": "מצא ספק אחר",
-  "זמן_אספקה": "זמן אספקה לא מתאים",
-  "כמות": "כמות לא מתאימה",
+  PRICE: "יקר לו",
+  QUANTITY_TOO_HIGH: "כמות גדולה מדי",
+  DELIVERY_TIME: "זמן אספקה",
+  NOT_READY: "לא בשל כרגע",
+  NO_RESPONSE: "הפסיק לענות",
+  CHOSE_COMPETITOR: "בחר ספק אחר",
+  OTHER: "סיבה אחרת",
+};
+
+export const LEAD_QUALITIES = ["FIT_READY", "FIT_NOT_READY", "UNFIT"] as const;
+export type LeadQuality = (typeof LEAD_QUALITIES)[number];
+export const LEAD_QUALITY_LABELS: Record<LeadQuality, string> = {
+  FIT_READY: "מתאים ומוכן",
+  FIT_NOT_READY: "מתאים ולא בשל",
+  UNFIT: "לא מתאים",
 };
 
 // Existing 5 flags — kept with numeric ManyChat IDs for backward compat with

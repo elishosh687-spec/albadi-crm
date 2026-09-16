@@ -20,6 +20,7 @@ import {
   type LifecycleKey,
   type PriorityBand,
 } from "../_components/crm-insights";
+import { SalesTargetsForm } from "./SalesTargetsForm";
 
 export interface AnalyticsData {
   activeLeadsCount: number;
@@ -47,11 +48,32 @@ export interface AnalyticsData {
     bailedQuestionnaires: number;
     handoffRatePct: number | null;
   };
-  botFunnel: {
-    started: number;
-    completed: number;
-    quoted: number;
+  botFunnel: Array<{
+    event: string;
+    label: string;
+    attempts: number;
+    uniqueLeads: number;
+  }>;
+  salesOutcomes: {
     replied: number;
+    humanReturned: number;
+    called: number;
+    qualified: number;
+    closed: number;
+    avgHumanResponseMinutes: number | null;
+    medianHumanResponseMinutes: number | null;
+    avgFollowups: number | null;
+  };
+  qualification: Array<{ key: string; label: string; count: number }>;
+  lossReasons: Array<{ key: string; label: string; count: number }>;
+  dealEconomics: {
+    deals: number;
+    averageProfitIls: number | null;
+    medianProfitIls: number | null;
+  };
+  salesTargets: {
+    maxCustomerAcquisitionCostIls: number | null;
+    dailyAdTestBudgetIls: number | null;
   };
   sourcePerformance: Array<{
     source: string;
@@ -79,6 +101,17 @@ const ACCENT_BG: Record<string, string> = {
   destructive: "bg-destructive/15 text-destructive",
   info: "bg-sky-500/15 text-sky-300",
 };
+
+function formatMinutes(value: number | null): string {
+  if (value === null) return "—";
+  if (value < 60) return `${Math.round(value)} דק׳`;
+  if (value < 1440) return `${(value / 60).toFixed(1)} שעות`;
+  return `${(value / 1440).toFixed(1)} ימים`;
+}
+
+function formatIls(value: number | null): string {
+  return value === null ? "—" : `₪${Math.round(value).toLocaleString("he-IL")}`;
+}
 
 export function AnalyticsView({ data }: { data: AnalyticsData }) {
   const funnelMax = Math.max(...data.funnel.map((f) => f.count), 1);
@@ -230,31 +263,50 @@ export function AnalyticsView({ data }: { data: AnalyticsData }) {
         <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wider mb-3">
           משפך הבוט — מצטבר
         </h2>
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          <Kpi
-            icon={<Bot className="size-4" />}
-            label="התחילו את הבוט"
-            value={data.botFunnel.started.toLocaleString("he-IL")}
-            accent="primary"
-          />
-          <Kpi
-            icon={<CheckCircle2 className="size-4" />}
-            label="סיימו את השאלות"
-            value={data.botFunnel.completed.toLocaleString("he-IL")}
-            accent="info"
-          />
-          <Kpi
-            icon={<Banknote className="size-4" />}
-            label="קיבלו מחיר"
-            value={data.botFunnel.quoted.toLocaleString("he-IL")}
-            accent="success"
-          />
-          <Kpi
-            icon={<MessageSquare className="size-4" />}
-            label="הגיבו למחיר"
-            value={data.botFunnel.replied.toLocaleString("he-IL")}
-            accent="warning"
-          />
+        <div className="rounded-xl border border-border bg-card overflow-hidden">
+          <div className="grid grid-cols-[minmax(0,1fr)_90px_90px] gap-3 border-b border-border/60 px-4 py-2 text-xs text-muted-foreground">
+            <span>שלב</span><span>ניסיונות</span><span>לידים</span>
+          </div>
+          {data.botFunnel.map((row) => (
+            <div key={row.event} className="grid grid-cols-[minmax(0,1fr)_90px_90px] gap-3 border-b border-border/40 px-4 py-2 text-sm last:border-0">
+              <span>{row.label}</span>
+              <span className="tabular-nums">{row.attempts.toLocaleString("he-IL")}</span>
+              <span className="tabular-nums">{row.uniqueLeads.toLocaleString("he-IL")}</span>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section>
+        <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wider mb-3">אחרי התגובה למחיר</h2>
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+          <Kpi label="הגיבו למחיר" value={data.salesOutcomes.replied.toLocaleString("he-IL")} accent="primary" />
+          <Kpi label="נציג חזר" value={data.salesOutcomes.humanReturned.toLocaleString("he-IL")} accent="info" />
+          <Kpi label="התקיימה שיחה" value={data.salesOutcomes.called.toLocaleString("he-IL")} accent="info" />
+          <Kpi label="לידים מתאימים" value={data.salesOutcomes.qualified.toLocaleString("he-IL")} accent="success" />
+          <Kpi label="נסגרו" value={data.salesOutcomes.closed.toLocaleString("he-IL")} accent="success" />
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mt-3">
+          <Kpi label="ממוצע עד מענה אנושי" value={formatMinutes(data.salesOutcomes.avgHumanResponseMinutes)} accent="warning" />
+          <Kpi label="חציון עד מענה אנושי" value={formatMinutes(data.salesOutcomes.medianHumanResponseMinutes)} accent="warning" />
+          <Kpi label="ממוצע ניסיונות מעקב" value={data.salesOutcomes.avgFollowups === null ? "—" : data.salesOutcomes.avgFollowups.toFixed(1)} accent="info" />
+        </div>
+      </section>
+
+      <section className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+        <DistributionPanel title="איכות הלידים" rows={data.qualification.map((r) => ({ label: r.label, count: r.count }))} />
+        <DistributionPanel title="סיבות אי־סגירה" rows={data.lossReasons.map((r) => ({ label: r.label, count: r.count }))} />
+      </section>
+
+      <section>
+        <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wider mb-3">כלכלת עסקה</h2>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <Kpi label="עסקאות עם נתוני רווח" value={data.dealEconomics.deals.toLocaleString("he-IL")} accent="success" />
+          <Kpi label="רווח ממוצע לעסקה" value={formatIls(data.dealEconomics.averageProfitIls)} accent="success" />
+          <Kpi label="רווח חציוני לעסקה" value={formatIls(data.dealEconomics.medianProfitIls)} accent="success" />
+        </div>
+        <div className="mt-3">
+          <SalesTargetsForm {...data.salesTargets} />
         </div>
       </section>
 

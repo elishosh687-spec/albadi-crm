@@ -55,6 +55,7 @@ import { buildLLMContext, renderContextForPrompt } from "./llm-context";
 import { logBotQuote } from "./quote-log";
 import { recordBotFunnelEvent } from "./funnel-events";
 import { logger, serializeError } from "@/lib/observability/log";
+import { randomUUID } from "node:crypto";
 
 const log = logger("bot");
 
@@ -272,6 +273,8 @@ const CONFIRMATION_QUESTION: Question = {
 
 export interface QState {
   step: number;
+  /** One UUID per questionnaire run; a restart always creates a new attempt. */
+  attemptId?: string;
   shipping?: string;
   quantity?: string;
   product?: string;
@@ -586,6 +589,32 @@ function matchAnswer(text: string, q: Question): string | null {
   return null;
 }
 
+function answerEventForField(
+  field: Question["field"]
+): "shipping_answered" | "quantity_answered" | "size_selected" | "colors_answered" | null {
+  if (field === "shipping") return "shipping_answered";
+  if (field === "quantity") return "quantity_answered";
+  if (field === "product") return "size_selected";
+  if (field === "colors") return "colors_answered";
+  return null;
+}
+
+async function recordQuestionAnswer(
+  sid: string,
+  state: QState,
+  field: Question["field"],
+  value: string
+): Promise<void> {
+  const event = answerEventForField(field);
+  if (!event) return;
+  await recordBotFunnelEvent({
+    leadSid: sid,
+    attemptId: state.attemptId,
+    event,
+    metadata: { value },
+  });
+}
+
 /**
  * Parse a customer's free-text custom-quantity into a positive integer.
  * Returns null when the string has no parseable digits.
@@ -828,9 +857,13 @@ export async function kickstartQuestionnaire(sid: string): Promise<void> {
   if (!ctx) return;
   if (ctx.qState) return; // already started — don't overwrite
   const first = QUESTIONS[0];
-  const newState: QState = { step: first.step };
+  const newState: QState = { step: first.step, attemptId: randomUUID() };
   await saveState(sid, newState);
-  await recordBotFunnelEvent({ leadSid: sid, event: "questionnaire_started" });
+  await recordBotFunnelEvent({
+    leadSid: sid,
+    attemptId: newState.attemptId,
+    event: "questionnaire_started",
+  });
   await askQuestion(ctx.jid, first);
 }
 
@@ -892,7 +925,7 @@ export async function restartQuestionnaire(
       ? `${ctx.phone.replace(/[^0-9]/g, "")}@s.whatsapp.net`
       : ctx.sid);
   const first = QUESTIONS[0];
-  const newState: QState = { step: first.step };
+  const newState: QState = { step: first.step, attemptId: randomUUID() };
   // pipelineStage must go back to NULL so the questionnaire FSM
   // (handleInbound) accepts the customer's next reply — otherwise the
   // decision-stage handler grabs the inbound first and intent-classifies it
@@ -912,6 +945,11 @@ export async function restartQuestionnaire(
       updatedAt: new Date(),
     })
     .where(sql`trim(${leads.manychatSubId}) = ${ctx.sid.trim()}`);
+  await recordBotFunnelEvent({
+    leadSid: ctx.sid,
+    attemptId: newState.attemptId,
+    event: "questionnaire_started",
+  });
   const transition =
     transitionText?.trim() ||
     "סליחה על הבלבול קודם 🙏 בואו נתחיל את השאלון מההתחלה.";
@@ -1024,12 +1062,6 @@ async function routeToFactory(
       updatedAt: new Date(),
     })
     .where(sql`trim(${leads.manychatSubId}) = ${ctx.sid.trim()}`);
-  await recordBotFunnelEvent({
-    leadSid: ctx.sid,
-    event: "questionnaire_completed",
-    occurredAt: new Date(done.doneAt!),
-    metadata: { outcome: "factory" },
-  });
   await ensureAutoTaskForStage(ctx.sid.trim(), "INTAKE").catch(() => {});
   mirrorAnswersToGhl(ctx.sid, done);
   await sendBridgeMessage(ctx.jid, S.factoryHoldMessage);
@@ -1063,17 +1095,11 @@ async function routeToQuoted(
         updatedAt: new Date(),
       })
       .where(sql`trim(${leads.manychatSubId}) = ${ctx.sid.trim()}`);
-    await recordBotFunnelEvent({
-      leadSid: ctx.sid,
-      event: "questionnaire_completed",
-      occurredAt: new Date(done.doneAt!),
-      metadata: { outcome: "quoted" },
-    });
     // Ensure the INTAKE follow-up task exists — this path bypasses
     // setLeadStage, so the task auto-create doesn't fire otherwise.
     await ensureAutoTaskForStage(ctx.sid.trim(), "INTAKE").catch(() => {});
     mirrorAnswersToGhl(ctx.sid, done);
-    await logBotQuote({
+    const quoteId = await logBotQuote({
       leadSid: ctx.sid,
       source: "initial",
       state: done,
@@ -1085,6 +1111,8 @@ async function routeToQuoted(
     await recordBotFunnelEvent({
       leadSid: ctx.sid,
       event: "quote_sent",
+      attemptId: done.attemptId,
+      quoteId,
       metadata: { totalIls: quote.totalIls },
     });
     if (S.sendCompanyCard) await sendCompanyTemplate(ctx.jid);
@@ -1165,7 +1193,7 @@ export async function requoteWithUpdatedSpec(input: {
       .where(sql`trim(${leads.manychatSubId}) = ${input.sid.trim()}`);
     await ensureAutoTaskForStage(input.sid.trim(), "INTAKE").catch(() => {});
     mirrorAnswersToGhl(input.sid, next);
-    await logBotQuote({
+    const quoteId = await logBotQuote({
       leadSid: input.sid,
       source: "requote",
       state: next,
@@ -1177,6 +1205,8 @@ export async function requoteWithUpdatedSpec(input: {
     await recordBotFunnelEvent({
       leadSid: input.sid,
       event: "quote_sent",
+      attemptId: next.attemptId,
+      quoteId,
       metadata: { totalIls: quote.totalIls, source: "requote" },
     });
     if (S.sendCompanyCard) await sendCompanyTemplate(input.jid);
@@ -1248,10 +1278,11 @@ export async function handleInbound(input: {
   // Cold start.
   if (!ctx.qState) {
     const first = QUESTIONS[0];
-    const newState: QState = { step: first.step };
+    const newState: QState = { step: first.step, attemptId: randomUUID() };
     await saveState(ctx.sid, newState);
     await recordBotFunnelEvent({
       leadSid: ctx.sid,
+      attemptId: newState.attemptId,
       event: "questionnaire_started",
     });
     await sendBridgeMessage(recipient, withHandoffHint(S.openingMessage));
@@ -1338,6 +1369,7 @@ export async function handleInbound(input: {
     };
     if (field === "quantity") captured.quantityCustom = captureText;
     if (field === "product") captured.productCustom = captureText;
+    await recordQuestionAnswer(ctx.sid, captured, field, captureText);
     const currentQ = getCurrentQuestion(ctx.qState!);
     const nextQ = currentQ ? findNextQuestion(currentQ.step) : undefined;
     if (nextQ) {
@@ -1495,6 +1527,16 @@ export async function handleInbound(input: {
   if (currentQ.field === "product" && llmCustomProduct) {
     advanced.productCustom = llmCustomProduct;
   }
+  await recordQuestionAnswer(
+    ctx.sid,
+    advanced,
+    currentQ.field,
+    currentQ.field === "quantity" && llmCustomQuantity
+      ? llmCustomQuantity
+      : currentQ.field === "product" && llmCustomProduct
+        ? llmCustomProduct
+        : match
+  );
   const nextQ = findNextQuestion(currentQ.step);
   if (nextQ) {
     advanced.step = nextQ.step;
@@ -1681,6 +1723,11 @@ async function handleConfirmationStep(
   }
 
   if (isProceed) {
+    await recordBotFunnelEvent({
+      leadSid: ctx.sid,
+      attemptId: state.attemptId,
+      event: "spec_confirmed",
+    });
     // Custom quantity inside the tier range (≥1000) snaps automatically via
     // calculator.quantityOverride — no need to send Eli. Only true factory
     // cases (custom dimensions, sub-tier quantity) require manual pricing.

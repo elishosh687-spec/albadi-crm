@@ -36,6 +36,8 @@ export {
   LEGACY_STAGE_MAP,
   LOSS_REASONS,
   LOSS_REASON_LABELS,
+  LEAD_QUALITIES,
+  LEAD_QUALITY_LABELS,
   normalizeStage,
   flagHasNumericId,
   type V2PipelineStage,
@@ -43,4 +45,5 @@ export {
   type V2AssignableStage,
   type V2FlagName,
   type LossReason,
+  type LeadQuality,
 } from "./stages";

@@ -30,6 +30,7 @@ import { getBotSettings } from "@/lib/bot-settings/store";
 import { computeCallPrep, prepForSalesperson } from "./call-prep";
 import type { QState } from "./questionnaire";
 import { logger, serializeError } from "@/lib/observability/log";
+import { recordBotFunnelEvent } from "@/lib/autoresponder/funnel-events";
 
 const log = logger("followups");
 
@@ -487,6 +488,12 @@ export async function handleCallbackReply(input: {
     .returning({ id: crmTasks.id });
 
   await setCallbackFlow(input.sid, { callbackFlow: "answered", requestedCallbackTime: timeText });
+  await recordBotFunnelEvent({
+    leadSid: input.sid,
+    event: "call_booked",
+    eventKey: `${input.qState.attemptId ?? `legacy:${input.sid.trim()}`}:call_booked:${task?.id ?? timeText}`,
+    metadata: { requestedTime: timeText, taskId: task?.id ?? null },
+  });
 
   // Close the loop back into the follow-up cadence: a lead with a call booked
   // for Thursday must not get "shall we talk?" on Tuesday. Inert for every

@@ -24,21 +24,26 @@ export async function logBotQuote(input: {
   text: string;
   totalIls: number;
   altTotalIls: number | null;
-}): Promise<void> {
+}): Promise<number | null> {
   try {
-    await db.insert(botQuotes).values({
-      leadSid: input.leadSid.trim(),
-      source: input.source,
-      qState: input.state as any,
-      quoteText: input.text,
-      quoteTotalIls: input.totalIls,
-      quoteAltTotalIls: input.altTotalIls,
-    });
+    const [row] = await db
+      .insert(botQuotes)
+      .values({
+        leadSid: input.leadSid.trim(),
+        source: input.source,
+        qState: input.state as any,
+        quoteText: input.text,
+        quoteTotalIls: input.totalIls,
+        quoteAltTotalIls: input.altTotalIls,
+      })
+      .returning({ id: botQuotes.id });
+    return row?.id ?? null;
   } catch (e) {
     log.warn("quote_log.insert_failed", {
       sid: input.leadSid,
       source: input.source,
       ...serializeError(e),
     });
+    return null;
   }
 }

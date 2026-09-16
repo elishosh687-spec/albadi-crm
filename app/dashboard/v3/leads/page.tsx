@@ -43,6 +43,8 @@ async function LeadsListWrapper() {
         pipelineFlag: leads.pipelineFlag,
         botPaused: leads.botPaused,
         followUpCount: leads.followUpCount,
+        leadQuality: leads.leadQuality,
+        lossReason: leads.lossReason,
         updatedAt: leads.updatedAt,
       })
       .from(leads)

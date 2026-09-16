@@ -79,6 +79,9 @@ export const leads = pgTable("leads", {
   // Required when pipeline_stage = LOST. Enum-by-convention; values defined
   // in lib/manychat/stages.ts → LOSS_REASONS.
   lossReason: text("loss_reason"),
+  // Manual sales qualification, intentionally separate from outcome/loss.
+  // FIT_READY | FIT_NOT_READY | UNFIT
+  leadQuality: text("lead_quality"),
   // Lead priority for sorting/filtering — low|normal|high|urgent.
   priority: text("priority"),
   // Denormalized from crm_lead_episodes.ownerId for fast filtering.
@@ -414,15 +417,21 @@ export const botFunnelEvents = pgTable(
   {
     id: bigserial("id", { mode: "number" }).primaryKey(),
     leadSid: text("lead_sid").notNull(),
+    attemptId: text("attempt_id").notNull(),
     event: text("event").notNull(),
+    eventKey: text("event_key").notNull(),
     occurredAt: timestamp("occurred_at", { withTimezone: true }).defaultNow().notNull(),
+    botVersion: text("bot_version"),
+    adId: text("ad_id"),
+    adName: text("ad_name"),
+    campaignId: text("campaign_id"),
+    campaignName: text("campaign_name"),
+    quoteId: text("quote_id"),
     metadata: jsonb("metadata"),
   },
   (t) => ({
-    leadEventUnique: uniqueIndex("bot_funnel_events_lead_event_uidx").on(
-      t.leadSid,
-      t.event
-    ),
+    eventKeyUnique: uniqueIndex("bot_funnel_events_event_key_uidx").on(t.eventKey),
+    attemptEventIdx: index("bot_funnel_events_attempt_event_idx").on(t.attemptId, t.event),
     eventOccurredAtIdx: index("bot_funnel_events_event_occurred_at_idx").on(
       t.event,
       t.occurredAt

@@ -63,6 +63,7 @@ import {
 } from "@/lib/autoresponder/future-followup";
 import { logger, serializeError } from "@/lib/observability/log";
 import { withJob } from "@/lib/observability/jobs";
+import { recordBotFunnelEvent } from "@/lib/autoresponder/funnel-events";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
@@ -785,6 +786,14 @@ async function processCustomerLead(row: {
       updatedAt: new Date(now),
     })
     .where(sql`trim(${leads.manychatSubId}) = ${row.sid.trim()}`);
+  const attemptId = (row.qState as { attemptId?: string } | null)?.attemptId;
+  await recordBotFunnelEvent({
+    leadSid: row.sid,
+    attemptId,
+    event: "followup_sent",
+    eventKey: `${attemptId ?? `legacy:${row.sid.trim()}`}:followup_sent:${rule.template}:${attempt}`,
+    metadata: { attempt, template: rule.template },
+  });
 
   // We just asked this customer for a time. Arm the latch so their answer runs
   // through handleCallbackReply — the one place in the system where customer
