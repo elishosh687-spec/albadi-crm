@@ -180,7 +180,10 @@ export async function setLeadStage(
     try {
       await pushStageAndFlags(cleanSid, input.stage, input.flags);
       if (input.stage === "LOST") {
-        const lossReason = input.lossReason ?? (prior?.lossReason as LossReason | null) ?? "OTHER";
+        const priorLossReason = LOSS_REASONS.includes(prior?.lossReason as LossReason)
+          ? (prior?.lossReason as LossReason)
+          : null;
+        const lossReason = input.lossReason ?? priorLossReason ?? "OTHER";
         await db
           .update(leads)
           .set({ lossReason, updatedAt: new Date() })

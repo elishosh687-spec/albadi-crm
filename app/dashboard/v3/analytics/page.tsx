@@ -367,7 +367,16 @@ async function loadSalesOutcomeStats(): Promise<{
       FROM leads WHERE active = true GROUP BY 1
     `),
     db.execute(sql`
-      SELECT coalesce(loss_reason, 'UNRECORDED') key, count(*)::int count
+      SELECT CASE
+        WHEN loss_reason IN ('PRICE', 'יקר_לו') THEN 'PRICE'
+        WHEN loss_reason IN ('QUANTITY_TOO_HIGH', 'כמות') THEN 'QUANTITY_TOO_HIGH'
+        WHEN loss_reason IN ('DELIVERY_TIME', 'זמן_אספקה') THEN 'DELIVERY_TIME'
+        WHEN loss_reason = 'NOT_READY' THEN 'NOT_READY'
+        WHEN loss_reason IN ('NO_RESPONSE', 'לא_ענה') THEN 'NO_RESPONSE'
+        WHEN loss_reason IN ('CHOSE_COMPETITOR', 'מצא_ספק_אחר') THEN 'CHOSE_COMPETITOR'
+        WHEN loss_reason IN ('OTHER', 'לא_רלוונטי', 'opt_out') THEN 'OTHER'
+        ELSE 'UNRECORDED'
+      END key, count(*)::int count
       FROM leads WHERE pipeline_stage = 'LOST' GROUP BY 1
     `),
   ]);
@@ -381,13 +390,6 @@ async function loadSalesOutcomeStats(): Promise<{
   };
   const lossLabels: Record<string, string> = {
     ...LOSS_REASON_LABELS,
-    "יקר_לו": "יקר לו",
-    "כמות": "כמות גדולה מדי",
-    "זמן_אספקה": "זמן אספקה",
-    "לא_ענה": "הפסיק לענות",
-    "מצא_ספק_אחר": "בחר ספק אחר",
-    "לא_רלוונטי": "סיבה אחרת",
-    opt_out: "סיבה אחרת",
     UNRECORDED: "לא תועד",
   };
   return {
