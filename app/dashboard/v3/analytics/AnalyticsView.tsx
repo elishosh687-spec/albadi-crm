@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
   AlertTriangle, ArrowLeft, Banknote, Bot, CheckCircle2, CircleDollarSign,
@@ -19,6 +20,7 @@ import { SalesTargetsForm } from "./SalesTargetsForm";
 
 export interface AnalyticsData {
   generatedAt: string;
+  dataHealth: { status: "healthy" | "unhealthy" | "error"; checkedAt: string; totalGaps: number } | null;
   activeLeadsCount: number;
   newLeadsWeek: number;
   pendingDrafts: number;
@@ -56,13 +58,27 @@ const VIEWS: Array<{ key: ViewKey; label: string }> = [
 ];
 
 export function AnalyticsView({ data }: { data: AnalyticsData }) {
+  const router = useRouter();
   const [view, setView] = useState<ViewKey>("sales");
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === "visible") router.refresh();
+    }, 60_000);
+    return () => window.clearInterval(timer);
+  }, [router]);
   const started = data.botFunnel.find((row) => row.event === "questionnaire_started")?.uniqueLeads ?? 0;
   const quoted = data.botFunnel.find((row) => row.event === "quote_sent")?.uniqueLeads ?? 0;
   const replied = data.botFunnel.find((row) => row.event === "quote_replied")?.uniqueLeads ?? 0;
   const totalQuality = data.qualification.reduce((sum, row) => sum + row.count, 0);
   const unclassified = data.qualification.find((row) => row.key === "UNCLASSIFIED")?.count ?? 0;
   const classificationRate = percentage(totalQuality - unclassified, totalQuality);
+  const healthLabel = !data.dataHealth
+    ? "הניטור ממתין לבדיקה ראשונה"
+    : data.dataHealth.status === "healthy"
+      ? "המשפך תקין"
+      : data.dataHealth.status === "error"
+        ? "בדיקת המשפך נכשלה"
+        : `נמצאו ${data.dataHealth.totalGaps} פערים`;
 
   return (
     <div className="mx-auto flex w-full max-w-[1420px] flex-col gap-6 pb-16">
@@ -77,9 +93,11 @@ export function AnalyticsView({ data }: { data: AnalyticsData }) {
               משפך אחד שמחבר את הבוט, המענה האנושי, איכות הלידים והרווח — בלי לספור התחלה חוזרת כליד חדש.
             </p>
           </div>
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <span className="size-2 rounded-full bg-success" aria-hidden="true" />
-            נתוני אמת · עודכן {new Date(data.generatedAt).toLocaleString("he-IL", { dateStyle: "short", timeStyle: "short" })}
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+            <span className={cn("size-2 rounded-full", data.dataHealth?.status === "healthy" ? "bg-success" : data.dataHealth ? "bg-destructive" : "bg-warning")} aria-hidden="true" />
+            <span>{healthLabel}</span>
+            <span aria-hidden="true">·</span>
+            <span>מתרענן כל דקה · עודכן {new Date(data.generatedAt).toLocaleString("he-IL", { dateStyle: "short", timeStyle: "short" })}</span>
           </div>
         </div>
       </header>

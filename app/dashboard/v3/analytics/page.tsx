@@ -15,6 +15,7 @@ import {
   buildBotFunnel,
   summarizeProfits,
 } from "@/lib/analytics/funnel";
+import { loadFunnelHealthState } from "@/lib/analytics/health";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -60,6 +61,7 @@ export default async function V3AnalyticsPage() {
     salesOutcomes,
     dealEconomics,
     salesTargets,
+    funnelHealth,
   ] = await Promise.all([
     db
       .select({ stage: leads.pipelineStage })
@@ -206,6 +208,7 @@ export default async function V3AnalyticsPage() {
     loadSalesOutcomeStats(),
     loadDealEconomics(),
     loadSalesTargets(),
+    loadFunnelHealthState(),
   ]);
 
   // Funnel = count of leads that EVER passed through each stage (best-effort:
@@ -242,6 +245,13 @@ export default async function V3AnalyticsPage() {
 
   const data: AnalyticsData = {
     generatedAt: now.toISOString(),
+    dataHealth: funnelHealth
+      ? {
+          status: funnelHealth.status,
+          checkedAt: funnelHealth.checkedAt,
+          totalGaps: Object.values(funnelHealth.gaps).reduce((sum, value) => sum + value, 0),
+        }
+      : null,
     activeLeadsCount: activeLeads.length,
     newLeadsWeek: newLeadsWeek[0]?.count ?? 0,
     pendingDrafts: pendingDrafts[0]?.count ?? 0,

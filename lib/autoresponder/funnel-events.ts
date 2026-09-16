@@ -7,7 +7,7 @@
  */
 import { db } from "@/lib/db";
 import { botFunnelEvents, botQuotes, leads } from "@/drizzle/schema";
-import { and, eq, lte, sql } from "drizzle-orm";
+import { and, asc, eq, lte, sql } from "drizzle-orm";
 import { logger, serializeError } from "@/lib/observability/log";
 import { buildFunnelEventIdentity } from "./funnel-event-identity";
 
@@ -119,6 +119,7 @@ export async function recordQuoteReplyIfEligible(
           lte(botQuotes.sentAt, occurredAt)
         )
       )
+      .orderBy(asc(botQuotes.sentAt))
       .limit(1);
     if (!quote) return;
     await recordBotFunnelEvent({

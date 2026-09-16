@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { recordBotFunnelEvent } from "@/lib/autoresponder/funnel-events";
+import { collectFunnelHealthGaps } from "@/lib/analytics/health";
 import { ciSid, sql } from "./_db";
 
 const SID = ciSid("funnel-events");
@@ -76,5 +77,40 @@ describe("recordBotFunnelEvent", () => {
       [SID]
     );
     expect(rows).toEqual([{ count: 2 }]);
+  });
+
+  it("detects missing source events and clears once they are recorded", async () => {
+    await sql(`DELETE FROM bot_funnel_events WHERE lead_sid = $1`, [SID]);
+    await sql(
+      `UPDATE leads
+       SET q_state = $2::jsonb, updated_at = now() - interval '15 minutes'
+       WHERE manychat_sub_id = $1`,
+      [SID, JSON.stringify({ attemptId: "attempt-health", step: 2, shipping: "regular" })]
+    );
+
+    expect(await collectFunnelHealthGaps({ leadSid: SID })).toEqual({
+      questionnaireStarts: 1,
+      questionnaireAnswers: 1,
+      quotes: 0,
+      quoteReplies: 0,
+    });
+
+    await recordBotFunnelEvent({
+      leadSid: SID,
+      event: "questionnaire_started",
+      attemptId: "attempt-health",
+    });
+    await recordBotFunnelEvent({
+      leadSid: SID,
+      event: "shipping_answered",
+      attemptId: "attempt-health",
+    });
+
+    expect(await collectFunnelHealthGaps({ leadSid: SID })).toEqual({
+      questionnaireStarts: 0,
+      questionnaireAnswers: 0,
+      quotes: 0,
+      quoteReplies: 0,
+    });
   });
 });

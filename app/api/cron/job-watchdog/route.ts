@@ -7,6 +7,7 @@
  */
 import { NextRequest, NextResponse } from "next/server";
 import { runWatchdog, withJob } from "@/lib/observability/jobs";
+import { runFunnelHealthCheck } from "@/lib/analytics/health";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -26,8 +27,9 @@ const run = withJob("job-watchdog", "cron", async (req: NextRequest, log) => {
     }
     const dry = req.nextUrl.searchParams.get("dry") === "1";
     const result = await runWatchdog({ dry });
-    log.info("watchdog.run", { job: "job-watchdog", dry, unhealthy: result.unhealthy.length, alerted: result.alerted.length, recovered: result.recovered.length });
-    return NextResponse.json(result);
+    const funnelHealth = await runFunnelHealthCheck({ dry });
+    log.info("watchdog.run", { job: "job-watchdog", dry, unhealthy: result.unhealthy.length, alerted: result.alerted.length, recovered: result.recovered.length, funnelHealthy: funnelHealth.ok, funnelGaps: funnelHealth.assessment.totalGaps });
+    return NextResponse.json({ ...result, funnelHealth });
 });
 export const GET = run;
 export const POST = run;
