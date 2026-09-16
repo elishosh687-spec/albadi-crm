@@ -10,6 +10,11 @@ import {
 import { listClosedQuotes } from "@/lib/factory/server/closed";
 import { LEAD_QUALITY_LABELS, LOSS_REASON_LABELS } from "@/lib/manychat/stages";
 import { loadSalesTargets } from "@/lib/analytics/targets";
+import {
+  aggregateLossReasons,
+  buildBotFunnel,
+  summarizeProfits,
+} from "@/lib/analytics/funnel";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -22,19 +27,6 @@ const FUNNEL_ORDER = [
   "CONSIDERATION",
   "WON",
 ];
-
-const BOT_FUNNEL_ORDER = [
-  ["questionnaire_started", "התחיל שאלון"],
-  ["shipping_answered", "ענה על שיטת משלוח"],
-  ["quantity_answered", "ענה על כמות"],
-  ["size_selected", "בחר מידה"],
-  ["colors_answered", "ענה על מספר צבעים"],
-  ["spec_confirmed", "אישר מפרט"],
-  ["quote_sent", "קיבל מחיר"],
-  ["quote_replied", "הגיב אחרי המחיר"],
-  ["call_booked", "קבע שיחה"],
-  ["deal_closed", "נסגרה עסקה"],
-] as const;
 
 export default async function V3AnalyticsPage() {
   const now = new Date();
@@ -249,6 +241,7 @@ export default async function V3AnalyticsPage() {
       : null;
 
   const data: AnalyticsData = {
+    generatedAt: now.toISOString(),
     activeLeadsCount: activeLeads.length,
     newLeadsWeek: newLeadsWeek[0]?.count ?? 0,
     pendingDrafts: pendingDrafts[0]?.count ?? 0,
@@ -278,12 +271,7 @@ export default async function V3AnalyticsPage() {
       bailedQuestionnaires: qStateRows[0]?.bailed ?? 0,
       handoffRatePct: handoffRate,
     },
-    botFunnel: BOT_FUNNEL_ORDER.map(([event, label]) => ({
-      event,
-      label,
-      attempts: botFunnelCount.get(event)?.attempts ?? 0,
-      uniqueLeads: botFunnelCount.get(event)?.uniqueLeads ?? 0,
-    })),
+    botFunnel: buildBotFunnel([...botFunnelCount.values()]),
     salesOutcomes: salesOutcomes.outcomes,
     qualification: salesOutcomes.qualification,
     lossReasons: salesOutcomes.lossReasons,
@@ -367,17 +355,8 @@ async function loadSalesOutcomeStats(): Promise<{
       FROM leads WHERE active = true GROUP BY 1
     `),
     db.execute(sql`
-      SELECT CASE
-        WHEN loss_reason IN ('PRICE', 'יקר_לו') THEN 'PRICE'
-        WHEN loss_reason IN ('QUANTITY_TOO_HIGH', 'כמות') THEN 'QUANTITY_TOO_HIGH'
-        WHEN loss_reason IN ('DELIVERY_TIME', 'זמן_אספקה') THEN 'DELIVERY_TIME'
-        WHEN loss_reason = 'NOT_READY' THEN 'NOT_READY'
-        WHEN loss_reason IN ('NO_RESPONSE', 'לא_ענה') THEN 'NO_RESPONSE'
-        WHEN loss_reason IN ('CHOSE_COMPETITOR', 'מצא_ספק_אחר') THEN 'CHOSE_COMPETITOR'
-        WHEN loss_reason IN ('OTHER', 'לא_רלוונטי', 'opt_out') THEN 'OTHER'
-        ELSE 'UNRECORDED'
-      END key, count(*)::int count
-      FROM leads WHERE pipeline_stage = 'LOST' GROUP BY 1
+      SELECT loss_reason key, count(*)::int count
+      FROM leads WHERE pipeline_stage = 'LOST' GROUP BY loss_reason
     `),
   ]);
   const rows = (outcomeResult as unknown as { rows?: any[] }).rows ?? [];
@@ -408,7 +387,7 @@ async function loadSalesOutcomeStats(): Promise<{
       label: qualityLabels[String(r.key)] ?? String(r.key),
       count: Number(r.count ?? 0),
     })),
-    lossReasons: lossRows.map((r) => ({
+    lossReasons: aggregateLossReasons(lossRows).map((r) => ({
       key: String(r.key),
       label: lossLabels[String(r.key)] ?? String(r.key),
       count: Number(r.count ?? 0),
@@ -435,19 +414,7 @@ async function loadDealEconomics(): Promise<AnalyticsData["dealEconomics"]> {
       return revenue - factory - shipping - commission - other;
     })
     .filter((value): value is number => value !== null && Number.isFinite(value));
-  if (profits.length === 0) {
-    return { deals: 0, averageProfitIls: null, medianProfitIls: null };
-  }
-  const sorted = [...profits].sort((a, b) => a - b);
-  const middle = Math.floor(sorted.length / 2);
-  const median = sorted.length % 2
-    ? sorted[middle]
-    : (sorted[middle - 1] + sorted[middle]) / 2;
-  return {
-    deals: profits.length,
-    averageProfitIls: profits.reduce((sum, value) => sum + value, 0) / profits.length,
-    medianProfitIls: median,
-  };
+  return summarizeProfits(profits);
 }
 
 async function loadCrmOpsStats(): Promise<AnalyticsData["crmOps"]> {

@@ -1,28 +1,24 @@
 "use client";
 
-import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  Cell,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
+import { useState } from "react";
 import Link from "next/link";
-import { Users, Inbox, Banknote, TrendingUp, Bot, MessageSquare, CheckCircle2, XCircle } from "lucide-react";
-import { STAGE_LABEL, STAGE_TONE } from "../_components/stage-meta";
-import { cn } from "@/lib/cn";
 import {
-  LIFECYCLE_LABEL,
-  PRIORITY_LABEL,
-  type LifecycleKey,
-  type PriorityBand,
+  AlertTriangle, ArrowLeft, Banknote, Bot, CheckCircle2, CircleDollarSign,
+  Clock3, Inbox, MessageSquare, PhoneCall, Target, Users,
+} from "lucide-react";
+import {
+  Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis,
+} from "recharts";
+import { cn } from "@/lib/cn";
+import { percentage } from "@/lib/analytics/funnel";
+import { STAGE_LABEL } from "../_components/stage-meta";
+import {
+  LIFECYCLE_LABEL, PRIORITY_LABEL, type LifecycleKey, type PriorityBand,
 } from "../_components/crm-insights";
 import { SalesTargetsForm } from "./SalesTargetsForm";
 
 export interface AnalyticsData {
+  generatedAt: string;
   activeLeadsCount: number;
   newLeadsWeek: number;
   pendingDrafts: number;
@@ -32,576 +28,315 @@ export interface AnalyticsData {
   botApprovalRatePct: number | null;
   botDraftsMonth: { sent: number; rejected: number; failed: number };
   todayMessages: { bot: number; eli: number; lead: number };
-  operations: {
-    needsHuman: number;
-    pausedLeads: number;
-    staleActiveLeads: number;
-    manualReviewLeads: number;
-  };
-  revenueOps: {
-    quotedLeads: number;
-    largeQuotedLeads: number;
-  };
-  botQa: {
-    activeQuestionnaires: number;
-    completedQuestionnaires: number;
-    bailedQuestionnaires: number;
-    handoffRatePct: number | null;
-  };
-  botFunnel: Array<{
-    event: string;
-    label: string;
-    attempts: number;
-    uniqueLeads: number;
-  }>;
+  operations: { needsHuman: number; pausedLeads: number; staleActiveLeads: number; manualReviewLeads: number };
+  revenueOps: { quotedLeads: number; largeQuotedLeads: number };
+  botQa: { activeQuestionnaires: number; completedQuestionnaires: number; bailedQuestionnaires: number; handoffRatePct: number | null };
+  botFunnel: Array<{ event: string; label: string; attempts: number; uniqueLeads: number }>;
   salesOutcomes: {
-    replied: number;
-    humanReturned: number;
-    called: number;
-    qualified: number;
-    closed: number;
-    avgHumanResponseMinutes: number | null;
-    medianHumanResponseMinutes: number | null;
-    avgFollowups: number | null;
+    replied: number; humanReturned: number; called: number; qualified: number; closed: number;
+    avgHumanResponseMinutes: number | null; medianHumanResponseMinutes: number | null; avgFollowups: number | null;
   };
   qualification: Array<{ key: string; label: string; count: number }>;
   lossReasons: Array<{ key: string; label: string; count: number }>;
-  dealEconomics: {
-    deals: number;
-    averageProfitIls: number | null;
-    medianProfitIls: number | null;
-  };
-  salesTargets: {
-    maxCustomerAcquisitionCostIls: number | null;
-    dailyAdTestBudgetIls: number | null;
-  };
-  sourcePerformance: Array<{
-    source: string;
-    leads: number;
-    won: number;
-    quoted: number;
-  }>;
+  dealEconomics: { deals: number; averageProfitIls: number | null; medianProfitIls: number | null };
+  salesTargets: { maxCustomerAcquisitionCostIls: number | null; dailyAdTestBudgetIls: number | null };
+  sourcePerformance: Array<{ source: string; leads: number; won: number; quoted: number }>;
   lifecycleDist: Array<{ lifecycle: LifecycleKey; count: number }>;
   priorityDist: Array<{ priority: PriorityBand; count: number }>;
-  crmOps: {
-    openTasks: number;
-    breachedSla: number;
-    openSla: number;
-    openOpportunities: number;
-    latestScores: number;
-  };
+  crmOps: { openTasks: number; breachedSla: number; openSla: number; openOpportunities: number; latestScores: number };
   funnel: Array<{ stage: string; count: number }>;
   pipelineDist: Array<{ stage: string; count: number }>;
 }
 
-const ACCENT_BG: Record<string, string> = {
-  primary: "bg-primary/15 text-primary",
-  success: "bg-success/15 text-success",
-  warning: "bg-warning/15 text-warning",
-  destructive: "bg-destructive/15 text-destructive",
-  info: "bg-sky-500/15 text-sky-300",
-};
-
-function formatMinutes(value: number | null): string {
-  if (value === null) return "—";
-  if (value < 60) return `${Math.round(value)} דק׳`;
-  if (value < 1440) return `${(value / 60).toFixed(1)} שעות`;
-  return `${(value / 1440).toFixed(1)} ימים`;
-}
-
-function formatIls(value: number | null): string {
-  return value === null ? "—" : `₪${Math.round(value).toLocaleString("he-IL")}`;
-}
+type ViewKey = "sales" | "operations" | "bot";
+const VIEWS: Array<{ key: ViewKey; label: string }> = [
+  { key: "sales", label: "משפך ומכירות" },
+  { key: "operations", label: "תפעול ו־SLA" },
+  { key: "bot", label: "בריאות הבוט" },
+];
 
 export function AnalyticsView({ data }: { data: AnalyticsData }) {
-  const funnelMax = Math.max(...data.funnel.map((f) => f.count), 1);
-  const pipelineChart = data.pipelineDist.map((p) => ({
-    stage: STAGE_LABEL[p.stage] ?? p.stage,
-    count: p.count,
-    color: extractFill(p.stage),
-  }));
+  const [view, setView] = useState<ViewKey>("sales");
+  const started = data.botFunnel.find((row) => row.event === "questionnaire_started")?.uniqueLeads ?? 0;
+  const quoted = data.botFunnel.find((row) => row.event === "quote_sent")?.uniqueLeads ?? 0;
+  const replied = data.botFunnel.find((row) => row.event === "quote_replied")?.uniqueLeads ?? 0;
+  const totalQuality = data.qualification.reduce((sum, row) => sum + row.count, 0);
+  const unclassified = data.qualification.find((row) => row.key === "UNCLASSIFIED")?.count ?? 0;
+  const classificationRate = percentage(totalQuality - unclassified, totalQuality);
 
   return (
-    <div className="flex flex-col gap-8">
-      <header>
-        <h1
-          className="text-3xl font-medium tracking-tight"
-          style={{ fontFamily: "var(--font-display)" }}
-        >
-          אנליטיקה
-        </h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          מבט ניהולי על בריאות הבוט, תור ההתערבות והכסף במשפך ב-30 הימים האחרונים.
-        </p>
+    <div className="mx-auto flex w-full max-w-[1420px] flex-col gap-6 pb-16">
+      <header className="border-b border-border/70 pb-6">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+          <div className="max-w-2xl">
+            <p className="mb-2 text-xs font-medium tracking-[0.18em] text-primary">מרכז ביצועים</p>
+            <h1 className="text-3xl font-semibold tracking-tight md:text-4xl" style={{ fontFamily: "var(--font-display)" }}>
+              מה קורה מהליד הראשון ועד העסקה
+            </h1>
+            <p className="mt-2 text-sm leading-6 text-muted-foreground">
+              משפך אחד שמחבר את הבוט, המענה האנושי, איכות הלידים והרווח — בלי לספור התחלה חוזרת כליד חדש.
+            </p>
+          </div>
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <span className="size-2 rounded-full bg-success" aria-hidden="true" />
+            נתוני אמת · עודכן {new Date(data.generatedAt).toLocaleString("he-IL", { dateStyle: "short", timeStyle: "short" })}
+          </div>
+        </div>
       </header>
 
-      <section>
-        <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wider mb-3">
-          תפעול יומי
-        </h2>
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          <Kpi
-            icon={<Users className="size-4" />}
-            label="לידים חדשים (שבוע)"
-            value={data.newLeadsWeek.toLocaleString("he-IL")}
-            accent="primary"
-          />
-          <Kpi
-            icon={<Inbox className="size-4" />}
-            label="תור אישורים"
-            value={data.pendingDrafts.toLocaleString("he-IL")}
-            accent={data.pendingDrafts > 0 ? "warning" : "success"}
-          />
-          <Kpi
-            icon={<Banknote className="size-4" />}
-            label="₪ WON (חודש)"
-            value={`₪${data.wonMonthSumIls.toLocaleString("he-IL")}`}
-            accent="success"
-          />
-          <Kpi
-            icon={<TrendingUp className="size-4" />}
-            label="לידים פעילים"
-            value={data.activeLeadsCount.toLocaleString("he-IL")}
-            accent="info"
-          />
+      <section className="grid gap-4 lg:grid-cols-[minmax(0,1.65fr)_minmax(290px,0.75fr)]">
+        <div className="grid grid-cols-2 overflow-hidden rounded-2xl border border-border bg-card md:grid-cols-4">
+          <HeadlineMetric label="לידים חדשים השבוע" value={formatNumber(data.newLeadsWeek)} icon={<Users />} />
+          <HeadlineMetric label="הגיבו למחיר" value={formatNumber(data.salesOutcomes.replied)} icon={<MessageSquare />} />
+          <HeadlineMetric label="נסגרו" value={formatNumber(data.salesOutcomes.closed)} icon={<CheckCircle2 />} />
+          <HeadlineMetric label="הכנסות החודש" value={formatIls(data.wonMonthSumIls)} icon={<Banknote />} />
         </div>
-      </section>
-
-      <section>
-        <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wider mb-3">
-          תגובה ו-SLA
-        </h2>
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          <Kpi
-            icon={<Inbox className="size-4" />}
-            label="דורש אדם"
-            value={data.operations.needsHuman.toLocaleString("he-IL")}
-            accent={data.operations.needsHuman > 0 ? "destructive" : "success"}
-          />
-          <Kpi
-            icon={<Bot className="size-4" />}
-            label="בוט מושעה"
-            value={data.operations.pausedLeads.toLocaleString("he-IL")}
-            accent={data.operations.pausedLeads > 0 ? "warning" : "success"}
-          />
-          <Kpi
-            icon={<XCircle className="size-4" />}
-            label="אין פעילות 48ש׳+"
-            value={data.operations.staleActiveLeads.toLocaleString("he-IL")}
-            accent={data.operations.staleActiveLeads > 0 ? "warning" : "success"}
-          />
-          <Kpi
-            icon={<MessageSquare className="size-4" />}
-            label="תמחור / בדיקה ידנית"
-            value={data.operations.manualReviewLeads.toLocaleString("he-IL")}
-            accent={data.operations.manualReviewLeads > 0 ? "warning" : "info"}
-          />
-        </div>
-      </section>
-
-      <section>
-        <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wider mb-3">
-          מחזור חיים ועדיפות
-        </h2>
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-          <DistributionPanel
-            title="מחזור חיים"
-            rows={data.lifecycleDist.map((row) => ({
-              label: LIFECYCLE_LABEL[row.lifecycle],
-              count: row.count,
-            }))}
-          />
-          <DistributionPanel
-            title="עדיפות"
-            rows={data.priorityDist.map((row) => ({
-              label: PRIORITY_LABEL[row.priority],
-              count: row.count,
-            }))}
-          />
-        </div>
-      </section>
-
-      <section>
-        <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wider mb-3">
-          שכבת CRM אמיתית
-        </h2>
-        <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
-          <Kpi
-            icon={<Inbox className="size-4" />}
-            label="משימות פתוחות"
-            value={data.crmOps.openTasks.toLocaleString("he-IL")}
-            accent={data.crmOps.openTasks > 0 ? "warning" : "success"}
-          />
-          <Kpi
-            icon={<XCircle className="size-4" />}
-            label="SLA חריג"
-            value={data.crmOps.breachedSla.toLocaleString("he-IL")}
-            accent={data.crmOps.breachedSla > 0 ? "destructive" : "success"}
-          />
-          <Kpi
-            icon={<MessageSquare className="size-4" />}
-            label="SLA פתוח"
-            value={data.crmOps.openSla.toLocaleString("he-IL")}
-            accent="info"
-          />
-          <Kpi
-            icon={<Banknote className="size-4" />}
-            label="Opportunities"
-            value={data.crmOps.openOpportunities.toLocaleString("he-IL")}
-            accent="success"
-          />
-          <Kpi
-            icon={<TrendingUp className="size-4" />}
-            label="Score snapshots"
-            value={data.crmOps.latestScores.toLocaleString("he-IL")}
-            accent="primary"
-          />
-        </div>
-      </section>
-
-      <section>
-        <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wider mb-3">
-          משפך הבוט — מצטבר
-        </h2>
-        <div className="rounded-xl border border-border bg-card overflow-hidden">
-          <div className="grid grid-cols-[minmax(0,1fr)_90px_90px] gap-3 border-b border-border/60 px-4 py-2 text-xs text-muted-foreground">
-            <span>שלב</span><span>ניסיונות</span><span>לידים</span>
+        <div className="rounded-2xl border border-border bg-card p-5">
+          <div className="mb-4 flex items-center gap-2"><Target className="size-4 text-primary" /><h2 className="text-sm font-semibold">שלוש נקודות לבדיקה</h2></div>
+          <div className="space-y-3">
+            <SignalRow label="המרה מהתחלה למחיר" value={formatPercent(percentage(quoted, started))} />
+            <SignalRow label="תגובה אחרי מחיר" value={formatPercent(percentage(replied, quoted))} />
+            <SignalRow label="לידים שסווגו" value={formatPercent(classificationRate)} tone={classificationRate !== null && classificationRate < 50 ? "warning" : "default"} />
           </div>
-          {data.botFunnel.map((row) => (
-            <div key={row.event} className="grid grid-cols-[minmax(0,1fr)_90px_90px] gap-3 border-b border-border/40 px-4 py-2 text-sm last:border-0">
-              <span>{row.label}</span>
-              <span className="tabular-nums">{row.attempts.toLocaleString("he-IL")}</span>
-              <span className="tabular-nums">{row.uniqueLeads.toLocaleString("he-IL")}</span>
-            </div>
-          ))}
         </div>
       </section>
 
-      <section>
-        <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wider mb-3">אחרי התגובה למחיר</h2>
-        <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
-          <Kpi label="הגיבו למחיר" value={data.salesOutcomes.replied.toLocaleString("he-IL")} accent="primary" />
-          <Kpi label="נציג חזר" value={data.salesOutcomes.humanReturned.toLocaleString("he-IL")} accent="info" />
-          <Kpi label="התקיימה שיחה" value={data.salesOutcomes.called.toLocaleString("he-IL")} accent="info" />
-          <Kpi label="לידים מתאימים" value={data.salesOutcomes.qualified.toLocaleString("he-IL")} accent="success" />
-          <Kpi label="נסגרו" value={data.salesOutcomes.closed.toLocaleString("he-IL")} accent="success" />
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mt-3">
-          <Kpi label="ממוצע עד מענה אנושי" value={formatMinutes(data.salesOutcomes.avgHumanResponseMinutes)} accent="warning" />
-          <Kpi label="חציון עד מענה אנושי" value={formatMinutes(data.salesOutcomes.medianHumanResponseMinutes)} accent="warning" />
-          <Kpi label="ממוצע ניסיונות מעקב" value={data.salesOutcomes.avgFollowups === null ? "—" : data.salesOutcomes.avgFollowups.toFixed(1)} accent="info" />
-        </div>
-      </section>
+      <nav className="flex w-full gap-1 overflow-x-auto rounded-xl border border-border bg-card p-1" role="tablist" aria-label="תחומי אנליטיקה">
+        {VIEWS.map((item) => (
+          <button key={item.key} type="button" role="tab" aria-selected={view === item.key} onClick={() => setView(item.key)}
+            className={cn("min-h-11 min-w-fit flex-1 rounded-lg px-4 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary", view === item.key ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted/50 hover:text-foreground")}>
+            {item.label}
+          </button>
+        ))}
+      </nav>
 
-      <section className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-        <DistributionPanel title="איכות הלידים" rows={data.qualification.map((r) => ({ label: r.label, count: r.count }))} />
-        <DistributionPanel title="סיבות אי־סגירה" rows={data.lossReasons.map((r) => ({ label: r.label, count: r.count }))} />
-      </section>
+      {view === "sales" && <SalesView data={data} />}
+      {view === "operations" && <OperationsView data={data} />}
+      {view === "bot" && <BotHealthView data={data} />}
+    </div>
+  );
+}
 
-      <section>
-        <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wider mb-3">כלכלת עסקה</h2>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          <Kpi label="עסקאות עם נתוני רווח" value={data.dealEconomics.deals.toLocaleString("he-IL")} accent="success" />
-          <Kpi label="רווח ממוצע לעסקה" value={formatIls(data.dealEconomics.averageProfitIls)} accent="success" />
-          <Kpi label="רווח חציוני לעסקה" value={formatIls(data.dealEconomics.medianProfitIls)} accent="success" />
-        </div>
-        <div className="mt-3">
+function SalesView({ data }: { data: AnalyticsData }) {
+  const replied = data.salesOutcomes.replied;
+  return (
+    <div role="tabpanel" className="space-y-5">
+      <div className="grid gap-5 xl:grid-cols-[minmax(0,1.45fr)_minmax(320px,0.75fr)]">
+        <Panel title="משפך הבוט" description="לידים ייחודיים הם המדד להמרה; ניסיונות כוללים התחלה מחדש."><Funnel rows={data.botFunnel} /></Panel>
+        <Panel title="מה קרה אחרי המחיר" description="אותה קבוצת לידים שהגיבה להצעה הראשונית.">
+          <OutcomePath rows={[
+            { label: "הגיבו למחיר", value: replied, icon: <MessageSquare /> },
+            { label: "נציג חזר", value: data.salesOutcomes.humanReturned, icon: <ArrowLeft /> },
+            { label: "התקיימה שיחה", value: data.salesOutcomes.called, icon: <PhoneCall /> },
+            { label: "נמצאו מתאימים", value: data.salesOutcomes.qualified, icon: <Target /> },
+            { label: "נסגרו", value: data.salesOutcomes.closed, icon: <CheckCircle2 /> },
+          ]} />
+          <div className="mt-5 grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-border bg-border">
+            <CompactStat label="חציון למענה אנושי" value={formatMinutes(data.salesOutcomes.medianHumanResponseMinutes)} />
+            <CompactStat label="ממוצע ניסיונות מעקב" value={data.salesOutcomes.avgFollowups === null ? "—" : data.salesOutcomes.avgFollowups.toFixed(1)} />
+          </div>
+        </Panel>
+      </div>
+
+      <div className="grid gap-5 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
+        <Panel title="איכות הלידים" description="איכות מתארת התאמה ובשלות — לא את סיבת ההפסד."><Distribution rows={data.qualification} emptyLabel="אין עדיין סיווגי איכות" /></Panel>
+        <Panel title="למה עסקאות לא נסגרו" description="סיבות מובנות כדי לראות אם הבעיה היא מחיר, תזמון או התאמה."><Distribution rows={data.lossReasons} emptyLabel="אין עדיין סיבות מתועדות" /></Panel>
+      </div>
+
+      <Panel title="כלכלת העסקה" description="רווח בפועל כשיש עלויות אמת; אחרת הרווח המתוכנן מההצעה הסגורה.">
+        <div className="grid gap-5 lg:grid-cols-[minmax(0,0.7fr)_minmax(0,1.3fr)]">
+          <div className="grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-border bg-border">
+            <CompactStat label="עסקאות עם נתוני רווח" value={formatNumber(data.dealEconomics.deals)} />
+            <CompactStat label="רווח חציוני" value={formatIls(data.dealEconomics.medianProfitIls)} emphasis />
+            <CompactStat label="רווח ממוצע" value={formatIls(data.dealEconomics.averageProfitIls)} />
+            <CompactStat label="CAC מקסימלי" value={formatIls(data.salesTargets.maxCustomerAcquisitionCostIls)} />
+          </div>
           <SalesTargetsForm {...data.salesTargets} />
         </div>
-      </section>
+      </Panel>
 
-      <section>
-        <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wider mb-3">
-          בריאות הבוט
-        </h2>
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          <Kpi
-            icon={<Bot className="size-4" />}
-            label="טיוטות נשלחו"
-            value={data.botDraftsMonth.sent.toLocaleString("he-IL")}
-            accent="success"
-          />
-          <Kpi
-            icon={<XCircle className="size-4" />}
-            label="טיוטות נדחו"
-            value={data.botDraftsMonth.rejected.toLocaleString("he-IL")}
-            accent="warning"
-          />
-          <Kpi
-            icon={<CheckCircle2 className="size-4" />}
-            label="שיעור אישור טיוטות"
-            value={
-              data.botApprovalRatePct === null
-                ? "—"
-                : `${data.botApprovalRatePct}%`
-            }
-            accent={data.botApprovalRatePct === null
-              ? "info"
-              : data.botApprovalRatePct >= 70
-              ? "success"
-              : "warning"}
-          />
-          <Kpi
-            icon={<MessageSquare className="size-4" />}
-            label="הודעות היום (בוט / אני / לקוח)"
-            value={`${data.todayMessages.bot}/${data.todayMessages.eli}/${data.todayMessages.lead}`}
-            accent="primary"
-          />
-        </div>
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mt-3">
-          <Kpi
-            icon={<Bot className="size-4" />}
-            label="שאלונים פעילים"
-            value={data.botQa.activeQuestionnaires.toLocaleString("he-IL")}
-            accent="info"
-          />
-          <Kpi
-            icon={<CheckCircle2 className="size-4" />}
-            label="שאלונים שהושלמו"
-            value={data.botQa.completedQuestionnaires.toLocaleString("he-IL")}
-            accent="success"
-          />
-          <Kpi
-            icon={<XCircle className="size-4" />}
-            label="נפילות שאלון"
-            value={data.botQa.bailedQuestionnaires.toLocaleString("he-IL")}
-            accent={data.botQa.bailedQuestionnaires > 0 ? "warning" : "success"}
-          />
-          <Kpi
-            icon={<Inbox className="size-4" />}
-            label="שיעור handoff"
-            value={
-              data.botQa.handoffRatePct === null
-                ? "—"
-                : `${data.botQa.handoffRatePct}%`
-            }
-            accent={
-              data.botQa.handoffRatePct === null || data.botQa.handoffRatePct < 25
-                ? "success"
-                : "warning"
-            }
-          />
-        </div>
-      </section>
+      <div className="grid gap-5 xl:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)]">
+        <Panel title="מקורות לידים" description="מי מביא נפח, מי מתקדם להצעה ומי נסגר."><SourceTable rows={data.sourcePerformance} /></Panel>
+        <Panel title="פיזור בצינור המכירה" description="המצב הנוכחי של הלידים הפעילים."><PipelineChart rows={data.pipelineDist} /></Panel>
+      </div>
+    </div>
+  );
+}
 
-      <section>
-        <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wider mb-3">
-          כסף על השולחן
-        </h2>
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          <Kpi
-            icon={<Banknote className="size-4" />}
-            label="לידים עם הצעה"
-            value={data.revenueOps.quotedLeads.toLocaleString("he-IL")}
-            accent="success"
-          />
-          <Kpi
-            icon={<TrendingUp className="size-4" />}
-            label="הצעות מעל 10,000 ₪"
-            value={data.revenueOps.largeQuotedLeads.toLocaleString("he-IL")}
-            accent={data.revenueOps.largeQuotedLeads > 0 ? "success" : "info"}
-          />
-          <Kpi
-            icon={<Banknote className="size-4" />}
-            label="₪ WON החודש"
-            value={`₪${data.wonMonthSumIls.toLocaleString("he-IL")}`}
-            accent="success"
-          />
-          <Kpi
-            icon={<TrendingUp className="size-4" />}
-            label="טיוטות שנשלחו"
-            value={data.sentThisMonth.toLocaleString("he-IL")}
-            accent="primary"
-          />
-        </div>
-      </section>
-
-      <section>
-        <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wider mb-3">
-          מקורות לידים
-        </h2>
-        <div className="rounded-xl border border-border bg-card p-5">
-          <div className="grid grid-cols-[minmax(0,1fr)_80px_80px_80px] gap-3 border-b border-border/60 pb-2 text-xs text-muted-foreground">
-            <span>מקור</span>
-            <span className="text-left">לידים</span>
-            <span className="text-left">הצעות</span>
-            <span className="text-left">WON</span>
-          </div>
+function OperationsView({ data }: { data: AnalyticsData }) {
+  return (
+    <div role="tabpanel" className="space-y-5">
+      <div className="grid gap-5 lg:grid-cols-[minmax(0,1.2fr)_minmax(300px,0.8fr)]">
+        <Panel title="תור העבודה עכשיו" description="המספרים שדורשים פעולה של נציג, לא רק מעקב.">
           <div className="divide-y divide-border/60">
-            {data.sourcePerformance.map((row) => (
-              <div
-                key={row.source}
-                className="grid grid-cols-[minmax(0,1fr)_80px_80px_80px] gap-3 py-2 text-sm"
-              >
-                <span className="truncate text-foreground">{row.source}</span>
-                <span className="text-left tabular-nums">{row.leads}</span>
-                <span className="text-left tabular-nums">{row.quoted}</span>
-                <span className="text-left tabular-nums text-success">{row.won}</span>
-              </div>
-            ))}
-            {data.sourcePerformance.length === 0 && (
-              <div className="py-6 text-center text-sm text-muted-foreground">
-                אין עדיין מספיק נתוני מקור.
-              </div>
-            )}
+            <ActionMetric icon={<Inbox />} label="דורש אדם" value={data.operations.needsHuman} href="/dashboard/v3/leads" critical={data.operations.needsHuman > 0} />
+            <ActionMetric icon={<AlertTriangle />} label="ללא פעילות מעל 48 שעות" value={data.operations.staleActiveLeads} href="/dashboard/v3/leads" critical={data.operations.staleActiveLeads > 0} />
+            <ActionMetric icon={<Bot />} label="בוט מושעה" value={data.operations.pausedLeads} href="/dashboard/v3/leads" />
+            <ActionMetric icon={<CircleDollarSign />} label="ממתינים לתמחור ידני" value={data.operations.manualReviewLeads} href="/dashboard/v3/factory" />
           </div>
-        </div>
-      </section>
-
-      <section>
-        <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wider mb-3">
-          משפך המרה והכנסות
-        </h2>
-        <div className="rounded-xl border border-border bg-card p-5">
-          <div className="flex flex-col gap-2.5">
-            {data.funnel.map((f, i) => {
-              const widthPct = Math.max(8, (f.count / funnelMax) * 100);
-              const dropFromPrev =
-                i > 0 && data.funnel[i - 1].count > 0
-                  ? Math.round((1 - f.count / data.funnel[i - 1].count) * 100)
-                  : null;
-              const tone = STAGE_TONE[f.stage] ?? STAGE_TONE.UNCLASSIFIED;
-              return (
-                <Link
-                  key={f.stage}
-                  href={`/dashboard/v3/leads?stage=${encodeURIComponent(f.stage)}`}
-                  className="flex items-center gap-3 hover:bg-muted/20 rounded-md transition-colors px-1 -mx-1"
-                  title={`הצג ${STAGE_LABEL[f.stage] ?? f.stage}`}
-                >
-                  <div className="w-28 shrink-0 text-xs text-muted-foreground text-right">
-                    {STAGE_LABEL[f.stage] ?? f.stage}
-                  </div>
-                  <div className="flex-1 h-7 bg-muted/30 rounded-md relative overflow-hidden">
-                    <div
-                      className={cn("h-full rounded-md transition-all", tone.bar)}
-                      style={{ width: `${widthPct}%` }}
-                    />
-                    <span className="absolute inset-y-0 right-2 flex items-center text-xs font-medium tabular-nums">
-                      {f.count}
-                    </span>
-                  </div>
-                  <div className="w-12 shrink-0 text-xs text-muted-foreground tabular-nums">
-                    {dropFromPrev !== null && dropFromPrev > 0 ? `-${dropFromPrev}%` : ""}
-                  </div>
-                </Link>
-              );
-            })}
-          </div>
-        </div>
-      </section>
-
-      <section>
-        <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wider mb-3">
-          פיזור לפי שלב
-        </h2>
-        <div className="rounded-xl border border-border bg-card p-5 h-72">
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={pipelineChart} margin={{ top: 5, right: 5, bottom: 5, left: 5 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="oklch(0.3 0.02 270)" />
-              <XAxis
-                dataKey="stage"
-                stroke="oklch(0.6 0.02 270)"
-                tick={{ fontSize: 11 }}
-                interval={0}
-              />
-              <YAxis stroke="oklch(0.6 0.02 270)" tick={{ fontSize: 11 }} allowDecimals={false} />
-              <Tooltip
-                contentStyle={{
-                  background: "oklch(0.22 0.02 270)",
-                  border: "1px solid oklch(0.28 0.02 270)",
-                  borderRadius: 6,
-                  fontSize: 12,
-                }}
-                cursor={{ fill: "oklch(0.25 0.02 270 / 0.5)" }}
-              />
-              <Bar dataKey="count" radius={[4, 4, 0, 0]}>
-                {pipelineChart.map((entry, index) => (
-                  <Cell key={`c-${index}`} fill={entry.color} />
-                ))}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-      </section>
-    </div>
-  );
-}
-
-function Kpi({
-  label,
-  value,
-  icon,
-  accent = "primary",
-}: {
-  label: string;
-  value: string;
-  icon?: React.ReactNode;
-  accent?: "primary" | "success" | "warning" | "destructive" | "info";
-}) {
-  return (
-    <div className="rounded-xl border border-border bg-card p-4">
-      <div className="flex items-start justify-between gap-3">
-        <div className="text-xs uppercase tracking-wider text-muted-foreground">
-          {label}
-        </div>
-        {icon && (
-          <div className={cn("rounded-lg p-1.5", ACCENT_BG[accent])}>
-            {icon}
-          </div>
-        )}
-      </div>
-      <div
-        className="mt-2 text-2xl font-medium text-foreground tabular-nums"
-        style={{ fontFamily: "var(--font-display)" }}
-      >
-        {value}
-      </div>
-    </div>
-  );
-}
-
-function DistributionPanel({
-  title,
-  rows,
-}: {
-  title: string;
-  rows: Array<{ label: string; count: number }>;
-}) {
-  const max = Math.max(...rows.map((row) => row.count), 1);
-
-  return (
-    <div className="rounded-xl border border-border bg-card p-5">
-      <h3 className="mb-3 text-sm font-medium">{title}</h3>
-      <div className="flex flex-col gap-2">
-        {rows.map((row) => (
-          <div key={row.label} className="grid grid-cols-[110px_1fr_44px] items-center gap-3">
-            <span className="truncate text-xs text-muted-foreground">{row.label}</span>
-            <div className="h-2 rounded-full bg-muted/40">
-              <div
-                className="h-full rounded-full bg-primary/70"
-                style={{ width: `${Math.max(4, (row.count / max) * 100)}%` }}
-              />
+        </Panel>
+        <Panel title="מהירות תגובה" description="מהצעת המחיר הראשונה ועד שנציג פונה.">
+          <div className="space-y-5">
+            <LargeMetric label="חציון" value={formatMinutes(data.salesOutcomes.medianHumanResponseMinutes)} icon={<Clock3 />} />
+            <div className="grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-border bg-border">
+              <CompactStat label="ממוצע" value={formatMinutes(data.salesOutcomes.avgHumanResponseMinutes)} />
+              <CompactStat label="פולואפים ממוצעים" value={data.salesOutcomes.avgFollowups === null ? "—" : data.salesOutcomes.avgFollowups.toFixed(1)} />
             </div>
-            <span className="text-left text-xs tabular-nums">{row.count}</span>
           </div>
-        ))}
+        </Panel>
+      </div>
+      <Panel title="שכבת ה־CRM" description="משימות, חריגות SLA והזדמנויות פתוחות.">
+        <div className="grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-border bg-border md:grid-cols-5">
+          <CompactStat label="משימות פתוחות" value={formatNumber(data.crmOps.openTasks)} />
+          <CompactStat label="SLA חריג" value={formatNumber(data.crmOps.breachedSla)} danger={data.crmOps.breachedSla > 0} />
+          <CompactStat label="SLA פתוח" value={formatNumber(data.crmOps.openSla)} />
+          <CompactStat label="הזדמנויות" value={formatNumber(data.crmOps.openOpportunities)} />
+          <CompactStat label="ציוני לידים" value={formatNumber(data.crmOps.latestScores)} />
+        </div>
+      </Panel>
+      <div className="grid gap-5 lg:grid-cols-2">
+        <Panel title="מחזור חיים"><Distribution rows={data.lifecycleDist.map((row) => ({ key: row.lifecycle, label: LIFECYCLE_LABEL[row.lifecycle], count: row.count }))} /></Panel>
+        <Panel title="עדיפות לטיפול"><Distribution rows={data.priorityDist.map((row) => ({ key: row.priority, label: PRIORITY_LABEL[row.priority], count: row.count }))} /></Panel>
       </div>
     </div>
   );
 }
 
-function extractFill(stage: string): string {
-  // Map the Tailwind tone -> approximate fill color for recharts (no dynamic
-  // Tailwind reading at runtime). Falls back to muted.
-  const map: Record<string, string> = {
-    INTAKE: "#0ea5e9",
-    DISCAVERY: "#06b6d4",
-    FACTORY_WAIT: "#f59e0b",
-    CONSIDERATION: "#f43f5e",
-    WON: "#10b981",
-    LOST: "#64748b",
-    PRE_QUOTE: "#94a3b8",
-    UNCLASSIFIED: "#94a3b8",
-  };
-  return map[stage] ?? "#64748b";
+function BotHealthView({ data }: { data: AnalyticsData }) {
+  const messageTotal = data.todayMessages.lead + data.todayMessages.bot + data.todayMessages.eli;
+  return (
+    <div role="tabpanel" className="space-y-5">
+      <div className="grid gap-5 lg:grid-cols-[minmax(0,1.15fr)_minmax(300px,0.85fr)]">
+        <Panel title="איכות האוטומציה" description="טיוטות, אישורים והעברות לטיפול אנושי ב־30 הימים האחרונים.">
+          <div className="grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-border bg-border md:grid-cols-4">
+            <CompactStat label="טיוטות שנשלחו" value={formatNumber(data.botDraftsMonth.sent)} />
+            <CompactStat label="טיוטות שנדחו" value={formatNumber(data.botDraftsMonth.rejected)} />
+            <CompactStat label="שיעור אישור" value={formatPercent(data.botApprovalRatePct)} emphasis />
+            <CompactStat label="שיעור העברה לאדם" value={formatPercent(data.botQa.handoffRatePct)} />
+          </div>
+        </Panel>
+        <Panel title="הודעות היום" description="חלוקת השיחה בין הבוט, הנציג והלקוח.">
+          <div className="space-y-4">
+            <MessageMix label="לקוח" value={data.todayMessages.lead} total={messageTotal} />
+            <MessageMix label="בוט" value={data.todayMessages.bot} total={messageTotal} />
+            <MessageMix label="נציג" value={data.todayMessages.eli} total={messageTotal} />
+          </div>
+        </Panel>
+      </div>
+      <Panel title="מצב השאלונים" description="מבט תפעולי על שאלונים פתוחים, שהושלמו או נעצרו.">
+        <div className="grid gap-4 md:grid-cols-[1.2fr_0.8fr]">
+          <div className="grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-border bg-border">
+            <CompactStat label="פעילים עכשיו" value={formatNumber(data.botQa.activeQuestionnaires)} emphasis />
+            <CompactStat label="הושלמו" value={formatNumber(data.botQa.completedQuestionnaires)} />
+            <CompactStat label="נפילות" value={formatNumber(data.botQa.bailedQuestionnaires)} danger={data.botQa.bailedQuestionnaires > 0} />
+            <CompactStat label="תור אישורים" value={formatNumber(data.pendingDrafts)} />
+          </div>
+          <div className="rounded-xl border border-border bg-muted/15 p-5">
+            <p className="text-xs text-muted-foreground">פעילות נכנסת ב־30 יום</p>
+            <p className="mt-2 text-3xl font-semibold tabular-nums">{formatNumber(data.inboundLeadsMonth)}</p>
+            <p className="mt-3 text-sm leading-6 text-muted-foreground">לידים ייחודיים ששלחו לפחות הודעה אחת בתקופה.</p>
+          </div>
+        </div>
+      </Panel>
+    </div>
+  );
 }
+
+function Panel({ title, description, children }: { title: string; description?: string; children: React.ReactNode }) {
+  return <section className="rounded-2xl border border-border bg-card p-4 md:p-6"><div className="mb-5"><h2 className="text-base font-semibold">{title}</h2>{description && <p className="mt-1 max-w-2xl text-sm leading-6 text-muted-foreground">{description}</p>}</div>{children}</section>;
+}
+
+function HeadlineMetric({ label, value, icon }: { label: string; value: string; icon: React.ReactNode }) {
+  return <div className="min-h-32 border-l border-b border-border p-4 last:border-l-0 md:border-b-0 md:p-5"><div className="flex items-center gap-2 text-xs text-muted-foreground [&_svg]:size-4 [&_svg]:text-primary">{icon}<span>{label}</span></div><p className="mt-4 text-2xl font-semibold tabular-nums md:text-3xl" style={{ fontFamily: "var(--font-display)" }}>{value}</p></div>;
+}
+
+function SignalRow({ label, value, tone = "default" }: { label: string; value: string; tone?: "default" | "warning" }) {
+  return <div className="flex items-center justify-between gap-4 border-t border-border/60 pt-3 first:border-0 first:pt-0"><span className="text-sm text-muted-foreground">{label}</span><span className={cn("text-sm font-semibold tabular-nums", tone === "warning" && "text-warning")}>{value}</span></div>;
+}
+
+function Funnel({ rows }: { rows: AnalyticsData["botFunnel"] }) {
+  const base = rows[0]?.uniqueLeads ?? 0;
+  return (
+    <div className="space-y-1">
+      {rows.map((row, index) => {
+        const rate = percentage(row.uniqueLeads, base);
+        const width = Math.max(row.uniqueLeads > 0 ? 2 : 0, rate ?? 0);
+        return (
+          <div
+            key={row.event}
+            className="grid grid-cols-[28px_minmax(0,1fr)_54px] items-center gap-3 py-2"
+          >
+            <span
+              className={cn(
+                "grid size-7 place-items-center rounded-full border text-xs tabular-nums",
+                index === 0
+                  ? "border-primary bg-primary text-primary-foreground"
+                  : "border-border bg-background text-muted-foreground"
+              )}
+            >
+              {index + 1}
+            </span>
+            <div className="min-w-0">
+              <div className="mb-1.5 flex items-center justify-between gap-3 text-sm">
+                <span className="truncate">{row.label}</span>
+                <span className="text-xs text-muted-foreground">
+                  {row.attempts !== row.uniqueLeads ? `${row.attempts} ניסיונות` : ""}
+                </span>
+              </div>
+              <div className="h-1.5 overflow-hidden rounded-full bg-muted/50">
+                <div className="h-full rounded-full bg-primary" style={{ width: `${width}%` }} />
+              </div>
+            </div>
+            <div className="text-left">
+              <div className="text-sm font-semibold tabular-nums">{formatNumber(row.uniqueLeads)}</div>
+              <div className="text-[11px] text-muted-foreground">{formatPercent(rate)}</div>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function OutcomePath({ rows }: { rows: Array<{ label: string; value: number; icon: React.ReactNode }> }) {
+  const base = rows[0]?.value ?? 0;
+  return <div>{rows.map((row, index) => <div key={row.label} className="relative flex items-center gap-3 pb-5 last:pb-0"><div className="relative z-10 grid size-9 shrink-0 place-items-center rounded-full border border-border bg-background text-primary [&_svg]:size-4">{row.icon}</div>{index < rows.length - 1 && <span className="absolute right-[17px] top-9 h-full w-px bg-border" />}<div className="flex min-w-0 flex-1 items-baseline justify-between gap-3"><span className="text-sm text-muted-foreground">{row.label}</span><span className="text-base font-semibold tabular-nums">{formatNumber(row.value)} <small className="font-normal text-muted-foreground">{formatPercent(percentage(row.value, base))}</small></span></div></div>)}</div>;
+}
+
+function Distribution({ rows, emptyLabel = "אין נתונים" }: { rows: Array<{ key?: string; label: string; count: number }>; emptyLabel?: string }) {
+  const total = rows.reduce((sum, row) => sum + row.count, 0);
+  if (rows.length === 0 || total === 0) return <div className="rounded-xl border border-dashed border-border px-4 py-10 text-center text-sm text-muted-foreground">{emptyLabel}</div>;
+  return <div className="space-y-4">{rows.map((row) => { const rate = percentage(row.count, total) ?? 0; return <div key={row.key ?? row.label}><div className="mb-1.5 flex items-center justify-between gap-3 text-sm"><span>{row.label}</span><span className="tabular-nums text-muted-foreground">{formatNumber(row.count)} · {formatPercent(rate)}</span></div><div className="h-1.5 rounded-full bg-muted/50"><div className="h-full rounded-full bg-primary" style={{ width: `${Math.max(row.count > 0 ? 2 : 0, rate)}%` }} /></div></div>; })}</div>;
+}
+
+function CompactStat({ label, value, emphasis = false, danger = false }: { label: string; value: string; emphasis?: boolean; danger?: boolean }) {
+  return <div className="min-h-24 bg-card p-4"><p className="text-xs leading-5 text-muted-foreground">{label}</p><p className={cn("mt-2 text-xl font-semibold tabular-nums", emphasis && "text-primary", danger && "text-destructive")}>{value}</p></div>;
+}
+
+function LargeMetric({ label, value, icon }: { label: string; value: string; icon: React.ReactNode }) {
+  return <div className="flex items-center gap-4 rounded-xl border border-border bg-muted/15 p-5"><div className="grid size-11 place-items-center rounded-xl bg-primary/10 text-primary [&_svg]:size-5">{icon}</div><div><p className="text-xs text-muted-foreground">{label}</p><p className="mt-1 text-3xl font-semibold tabular-nums">{value}</p></div></div>;
+}
+
+function ActionMetric({ icon, label, value, href, critical = false }: { icon: React.ReactNode; label: string; value: number; href: string; critical?: boolean }) {
+  return <Link href={href} className="group flex min-h-16 items-center gap-3 py-3"><span className={cn("grid size-9 place-items-center rounded-lg bg-muted/40 text-muted-foreground [&_svg]:size-4", critical && "bg-destructive/10 text-destructive")}>{icon}</span><span className="flex-1 text-sm">{label}</span><strong className={cn("text-lg tabular-nums", critical && "text-destructive")}>{formatNumber(value)}</strong><ArrowLeft className="size-4 text-muted-foreground transition-transform group-hover:-translate-x-1" /></Link>;
+}
+
+function MessageMix({ label, value, total }: { label: string; value: number; total: number }) {
+  const rate = percentage(value, total) ?? 0;
+  return <div><div className="mb-1.5 flex justify-between text-sm"><span>{label}</span><span className="tabular-nums text-muted-foreground">{formatNumber(value)} · {formatPercent(rate)}</span></div><div className="h-2 rounded-full bg-muted/50"><div className="h-full rounded-full bg-primary" style={{ width: `${rate}%` }} /></div></div>;
+}
+
+function SourceTable({ rows }: { rows: AnalyticsData["sourcePerformance"] }) {
+  return <div className="overflow-x-auto"><table className="w-full min-w-[480px] text-sm"><thead><tr className="border-b border-border text-xs text-muted-foreground"><th className="pb-3 text-right font-medium">מקור</th><th className="pb-3 text-left font-medium">לידים</th><th className="pb-3 text-left font-medium">הצעות</th><th className="pb-3 text-left font-medium">נסגרו</th><th className="pb-3 text-left font-medium">המרה</th></tr></thead><tbody className="divide-y divide-border/60">{rows.map((row) => <tr key={row.source}><td className="max-w-52 truncate py-3">{row.source}</td><td className="py-3 text-left tabular-nums">{row.leads}</td><td className="py-3 text-left tabular-nums">{row.quoted}</td><td className="py-3 text-left tabular-nums">{row.won}</td><td className="py-3 text-left tabular-nums text-primary">{formatPercent(percentage(row.won, row.leads))}</td></tr>)}</tbody></table>{rows.length === 0 && <p className="py-10 text-center text-sm text-muted-foreground">אין עדיין מספיק נתוני מקור.</p>}</div>;
+}
+
+function PipelineChart({ rows }: { rows: AnalyticsData["pipelineDist"] }) {
+  const chart = rows.map((row) => ({ ...row, label: STAGE_LABEL[row.stage] ?? row.stage, color: stageColor(row.stage) }));
+  return <div className="h-72" dir="ltr"><ResponsiveContainer width="100%" height="100%"><BarChart data={chart} margin={{ top: 8, right: 4, bottom: 8, left: 0 }}><CartesianGrid vertical={false} stroke="oklch(0.3 0.02 270)" /><XAxis dataKey="label" stroke="oklch(0.6 0.02 270)" tick={{ fontSize: 11 }} interval={0} /><YAxis stroke="oklch(0.6 0.02 270)" tick={{ fontSize: 11 }} allowDecimals={false} /><Tooltip contentStyle={{ background: "oklch(0.22 0.02 270)", border: "1px solid oklch(0.3 0.02 270)", borderRadius: 10, fontSize: 12 }} cursor={{ fill: "oklch(0.25 0.02 270 / 0.45)" }} /><Bar dataKey="count" radius={[6, 6, 0, 0]}>{chart.map((entry) => <Cell key={entry.stage} fill={entry.color} />)}</Bar></BarChart></ResponsiveContainer></div>;
+}
+
+function formatNumber(value: number): string { return value.toLocaleString("he-IL"); }
+function formatPercent(value: number | null): string { return value === null ? "—" : `${value}%`; }
+function formatIls(value: number | null): string { return value === null ? "—" : `₪${Math.round(value).toLocaleString("he-IL")}`; }
+function formatMinutes(value: number | null): string { if (value === null) return "—"; if (value < 60) return `${Math.round(value)} דק׳`; if (value < 1440) return `${(value / 60).toFixed(1)} שעות`; return `${(value / 1440).toFixed(1)} ימים`; }
+function stageColor(stage: string): string { return ({ INTAKE: "#0ea5e9", DISCAVERY: "#06b6d4", FACTORY_WAIT: "#f59e0b", CONSIDERATION: "#f43f5e", WON: "#10b981", LOST: "#64748b" } as Record<string, string>)[stage] ?? "#64748b"; }

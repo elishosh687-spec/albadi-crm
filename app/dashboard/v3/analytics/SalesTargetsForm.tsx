@@ -39,10 +39,16 @@ export function SalesTargetsForm({
   };
 
   return (
-    <div className="rounded-xl border border-border bg-card p-4">
-      <div className="grid grid-cols-1 gap-3 md:grid-cols-[1fr_1fr_auto] md:items-end">
-        <label className="space-y-1 text-sm">
-          <span className="text-muted-foreground">עלות רכישת לקוח מקסימלית</span>
+    <div className="rounded-xl border border-border bg-muted/15 p-5">
+      <div className="mb-4">
+        <h3 className="text-sm font-semibold">יעדי פרסום</h3>
+        <p className="mt-1 text-xs leading-5 text-muted-foreground">
+          שמור את הגבולות העסקיים כדי להשוות אליהם את ביצועי הקמפיינים.
+        </p>
+      </div>
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <label className="space-y-2 text-sm">
+          <span className="text-xs text-muted-foreground">עלות רכישת לקוח מקסימלית</span>
           <input
             type="number"
             min="0"
@@ -50,11 +56,11 @@ export function SalesTargetsForm({
             value={maxCac}
             onChange={(event) => setMaxCac(event.target.value)}
             placeholder="₪"
-            className="w-full rounded-lg border border-border bg-background px-3 py-2"
+            className="min-h-11 w-full rounded-lg border border-border bg-background px-3 py-2 text-base outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/20"
           />
         </label>
-        <label className="space-y-1 text-sm">
-          <span className="text-muted-foreground">תקציב יומי לבדיקת מודעות</span>
+        <label className="space-y-2 text-sm">
+          <span className="text-xs text-muted-foreground">תקציב יומי לבדיקת מודעות</span>
           <input
             type="number"
             min="0"
@@ -62,19 +68,23 @@ export function SalesTargetsForm({
             value={dailyBudget}
             onChange={(event) => setDailyBudget(event.target.value)}
             placeholder="₪ ליום"
-            className="w-full rounded-lg border border-border bg-background px-3 py-2"
+            className="min-h-11 w-full rounded-lg border border-border bg-background px-3 py-2 text-base outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/20"
           />
         </label>
+      </div>
+      <div className="mt-4 flex min-h-11 items-center justify-between gap-3">
+        <p className="text-xs text-muted-foreground" role="status" aria-live="polite">
+          {message ?? "אפשר לעדכן בכל עת"}
+        </p>
         <button
           type="button"
           onClick={save}
           disabled={isPending}
-          className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground disabled:opacity-50"
+          className="min-h-11 rounded-lg bg-primary px-5 text-sm font-medium text-primary-foreground transition-transform active:translate-y-px disabled:opacity-50"
         >
           {isPending ? "שומר…" : "שמור יעדים"}
         </button>
       </div>
-      {message && <p className="mt-2 text-xs text-muted-foreground">{message}</p>}
     </div>
   );
 }

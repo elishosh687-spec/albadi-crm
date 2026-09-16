@@ -9,6 +9,7 @@ import { db } from "@/lib/db";
 import { botFunnelEvents, botQuotes, leads } from "@/drizzle/schema";
 import { and, eq, lte, sql } from "drizzle-orm";
 import { logger, serializeError } from "@/lib/observability/log";
+import { buildFunnelEventIdentity } from "./funnel-event-identity";
 
 const log = logger("bot");
 
@@ -55,15 +56,20 @@ export async function recordBotFunnelEvent(input: {
       .where(sql`trim(${leads.manychatSubId}) = ${sid}`)
       .limit(1);
     const qState = (lead?.qState ?? null) as { attemptId?: string } | null;
-    const attemptId = input.attemptId?.trim() || qState?.attemptId || `legacy:${sid}`;
-    const eventKey = input.eventKey ?? `${attemptId}:${input.event}`;
-    await db
+    const identity = buildFunnelEventIdentity({
+      leadSid: sid,
+      event: input.event,
+      explicitAttemptId: input.attemptId,
+      stateAttemptId: qState?.attemptId,
+      explicitEventKey: input.eventKey,
+    });
+    const inserted = await db
       .insert(botFunnelEvents)
       .values({
-        leadSid: sid,
-        attemptId,
+        leadSid: identity.leadSid,
+        attemptId: identity.attemptId,
         event: input.event,
-        eventKey,
+        eventKey: identity.eventKey,
         occurredAt: input.occurredAt ?? new Date(),
         botVersion:
           process.env.VERCEL_GIT_COMMIT_SHA ??
@@ -78,7 +84,16 @@ export async function recordBotFunnelEvent(input: {
       })
       .onConflictDoNothing({
         target: botFunnelEvents.eventKey,
+      })
+      .returning({ id: botFunnelEvents.id });
+    if (inserted.length > 0) {
+      log.info("funnel_event.recorded", {
+        sid: identity.leadSid,
+        event: input.event,
+        attempt_id: identity.attemptId,
+        event_key: identity.eventKey,
       });
+    }
   } catch (e) {
     log.warn("funnel_event.insert_failed", {
       sid: input.leadSid,
