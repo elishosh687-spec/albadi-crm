@@ -70,6 +70,7 @@ import {
 } from "@/integrations/ghl/sync";
 import { logger, serializeError, withRequestLog } from "@/lib/observability/log";
 import { dispatchZohoBot, zohoBotRoute } from "@/lib/zoho-bot/dispatch";
+import { recordQuoteReplyIfEligible } from "@/lib/autoresponder/funnel-events";
 
 const log = logger("webhook.green");
 
@@ -440,6 +441,10 @@ async function handleIncoming(evt: GreenWebhook): Promise<void> {
     payload: evt as unknown as Record<string, unknown>,
   });
   const inboundMessageId = insertedMessage?.id ?? null;
+  const occurredAt = evt.timestamp
+    ? new Date(evt.timestamp * 1000)
+    : new Date();
+  await recordQuoteReplyIfEligible(canonicalSid, occurredAt);
 
   // Did they arrive by pressing WhatsApp on the website? The prefilled sentence
   // the site puts in the box is the only evidence — same number, same webhook

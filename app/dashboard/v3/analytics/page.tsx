@@ -1,5 +1,5 @@
 import { db } from "@/lib/db";
-import { botDrafts, leads, messages } from "@/drizzle/schema";
+import { botDrafts, botFunnelEvents, leads, messages } from "@/drizzle/schema";
 import { and, eq, gte, isNotNull, sql } from "drizzle-orm";
 import { AnalyticsView, type AnalyticsData } from "./AnalyticsView";
 import {
@@ -48,6 +48,7 @@ export default async function V3AnalyticsPage() {
     manualReviewLeads,
     qStateRows,
     sourceRows,
+    botFunnelRows,
   ] = await Promise.all([
     db
       .select({ stage: leads.pipelineStage })
@@ -183,6 +184,13 @@ export default async function V3AnalyticsPage() {
       .groupBy(sql`coalesce(nullif(${leads.leadSource}, ''), nullif(${leads.source}, ''), 'לא ידוע')`)
       .orderBy(sql`count(*) desc`)
       .limit(8),
+    db
+      .select({
+        event: botFunnelEvents.event,
+        count: sql<number>`count(*)::int`,
+      })
+      .from(botFunnelEvents)
+      .groupBy(botFunnelEvents.event),
   ]);
 
   // Funnel = count of leads that EVER passed through each stage (best-effort:
@@ -211,6 +219,7 @@ export default async function V3AnalyticsPage() {
       ? Math.round((sent / totalDecidedDrafts) * 1000) / 10
       : null;
   const needsHumanCount = needsHuman[0]?.count ?? 0;
+  const botFunnelCount = new Map(botFunnelRows.map((row) => [row.event, row.count]));
   const handoffRate =
     activeLeads.length > 0
       ? Math.round((needsHumanCount / activeLeads.length) * 1000) / 10
@@ -245,6 +254,12 @@ export default async function V3AnalyticsPage() {
       completedQuestionnaires: qStateRows[0]?.completed ?? 0,
       bailedQuestionnaires: qStateRows[0]?.bailed ?? 0,
       handoffRatePct: handoffRate,
+    },
+    botFunnel: {
+      started: botFunnelCount.get("questionnaire_started") ?? 0,
+      completed: botFunnelCount.get("questionnaire_completed") ?? 0,
+      quoted: botFunnelCount.get("quote_sent") ?? 0,
+      replied: botFunnelCount.get("quote_replied") ?? 0,
     },
     sourcePerformance: sourceRows.map((row) => ({
       source: row.source,

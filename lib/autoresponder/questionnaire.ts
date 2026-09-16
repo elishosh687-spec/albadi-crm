@@ -53,6 +53,7 @@ import {
 } from "./spec-extractor";
 import { buildLLMContext, renderContextForPrompt } from "./llm-context";
 import { logBotQuote } from "./quote-log";
+import { recordBotFunnelEvent } from "./funnel-events";
 import { logger, serializeError } from "@/lib/observability/log";
 
 const log = logger("bot");
@@ -829,6 +830,7 @@ export async function kickstartQuestionnaire(sid: string): Promise<void> {
   const first = QUESTIONS[0];
   const newState: QState = { step: first.step };
   await saveState(sid, newState);
+  await recordBotFunnelEvent({ leadSid: sid, event: "questionnaire_started" });
   await askQuestion(ctx.jid, first);
 }
 
@@ -1022,6 +1024,12 @@ async function routeToFactory(
       updatedAt: new Date(),
     })
     .where(sql`trim(${leads.manychatSubId}) = ${ctx.sid.trim()}`);
+  await recordBotFunnelEvent({
+    leadSid: ctx.sid,
+    event: "questionnaire_completed",
+    occurredAt: new Date(done.doneAt!),
+    metadata: { outcome: "factory" },
+  });
   await ensureAutoTaskForStage(ctx.sid.trim(), "INTAKE").catch(() => {});
   mirrorAnswersToGhl(ctx.sid, done);
   await sendBridgeMessage(ctx.jid, S.factoryHoldMessage);
@@ -1055,6 +1063,12 @@ async function routeToQuoted(
         updatedAt: new Date(),
       })
       .where(sql`trim(${leads.manychatSubId}) = ${ctx.sid.trim()}`);
+    await recordBotFunnelEvent({
+      leadSid: ctx.sid,
+      event: "questionnaire_completed",
+      occurredAt: new Date(done.doneAt!),
+      metadata: { outcome: "quoted" },
+    });
     // Ensure the INTAKE follow-up task exists — this path bypasses
     // setLeadStage, so the task auto-create doesn't fire otherwise.
     await ensureAutoTaskForStage(ctx.sid.trim(), "INTAKE").catch(() => {});
@@ -1068,6 +1082,11 @@ async function routeToQuoted(
       altTotalIls: quote.altTotalIls,
     });
     await sendBridgeMessage(ctx.jid, quote.text);
+    await recordBotFunnelEvent({
+      leadSid: ctx.sid,
+      event: "quote_sent",
+      metadata: { totalIls: quote.totalIls },
+    });
     if (S.sendCompanyCard) await sendCompanyTemplate(ctx.jid);
     if (S.sendDecisionPrompt) await sendBridgeMessage(ctx.jid, S.decisionPrompt);
     if (overCbm) {
@@ -1155,6 +1174,11 @@ export async function requoteWithUpdatedSpec(input: {
       altTotalIls: quote.altTotalIls,
     });
     await sendBridgeMessage(input.jid, quote.text);
+    await recordBotFunnelEvent({
+      leadSid: input.sid,
+      event: "quote_sent",
+      metadata: { totalIls: quote.totalIls, source: "requote" },
+    });
     if (S.sendCompanyCard) await sendCompanyTemplate(input.jid);
     if (S.sendDecisionPrompt) await sendBridgeMessage(input.jid, S.decisionPrompt);
     return true;
@@ -1226,6 +1250,10 @@ export async function handleInbound(input: {
     const first = QUESTIONS[0];
     const newState: QState = { step: first.step };
     await saveState(ctx.sid, newState);
+    await recordBotFunnelEvent({
+      leadSid: ctx.sid,
+      event: "questionnaire_started",
+    });
     await sendBridgeMessage(recipient, withHandoffHint(S.openingMessage));
     await askQuestion(recipient, first);
     return { action: "started" };

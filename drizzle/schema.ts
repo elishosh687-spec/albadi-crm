@@ -405,6 +405,31 @@ export const botQuotes = pgTable(
   })
 );
 
+// First-occurrence milestones for the automated WhatsApp quote funnel.
+// One row per lead + milestone keeps the all-time conversion funnel stable
+// even when q_state is reset for a re-quote or the lead moves to another CRM
+// stage. Detailed quote/message history remains in bot_quotes/messages.
+export const botFunnelEvents = pgTable(
+  "bot_funnel_events",
+  {
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    leadSid: text("lead_sid").notNull(),
+    event: text("event").notNull(),
+    occurredAt: timestamp("occurred_at", { withTimezone: true }).defaultNow().notNull(),
+    metadata: jsonb("metadata"),
+  },
+  (t) => ({
+    leadEventUnique: uniqueIndex("bot_funnel_events_lead_event_uidx").on(
+      t.leadSid,
+      t.event
+    ),
+    eventOccurredAtIdx: index("bot_funnel_events_event_occurred_at_idx").on(
+      t.event,
+      t.occurredAt
+    ),
+  })
+);
+
 // === CRM operating layer (additive v1) ===
 
 export const crmContacts = pgTable("crm_contacts", {

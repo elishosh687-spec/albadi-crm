@@ -55,6 +55,7 @@ import {
   syncLeadToGHL,
 } from "@/integrations/ghl/sync";
 import { pauseFields } from "@/lib/autoresponder/bot-pause";
+import { recordQuoteReplyIfEligible } from "@/lib/autoresponder/funnel-events";
 import { logger, serializeError, withRequestLog } from "@/lib/observability/log";
 
 const log = logger("webhook.bridge");
@@ -266,23 +267,25 @@ async function handleMessageReceived(evt: BridgeEnvelope): Promise<void> {
   const sid = canonicalSid;
 
   // Capture the inserted message_id for the decision log.
+  const occurredAt = new Date(evt.occurred_at);
   const inserted = await insertBridgeMessage({
     jid,
     direction: "in",
     text,
     waMessageId,
     payload: d,
-    receivedAt: new Date(evt.occurred_at),
+    receivedAt: occurredAt,
     sender: "lead",
   });
   const inboundMessageId: number | null = inserted?.id ?? null;
+  await recordQuoteReplyIfEligible(sid, occurredAt);
 
   void ghlForwardMessage({
     sid,
     direction: "in",
     sender: "lead",
     text,
-    occurredAt: new Date(evt.occurred_at),
+    occurredAt,
   });
 
   // Load lead snapshot BEFORE auto-unpause so we know the original state.

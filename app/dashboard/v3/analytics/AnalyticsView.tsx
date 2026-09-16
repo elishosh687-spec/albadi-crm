@@ -47,6 +47,12 @@ export interface AnalyticsData {
     bailedQuestionnaires: number;
     handoffRatePct: number | null;
   };
+  botFunnel: {
+    started: number;
+    completed: number;
+    quoted: number;
+    replied: number;
+  };
   sourcePerformance: Array<{
     source: string;
     leads: number;
@@ -216,6 +222,38 @@ export function AnalyticsView({ data }: { data: AnalyticsData }) {
             label="Score snapshots"
             value={data.crmOps.latestScores.toLocaleString("he-IL")}
             accent="primary"
+          />
+        </div>
+      </section>
+
+      <section>
+        <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wider mb-3">
+          משפך הבוט — מצטבר
+        </h2>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <Kpi
+            icon={<Bot className="size-4" />}
+            label="התחילו את הבוט"
+            value={data.botFunnel.started.toLocaleString("he-IL")}
+            accent="primary"
+          />
+          <Kpi
+            icon={<CheckCircle2 className="size-4" />}
+            label="סיימו את השאלות"
+            value={data.botFunnel.completed.toLocaleString("he-IL")}
+            accent="info"
+          />
+          <Kpi
+            icon={<Banknote className="size-4" />}
+            label="קיבלו מחיר"
+            value={data.botFunnel.quoted.toLocaleString("he-IL")}
+            accent="success"
+          />
+          <Kpi
+            icon={<MessageSquare className="size-4" />}
+            label="הגיבו למחיר"
+            value={data.botFunnel.replied.toLocaleString("he-IL")}
+            accent="warning"
           />
         </div>
       </section>
