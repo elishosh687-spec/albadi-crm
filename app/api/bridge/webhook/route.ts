@@ -55,7 +55,10 @@ import {
   syncLeadToGHL,
 } from "@/integrations/ghl/sync";
 import { pauseFields } from "@/lib/autoresponder/bot-pause";
-import { recordQuoteReplyIfEligible } from "@/lib/autoresponder/funnel-events";
+import {
+  recordBotFunnelEvent,
+  recordQuoteReplyIfEligible,
+} from "@/lib/autoresponder/funnel-events";
 import { logger, serializeError, withRequestLog } from "@/lib/observability/log";
 
 const log = logger("webhook.bridge");
@@ -321,6 +324,12 @@ async function handleMessageReceived(evt: BridgeEnvelope): Promise<void> {
       } catch (sendErr) {
         log.error("stop_word.reply_failed", sendErr, { sid, chatId: bridgeJid });
       }
+      await recordBotFunnelEvent({
+        leadSid: sid,
+        attemptId: (leadSnapshot?.qState as { attemptId?: string } | null)?.attemptId,
+        event: "human_handoff",
+        metadata: { reason: "stop_word" },
+      });
       await sendEliDM(
         eliEscalationTemplate({
           name: leadSnapshot?.name ?? null,

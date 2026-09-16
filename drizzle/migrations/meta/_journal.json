@@ -15,6 +15,13 @@
       "when": 1779020000000,
       "tag": "0001_crm_operating_layer",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1789581600000,
+      "tag": "0002_bot_funnel_event_context",
+      "breakpoints": true
     }
   ]
 }

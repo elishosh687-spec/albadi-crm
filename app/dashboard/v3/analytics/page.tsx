@@ -36,6 +36,12 @@ export default async function V3AnalyticsPage() {
   const staleSince = new Date(now.getTime() - 48 * 3600 * 1000);
   const todayStart = new Date(now);
   todayStart.setHours(0, 0, 0, 0);
+  const canonicalFunnelEvent = sql<string>`case
+    when ${botFunnelEvents.event} = 'size_selected' then 'size_answered'
+    when ${botFunnelEvents.event} = 'quote_replied' then 'post_quote_reply'
+    when ${botFunnelEvents.event} = 'call_completed' then 'conversation_held'
+    else ${botFunnelEvents.event}
+  end`;
 
   const [
     activeLeads,
@@ -199,12 +205,12 @@ export default async function V3AnalyticsPage() {
       .limit(8),
     db
       .select({
-        event: botFunnelEvents.event,
+        event: canonicalFunnelEvent,
         attempts: sql<number>`count(*)::int`,
         uniqueLeads: sql<number>`count(distinct ${botFunnelEvents.leadSid})::int`,
       })
       .from(botFunnelEvents)
-      .groupBy(botFunnelEvents.event),
+      .groupBy(canonicalFunnelEvent),
     loadSalesOutcomeStats(),
     loadDealEconomics(),
     loadSalesTargets(),

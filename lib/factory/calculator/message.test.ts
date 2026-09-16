@@ -28,7 +28,7 @@ describe("buildQuoteMessage", () => {
     expect(m).toContain("ידיות: עם ידיות");
     expect(m).toContain("למינציה: ללא למינציה");
     expect(m).toMatch(/כמות: 5[,.  ]?000 \| 2 צבעי הדפסה/);
-    expect(m).toContain("משלוח: רגיל (~90 ימים)");
+    expect(m).toContain("משלוח: ימי (60–90 ימים מאישור הגרפיקה הסופית)");
     expect(m).toContain("המחיר לא כולל מעמ");
     expect(m).toContain("* ההצעה כפופה לאישור הסופי של החברה שלנו");
     expect(m).toContain("אלבדי – אריזה ממותגת לסביבה שלך");
@@ -54,12 +54,12 @@ describe("buildQuoteMessage", () => {
   // 2026-09-06: the bot's auto-quote was the one path that never charged the plates.
   it("prints the molds line only when moldsIls > 0, and adds it to the total", () => {
     const with_ = buildQuoteMessage(params({ moldsIls: 513.89 }));
-    expect(with_).toContain("🧩 תבניות / מולדים (חד פעמי): ₪513.89");
+    expect(with_).toContain("🧩 גלופה חד-פעמית לעיצוב: ₪513.89");
     expect(with_).toContain("סה״כ: ₪4,063.89");
     const without = buildQuoteMessage(params({ moldsIls: 0 }));
-    expect(without).not.toContain("🧩 תבניות / מולדים (חד פעמי)");
-    expect(buildQuoteMessage(params())).not.toContain("תבניות");
-    expect(buildQuoteMessage(params({ moldsIls: -3 }))).not.toContain("תבניות");
+    expect(without).not.toContain("🧩 גלופה חד-פעמית לעיצוב");
+    expect(buildQuoteMessage(params())).not.toContain("גלופה חד-פעמית לעיצוב");
+    expect(buildQuoteMessage(params({ moldsIls: -3 }))).not.toContain("גלופה חד-פעמית לעיצוב");
   });
 
   // Eli: a cold lead must never get bank details — the bot quote has no payment block.
@@ -93,11 +93,19 @@ describe("buildQuoteMessage", () => {
   });
 
   it("booking invitation is on by default and an empty bookingUrl removes it", () => {
-    expect(buildQuoteMessage(params())).toContain("קבע שיחה קצרה – נסביר הכל ב־10 דקות\nhttps://calendly.com/elishosh687/30min");
+    expect(buildQuoteMessage(params())).toContain("מעדיפים שיחה? אפשר לקבוע כאן:\nhttps://calendly.com/elishosh687/30min");
     const m = buildQuoteMessage(params({ bookingUrl: "" }));
-    expect(m).not.toContain("קבע שיחה קצרה");
+    expect(m).not.toContain("מעדיפים שיחה?");
     expect(m).not.toContain("calendly");
     expect(buildQuoteMessage(params({ bookingUrl: "https://x.y/z" }))).toContain("https://x.y/z");
+  });
+
+  it("explains the included service and routes faster delivery to a representative", () => {
+    const m = buildQuoteMessage(params());
+    expect(m).toContain("כלול במחיר:");
+    expect(m).toContain("✓ הכנת קובץ הדפסה מלוגו קיים");
+    expect(m).toContain("✓ תיקונים עד לאישור לפני תחילת הייצור");
+    expect(m).toContain("צריכים מהר יותר? אפשר לבדוק מסלול אווירי או משולב מול נציג.");
   });
 
   it("priceRangePct widens the price into a range; estimateNote is appended", () => {

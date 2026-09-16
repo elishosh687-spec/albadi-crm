@@ -260,13 +260,18 @@ export async function setLeadQualityAction(
       .update(leads)
       .set({ leadQuality: quality, updatedAt: new Date() })
       .where(sql`trim(${leads.manychatSubId}) = ${sid}`);
-    if (quality !== "UNFIT") {
-      await recordBotFunnelEvent({
-        leadSid: sid,
-        event: "qualified",
-        metadata: { quality },
-      });
-    }
+    const event =
+      quality === "FIT_READY"
+        ? "qualified_ready"
+        : quality === "FIT_NOT_READY"
+          ? "qualified_not_ready"
+          : "unqualified";
+    await recordBotFunnelEvent({
+      leadSid: sid,
+      event,
+      value: quality,
+      metadata: { quality },
+    });
     safeRevalidate("/dashboard/v3", "layout");
     return { ok: true, message: "איכות הליד נשמרה" };
   } catch (e) {
@@ -615,7 +620,7 @@ export async function sendManualReply(
     await sendBridgeMessage(recipient, cleanText, undefined, "eli");
     await recordBotFunnelEvent({
       leadSid: cleanSid,
-      event: "human_contacted",
+      event: "rep_contacted",
     });
 
     // Pause bot so cron doesn't pile on; Eli is now driving. Recorded as

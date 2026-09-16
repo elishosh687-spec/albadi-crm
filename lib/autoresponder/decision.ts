@@ -53,6 +53,8 @@ import { generateAndQueueDraft, type MoneyReason } from "../drafts";
 import { pauseFields } from "./bot-pause";
 import { phraseStateReply } from "../setter/phrase";
 import { logger } from "@/lib/observability/log";
+import { recordBotFunnelEvent } from "./funnel-events";
+import { EXPRESS_HANDOFF_REPLY, isExpressRequest } from "./express-request";
 
 const log = logger("bot");
 
@@ -95,7 +97,8 @@ const REPLY_COMPETITOR_AMBIGUOUS_ACK =
   "סבבה, אתקשר אליכם.";
 
 // Stage 2 / 3 / 4 canned answers (values from BOT-COPY.md §2.6 / 3.4 / 4.4)
-const REPLY_DELIVERY = "אקספרס 25 יום, רגיל 90 יום (מהאישור).";
+const REPLY_DELIVERY =
+  "ברירת המחדל היא משלוח ימי, 60–90 ימים מאישור הגרפיקה הסופית. אם צריך מהר יותר, אפשר לבדוק מסלול אווירי או משולב מול נציג.";
 const REPLY_INCLUSIVE =
   "הכל כלול — שקיות, הדפסה, משלוח.";
 const REPLY_PAYMENT =
@@ -540,6 +543,33 @@ export async function handleDecisionInbound(input: {
   const stage = (ctx.pipelineStage ?? "").toUpperCase();
   const subFlow =
     ((ctx.qState as Record<string, unknown> | null)?.subFlow as string | undefined) ?? null;
+  const text = (input.text ?? "").trim();
+
+  if (isExpressRequest(text)) {
+    const attemptId = (ctx.qState as QState | null)?.attemptId;
+    await Promise.all([
+      recordBotFunnelEvent({
+        leadSid: ctx.sid,
+        attemptId,
+        event: "express_requested",
+        value: text,
+        metadata: { value: text },
+      }),
+      recordBotFunnelEvent({
+        leadSid: ctx.sid,
+        attemptId,
+        event: "human_handoff",
+        metadata: { reason: "express_requested" },
+      }),
+    ]);
+    await sendBridgeMessage(ctx.jid, EXPRESS_HANDOFF_REPLY);
+    await escalateToEli(ctx, "Customer requested express / air shipping", {
+      kind: "question",
+      llmSummary: text,
+      recommendation: "לבדוק מסלול אווירי או משולב ולחזור ללקוח.",
+    });
+    return { action: "escalated", detail: "express requested" };
+  }
 
   // subFlow is authoritative when present.
   if (subFlow === "awaiting_logo") {
@@ -894,6 +924,11 @@ async function handleDecisionStage(
           updatedAt: new Date(),
         })
         .where(sql`trim(${leads.manychatSubId}) = ${ctx.sid.trim()}`);
+      await recordBotFunnelEvent({
+        leadSid: ctx.sid,
+        attemptId: (ctx.qState as QState | null)?.attemptId,
+        event: "logo_requested",
+      });
       await sendBridgeMessage(
       ctx.jid,
       await phraseStateReply({
@@ -1129,6 +1164,12 @@ async function handleLogoStage(
         updatedAt: new Date(),
       })
       .where(sql`trim(${leads.manychatSubId}) = ${ctx.sid.trim()}`);
+    await recordBotFunnelEvent({
+      leadSid: ctx.sid,
+      attemptId: (ctx.qState as QState | null)?.attemptId,
+      event: "logo_received",
+      value: { kind: "media" },
+    });
     // Include the preliminary quote in the DM so Eli has context to send the
     // final price quickly.
     const [row] = await db
@@ -1174,6 +1215,12 @@ async function handleLogoStage(
         updatedAt: new Date(),
       })
       .where(sql`trim(${leads.manychatSubId}) = ${ctx.sid.trim()}`);
+    await recordBotFunnelEvent({
+      leadSid: ctx.sid,
+      attemptId: (ctx.qState as QState | null)?.attemptId,
+      event: "logo_received",
+      value: { kind: "link" },
+    });
     const [row] = await db
       .select({ quoteTotal: leads.quoteTotal })
       .from(leads)

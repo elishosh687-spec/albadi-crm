@@ -60,16 +60,17 @@ export async function collectFunnelHealthGaps(options?: {
         count(*) FILTER (WHERE NOT EXISTS (
           SELECT 1 FROM bot_funnel_events e
           WHERE e.attempt_id = a.attempt_id AND e.event = 'questionnaire_started'
+        ) AND (
+          a.q_state->>'quantity' IS NOT NULL OR
+          a.q_state->>'product' IS NOT NULL OR
+          a.q_state->>'colors' IS NOT NULL
         ))::int questionnaire_starts,
         (
-          count(*) FILTER (WHERE a.q_state->>'shipping' IS NOT NULL AND NOT EXISTS (
-            SELECT 1 FROM bot_funnel_events e WHERE e.attempt_id = a.attempt_id AND e.event = 'shipping_answered'
-          )) +
           count(*) FILTER (WHERE a.q_state->>'quantity' IS NOT NULL AND NOT EXISTS (
             SELECT 1 FROM bot_funnel_events e WHERE e.attempt_id = a.attempt_id AND e.event = 'quantity_answered'
           )) +
           count(*) FILTER (WHERE a.q_state->>'product' IS NOT NULL AND NOT EXISTS (
-            SELECT 1 FROM bot_funnel_events e WHERE e.attempt_id = a.attempt_id AND e.event = 'size_selected'
+            SELECT 1 FROM bot_funnel_events e WHERE e.attempt_id = a.attempt_id AND e.event IN ('size_answered','size_selected')
           )) +
           count(*) FILTER (WHERE a.q_state->>'colors' IS NOT NULL AND NOT EXISTS (
             SELECT 1 FROM bot_funnel_events e WHERE e.attempt_id = a.attempt_id AND e.event = 'colors_answered'
@@ -98,7 +99,7 @@ export async function collectFunnelHealthGaps(options?: {
             AND m.received_at < now() - interval '10 minutes'
         ) AND NOT EXISTS (
           SELECT 1 FROM bot_funnel_events e
-          WHERE e.event = 'quote_replied' AND e.quote_id = q.id::text
+          WHERE e.event IN ('post_quote_reply','quote_replied') AND e.quote_id = q.id::text
         ))::int quote_replies
       FROM recent_quotes q
     )

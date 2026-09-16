@@ -15,12 +15,26 @@ const log = logger("bot");
 
 export const BOT_FUNNEL_EVENTS = [
   "questionnaire_started",
-  "shipping_answered",
   "quantity_answered",
-  "size_selected",
+  "size_answered",
   "colors_answered",
+  "colors_unknown",
+  "logo_requested",
+  "logo_received",
   "spec_confirmed",
   "quote_sent",
+  "express_requested",
+  "post_quote_reply",
+  "human_handoff",
+  "rep_contacted",
+  "conversation_held",
+  "qualified_ready",
+  "qualified_not_ready",
+  "unqualified",
+  "first_payment_received",
+  // Historical/additional milestones retained for backwards compatibility.
+  "shipping_answered",
+  "size_selected",
   "quote_replied",
   "call_booked",
   "deal_closed",
@@ -40,6 +54,7 @@ export async function recordBotFunnelEvent(input: {
   eventKey?: string;
   occurredAt?: Date;
   quoteId?: string | number | null;
+  value?: unknown;
   metadata?: Record<string, unknown>;
 }): Promise<void> {
   try {
@@ -47,6 +62,8 @@ export async function recordBotFunnelEvent(input: {
     const [lead] = await db
       .select({
         qState: leads.qState,
+        source: leads.source,
+        leadSource: leads.leadSource,
         adId: leads.metaAdId,
         adName: leads.metaAdName,
         campaignId: leads.metaCampaignId,
@@ -75,6 +92,8 @@ export async function recordBotFunnelEvent(input: {
           process.env.VERCEL_GIT_COMMIT_SHA ??
           process.env.npm_package_version ??
           "local",
+        source: lead?.leadSource ?? lead?.source ?? "unknown",
+        value: input.value ?? null,
         adId: lead?.adId ?? null,
         adName: lead?.adName ?? null,
         campaignId: lead?.campaignId ?? null,
@@ -124,7 +143,7 @@ export async function recordQuoteReplyIfEligible(
     if (!quote) return;
     await recordBotFunnelEvent({
       leadSid,
-      event: "quote_replied",
+      event: "post_quote_reply",
       occurredAt,
       quoteId: quote.id,
     });

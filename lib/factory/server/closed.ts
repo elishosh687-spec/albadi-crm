@@ -543,10 +543,34 @@ export async function savePaymentsReceived(
   const clean = (Array.isArray(received) ? received : []).map((r) => ({
     paidIls: Number.isFinite(Number(r?.paidIls)) && Number(r.paidIls) > 0 ? r2(Number(r.paidIls)) : 0,
   }));
+  const [before] = await db
+    .select({
+      leadSid: factoryQuoteRequests.manychatSubId,
+      paymentsReceived: factoryQuoteRequests.paymentsReceived,
+    })
+    .from(factoryQuoteRequests)
+    .where(eq(factoryQuoteRequests.id, primaryId))
+    .limit(1);
+  const previousTotal = Array.isArray(before?.paymentsReceived)
+    ? (before.paymentsReceived as Array<{ paidIls?: number }>).reduce(
+        (sum, row) => sum + Math.max(0, Number(row?.paidIls) || 0),
+        0
+      )
+    : 0;
+  const nextTotal = clean.reduce((sum, row) => sum + row.paidIls, 0);
   await db
     .update(factoryQuoteRequests)
     .set({ paymentsReceived: clean, updatedAt: new Date() })
     .where(eq(factoryQuoteRequests.id, primaryId));
+  if (before?.leadSid && previousTotal <= 0 && nextTotal > 0) {
+    await recordBotFunnelEvent({
+      leadSid: before.leadSid,
+      event: "first_payment_received",
+      eventKey: `first_payment_received:deal:${primaryId}`,
+      value: { amountIls: nextTotal, dealId: primaryId },
+      metadata: { amountIls: nextTotal, dealId: primaryId },
+    });
+  }
 }
 
 /**

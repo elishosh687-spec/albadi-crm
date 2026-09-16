@@ -19,6 +19,8 @@ async function main(): Promise<void> {
       event_key text,
       occurred_at timestamptz NOT NULL DEFAULT now(),
       bot_version text,
+      source text,
+      value jsonb,
       ad_id text,
       ad_name text,
       campaign_id text,
@@ -30,6 +32,8 @@ async function main(): Promise<void> {
   await sql`ALTER TABLE bot_funnel_events ADD COLUMN IF NOT EXISTS attempt_id text`;
   await sql`ALTER TABLE bot_funnel_events ADD COLUMN IF NOT EXISTS event_key text`;
   await sql`ALTER TABLE bot_funnel_events ADD COLUMN IF NOT EXISTS bot_version text`;
+  await sql`ALTER TABLE bot_funnel_events ADD COLUMN IF NOT EXISTS source text`;
+  await sql`ALTER TABLE bot_funnel_events ADD COLUMN IF NOT EXISTS value jsonb`;
   await sql`ALTER TABLE bot_funnel_events ADD COLUMN IF NOT EXISTS ad_id text`;
   await sql`ALTER TABLE bot_funnel_events ADD COLUMN IF NOT EXISTS ad_name text`;
   await sql`ALTER TABLE bot_funnel_events ADD COLUMN IF NOT EXISTS campaign_id text`;
@@ -48,6 +52,7 @@ async function main(): Promise<void> {
   await sql`
     UPDATE bot_funnel_events e SET
       bot_version = coalesce(e.bot_version, 'historical'),
+      source = coalesce(e.source, l.lead_source, l.source, 'unknown'),
       ad_id = coalesce(e.ad_id, l.meta_ad_id),
       ad_name = coalesce(e.ad_name, l.meta_ad_name),
       campaign_id = coalesce(e.campaign_id, l.meta_campaign_id),
@@ -68,7 +73,7 @@ await sql`
   for (const [event, field] of [
     ["shipping_answered", "shipping"],
     ["quantity_answered", "quantity"],
-    ["size_selected", "product"],
+    ["size_answered", "product"],
     ["colors_answered", "colors"],
   ] as const) {
     await sql`
@@ -95,8 +100,8 @@ await sql`
   await sql`
     INSERT INTO bot_funnel_events
       (lead_sid, attempt_id, event, event_key, occurred_at, bot_version, metadata)
-    SELECT trim(l.manychat_sub_id), 'legacy:' || trim(l.manychat_sub_id), 'human_contacted',
-           'legacy:' || trim(l.manychat_sub_id) || ':human_contacted', min(m.received_at),
+    SELECT trim(l.manychat_sub_id), 'legacy:' || trim(l.manychat_sub_id), 'rep_contacted',
+           'legacy:' || trim(l.manychat_sub_id) || ':rep_contacted', min(m.received_at),
            'historical', '{"source":"historical_backfill"}'::jsonb
     FROM leads l
     JOIN bot_quotes q ON trim(q.lead_sid) = trim(l.manychat_sub_id) AND q.source = 'initial'
@@ -109,8 +114,8 @@ await sql`
   await sql`
     INSERT INTO bot_funnel_events
       (lead_sid, attempt_id, event, event_key, occurred_at, bot_version, metadata)
-    SELECT trim(l.manychat_sub_id), 'legacy:' || trim(l.manychat_sub_id), 'call_completed',
-           'call_completed:ghl:' || c.ghl_message_id, c.call_started_at,
+    SELECT trim(l.manychat_sub_id), 'legacy:' || trim(l.manychat_sub_id), 'conversation_held',
+           'conversation_held:ghl:' || c.ghl_message_id, c.call_started_at,
            'historical', jsonb_build_object('source','historical_backfill','durationSec',c.call_duration_sec)
     FROM call_recording_imports c JOIN leads l ON l.ghl_contact_id = c.ghl_contact_id
     WHERE coalesce(c.call_duration_sec,0) >= 30
@@ -176,8 +181,8 @@ await sql`
 
 await sql`
   INSERT INTO bot_funnel_events (lead_sid, attempt_id, event, event_key, occurred_at, quote_id, metadata)
-  SELECT fq.sid, 'legacy:' || fq.sid, 'quote_replied',
-         'legacy:' || fq.sid || ':quote_replied', min(m.received_at), fq.quote_id,
+  SELECT fq.sid, 'legacy:' || fq.sid, 'post_quote_reply',
+         'legacy:' || fq.sid || ':post_quote_reply', min(m.received_at), fq.quote_id,
          '{"source":"historical_backfill"}'::jsonb
   FROM (
     SELECT DISTINCT ON (trim(lead_sid)) trim(lead_sid) sid, sent_at, id::text quote_id
@@ -196,12 +201,15 @@ await sql`
 await sql`
   UPDATE bot_funnel_events e SET
     bot_version = coalesce(e.bot_version, 'historical'),
+    source = coalesce(e.source, l.lead_source, l.source, 'unknown'),
+    value = coalesce(e.value, e.metadata->'value'),
     ad_id = coalesce(e.ad_id, l.meta_ad_id),
     ad_name = coalesce(e.ad_name, l.meta_ad_name),
     campaign_id = coalesce(e.campaign_id, l.meta_campaign_id),
     campaign_name = coalesce(e.campaign_name, l.meta_campaign_name)
   FROM leads l WHERE trim(l.manychat_sub_id) = trim(e.lead_sid)
 `;
+await sql`UPDATE bot_funnel_events SET source = 'unknown' WHERE source IS NULL`;
 
 const counts = await sql`
   SELECT event, count(*)::int AS count

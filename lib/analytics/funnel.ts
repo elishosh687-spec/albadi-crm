@@ -1,15 +1,22 @@
 export const BOT_FUNNEL_DEFINITIONS = [
   ["questionnaire_started", "התחיל שאלון"],
-  ["shipping_answered", "ענה על שיטת משלוח"],
   ["quantity_answered", "ענה על כמות"],
-  ["size_selected", "בחר מידה"],
+  ["size_answered", "בחר מידה"],
   ["colors_answered", "ענה על מספר צבעים"],
   ["spec_confirmed", "אישר מפרט"],
   ["quote_sent", "קיבל מחיר"],
-  ["quote_replied", "הגיב אחרי המחיר"],
+  ["post_quote_reply", "הגיב אחרי המחיר"],
   ["call_booked", "קבע שיחה"],
-  ["deal_closed", "נסגרה עסקה"],
+  ["conversation_held", "התקיימה שיחה"],
+  ["qualified_ready", "ליד מתאים ומוכן"],
+  ["first_payment_received", "התקבל תשלום ראשון"],
 ] as const;
+
+const EVENT_ALIASES: Partial<Record<(typeof BOT_FUNNEL_DEFINITIONS)[number][0], string[]>> = {
+  size_answered: ["size_selected"],
+  post_quote_reply: ["quote_replied"],
+  conversation_held: ["call_completed"],
+};
 
 export type BotFunnelRow = {
   event: string;
@@ -22,12 +29,18 @@ export function buildBotFunnel(
   rows: Array<{ event: string; attempts: number; uniqueLeads: number }>
 ): BotFunnelRow[] {
   const byEvent = new Map(rows.map((row) => [row.event, row]));
-  return BOT_FUNNEL_DEFINITIONS.map(([event, label]) => ({
-    event,
-    label,
-    attempts: Number(byEvent.get(event)?.attempts ?? 0),
-    uniqueLeads: Number(byEvent.get(event)?.uniqueLeads ?? 0),
-  }));
+  return BOT_FUNNEL_DEFINITIONS.map(([event, label]) => {
+    const names = [event, ...(EVENT_ALIASES[event] ?? [])];
+    return {
+      event,
+      label,
+      attempts: names.reduce((sum, name) => sum + Number(byEvent.get(name)?.attempts ?? 0), 0),
+      uniqueLeads: names.reduce(
+        (sum, name) => sum + Number(byEvent.get(name)?.uniqueLeads ?? 0),
+        0
+      ),
+    };
+  });
 }
 
 export function percentage(part: number, whole: number): number | null {

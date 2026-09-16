@@ -65,8 +65,6 @@ export function buildQuoteMessage(params: QuoteMessageParams): string {
     hasLamination,
     quantity,
     logoColors,
-    shippingName,
-    shippingDays,
     pricePerUnit,
     moldsIls = 0,
     currency,
@@ -114,16 +112,22 @@ export function buildQuoteMessage(params: QuoteMessageParams): string {
     `ידיות: ${handlesText}\n` +
     `למינציה: ${laminationText}\n` +
     `כמות: ${quantity.toLocaleString()} | ${logoColors} צבעי הדפסה\n` +
-    `משלוח: ${shippingName} (~${shippingDays} ימים)\n` +
-    (molds > 0 ? `🧩 תבניות / מולדים (חד פעמי): ${fp(molds)}\n` : "") +
+    `משלוח: ימי (60–90 ימים מאישור הגרפיקה הסופית)\n` +
+    (molds > 0 ? `🧩 גלופה חד-פעמית לעיצוב: ${fp(molds)}\n` : "") +
     `💰 ליחידה: ${band(pricePerUnit)} | סה״כ: ${band(totalShown)}\n` +
     altBlock +
+    `\nכלול במחיר:\n` +
+    `✓ עזרה בהתאמת המפרט לצורך ולתקציב\n` +
+    `✓ הכנת קובץ הדפסה מלוגו קיים\n` +
+    `✓ הדמיה ופריסה לאישור\n` +
+    `✓ תיקונים עד לאישור לפני תחילת הייצור\n\n` +
+    `צריכים מהר יותר? אפשר לבדוק מסלול אווירי או משולב מול נציג.\n` +
     `המחיר לא כולל מעמ\n` +
     `* ההצעה כפופה לאישור הסופי של החברה שלנו\n` +
     (estimateNote ? `${estimateNote}\n` : "") +
     `\n---\n` +
     (bookingUrl
-      ? `קבע שיחה קצרה – נסביר הכל ב־10 דקות\n${bookingUrl}\n\n`
+      ? `מעדיפים שיחה? אפשר לקבוע כאן:\n${bookingUrl}\n\n`
       : "") +
     `אלבדי – אריזה ממותגת לסביבה שלך\n` +
     `דף הבית: ${appUrl}`

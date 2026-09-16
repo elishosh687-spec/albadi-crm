@@ -68,7 +68,7 @@ export function AnalyticsView({ data }: { data: AnalyticsData }) {
   }, [router]);
   const started = data.botFunnel.find((row) => row.event === "questionnaire_started")?.uniqueLeads ?? 0;
   const quoted = data.botFunnel.find((row) => row.event === "quote_sent")?.uniqueLeads ?? 0;
-  const replied = data.botFunnel.find((row) => row.event === "quote_replied")?.uniqueLeads ?? 0;
+  const replied = data.botFunnel.find((row) => row.event === "post_quote_reply")?.uniqueLeads ?? 0;
   const totalQuality = data.qualification.reduce((sum, row) => sum + row.count, 0);
   const unclassified = data.qualification.find((row) => row.key === "UNCLASSIFIED")?.count ?? 0;
   const classificationRate = percentage(totalQuality - unclassified, totalQuality);

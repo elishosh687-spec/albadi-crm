@@ -584,8 +584,8 @@ async function stage4PostBack(): Promise<{ done: number }> {
         if (lead?.sid) {
           await recordBotFunnelEvent({
             leadSid: lead.sid,
-            event: "call_completed",
-            eventKey: `call_completed:ghl:${row.ghlMessageId}`,
+            event: "conversation_held",
+            eventKey: `conversation_held:ghl:${row.ghlMessageId}`,
             occurredAt: row.callStartedAt ?? new Date(),
             metadata: { durationSec: row.callDurationSec ?? null },
           });
@@ -620,8 +620,8 @@ async function stage4PostBack(): Promise<{ done: number }> {
       if (lead?.sid) {
         await recordBotFunnelEvent({
           leadSid: lead.sid,
-          event: "call_completed",
-          eventKey: `call_completed:ghl:${row.ghlMessageId}`,
+          event: "conversation_held",
+          eventKey: `conversation_held:ghl:${row.ghlMessageId}`,
           occurredAt: row.callStartedAt ?? new Date(),
           metadata: { durationSec: row.callDurationSec ?? null },
         });

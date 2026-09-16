@@ -422,6 +422,8 @@ export const botFunnelEvents = pgTable(
     eventKey: text("event_key").notNull(),
     occurredAt: timestamp("occurred_at", { withTimezone: true }).defaultNow().notNull(),
     botVersion: text("bot_version"),
+    source: text("source"),
+    value: jsonb("value"),
     adId: text("ad_id"),
     adName: text("ad_name"),
     campaignId: text("campaign_id"),

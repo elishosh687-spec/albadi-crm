@@ -25,6 +25,26 @@ describe("sales funnel analytics", () => {
     });
   });
 
+  it("maps historical event names into the canonical funnel", () => {
+    const result = buildBotFunnel([
+      { event: "size_selected", attempts: 5, uniqueLeads: 4 },
+      { event: "quote_replied", attempts: 3, uniqueLeads: 3 },
+      { event: "call_completed", attempts: 2, uniqueLeads: 2 },
+    ]);
+    expect(result.find((row) => row.event === "size_answered")).toMatchObject({
+      attempts: 5,
+      uniqueLeads: 4,
+    });
+    expect(result.find((row) => row.event === "post_quote_reply")).toMatchObject({
+      attempts: 3,
+      uniqueLeads: 3,
+    });
+    expect(result.find((row) => row.event === "conversation_held")).toMatchObject({
+      attempts: 2,
+      uniqueLeads: 2,
+    });
+  });
+
   it("calculates stable one-decimal conversion rates", () => {
     expect(percentage(101, 326)).toBe(31);
     expect(percentage(0, 0)).toBeNull();

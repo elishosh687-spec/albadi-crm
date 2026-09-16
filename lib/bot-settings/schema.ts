@@ -122,7 +122,7 @@ export const DEFAULT_BOT_SETTINGS: BotSettings = {
   confirmFreetextPrompt:
     "תכתוב מה תרצה לשנות או להוסיף — אפשר חופשי, בעברית.\nלמשל: 'במקום 5000 תהיה 2000', 'מידה אחרת', 'הערה לתערוכה'.",
   decisionPrompt:
-    "מה דעתכם על ההצעה?\n\n✅ מתאים → שלחו לנו את הלוגו ונמשיך.\n🔧 רוצים לשנות משהו?",
+    "מתאים לכם? שלחו את הלוגו ונמשיך עם נציג.\n\nרוצים לשנות משהו? כתבו לי מה לשנות.",
   companyCardText:
     "👋 *קצת עלינו — אלבדי*\n\n" +
     "חברת אריזות עם 20+ שנה בענף. שותפים במפעל ייצור בסין. מתמחים בשקיות ממותגות לעסקים.",
@@ -948,6 +948,14 @@ export function normalizeBotSettings(raw: unknown): BotSettings {
     ) {
       (out[field.key] as string) = v;
     }
+  }
+  // Upgrade the exact legacy default without overwriting a genuinely custom
+  // CTA that an operator saved in the settings screen.
+  if (
+    out.decisionPrompt ===
+    "מה דעתכם על ההצעה?\n\n✅ מתאים → שלחו לנו את הלוגו ונמשיך.\n🔧 רוצים לשנות משהו?"
+  ) {
+    out.decisionPrompt = DEFAULT_BOT_SETTINGS.decisionPrompt;
   }
   return out;
 }

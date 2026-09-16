@@ -6,8 +6,7 @@
  *   - Standard path triggers INTAKE (subFlow=awaiting_estimate_decision) sub-flow (handled in decision.ts)
  *
  * State machine:
- *   step 3: asked shipping
- *   step 4: asked quantity (option 5 = "אחר" → free-text capture in same step)
+ *   step 4: asked quantity (option 4 = "אחר" → free-text capture in same step)
  *   step 5: asked product  (option 7 = "אחר" → free-text capture in same step)
  *   step 8: asked colors
  *   step 9: confirmation gate
@@ -54,6 +53,7 @@ import {
 import { buildLLMContext, renderContextForPrompt } from "./llm-context";
 import { logBotQuote } from "./quote-log";
 import { recordBotFunnelEvent } from "./funnel-events";
+import { EXPRESS_HANDOFF_REPLY, isExpressRequest } from "./express-request";
 import { logger, serializeError } from "@/lib/observability/log";
 import { randomUUID } from "node:crypto";
 
@@ -63,7 +63,7 @@ type ListOption = { value: string; label: string };
 
 interface Question {
   step: number;
-  field: "shipping" | "quantity" | "product" | "handles" | "lamination" | "colors";
+  field: "quantity" | "product" | "handles" | "lamination" | "colors" | "confirmation";
   prompt: string;
   options: ListOption[];
   /** When true, picking the last option triggers a free-text capture in the same step. */
@@ -76,6 +76,7 @@ interface Question {
 
 export const OPENING =
   "שלום! 👋 אני אעזור לך לקבל הצעת מחיר מיידית לשקיות ממותגות. זה ייקח כ-2 דקות 😊";
+export const DEFAULT_SHIPPING_OPTION_ID = "s2";
 
 /**
  * Live bot settings, refreshed at the top of every entry point.
@@ -115,16 +116,6 @@ function withHandoffHint(text: string): string {
 }
 
 const QUESTIONS: Question[] = [
-  {
-    step: 3,
-    field: "shipping",
-    prompt: "🚚 שיטת משלוח?",
-    options: [
-      { value: "s1", label: "✈️ אקספרס (~25 יום)" },
-      { value: "s2", label: "🚢 רגיל (~90 יום)" },
-    ],
-    buttons: true,
-  },
   {
     step: 4,
     field: "quantity",
@@ -168,10 +159,26 @@ const QUESTIONS: Question[] = [
       { value: "1", label: "צבע אחד" },
       { value: "2", label: "2 צבעים" },
       { value: "3", label: "3 צבעים" },
+      { value: "unknown", label: "לא בטוחים — נשלח לוגו לבדיקה" },
     ],
-    buttons: true,
   },
 ];
+
+export const COLORS_UNKNOWN_REPLY =
+  "מעולה — שלחו כאן את קובץ הלוגו. נבדוק כמה צבעי הדפסה יש בו ונשלים לכם את המחיר. אין צורך להכין קובץ לדפוס; אנחנו ממשיכים מהלוגו הקיים שלכם.";
+
+/** Read-only flow shape for automated acceptance tests and the dev playground. */
+export function getQuestionnaireFlow(): Array<{
+  step: number;
+  field: string;
+  options: Array<{ value: string; label: string }>;
+}> {
+  return QUESTIONS.map((question) => ({
+    step: question.step,
+    field: question.field,
+    options: question.options.map((option) => ({ ...option })),
+  }));
+}
 
 
 // Step-5 "page 2" — shown when the customer picks "צריך מידה אחרת" from the
@@ -213,6 +220,7 @@ function findNextQuestion(currentStep: number): Question | undefined {
 function applyRetiredFieldDefaults(state: QState): QState {
   return {
     ...state,
+    shipping: state.shipping ?? DEFAULT_SHIPPING_OPTION_ID,
     handles: state.handles ?? (S.handlesDefault ? "true" : "false"),
     lamination: state.lamination ?? (S.laminationDefault ? "true" : "false"),
   };
@@ -260,7 +268,7 @@ const CONFIRMATION_QUESTION: Question = {
   // `confirmation` isn't a real field — it's a marker so matchAnswer can pick
   // the proceed/change button. The handler in handleInbound branches on
   // confirmationStep, not on this synthetic field.
-  field: "shipping" /* placeholder — never read for confirmation */,
+  field: "confirmation",
   // Used as the poll question when POLLS_ENABLED. The full summary body is
   // sent as a preceding text message via buildConfirmationMessage.
   prompt: "הכל בסדר, או רוצים לשנות משהו?",
@@ -281,6 +289,8 @@ export interface QState {
   handles?: string;
   lamination?: string;
   colors?: string;
+  colorsUnknown?: boolean;
+  expressRequested?: boolean;
   quantityCustom?: string;
   productCustom?: string;
   pendingCustomField?: "quantity" | "product" | null;
@@ -412,10 +422,6 @@ async function askQuestion(recipient: string, q: Question): Promise<void> {
 
 // --- step 9 confirmation helpers ---
 
-const SHIP_LABEL: Record<string, string> = {
-  s1: "אקספרס (~25 יום)",
-  s2: "רגיל (~90 יום)",
-};
 const QTY_LABEL: Record<string, string> = {
   q0: "1,000",
   q1: "3,000",
@@ -455,7 +461,9 @@ export function renderAnswerLines(state: QState): string[] {
     state.product === "custom"
       ? state.productCustom || "מידה מיוחדת"
       : PROD_LABEL[state.product ?? ""] ?? state.product ?? "?";
-  const ship = SHIP_LABEL[state.shipping ?? ""] ?? state.shipping ?? "?";
+  const ship = state.expressRequested
+    ? "אקספרס / אווירי — ממתין לבדיקת נציג"
+    : "ימי (60–90 ימים מאישור הגרפיקה הסופית)";
   const handles = state.handles === "true" ? "כן" : "לא";
   // Same resolution as the quote — otherwise the customer confirms
   // "למינציה: לא" and is then sent a quote headed "עם למינציה".
@@ -469,7 +477,7 @@ export function renderAnswerLines(state: QState): string[] {
     `🚚 משלוח: ${ship}`,
     `🛍️ ידיות: ${handles}`,
     `✨ למינציה: ${lamination}`,
-    `🎨 צבעי הדפסה: ${state.colors ?? "?"}`,
+    `🎨 צבעי הדפסה: ${state.colorsUnknown ? "ממתין לבדיקת לוגו" : state.colors ?? "?"}`,
   ];
   if (state.orderNotes) {
     lines.push(`📝 הערות: ${state.orderNotes}`);
@@ -513,6 +521,7 @@ export function mergeExtracted(
 
   if (extracted.shipping && extracted.shipping !== state.shipping) {
     merged.shipping = extracted.shipping;
+    merged.expressRequested = extracted.shipping === "s1";
     changed = true;
   }
   if (extracted.quantity && extracted.quantity !== state.quantity) {
@@ -591,10 +600,9 @@ function matchAnswer(text: string, q: Question): string | null {
 
 function answerEventForField(
   field: Question["field"]
-): "shipping_answered" | "quantity_answered" | "size_selected" | "colors_answered" | null {
-  if (field === "shipping") return "shipping_answered";
+): "quantity_answered" | "size_answered" | "colors_answered" | null {
   if (field === "quantity") return "quantity_answered";
-  if (field === "product") return "size_selected";
+  if (field === "product") return "size_answered";
   if (field === "colors") return "colors_answered";
   return null;
 }
@@ -610,7 +618,13 @@ async function recordQuestionAnswer(
   await recordBotFunnelEvent({
     leadSid: sid,
     attemptId: state.attemptId,
+    event: "questionnaire_started",
+  });
+  await recordBotFunnelEvent({
+    leadSid: sid,
+    attemptId: state.attemptId,
     event,
+    value,
     metadata: { value },
   });
 }
@@ -648,6 +662,7 @@ export function parseCustomQuantity(raw?: string | null): number | null {
  *     was retired from customer selection.)
  */
 export function shouldRouteToFactory(state: QState): boolean {
+  if (state.expressRequested || state.colorsUnknown) return true;
   // A custom size used to always mean "a human prices this". It now only does
   // when custom-size pricing is switched off in settings — otherwise fetchQuote
   // runs it through the estimator, and falls back here if that can't price it.
@@ -696,7 +711,7 @@ async function fetchCustomSizeQuote(
     hasHandles: state.handles === "true",
     hasLamination,
     logoColors: Number(state.colors) || 1,
-    shippingOptionId: state.shipping ?? "s1",
+    shippingOptionId: state.shipping ?? DEFAULT_SHIPPING_OPTION_ID,
     moldsCostCny: moldsCostCnyFor(Number(state.colors) || 1),
   });
   if (!outcome.ok) {
@@ -705,7 +720,7 @@ async function fetchCustomSizeQuote(
   }
 
   const { result, altResult } = outcome;
-  const showAlt = S.showAlternativeShipping && !!altResult;
+  const showAlt = false;
   const text = buildQuoteMessage({
     dimensions: outcome.dims,
     hasHandles: result.hasHandles,
@@ -728,7 +743,7 @@ async function fetchCustomSizeQuote(
             totalOrder: altResult.totalOrderPriceIls,
           }
         : null,
-    showAlternative: S.showAlternativeShipping,
+    showAlternative: false,
     bookingUrl: S.showBookingLink ? S.bookingUrl : "",
     // Custom sizes are an ESTIMATE — say so, and optionally widen the number
     // into a range so we aren't held to a figure the factory hasn't confirmed.
@@ -819,7 +834,7 @@ async function fetchQuote(state: QState): Promise<QuoteCalcOutput> {
           totalOrder: calc.altResult.totalOrderPriceIls,
         }
       : null,
-    showAlternative: S.showAlternativeShipping,
+    showAlternative: false,
     bookingUrl: S.showBookingLink ? S.bookingUrl : "",
   });
   return {
@@ -835,6 +850,39 @@ async function saveState(sid: string, state: QState): Promise<void> {
     .update(leads)
     .set({ qState: state as any, updatedAt: new Date() })
     .where(sql`trim(${leads.manychatSubId}) = ${sid.trim()}`);
+}
+
+async function markExpressRequested(ctx: LeadCtx, text: string): Promise<QState> {
+  const next: QState = {
+    ...(ctx.qState as QState),
+    shipping: "s1",
+    expressRequested: true,
+  };
+  await Promise.all([
+    db
+      .update(leads)
+      .set({
+        qState: next as any,
+        pipelineFlag: "NEEDS_ELI",
+        botSummary: "express / air route requested — representative review required",
+        updatedAt: new Date(),
+      })
+      .where(sql`trim(${leads.manychatSubId}) = ${ctx.sid.trim()}`),
+    recordBotFunnelEvent({
+      leadSid: ctx.sid,
+      attemptId: next.attemptId,
+      event: "express_requested",
+      value: text,
+      metadata: { value: text },
+    }),
+    recordBotFunnelEvent({
+      leadSid: ctx.sid,
+      attemptId: next.attemptId,
+      event: "human_handoff",
+      metadata: { reason: "express_requested" },
+    }),
+  ]);
+  return next;
 }
 
 interface LeadCtx {
@@ -859,11 +907,6 @@ export async function kickstartQuestionnaire(sid: string): Promise<void> {
   const first = QUESTIONS[0];
   const newState: QState = { step: first.step, attemptId: randomUUID() };
   await saveState(sid, newState);
-  await recordBotFunnelEvent({
-    leadSid: sid,
-    attemptId: newState.attemptId,
-    event: "questionnaire_started",
-  });
   await askQuestion(ctx.jid, first);
 }
 
@@ -907,7 +950,7 @@ export async function resetLeadAndRestart(
 }
 
 /**
- * Force-restart the questionnaire from the first question (shipping). Resets
+ * Force-restart the questionnaire from the first question (quantity). Resets
  * qState, sends a transition note + OPENING + the first poll. Safe to invoke
  * mid-flow — the new state overrides whatever step the lead was on. Used by
  * the CRM "restart questionnaire" template.
@@ -945,11 +988,6 @@ export async function restartQuestionnaire(
       updatedAt: new Date(),
     })
     .where(sql`trim(${leads.manychatSubId}) = ${ctx.sid.trim()}`);
-  await recordBotFunnelEvent({
-    leadSid: ctx.sid,
-    attemptId: newState.attemptId,
-    event: "questionnaire_started",
-  });
   const transition =
     transitionText?.trim() ||
     "סליחה על הבלבול קודם 🙏 בואו נתחיל את השאלון מההתחלה.";
@@ -992,8 +1030,8 @@ export async function loadLeadCtx(sid: string): Promise<LeadCtx | null> {
 function summarizeForFactory(state: QState, name: string | null, phone: string | null): string {
   const who = name?.trim() || phone || "ליד";
   const shipMap: Record<string, string> = {
-    s1: "אקספרס",
-    s2: "רגיל",
+    s1: "אקספרס / אווירי — לבדיקה",
+    s2: "ימי",
   };
   // Decode tier/size codes to the human-readable label Eli sees on his
   // phone — sending raw `q1` / `p3` is ambiguous and forces a mental lookup.
@@ -1063,6 +1101,18 @@ async function routeToFactory(
     })
     .where(sql`trim(${leads.manychatSubId}) = ${ctx.sid.trim()}`);
   await ensureAutoTaskForStage(ctx.sid.trim(), "INTAKE").catch(() => {});
+  await recordBotFunnelEvent({
+    leadSid: ctx.sid,
+    attemptId: done.attemptId,
+    event: "human_handoff",
+    metadata: {
+      reason: state.expressRequested
+        ? "express_requested"
+        : state.colorsUnknown
+          ? "colors_unknown"
+          : "manual_quote_required",
+    },
+  });
   mirrorAnswersToGhl(ctx.sid, done);
   await sendBridgeMessage(ctx.jid, S.factoryHoldMessage);
   await sendEliDM(summarizeForFactory(state, ctx.name, ctx.phone));
@@ -1141,6 +1191,12 @@ async function routeToQuoted(
       })
       .where(sql`trim(${leads.manychatSubId}) = ${ctx.sid.trim()}`);
     await ensureAutoTaskForStage(ctx.sid.trim(), "INTAKE").catch(() => {});
+    await recordBotFunnelEvent({
+      leadSid: ctx.sid,
+      attemptId: bailed.attemptId,
+      event: "human_handoff",
+      metadata: { reason: "automatic_quote_failed" },
+    });
     mirrorAnswersToGhl(ctx.sid, bailed);
     await sendBridgeMessage(ctx.jid, S.factoryHoldMessage);
     // A custom size we couldn't estimate is a normal outcome, not a fault —
@@ -1240,7 +1296,9 @@ export async function handleInbound(input: {
     | "confirmation_sent"
     | "confirmation_freetext_prompt"
     | "confirmation_revised"
-    | "confirmation_nothing_extracted";
+    | "confirmation_nothing_extracted"
+    | "colors_unknown"
+    | "express_requested";
   detail?: string;
 }> {
   await refreshSettings();
@@ -1280,14 +1338,18 @@ export async function handleInbound(input: {
     const first = QUESTIONS[0];
     const newState: QState = { step: first.step, attemptId: randomUUID() };
     await saveState(ctx.sid, newState);
-    await recordBotFunnelEvent({
-      leadSid: ctx.sid,
-      attemptId: newState.attemptId,
-      event: "questionnaire_started",
-    });
     await sendBridgeMessage(recipient, withHandoffHint(S.openingMessage));
     await askQuestion(recipient, first);
     return { action: "started" };
+  }
+
+  if (isExpressRequest(text)) {
+    const next = await markExpressRequested(ctx, text);
+    await sendBridgeMessage(recipient, EXPRESS_HANDOFF_REPLY);
+    const current = getCurrentQuestion(next);
+    if (current) await askQuestion(recipient, current);
+    else if (next.step === 9) await routeToFactory(ctx, next);
+    return { action: "express_requested" };
   }
 
   // Step 9 — confirmation gate (post-questionnaire, pre-route).
@@ -1399,7 +1461,9 @@ export async function handleInbound(input: {
 
   // LLM fallback — when the dumb substring matcher returns null, ask
   // spec-extractor to map the customer's Hebrew to a canonical option.
-  // This catches: "דחוף" → s1, "לא חייב" → false, "אלפיים" → custom+"2000".
+  // Express requests are handled above without consuming an invalid-answer
+  // attempt. This fallback handles normal free-text answers such as
+  // "אלפיים" → custom+"2000".
   // Full conversation context is passed so the LLM understands what was
   // already answered and what the bot is currently asking.
   // Soft-fails on any LLM error — the original reask path runs unchanged.
@@ -1458,10 +1522,7 @@ export async function handleInbound(input: {
     await saveState(ctx.sid, reasked);
     const reasks = [S.reask1, S.reask2];
     const reaskIdx = Math.min(unmatched - 1, reasks.length - 1);
-    const baseReask =
-      currentQ.field === "shipping" && unmatched >= 2
-        ? "אני שואל קודם כל על שיטת המשלוח (זמן האספקה). תבחרו: אקספרס (~25 יום) או רגיל (~90 יום). על המידות ושאר הפרטים נגיע אחר כך."
-        : reasks[reaskIdx];
+    const baseReask = reasks[reaskIdx];
     // From the second miss the customer is entitled to know there's a way out.
     const reaskText = unmatched >= 2 ? withHandoffHint(baseReask) : baseReask;
     await sendBridgeMessage(recipient, reaskText);
@@ -1500,6 +1561,11 @@ export async function handleInbound(input: {
       // Fall through to standard advance below with the custom value baked in.
       // We'll record it via the [field]Custom write a few lines down.
     } else {
+      await recordBotFunnelEvent({
+        leadSid: ctx.sid,
+        attemptId: ctx.qState.attemptId,
+        event: "questionnaire_started",
+      });
       const pending: QState = {
         ...ctx.qState,
         [currentQ.field]: "custom",
@@ -1537,6 +1603,44 @@ export async function handleInbound(input: {
         ? llmCustomProduct
         : match
   );
+
+  if (currentQ.field === "colors" && match === "unknown") {
+    const waitingForLogo: QState = applyRetiredFieldDefaults({
+      ...advanced,
+      colorsUnknown: true,
+      step: 10,
+    });
+    await db
+      .update(leads)
+      .set({
+        qState: { ...(waitingForLogo as any), subFlow: "awaiting_logo" },
+        pipelineStage: "INTAKE",
+        pipelineFlag: "NEEDS_ELI",
+        botSummary: "logo colors unknown — awaiting logo review",
+        updatedAt: new Date(),
+      })
+      .where(sql`trim(${leads.manychatSubId}) = ${ctx.sid.trim()}`);
+    await Promise.all([
+      recordBotFunnelEvent({
+        leadSid: ctx.sid,
+        attemptId: waitingForLogo.attemptId,
+        event: "colors_unknown",
+      }),
+      recordBotFunnelEvent({
+        leadSid: ctx.sid,
+        attemptId: waitingForLogo.attemptId,
+        event: "logo_requested",
+      }),
+      recordBotFunnelEvent({
+        leadSid: ctx.sid,
+        attemptId: waitingForLogo.attemptId,
+        event: "human_handoff",
+        metadata: { reason: "colors_unknown" },
+      }),
+      sendBridgeMessage(recipient, COLORS_UNKNOWN_REPLY),
+    ]);
+    return { action: "colors_unknown" };
+  }
   const nextQ = findNextQuestion(currentQ.step);
   if (nextQ) {
     advanced.step = nextQ.step;

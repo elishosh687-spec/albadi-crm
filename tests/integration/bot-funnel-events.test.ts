@@ -13,9 +13,9 @@ async function cleanup(): Promise<void> {
 beforeAll(async () => {
   await cleanup();
   await sql(
-    `INSERT INTO leads (manychat_sub_id, active, q_state, meta_ad_id, meta_campaign_id)
-     VALUES ($1, true, $2::jsonb, 'ci-ad', 'ci-campaign')`,
-    [SID, JSON.stringify({ attemptId: "attempt-a", step: 1 })]
+    `INSERT INTO leads (manychat_sub_id, active, q_state, lead_source, meta_ad_id, meta_campaign_id)
+     VALUES ($1, true, $2::jsonb, 'Meta', 'ci-ad', 'ci-campaign')`,
+    [SID, JSON.stringify({ attemptId: "attempt-a", step: 4 })]
   );
 });
 
@@ -27,7 +27,7 @@ describe("recordBotFunnelEvent", () => {
     await recordBotFunnelEvent({ leadSid: SID, event: "questionnaire_started" });
 
     const rows = await sql(
-      `SELECT attempt_id, event_key, ad_id, campaign_id
+      `SELECT attempt_id, event_key, source, ad_id, campaign_id
        FROM bot_funnel_events WHERE lead_sid = $1`,
       [SID]
     );
@@ -35,6 +35,7 @@ describe("recordBotFunnelEvent", () => {
       {
         attempt_id: "attempt-a",
         event_key: "attempt-a:questionnaire_started",
+        source: "Meta",
         ad_id: "ci-ad",
         campaign_id: "ci-campaign",
       },
@@ -85,7 +86,20 @@ describe("recordBotFunnelEvent", () => {
       `UPDATE leads
        SET q_state = $2::jsonb, updated_at = now() - interval '15 minutes'
        WHERE manychat_sub_id = $1`,
-      [SID, JSON.stringify({ attemptId: "attempt-health", step: 2, shipping: "regular" })]
+      [SID, JSON.stringify({ attemptId: "attempt-health", step: 4 })]
+    );
+    expect(await collectFunnelHealthGaps({ leadSid: SID })).toEqual({
+      questionnaireStarts: 0,
+      questionnaireAnswers: 0,
+      quotes: 0,
+      quoteReplies: 0,
+    });
+
+    await sql(
+      `UPDATE leads
+       SET q_state = $2::jsonb, updated_at = now() - interval '15 minutes'
+       WHERE manychat_sub_id = $1`,
+      [SID, JSON.stringify({ attemptId: "attempt-health", step: 5, quantity: "q2" })]
     );
 
     expect(await collectFunnelHealthGaps({ leadSid: SID })).toEqual({
@@ -102,8 +116,9 @@ describe("recordBotFunnelEvent", () => {
     });
     await recordBotFunnelEvent({
       leadSid: SID,
-      event: "shipping_answered",
+      event: "quantity_answered",
       attemptId: "attempt-health",
+      value: "q2",
     });
 
     expect(await collectFunnelHealthGaps({ leadSid: SID })).toEqual({
