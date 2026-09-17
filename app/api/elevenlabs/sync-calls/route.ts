@@ -16,7 +16,7 @@
  */
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { appConfig, elevenlabsCallImports } from "@/drizzle/schema";
+import { appConfig, elevenlabsCallImports, leads } from "@/drizzle/schema";
 import { and, eq, isNotNull, isNull, ne, sql } from "drizzle-orm";
 import {
   listConversations,
@@ -38,17 +38,23 @@ import {
   requireGHLLocationId,
 } from "@/integrations/ghl/config";
 import { getValidAccessToken } from "@/integrations/ghl/oauth";
-import { analyzeCall, type CallAnalysis } from "@/lib/autoresponder/call-analysis";
+import { analyzeCall } from "@/lib/autoresponder/call-analysis";
 import { withJob } from "@/lib/observability/jobs";
+import { getBotSettings } from "@/lib/bot-settings/store";
+import { buildCallAnalysisNote } from "@/lib/calls/note-builder";
+import { processCallAction } from "@/lib/calls/process-action";
+import { normalizeCallAnalysisV2 } from "@/lib/calls/analysis-normalize";
+import { logger, serializeError } from "@/lib/observability/log";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
 
 const CURSOR_KEY = "elevenlabs.last_polled_unix";
-const NOTE_MARKER_VERSION = "CALL-ANALYSIS-11L v1";
+const NOTE_MARKER_VERSION = "CALL-ANALYSIS-11L v2";
 const MAX_ATTEMPTS = 3;
 const PER_STAGE_CAP = 5;
 const REWIND_SECS = 30 * 60; // belt-and-suspenders overlap each tick
+const log = logger("calls");
 
 function authorized(req: NextRequest): boolean {
   const accepted = [process.env.BOT_SECRET, process.env.CALL_TRIGGER_SECRET]
@@ -60,6 +66,10 @@ function authorized(req: NextRequest): boolean {
 
 function markerFor(conversationId: string): string {
   return `[${NOTE_MARKER_VERSION}] conv=${conversationId}`;
+}
+
+function legacyMarkerFor(conversationId: string): string {
+  return `[CALL-ANALYSIS-11L v1] conv=${conversationId}`;
 }
 
 // ---- cursor (epoch seconds) ----
@@ -97,75 +107,6 @@ async function recordError(id: number, err: unknown, giveUp: boolean): Promise<v
       updatedAt: new Date(),
     })
     .where(eq(elevenlabsCallImports.id, id));
-}
-
-function formatHebrewNote(args: {
-  conversationId: string;
-  startedAt: Date | null;
-  durationSec: number | null;
-  direction: string | null;
-  analysis: CallAnalysis | null;
-  fallbackSummary: string | null;
-  transcript: string;
-}): string {
-  const { conversationId, startedAt, durationSec, direction, analysis, fallbackSummary, transcript } =
-    args;
-  const dateStr = startedAt
-    ? startedAt.toLocaleString("he-IL", {
-        timeZone: "Asia/Jerusalem",
-        day: "2-digit",
-        month: "2-digit",
-        year: "numeric",
-        hour: "2-digit",
-        minute: "2-digit",
-      })
-    : "—";
-  const minStr = durationSec ? `${Math.max(1, Math.round(durationSec / 60))}m` : "—";
-  const dirStr = direction === "inbound" ? "נכנסת" : direction === "outbound" ? "יוצאת" : "—";
-  const bullets = (xs: string[]) =>
-    xs.length === 0 ? "—" : xs.map((x) => `• ${x}`).join("\n");
-
-  const head = [
-    markerFor(conversationId),
-    `🤖 שיחת סוכן קולי (ElevenLabs): ${dateStr} · ${minStr} · ${dirStr}`,
-    "",
-  ];
-
-  let bodyLines: string[];
-  if (analysis) {
-    const objBullets =
-      analysis.objections.length === 0
-        ? "—"
-        : analysis.objections
-            .map((o) => (o.quote ? `• ${o.text}  ("${o.quote}")` : `• ${o.text}`))
-            .join("\n");
-    bodyLines = [
-      `🧭 סיכום: ${analysis.call_summary || fallbackSummary || "—"}`,
-      "",
-      `🎯 צרכי לקוח:`,
-      bullets(analysis.customer_needs),
-      "",
-      `⚠️ התנגדויות:`,
-      objBullets,
-      "",
-      `💰 מחיר: ${analysis.price_discussion ?? "—"}`,
-      "",
-      `➡️ צעדים הבאים:`,
-      bullets(analysis.next_steps),
-      "",
-      `רגש: ${analysis.sentiment}  ·  דחיפות מעקב: ${analysis.follow_up_urgency}`,
-      analysis.competitor_mentions.length > 0
-        ? `מתחרים שהוזכרו: ${analysis.competitor_mentions.join(", ")}`
-        : "",
-      analysis.red_flags.length > 0 ? `🚩 דגלים אדומים: ${analysis.red_flags.join(", ")}` : "",
-    ];
-  } else {
-    bodyLines = [`🧭 סיכום: ${fallbackSummary || "—"}`];
-  }
-
-  return [...head, ...bodyLines, "", "📄 תמלול:", transcript]
-    .filter((s) => s !== "")
-    .join("\n");
 }
 
 // ===========================================================================
@@ -252,6 +193,8 @@ async function stageEnrich(): Promise<number> {
 }
 
 async function stageAnalyze(): Promise<number> {
+  const settings = await getBotSettings();
+  if (!settings.callAnalysisEnabled || !settings.callAnalysisElevenlabsEnabled) return 0;
   const rows = await db
     .select()
     .from(elevenlabsCallImports)
@@ -266,7 +209,7 @@ async function stageAnalyze(): Promise<number> {
   let done = 0;
   for (const row of rows) {
     try {
-      const analysis = await analyzeCall(row.transcript ?? "");
+      const analysis = await analyzeCall(row.transcript ?? "", { callStartedAt: row.callStartedAt });
       await db
         .update(elevenlabsCallImports)
         .set({
@@ -285,6 +228,8 @@ async function stageAnalyze(): Promise<number> {
 }
 
 async function stagePost(): Promise<number> {
+  const settings = await getBotSettings();
+  if (!settings.callAnalysisEnabled || !settings.callAnalysisElevenlabsEnabled) return 0;
   const rows = await db
     .select()
     .from(elevenlabsCallImports)
@@ -322,26 +267,64 @@ async function stagePost(): Promise<number> {
         continue;
       }
 
+      if (row.analysis) {
+        const analysis = normalizeCallAnalysisV2(row.analysis, {
+          transcript: row.transcript ?? "",
+          callStartedAt: row.callStartedAt ?? row.createdAt,
+          model: null,
+        });
+        const [actionLead] = await db
+          .select({ sid: leads.manychatSubId })
+          .from(leads)
+          .where(eq(leads.ghlContactId, contactId))
+          .limit(1);
+        await processCallAction({
+          source: "elevenlabs",
+          sourceRecordId: row.conversationId,
+          leadSid: actionLead?.sid ?? null,
+          ghlContactId: contactId,
+          callStartedAt: row.callStartedAt,
+          analysis,
+        }).catch((error) =>
+          log.warn("call_action.processing_failed", {
+            conversationId: row.conversationId,
+            contactId,
+            ...serializeError(error),
+          }),
+        );
+      }
+
       const marker = markerFor(row.conversationId);
 
       // 2. Idempotency — note already posted?
       let noteId: string | null = null;
-      const existing = await listContactNotes(contactId);
-      const already = existing.find((n) => (n.body ?? "").includes(marker));
-      if (already) {
-        noteId = already.id;
-      } else {
-        const body = formatHebrewNote({
-          conversationId: row.conversationId,
+      if (settings.callAnalysisPublishNote) {
+        const existing = await listContactNotes(contactId);
+        const legacyMarker = legacyMarkerFor(row.conversationId);
+        const already = existing.find(
+          (n) => (n.body ?? "").includes(marker) || (n.body ?? "").includes(legacyMarker),
+        );
+        if (already) {
+          noteId = already.id;
+        } else if (row.analysis) {
+          const analysis = normalizeCallAnalysisV2(row.analysis, {
+            transcript: row.transcript ?? "",
+            callStartedAt: row.callStartedAt ?? row.createdAt,
+            model: null,
+          });
+          const body = buildCallAnalysisNote({
+          marker,
+          sourceLabel: "שיחת סוכן קולי (ElevenLabs)",
           startedAt: row.callStartedAt,
           durationSec: row.callDurationSec,
           direction: row.direction,
-          analysis: (row.analysis as CallAnalysis | null) ?? null,
-          fallbackSummary: row.elevenSummary,
+          analysis,
           transcript: row.transcript ?? "",
-        });
-        const note = await addContactNote(contactId, body);
-        noteId = note.id;
+          settings,
+          });
+          const note = await addContactNote(contactId, body);
+          noteId = note.id;
+        }
       }
 
       // 3. Attach the playable recording via the Custom Conversation Provider.

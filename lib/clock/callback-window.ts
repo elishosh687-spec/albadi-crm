@@ -106,7 +106,26 @@ export function addCalendarDays(
 export async function clampToWorkWindow(
   at: Date,
   now: Date = new Date(),
+  window?: { start?: string; end?: string },
 ): Promise<Date> {
+  const parseTime = (value: string | undefined, fallbackHour: number) => {
+    const match = /^(\d{1,2}):(\d{2})$/.exec(value?.trim() ?? "");
+    if (!match) return { hour: fallbackHour, minute: 0 };
+    const hour = Number(match[1]);
+    const minute = Number(match[2]);
+    if (hour < 0 || hour > 23 || minute < 0 || minute > 59) {
+      return { hour: fallbackHour, minute: 0 };
+    }
+    return { hour, minute };
+  };
+  const start = parseTime(window?.start, WORK_START_HOUR);
+  const end = parseTime(window?.end, WORK_END_HOUR);
+  const startMinute = start.hour * 60 + start.minute;
+  const endMinute = end.hour * 60 + end.minute;
+  // Invalid/reversed custom windows fail safely to the established defaults.
+  const validCustomWindow = endMinute > startMinute;
+  const effectiveStart = validCustomWindow ? start : { hour: WORK_START_HOUR, minute: 0 };
+  const effectiveEndMinute = validCustomWindow ? endMinute : WORK_END_HOUR * 60;
   // Never schedule in the past.
   let cur =
     at.getTime() < now.getTime() ? new Date(now.getTime()) : new Date(at.getTime());
@@ -117,18 +136,26 @@ export async function clampToWorkWindow(
     // Weekend / holiday / holiday-eve → jump to 09:00 next day and re-check.
     if (await isNoSendDay(cur)) {
       const next = addCalendarDays(p.year, p.month, p.day, 1);
-      cur = jerusalemWallClock(next.year, next.month, next.day, WORK_START_HOUR, 0);
+      cur = jerusalemWallClock(
+        next.year,
+        next.month,
+        next.day,
+        effectiveStart.hour,
+        effectiveStart.minute,
+      );
       continue;
     }
 
     // Before the window → pull up to 09:00 the same (working) day.
-    if (p.hour < WORK_START_HOUR) {
+    const currentMinute = p.hour * 60 + p.minute;
+    const effectiveStartMinute = effectiveStart.hour * 60 + effectiveStart.minute;
+    if (currentMinute < effectiveStartMinute) {
       const sameDay9 = jerusalemWallClock(
         p.year,
         p.month,
         p.day,
-        WORK_START_HOUR,
-        0,
+        effectiveStart.hour,
+        effectiveStart.minute,
       );
       // Respect the past-guard: don't move earlier than `now`.
       cur = sameDay9.getTime() < now.getTime() ? new Date(now.getTime()) : sameDay9;
@@ -137,9 +164,15 @@ export async function clampToWorkWindow(
     }
 
     // At/after the window close → 09:00 next day and re-check.
-    if (p.hour >= WORK_END_HOUR) {
+    if (currentMinute >= effectiveEndMinute) {
       const next = addCalendarDays(p.year, p.month, p.day, 1);
-      cur = jerusalemWallClock(next.year, next.month, next.day, WORK_START_HOUR, 0);
+      cur = jerusalemWallClock(
+        next.year,
+        next.month,
+        next.day,
+        effectiveStart.hour,
+        effectiveStart.minute,
+      );
       continue;
     }
 

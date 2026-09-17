@@ -810,6 +810,53 @@ export const elevenlabsCallImports = pgTable(
   })
 );
 
+// Evidence-backed actions proposed from a call analysis. GHL remains the
+// operational source of truth for the actual task; this table owns the proposal,
+// policy decision, human edit/decision and retry audit.
+export const callActionCandidates = pgTable(
+  "call_action_candidates",
+  {
+    id: serial("id").primaryKey(),
+    source: text("source").notNull(), // ghl | elevenlabs
+    sourceRecordId: text("source_record_id").notNull(),
+    leadSid: text("lead_sid"),
+    ghlContactId: text("ghl_contact_id"),
+    analysisVersion: text("analysis_version").notNull(),
+    inputHash: text("input_hash").notNull(),
+    proposal: jsonb("proposal").notNull(),
+    originalProposal: jsonb("original_proposal").notNull(),
+    editedProposal: jsonb("edited_proposal"),
+    policyDecision: text("policy_decision").notNull(),
+    decisionReason: text("decision_reason").notNull(),
+    status: text("status").notNull().default("pending"),
+    decidedBy: text("decided_by"),
+    humanDecisionReason: text("human_decision_reason"),
+    decidedAt: timestamp("decided_at", { withTimezone: true }),
+    ghlTaskId: text("ghl_task_id"),
+    executionStatus: text("execution_status").notNull().default("not_requested"),
+    idempotencyKey: text("idempotency_key").notNull(),
+    attempts: integer("attempts").notNull().default(0),
+    lastError: text("last_error"),
+    lastErrorAt: timestamp("last_error_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => ({
+    idempotencyUnique: uniqueIndex("call_action_candidates_idempotency_uidx").on(
+      t.idempotencyKey,
+    ),
+    statusCreatedIdx: index("call_action_candidates_status_created_idx").on(
+      t.status,
+      t.createdAt,
+    ),
+    leadStatusIdx: index("call_action_candidates_lead_status_idx").on(t.leadSid, t.status),
+    sourceRecordIdx: index("call_action_candidates_source_record_idx").on(
+      t.source,
+      t.sourceRecordId,
+    ),
+  }),
+);
+
 // Per-lead deep sales analysis ("why is this lead stuck"). One row per analysis
 // run, keyed by lead. The latest row per sid is the current verdict (read with
 // ORDER BY created_at DESC LIMIT 1). `input_hash` is a hash of the dossier

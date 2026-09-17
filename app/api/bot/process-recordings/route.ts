@@ -26,25 +26,21 @@ import { appConfig, callRecordingImports, leads } from "@/drizzle/schema";
 import { and, eq, isNotNull, isNull, lte, sql } from "drizzle-orm";
 import {
   addContactNote,
-  createContactTask,
-  deleteContactTask,
   downloadRecording,
   listContactNotes,
-  listContactTasks,
   searchCallMessages,
 } from "@/integrations/ghl/client";
 import { recordBotFunnelEvent } from "@/lib/autoresponder/funnel-events";
 import { GHL_FIELD_IDS } from "@/integrations/ghl/config";
-import { resolveAssigneeUserId } from "@/lib/crm-tasks/assignee";
 import { updateContact } from "@/integrations/ghl/client";
-import { clampToWorkWindow } from "@/lib/clock/callback-window";
 import { transcribeAudio, TranscribeError } from "@/lib/transcription/whisper";
-import {
-  analyzeCall,
-  type CallAnalysis,
-} from "@/lib/autoresponder/call-analysis";
+import { analyzeCall } from "@/lib/autoresponder/call-analysis";
 import { logger, serializeError } from "@/lib/observability/log";
 import { withJob } from "@/lib/observability/jobs";
+import { getBotSettings } from "@/lib/bot-settings/store";
+import { buildCallAnalysisNote } from "@/lib/calls/note-builder";
+import { processCallAction } from "@/lib/calls/process-action";
+import { normalizeCallAnalysisV2 } from "@/lib/calls/analysis-normalize";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -58,8 +54,7 @@ const CURSOR_OVERLAP_MS = 30 * 60 * 1000; // 30min belt-and-suspenders rewind
 // Whisper rate limit is 50 RPM — we're at ~2 RPM at this cap.
 const MAX_PER_TICK_DOWNLOADS = 10;
 const MAX_ATTEMPTS = 3;
-const NOTE_MARKER_VERSION = "CALL-ANALYSIS v1";
-const CALLBACK_MARKER_VERSION = "CALLBACK v1";
+const NOTE_MARKER_VERSION = "CALL-ANALYSIS v2";
 
 function authorized(req: NextRequest): boolean {
   // Accept either BOT_SECRET (shared with the rest of the internal API) or
@@ -77,171 +72,8 @@ function markerFor(messageId: string): string {
   return `[${NOTE_MARKER_VERSION}] msg=${messageId}`;
 }
 
-function callbackMarkerFor(messageId: string): string {
-  return `[${CALLBACK_MARKER_VERSION}] msg=${messageId}`;
-}
-
-/**
- * Auto-create the salesperson's "callback" GHL task from the call analysis.
- * Fires only when the LLM extracted a concrete `callback_at`. Idempotent:
- * `callback_task_id` is a cheap re-entry guard, and a marker scan over the
- * contact's existing tasks closes the create→persist crash window.
- *
- * Non-fatal by design — a failure here must never block the note from posting.
- * Run BEFORE the note logic so the note's early-return (marker already present)
- * can't skip it.
- */
-async function ensureCallbackTask(row: {
-  id: number;
-  ghlContactId: string;
-  ghlMessageId: string;
-  analysis: CallAnalysis;
-  callbackTaskId: string | null;
-}): Promise<void> {
-  const cbAt = row.analysis.callback_at;
-  if (!cbAt) return; // no callback agreed on the call → no task
-  if (row.callbackTaskId) return; // already created (cheap guard, no API)
-
-  try {
-    const due = await clampToWorkWindow(new Date(cbAt));
-    const marker = callbackMarkerFor(row.ghlMessageId);
-
-    // Dedupe across crashes: a prior run may have created the task but failed
-    // to persist the id. Scan existing tasks for our marker first.
-    const existing = await listContactTasks(row.ghlContactId);
-
-    // The call-driven callback supersedes the one-time backfill "seed" task —
-    // remove it so the lead doesn't show two tasks once it has real activity.
-    const seed = existing.find((t) => (t.body ?? "").includes("[BACKFILL v1]"));
-    if (seed) {
-      await deleteContactTask(row.ghlContactId, seed.id).catch((e) =>
-        log.warn("callback_task.seed_cleanup_failed", {
-          contactId: row.ghlContactId,
-          messageId: row.ghlMessageId,
-          taskId: seed.id,
-          ...serializeError(e),
-        }),
-      );
-    }
-
-    const found = existing.find((t) => (t.body ?? "").includes(marker));
-    if (found) {
-      await db
-        .update(callRecordingImports)
-        .set({ callbackTaskId: found.id, updatedAt: new Date() })
-        .where(eq(callRecordingImports.id, row.id));
-      return;
-    }
-
-    const reason = (row.analysis.callback_reason ?? "").trim();
-    const title = reason
-      ? `📞 חזרה ללקוח: ${reason.slice(0, 60)}`
-      : "📞 חזרה ללקוח";
-    const dueLocal = due.toLocaleString("he-IL", {
-      timeZone: "Asia/Jerusalem",
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-    const body = [
-      marker,
-      "הלקוח ביקש שנחזור אליו.",
-      `מועד מבוקש: ${dueLocal}`,
-      `סיבה: ${reason || "—"}`,
-      "",
-      `סיכום השיחה: ${row.analysis.call_summary || "—"}`,
-    ].join("\n");
-
-    const created = await createContactTask(row.ghlContactId, {
-      title,
-      body,
-      dueDate: due.toISOString(),
-      assignedTo: (await resolveAssigneeUserId()) ?? undefined,
-    });
-    await db
-      .update(callRecordingImports)
-      .set({ callbackTaskId: created.id, updatedAt: new Date() })
-      .where(eq(callRecordingImports.id, row.id));
-  } catch (err) {
-    // Non-fatal: the note still posts. We log loudly because once
-    // posted_back_at is set the cron won't retry this row, so a lost callback
-    // task needs human visibility.
-    log.warn("callback_task.create_failed", {
-      contactId: row.ghlContactId,
-      messageId: row.ghlMessageId,
-      ...serializeError(err),
-    });
-  }
-}
-
-function formatHebrewNote(args: {
-  messageId: string;
-  startedAt: Date | null;
-  durationSec: number | null;
-  analysis: CallAnalysis;
-  transcript: string;
-}): string {
-  const { messageId, startedAt, durationSec, analysis, transcript } = args;
-
-  const dateStr = startedAt
-    ? `${startedAt.toLocaleString("he-IL", {
-        timeZone: "Asia/Jerusalem",
-        day: "2-digit",
-        month: "2-digit",
-        year: "numeric",
-        hour: "2-digit",
-        minute: "2-digit",
-      })}`
-    : "—";
-  const minStr = durationSec
-    ? `${Math.round(durationSec / 60)}m`
-    : "—";
-
-  const bullets = (xs: string[]) =>
-    xs.length === 0 ? "—" : xs.map((x) => `• ${x}`).join("\n");
-  const objBullets =
-    analysis.objections.length === 0
-      ? "—"
-      : analysis.objections
-          .map((o) =>
-            o.quote
-              ? `• ${o.text}  ("${o.quote}")`
-              : `• ${o.text}`,
-          )
-          .join("\n");
-
-  return [
-    markerFor(messageId),
-    `📞 שיחה: ${dateStr} · ${minStr}`,
-    "",
-    `🧭 סיכום: ${analysis.call_summary || "—"}`,
-    "",
-    `🎯 צרכי לקוח:`,
-    bullets(analysis.customer_needs),
-    "",
-    `⚠️ התנגדויות:`,
-    objBullets,
-    "",
-    `💰 מחיר: ${analysis.price_discussion ?? "—"}`,
-    "",
-    `➡️ צעדים הבאים:`,
-    bullets(analysis.next_steps),
-    "",
-    `רגש: ${analysis.sentiment}  ·  דחיפות מעקב: ${analysis.follow_up_urgency}`,
-    analysis.competitor_mentions.length > 0
-      ? `מתחרים שהוזכרו: ${analysis.competitor_mentions.join(", ")}`
-      : "",
-    analysis.red_flags.length > 0
-      ? `🚩 דגלים אדומים: ${analysis.red_flags.join(", ")}`
-      : "",
-    "",
-    "📄 תמלול:",
-    transcript,
-  ]
-    .filter((s) => s !== "")
-    .join("\n");
+function legacyMarkerFor(messageId: string): string {
+  return `[CALL-ANALYSIS v1] msg=${messageId}`;
 }
 
 async function getCursor(): Promise<Date> {
@@ -447,6 +279,8 @@ async function stage2Transcribe(): Promise<{ done: number }> {
 // Stage 3 — analyze transcripts.
 // ===========================================================================
 async function stage3Analyze(): Promise<{ done: number }> {
+  const settings = await getBotSettings();
+  if (!settings.callAnalysisEnabled || !settings.callAnalysisGhlEnabled) return { done: 0 };
   const rows = await db
     .select()
     .from(callRecordingImports)
@@ -520,6 +354,8 @@ async function stampLastCall(contactId: string): Promise<void> {
 }
 
 async function stage4PostBack(): Promise<{ done: number }> {
+  const settings = await getBotSettings();
+  if (!settings.callAnalysisEnabled || !settings.callAnalysisGhlEnabled) return { done: 0 };
   const rows = await db
     .select()
     .from(callRecordingImports)
@@ -549,23 +385,63 @@ async function stage4PostBack(): Promise<{ done: number }> {
       // early-return so it's set even on already-noted (re-processed) calls.
       await stampLastCall(row.ghlContactId);
 
-      // Auto-create the salesperson's callback task from the analysis. Runs
-      // before the note logic so the note's marker early-return can't skip it.
-      // Non-fatal: never blocks the note.
-      await ensureCallbackTask({
-        id: row.id,
-        ghlContactId: row.ghlContactId,
-        ghlMessageId: row.ghlMessageId,
-        analysis: row.analysis as CallAnalysis,
-        callbackTaskId: row.callbackTaskId,
+      const [actionLead] = await db
+        .select({ sid: leads.manychatSubId })
+        .from(leads)
+        .where(eq(leads.ghlContactId, row.ghlContactId))
+        .limit(1);
+      const analysis = normalizeCallAnalysisV2(row.analysis, {
+        transcript: row.transcript ?? "",
+        callStartedAt: row.callStartedAt ?? row.createdAt,
+        model: null,
       });
+      await processCallAction({
+        source: "ghl",
+        sourceRecordId: row.ghlMessageId,
+        leadSid: actionLead?.sid ?? null,
+        ghlContactId: row.ghlContactId,
+        callStartedAt: row.callStartedAt,
+        analysis,
+      }).catch((error) =>
+        log.warn("call_action.processing_failed", {
+          messageId: row.ghlMessageId,
+          contactId: row.ghlContactId,
+          ...serializeError(error),
+        }),
+      );
+
+      if (!settings.callAnalysisPublishNote) {
+        await db
+          .update(callRecordingImports)
+          .set({ postedBackAt: new Date(), status: "posted", updatedAt: new Date() })
+          .where(eq(callRecordingImports.id, row.id));
+        const [lead] = await db
+          .select({ sid: leads.manychatSubId })
+          .from(leads)
+          .where(eq(leads.ghlContactId, row.ghlContactId))
+          .limit(1);
+        if (lead?.sid) {
+          await recordBotFunnelEvent({
+            leadSid: lead.sid,
+            event: "conversation_held",
+            eventKey: `conversation_held:ghl:${row.ghlMessageId}`,
+            occurredAt: row.callStartedAt ?? new Date(),
+            metadata: { durationSec: row.callDurationSec ?? null },
+          });
+        }
+        done++;
+        continue;
+      }
 
       // Idempotency: if a previous run created the note but crashed before
       // updating `posted_back_at`, the marker is already in the contact's
       // note list — skip.
       const existing = await listContactNotes(row.ghlContactId);
       const marker = markerFor(row.ghlMessageId);
-      const already = existing.find((n) => (n.body ?? "").includes(marker));
+      const legacyMarker = legacyMarkerFor(row.ghlMessageId);
+      const already = existing.find(
+        (n) => (n.body ?? "").includes(marker) || (n.body ?? "").includes(legacyMarker),
+      );
       if (already) {
         await db
           .update(callRecordingImports)
@@ -594,12 +470,14 @@ async function stage4PostBack(): Promise<{ done: number }> {
         continue;
       }
 
-      const body = formatHebrewNote({
-        messageId: row.ghlMessageId,
+      const body = buildCallAnalysisNote({
+        marker: markerFor(row.ghlMessageId),
+        sourceLabel: "שיחת GHL",
         startedAt: row.callStartedAt,
         durationSec: row.callDurationSec,
-        analysis: row.analysis as CallAnalysis,
+        analysis,
         transcript: row.transcript ?? "",
+        settings,
       });
       const { id: noteId } = await addContactNote(row.ghlContactId, body);
 

@@ -103,6 +103,34 @@ export interface BotSettings {
   callAnalysisGuidance: string;
   leadAnalysisGuidance: string;
 
+  // --- call analysis V2 and CRM actions ---
+  callAnalysisEnabled: boolean;
+  callAnalysisGhlEnabled: boolean;
+  callAnalysisElevenlabsEnabled: boolean;
+  callAnalysisPublishNote: boolean;
+  callAnalysisIncludeTranscript: boolean;
+  callAnalysisIncludeScore: boolean;
+  callAnalysisNoteSections: string;
+  callAnalysisTaskMode: string;
+  callAnalysisConfidenceThreshold: number;
+  callAnalysisEvidenceRequired: boolean;
+  callAnalysisMissingDuePolicy: string;
+  callAnalysisDefaultDueHours: number;
+  callAnalysisWorkdayStart: string;
+  callAnalysisWorkdayEnd: string;
+  callAnalysisAssigneeMode: string;
+  callAnalysisFixedAssigneeId: string;
+  callAnalysisDuplicateWindowHours: number;
+  callAnalysisSupersedeAutoTasks: boolean;
+  callAnalysisAutoActionTypes: string;
+  callAnalysisAlwaysApproveActionTypes: string;
+  callAnalysisNegotiationStatusMode: string;
+  callAnalysisFutureStatusMode: string;
+  callAnalysisWonStatusMode: string;
+  callAnalysisLostStatusMode: string;
+  callAnalysisMaxFutureDays: number;
+  callAnalysisMinTranscriptChars: number;
+
   // --- models ---
   intentModel: string;
   analysisModel: string;
@@ -198,6 +226,34 @@ export const DEFAULT_BOT_SETTINGS: BotSettings = {
   callAnalysisGuidance: "",
   leadAnalysisGuidance: "",
 
+  callAnalysisEnabled: true,
+  callAnalysisGhlEnabled: true,
+  callAnalysisElevenlabsEnabled: true,
+  callAnalysisPublishNote: true,
+  callAnalysisIncludeTranscript: true,
+  callAnalysisIncludeScore: true,
+  callAnalysisNoteSections:
+    "summary,needs,specification,objections,outcome,action,status,score",
+  callAnalysisTaskMode: "shadow",
+  callAnalysisConfidenceThreshold: 85,
+  callAnalysisEvidenceRequired: true,
+  callAnalysisMissingDuePolicy: "approval",
+  callAnalysisDefaultDueHours: 24,
+  callAnalysisWorkdayStart: "09:00",
+  callAnalysisWorkdayEnd: "17:00",
+  callAnalysisAssigneeMode: "contact_owner",
+  callAnalysisFixedAssigneeId: "",
+  callAnalysisDuplicateWindowHours: 72,
+  callAnalysisSupersedeAutoTasks: false,
+  callAnalysisAutoActionTypes: "callback,send_quote,check_logo_received,follow_up",
+  callAnalysisAlwaysApproveActionTypes: "check_payment,other",
+  callAnalysisNegotiationStatusMode: "recommend",
+  callAnalysisFutureStatusMode: "recommend",
+  callAnalysisWonStatusMode: "recommend",
+  callAnalysisLostStatusMode: "recommend",
+  callAnalysisMaxFutureDays: 60,
+  callAnalysisMinTranscriptChars: 80,
+
   intentModel: "gpt-5.6-luna",
   analysisModel: "gpt-5.6-terra",
   transcribeProvider: "openai",
@@ -233,6 +289,7 @@ export const GROUPS = [
   "תיאום שיחות",
   "מוח מכירות",
   "טקטיקות המכירה",
+  "ניתוח שיחות ומשימות",
   "הנחיות לניתוח",
   "מודלים",
 ] as const;
@@ -858,6 +915,255 @@ export const BOT_SETTING_FIELDS: BotSettingField[] = [
     type: "longtext",
   },
 
+  // ---------- ניתוח שיחות ומשימות ----------
+  {
+    key: "callAnalysisEnabled",
+    group: "ניתוח שיחות ומשימות",
+    label: "מתג ראשי לניתוח שיחות",
+    description:
+      "מפעיל את ניתוח השיחות החדש. כשהוא כבוי, שיחות חדשות לא נשלחות לניתוח ולא נוצרות מהן הערות, הצעות פעולה או משימות. התמלול והקלטת השיחה ממשיכים להישמר לפי המנגנון הקיים.",
+    where: "חל על שיחות חדשות שטרם נותחו",
+    type: "toggle",
+  },
+  {
+    key: "callAnalysisGhlEnabled",
+    group: "ניתוח שיחות ומשימות",
+    label: "לנתח שיחות מהחייגן של GHL",
+    description:
+      "שולט רק בשיחות טלפון שהוקלטו דרך GHL. כיבוי המקור אינו משפיע על שיחות הסוכן הקולי של ElevenLabs.",
+    where: "מקור: הקלטות שיחה ב-GHL",
+    type: "toggle",
+  },
+  {
+    key: "callAnalysisElevenlabsEnabled",
+    group: "ניתוח שיחות ומשימות",
+    label: "לנתח שיחות של הסוכן הקולי",
+    description:
+      "שולט רק בשיחות שמגיעות מ-ElevenLabs. כיבוי המקור אינו משפיע על הקלטות החייגן של GHL.",
+    where: "מקור: ElevenLabs",
+    type: "toggle",
+  },
+  {
+    key: "callAnalysisPublishNote",
+    group: "ניתוח שיחות ומשימות",
+    label: "לפרסם את הניתוח כהערה ב-GHL",
+    description:
+      "כשהמתג דולק, הסיכום והפרטים שנבחרו נכתבים בכרטיס הלקוח. כשהוא כבוי, הניתוח עדיין נשמר במערכת ויכול להציע פעולה, אבל לא מתווספת הערה חדשה ב-GHL.",
+    where: "פעולת כתיבה אמיתית ב-GHL",
+    type: "toggle",
+  },
+  {
+    key: "callAnalysisIncludeTranscript",
+    group: "ניתוח שיחות ומשימות",
+    label: "לצרף תמלול מלא להערה",
+    description:
+      "מוסיף את כל התמלול להערת GHL. כיבוי משאיר הערה קצרה ונוחה לקריאה, בעוד שהתמלול המלא נשמר במסד הנתונים וניתן לפתוח אותו ממסך האישורים.",
+    where: "משפיע רק על תוכן ההערה ב-GHL",
+    type: "toggle",
+  },
+  {
+    key: "callAnalysisIncludeScore",
+    group: "ניתוח שיחות ומשימות",
+    label: "להציג ציון ביצוע לנציג",
+    description:
+      "מוסיף לניתוח ציון למידה מתוך 10 והערות שיפור. הציון מיועד לשיפור שיחות בלבד ואינו משנה סטטוס, משימה, שכר או החלטה אוטומטית.",
+    where: "בניתוח ובהערה, אם מקטע הציון נבחר",
+    type: "toggle",
+  },
+  {
+    key: "callAnalysisNoteSections",
+    group: "ניתוח שיחות ומשימות",
+    label: "חלקים שיופיעו בהערת GHL",
+    description:
+      "רשימה מופרדת בפסיקים. האפשרויות: summary, needs, specification, objections, outcome, action, status, score. שינוי הרשימה משפיע רק על תצוגת ההערה — כל הנתונים עדיין נשמרים לניתוח ולאישורים.",
+    where: "הערת השיחה בכרטיס הלקוח",
+    type: "text",
+  },
+  {
+    key: "callAnalysisTaskMode",
+    group: "ניתוח שיחות ומשימות",
+    label: "מצב יצירת משימות",
+    description:
+      "כבוי = לא נשמרת הצעת משימה. צל = נשמרת החלטה לבדיקה אך שום משימה לא נוצרת. תמיד לאישור = כל הצעה מגיעה אליך. משולב = רק מקרים שעברו את כל בדיקות הבטיחות נוצרים אוטומטית. אוטומטי = כל פעולה תקינה נוצרת בלי אישור, למעט סוגים שהוגדרו כחייבי אישור.",
+    where: "קובע אם הניתוח רשאי לכתוב משימה אמיתית ב-GHL",
+    type: "select",
+    options: [
+      { value: "off", label: "כבוי — בלי הצעות ובלי משימות" },
+      { value: "shadow", label: "צל — למדוד בלבד, בלי משימות" },
+      { value: "approve_all", label: "תמיד לאישור — שום דבר לא נוצר לבד" },
+      { value: "hybrid", label: "משולב — בטוח אוטומטי, השאר לאישור" },
+      { value: "automatic", label: "אוטומטי — כל פעולה תקינה נוצרת" },
+    ],
+  },
+  {
+    key: "callAnalysisConfidenceThreshold",
+    group: "ניתוח שיחות ומשימות",
+    label: "רף ביטחון ליצירה אוטומטית",
+    description:
+      "רק הצעה ברמת ביטחון שווה או גבוהה מהמספר הזה יכולה להפוך אוטומטית למשימה. מתחת לרף היא עוברת לאישור. גם 100% אינו עוקף דרישת ראיה, אחראי ותאריך.",
+    where: "רלוונטי במצב משולב או אוטומטי",
+    type: "number",
+    min: 50,
+    max: 100,
+    unit: "%",
+  },
+  {
+    key: "callAnalysisEvidenceRequired",
+    group: "ניתוח שיחות ומשימות",
+    label: "לחייב ציטוט מדויק מהשיחה",
+    description:
+      "כשהמתג דולק, משימה אוטומטית דורשת ציטוט שקיים מילה במילה בתמלול. אם הציטוט חסר או הומצא, ההצעה עוברת לאישור. מומלץ להשאיר דולק.",
+    where: "בדיקת בטיחות לפני כתיבה ל-GHL",
+    type: "toggle",
+  },
+  {
+    key: "callAnalysisMissingDuePolicy",
+    group: "ניתוח שיחות ומשימות",
+    label: "מה לעשות כשלא נאמר מועד",
+    description:
+      "קובע מה קורה כשיש פעולה ברורה אבל אין תאריך. לאישור = אתה משלים תאריך. ברירת מחדל = המערכת מוסיפה את מספר השעות שהוגדר למטה. בלי משימה = ההצעה נשמרת אך לא ניתנת לביצוע.",
+    where: "רק להצעה ללא תאריך או שעה תקינים",
+    type: "select",
+    options: [
+      { value: "approval", label: "להעביר לאישור כדי שאבחר מועד" },
+      { value: "default_delay", label: "להוסיף זמן ברירת מחדל" },
+      { value: "no_task", label: "לא ליצור משימה ללא מועד" },
+    ],
+  },
+  {
+    key: "callAnalysisDefaultDueHours",
+    group: "ניתוח שיחות ומשימות",
+    label: "זמן ברירת מחדל למשימה ללא מועד",
+    description:
+      "מספר השעות שיוספו לזמן השיחה כאשר המדיניות שמעל היא ברירת מחדל. המועד יוזז לחלון העבודה שהוגדר ולא יישאר באמצע הלילה.",
+    where: "רלוונטי רק למדיניות זמן ברירת מחדל",
+    type: "number",
+    min: 1,
+    max: 336,
+    unit: "שעות",
+  },
+  {
+    key: "callAnalysisWorkdayStart",
+    group: "ניתוח שיחות ומשימות",
+    label: "תחילת יום עבודה למשימות",
+    description:
+      "השעה המוקדמת ביותר שבה משימה אוטומטית יכולה להיות מתוזמנת. יש לכתוב בפורמט 09:00 לפי שעון ישראל.",
+    where: "תיקון מועדים שנופלים מחוץ לשעות העבודה",
+    type: "text",
+  },
+  {
+    key: "callAnalysisWorkdayEnd",
+    group: "ניתוח שיחות ומשימות",
+    label: "סוף יום עבודה למשימות",
+    description:
+      "השעה המאוחרת ביותר למשימה אוטומטית. מועד מאוחר יותר יידחה לחלון העבודה הבא לפי שעון ישראל.",
+    where: "תיקון מועדים שנופלים מחוץ לשעות העבודה",
+    type: "text",
+  },
+  {
+    key: "callAnalysisAssigneeMode",
+    group: "ניתוח שיחות ומשימות",
+    label: "למי לשייך משימה",
+    description:
+      "בעל הליד = המשימה משויכת לנציג שמופיע בכרטיס GHL. משתמש קבוע = כל המשימות משויכות למזהה המשתמש שהוגדר בשדה הבא. אם אין אחראי תקין, המשימה עוברת לאישור ולא נוצרת לבד.",
+    where: "שדה האחראי במשימת GHL",
+    type: "select",
+    options: [
+      { value: "contact_owner", label: "בעל הליד ב-GHL" },
+      { value: "fixed_user", label: "משתמש GHL קבוע" },
+    ],
+  },
+  {
+    key: "callAnalysisFixedAssigneeId",
+    group: "ניתוח שיחות ומשימות",
+    label: "מזהה משתמש GHL קבוע",
+    description:
+      "נדרש רק אם בחרת משתמש קבוע. זהו מזהה המשתמש ב-GHL, לא שם התצוגה. ערך חסר או שגוי חוסם יצירה אוטומטית כדי שמשימה לא תישאר ללא בעלים.",
+    where: "רלוונטי רק לשיוך למשתמש קבוע",
+    type: "text",
+  },
+  {
+    key: "callAnalysisDuplicateWindowHours",
+    group: "ניתוח שיחות ומשימות",
+    label: "חלון זיהוי משימה כפולה",
+    description:
+      "כמה שעות אחורה לבדוק משימות פתוחות דומות לאותו ליד. התאמה ברורה אינה נוצרת שוב; ספק או סתירה עוברים לאישור.",
+    where: "לפני כל יצירת משימה",
+    type: "number",
+    min: 1,
+    max: 720,
+    unit: "שעות",
+  },
+  {
+    key: "callAnalysisSupersedeAutoTasks",
+    group: "ניתוח שיחות ומשימות",
+    label: "לאפשר להחליף משימה אוטומטית ישנה",
+    description:
+      "מאפשר לשיחה חדשה להחליף רק משימה קודמת שנוצרה על ידי המנגנון הזה. משימה ידנית לעולם לא משתנה. כשהמתג כבוי, סתירה תמיד עוברת לאישור.",
+    where: "רק למשימות עם סימון אוטומציה מזוהה",
+    type: "toggle",
+  },
+  {
+    key: "callAnalysisAutoActionTypes",
+    group: "ניתוח שיחות ומשימות",
+    label: "סוגי פעולה שמותר ליצור אוטומטית",
+    description:
+      "רשימה מופרדת בפסיקים מתוך: callback, send_quote, send_sample, check_logo_received, check_payment, follow_up, factory_check, other. סוג שלא מופיע כאן יעבור לאישור גם אם שאר הבדיקות עברו.",
+    where: "רשימת הרשאה לאוטומציה",
+    type: "text",
+  },
+  {
+    key: "callAnalysisAlwaysApproveActionTypes",
+    group: "ניתוח שיחות ומשימות",
+    label: "סוגי פעולה שתמיד חייבים אישור",
+    description:
+      "רשימה מופרדת בפסיקים. הרשימה הזו גוברת על ההרשאה האוטומטית. מתאימה לפעולות רגישות כמו בדיקת תשלום או פעולה כללית שלא סווגה היטב.",
+    where: "בלם בטיחות לפני יצירת משימה",
+    type: "text",
+  },
+  ...([
+    ["callAnalysisNegotiationStatusMode", "המלצת סטטוס: משא ומתן"],
+    ["callAnalysisFutureStatusMode", "המלצת סטטוס: להתקשר בעתיד"],
+    ["callAnalysisWonStatusMode", "המלצת סטטוס: נסגר"],
+    ["callAnalysisLostStatusMode", "המלצת סטטוס: אבוד"],
+  ] as const).map(([key, label]) => ({
+    key,
+    group: "ניתוח שיחות ומשימות",
+    label,
+    description:
+      "קובע אם הסטטוס הזה לא יופיע כלל או יוצג כהמלצה עם סיבה וציטוט. בשלב ההשקה המערכת אינה משנה סטטוס אוטומטית; אחרי שנמדוד דיוק נוכל לפתוח מצב אישור או אוטומציה בלי לשנות את חוזה הנתונים.",
+    where: "המלצה בלבד — לא משנה כרגע את הסטטוס ב-GHL",
+    type: "select" as const,
+    options: [
+      { value: "off", label: "כבוי" },
+      { value: "recommend", label: "המלצה בלבד" },
+    ],
+  })),
+  {
+    key: "callAnalysisMaxFutureDays",
+    group: "ניתוח שיחות ומשימות",
+    label: "מועד עתידי מרבי שהניתוח יקבל",
+    description:
+      "מועד רחוק יותר נחשב חשוד ולא הופך למשימה אוטומטית. אפשר להגדיל אם העסק מנהל מעקבים ארוכי טווח.",
+    where: "ולידציה של תאריך שחולץ מהשיחה",
+    type: "number",
+    min: 7,
+    max: 365,
+    unit: "ימים",
+  },
+  {
+    key: "callAnalysisMinTranscriptChars",
+    group: "ניתוח שיחות ומשימות",
+    label: "אורך מינימלי ליצירת פעולה",
+    description:
+      "תמלול קצר מהמספר הזה יכול עדיין לקבל סיכום, אבל לא ייצור משימה. מגן מפני תא קולי, ניתוק ושיחה קצרה מדי להבנת התחייבות.",
+    where: "נמדד בתווים אחרי ניקוי רווחים",
+    type: "number",
+    min: 20,
+    max: 1000,
+    unit: "תווים",
+  },
+
   // ---------- מודלים ----------
   {
     key: "intentModel",
@@ -874,8 +1180,8 @@ export const BOT_SETTING_FIELDS: BotSettingField[] = [
     group: "מודלים",
     label: "מודל ניתוח",
     description:
-      "המודל של כפתור 'נתח' — הניתוח המכירתי העמוק פר ליד. כבד ויקר יותר, רץ הרבה פחות, ולכן שווה לו מודל חזק.",
-    where: "לשונית ניתוח + הערות ב-GHL",
+      "המודל שמנתח שיחות טלפון וגם מפעיל את כפתור 'נתח' לניתוח מכירתי עמוק של ליד. מודל חזק יותר מדייק בציטוטים, התחייבויות והתנגדויות, אבל עולה יותר.",
+    where: "ניתוח שיחות + לשונית ניתוח + הערות ב-GHL",
     type: "select",
     options: MODEL_OPTIONS,
   },

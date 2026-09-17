@@ -22,7 +22,7 @@ export const ciChatId = (n: number) => `${ciPhone(n)}@c.us`;
 
 /** Remove every trace of a lead across the tables that key on its sid. */
 export async function purgeSid(sid: string): Promise<void> {
-  const bySid = ["messages", "lead_tags", "source_touches", "crm_tasks", "lead_events", "setter_decisions", "bot_decision_log", "lead_analyses"];
+  const bySid = ["messages", "lead_tags", "source_touches", "call_action_candidates", "crm_tasks", "lead_events", "setter_decisions", "bot_decision_log", "lead_analyses"];
   for (const t of bySid) {
     try {
       await sql(`DELETE FROM ${t} WHERE manychat_sub_id = $1`, [sid]);

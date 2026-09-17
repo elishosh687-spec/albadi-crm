@@ -12,6 +12,8 @@
  */
 import { callLLM } from "./openai-client";
 import { getBotSettings } from "../bot-settings/store";
+import type { CallAnalysisV2 } from "../calls/analysis-v2";
+import { normalizeCallAnalysisV2 } from "../calls/analysis-normalize";
 
 const BOM = "﻿";
 function readEnv(key: string): string {
@@ -19,39 +21,7 @@ function readEnv(key: string): string {
   return raw.startsWith(BOM) ? raw.slice(1) : raw;
 }
 
-export interface CallAnalysisObjection {
-  text: string;
-  quote?: string;
-}
-
-export interface CallAnalysis {
-  /** 1-2 sentence summary of what happened. */
-  call_summary: string;
-  /** What the customer was looking for. */
-  customer_needs: string[];
-  /** Objections raised by the customer. */
-  objections: CallAnalysisObjection[];
-  /** What was said about price, or null if not discussed. */
-  price_discussion: string | null;
-  /** Competitor names mentioned. */
-  competitor_mentions: string[];
-  /** Steps explicitly agreed on during the call. */
-  next_steps: string[];
-  sentiment: "positive" | "neutral" | "negative";
-  /** Concrete buying signals (asked about shipping, dates, MOQ, etc.). */
-  buying_signals: string[];
-  follow_up_urgency: "low" | "medium" | "high";
-  /** Red flags — e.g. customer already signed with a competitor. */
-  red_flags: string[];
-  /**
-   * Absolute ISO-8601 instant the customer agreed to be called back, or null.
-   * Computed by the LLM relative to the call-start anchor. Drives the
-   * auto-created GHL "callback" task. See docs/SALESPERSON-WORKFLOW.md.
-   */
-  callback_at: string | null;
-  /** Short Hebrew phrase describing the callback ask, or null. */
-  callback_reason: string | null;
-}
+export type CallAnalysis = CallAnalysisV2;
 
 /**
  * What the analyst is asked to look for — Eli's to change.
@@ -70,7 +40,7 @@ import { DEFAULT_CALL_ANALYSIS_GUIDANCE } from "../bot-settings/analysis-default
 export { DEFAULT_CALL_ANALYSIS_GUIDANCE };
 
 /** The machine contract. Not configurable — see above. */
-const RESPONSE_SCHEMA = `החזר JSON בדיוק בפורמט הבא:
+const RESPONSE_SCHEMA = `החזר JSON בדיוק בפורמט הבא. אם מידע לא נאמר במפורש, החזר null, [] או "לא ידוע" — אל תנחש:
 {
   "call_summary": "1-2 משפטים על מה קרה בשיחה",
   "customer_needs": ["..."],
@@ -83,7 +53,77 @@ const RESPONSE_SCHEMA = `החזר JSON בדיוק בפורמט הבא:
   "follow_up_urgency": "low" | "medium" | "high",
   "red_flags": ["..."],
   "callback_at": "ISO 8601 עם offset ישראל אם סוכם מועד חזרה, אחרת null",
-  "callback_reason": "משפט קצר בעברית על מה סוכם לגבי החזרה, אחרת null"
+  "callback_reason": "משפט קצר בעברית על מה סוכם לגבי החזרה, אחרת null",
+  "customer": {
+    "whyNow": "למה הלקוח בודק עכשיו או null",
+    "business": "מה העסק מוכר או null",
+    "bagUse": "מה נכנס לשקית או null",
+    "existingBagProblem": "מה לא עובד בשקית הקיימת או null",
+    "priorSupplierExperience": "ניסיון קודם עם ספק או null",
+    "requiredDate": "מועד/אירוע כפי שנאמר או null"
+  },
+  "needs": [{
+    "need": "צורך אחד",
+    "desiredOutcome": "תוצאה רצויה או null",
+    "priority": "appearance|strength|size|price|deadline|other|unknown",
+    "evidence": {"quote": "ציטוט מדויק וקצר מהתמלול או null"}
+  }],
+  "specification": {
+    "quantity": null,
+    "size": null,
+    "colors": null,
+    "details": [],
+    "approved": null,
+    "missing": [],
+    "logoExists": null,
+    "logoSent": null,
+    "pricePresented": null,
+    "fitsMinimumQuantity": null,
+    "decisionMaker": null,
+    "participants": []
+  },
+  "salespersonExecution": {
+    "askedWhyNow": null,
+    "exploredSeveralNeeds": null,
+    "askedFollowUpBeforeSolution": null,
+    "summarizedAndConfirmed": null,
+    "tailoredRecommendation": null,
+    "askedWhatBlocks": null,
+    "askedForPaymentWhenReady": null,
+    "agreedActionOwnerDue": null,
+    "scoreOutOf10": null,
+    "learningNotes": []
+  },
+  "objectionsV2": [{
+    "type": "price|quantity|delivery_time|not_ready|trust|competitor|other|unknown",
+    "customerWording": "ההתנגדות במילות הלקוח",
+    "clarified": null,
+    "handling": null,
+    "resolution": "resolved|open|unclear",
+    "nextStep": null,
+    "evidence": {"quote": "ציטוט מדויק וקצר או null"}
+  }],
+  "outcome": {
+    "result": "תוצאת השיחה",
+    "advance": "התקדמות קונקרטית או null",
+    "proposedAction": {
+      "actionType": "callback|send_quote|send_sample|check_logo_received|check_payment|follow_up|factory_check|other",
+      "description": "פעולה קונקרטית לנציג",
+      "responsibleParty": "salesperson|customer|factory|unknown",
+      "dueAt": "ISO 8601 עם offset ישראל או null",
+      "dueText": "ניסוח המועד בשיחה או null",
+      "confidence": 0.0,
+      "evidence": {"quote": "ציטוט מדויק וקצר שמוכיח את הפעולה או null"}
+    },
+    "statusRecommendation": {
+      "status": "negotiation|future_follow_up|won|lost|no_change",
+      "reason": "סיבה קצרה",
+      "confidence": 0.0,
+      "evidence": {"quote": "ציטוט מדויק וקצר או null"}
+    }
+  },
+  "isVoicemail": false,
+  "isTooShortForAction": false
 }`;
 
 async function buildSystemPrompt(): Promise<string> {
@@ -111,21 +151,6 @@ function jerusalemAnchor(at: Date): string {
   });
 }
 
-/** Keep a callback only if it's a sane instant (not garbage, not far past/future). */
-function sanitizeCallbackAt(raw: unknown): string | null {
-  if (typeof raw !== "string" || raw.trim() === "") return null;
-  const d = new Date(raw);
-  if (Number.isNaN(d.getTime())) return null;
-  const now = Date.now();
-  const TWO_DAYS = 2 * 24 * 60 * 60 * 1000;
-  const SIXTY_DAYS = 60 * 24 * 60 * 60 * 1000;
-  // Reject obvious hallucinations: more than 2 days in the past (a callback
-  // that already long elapsed) or more than 60 days out. Recent past is fine —
-  // clampToWorkWindow pulls it up to the next valid slot.
-  if (d.getTime() < now - TWO_DAYS || d.getTime() > now + SIXTY_DAYS) return null;
-  return d.toISOString();
-}
-
 /**
  * Analyze a call transcript. Returns null on any LLM/parse failure.
  *
@@ -145,11 +170,10 @@ export async function analyzeCall(
   // unset in production — and fell through to the CONVERSATION model, the
   // cheapest one in the list. Nobody chose that; the settings screen simply
   // had no effect here, which made the control a lie.
+  const settings = await getBotSettings().catch(() => null);
   const model =
     readEnv("OPENAI_ANALYSIS_MODEL") ||
-    (await getBotSettings()
-      .then((s) => s.analysisModel)
-      .catch(() => undefined));
+    settings?.analysisModel;
 
   const anchor = opts?.callStartedAt ?? new Date();
   const user = [
@@ -161,7 +185,7 @@ export async function analyzeCall(
     transcript,
   ].join("\n");
 
-  const result = await callLLM<CallAnalysis>({
+  const result = await callLLM<Record<string, unknown>>({
     system: await buildSystemPrompt(),
     user,
     model,
@@ -172,21 +196,12 @@ export async function analyzeCall(
 
   if (!result) return null;
 
-  // Defensive: coerce missing array fields to [] so downstream formatting
-  // doesn't crash on .map() of undefined. The model usually returns the
-  // right shape but JSON-mode + Hebrew prompts occasionally drop fields.
-  return {
-    call_summary: result.call_summary ?? "",
-    customer_needs: result.customer_needs ?? [],
-    objections: result.objections ?? [],
-    price_discussion: result.price_discussion ?? null,
-    competitor_mentions: result.competitor_mentions ?? [],
-    next_steps: result.next_steps ?? [],
-    sentiment: result.sentiment ?? "neutral",
-    buying_signals: result.buying_signals ?? [],
-    follow_up_urgency: result.follow_up_urgency ?? "low",
-    red_flags: result.red_flags ?? [],
-    callback_at: sanitizeCallbackAt(result.callback_at),
-    callback_reason: result.callback_reason ?? null,
-  };
+  return normalizeCallAnalysisV2(result, {
+    transcript,
+    callStartedAt: anchor,
+    model: model ?? null,
+    guidanceRevision: settings?.callAnalysisGuidance?.trim() ? "custom-v2" : "default-v2",
+    maxFutureDays: settings?.callAnalysisMaxFutureDays,
+    minTranscriptChars: settings?.callAnalysisMinTranscriptChars,
+  });
 }
