@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import {
   AlertTriangle, ArrowLeft, Banknote, Bot, CheckCircle2, CircleDollarSign,
@@ -12,10 +12,10 @@ import {
 } from "recharts";
 import { cn } from "@/lib/cn";
 import { percentage } from "@/lib/analytics/funnel";
-import { STAGE_LABEL } from "../_components/stage-meta";
+import { STAGE_LABEL } from "@/lib/messaging/stage-meta";
 import {
   LIFECYCLE_LABEL, PRIORITY_LABEL, type LifecycleKey, type PriorityBand,
-} from "../_components/crm-insights";
+} from "@/lib/crm/insights";
 import { SalesTargetsForm } from "./SalesTargetsForm";
 
 export interface AnalyticsData {
@@ -59,6 +59,8 @@ const VIEWS: Array<{ key: ViewKey; label: string }> = [
 
 export function AnalyticsView({ data }: { data: AnalyticsData }) {
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const [view, setView] = useState<ViewKey>("sales");
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -79,6 +81,12 @@ export function AnalyticsView({ data }: { data: AnalyticsData }) {
       : data.dataHealth.status === "error"
         ? "בדיקת המשפך נכשלה"
         : `נמצאו ${data.dataHealth.totalGaps} פערים`;
+  const widgetToken = searchParams.get("widget_token") ?? "";
+  const widgetHub = (tab: string) =>
+    `/widget/hub?widget_token=${encodeURIComponent(widgetToken)}&tab=${tab}`;
+  const links = pathname.startsWith("/widget/")
+    ? { leads: widgetHub("inbox"), factory: widgetHub("factory") }
+    : { leads: "/dashboard/v3/leads", factory: "/dashboard/v3/factory" };
 
   return (
     <div className="mx-auto flex w-full max-w-[1420px] flex-col gap-6 pb-16">
@@ -129,7 +137,7 @@ export function AnalyticsView({ data }: { data: AnalyticsData }) {
       </nav>
 
       {view === "sales" && <SalesView data={data} />}
-      {view === "operations" && <OperationsView data={data} />}
+      {view === "operations" && <OperationsView data={data} links={links} />}
       {view === "bot" && <BotHealthView data={data} />}
     </div>
   );
@@ -181,16 +189,22 @@ function SalesView({ data }: { data: AnalyticsData }) {
   );
 }
 
-function OperationsView({ data }: { data: AnalyticsData }) {
+function OperationsView({
+  data,
+  links,
+}: {
+  data: AnalyticsData;
+  links: { leads: string; factory: string };
+}) {
   return (
     <div role="tabpanel" className="space-y-5">
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1.2fr)_minmax(300px,0.8fr)]">
         <Panel title="תור העבודה עכשיו" description="המספרים שדורשים פעולה של נציג, לא רק מעקב.">
           <div className="divide-y divide-border/60">
-            <ActionMetric icon={<Inbox />} label="דורש אדם" value={data.operations.needsHuman} href="/dashboard/v3/leads" critical={data.operations.needsHuman > 0} />
-            <ActionMetric icon={<AlertTriangle />} label="ללא פעילות מעל 48 שעות" value={data.operations.staleActiveLeads} href="/dashboard/v3/leads" critical={data.operations.staleActiveLeads > 0} />
-            <ActionMetric icon={<Bot />} label="בוט מושעה" value={data.operations.pausedLeads} href="/dashboard/v3/leads" />
-            <ActionMetric icon={<CircleDollarSign />} label="ממתינים לתמחור ידני" value={data.operations.manualReviewLeads} href="/dashboard/v3/factory" />
+            <ActionMetric icon={<Inbox />} label="דורש אדם" value={data.operations.needsHuman} href={links.leads} critical={data.operations.needsHuman > 0} />
+            <ActionMetric icon={<AlertTriangle />} label="ללא פעילות מעל 48 שעות" value={data.operations.staleActiveLeads} href={links.leads} critical={data.operations.staleActiveLeads > 0} />
+            <ActionMetric icon={<Bot />} label="בוט מושעה" value={data.operations.pausedLeads} href={links.leads} />
+            <ActionMetric icon={<CircleDollarSign />} label="ממתינים לתמחור ידני" value={data.operations.manualReviewLeads} href={links.factory} />
           </div>
         </Panel>
         <Panel title="מהירות תגובה" description="מהצעת המחיר הראשונה ועד שנציג פונה.">
@@ -350,7 +364,7 @@ function SourceTable({ rows }: { rows: AnalyticsData["sourcePerformance"] }) {
 
 function PipelineChart({ rows }: { rows: AnalyticsData["pipelineDist"] }) {
   const chart = rows.map((row) => ({ ...row, label: STAGE_LABEL[row.stage] ?? row.stage, color: stageColor(row.stage) }));
-  return <div className="h-72" dir="ltr"><ResponsiveContainer width="100%" height="100%"><BarChart data={chart} margin={{ top: 8, right: 4, bottom: 8, left: 0 }}><CartesianGrid vertical={false} stroke="oklch(0.3 0.02 270)" /><XAxis dataKey="label" stroke="oklch(0.6 0.02 270)" tick={{ fontSize: 11 }} interval={0} /><YAxis stroke="oklch(0.6 0.02 270)" tick={{ fontSize: 11 }} allowDecimals={false} /><Tooltip contentStyle={{ background: "oklch(0.22 0.02 270)", border: "1px solid oklch(0.3 0.02 270)", borderRadius: 10, fontSize: 12 }} cursor={{ fill: "oklch(0.25 0.02 270 / 0.45)" }} /><Bar dataKey="count" radius={[6, 6, 0, 0]}>{chart.map((entry) => <Cell key={entry.stage} fill={entry.color} />)}</Bar></BarChart></ResponsiveContainer></div>;
+  return <div className="h-72 min-w-0" dir="ltr"><ResponsiveContainer width="100%" height="100%" minWidth={0}><BarChart data={chart} margin={{ top: 8, right: 4, bottom: 8, left: 0 }}><CartesianGrid vertical={false} stroke="oklch(0.3 0.02 270)" /><XAxis dataKey="label" stroke="oklch(0.6 0.02 270)" tick={{ fontSize: 11 }} interval={0} /><YAxis stroke="oklch(0.6 0.02 270)" tick={{ fontSize: 11 }} allowDecimals={false} /><Tooltip contentStyle={{ background: "oklch(0.22 0.02 270)", border: "1px solid oklch(0.3 0.02 270)", borderRadius: 10, fontSize: 12 }} cursor={{ fill: "oklch(0.25 0.02 270 / 0.45)" }} /><Bar dataKey="count" radius={[6, 6, 0, 0]}>{chart.map((entry) => <Cell key={entry.stage} fill={entry.color} />)}</Bar></BarChart></ResponsiveContainer></div>;
 }
 
 function formatNumber(value: number): string { return value.toLocaleString("he-IL"); }

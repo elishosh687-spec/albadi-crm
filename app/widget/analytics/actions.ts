@@ -1,5 +1,7 @@
 "use server";
 
+// Canonical GHL-widget action; both routes invalidate after a save.
+
 import { revalidatePath } from "next/cache";
 import { saveSalesTargets } from "@/lib/analytics/targets";
 
@@ -15,6 +17,7 @@ export async function saveSalesTargetsAction(input: {
   try {
     await saveSalesTargets(input);
     revalidatePath("/dashboard/v3/analytics");
+    revalidatePath("/widget/analytics");
     return { ok: true };
   } catch (error) {
     return {

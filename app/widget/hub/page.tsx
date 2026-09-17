@@ -80,6 +80,12 @@ const TABS: TabDef[] = [
     url: (t) => `/widget/analysis?widget_token=${encodeURIComponent(t)}`,
   },
   {
+    id: "analytics",
+    label: "אנליטיקה",
+    icon: BarChart3,
+    url: (t) => `/widget/analytics?widget_token=${encodeURIComponent(t)}`,
+  },
+  {
     id: "calc",
     label: "מחשבון",
     icon: Calculator,

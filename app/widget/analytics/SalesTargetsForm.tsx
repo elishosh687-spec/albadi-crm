@@ -1,5 +1,7 @@
 "use client";
 
+// Canonical GHL-widget form; the dashboard compatibility route reuses it.
+
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { saveSalesTargetsAction } from "./actions";

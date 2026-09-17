@@ -7,7 +7,7 @@
  * `ghl_lead_tasks` cache to issue create/update/delete calls to GHL.
  *
  * Mirror of the scoring logic in
- * app/dashboard/v3/_components/crm-insights.ts so Eli sees the same
+ * lib/crm/insights.ts so Eli sees the same
  * signals surface in both the dashboard CommandCenter and the GHL Tasks
  * tab.
  */

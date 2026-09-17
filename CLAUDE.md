@@ -596,6 +596,17 @@ To actually query the DB or call GHL from local:
 
 ## Mobile layer — `.mfit` (READ BEFORE ADDING RESPONSIVE CSS)
 
+### GHL widget is the canonical UI (permanent rule, 2026-09-17)
+
+Eli works from the GHL Hub widget. Build every user-visible CRM feature under
+`/widget` first. If a matching `/dashboard/v3` route remains for compatibility,
+it must import the exact widget component and data loader; it must not own a
+second implementation. GHL owns operational CRM fields (pipeline stage, status,
+owner, contact details, tags and tasks); the Albadi DB mirrors those fields and
+owns bot-event history and analytics aggregates. Test and smoke-check the GHL
+route first and its dashboard alias second. Only diverge when Eli explicitly
+requests a surface-specific behavior.
+
 Eli works the widget from a **phone browser directly** (not the GHL app), so
 every hub tab has to survive ~390px. The tree was built for a desktop iframe:
 ~95% inline `style={{}}`, and before 2026-08-14 there were **4 `@media` queries
