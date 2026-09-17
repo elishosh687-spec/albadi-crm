@@ -6,7 +6,7 @@
  * Pulls real finalized SEA orders and renders the consolidation planner.
  */
 
-import { verifyWidgetToken } from "@/integrations/ghl/widget-auth";
+import { widgetPageAuthed } from "@/lib/widget/page-auth";
 import { loadConsolidationCandidates } from "@/lib/factory/consolidation";
 import { getActiveSeaCarrier } from "@/lib/factory/sea-carriers";
 import { ConsolidationView } from "@/components/shipping/ConsolidationView";
@@ -25,7 +25,7 @@ export default async function ShippingWidgetPage({
   const params = await searchParams;
   const token = params.widget_token ?? "";
 
-  if (!verifyWidgetToken(token)) {
+  if (!(await widgetPageAuthed(token))) {
     return (
       <div style={{ padding: 24, color: "#f87171" }}>
         <h2 style={{ marginTop: 0 }}>אין הרשאה</h2>

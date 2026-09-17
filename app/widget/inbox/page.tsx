@@ -12,7 +12,7 @@
 import { db } from "@/lib/db";
 import { leads, messages, messageTemplates, leadAnalyses } from "@/drizzle/schema";
 import { asc, desc, eq, sql } from "drizzle-orm";
-import { verifyWidgetToken } from "@/integrations/ghl/widget-auth";
+import { widgetPageAuthed } from "@/lib/widget/page-auth";
 import { type InboxRow, type QuickTemplate } from "@/components/inbox/InboxView";
 import CockpitShell from "@/components/inbox/CockpitShell";
 import { type CockpitLead } from "@/components/inbox/CockpitView";
@@ -126,7 +126,7 @@ export default async function InboxWidgetPage({
   const token = params.widget_token ?? "";
   const selectedSid = params.sid?.trim() ?? "";
 
-  if (!verifyWidgetToken(token)) {
+  if (!(await widgetPageAuthed(token))) {
     return (
       <div style={{ padding: 24, color: "#f87171" }}>
         <h2 style={{ marginTop: 0 }}>אין הרשאה</h2>

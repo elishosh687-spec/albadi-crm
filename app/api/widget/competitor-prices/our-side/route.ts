@@ -19,7 +19,7 @@
  */
 import { NextRequest, NextResponse } from "next/server";
 import { withRequestLog } from "@/lib/observability/log";
-import { verifyWidgetToken } from "@/integrations/ghl/widget-auth";
+import { widgetAuthed } from "@/lib/widget/auth";
 import { db } from "@/lib/db";
 import { competitorPrices } from "@/drizzle/schema";
 import { getFactoryConfig } from "@/lib/factory/config";
@@ -48,11 +48,7 @@ export const maxDuration = 60;
 const SHIPPING = "s2";
 
 function auth(req: NextRequest): boolean {
-  const token =
-    req.nextUrl.searchParams.get("widget_token") ||
-    req.headers.get("authorization")?.replace(/^Bearer\s+/i, "") ||
-    null;
-  return verifyWidgetToken(token);
+  return widgetAuthed(req);
 }
 
 /**

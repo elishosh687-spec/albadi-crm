@@ -38,18 +38,32 @@ export function verifyWidgetToken(token: string | null | undefined): boolean {
   return mismatch === 0;
 }
 
+/** Verify the protected standalone site's HTTP-only session cookie. */
+export function verifyAdminCookie(
+  cookieValue: string | null | undefined
+): boolean {
+  const password = readEnv("ADMIN_PASSWORD");
+  if (!password || !cookieValue) return false;
+  if (cookieValue.length !== password.length) return false;
+
+  let mismatch = 0;
+  for (let i = 0; i < cookieValue.length; i++) {
+    mismatch |= cookieValue.charCodeAt(i) ^ password.charCodeAt(i);
+  }
+  return mismatch === 0;
+}
+
 /**
- * Shared gate for canonical widget APIs that are also rendered by a protected
- * dashboard compatibility route. The widget uses its query token; the legacy
- * dashboard uses the same admin cookie already enforced by middleware.
+ * Shared gate for canonical widget APIs rendered either inside GHL or by the
+ * protected standalone site. GHL uses its query token; the site uses the same
+ * admin cookie already enforced on its root route by middleware.
  */
 export function verifyWidgetTokenOrDashboard(
   req: NextRequest,
   token?: string | null
 ): boolean {
   if (verifyWidgetToken(token)) return true;
-  const password = readEnv("ADMIN_PASSWORD");
-  return !!password && req.cookies.get("albadi_auth")?.value === password;
+  return verifyAdminCookie(req.cookies.get("albadi_auth")?.value);
 }
 
 /**

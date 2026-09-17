@@ -66,8 +66,8 @@ export function middleware(req: NextRequest) {
     return NextResponse.next();
   }
 
-  // Protect dashboard + actions APIs + factory pipeline APIs + the root
-  // path (which we internally serve from /dashboard/v3 — see below).
+  // Protect the standalone Hub, legacy dashboard URLs, actions APIs, and the
+  // factory pipeline. The standalone Hub uses the same UI as the GHL widget.
   if (
     path === "/" ||
     path.startsWith("/dashboard") ||
@@ -78,17 +78,31 @@ export function middleware(req: NextRequest) {
     if (!cookie || cookie.value !== process.env.ADMIN_PASSWORD) {
       const url = req.nextUrl.clone();
       url.pathname = "/login";
-      url.searchParams.set("from", path);
+      url.searchParams.set("from", `${path}${req.nextUrl.search}`);
       return NextResponse.redirect(url);
     }
   }
 
-  // Serve the live dashboard at the root path without changing the URL bar.
-  // Internal rewrite — keeps the address at "/", renders /dashboard/v3.
-  if (path === "/") {
+  // The old dashboard is no longer a separate product. Keep its URLs as
+  // compatibility aliases that land on the matching canonical Hub tab.
+  if (path.startsWith("/dashboard")) {
+    const tab =
+      path.includes("/drafts") ? "drafts" :
+      path.includes("/factory") ? "factory" :
+      path.includes("/calculator") ? "calc" :
+      path.includes("/settings") ? "settings" :
+      path.includes("/shipping") ? "shipping" :
+      path.includes("/conversations") ? "inbox" :
+      path.includes("/analysis") ||
+      path.includes("/analytics") ||
+      path.includes("/leads") ||
+      path.includes("/pipeline") ||
+      path.includes("/followups") ? "analytics" : null;
     const url = req.nextUrl.clone();
-    url.pathname = "/dashboard/v3";
-    return NextResponse.rewrite(url);
+    url.pathname = "/";
+    url.search = "";
+    if (tab) url.searchParams.set("tab", tab);
+    return NextResponse.redirect(url);
   }
 
   return NextResponse.next();

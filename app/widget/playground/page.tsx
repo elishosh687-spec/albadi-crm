@@ -5,7 +5,7 @@
  *   https://<host>/widget/playground?widget_token=<GHL_WIDGET_TOKEN>
  */
 
-import { verifyWidgetToken } from "@/integrations/ghl/widget-auth";
+import { widgetPageAuthed } from "@/lib/widget/page-auth";
 import PlaygroundView from "@/components/playground/PlaygroundView";
 
 export const dynamic = "force-dynamic";
@@ -22,7 +22,7 @@ export default async function PlaygroundWidgetPage({
   const params = await searchParams;
   const token = params.widget_token ?? "";
 
-  if (!verifyWidgetToken(token)) {
+  if (!(await widgetPageAuthed(token))) {
     return (
       <div style={{ padding: 24, color: "#f87171" }} dir="rtl">
         <h2 style={{ marginTop: 0 }}>אין הרשאה</h2>

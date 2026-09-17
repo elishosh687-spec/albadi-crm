@@ -7,7 +7,7 @@
  *
  * Auth: ?widget_token=<GHL_WIDGET_TOKEN>. Period via ?days=30|90 (default all).
  */
-import { verifyWidgetToken } from "@/integrations/ghl/widget-auth";
+import { widgetPageAuthed } from "@/lib/widget/page-auth";
 import { buildAdPerformance } from "@/lib/analysis/ad-performance";
 import { checkMetaHealth } from "@/lib/meta/health";
 import { getMetaReportingStatus } from "@/lib/meta/reporting-status";
@@ -29,7 +29,7 @@ export default async function AdsWidgetPage({
 }) {
   const { widget_token, days } = await searchParams;
   const token = widget_token ?? "";
-  if (!verifyWidgetToken(token)) {
+  if (!(await widgetPageAuthed(token))) {
     return (
       <div dir="rtl" style={{ padding: 24, color: "#f87171" }}>
         <h2 style={{ marginTop: 0 }}>אין הרשאה</h2>

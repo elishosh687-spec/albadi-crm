@@ -10,7 +10,7 @@
  *   - factory requests in flight
  *   - leads currently paused (bot skipping)
  */
-import { verifyWidgetToken } from "@/integrations/ghl/widget-auth";
+import { widgetPageAuthed } from "@/lib/widget/page-auth";
 import { db } from "@/lib/db";
 import { leads, botDrafts, factoryQuoteRequests } from "@/drizzle/schema";
 import { eq, and, sql } from "drizzle-orm";
@@ -110,7 +110,7 @@ const ROW_STYLE: React.CSSProperties = {
 export default async function BotPreviewWidget({ searchParams }: { searchParams: Promise<{ widget_token?: string }> }) {
   const params = await searchParams;
   const token = params.widget_token ?? "";
-  if (!verifyWidgetToken(token)) {
+  if (!(await widgetPageAuthed(token))) {
     return <div style={{ padding: 24, color: "#f87171" }}>אין הרשאה</div>;
   }
 

@@ -12,7 +12,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { withRequestLog } from "@/lib/observability/log";
 import { desc } from "drizzle-orm";
-import { verifyWidgetToken } from "@/integrations/ghl/widget-auth";
+import { widgetAuthed } from "@/lib/widget/auth";
 import { db } from "@/lib/db";
 import { competitorPrices } from "@/drizzle/schema";
 
@@ -20,11 +20,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 function auth(req: NextRequest): boolean {
-  const token =
-    req.nextUrl.searchParams.get("widget_token") ||
-    req.headers.get("authorization")?.replace(/^Bearer\s+/i, "") ||
-    null;
-  return verifyWidgetToken(token);
+  return widgetAuthed(req);
 }
 
 /** Coerce a form value to a finite number or null (empty string → null). */

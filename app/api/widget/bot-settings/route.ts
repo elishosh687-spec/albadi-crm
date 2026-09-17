@@ -4,7 +4,7 @@
  *   PUT → save (full object; unknown/badly-typed keys are dropped)
  */
 import { NextRequest, NextResponse } from "next/server";
-import { verifyWidgetToken } from "@/integrations/ghl/widget-auth";
+import { widgetAuthed } from "@/lib/widget/auth";
 import { getBotSettings, saveBotSettings } from "@/lib/bot-settings/store";
 import { DEFAULT_BOT_SETTINGS } from "@/lib/bot-settings/schema";
 import { withRequestLog } from "@/lib/observability/log";
@@ -16,8 +16,7 @@ function unauthorized() {
 }
 
 export const GET = withRequestLog("widget", async (req: NextRequest, log) => {
-  const token = req.nextUrl.searchParams.get("widget_token") ?? "";
-  if (!verifyWidgetToken(token)) {
+  if (!widgetAuthed(req)) {
     log.warn("unauthorized");
     return unauthorized();
   }
@@ -26,8 +25,7 @@ export const GET = withRequestLog("widget", async (req: NextRequest, log) => {
 });
 
 export const PUT = withRequestLog("widget", async (req: NextRequest, log) => {
-  const token = req.nextUrl.searchParams.get("widget_token") ?? "";
-  if (!verifyWidgetToken(token)) {
+  if (!widgetAuthed(req)) {
     log.warn("unauthorized");
     return unauthorized();
   }

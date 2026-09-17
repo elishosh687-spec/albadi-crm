@@ -53,7 +53,7 @@ export default function LoginPage({
             marginBottom: space.xl,
           }}
         >
-          הזן סיסמה כדי להמשיך לדאשבורד.
+          הזן סיסמה כדי להמשיך למערכת אלבדי.
         </p>
         <LoginForm searchParams={searchParams} />
       </div>

@@ -15,15 +15,14 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { leads } from "@/drizzle/schema";
 import { eq } from "drizzle-orm";
-import { verifyWidgetToken } from "@/integrations/ghl/widget-auth";
+import { widgetAuthed } from "@/lib/widget/auth";
 import { withRequestLog } from "@/lib/observability/log";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export const GET = withRequestLog("widget", async (req: NextRequest, log) => {
-  const token = req.nextUrl.searchParams.get("widget_token");
-  if (!verifyWidgetToken(token)) {
+  if (!widgetAuthed(req)) {
     log.warn("unauthorized");
     return NextResponse.json(
       { ok: false, error: "unauthorized" },

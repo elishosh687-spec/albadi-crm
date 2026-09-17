@@ -1,8 +1,21 @@
-import { redirect } from "next/navigation";
+import { HubShell } from "@/components/hub/HubShell";
+import { WidgetSurface } from "@/components/hub/WidgetSurface";
 
-// Root path goes straight to the live dashboard. The middleware (middleware.ts)
-// gates /dashboard/* on the albadi_auth cookie, so unauthenticated visitors
-// get bounced to /login automatically.
-export default function Home() {
-  redirect("/dashboard/v3");
+export const dynamic = "force-dynamic";
+
+export default async function Home({
+  searchParams,
+}: {
+  searchParams: Promise<{ tab?: string; sid?: string }>;
+}) {
+  const params = await searchParams;
+  return (
+    <WidgetSurface>
+      <HubShell
+        mode="standalone"
+        activeTab={params.tab}
+        sid={params.sid?.trim() ?? ""}
+      />
+    </WidgetSurface>
+  );
 }

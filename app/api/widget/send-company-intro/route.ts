@@ -10,7 +10,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { verifyWidgetToken } from "@/integrations/ghl/widget-auth";
+import { widgetAuthed } from "@/lib/widget/auth";
 import { db } from "@/lib/db";
 import { leads } from "@/drizzle/schema";
 import { sql } from "drizzle-orm";
@@ -24,11 +24,10 @@ export const maxDuration = 30;
 export const POST = withRequestLog("messaging", async (req: NextRequest, log) => {
   // Two auth paths: widget_token (from the GHL iframe), or
   // Authorization: Bearer $CRON_SECRET (from CLI / admin scripts).
-  const token = req.nextUrl.searchParams.get("widget_token") ?? "";
   const bearer = req.headers.get("authorization") ?? "";
   const cronBearer =
     process.env.CRON_SECRET && bearer === `Bearer ${process.env.CRON_SECRET}`;
-  if (!verifyWidgetToken(token) && !cronBearer) {
+  if (!widgetAuthed(req) && !cronBearer) {
     log.warn("unauthorized");
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }

@@ -4,12 +4,19 @@
  */
 
 import { NextRequest } from "next/server";
-import { verifyWidgetToken } from "@/integrations/ghl/widget-auth";
+import {
+  verifyAdminCookie,
+  verifyWidgetToken,
+} from "@/integrations/ghl/widget-auth";
 
 export function widgetAuthed(req: NextRequest): boolean {
   const fromQuery = req.nextUrl.searchParams.get("widget_token");
   const fromHeader = req.headers
     .get("authorization")
     ?.replace(/^Bearer\s+/i, "");
-  return verifyWidgetToken(fromQuery) || verifyWidgetToken(fromHeader);
+  return (
+    verifyWidgetToken(fromQuery) ||
+    verifyWidgetToken(fromHeader) ||
+    verifyAdminCookie(req.cookies.get("albadi_auth")?.value)
+  );
 }

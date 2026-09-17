@@ -8,7 +8,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { verifyWidgetToken } from "@/integrations/ghl/widget-auth";
+import { widgetAuthed } from "@/lib/widget/auth";
 import { db } from "@/lib/db";
 import { messages } from "@/drizzle/schema";
 import { sql, desc } from "drizzle-orm";
@@ -18,8 +18,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export const GET = withRequestLog("widget", async (req: NextRequest, log) => {
-  const token = req.nextUrl.searchParams.get("widget_token") ?? "";
-  if (!verifyWidgetToken(token)) {
+  if (!widgetAuthed(req)) {
     log.warn("unauthorized");
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }

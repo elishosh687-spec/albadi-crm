@@ -6,7 +6,7 @@
  *   https://<host>/widget/closed-quotes?widget_token=<GHL_WIDGET_TOKEN>
  */
 
-import { verifyWidgetToken } from "@/integrations/ghl/widget-auth";
+import { widgetPageAuthed } from "@/lib/widget/page-auth";
 import { ClosedQuotesView } from "@/components/factory-flow/ClosedQuotesView";
 
 export const dynamic = "force-dynamic";
@@ -23,7 +23,7 @@ export default async function ClosedQuotesWidgetPage({
   const params = await searchParams;
   const token = params.widget_token ?? "";
 
-  if (!verifyWidgetToken(token)) {
+  if (!(await widgetPageAuthed(token))) {
     return (
       <div style={{ padding: 24, color: "#f87171" }}>
         <h2 style={{ marginTop: 0 }}>אין הרשאה</h2>

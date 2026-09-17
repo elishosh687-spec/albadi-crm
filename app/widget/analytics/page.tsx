@@ -5,7 +5,7 @@
  * this same component so GHL owns the implementation and the two cannot drift.
  */
 import AnalyticsContent from "./AnalyticsContent";
-import { verifyWidgetToken } from "@/integrations/ghl/widget-auth";
+import { widgetPageAuthed } from "@/lib/widget/page-auth";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -18,7 +18,7 @@ export default async function AnalyticsWidgetPage({
 }) {
   const { widget_token } = await searchParams;
   const token = widget_token ?? "";
-  if (!verifyWidgetToken(token)) {
+  if (!(await widgetPageAuthed(token))) {
     return (
       <div dir="rtl" style={{ padding: 24, color: "#f87171" }}>
         <h2 style={{ marginTop: 0 }}>אין הרשאה</h2>

@@ -16,6 +16,12 @@ export function LoginForm({
   const [error, setError] = useState<string | null>(params.error ?? null);
   const [busy, setBusy] = useState(false);
 
+  const requestedPath = params.from;
+  const destination =
+    requestedPath?.startsWith("/") && !requestedPath.startsWith("//")
+      ? requestedPath
+      : "/";
+
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setBusy(true);
@@ -31,7 +37,7 @@ export function LoginForm({
         setError(j.error ?? "סיסמה שגויה");
         return;
       }
-      router.push(params.from || "/dashboard");
+      router.push(destination);
       router.refresh();
     } catch {
       setError("שגיאת חיבור");

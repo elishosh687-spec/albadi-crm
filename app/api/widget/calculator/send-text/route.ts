@@ -12,7 +12,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { withRequestLog } from "@/lib/observability/log";
-import { verifyWidgetToken } from "@/integrations/ghl/widget-auth";
+import { widgetAuthed } from "@/lib/widget/auth";
 import { db } from "@/lib/db";
 import { leads } from "@/drizzle/schema";
 import { sql } from "drizzle-orm";
@@ -26,8 +26,7 @@ export const maxDuration = 30;
 const NOTIFY_KINDS = new Set(["draft", "factory", "estimate", "combined"]);
 
 export const POST = withRequestLog("calculator", async (req: NextRequest, log) => {
-  const token = req.nextUrl.searchParams.get("widget_token") ?? "";
-  if (!verifyWidgetToken(token)) {
+  if (!widgetAuthed(req)) {
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
 

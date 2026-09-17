@@ -12,7 +12,7 @@
  * skipped: the point is to exercise the bot, not the guard rails around it.
  */
 import { NextRequest, NextResponse } from "next/server";
-import { verifyWidgetToken } from "@/integrations/ghl/widget-auth";
+import { widgetAuthed } from "@/lib/widget/auth";
 import { runCaptured } from "@/lib/bot-playground/capture";
 import {
   PLAYGROUND_SID,
@@ -48,8 +48,7 @@ function unauthorized() {
 }
 
 export const GET = withRequestLog("setter", async (req: NextRequest, log) => {
-  const token = req.nextUrl.searchParams.get("widget_token") ?? "";
-  if (!verifyWidgetToken(token)) {
+  if (!widgetAuthed(req)) {
     log.warn("unauthorized");
     return unauthorized();
   }
@@ -64,8 +63,7 @@ export const GET = withRequestLog("setter", async (req: NextRequest, log) => {
 });
 
 export const POST = withRequestLog("setter", async (req: NextRequest, log) => {
-  const token = req.nextUrl.searchParams.get("widget_token") ?? "";
-  if (!verifyWidgetToken(token)) {
+  if (!widgetAuthed(req)) {
     log.warn("unauthorized");
     return unauthorized();
   }

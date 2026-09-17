@@ -30,4 +30,24 @@ describe("verifyWidgetTokenOrDashboard", () => {
 
     expect(verifyWidgetTokenOrDashboard(req, null)).toBe(false);
   });
+
+  it("rejects an invalid standalone cookie", async () => {
+    const { verifyWidgetTokenOrDashboard } = await import("./widget-auth");
+    const req = new NextRequest("https://example.test/api/widget/analysis-aggregate", {
+      headers: { cookie: "albadi_auth=wrong-secret" },
+    });
+
+    expect(verifyWidgetTokenOrDashboard(req, null)).toBe(false);
+  });
+
+  it("does not accept a cookie when the admin password is unset", async () => {
+    vi.stubEnv("ADMIN_PASSWORD", "");
+    vi.resetModules();
+    const { verifyWidgetTokenOrDashboard } = await import("./widget-auth");
+    const req = new NextRequest("https://example.test/api/widget/analysis-aggregate", {
+      headers: { cookie: "albadi_auth=admin-secret" },
+    });
+
+    expect(verifyWidgetTokenOrDashboard(req, null)).toBe(false);
+  });
 });
