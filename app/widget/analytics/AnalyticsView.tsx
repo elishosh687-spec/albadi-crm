@@ -119,7 +119,7 @@ export function AnalyticsView({ data }: { data: AnalyticsData }) {
             <span className={cn("size-2 rounded-full", data.dataHealth?.status === "healthy" ? "bg-success" : data.dataHealth ? "bg-destructive" : "bg-warning")} aria-hidden="true" />
             <span>{healthLabel}</span>
             <span aria-hidden="true">·</span>
-            <span>מתרענן כל דקה · עודכן {new Date(data.generatedAt).toLocaleString("he-IL", { dateStyle: "short", timeStyle: "short" })}</span>
+            <span>מתרענן כל דקה · עודכן {new Date(data.generatedAt).toLocaleString("he-IL", { dateStyle: "short", timeStyle: "short", timeZone: "Asia/Jerusalem" })}</span>
           </div>
         </div>
       </header>
