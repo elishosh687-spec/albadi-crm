@@ -10,7 +10,9 @@
   write to GHL.
 - Safe launch defaults remain enabled: task mode is `shadow`, and status changes
   are recommendations only.
-- The feature has not been pushed, deployed, or migrated in production yet.
+- The feature was pushed to `main`, migrated, and deployed to production on
+  2026-09-17. Vercel deployment `dpl_88iZHmuZ1jGUkcFeFAVVsvfgPoqg` reached
+  `Ready`.
 
 ## Commits
 
@@ -18,6 +20,8 @@
 - `8597f90` — implementation plan
 - `f0d8871` — evidence-backed call action pipeline
 - `9f7ca55` — settings and approvals UI
+- `f8c2d38` — rollout handoff
+- `c0709be` — register the migration in Drizzle's journal
 
 ## Verification completed
 
@@ -29,15 +33,29 @@
 - Widget settings and call-action approvals were visually checked locally.
 - Temporary Neon branches and the temporary local server were removed.
 
-## Production next step
+## Production rollout completed
 
-After Eli explicitly approves production rollout:
+- Applied `0003_call_action_candidates.sql` to the production Neon `main`
+  branch. The table and all five expected indexes were verified.
+- Pushed through `c0709be` to GitHub `main`; the GitHub-to-Vercel deployment
+  completed successfully.
+- Production HTTP checks passed: the site and settings route respond, and the
+  pending-actions API rejects unauthenticated requests with `401`.
+- The existing Chrome session loaded the deployed Albadi Hub with live data.
+- Effective launch behavior is safe: task mode falls back to `shadow`, WON and
+  LOST remain recommendations, and no automatic task/status write is enabled.
+- Both affected job heartbeats reported successful runs after deployment:
+  `process-recordings` at `2026-09-17T17:11:50.155Z` and `elevenlabs-sync` at
+  `2026-09-17T17:11:44.686Z`.
+- There were zero call-action candidates immediately after deployment.
 
-1. Apply `drizzle/migrations/0003_call_action_candidates.sql` to production.
-2. Push the four commits above and deploy.
-3. Smoke-test the GHL settings widget, dry preview, pending approvals, and one
-   safe shadow-mode call without allowing automatic task or status writes.
-4. Keep shadow mode active until reviewed candidates show acceptable precision.
+## Next operational step
+
+1. Keep shadow mode active until at least 30 calls have been labeled and
+   reviewed for precision.
+2. Review new candidates under the GHL Hub approvals tab.
+3. Promote to approval or hybrid mode only from settings after the pilot review;
+   do not change WON/LOST to automatic.
 
 ## Unrelated local work
 
