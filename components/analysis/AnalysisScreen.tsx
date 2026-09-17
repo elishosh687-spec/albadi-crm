@@ -1,13 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { AlertCircle, ChevronDown, SlidersHorizontal, WandSparkles } from "lucide-react";
 import type { AnalysisAggregate, Pattern } from "@/lib/analysis/aggregate";
 import PlaysEditor from "./PlaysEditor";
 import PipelineAuditSection from "./PipelineAuditSection";
 import FormGapsSection from "./FormGapsSection";
 import InfoTip from "./InfoTip";
 import type { BlockerKey, StagePlay } from "@/lib/sales/stage-plays.he";
-import { LuxShell, LuxTitle, LuxAccent } from "@/components/widget-ui/lux";
+import { cn } from "@/lib/cn";
 
 const STAGES: [string, string][] = [
   ["__NULL__", "בשאלון"],
@@ -35,7 +36,13 @@ interface AggResp {
  * of why those leads aren't closing. The rollup is a pure groupby over stored
  * verdicts, so every number carries its exact supporting lead list.
  */
-export default function AnalysisScreen({ token }: { token: string }) {
+export default function AnalysisScreen({
+  token,
+  embedded = false,
+}: {
+  token: string;
+  embedded?: boolean;
+}) {
   const [stages, setStages] = useState<string[]>([]);
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
@@ -132,227 +139,148 @@ export default function AnalysisScreen({ token }: { token: string }) {
   const pct = matched.total ? Math.round((matched.analyzed / matched.total) * 100) : 0;
 
   return (
-    <LuxShell>
-      <LuxTitle
-        overline="— Lead analysis"
-        subtitle={
-          <InfoTip
-            gap={6}
-            info={
-              <>
-                הטאב מנתח את הלידים מלמטה למעלה כדי להבין <b>למה הם לא נסגרים</b>:
-                למעלה בקרת פייפליין (לידים נשכחים / שלב לא תואם), למטה סינון קבוצת
-                לידים והרצת ניתוח שמפיק סיכום דטרמיניסטי של החסמים וההתנגדויות
-                החוזרים. כל מספר ניתן ללחיצה ומראה את רשימת הלידים שמאחוריו.
-              </>
-            }
-          >
-            <span>מה חוסם, מה מתנגד, ומי לא חזר אחרי פולואפ — מבוסס נתוחי ליד.</span>
-          </InfoTip>
-        }
-        aside={
-          <button onClick={() => setShowEditor((s) => !s)} style={btn("neutral")}>
-            {showEditor ? "→ חזרה לניתוח" : "✏️ ערוך פליז"}
-          </button>
-        }
-      >
-        למה לידים <LuxAccent>לא נסגרים.</LuxAccent>
-      </LuxTitle>
+    <div className={cn("space-y-5", !embedded && "mx-auto max-w-[1420px] pb-16")}>
+      <div className="flex flex-col gap-3 rounded-2xl border border-border bg-card p-5 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <p className="text-xs font-medium tracking-[0.14em] text-primary">אבחון מבוסס שיחות והתכתבויות</p>
+          <h3 className="mt-1 text-xl font-semibold">למה לידים לא נסגרים</h3>
+          <p className="mt-1 max-w-2xl text-sm leading-6 text-muted-foreground">
+            מוצא לידים שנשכחו, פערי שלב וחסמים חוזרים. כל מספר נפתח לרשימת הלידים שמאחוריו.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => setShowEditor((state) => !state)}
+          className="min-h-11 rounded-xl border border-border bg-background/40 px-4 text-sm font-medium text-foreground transition-colors hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+        >
+          {showEditor ? "חזרה לאבחון" : "עריכת תסריטי מכירה"}
+        </button>
+      </div>
 
       {showEditor ? (
-        <PlaysEditor load={loadPlays} save={savePlays} />
+        <div className="rounded-2xl border border-border bg-card p-5">
+          <PlaysEditor load={loadPlays} save={savePlays} />
+        </div>
       ) : (
         <>
-      <PipelineAuditSection token={token} />
-      <FormGapsSection token={token} />
-      {/* Filters */}
-      <div style={card}>
-        <InfoTip
-          gap={6}
-          info={
-            <>
-              בוחרים קבוצת לידים לניתוח: לפי שלב, לפי טווח תאריכי כניסה, או רק
-              לידים שהיו איתם שיחות. "החל סינון" מרענן את התוצאות; "נתח" מריץ ניתוח
-              LLM על הלידים בסינון שעדיין לא נותחו (בבאצ'ים, עולה כסף לכל ליד).
-            </>
-          }
-        >
-          <span style={{ fontSize: 11, color: "#8f939b" }}>שלב</span>
-        </InfoTip>
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 6 }}>
-          {STAGES.map(([key, label]) => {
-            const on = stages.includes(key);
-            return (
-              <button
-                key={key}
-                onClick={() =>
-                  setStages((s) => (on ? s.filter((x) => x !== key) : [...s, key]))
-                }
-                style={chip(on)}
-              >
-                {label}
+          <PipelineAuditSection token={token} />
+          <FormGapsSection token={token} />
+
+          <section className="rounded-2xl border border-border bg-card p-5">
+            <div className="mb-5 flex items-start gap-3">
+              <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-muted/50 text-muted-foreground">
+                <SlidersHorizontal className="size-4" />
+              </span>
+              <div>
+                <h3 className="text-sm font-semibold">קבוצת הלידים לניתוח</h3>
+                <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                  הסינון משנה גם את הסיכום וגם את הבאצ׳ הבא. הרצת ניתוח חדש משתמשת ב־LLM ועולה כסף.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              {STAGES.map(([key, label]) => {
+                const active = stages.includes(key);
+                return (
+                  <button
+                    key={key}
+                    type="button"
+                    aria-pressed={active}
+                    onClick={() => setStages((current) => active ? current.filter((item) => item !== key) : [...current, key])}
+                    className={cn(
+                      "min-h-9 rounded-full border px-3 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
+                      active
+                        ? "border-primary/40 bg-primary/15 text-primary"
+                        : "border-border bg-background/30 text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+                    )}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_140px_auto] lg:items-end">
+              <FilterField label="נוצר מתאריך">
+                <input type="date" value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} className={controlClass} />
+              </FilterField>
+              <FilterField label="עד תאריך">
+                <input type="date" value={dateTo} onChange={(event) => setDateTo(event.target.value)} className={controlClass} />
+              </FilterField>
+              <FilterField label="גודל באצ׳">
+                <select value={batch} onChange={(event) => setBatch(Number(event.target.value))} className={controlClass}>
+                  <option value={10}>10</option>
+                  <option value={20}>20</option>
+                  <option value={40}>40</option>
+                </select>
+              </FilterField>
+              <label className="flex min-h-11 items-center gap-2 rounded-xl border border-border bg-background/30 px-3 text-sm text-muted-foreground">
+                <input type="checkbox" checked={withCalls} onChange={(event) => setWithCalls(event.target.checked)} className="size-4 accent-[var(--primary)]" />
+                רק עם שיחות
+              </label>
+            </div>
+
+            <div className="mt-4 flex flex-wrap gap-2">
+              <button type="button" onClick={loadAggregate} disabled={loading} className={secondaryButtonClass}>
+                {loading ? "מרענן…" : "החל סינון"}
               </button>
-            );
-          })}
-        </div>
+              <button type="button" onClick={runBatch} disabled={running || remaining === 0} className={primaryButtonClass}>
+                <WandSparkles className="size-4" />
+                {running ? "מנתח…" : remaining === 0 ? "הכול נותח" : `נתח ${Math.min(batch, remaining)} מתוך ${remaining}`}
+              </button>
+            </div>
+          </section>
 
-        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 10 }}>
-          <label style={lbl}>
-            נוצר מ־
-            <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} style={inp} />
-          </label>
-          <label style={lbl}>
-            עד
-            <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} style={inp} />
-          </label>
-          <label style={lbl}>
-            באצ'
-            <select value={batch} onChange={(e) => setBatch(Number(e.target.value))} style={inp}>
-              <option value={10}>10</option>
-              <option value={20}>20</option>
-              <option value={40}>40</option>
-            </select>
-          </label>
-          <label style={{ ...lbl, flexDirection: "row", alignItems: "center", gap: 6 }}>
-            <input type="checkbox" checked={withCalls} onChange={(e) => setWithCalls(e.target.checked)} />
-            רק עם שיחות
-          </label>
-        </div>
+          <section className="rounded-2xl border border-border bg-card p-5">
+            <div className="flex items-center justify-between gap-4 text-sm">
+              <div>
+                <span className="font-medium">כיסוי הניתוח</span>
+                <span className="mr-2 text-muted-foreground">{matched.analyzed} מתוך {matched.total} לידים</span>
+              </div>
+              <strong className="tabular-nums text-primary">{pct}%</strong>
+            </div>
+            <div className="mt-3 h-2 overflow-hidden rounded-full bg-muted">
+              <div className="h-full rounded-full bg-primary transition-[width]" style={{ width: `${pct}%` }} />
+            </div>
+            {remaining > 0 && !running && (
+              <button type="button" onClick={runBatch} className={cn(primaryButtonClass, "mt-4")}>
+                המשך לנתח עוד {Math.min(batch, remaining)}
+              </button>
+            )}
+          </section>
 
-        <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-          <button onClick={loadAggregate} disabled={loading} style={btn("neutral")}>
-            {loading ? "טוען…" : "החל סינון"}
-          </button>
-          <button onClick={runBatch} disabled={running || remaining === 0} style={btn("accent")}>
-            {running
-              ? "מנתח…"
-              : remaining === 0
-              ? "הכל נותח ✓"
-              : `נתח ${Math.min(batch, remaining)} מתוך ${remaining}`}
-          </button>
-        </div>
-      </div>
+          {error && (
+            <div className="flex items-center gap-2 rounded-xl border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
+              <AlertCircle className="size-4 shrink-0" />
+              שגיאה: {error}
+            </div>
+          )}
 
-      {/* Progress */}
-      <div style={{ ...card, marginTop: 10 }}>
-        <InfoTip
-          gap={6}
-          info={
-            <>
-              כמה מהלידים בסינון כבר עברו ניתוח. ניתוח שכבר רץ נשמר במטמון — לחיצה
-              חוזרת חינמית ומיידית; רק לידים חדשים או עם הודעה/שיחה חדשה מנותחים
-              מחדש. "המשך לנתח" מריץ את הבאצ' הבא עד שהכל נותח.
-            </>
-          }
-        >
-          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, flex: 1 }}>
-            <span>נותחו {matched.analyzed} מתוך {matched.total} בסינון</span>
-            <span style={{ color: "#8f939b" }}>{pct}%</span>
-          </div>
-        </InfoTip>
-        <div style={{ height: 6, background: "rgba(255,255,255,0.05)", borderRadius: 99, marginTop: 6, overflow: "hidden" }}>
-          <div style={{ height: "100%", width: `${pct}%`, background: "#cda978" }} />
-        </div>
-        {remaining > 0 && !running && (
-          <button onClick={runBatch} style={{ ...btn("accent"), marginTop: 8 }}>
-            המשך לנתח עוד {Math.min(batch, remaining)}
-          </button>
-        )}
-      </div>
-
-      {error && <div style={{ color: "#f0b4b4", marginTop: 10 }}>שגיאה: {error}</div>}
-
-      {/* Aggregate */}
-      {agg && (
-        <div style={{ marginTop: 12 }}>
-          {agg.conclusive === 0 ? (
-            <div style={{ color: "#8f939b" }}>
-              עוד לא נותחו לידים בסינון הזה — לחץ "נתח" כדי להתחיל.
+          {agg && (agg.conclusive === 0 ? (
+            <div className="rounded-2xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
+              עוד לא נותחו לידים בסינון הזה. אפשר להתחיל מהכפתור למעלה.
             </div>
           ) : (
-            <>
-              {/* Stripe-style KPI cards — promoted from the old summary line */}
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "repeat(auto-fit, minmax(108px, 1fr))",
-                  gap: 8,
-                  marginBottom: 12,
-                }}
-              >
+            <section className="space-y-5">
+              <div className="grid grid-cols-2 gap-px overflow-hidden rounded-2xl border border-border bg-border lg:grid-cols-4">
                 <Kpi label="נותחו" value={`${agg.conclusive}`} />
                 <Kpi label="מחויבות ממוצעת" value={`${agg.avg_commitment}/5`} />
                 <Kpi label="נשירת פולואפ" value={`${agg.followup_failures.count}`} tone="warn" />
-                <Kpi label="ללא מספיק דאטה" value={`${agg.insufficient}`} />
+                <Kpi label="ללא מספיק מידע" value={`${agg.insufficient}`} />
               </div>
-
-              <div
-                // two long Hebrew pattern lists side by side end up ~150px
-                // each on a phone — unreadable, so they stack
-                className="lux-stack-sm"
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "1.2fr 1fr",
-                  gap: 14,
-                  alignItems: "start",
-                }}
-              >
-                <PatternList
-                  title="חסם מרכזי"
-                  info={
-                    <>
-                      הסיבה המרכזית שכל ליד תקוע, לפי הניתוח — חסם אחד דומיננטי לכל
-                      ליד (מחיר / כמות מינימלית / תנאי תשלום / מפרט פתוח וכו'). המספר
-                      = כמה לידים נחסמו מאותה סיבה. לחיצה פותחת את רשימת הלידים.
-                    </>
-                  }
-                  patterns={agg.by_blocker}
-                  denom={agg.conclusive}
-                  open={openPattern}
-                  setOpen={setOpenPattern}
-                  prefix="b"
-                />
-                <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-                  <PatternList
-                    title="התנגדויות"
-                    info={
-                      <>
-                        התנגדויות שהלקוחות העלו בפועל (עם ציטוט מילולי מהשיחה/צ'אט,
-                        לא ניחוש). ליד יכול להעלות כמה התנגדויות, אז הסכום כאן יכול
-                        לעלות על מספר הלידים.
-                      </>
-                    }
-                    patterns={agg.by_objection}
-                    denom={agg.conclusive}
-                    open={openPattern}
-                    setOpen={setOpenPattern}
-                    prefix="o"
-                  />
-                  <PatternList
-                    title="מעקב ובקשות לראות מוצר"
-                    info={
-                      <>
-                        "נשירת פולואפ" = הלקוח שלח הודעה אחרונה ועברו יותר מ-3 ימים
-                        בלי מענה מאיתנו (חישוב דטרמיניסטי מה-DB, לא ניחוש LLM).
-                        "בקשה לראות מוצר" מסומנת כ<b>סיגנל</b> ולא ככישלון — אלבדי
-                        לא שולחת דוגמאות, עונים עם תמונות/וידאו/הוכחה חברתית.
-                      </>
-                    }
-                    patterns={[agg.followup_failures, agg.sample_gaps].filter((p) => p.count > 0)}
-                    denom={agg.conclusive}
-                    open={openPattern}
-                    setOpen={setOpenPattern}
-                    prefix="x"
-                  />
+              <div className="grid items-start gap-5 xl:grid-cols-[1.15fr_0.85fr]">
+                <PatternList title="חסם מרכזי" info={<>הסיבה המרכזית שכל ליד תקוע. לחיצה פותחת את רשימת הלידים.</>} patterns={agg.by_blocker} denom={agg.conclusive} open={openPattern} setOpen={setOpenPattern} prefix="b" />
+                <div className="space-y-5">
+                  <PatternList title="התנגדויות" info={<>התנגדויות שעלו בפועל בשיחות ובהתכתבויות. ליד יכול להופיע ביותר מקבוצה אחת.</>} patterns={agg.by_objection} denom={agg.conclusive} open={openPattern} setOpen={setOpenPattern} prefix="o" />
+                  <PatternList title="מעקב ובקשות לראות מוצר" info={<>נשירת פולואפ מחושבת מהנתונים; בקשה לראות מוצר היא סיגנל לטיפול ולא כישלון.</>} patterns={[agg.followup_failures, agg.sample_gaps].filter((pattern) => pattern.count > 0)} denom={agg.conclusive} open={openPattern} setOpen={setOpenPattern} prefix="x" />
                 </div>
               </div>
-            </>
-          )}
-        </div>
-      )}
+            </section>
+          ))}
         </>
       )}
-    </LuxShell>
+    </div>
   );
 }
 
@@ -375,19 +303,10 @@ function PatternList({
 }) {
   if (!patterns.length) return null;
   const max = Math.max(...patterns.map((p) => p.count), 1);
-  const titleEl = (
-    <div
-      className="lux-label"
-      style={{
-        letterSpacing: "0.16em",
-      }}
-    >
-      {title}
-    </div>
-  );
+  const titleEl = <h3 className="text-sm font-semibold">{title}</h3>;
   return (
-    <div style={{ ...card }}>
-      <div style={{ marginBottom: 16 }}>
+    <div className="rounded-2xl border border-border bg-card p-5">
+      <div className="mb-5">
         {info ? (
           <InfoTip gap={6} info={info}>
             {titleEl}
@@ -396,77 +315,33 @@ function PatternList({
           titleEl
         )}
       </div>
-      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      <div className="space-y-4">
         {patterns.map((p) => {
           const id = `${prefix}:${p.key}`;
           const isOpen = open === id;
           const pct = denom ? Math.round((p.count / denom) * 100) : 0;
           const barW = Math.round((p.count / max) * 100);
           return (
-            <div key={id}>
+            <div key={id} className="rounded-xl border border-transparent p-1 transition-colors hover:border-border/70">
               <button
+                type="button"
                 onClick={() => setOpen(isOpen ? null : id)}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 8,
-                  width: "100%",
-                  minHeight: 32,
-                  background: "transparent",
-                  border: "none",
-                  color: "#f5f6f7",
-                  cursor: "pointer",
-                  fontFamily: "inherit",
-                  fontSize: 13,
-                  padding: 0,
-                  textAlign: "right",
-                }}
+                aria-expanded={isOpen}
+                className="flex min-h-10 w-full items-center gap-3 rounded-lg text-right text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
               >
-                <span style={{ color: "#6b7079", fontSize: 11, width: 12 }}>
-                  {isOpen ? "▾" : "▸"}
-                </span>
-                <span style={{ flex: 1, minWidth: 0 }}>{p.label}</span>
-                <span
-                  style={{
-                    fontSize: 12,
-                    fontWeight: 600,
-                    color: "#e7cba6",
-                    background: "rgba(205,169,120,0.14)",
-                    boxShadow: "inset 0 0 0 1px rgba(205,169,120,0.30)",
-                    borderRadius: 6,
-                    padding: "1px 8px",
-                    whiteSpace: "nowrap",
-                    fontVariantNumeric: "tabular-nums",
-                  }}
-                >
+                <ChevronDown className={cn("size-4 shrink-0 text-muted-foreground transition-transform", isOpen && "rotate-180")} />
+                <span className="min-w-0 flex-1">{p.label}</span>
+                <span className="whitespace-nowrap rounded-md bg-primary/10 px-2 py-1 text-xs font-semibold tabular-nums text-primary">
                   {p.count} · {pct}%
                 </span>
               </button>
-              {/* proportional bar (relative to the biggest pattern in the group) */}
-              <div
-                style={{
-                  height: 5,
-                  background: "rgba(255,255,255,0.06)",
-                  borderRadius: 99,
-                  marginTop: 6,
-                  marginInlineStart: 20,
-                  overflow: "hidden",
-                }}
-              >
-                <div style={{ height: "100%", width: `${barW}%`, background: "#cda978" }} />
+              <div className="mr-7 h-1.5 overflow-hidden rounded-full bg-muted">
+                <div className="h-full rounded-full bg-primary/70" style={{ width: `${barW}%` }} />
               </div>
               {isOpen && (
-                <div
-                  style={{
-                    display: "flex",
-                    flexWrap: "wrap",
-                    gap: 5,
-                    marginTop: 8,
-                    marginInlineStart: 20,
-                  }}
-                >
+                <div className="mr-7 mt-3 flex flex-wrap gap-2">
                   {p.leads.map((l) => (
-                    <span key={l.sid} style={chipLead}>
+                    <span key={l.sid} className="rounded-lg border border-border bg-muted/30 px-2.5 py-1 text-xs text-muted-foreground">
                       {leadLabel(l)}
                     </span>
                   ))}
@@ -488,89 +363,24 @@ function leadLabel(l: { name: string | null; sid: string }): string {
 
 function Kpi({ label, value, tone }: { label: string; value: string; tone?: "warn" }) {
   return (
-    <div
-      style={{
-        background: "#1d1b1a",
-        borderRadius: 9,
-        padding: "13px 15px",
-        boxShadow: tone === "warn"
-          ? "inset 0 0 0 1px rgba(224,169,109,0.2)"
-          : "inset 0 0 0 1px rgba(69,70,77,0.16)",
-      }}
-    >
-      <div style={{ fontSize: 10.5, color: "#8a7f74", marginBottom: 4 }}>{label}</div>
-      <div
-        style={{
-          fontFamily: "var(--font-body), Heebo, system-ui",
-          fontWeight: 300,
-          fontSize: 24,
-          color: tone === "warn" ? "#e0a96d" : "#e6e1e0",
-          fontVariantNumeric: "tabular-nums",
-          lineHeight: 1.1,
-        }}
-      >
+    <div className="bg-card p-5">
+      <div className="mb-2 text-xs text-muted-foreground">{label}</div>
+      <div className={cn("text-2xl font-semibold tabular-nums", tone === "warn" && "text-warning")}>
         {value}
       </div>
     </div>
   );
 }
 
-const chipLead: React.CSSProperties = {
-  fontSize: 11.5,
-  padding: "3px 9px",
-  background: "rgba(255,255,255,0.05)",
-  border: "1px solid rgba(255,255,255,0.10)",
-  borderRadius: 6,
-  color: "#d4d6da",
-  whiteSpace: "nowrap",
-};
+function FilterField({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <label className="flex flex-col gap-1.5 text-xs text-muted-foreground">
+      {label}
+      {children}
+    </label>
+  );
+}
 
-const card: React.CSSProperties = {
-  background: "#1d1b1a",
-  borderRadius: 8,
-  padding: "18px 20px",
-  boxShadow: "inset 0 0 0 1px rgba(69,70,77,0.16)",
-};
-const lbl: React.CSSProperties = {
-  display: "flex",
-  flexDirection: "column",
-  gap: 5,
-  fontSize: 11,
-  color: "#8a7f74",
-};
-const inp: React.CSSProperties = {
-  background: "#211f1e",
-  border: 0,
-  boxShadow: "inset 0 0 0 1px rgba(69,70,77,0.18)",
-  borderRadius: 4,
-  color: "#c6c6cd",
-  padding: "8px 12px",
-  fontFamily: "inherit",
-  fontSize: 12,
-};
-function chip(on: boolean): React.CSSProperties {
-  return {
-    fontSize: 12,
-    padding: "5px 12px",
-    borderRadius: 99,
-    cursor: "pointer",
-    fontFamily: "inherit",
-    background: on ? "rgba(205,169,120,0.14)" : "transparent",
-    border: 0,
-    boxShadow: `inset 0 0 0 1px ${on ? "rgba(205,169,120,0.30)" : "rgba(69,70,77,0.22)"}`,
-    color: on ? "#e7cba6" : "#8a7f74",
-  };
-}
-function btn(tone: "accent" | "neutral"): React.CSSProperties {
-  return {
-    padding: "9px 15px",
-    borderRadius: 8,
-    cursor: "pointer",
-    fontFamily: "inherit",
-    fontSize: 12,
-    border: 0,
-    boxShadow: `inset 0 0 0 1px ${tone === "accent" ? "rgba(205,169,120,0.30)" : "rgba(69,70,77,0.22)"}`,
-    background: tone === "accent" ? "rgba(205,169,120,0.14)" : "transparent",
-    color: tone === "accent" ? "#e7cba6" : "#8a7f74",
-  };
-}
+const controlClass = "min-h-11 w-full rounded-xl border border-border bg-background/40 px-3 text-base text-foreground outline-none transition-colors focus:border-primary";
+const primaryButtonClass = "inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-primary px-4 text-sm font-medium text-primary-foreground transition-transform active:translate-y-px disabled:cursor-not-allowed disabled:opacity-50";
+const secondaryButtonClass = "inline-flex min-h-11 items-center justify-center rounded-xl border border-border bg-background/40 px-4 text-sm font-medium text-foreground transition-colors hover:bg-muted/60 disabled:opacity-50";

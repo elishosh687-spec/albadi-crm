@@ -1,11 +1,10 @@
 /**
- * Widget "ניתוח לידים" screen — filtered bulk analysis + the deterministic
- * "why aren't leads closing" rollup. Opened as a hub tab.
+ * Compatibility route. Lead diagnosis now lives inside canonical analytics.
  *
  * Auth: ?widget_token=<GHL_WIDGET_TOKEN>
  */
+import { redirect } from "next/navigation";
 import { verifyWidgetToken } from "@/integrations/ghl/widget-auth";
-import AnalysisScreen from "@/components/analysis/AnalysisScreen";
 
 export const dynamic = "force-dynamic";
 
@@ -26,5 +25,5 @@ export default async function AnalysisWidgetPage({
       </div>
     );
   }
-  return <AnalysisScreen token={token} />;
+  redirect(`/widget/analytics?widget_token=${encodeURIComponent(token)}&view=diagnosis`);
 }

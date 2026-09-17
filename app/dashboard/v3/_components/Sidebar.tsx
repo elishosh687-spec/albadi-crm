@@ -10,7 +10,6 @@ import {
   Inbox,
   LayoutDashboard,
   MessageSquare,
-  Search,
   Settings,
   Ship,
   Users,
@@ -27,7 +26,6 @@ export const NAV = [
   { href: "/dashboard/v3/calculator", label: "מחשבון", icon: Calculator },
   { href: "/dashboard/v3/shipping", label: "צירוף משלוחים", icon: Ship },
   { href: "/dashboard/v3/analytics", label: "אנליטיקה", icon: BarChart3 },
-  { href: "/dashboard/v3/analysis", label: "ניתוח לידים", icon: Search },
   { href: "/dashboard/v3/settings", label: "הגדרות", icon: Settings },
 ];
 

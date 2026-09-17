@@ -5,7 +5,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import {
   AlertTriangle, ArrowLeft, Banknote, Bot, CheckCircle2, CircleDollarSign,
-  Clock3, Inbox, MessageSquare, PhoneCall, Target, Users,
+  Clock3, Inbox, MessageSquare, PhoneCall, Search, Target, Users,
 } from "lucide-react";
 import {
   Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis,
@@ -17,6 +17,7 @@ import {
   LIFECYCLE_LABEL, PRIORITY_LABEL, type LifecycleKey, type PriorityBand,
 } from "@/lib/crm/insights";
 import { SalesTargetsForm } from "./SalesTargetsForm";
+import AnalysisScreen from "@/components/analysis/AnalysisScreen";
 
 export interface AnalyticsData {
   generatedAt: string;
@@ -50,9 +51,10 @@ export interface AnalyticsData {
   pipelineDist: Array<{ stage: string; count: number }>;
 }
 
-type ViewKey = "sales" | "operations" | "bot";
+type ViewKey = "sales" | "diagnosis" | "operations" | "bot";
 const VIEWS: Array<{ key: ViewKey; label: string }> = [
   { key: "sales", label: "משפך ומכירות" },
+  { key: "diagnosis", label: "אבחון לידים" },
   { key: "operations", label: "תפעול ו־SLA" },
   { key: "bot", label: "בריאות הבוט" },
 ];
@@ -61,7 +63,11 @@ export function AnalyticsView({ data }: { data: AnalyticsData }) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const [view, setView] = useState<ViewKey>("sales");
+  const requestedView = searchParams.get("view");
+  const initialView = VIEWS.some((item) => item.key === requestedView)
+    ? (requestedView as ViewKey)
+    : "sales";
+  const [view, setView] = useState<ViewKey>(initialView);
   useEffect(() => {
     const timer = window.setInterval(() => {
       if (document.visibilityState === "visible") router.refresh();
@@ -87,6 +93,14 @@ export function AnalyticsView({ data }: { data: AnalyticsData }) {
   const links = pathname.startsWith("/widget/")
     ? { leads: widgetHub("inbox"), factory: widgetHub("factory") }
     : { leads: "/dashboard/v3/leads", factory: "/dashboard/v3/factory" };
+  function selectView(next: ViewKey) {
+    setView(next);
+    const params = new URLSearchParams(searchParams.toString());
+    if (next === "sales") params.delete("view");
+    else params.set("view", next);
+    const query = params.toString();
+    router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+  }
 
   return (
     <div className="mx-auto flex w-full max-w-[1420px] flex-col gap-6 pb-16">
@@ -98,7 +112,7 @@ export function AnalyticsView({ data }: { data: AnalyticsData }) {
               מה קורה מהליד הראשון ועד העסקה
             </h1>
             <p className="mt-2 text-sm leading-6 text-muted-foreground">
-              משפך אחד שמחבר את הבוט, המענה האנושי, איכות הלידים והרווח — בלי לספור התחלה חוזרת כליד חדש.
+              משפך, אבחון לידים ותפעול במקום אחד — מהכניסה הראשונה ועד העסקה, בלי מסכים כפולים.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
@@ -129,7 +143,7 @@ export function AnalyticsView({ data }: { data: AnalyticsData }) {
 
       <nav className="flex w-full gap-1 overflow-x-auto rounded-xl border border-border bg-card p-1" role="tablist" aria-label="תחומי אנליטיקה">
         {VIEWS.map((item) => (
-          <button key={item.key} type="button" role="tab" aria-selected={view === item.key} onClick={() => setView(item.key)}
+          <button key={item.key} type="button" role="tab" aria-selected={view === item.key} onClick={() => selectView(item.key)}
             className={cn("min-h-11 min-w-fit flex-1 rounded-lg px-4 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary", view === item.key ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted/50 hover:text-foreground")}>
             {item.label}
           </button>
@@ -137,6 +151,22 @@ export function AnalyticsView({ data }: { data: AnalyticsData }) {
       </nav>
 
       {view === "sales" && <SalesView data={data} />}
+      {view === "diagnosis" && (
+        <div role="tabpanel" className="space-y-5">
+          <div className="flex items-start gap-3 rounded-2xl border border-border bg-card p-5">
+            <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
+              <Search className="size-5" />
+            </span>
+            <div>
+              <h2 className="text-base font-semibold">אבחון לידים</h2>
+              <p className="mt-1 text-sm leading-6 text-muted-foreground">
+                בקרת פייפליין, לידים שנשכחו וניתוח החסמים — באותו מסך ובאותה שפה של האנליטיקה.
+              </p>
+            </div>
+          </div>
+          <AnalysisScreen token={widgetToken} embedded />
+        </div>
+      )}
       {view === "operations" && <OperationsView data={data} links={links} />}
       {view === "bot" && <BotHealthView data={data} />}
     </div>

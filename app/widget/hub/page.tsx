@@ -2,7 +2,7 @@
  * Hub widget — unified entry point for all sub-widgets.
  *
  * Single GHL Custom Menu Link points here. Tabs swap which sub-widget
- * iframe renders below: inbox / playground / quotes / deals / analysis /
+ * iframe renders below: inbox / approvals / quotes / deals / analytics /
  * calculator / ads / competitors / 3D / shipping / settings.
  *
  * URL template:
@@ -25,6 +25,7 @@ import {
   Search,
   CircleCheckBig,
   FlaskConical,
+  Inbox,
   type LucideIcon,
 } from "lucide-react";
 import { verifyWidgetToken } from "@/integrations/ghl/widget-auth";
@@ -56,10 +57,10 @@ const TABS: TabDef[] = [
     url: (t, sid) => withSid(`/widget/inbox?widget_token=${encodeURIComponent(t)}`, sid),
   },
   {
-    id: "playground",
-    label: "מגרש בדיקות",
-    icon: FlaskConical,
-    url: (t) => `/widget/playground?widget_token=${encodeURIComponent(t)}`,
+    id: "drafts",
+    label: "אישורים",
+    icon: Inbox,
+    url: (t) => `/widget/drafts?widget_token=${encodeURIComponent(t)}`,
   },
   {
     id: "factory",
@@ -74,16 +75,16 @@ const TABS: TabDef[] = [
     url: (t) => `/widget/closed-quotes?widget_token=${encodeURIComponent(t)}`,
   },
   {
-    id: "analysis",
-    label: "ניתוח",
-    icon: BarChart3,
-    url: (t) => `/widget/analysis?widget_token=${encodeURIComponent(t)}`,
-  },
-  {
     id: "analytics",
     label: "אנליטיקה",
     icon: BarChart3,
     url: (t) => `/widget/analytics?widget_token=${encodeURIComponent(t)}`,
+  },
+  {
+    id: "playground",
+    label: "מגרש בדיקות",
+    icon: FlaskConical,
+    url: (t) => `/widget/playground?widget_token=${encodeURIComponent(t)}`,
   },
   {
     id: "calc",

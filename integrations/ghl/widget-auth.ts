@@ -1,3 +1,5 @@
+import type { NextRequest } from "next/server";
+
 // Server-only iframe widget auth.
 //
 // Phase 1 — shared secret (single user, low blast radius). GHL Custom Menu
@@ -34,6 +36,20 @@ export function verifyWidgetToken(token: string | null | undefined): boolean {
     mismatch |= token.charCodeAt(i) ^ GHL_WIDGET_TOKEN.charCodeAt(i);
   }
   return mismatch === 0;
+}
+
+/**
+ * Shared gate for canonical widget APIs that are also rendered by a protected
+ * dashboard compatibility route. The widget uses its query token; the legacy
+ * dashboard uses the same admin cookie already enforced by middleware.
+ */
+export function verifyWidgetTokenOrDashboard(
+  req: NextRequest,
+  token?: string | null
+): boolean {
+  if (verifyWidgetToken(token)) return true;
+  const password = readEnv("ADMIN_PASSWORD");
+  return !!password && req.cookies.get("albadi_auth")?.value === password;
 }
 
 /**

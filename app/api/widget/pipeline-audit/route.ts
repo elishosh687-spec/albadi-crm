@@ -5,7 +5,7 @@
  *      Moves the lead via setLeadStage. No bulk apply — Eli reviews each row.
  */
 import { NextRequest, NextResponse } from "next/server";
-import { verifyWidgetToken } from "@/integrations/ghl/widget-auth";
+import { verifyWidgetTokenOrDashboard } from "@/integrations/ghl/widget-auth";
 import { runPipelineAudit } from "@/lib/analysis/pipeline-audit";
 import { V2_ASSIGNABLE_STAGES, type V2AssignableStage } from "@/lib/manychat/stages";
 import { serializeError, withRequestLog } from "@/lib/observability/log";
@@ -23,7 +23,7 @@ function auth(req: NextRequest): boolean {
     req.nextUrl.searchParams.get("widget_token") ||
     req.headers.get("authorization")?.replace(/^Bearer\s+/i, "") ||
     null;
-  return verifyWidgetToken(token);
+  return verifyWidgetTokenOrDashboard(req, token);
 }
 
 export const GET = withRequestLog("analysis", async (req: NextRequest, log) => {

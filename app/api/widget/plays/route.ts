@@ -4,7 +4,7 @@
  * Auth: ?widget_token=...
  */
 import { NextRequest, NextResponse } from "next/server";
-import { verifyWidgetToken } from "@/integrations/ghl/widget-auth";
+import { verifyWidgetTokenOrDashboard } from "@/integrations/ghl/widget-auth";
 import { loadPlays, savePlays } from "@/lib/sales/plays-store";
 import { withRequestLog } from "@/lib/observability/log";
 
@@ -16,7 +16,7 @@ function authed(req: NextRequest): boolean {
     req.nextUrl.searchParams.get("widget_token") ||
     req.headers.get("authorization")?.replace(/^Bearer\s+/i, "") ||
     null;
-  return verifyWidgetToken(t);
+  return verifyWidgetTokenOrDashboard(req, t);
 }
 
 export const GET = withRequestLog("widget", async (req: NextRequest, log) => {

@@ -6,7 +6,7 @@
  * withCalls?, limit?, force? }
  */
 import { NextRequest, NextResponse } from "next/server";
-import { verifyWidgetToken } from "@/integrations/ghl/widget-auth";
+import { verifyWidgetTokenOrDashboard } from "@/integrations/ghl/widget-auth";
 import { analyzeBatch, type LeadFilter } from "@/lib/analysis/batch";
 import { withRequestLog } from "@/lib/observability/log";
 
@@ -19,7 +19,7 @@ export const POST = withRequestLog("analysis", async (req: NextRequest, log) => 
     req.nextUrl.searchParams.get("widget_token") ||
     req.headers.get("authorization")?.replace(/^Bearer\s+/i, "") ||
     null;
-  if (!verifyWidgetToken(token)) {
+  if (!verifyWidgetTokenOrDashboard(req, token)) {
     log.warn("unauthorized");
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }

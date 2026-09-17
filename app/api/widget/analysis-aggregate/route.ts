@@ -6,7 +6,7 @@
  * Auth: ?widget_token=... Query: stages, dateFrom, dateTo, withCalls
  */
 import { NextRequest, NextResponse } from "next/server";
-import { verifyWidgetToken } from "@/integrations/ghl/widget-auth";
+import { verifyWidgetTokenOrDashboard } from "@/integrations/ghl/widget-auth";
 import { aggregateAnalyses } from "@/lib/analysis/aggregate";
 import { selectMatched, type LeadFilter } from "@/lib/analysis/batch";
 import { withRequestLog } from "@/lib/observability/log";
@@ -17,7 +17,7 @@ export const maxDuration = 30;
 
 export const GET = withRequestLog("analysis", async (req: NextRequest, log) => {
   const token = req.nextUrl.searchParams.get("widget_token");
-  if (!verifyWidgetToken(token)) {
+  if (!verifyWidgetTokenOrDashboard(req, token)) {
     log.warn("unauthorized");
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
