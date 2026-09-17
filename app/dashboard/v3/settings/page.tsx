@@ -1,16 +1,8 @@
-import { FactoryPricingForm } from "./FactoryPricingForm";
-import { TemplatesSection } from "./TemplatesSection";
-import { getFactoryConfig } from "@/lib/factory/config";
+import { SettingsView } from "@/components/settings/SettingsView";
 
 export const dynamic = "force-dynamic";
-export const revalidate = 0;
 
-export default async function V3SettingsPage() {
-  const factoryConfig = await getFactoryConfig({ fresh: true });
-  return (
-    <div className="flex flex-col gap-8 max-w-3xl">
-      <FactoryPricingForm initial={factoryConfig} />
-      <TemplatesSection />
-    </div>
-  );
+/** Standalone fallback: render the exact canonical GHL Hub implementation. */
+export default function V3SettingsPage() {
+  return <SettingsView apiToken={process.env.GHL_WIDGET_TOKEN ?? ""} />;
 }

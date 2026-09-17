@@ -9,13 +9,14 @@
  */
 
 import { useState } from "react";
-import { Sparkles } from "lucide-react";
+import { PhoneCall, Sparkles } from "lucide-react";
 import { DraftsView } from "./DraftsView";
 import { BotDecisionsView } from "@/components/bot-decisions/BotDecisionsView";
 import { BotPreviewView } from "@/components/bot-decisions/BotPreviewView";
 import { LuxShell, LuxTitle, LuxAccent } from "@/components/widget-ui/lux";
+import { CallActionApprovals } from "./CallActionApprovals";
 
-type Tab = "drafts" | "decisions" | "preview";
+type Tab = "drafts" | "call-actions" | "decisions" | "preview";
 
 export function DraftsWithDecisions({ apiToken }: { apiToken: string }) {
   const [tab, setTab] = useState<Tab>("drafts");
@@ -27,6 +28,8 @@ export function DraftsWithDecisions({ apiToken }: { apiToken: string }) {
         subtitle={
           tab === "drafts"
             ? "הבוט מציע — אתה מאשר, עורך, או דוחה. רגעי כסף, התנגדות, ושינויי מפרט מגיעים לכאן."
+            : tab === "call-actions"
+            ? "פעולות שעלו משיחות טלפון ולא עברו את כל בדיקות הבטיחות — עם הציטוט, המועד והסיבה לאישור."
             : tab === "decisions"
             ? "כל פעולה של ה-AI על כל ליד — מה הלקוח כתב, מה ה-AI החליט, ולמה. קריאה בלבד."
             : "מה הבוט עומד לעשות ב-36 שעות הקרובות — פולואפים, טיוטות, בקשות מפעל, ולידים מושהים."
@@ -45,6 +48,10 @@ export function DraftsWithDecisions({ apiToken }: { apiToken: string }) {
             <PillTab active={tab === "drafts"} onClick={() => setTab("drafts")}>
               תור אישורים
             </PillTab>
+            <PillTab active={tab === "call-actions"} onClick={() => setTab("call-actions")}>
+              <PhoneCall size={12} strokeWidth={2} style={{ marginInlineEnd: 4 }} />
+              פעולות משיחות
+            </PillTab>
             <PillTab active={tab === "decisions"} onClick={() => setTab("decisions")}>
               היסטוריה
             </PillTab>
@@ -60,6 +67,8 @@ export function DraftsWithDecisions({ apiToken }: { apiToken: string }) {
 
       {tab === "drafts" ? (
         <DraftsView apiToken={apiToken} />
+      ) : tab === "call-actions" ? (
+        <CallActionApprovals apiToken={apiToken} />
       ) : tab === "decisions" ? (
         <BotDecisionsView apiToken={apiToken} />
       ) : (

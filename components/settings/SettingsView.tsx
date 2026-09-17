@@ -27,6 +27,7 @@ import { TemplatesManager } from "@/components/settings/TemplatesManager";
 import { LuxShell, LuxTitle, LuxAccent } from "@/components/widget-ui/lux";
 import { AssigneeSection } from "@/components/settings/AssigneeSection";
 import { QuoteNotifySection } from "@/components/settings/QuoteNotifySection";
+import { CallAnalysisSettingsSection } from "@/components/settings/CallAnalysisSettingsSection";
 
 function widgetUrl(path: string, token: string): string {
   const u = new URL(path, "http://placeholder.local");
@@ -287,6 +288,8 @@ export function SettingsView({ apiToken }: { apiToken: string }) {
         הגדרות תמחור <LuxAccent>מפעל.</LuxAccent>
       </LuxTitle>
       <section className="space-y-6" dir="rtl">
+
+      <CallAnalysisSettingsSection apiToken={apiToken} />
 
       <AssigneeSection apiToken={apiToken} />
       <QuoteNotifySection apiToken={apiToken} />
