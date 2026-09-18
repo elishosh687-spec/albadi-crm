@@ -857,6 +857,50 @@ export const callActionCandidates = pgTable(
   }),
 );
 
+// Meta ad recommendations (2026-09-18). Recommendation-only — no code that
+// writes to Meta reads these. Policy history is append-only; the current policy
+// is mirrored into app_config "ads.recommendation.settings" in the SAME
+// statement (lib/ads/settings-store.ts). Review state is Eli's approved,
+// per-exact-Ad-ID status; the live recommendation is derived, never stored here.
+// Migration: drizzle/migrations/0004_ad_recommendations.sql.
+export const adRecommendationPolicyRevisions = pgTable("ad_recommendation_policy_revisions", {
+  revision: integer("revision").primaryKey(),
+  settings: jsonb("settings").notNull(),
+  previous: jsonb("previous"),
+  changedKeys: text("changed_keys").array().notNull(),
+  actor: text("actor"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+export const adReviewState = pgTable("ad_review_state", {
+  adId: text("ad_id").primaryKey(),
+  adSetId: text("ad_set_id"),
+  segment: text("segment"), // prospecting | remarketing
+  role: text("role"), // control | challenger | remarketing
+  approvedStatus: text("approved_status").notNull().default("untested"), // untested | testing | winner | loser
+  decisionReason: text("decision_reason"),
+  decidedBy: text("decided_by"),
+  decidedAt: timestamp("decided_at", { withTimezone: true }),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+export const adReviewStateAudit = pgTable(
+  "ad_review_state_audit",
+  {
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    adId: text("ad_id").notNull(),
+    field: text("field").notNull(),
+    oldValue: text("old_value"),
+    newValue: text("new_value"),
+    reason: text("reason"),
+    actor: text("actor"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => ({
+    adIdx: index("ad_review_state_audit_ad_idx").on(t.adId, t.createdAt),
+  }),
+);
+
 // Per-lead deep sales analysis ("why is this lead stuck"). One row per analysis
 // run, keyed by lead. The latest row per sid is the current verdict (read with
 // ORDER BY created_at DESC LIMIT 1). `input_hash` is a hash of the dossier

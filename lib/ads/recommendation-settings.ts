@@ -386,3 +386,18 @@ function fmt(n: number): string {
 function isObj(x: unknown): x is Record<string, unknown> {
   return typeof x === "object" && x !== null && !Array.isArray(x);
 }
+
+/** Dotted paths whose value differs — recorded on every policy revision. */
+export function changedSettingKeys(
+  prev: AdRecommendationSettings | null,
+  next: AdRecommendationSettings,
+): string[] {
+  const out: string[] = [];
+  for (const [group, fields] of Object.entries(next)) {
+    for (const [key, value] of Object.entries(fields as Record<string, unknown>)) {
+      const before = prev ? (prev as unknown as Record<string, Record<string, unknown>>)[group]?.[key] : undefined;
+      if (!prev || before !== value) out.push(`${group}.${key}`);
+    }
+  }
+  return out;
+}

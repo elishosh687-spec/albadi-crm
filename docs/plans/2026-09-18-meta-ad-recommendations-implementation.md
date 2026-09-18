@@ -1,7 +1,7 @@
 # Meta Ad Recommendations — Implementation Plan
 
 **Date:** 2026-09-18
-**Status:** Approved by Eli 2026-09-18. Phase 1 done (uncommitted); Phases 2–5 pending
+**Status:** Approved by Eli 2026-09-18. Phase 1 done (`f5f4733`); Phase 2 done (code + tests, migration NOT yet applied to prod); Phases 3–5 pending
 **Approved design:** `docs/plans/2026-09-18-meta-ad-recommendations-settings-design.md`
 **Methodology sources (read-only, never loaded at runtime):**
 `/Users/eli/Projects/marketing/albadi/account/tests.md`,
@@ -222,6 +222,33 @@ An architecture test (below) enforces that.
 
 **Exit check:** unit + integration green on a `ci-local` branch; migration
 applied to production only after Eli's OK (standard prod-DB write rule).
+
+### Phase 2 as built (2026-09-18)
+
+- `drizzle/migrations/0004_ad_recommendations.sql` (+ journal idx 4) —
+  idempotent `IF NOT EXISTS`, CHECK constraints on segment/role/status and a
+  digits-only `ad_id`. **Not applied to production yet.**
+- `lib/ads/settings-store.ts` — a save is ONE statement (data-modifying CTE:
+  insert revision `ON CONFLICT DO NOTHING` → upsert `app_config` only if the
+  insert happened), so history and current policy cannot disagree and a race
+  from the same `expectedRevision` yields exactly one winner (tested with two
+  concurrent PUTs). Invalid stored doc → falls back to the newest valid revision.
+- `lib/ads/review-state.ts` (pure validation, `validateReviewPatch`) +
+  `lib/ads/review-state-store.ts` — one CTE reads the old row, upserts, and
+  appends an audit row per field that actually changed.
+- Routes (all `withRequestLog("meta")` + `widgetAuthed`, own-gate bucket, swept
+  automatically): `GET|PUT /api/widget/ads/recommendation-settings`,
+  `GET /api/widget/ads/review-state`, `GET|PUT /api/widget/ads/review-state/[adId]`.
+  Actor is recorded as `widget` (the widget has no per-user identity).
+- `GET /api/widget/ads/recommendations` moved to Phase 3 — it has nothing to
+  return until the evidence exists.
+- `tests/unit/architecture/ads-read-only.test.ts` — forbids Graph writes,
+  status/budget fields and `/copies` in the feature's files.
+- `tests/integration/ad-recommendations.test.ts` applies 0004 itself (CI
+  branches from prod, which lacks the tables until the prod apply) and restores
+  the branch's prior policy afterwards.
+- Verified: unit 581 + 2 expected fails; typecheck clean; integration 191/191
+  on throwaway branch `ci-local-ads` (deleted).
 
 ---
 

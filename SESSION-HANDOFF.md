@@ -4,8 +4,8 @@
 
 - Eli approved a design for a recommendation-only decision engine inside the
   canonical GHL Hub `מודעות` widget.
-- No database schema, settings, Meta object, or production state has been
-  changed for this project. Only the pure Phase 1 modules exist (see below).
+- No production database, setting, or Meta object has been changed for this
+  project. Code for Phases 1–2 is committed locally (see below).
 - The complete approved design is
   `docs/plans/2026-09-18-meta-ad-recommendations-settings-design.md`.
 - Source methodology and evidence are outside this repository:
@@ -17,17 +17,23 @@
   separate; all live parameters belong in `מודעות → הגדרות בדיקה`.
 - 2026-09-18: implementation plan written —
   `docs/plans/2026-09-18-meta-ad-recommendations-implementation.md` (5 phases,
-  not yet approved, still no product code). Established from prod: the GHL
+  approved the same day). Established from prod: the GHL
   suitable-lead tag is `good lead` in `lead_tags` (15 leads);
   `meta_qualified_sent_at` is NOT the marker (reportable subset only); three
   ad names already have 2 Ad IDs each; no ad-set column on `leads`.
 - Eli approved the plan: keep tag `good lead`; for a name with several Ad IDs
   the approved status goes only to the copy that produced the results.
-- Phase 1 DONE (uncommitted): `lib/ads/{recommendation-settings,recommendation-engine,structure-check,ad-id}.ts`
-  + tests. Unit suite 576 passed, typecheck clean. No DB, Meta, or prod change.
-- Next step: Phase 2 — migration `0004_ad_recommendations.sql` (+ journal),
-  settings store with revisions, review-state store with audit, widget-token
-  APIs, integration + route-gate tests. Applying 0004 to prod needs Eli's OK.
+- Phase 1 DONE — commit `f5f4733` (pure engine + settings + tests).
+- Phase 2 DONE — migration `0004_ad_recommendations.sql`, settings store with
+  revisions, review-state store with audit, 3 widget-token routes, read-only
+  architecture test, integration test. Unit + typecheck + integration (191/191
+  on a throwaway branch, deleted) green. **0004 is NOT applied to production.**
+  Nothing calls the new routes yet, so prod is unaffected until the UI ships.
+- Next step: Phase 3 — Meta daily evidence by exact Ad ID (paginated insights,
+  `action_type=lead` only, `fetchAdStatuses`), CRM evidence by normalised
+  `meta_ad_id` + `lead_tags` tag + closed deals, assembly + `GET
+  /api/widget/ads/recommendations`. Apply 0004 to prod only with Eli's OK,
+  before the Phase 4 UI deploys.
 
 ## Completed project — call analysis V2
 

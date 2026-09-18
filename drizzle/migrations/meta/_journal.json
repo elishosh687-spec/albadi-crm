@@ -29,6 +29,13 @@
       "when": 1789665051268,
       "tag": "0003_call_action_candidates",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1789754795265,
+      "tag": "0004_ad_recommendations",
+      "breakpoints": true
     }
   ]
 }
