@@ -67,7 +67,7 @@ const C = {
   border: "rgba(255,255,255,0.08)",
   text: "#e8e4de",
   dim: "#9a938a",
-  faint: "#6b645c",
+  faint: "#958b80", // ≥4.5:1 (ui-ux-pro-max) — was #6b645c, ~2.9:1
   accent: "#c9a227",
   inBubble: "#26302a",
   outBubble: "#22201d",
@@ -163,7 +163,7 @@ export default function PlaygroundView({ apiToken }: { apiToken: string }) {
       dir="rtl"
       // `.mfit` opts this screen into the mobile layer in globals.css (chiefly
       // the 16px input rule that stops iOS zooming the page on focus).
-      className="mfit"
+      className="mfit ux-floor"
       style={{
         // Fixed inset rather than minHeight: the widget lives in a GHL iframe,
         // and a taller-than-viewport page let the (light) document background
@@ -309,7 +309,7 @@ export default function PlaygroundView({ apiToken }: { apiToken: string }) {
                     borderRadius: 10,
                     padding: 10,
                     margin: "0 0 8px",
-                    fontSize: 11.5,
+                    fontSize: 13,
                     color: C.dim,
                     whiteSpace: "pre-wrap",
                     wordBreak: "break-word",
@@ -505,7 +505,7 @@ function ToolCard({
       <div style={{ fontSize: 13.5, fontWeight: 600, marginBottom: 2 }}>
         {icon} {title}
       </div>
-      <p style={{ margin: "0 0 9px", fontSize: 11.5, color: C.dim, lineHeight: 1.55 }}>{caption}</p>
+      <p style={{ margin: "0 0 9px", fontSize: 13, color: C.dim, lineHeight: 1.55 }}>{caption}</p>
       {children}
     </div>
   );
@@ -572,7 +572,7 @@ function SetterResult({ run, onClose }: { run: Record<string, unknown>; onClose:
       {msg?.validation && (
         <div
           style={{
-            fontSize: 11,
+            fontSize: 12.5,
             marginTop: 5,
             color: msg.validation.ok ? "#7fb894" : "#e88",
           }}
@@ -634,7 +634,7 @@ function SystemTab({ groups }: { groups: SettingsGroup[] }) {
             >
               <span style={{ minWidth: 190, color: C.dim }}>{it.label}</span>
               <span style={{ flex: 1 }}>{it.value}</span>
-              <span style={{ fontSize: 11, color: C.faint }}>
+              <span style={{ fontSize: 12.5, color: C.faint }}>
                 {SOURCE_LABELS[it.source]}
                 {it.hint ? ` · ${it.hint}` : ""}
               </span>
@@ -675,7 +675,7 @@ function Bubble({
     >
       <div style={{ maxWidth: "85%" }}>
         {isAlert && (
-          <div style={{ fontSize: 11, color: "#d6a44c", marginBottom: 3 }}>
+          <div style={{ fontSize: 12.5, color: "#d6a44c", marginBottom: 3 }}>
             🔔 התראה פנימית לאלי (הלקוח לא רואה)
           </div>
         )}
@@ -695,7 +695,7 @@ function Bubble({
         </div>
         <div
           style={{
-            fontSize: 10,
+            fontSize: 12,
             color: "#6b645c",
             marginTop: 2,
             textAlign: isIn ? "start" : "end",
@@ -780,7 +780,7 @@ const linkBtn: React.CSSProperties = {
   background: "transparent",
   border: "none",
   color: C.faint,
-  fontSize: 11.5,
+  fontSize: 13,
   cursor: "pointer",
   textDecoration: "underline",
   padding: 0,

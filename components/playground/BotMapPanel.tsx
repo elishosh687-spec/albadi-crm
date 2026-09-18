@@ -406,7 +406,7 @@ function H({ children, sub }: { children: React.ReactNode; sub?: string }) {
   return (
     <div style={{ marginTop: 22, marginBottom: 8 }}>
       <div style={{ fontSize: 15, fontWeight: 700 }}>{children}</div>
-      {sub && <div style={{ fontSize: 11.5, color: C.faint, marginTop: 2 }}>{sub}</div>}
+      {sub && <div style={{ fontSize: 13, color: C.faint, marginTop: 2 }}>{sub}</div>}
     </div>
   );
 }
@@ -442,7 +442,7 @@ function Cadence({ title, text, onEdit }: { title: string; text: string; onEdit:
       style={{ ...card, ...btnReset, display: "flex", gap: 8, justifyContent: "space-between", alignItems: "baseline", textAlign: "start" }}
     >
       <span style={{ fontSize: 12.5, fontWeight: 600 }}>{title}</span>
-      <span style={{ fontSize: 11.5, color: C.accent }}>{text}</span>
+      <span style={{ fontSize: 13, color: C.accent }}>{text}</span>
     </button>
   );
 }
@@ -479,11 +479,11 @@ function ModelRow({
     >
       <span style={{ flex: 1, minWidth: 0 }}>
         <span style={{ fontSize: 12.5, fontWeight: 600, display: "block" }}>{job}</span>
-        <span style={{ fontSize: 11, color: C.faint }}>{what}</span>
+        <span style={{ fontSize: 12.5, color: C.faint }}>{what}</span>
       </span>
       <span
         style={{
-          fontSize: 11,
+          fontSize: 12.5,
           color: C.accent,
           whiteSpace: "nowrap",
           fontFamily: "ui-monospace, Menlo, monospace",
@@ -505,7 +505,7 @@ function Locked({ text }: { text: string }) {
 }
 
 function Meta({ text }: { text: string }) {
-  return <div style={{ fontSize: 11.5, color: C.faint, padding: "0 2px", lineHeight: 1.6 }}>{text}</div>;
+  return <div style={{ fontSize: 13, color: C.faint, padding: "0 2px", lineHeight: 1.6 }}>{text}</div>;
 }
 
 function Row({ k, v, last }: { k: string; v: string; last?: boolean }) {
@@ -532,7 +532,7 @@ function Stat({ n, label, muted }: { n: number | string; label: string; muted?: 
       <div style={{ fontSize: 21, fontWeight: 600, color: muted ? C.faint : C.accent, fontVariantNumeric: "tabular-nums" }}>
         {typeof n === "number" ? n.toLocaleString() : n}
       </div>
-      <div style={{ fontSize: 11, color: C.dim, marginTop: 2, lineHeight: 1.4 }}>{label}</div>
+      <div style={{ fontSize: 12.5, color: C.dim, marginTop: 2, lineHeight: 1.4 }}>{label}</div>
     </div>
   );
 }
@@ -541,7 +541,7 @@ function Tag({ kind, children }: { kind: "edit" | "lock"; children: React.ReactN
   return (
     <span
       style={{
-        fontSize: 10.5,
+        fontSize: 12,
         padding: "2px 6px",
         borderRadius: 3,
         whiteSpace: "nowrap",
@@ -586,4 +586,4 @@ const phaseNum: React.CSSProperties = {
   alignItems: "center",
   justifyContent: "center",
 };
-const foot: React.CSSProperties = { fontSize: 11, color: C.faint, lineHeight: 1.7, marginTop: 8 };
+const foot: React.CSSProperties = { fontSize: 12.5, color: C.faint, lineHeight: 1.7, marginTop: 8 };

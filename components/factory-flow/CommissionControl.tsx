@@ -80,7 +80,7 @@ export function CommissionControl({
     <div className={cn("rounded-xl border border-border bg-card/40 p-3 flex flex-col gap-2", className)}>
       <div className="flex items-center justify-between gap-2">
         <label className="text-sm font-medium">עמלת מכירות</label>
-        <span className="text-[11px] text-muted-foreground">תצוגה לבוס בלבד — לא משנה את מחיר הלקוח</span>
+        <span className="text-[13px] text-muted-foreground">תצוגה לבוס בלבד — לא משנה את מחיר הלקוח</span>
       </div>
 
       <div className="flex items-center gap-2 flex-wrap">
@@ -103,7 +103,7 @@ export function CommissionControl({
           <button
             type="button"
             onClick={() => onTextChange("")}
-            className="inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground"
+            className="inline-flex items-center gap-1 text-[13px] text-muted-foreground hover:text-foreground"
           >
             <RotateCcw className="size-3" /> חזרה ל-{defaultPct}%
           </button>
@@ -123,7 +123,7 @@ export function CommissionControl({
         </button>
       </div>
 
-      <span className="text-[11px] text-muted-foreground">
+      <span className="text-[13px] text-muted-foreground">
         {overriding
           ? `חישוב זה: ${effectivePct}% (דורס את ${defaultPct}% הגלובלי). "שמור כברירת מחדל" יחיל על כל המסכים.`
           : `ברירת המחדל הגלובלית: ${defaultPct}%. שנה כדי לדרוס לחישוב הזה בלבד.`}

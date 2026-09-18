@@ -33,7 +33,7 @@ export default function ColorCatalogScreen() {
   const [view, setView] = useState<"shared" | "factories">("shared");
 
   return (
-    <LuxShell>
+    <LuxShell className="ux ux-floor">
       <LuxTitle
         overline="— Colour catalogue"
         subtitle="הגוונים נמדדו מקטלוגי הבד של המפעלים. הקטלוג הכללי הוא מה שאפשר להבטיח ללקוח לפני שיודעים לאן ההזמנה הולכת."
@@ -162,12 +162,12 @@ function SharedView() {
                 style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}
               >
                 <strong style={{ fontSize: 14 }}>{c.nameHe}</strong>
-                <span style={{ ...LTR, fontSize: 11, color: "var(--lux-muted)" }}>{c.hex}</span>
+                <span style={{ ...LTR, fontSize: 12.5, color: "var(--lux-muted)" }}>{c.hex}</span>
                 <span
                   title={`הפרש מרבי בין המפעלים: ΔE ${c.maxDeltaE}`}
                   style={{
                     marginInlineStart: "auto",
-                    fontSize: 10,
+                    fontSize: 12,
                     padding: "1px 6px",
                     borderRadius: 3,
                     color: c.tier === "exact" ? "#1d1b1a" : "var(--lux-muted)",
@@ -205,7 +205,7 @@ function SharedView() {
                       {c.codes[id]}
                     </code>
                     {id === "MANDY" ? (
-                      <span style={{ ...LTR, fontSize: 10, color: "var(--lux-muted)" }}>
+                      <span style={{ ...LTR, fontSize: 12, color: "var(--lux-muted)" }}>
                         {c.mandyCatalog.replace("MATERIAL COLOR ", "COLOR ")}
                       </span>
                     ) : null}
@@ -279,7 +279,7 @@ function FactoryBlock({ id, numeral }: { id: FactoryId; numeral: string }) {
         >
           {meta.whenToUse}
           {meta.chineseName ? (
-            <span style={{ display: "block", marginTop: 5, color: "var(--lux-muted)", fontSize: 11.5 }}>
+            <span style={{ display: "block", marginTop: 5, color: "var(--lux-muted)", fontSize: 13 }}>
               בגיליון ההצעות: {meta.chineseName}
             </span>
           ) : null}
@@ -292,7 +292,7 @@ function FactoryBlock({ id, numeral }: { id: FactoryId; numeral: string }) {
             <div
               style={{
                 ...LTR,
-                fontSize: 11,
+                fontSize: 12.5,
                 letterSpacing: "0.06em",
                 color: "var(--lux-muted)",
                 marginBottom: 8,
@@ -324,14 +324,14 @@ function FactoryBlock({ id, numeral }: { id: FactoryId; numeral: string }) {
                   style={{
                     ...LTR,
                     marginTop: 4,
-                    fontSize: 11,
+                    fontSize: 12.5,
                     lineHeight: 1.35,
                     color: "var(--lux-ink)",
                     textAlign: "start",
                   }}
                 >
                   {c.code}
-                  <span style={{ display: "block", fontSize: 9.5, color: "var(--lux-muted)" }}>
+                  <span style={{ display: "block", fontSize: 12, color: "var(--lux-muted)" }}>
                     {c.hex}
                   </span>
                 </figcaption>

@@ -140,7 +140,7 @@ export default function BotSettingsPanel({ apiToken }: { apiToken: string }) {
                 {g}
                 {dirty && <span style={{ color: C.accent }}> •</span>}
               </span>
-              <span style={{ fontSize: 11, color: C.faint }}>{count}</span>
+              <span style={{ fontSize: 12.5, color: C.faint }}>{count}</span>
             </button>
           );
         })}
@@ -245,7 +245,7 @@ function SettingCard({
         {field.type === "toggle" && (
           <span
             style={{
-              fontSize: 11,
+              fontSize: 12.5,
               color: value ? C.on : C.faint,
               border: `1px solid ${value ? "rgba(78,161,114,0.4)" : C.border}`,
               borderRadius: 999,
@@ -267,7 +267,7 @@ function SettingCard({
         {field.description}
       </p>
       {field.where && (
-        <p style={{ margin: "0 0 10px", fontSize: 11.5, color: C.faint }}>
+        <p style={{ margin: "0 0 10px", fontSize: 13, color: C.faint }}>
           📍 {field.where}
         </p>
       )}
@@ -349,7 +349,7 @@ function Control({
         />
         {field.unit && <span style={{ fontSize: 12.5, color: C.dim }}>{field.unit}</span>}
         {(field.min !== undefined || field.max !== undefined) && (
-          <span style={{ fontSize: 11.5, color: C.faint }}>
+          <span style={{ fontSize: 13, color: C.faint }}>
             (טווח מותר: {field.min ?? "—"}–{field.max ?? "—"})
           </span>
         )}
@@ -405,7 +405,7 @@ function Control({
             <button onClick={() => onChange(builtIn)} style={btnGhost} className="lux-tap">
               טען לעריכה
             </button>
-            <span style={{ fontSize: 11, color: C.faint }}>
+            <span style={{ fontSize: 12.5, color: C.faint }}>
               אלה ההנחיות שרצות עכשיו. עריכה תחליף אותן.
             </span>
           </div>
@@ -420,7 +420,7 @@ function Control({
           rows={Math.min(10, Math.max(2, text.split("\n").length + 1))}
           style={{ ...inputStyle, width: "100%", resize: "vertical", lineHeight: 1.7 }}
         />
-        <div style={{ fontSize: 11, color: C.faint, marginTop: 3 }}>
+        <div style={{ fontSize: 12.5, color: C.faint, marginTop: 3 }}>
           {text.length} תווים · שורה חדשה = שורה חדשה אצל הלקוח
         </div>
       </div>
@@ -441,11 +441,11 @@ function Control({
           inputMode="text"
           style={{ ...inputStyle, width: "100%", maxWidth: 480 }}
         />
-        <div style={{ fontSize: 11, color: C.faint, marginTop: 4 }}>
+        <div style={{ fontSize: 12.5, color: C.faint, marginTop: 4 }}>
           {parsed.hours.length > 0 ? describeCadence(parsed.hours) : "שעות מופרדות בפסיקים"}
         </div>
         {parsed.warnings.map((w, i) => (
-          <div key={i} style={{ fontSize: 11, color: "#D0A03C", marginTop: 2 }}>
+          <div key={i} style={{ fontSize: 12.5, color: "#D0A03C", marginTop: 2 }}>
             ⚠ {w}
           </div>
         ))}
@@ -496,7 +496,7 @@ const linkBtn: React.CSSProperties = {
   background: "transparent",
   border: "none",
   color: C.faint,
-  fontSize: 11.5,
+  fontSize: 13,
   cursor: "pointer",
   textDecoration: "underline",
   padding: 0,

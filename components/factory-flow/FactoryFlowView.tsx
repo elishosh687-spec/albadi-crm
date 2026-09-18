@@ -129,7 +129,7 @@ export function FactoryFlowView({ apiToken }: { apiToken: string }) {
   );
 
   return (
-    <LuxShell>
+    <LuxShell className="ux ux-floor">
       <LuxTitle
         overline="— Factory quotes"
         subtitle="חפש לקוח כדי לפתוח או לשלוח הצעה חדשה למפעל."
@@ -150,7 +150,7 @@ export function FactoryFlowView({ apiToken }: { apiToken: string }) {
             gap: 10,
           }}
         >
-          <Search className="size-4" style={{ color: "#8a7f74" }} />
+          <Search className="size-4" style={{ color: "var(--lux-muted)" }} />
           <input
             type="text"
             value={query}
@@ -180,7 +180,7 @@ export function FactoryFlowView({ apiToken }: { apiToken: string }) {
                 border: 0,
                 background: "transparent",
                 borderRadius: 6,
-                color: "#8a7f74",
+                color: "var(--lux-muted)",
                 cursor: "pointer",
               }}
             >
@@ -213,12 +213,12 @@ export function FactoryFlowView({ apiToken }: { apiToken: string }) {
                         <div className="text-sm font-medium truncate">
                           {r.name || "(ללא שם)"}
                         </div>
-                        <div className="text-[11px] text-muted-foreground tabular-nums truncate">
+                        <div className="text-[13px] text-muted-foreground tabular-nums truncate">
                           {r.phone || r.sid}
                           {r.stage ? ` · ${r.stage}` : ""}
                         </div>
                       </div>
-                      <div className="text-[10px] text-muted-foreground shrink-0 tabular-nums">
+                      <div className="text-xs text-muted-foreground shrink-0 tabular-nums">
                         {new Date(r.updatedAt).toLocaleDateString("he-IL")}
                       </div>
                     </button>
@@ -237,7 +237,7 @@ export function FactoryFlowView({ apiToken }: { apiToken: string }) {
             background: "var(--lux-card)",
             borderRadius: 10,
             padding: "32px 18px",
-            color: "#8a7f74",
+            color: "var(--lux-muted)",
             fontSize: 14,
             boxShadow: "inset 0 0 0 1px var(--lux-line)",
             marginBottom: 18,
@@ -255,7 +255,7 @@ export function FactoryFlowView({ apiToken }: { apiToken: string }) {
             background: "#1d1b1a",
             borderRadius: 10,
             padding: "24px 18px",
-            color: "#8a7f74",
+            color: "var(--lux-muted)",
             fontSize: 14,
             boxShadow: "inset 0 0 0 1px rgba(69,70,77,0.16)",
             marginBottom: 16,
@@ -303,8 +303,8 @@ export function FactoryFlowView({ apiToken }: { apiToken: string }) {
                 <div
                   style={{
                     fontFamily: "var(--font-editorial-sans), Manrope, system-ui",
-                    fontSize: 11,
-                    color: "#8a7f74",
+                    fontSize: 12.5,
+                    color: "var(--lux-muted)",
                     fontVariantNumeric: "tabular-nums",
                   }}
                 >

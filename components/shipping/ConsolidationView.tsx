@@ -73,7 +73,7 @@ export function ConsolidationView({
 
   if (!carrier) {
     return (
-      <LuxShell>
+      <LuxShell className="ux ux-floor">
         <LuxTitle overline="— Consolidation planner">
           צירוף <LuxAccent>משלוחים.</LuxAccent>
         </LuxTitle>
@@ -94,7 +94,7 @@ export function ConsolidationView({
   }
 
   return (
-    <LuxShell>
+    <LuxShell className="ux ux-floor">
       <LuxTitle
         overline="— Consolidation planner"
         subtitle={`סמן הזמנות ים מאותו זמן כדי לראות כמה תחסוך אם תשלח אותן יחד במקום כל אחת בנפרד. כלי תכנון בלבד — לא משנה מחירים ללקוחות. ספק: ${carrier.name}.`}
@@ -109,7 +109,7 @@ export function ConsolidationView({
             borderRadius: 10,
             padding: "32px 18px",
             textAlign: "center",
-            color: "#8a7f74",
+            color: "var(--lux-muted)",
             fontSize: 14,
             boxShadow: "inset 0 0 0 1px var(--lux-line)",
           }}
@@ -190,8 +190,8 @@ export function ConsolidationView({
                       {c.stage && (
                         <span
                           style={{
-                            fontSize: 10,
-                            color: "#8a7f74",
+                            fontSize: 12,
+                            color: "var(--lux-muted)",
                             background: "#211f1e",
                             padding: "2px 8px",
                             borderRadius: 4,
@@ -208,14 +208,14 @@ export function ConsolidationView({
                           rel="noreferrer"
                           onClick={(e) => e.stopPropagation()}
                           title="כרטיס לקוח ב-GHL"
-                          style={{ color: "#8a7f74", flexShrink: 0, display: "inline-flex" }}
+                          style={{ color: "var(--lux-muted)", flexShrink: 0, display: "inline-flex" }}
                         >
                           <ExternalLink size={13} />
                         </a>
                       )}
                     </div>
                     <div
-                      style={{ fontSize: 11, color: "#8a7f74", marginTop: 2 }}
+                      style={{ fontSize: 12.5, color: "var(--lux-muted)", marginTop: 2 }}
                       className="truncate"
                     >
                       {c.productName ?? "—"}
@@ -234,8 +234,8 @@ export function ConsolidationView({
                     </div>
                     <div
                       style={{
-                        fontSize: 11,
-                        color: "#8a7f74",
+                        fontSize: 12.5,
+                        color: "var(--lux-muted)",
                         fontVariantNumeric: "tabular-nums",
                       }}
                     >
@@ -292,19 +292,19 @@ function SummaryRail({
     >
       <div
         className="lux-label"
-        style={{ color: count > 0 ? "#bec6e0" : "#8a7f74", marginBottom: 18 }}
+        style={{ color: count > 0 ? "#bec6e0" : "var(--lux-muted)", marginBottom: 18 }}
       >
         {count === 0 ? "בחר כדי להתחיל" : `${count} נבחרו · השוואה חיה`}
       </div>
 
       {count === 0 ? (
-        <div style={{ fontSize: 12.5, color: "#8a7f74", lineHeight: 1.55 }}>
+        <div style={{ fontSize: 12.5, color: "var(--lux-muted)", lineHeight: 1.55 }}>
           סמן הזמנות מהרשימה כדי לראות חיסכון במשלוח מאוחד.
         </div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
           <div>
-            <div style={{ fontSize: 12, color: "#8a7f74", marginBottom: 3 }}>נפח מאוחד</div>
+            <div style={{ fontSize: 12, color: "var(--lux-muted)", marginBottom: 3 }}>נפח מאוחד</div>
             <div
               style={{
                 fontFamily: "var(--font-body), Heebo, system-ui",
@@ -326,7 +326,7 @@ function SummaryRail({
             }}
           >
             <div>
-              <div style={{ fontSize: 12, color: "#8a7f74", marginBottom: 3 }}>בנפרד</div>
+              <div style={{ fontSize: 12, color: "var(--lux-muted)", marginBottom: 3 }}>בנפרד</div>
               <div
                 style={{
                   fontSize: 18,
@@ -338,7 +338,7 @@ function SummaryRail({
               </div>
             </div>
             <div style={{ textAlign: "left" }}>
-              <div style={{ fontSize: 12, color: "#8a7f74", marginBottom: 3 }}>מאוחד</div>
+              <div style={{ fontSize: 12, color: "var(--lux-muted)", marginBottom: 3 }}>מאוחד</div>
               <div
                 style={{
                   fontSize: 18,
@@ -359,7 +359,7 @@ function SummaryRail({
               boxShadow: "inset 0 0 0 1px rgba(127,211,168,0.25)",
             }}
           >
-            <div style={{ fontSize: 12, color: "#8a7f74", marginBottom: 3 }}>חיסכון</div>
+            <div style={{ fontSize: 12, color: "var(--lux-muted)", marginBottom: 3 }}>חיסכון</div>
             <div
               style={{
                 fontFamily: "var(--font-body), Heebo, system-ui",

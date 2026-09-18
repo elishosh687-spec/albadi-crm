@@ -357,7 +357,7 @@ export function SendToFactoryFormWidget({
       />
 
       <div>
-        <span className="block text-[11px] text-muted-foreground mb-1 text-right">
+        <span className="block text-[13px] text-muted-foreground mb-1 text-right">
           מידות (cm)
         </span>
         <div className="grid grid-cols-3 gap-2">
@@ -366,7 +366,7 @@ export function SendToFactoryFormWidget({
           <Field label="D (עומק)" value={depthCm} onChange={setDepthCm} type="number" compact />
         </div>
         <div className="mt-2 flex items-center gap-2">
-          <span className="text-[11px] text-muted-foreground shrink-0">או הדבק:</span>
+          <span className="text-[13px] text-muted-foreground shrink-0">או הדבק:</span>
           <input
             value={sizeString}
             onChange={(e) => handleSizeStringChange(e.target.value)}
@@ -376,7 +376,7 @@ export function SendToFactoryFormWidget({
           />
         </div>
         {sizePreview && (
-          <div className="mt-1 text-[10px] text-muted-foreground text-right">
+          <div className="mt-1 text-xs text-muted-foreground text-right">
             ייכתב ל-Feishu: <span className="font-mono text-foreground">{sizePreview}</span>
           </div>
         )}
@@ -479,7 +479,7 @@ function SelectField({
 }) {
   return (
     <label className="block">
-      <span className="block text-[11px] text-muted-foreground mb-1 text-right">{label}</span>
+      <span className="block text-[13px] text-muted-foreground mb-1 text-right">{label}</span>
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
@@ -512,7 +512,7 @@ function Field({
 }) {
   return (
     <label className="block">
-      <span className="block text-[11px] text-muted-foreground mb-1 text-right">{label}</span>
+      <span className="block text-[13px] text-muted-foreground mb-1 text-right">{label}</span>
       <input
         type={type}
         value={value}

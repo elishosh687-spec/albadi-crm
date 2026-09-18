@@ -49,7 +49,7 @@ export function SpecField({
 }) {
   return (
     <div>
-      <label className="block text-[11px] text-muted-foreground mb-0.5">{label}</label>
+      <label className="block text-[13px] text-muted-foreground mb-0.5">{label}</label>
       <input
         type={type}
         value={value}

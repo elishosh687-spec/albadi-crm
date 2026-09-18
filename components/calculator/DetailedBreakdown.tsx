@@ -122,8 +122,8 @@ export function DetailedBreakdown(props: BreakdownInput & { defaultOpen?: boolea
             )}
 
             {v.components && (
-              <div className="mt-2 pt-2 border-t border-border/50 space-y-0.5 text-[11px]">
-                <div className="text-muted-foreground text-[10px] uppercase tracking-wider mb-1">
+              <div className="mt-2 pt-2 border-t border-border/50 space-y-0.5 text-[13px]">
+                <div className="text-muted-foreground text-xs uppercase tracking-wider mb-1">
                   פירוק רכיבי הייצור (¥)
                 </div>
                 <ComponentRow label="בסיס שקית" cny={v.components.baseBagCny} cnyToIls={v.fx.cnyToIls} />
@@ -154,7 +154,7 @@ export function DetailedBreakdown(props: BreakdownInput & { defaultOpen?: boolea
             )}
 
             {v.plateFee && (
-              <div className="mt-2 pt-2 border-t border-border/50 text-[11px] space-y-1">
+              <div className="mt-2 pt-2 border-t border-border/50 text-[13px] space-y-1">
                 {v.plateFee.colors !== undefined && v.plateFee.perColorCny !== undefined ? (
                   /* Factory-quoted plate fee (from Feishu column T) — richer
                      display with colours × per-colour breakdown and
@@ -204,11 +204,11 @@ export function DetailedBreakdown(props: BreakdownInput & { defaultOpen?: boolea
                 lines here are just the split that sums to it. */}
             {v.plateFee && v.plateFee.ilsTotal > 0 && (
               <div className="mt-2 pt-2 border-t border-border space-y-0.5">
-                <div className="flex justify-between gap-2 items-baseline text-[11px] text-muted-foreground">
+                <div className="flex justify-between gap-2 items-baseline text-[13px] text-muted-foreground">
                   <span>בסיס ייצור</span>
                   <span>{fmtIls(v.factory.baseIlsTotal)}</span>
                 </div>
-                <div className="flex justify-between gap-2 items-baseline text-[11px] text-muted-foreground">
+                <div className="flex justify-between gap-2 items-baseline text-[13px] text-muted-foreground">
                   <span>+ גלופה (pass-through)</span>
                   <span>{fmtIls(v.plateFee.ilsTotal)}</span>
                 </div>
@@ -307,7 +307,7 @@ export function DetailedBreakdown(props: BreakdownInput & { defaultOpen?: boolea
                           <Row
                             label=""
                             value={
-                              <span className="text-[10px] text-muted-foreground">
+                              <span className="text-xs text-muted-foreground">
                                 * משקל מוערך — ההצעה נסגרה לפני שנשמר המשקל המדויק לכל רגל
                               </span>
                             }
@@ -453,7 +453,7 @@ export function DetailedBreakdown(props: BreakdownInput & { defaultOpen?: boolea
                 const diff = v.alt.totalSellingPrice - v.totals.totalSellingPrice;
                 if (Math.abs(diff) < 1) return null;
                 return (
-                  <div className="mt-1.5 text-center text-[11px] text-muted-foreground">
+                  <div className="mt-1.5 text-center text-[13px] text-muted-foreground">
                     {diff > 0
                       ? `החלופה יקרה ב‑${fmtIls(diff)}`
                       : `החלופה זולה ב‑${fmtIls(-diff)}`}
@@ -474,7 +474,7 @@ export function DetailedBreakdown(props: BreakdownInput & { defaultOpen?: boolea
               }
             />
             {isOverCbmConsolidationThreshold(v.logistics.cbm) && (
-              <div className="mt-2 rounded-md border border-amber-500/50 bg-amber-500/15 px-3 py-2 text-[11px] font-bold text-amber-700 dark:text-amber-400">
+              <div className="mt-2 rounded-md border border-amber-500/50 bg-amber-500/15 px-3 py-2 text-[13px] font-bold text-amber-700 dark:text-amber-400">
                 🚢 {cbmConsolidationAlert(v.logistics.cbm)}
               </div>
             )}
@@ -506,9 +506,9 @@ function Stat({
 }) {
   return (
     <div className="rounded-lg border border-border/60 bg-background/40 px-2 py-2 text-center">
-      <div className="text-[10px] uppercase tracking-wider text-muted-foreground">{label}</div>
+      <div className="text-xs uppercase tracking-wider text-muted-foreground">{label}</div>
       <div className={cn("text-sm font-bold tabular-nums mt-0.5", TONE_TEXT[tone])}>{value}</div>
-      {sub && <div className="text-[10px] text-muted-foreground mt-0.5">{sub}</div>}
+      {sub && <div className="text-xs text-muted-foreground mt-0.5">{sub}</div>}
     </div>
   );
 }
@@ -528,7 +528,7 @@ function Section({
     <div className="rounded-lg border border-border/60 bg-background/30 overflow-hidden">
       <div className="flex items-center gap-1.5 px-2.5 py-1.5 border-b border-border/40 bg-muted/15">
         {Icon && <Icon className={cn("size-3.5 shrink-0", TONE_TEXT[tone])} />}
-        <span className="text-[11px] font-medium text-foreground/90">{title}</span>
+        <span className="text-[13px] font-medium text-foreground/90">{title}</span>
       </div>
       <div className="p-2.5">{children}</div>
     </div>
@@ -547,7 +547,7 @@ function Row({ label, value }: { label: React.ReactNode; value: React.ReactNode 
 function FxCell({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-md bg-muted/30 p-1.5">
-      <div className="text-[9px] uppercase tracking-wider text-muted-foreground">{label}</div>
+      <div className="text-xs uppercase tracking-wider text-muted-foreground">{label}</div>
       <div className="font-semibold">{value}</div>
     </div>
   );
@@ -593,12 +593,12 @@ function AltCell({
         isActive ? "bg-primary/10 border border-primary/30" : "bg-muted/20 border border-border/40",
       )}
     >
-      <div className="flex items-center justify-center gap-1 text-[10px] uppercase tracking-wider text-muted-foreground">
+      <div className="flex items-center justify-center gap-1 text-xs uppercase tracking-wider text-muted-foreground">
         {type === "air" ? <Plane className="size-3" /> : <Ship className="size-3" />}
         {label}
       </div>
       <div className="text-sm font-semibold mt-0.5">{fmtIls(total)}</div>
-      <div className="text-[10px] text-muted-foreground">{fmtIls(unit, 2)}/יח׳</div>
+      <div className="text-xs text-muted-foreground">{fmtIls(unit, 2)}/יח׳</div>
     </div>
   );
 }

@@ -771,18 +771,18 @@ export function QuotesHistoryView({ apiToken }: { apiToken: string }) {
           {r.sentToCustomerAt && (
             <span
               title={`נשלח ללקוח ${fmtDate(r.sentToCustomerAt)}`}
-              className="shrink-0 inline-flex items-center gap-0.5 text-[10px] rounded-full border border-emerald-500/30 bg-emerald-500/10 text-emerald-400 px-1.5 py-0.5"
+              className="shrink-0 inline-flex items-center gap-0.5 text-xs rounded-full border border-emerald-500/30 bg-emerald-500/10 text-emerald-400 px-1.5 py-0.5"
             >
               <Check className="size-3" /> נשלח
             </span>
           )}
-          <span className="text-[11px] text-muted-foreground tabular-nums shrink-0">
+          <span className="text-[13px] text-muted-foreground tabular-nums shrink-0">
             {fmtDate(r.createdAt)}
           </span>
-          <span className="text-[11px] font-mono text-muted-foreground shrink-0">
+          <span className="text-[13px] font-mono text-muted-foreground shrink-0">
             {r.quotationNo ?? r.id.slice(-6)}
           </span>
-          <span className={`text-[10px] rounded-full border px-1.5 py-0.5 shrink-0 ${STATUS_LABEL[r.status]?.cls ?? "bg-muted"}`}>
+          <span className={`text-xs rounded-full border px-1.5 py-0.5 shrink-0 ${STATUS_LABEL[r.status]?.cls ?? "bg-muted"}`}>
             {STATUS_LABEL[r.status]?.text ?? r.status}
           </span>
           <span className="text-sm font-medium truncate min-w-0">
@@ -790,7 +790,7 @@ export function QuotesHistoryView({ apiToken }: { apiToken: string }) {
           </span>
           {(r.status === "finalized" || r.status === "draft") && r.finalPricing && (
             <span
-              className={`text-[11px] tabular-nums shrink-0 ${r.status === "draft" ? "text-muted-foreground" : "text-emerald-400"}`}
+              className={`text-[13px] tabular-nums shrink-0 ${r.status === "draft" ? "text-muted-foreground" : "text-emerald-400"}`}
               title={r.status === "draft" ? "מחיר משוער (טיוטה — לא ממפעל)" : undefined}
             >
               {r.status === "draft" ? "~" : ""}{fmtMoney(displayTotal(r.finalPricing as Record<string, unknown>))}
@@ -841,7 +841,7 @@ export function QuotesHistoryView({ apiToken }: { apiToken: string }) {
               onClick={() => handleCloseDeal(r, true)}
               disabled={busyId === r.id}
               title={r.status === "draft" ? "סגור עסקה מהאומדן — הלקוח קיבל את המחיר" : "סגור עסקה — העבר ללשונית עסקאות"}
-              className="lux-tap shrink-0 inline-flex items-center gap-1 text-[10px] rounded-full border border-amber-500/40 bg-amber-500/10 text-amber-400 px-2 py-0.5 hover:bg-amber-500/20 disabled:opacity-50"
+              className="lux-tap shrink-0 inline-flex items-center gap-1 text-xs rounded-full border border-amber-500/40 bg-amber-500/10 text-amber-400 px-2 py-0.5 hover:bg-amber-500/20 disabled:opacity-50"
             >
               {busyId === r.id ? <Loader2 className="size-3 animate-spin" /> : <CheckCircle2 className="size-3" />}
               {r.status === "draft" ? "סגור עסקה (אומדן)" : "סגור עסקה"}
@@ -850,7 +850,7 @@ export function QuotesHistoryView({ apiToken }: { apiToken: string }) {
           {(r.status === "finalized" || r.status === "draft") && r.closedDealAt && (
             <span
               title="עסקה סגורה — בלשונית עסקאות"
-              className="shrink-0 inline-flex items-center gap-0.5 text-[10px] rounded-full border border-emerald-500/30 bg-emerald-500/10 text-emerald-400 px-1.5 py-0.5"
+              className="shrink-0 inline-flex items-center gap-0.5 text-xs rounded-full border border-emerald-500/30 bg-emerald-500/10 text-emerald-400 px-1.5 py-0.5"
             >
               <Check className="size-3" /> בעסקאות
             </span>
@@ -988,7 +988,7 @@ export function QuotesHistoryView({ apiToken }: { apiToken: string }) {
         </div>
 
         <div className="flex items-center justify-between gap-2">
-          <span className="text-[11px] text-muted-foreground">
+          <span className="text-[13px] text-muted-foreground">
             נמחקו הצעות? ייבא אותן מחדש מ-Feishu (עם אותו מס' הצעה).
           </span>
           <div className="flex items-center gap-1.5 shrink-0">
@@ -1021,9 +1021,9 @@ export function QuotesHistoryView({ apiToken }: { apiToken: string }) {
           <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 space-y-1.5" dir="rtl">
             <div className="text-xs font-semibold text-amber-400 flex items-center gap-1.5">
               <Trash className="size-3.5" /> סל מיחזור
-              {trash && <span className="text-[10px] text-muted-foreground font-normal">({trash.length})</span>}
+              {trash && <span className="text-xs text-muted-foreground font-normal">({trash.length})</span>}
             </div>
-            <p className="text-[10px] text-muted-foreground">
+            <p className="text-xs text-muted-foreground">
               הצעות שנמחקו. שחזר כדי להחזיר לרשימה, או מחק לצמיתות.
             </p>
             {trash === null ? (
@@ -1040,13 +1040,13 @@ export function QuotesHistoryView({ apiToken }: { apiToken: string }) {
                     className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border/60 bg-background/40 px-2.5 py-1.5"
                   >
                     <div className="flex items-center gap-2 min-w-0 flex-1 flex-wrap">
-                      <span className="text-[11px] text-muted-foreground tabular-nums shrink-0">
+                      <span className="text-[13px] text-muted-foreground tabular-nums shrink-0">
                         {fmtDate(r.createdAt)}
                       </span>
-                      <span className="text-[11px] font-mono text-muted-foreground shrink-0">
+                      <span className="text-[13px] font-mono text-muted-foreground shrink-0">
                         {r.quotationNo ?? r.id.slice(-6)}
                       </span>
-                      <span className={`text-[10px] rounded-full border px-1.5 py-0.5 shrink-0 ${STATUS_LABEL[r.status]?.cls ?? "bg-muted"}`}>
+                      <span className={`text-xs rounded-full border px-1.5 py-0.5 shrink-0 ${STATUS_LABEL[r.status]?.cls ?? "bg-muted"}`}>
                         {STATUS_LABEL[r.status]?.text ?? r.status}
                       </span>
                       <span className="text-sm font-medium truncate min-w-0">
@@ -1059,7 +1059,7 @@ export function QuotesHistoryView({ apiToken }: { apiToken: string }) {
                         onClick={() => handleRestore(r)}
                         disabled={busyId === r.id}
                         title="שחזר"
-                        className="inline-flex items-center gap-1 rounded-md border border-emerald-500/30 bg-emerald-500/10 px-2 py-1 text-[11px] font-medium text-emerald-400 hover:bg-emerald-500/20 disabled:opacity-50"
+                        className="inline-flex items-center gap-1 rounded-md border border-emerald-500/30 bg-emerald-500/10 px-2 py-1 text-[13px] font-medium text-emerald-400 hover:bg-emerald-500/20 disabled:opacity-50"
                       >
                         {busyId === r.id ? <Loader2 className="size-3 animate-spin" /> : <RotateCcw className="size-3" />}
                         שחזר
@@ -1091,7 +1091,7 @@ export function QuotesHistoryView({ apiToken }: { apiToken: string }) {
                 key={u.quotationNo}
                 className="flex items-center gap-2 flex-wrap rounded-md border border-border/60 bg-background/40 px-2 py-1.5"
               >
-                <span className="text-[11px] font-mono text-muted-foreground shrink-0">
+                <span className="text-[13px] font-mono text-muted-foreground shrink-0">
                   {u.quotationNo}
                 </span>
                 <span className="text-xs shrink-0">{u.customer || "ללא שם"}</span>
@@ -1120,7 +1120,7 @@ export function QuotesHistoryView({ apiToken }: { apiToken: string }) {
               <>
                 📝 בקשות מחיר שממתינות לתמחור ({needsPricing.length})
                 {needsPricing.some((r) => r.createdBy === "sales") && (
-                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-sky-500/20">
+                  <span className="text-xs px-1.5 py-0.5 rounded bg-sky-500/20">
                     {needsPricing.filter((r) => r.createdBy === "sales").length} מאיש מכירות
                   </span>
                 )}
@@ -1147,7 +1147,7 @@ export function QuotesHistoryView({ apiToken }: { apiToken: string }) {
                 name={r.name ?? r.leadSid.slice(0, 20)}
                 metaBadge={
                   r.createdBy === "sales" ? (
-                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-sky-500/15 text-sky-400 shrink-0">
+                    <span className="text-xs px-1.5 py-0.5 rounded bg-sky-500/15 text-sky-400 shrink-0">
                       בקשה מאיש מכירות
                     </span>
                   ) : undefined
@@ -1233,7 +1233,7 @@ export function QuotesHistoryView({ apiToken }: { apiToken: string }) {
                 name={r.name ?? r.leadSid.slice(0, 20)}
                 metaBadge={
                   <span
-                    className={`text-[10px] px-1.5 py-0.5 rounded shrink-0 ${
+                    className={`text-xs px-1.5 py-0.5 rounded shrink-0 ${
                       r.status === "finalized"
                         ? "bg-emerald-500/15 text-emerald-400"
                         : "bg-amber-500/15 text-amber-400"
@@ -1434,16 +1434,16 @@ export function QuotesHistoryView({ apiToken }: { apiToken: string }) {
                       <span className="text-sm font-medium truncate min-w-0">
                         {g.name ?? g.leadSid.slice(0, 20)}
                       </span>
-                      <span className="text-[10px] rounded-full border border-border px-1.5 py-0.5 text-muted-foreground shrink-0">
+                      <span className="text-xs rounded-full border border-border px-1.5 py-0.5 text-muted-foreground shrink-0">
                         {g.rows.length} הצעות
                       </span>
-                      <span className="text-[11px] text-muted-foreground tabular-nums shrink-0">
+                      <span className="text-[13px] text-muted-foreground tabular-nums shrink-0">
                         {fmtDate(g.latestAt)}
                       </span>
                       {sentCount > 0 && (
                         <span
                           title={`${sentCount} הצעות נשלחו ללקוח`}
-                          className="shrink-0 inline-flex items-center gap-0.5 text-[10px] rounded-full border border-emerald-500/40 bg-emerald-500/15 text-emerald-400 px-1.5 py-0.5 font-medium"
+                          className="shrink-0 inline-flex items-center gap-0.5 text-xs rounded-full border border-emerald-500/40 bg-emerald-500/15 text-emerald-400 px-1.5 py-0.5 font-medium"
                         >
                           <Check className="size-3" /> נשלח {sentCount}
                         </span>
@@ -1452,7 +1452,7 @@ export function QuotesHistoryView({ apiToken }: { apiToken: string }) {
                         {Object.entries(g.statusCounts).map(([st, n]) => (
                           <span
                             key={st}
-                            className={`text-[10px] rounded-full border px-1.5 py-0.5 ${STATUS_LABEL[st]?.cls ?? "bg-muted"}`}
+                            className={`text-xs rounded-full border px-1.5 py-0.5 ${STATUS_LABEL[st]?.cls ?? "bg-muted"}`}
                           >
                             {STATUS_LABEL[st]?.text ?? st} {n}
                           </span>
@@ -1518,7 +1518,7 @@ export function QuotesHistoryView({ apiToken }: { apiToken: string }) {
                           onClick={() => handleCloseDealGroup(g.leadSid, finalizedIds)}
                           disabled={busyId === `closegroup:${g.leadSid}`}
                           title={`סגור עסקה משולבת (${finalizedIds.length} מוצרים → עסקה אחת)`}
-                          className="lux-tap shrink-0 inline-flex items-center gap-1 text-[10px] rounded-full border border-amber-500/40 bg-amber-500/10 text-amber-400 px-2 py-0.5 hover:bg-amber-500/20 disabled:opacity-50"
+                          className="lux-tap shrink-0 inline-flex items-center gap-1 text-xs rounded-full border border-amber-500/40 bg-amber-500/10 text-amber-400 px-2 py-0.5 hover:bg-amber-500/20 disabled:opacity-50"
                         >
                           {busyId === `closegroup:${g.leadSid}` ? <Loader2 className="size-3 animate-spin" /> : <CheckCircle2 className="size-3" />}
                           סגור עסקה משולבת
@@ -1612,10 +1612,10 @@ export function QuotesHistoryView({ apiToken }: { apiToken: string }) {
                     onChange={(e) => setPayModal({ ...payModal, customPct: e.target.value })}
                     className="w-20 rounded-md border border-border bg-background/40 px-2 py-1.5 text-xs text-center tabular-nums"
                   />
-                  <span className="text-[11px] text-muted-foreground">מקדמה</span>
+                  <span className="text-[13px] text-muted-foreground">מקדמה</span>
                 </div>
               </div>
-              <p className="text-[11px] text-muted-foreground">
+              <p className="text-[13px] text-muted-foreground">
                 {(() => {
                   const pct = parseInt(payModal.customPct, 10);
                   const plan =
@@ -1853,14 +1853,14 @@ function DraftVsFactoryStrip({ rows }: { rows: ApiQuoteRow[] }) {
 
   return (
     <div className="rounded-md border border-amber-500/30 bg-amber-500/5 px-3 py-2 mb-1.5" dir="rtl">
-      <div className="text-[11px] font-medium text-amber-400 mb-1.5 flex items-center gap-1.5">
+      <div className="text-[13px] font-medium text-amber-400 mb-1.5 flex items-center gap-1.5">
         <Sparkles className="size-3" />
         טיוטה מול הצעת מפעל
-        <span className="text-[10px] text-muted-foreground font-normal">
+        <span className="text-xs text-muted-foreground font-normal">
           (אומדן #{estId} · מפעל #{factory.quotationNo ?? factory.id.slice(-5)})
         </span>
       </div>
-      <div className="grid grid-cols-[1fr_auto_auto_auto] gap-x-3 gap-y-1 text-[11px] items-center">
+      <div className="grid grid-cols-[1fr_auto_auto_auto] gap-x-3 gap-y-1 text-[13px] items-center">
         <span className="text-muted-foreground" />
         <span className="text-muted-foreground text-left">טיוטה</span>
         <span className="text-muted-foreground text-left">מפעל</span>
@@ -1933,7 +1933,7 @@ function AlertShell({
     <div className={`rounded-lg border ${t.border} ${t.bg} p-3 space-y-2`} dir="rtl">
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <div className={`text-xs font-semibold ${t.text} flex items-center gap-1.5`}>{title}</div>
-        <label className="inline-flex items-center gap-1.5 cursor-pointer text-[11px] text-muted-foreground hover:text-foreground">
+        <label className="inline-flex items-center gap-1.5 cursor-pointer text-[13px] text-muted-foreground hover:text-foreground">
           <input
             type="checkbox"
             checked={allOn}
@@ -1943,13 +1943,13 @@ function AlertShell({
           בחר הכל
         </label>
       </div>
-      <p className="text-[10px] text-muted-foreground">{hint}</p>
+      <p className="text-xs text-muted-foreground">{hint}</p>
 
       {selectedIds.length > 0 && (
         <div className="flex items-center gap-2 flex-wrap rounded-md border border-border/60 bg-background/60 px-2.5 py-1.5">
-          <span className="text-[11px] font-medium tabular-nums">{selectedIds.length} מסומנות</span>
+          <span className="text-[13px] font-medium tabular-nums">{selectedIds.length} מסומנות</span>
           {bulkBusy ? (
-            <span className="text-[11px] text-muted-foreground inline-flex items-center gap-1.5">
+            <span className="text-[13px] text-muted-foreground inline-flex items-center gap-1.5">
               <Loader2 className="size-3 animate-spin" />
               {bulkBusy}
             </span>
@@ -1959,7 +1959,7 @@ function AlertShell({
               <button
                 type="button"
                 onClick={onClear}
-                className="text-[11px] px-2 py-1 rounded-md border border-border text-muted-foreground hover:bg-secondary"
+                className="text-[13px] px-2 py-1 rounded-md border border-border text-muted-foreground hover:bg-secondary"
               >
                 נקה בחירה
               </button>
@@ -1989,7 +1989,7 @@ function BulkButton({
         ? "border-red-500/40 text-red-400 hover:bg-red-500/10"
         : "border-border text-muted-foreground hover:bg-secondary";
   return (
-    <button type="button" onClick={onClick} className={`text-[11px] px-2 py-1 rounded-md border ${cls}`}>
+    <button type="button" onClick={onClick} className={`text-[13px] px-2 py-1 rounded-md border ${cls}`}>
       {children}
     </button>
   );
@@ -2032,7 +2032,7 @@ function AlertRow({
         <div className="text-sm font-medium truncate">{name}</div>
         {/* wrap as whole chips — without the nowrap the date and quote number
             get squeezed to a character per line next to a status badge */}
-        <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10.5px] text-muted-foreground [&_span]:whitespace-nowrap">
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground [&_span]:whitespace-nowrap">
           {meta}
           {metaBadge}
         </div>
@@ -2063,7 +2063,7 @@ function QuoteModal({ row, onClose, widgetToken }: { row: ApiQuoteRow; onClose: 
         <div className="flex items-center justify-between px-4 py-2 border-b border-border bg-card/80">
           <div className="text-sm font-semibold">
             {row.name ?? row.leadSid.slice(0, 25)}
-            <span className="text-[11px] text-muted-foreground font-mono mx-2">
+            <span className="text-[13px] text-muted-foreground font-mono mx-2">
               #{row.quotationNo ?? row.id.slice(-6)}
             </span>
           </div>

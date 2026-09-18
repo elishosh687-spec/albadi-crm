@@ -207,3 +207,22 @@ and showed "—"), one filter row, the profit scenario folded in a `<details>`,
 6 columns with the verdict in words ("אנחנו זולים ב־₪3,950 (32%)"),
 plate/shipping/lead time behind "פרטים", rows grouped by supplier, and the
 table turns into cards under 768px (`.competitor-table` in globals.css).
+
+### Compliance pass over every tab (2026-09-18)
+
+- Probe (small text / taps / contrast / overflow) run on every hub tab at
+  375px, 812×375 and 1280px: all clean except the planned-vs-actual cost table
+  on עסקאות (a deliberate `.lux-scroll-x` region) and the 3D designer (own
+  light theme, left as-is by design).
+- `.ux-floor` on FactoryFlowView, ClosedQuotesView, ConsolidationView,
+  ColorCatalogScreen, PlaygroundView and CalculatorView: every control ≥44px,
+  `a.size-7` icon links too.
+- Lux base: `.lux-overline` / `.lux-label` / `.lux-stat-label` 12px (were 10),
+  `.mfit .lux-tap` 44px (was 34), `.lux-range` = 44px input with a 6px track
+  pseudo-element (look unchanged), `.mfit .lux-stack-sm` uses
+  `minmax(0,1fr)` + `min-width:0` children (a plain `1fr` grew to 557px on the
+  shipping list). `.mfit .calc-lux select { width:100% }` — a select is as wide
+  as its longest option and pushed the calculator 130px off a phone.
+- Font sweep in factory-flow / shipping / playground / colors / calculator:
+  inline and Tailwind sizes under 12px raised; `#8a7f74` → `var(--lux-muted)`.
+  Playground `faint` #6b645c → #958b80.

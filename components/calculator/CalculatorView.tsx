@@ -493,7 +493,7 @@ export function CalculatorView({ products, quantityTiers, shippingOptions, initi
   const share = useQuoteShare({ apiToken, sid, leadName, quoteText: operatorQuoteText, factorySpec: operatorFactorySpec, pricing: operatorPricing, draftId });
 
   return (
-    <div className="calc-lux gg-theme flex flex-col gap-6 rounded-xl p-5" dir="rtl">
+    <div className="calc-lux gg-theme ux-floor flex flex-col gap-6 rounded-xl p-5" dir="rtl">
       {/* Editorial header — quote title + live FX strip + tabs */}
       <div className="flex flex-col gap-4">
         {/* Top strip: live pill + FX rates */}
@@ -518,7 +518,7 @@ export function CalculatorView({ products, quantityTiers, shippingOptions, initi
           {c && (
             <div
               className="lux-sans flex items-center gap-2 tabular-nums"
-              style={{ fontSize: 11, color: "var(--lux-muted)", letterSpacing: "0.04em" }}
+              style={{ fontSize: 12.5, color: "var(--lux-muted)", letterSpacing: "0.04em" }}
             >
               <span>USD→ILS {r2(c.usdToIls)}</span>
               <span style={{ opacity: 0.5 }}>·</span>
@@ -668,7 +668,7 @@ export function CalculatorView({ products, quantityTiers, shippingOptions, initi
             ) : (
               /* Manual product spec */
               <div className="flex flex-col gap-3 rounded-lg border border-primary/30 bg-primary/5 p-3">
-                <div className="text-[11px] text-muted-foreground">
+                <div className="text-[13px] text-muted-foreground">
                   מוצר מותאם אישית — הזן עלות סינית, מידות, ופרטי קרטון. הרווח/שילוח מחושב לפי הגדרות המערכת.
                 </div>
                 <div className="flex flex-col gap-1">
@@ -698,11 +698,11 @@ export function CalculatorView({ products, quantityTiers, shippingOptions, initi
                     className="bg-background/50 border border-border rounded-md px-3 py-1.5 text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-ring/30"
                   />
                   {!manualValid && (
-                    <span className="text-[11px] text-warning">חובה להזין עלות סינית גדולה מ-0</span>
+                    <span className="text-[13px] text-warning">חובה להזין עלות סינית גדולה מ-0</span>
                   )}
                 </div>
                 <div className="pt-2 border-t border-primary/20 flex flex-col gap-2">
-                  <div className="text-[11px] uppercase tracking-wider text-muted-foreground">קרטון מאסטר</div>
+                  <div className="text-[13px] uppercase tracking-wider text-muted-foreground">קרטון מאסטר</div>
                   <div className="grid grid-cols-2 gap-3">
                     <NumField label="יחידות לקרטון" value={manualCartonQty} onChange={setManualCartonQty} placeholder="250" />
                     <NumField label="משקל קרטון (ק״ג)" value={manualCartonWeight} onChange={setManualCartonWeight} placeholder="5" step={0.1} />
@@ -760,7 +760,7 @@ export function CalculatorView({ products, quantityTiers, shippingOptions, initi
                     autoFocus
                     className="bg-background/50 border border-border rounded-md px-3 py-2 text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-ring/30"
                   />
-                  <span className="text-[11px] text-muted-foreground">
+                  <span className="text-[13px] text-muted-foreground">
                     {overrideValid
                       ? `מתומחר לפי טיר ${snappedTierQty.toLocaleString("he-IL")}`
                       : "הזן כמות מותאמת או בחר טיר למעלה"}
@@ -823,9 +823,9 @@ export function CalculatorView({ products, quantityTiers, shippingOptions, initi
                     className="w-full bg-transparent border-0 px-1.5 text-right tabular-nums focus:outline-none"
                     style={{ fontSize: 16, color: "var(--lux-ink)" }}
                   />
-                  <span style={{ fontSize: 11, color: "var(--lux-muted)", whiteSpace: "nowrap" }}>· חד-פעמי</span>
+                  <span style={{ fontSize: 12.5, color: "var(--lux-muted)", whiteSpace: "nowrap" }}>· חד-פעמי</span>
                 </div>
-                <span className="text-[10px]" style={{ color: "var(--lux-muted)" }}>
+                <span className="text-xs" style={{ color: "var(--lux-muted)" }}>
                   {moldsValid
                     ? `¥${(moldsParsed / effectiveQty).toFixed(3)}/יח׳ · ${effectiveQty.toLocaleString("he-IL")} יח׳`
                     : "ריק → ללא עלות מולדים"}
@@ -876,7 +876,7 @@ export function CalculatorView({ products, quantityTiers, shippingOptions, initi
               <div className="flex items-baseline justify-between">
                 <span className="lux-label" style={{ color: "var(--lux-muted)", letterSpacing: "0.14em" }}>
                   מרווח רווח{" "}
-                  <span style={{ fontSize: 9, opacity: 0.7 }}>(margin-on-price)</span>
+                  <span style={{ fontSize: 12, opacity: 0.7 }}>(margin-on-price)</span>
                 </span>
                 <span
                   className="lux-sans tabular-nums"
@@ -896,7 +896,7 @@ export function CalculatorView({ products, quantityTiers, shippingOptions, initi
                 className="lux-range"
                 aria-label="מרווח רווח"
               />
-              <span className="text-[10px]" style={{ color: "var(--lux-muted)" }}>
+              <span className="text-xs" style={{ color: "var(--lux-muted)" }}>
                 {marginOverrideValid
                   ? `דורס את הגלובלי לחישוב הזה (${marginOverrideParsed}%)`
                   : `ברירת מחדל מהמערכת: ${Math.round(defaultMargin)}%`}
@@ -931,7 +931,7 @@ export function CalculatorView({ products, quantityTiers, shippingOptions, initi
                     style={{ fontSize: 16, color: "var(--lux-ink)" }}
                   />
                 </div>
-                <span className="text-[10px]" style={{ color: "var(--lux-muted)" }}>
+                <span className="text-xs" style={{ color: "var(--lux-muted)" }}>
                   {minProfitValid ? `אזהרה אם רווח כולל < ₪${ils(minProfitParsed)}` : "ריק → ללא בדיקה"}
                 </span>
               </AddonField>
@@ -1201,7 +1201,7 @@ export function CalculatorView({ products, quantityTiers, shippingOptions, initi
               החל על ההצעה — קבע מרווח {r2(reverseResult.marginPct)}%
             </button>
           )}
-          <p className="text-[11px] text-muted-foreground">
+          <p className="text-[13px] text-muted-foreground">
             השוואה למרג'ין הנוכחי בהגדרות: {currentMargin}%. צבע ירוק = ≥ ההגדרה.
           </p>
         </section>
@@ -1239,7 +1239,7 @@ function ConfidenceBadge({ confidence }: { confidence?: string }) {
     low: ["bg-destructive/15 text-destructive", "ביטחון נמוך"],
   };
   const [cls, label] = map[confidence ?? "medium"] ?? map.medium;
-  return <span className={cn("rounded-full px-2.5 py-0.5 text-[11px] font-semibold", cls)}>{label}</span>;
+  return <span className={cn("rounded-full px-2.5 py-0.5 text-[13px] font-semibold", cls)}>{label}</span>;
 }
 
 function EstimateTab({ apiToken, shippingOptions, sid, leadName, initialMargins, prefill, draftId }: { apiToken?: string; shippingOptions: ShippingOption[]; sid?: string; leadName?: string | null; initialMargins: Record<string, number>; prefill?: EstimatePrefill; draftId?: string }) {
@@ -1439,7 +1439,7 @@ function EstimateTab({ apiToken, shippingOptions, sid, leadName, initialMargins,
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="text-[11px] text-muted-foreground">
+      <div className="text-[13px] text-muted-foreground">
         הזן מידות וכמות → המערכת תחזה את המחיר לפי המחירונים האמיתיים של המפעלים (80g), תבחר את המפעל הזול שמייצר, ותראה את ההיגיון. מעל 10,000 יח׳ → אומדן מבוסס על שכבת ה‑10,000. מחוץ לטווח → &quot;שלח למפעל&quot;.
       </div>
 
@@ -1484,7 +1484,7 @@ function EstimateTab({ apiToken, shippingOptions, sid, leadName, initialMargins,
                 className="bg-background/50 border border-border rounded-md px-3 py-1.5 text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-ring/30"
               />
               {effectiveQty > 10000 && (
-                <span className="text-[11px] text-amber-500">
+                <span className="text-[13px] text-amber-500">
                   ⚠️ מעל 10,000 — האומדן מבוסס על מחיר יחידה בשכבת ה‑10,000 ומוכפל בכמות. לאישור מול המפעל.
                 </span>
               )}
@@ -1526,7 +1526,7 @@ function EstimateTab({ apiToken, shippingOptions, sid, leadName, initialMargins,
                   <option value="heat_press">חום (heat-press)</option>
                   <option value="sewing">תפירה ידנית</option>
                 </select>
-                <span className="text-[11px] text-muted-foreground">קובע איזה מפעל מתמחר (לפי הטבלה של סיימון)</span>
+                <span className="text-[13px] text-muted-foreground">קובע איזה מפעל מתמחר (לפי הטבלה של סיימון)</span>
               </div>
             </div>
 
@@ -1542,7 +1542,7 @@ function EstimateTab({ apiToken, shippingOptions, sid, leadName, initialMargins,
                 onChange={(e) => setMoldsCost(e.target.value)}
                 className="bg-background/50 border border-border rounded-md px-3 py-1.5 text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-ring/30"
               />
-              <span className="text-[11px] text-muted-foreground">
+              <span className="text-[13px] text-muted-foreground">
                 {moldsValid
                   ? `מולדים ידני — מתחלק על ${effectiveQty.toLocaleString("he-IL")} יח׳ = ¥${(moldsParsed / effectiveQty).toFixed(3)} ליחידה · pass-through, בנפרד מהגלופה האוטומטית מהקטלוג`
                   : "ריק → רק הגלופה האוטומטית מהקטלוג (אם יש למינציה)"}
@@ -1566,7 +1566,7 @@ function EstimateTab({ apiToken, shippingOptions, sid, leadName, initialMargins,
                   onChange={(e) => setMarginOverride(e.target.value)}
                   className="bg-background/50 border border-border rounded-md px-3 py-1.5 text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-ring/30"
                 />
-                <span className="text-[11px] text-muted-foreground">
+                <span className="text-[13px] text-muted-foreground">
                   {marginOverrideValid
                     ? `דורס את הגלובלי לחישוב הזה (${marginOverrideParsed}%)`
                     : "ריק → לפי הגדרות מערכת"}
@@ -1583,7 +1583,7 @@ function EstimateTab({ apiToken, shippingOptions, sid, leadName, initialMargins,
                   onChange={(e) => setMinProfit(e.target.value)}
                   className="bg-background/50 border border-border rounded-md px-3 py-1.5 text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-ring/30"
                 />
-                <span className="text-[11px] text-muted-foreground">
+                <span className="text-[13px] text-muted-foreground">
                   {minProfitValid
                     ? `מציג אזהרה אם רווח כולל < ₪${ils(minProfitParsed)}`
                     : "ריק → ללא בדיקה"}
@@ -1610,7 +1610,7 @@ function EstimateTab({ apiToken, shippingOptions, sid, leadName, initialMargins,
               <ul className="list-disc pr-5 text-muted-foreground space-y-0.5">
                 {geoErrors.map((e, i) => (<li key={i}>{e}</li>))}
               </ul>
-              <div className="text-[11px] text-muted-foreground mt-2">תקן את המידות כדי לחשב מחיר.</div>
+              <div className="text-[13px] text-muted-foreground mt-2">תקן את המידות כדי לחשב מחיר.</div>
             </div>
           )}
           {!geoBlocked && loading && (<div className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="size-4 animate-spin" />מחשב…</div>)}
@@ -1621,7 +1621,7 @@ function EstimateTab({ apiToken, shippingOptions, sid, leadName, initialMargins,
               <div className="font-bold text-amber-700 dark:text-amber-400 mb-1">⚠️ לא ניתן לאמוד — שלח למפעל</div>
               <div className="text-muted-foreground">{est.refused}</div>
               {est.candidates && est.candidates.length > 0 && (
-                <div className="text-[11px] text-muted-foreground mt-2">מחירים שנבדקו: {est.candidates.map((x) => `${x.factory} ¥${x.unitCny}${x.inRange ? "" : " (מחוץ לטווח)"}`).join(" · ")}</div>
+                <div className="text-[13px] text-muted-foreground mt-2">מחירים שנבדקו: {est.candidates.map((x) => `${x.factory} ¥${x.unitCny}${x.inRange ? "" : " (מחוץ לטווח)"}`).join(" · ")}</div>
               )}
             </div>
           )}
@@ -1672,7 +1672,7 @@ function EstimateTab({ apiToken, shippingOptions, sid, leadName, initialMargins,
                   <Calculator className="size-3.5" />
                   ההיגיון מאחורי המחיר
                 </span>
-                <span className="flex items-center gap-1.5 text-[11px] text-muted-foreground/70">
+                <span className="flex items-center gap-1.5 text-[13px] text-muted-foreground/70">
                   הצג פירוט
                   <ChevronDown className="size-4 transition-transform group-open:rotate-180" />
                 </span>
@@ -1693,11 +1693,11 @@ function EstimateTab({ apiToken, shippingOptions, sid, leadName, initialMargins,
               <div className="flex items-center justify-between mb-2">
                 <h3 className="text-xs uppercase tracking-wider text-muted-foreground">מידות אריזה (אומדן)</h3>
                 {est.carton.confidence === "low"
-                  ? <span className="rounded-full bg-amber-500/20 text-amber-700 dark:text-amber-400 px-2.5 py-0.5 text-[11px] font-semibold">לאמת מול מפעל</span>
-                  : <span className="rounded-full bg-success/15 text-success px-2.5 py-0.5 text-[11px] font-semibold">±10%</span>}
+                  ? <span className="rounded-full bg-amber-500/20 text-amber-700 dark:text-amber-400 px-2.5 py-0.5 text-[13px] font-semibold">לאמת מול מפעל</span>
+                  : <span className="rounded-full bg-success/15 text-success px-2.5 py-0.5 text-[13px] font-semibold">±10%</span>}
               </div>
               {est.carton.confidence === "low" && (
-                <div className="text-[11px] text-amber-700 dark:text-amber-400 mb-2">צורה שטוחה/חריגה — אומדן הנפח לא אמין. הקרטון להלן בערך בלבד; מומלץ לאמת מול המפעל.</div>
+                <div className="text-[13px] text-amber-700 dark:text-amber-400 mb-2">צורה שטוחה/חריגה — אומדן הנפח לא אמין. הקרטון להלן בערך בלבד; מומלץ לאמת מול המפעל.</div>
               )}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs tabular-nums">
                 <Stat label="קרטון (ס״מ)" value={`${est.carton.lengthCm}×${est.carton.widthCm}×${est.carton.heightCm} ≈`} />
@@ -1707,7 +1707,7 @@ function EstimateTab({ apiToken, shippingOptions, sid, leadName, initialMargins,
                 <Stat label="קרטונים" value={`${r.totalCartons}`} />
                 <Stat label="משקל (ק״ג)" value={`${r.totalWeightKg.toLocaleString("he-IL")} ≈`} />
               </div>
-              <div className="text-[10px] text-muted-foreground mt-2">
+              <div className="text-xs text-muted-foreground mt-2">
                 ה‑CBM הוא המספר הקובע לשילוח. המשקל הוא אומדן-בד גס (לא נתון מפעל) — להתמצאות בלבד.
               </div>
             </section>
@@ -1819,7 +1819,7 @@ function ProposalSummary({
           </span>
           <span
             className="lux-sans tabular-nums"
-            style={{ fontSize: 10, letterSpacing: "0.12em", color: "var(--lux-muted)" }}
+            style={{ fontSize: 12, letterSpacing: "0.12em", color: "var(--lux-muted)" }}
           >
             {r.quantity.toLocaleString("he-IL")} יח׳ · {shippingName}
           </span>
@@ -1849,7 +1849,7 @@ function ProposalSummary({
         >
           <SummaryRow label="עלות יח׳" value={`₪${ils(c.productionPerUnitIls)}`} />
           <SummaryRow
-            label={<>משלוח יח׳ <span style={{ fontSize: 10, opacity: 0.7 }}>· pass-through</span></>}
+            label={<>משלוח יח׳ <span style={{ fontSize: 12, opacity: 0.7 }}>· pass-through</span></>}
             value={`₪${ils(c.shippingPerUnitIls)}`}
           />
           <SummaryRow
@@ -1866,7 +1866,7 @@ function ProposalSummary({
             style={{ padding: "12px 14px", marginTop: 10, borderRadius: 4, background: "var(--lux-inset)" }}
           >
             <span style={{ fontSize: 13, color: "var(--lux-ink)" }}>
-              תבניות / מולדים <span style={{ fontSize: 10, color: "var(--lux-muted)" }}>· חד-פעמי</span>
+              תבניות / מולדים <span style={{ fontSize: 12, color: "var(--lux-muted)" }}>· חד-פעמי</span>
             </span>
             <span className="tabular-nums" style={{ fontSize: 14, color: "var(--lux-ink)" }}>
               ₪{ils(r.moldsTotalSellingPriceIls)}
@@ -1968,8 +1968,8 @@ function ProposalSummary({
           </button>
         )}
 
-        {share.status && <p className="text-[11px]" style={{ color: "var(--lux-cool)", marginTop: 10 }}>{share.status}</p>}
-        {share.error && <p className="text-[11px] text-destructive" style={{ marginTop: 10 }}>⚠️ {share.error}</p>}
+        {share.status && <p className="text-[13px]" style={{ color: "var(--lux-cool)", marginTop: 10 }}>{share.status}</p>}
+        {share.error && <p className="text-[13px] text-destructive" style={{ marginTop: 10 }}>⚠️ {share.error}</p>}
       </section>
 
       {/* logistics stat tiles */}
@@ -2003,7 +2003,7 @@ function LogiTile({ value, label }: { value: string; label: string }) {
       }}
     >
       <div className="tabular-nums" style={{ fontSize: 18, color: "var(--lux-ink)" }}>{value}</div>
-      <div style={{ fontSize: 10, color: "var(--lux-muted)", marginTop: 3, letterSpacing: "0.04em" }}>{label}</div>
+      <div style={{ fontSize: 12, color: "var(--lux-muted)", marginTop: 3, letterSpacing: "0.04em" }}>{label}</div>
     </div>
   );
 }
@@ -2259,7 +2259,7 @@ function BreakdownCard({
               </div>
             </div>
           </div>
-          <div className="text-muted-foreground text-center mt-2 text-[11px]">
+          <div className="text-muted-foreground text-center mt-2 text-[13px]">
             {r.chargeableWeightKg > r.totalWeightKg
               ? `הנפח גובר — מחויב לפי ${r.volumetricWeightKg.toLocaleString("he-IL")} ק״ג (CBM × 167)`
               : "המשקל הפיזי גובר — מחויב לפי המשקל בפועל"}
@@ -2782,14 +2782,14 @@ function PaymentPlanPicker({
   const custom = planId.startsWith("custom_") ? planId.slice(7) : "";
   return (
     <div className="flex items-center gap-2 flex-wrap" dir="rtl">
-      <span className="text-[11px] text-muted-foreground">פריסת תשלומים:</span>
+      <span className="text-[13px] text-muted-foreground">פריסת תשלומים:</span>
       {/* "ללא" — send the quote WITHOUT any payment terms (Eli 2026-08-03, the
           default): the salesperson confirms terms per-call, adds them here only
           when he wants. */}
       <button
         type="button"
         onClick={() => onChange(NO_PAYMENT_PLAN_ID)}
-        className={`text-[11px] px-2.5 py-1 rounded-md border transition-colors ${
+        className={`text-[13px] px-2.5 py-1 rounded-md border transition-colors ${
           planId === NO_PAYMENT_PLAN_ID
             ? "bg-primary text-primary-foreground border-primary"
             : "border-border bg-background/40 text-muted-foreground hover:bg-secondary"
@@ -2802,7 +2802,7 @@ function PaymentPlanPicker({
           key={p.id}
           type="button"
           onClick={() => onChange(p.id)}
-          className={`text-[11px] px-2.5 py-1 rounded-md border transition-colors ${
+          className={`text-[13px] px-2.5 py-1 rounded-md border transition-colors ${
             planId === p.id
               ? "bg-primary text-primary-foreground border-primary"
               : "border-border bg-background/40 text-muted-foreground hover:bg-secondary"
@@ -2821,7 +2821,7 @@ function PaymentPlanPicker({
           const n = parseInt(e.target.value, 10);
           onChange(Number.isFinite(n) && n > 0 && n < 100 ? customDepositPlan(n).id : DEFAULT_PAYMENT_PLAN_ID);
         }}
-        className="w-16 rounded-md border border-border bg-background/40 px-2 py-1 text-[11px] text-center tabular-nums"
+        className="w-16 rounded-md border border-border bg-background/40 px-2 py-1 text-[13px] text-center tabular-nums"
       />
     </div>
   );
@@ -2889,7 +2889,7 @@ function QuoteShareCard(props: {
               with no schedule and no bank details and nobody noticed until a
               customer had to ask (Eli 02/09). */}
           {(props.paymentPlanId ?? NO_PAYMENT_PLAN_ID) === NO_PAYMENT_PLAN_ID && (
-            <p className="text-[11px] text-muted-foreground -mt-1">
+            <p className="text-[13px] text-muted-foreground -mt-1">
               ההצעה תישלח <b className="text-foreground">בלי תנאי תשלום ובלי פרטי חשבון בנק</b> — בחר פריסה למעלה כדי לצרף אותם להודעה ול-PDF.
             </p>
           )}
@@ -2904,7 +2904,7 @@ function QuoteShareCard(props: {
               <div className="text-xs font-medium truncate">
                 {pickedName ?? "(ללא שם)"}
               </div>
-              <div className="text-[11px] text-muted-foreground truncate tabular-nums">
+              <div className="text-[13px] text-muted-foreground truncate tabular-nums">
                 sid {pickedSid}
               </div>
             </div>
@@ -2936,12 +2936,12 @@ function QuoteShareCard(props: {
         {open && (
           <div className="absolute z-30 mt-1 w-full rounded-md border border-border bg-popover shadow-xl max-h-72 overflow-auto">
             {loadingResults ? (
-              <div className="px-3 py-4 text-[11px] text-muted-foreground flex items-center gap-2 justify-center">
+              <div className="px-3 py-4 text-[13px] text-muted-foreground flex items-center gap-2 justify-center">
                 <Loader2 className="size-3 animate-spin" />
                 טוען…
               </div>
             ) : results.length === 0 ? (
-              <div className="px-3 py-4 text-[11px] text-muted-foreground text-center">
+              <div className="px-3 py-4 text-[13px] text-muted-foreground text-center">
                 לא נמצאו לידים.
               </div>
             ) : (
@@ -2955,7 +2955,7 @@ function QuoteShareCard(props: {
                     >
                       <div className="min-w-0 flex-1">
                         <div className="text-xs font-medium truncate">{r.name || "(ללא שם)"}</div>
-                        <div className="text-[10px] text-muted-foreground tabular-nums truncate">
+                        <div className="text-xs text-muted-foreground tabular-nums truncate">
                           {r.phone || r.sid}
                           {r.stage ? ` · ${r.stage}` : ""}
                         </div>
@@ -2977,7 +2977,7 @@ function QuoteShareCard(props: {
 
       {estimate && (
         <div className="flex flex-col gap-2 border-t border-border/60 pt-3">
-          <div className="text-[11px] text-muted-foreground">מהאומדן אפשר גם:</div>
+          <div className="text-[13px] text-muted-foreground">מהאומדן אפשר גם:</div>
           <div className="flex flex-wrap gap-2">
             <button
               type="button"
@@ -3001,13 +3001,13 @@ function QuoteShareCard(props: {
             </button>
           </div>
           {estimate.cartonConfidence === "low" && (
-            <div className="text-[11px] text-amber-700 dark:text-amber-400">⚠️ אומדן האריזה לצורה הזו לא ודאי — כדאי לאמת מול המפעל לפני שליחה ללקוח.</div>
+            <div className="text-[13px] text-amber-700 dark:text-amber-400">⚠️ אומדן האריזה לצורה הזו לא ודאי — כדאי לאמת מול המפעל לפני שליחה ללקוח.</div>
           )}
         </div>
       )}
 
-      {status && <p className="text-[11px] text-success">{status}</p>}
-      {error && <p className="text-[11px] text-destructive">⚠️ {error}</p>}
+      {status && <p className="text-[13px] text-success">{status}</p>}
+      {error && <p className="text-[13px] text-destructive">⚠️ {error}</p>}
     </section>
   );
 }
@@ -3043,7 +3043,7 @@ function ReadField({ label, value, prefix, suffix }: { label: string; value: str
 function ReadStat({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex flex-col">
-      <span style={{ fontSize: 11, color: "var(--lux-muted)", marginBottom: 6 }}>{label}</span>
+      <span style={{ fontSize: 12.5, color: "var(--lux-muted)", marginBottom: 6 }}>{label}</span>
       <span style={{ fontSize: 15, color: "var(--lux-ink)" }}>{value}</span>
     </div>
   );
@@ -3177,7 +3177,7 @@ function SplitShipCard({ active, onSelect }: { active: boolean; onSelect: () => 
         </span>
         <span className="flex flex-col items-start min-w-0">
           <span style={{ fontSize: 14, color: "var(--lux-ink)" }} className="truncate">מפוצל (אוויר+ים)</span>
-          <span style={{ fontSize: 11, color: "var(--lux-muted)" }} className="truncate">חלק באוויר, חלק בים</span>
+          <span style={{ fontSize: 12.5, color: "var(--lux-muted)" }} className="truncate">חלק באוויר, חלק בים</span>
         </span>
       </span>
       {active && <Check className="size-4 shrink-0" style={{ color: "var(--lux-cool)" }} />}
@@ -3199,7 +3199,7 @@ function ShippingCard({ option, active, onSelect }: { option: ShippingOption; ac
         <span className="flex flex-col items-start min-w-0">
           <span style={{ fontSize: 14, color: "var(--lux-ink)" }} className="truncate">{option.name}</span>
           {option.description && (
-            <span style={{ fontSize: 11, color: "var(--lux-muted)" }} className="truncate">{option.description}</span>
+            <span style={{ fontSize: 12.5, color: "var(--lux-muted)" }} className="truncate">{option.description}</span>
           )}
         </span>
       </span>

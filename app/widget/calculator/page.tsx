@@ -205,7 +205,7 @@ export default async function CalculatorWidgetPage({
           <div>
             {lead ? (
               <span>
-                <span style={{ color: "#8a7f74" }}>ליד · </span>
+                <span style={{ color: "var(--lux-muted, #a0958a)" }}>ליד · </span>
                 {lead.name || lead.phone || lead.sid}
                 {lead.stage && (
                   <span
@@ -223,7 +223,7 @@ export default async function CalculatorWidgetPage({
                 )}
               </span>
             ) : (!contactId && !sid) ? (
-              <span style={{ color: "#8a7f74" }}>ללא ליד — מצב standalone</span>
+              <span style={{ color: "var(--lux-muted, #a0958a)" }}>ללא ליד — מצב standalone</span>
             ) : null}
           </div>
           {leadError && (

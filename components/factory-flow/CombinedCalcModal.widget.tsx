@@ -551,7 +551,7 @@ export function CombinedCalcModalWidget({
               {priceableRows.length > 1 && (
                 <div className="rounded-md border border-primary/30 bg-primary/5 px-3 py-2">
                   <div className="flex items-center justify-between mb-1">
-                    <span className="text-[11px] text-muted-foreground">
+                    <span className="text-[13px] text-muted-foreground">
                       קבע אחוז רווח לכל המוצרים יחד
                     </span>
                     <span className="text-xs font-semibold text-primary tabular-nums">
@@ -572,18 +572,18 @@ export function CombinedCalcModalWidget({
 
               {/* Products header + expand/collapse all */}
               <div className="flex items-center justify-between pt-1">
-                <span className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold">
+                <span className="text-[13px] uppercase tracking-wider text-muted-foreground font-semibold">
                   מוצרים — {selectedRows.length} נבחרו מתוך {priceableRows.length}
                 </span>
                 <button
                   type="button"
                   onClick={toggleAll}
-                  className="text-[11px] font-medium text-primary hover:underline"
+                  className="text-[13px] font-medium text-primary hover:underline"
                 >
                   {allExpanded ? "כווץ הכל" : "הרחב הכל"}
                 </button>
               </div>
-              <p className="text-[10px] text-muted-foreground -mt-1.5">
+              <p className="text-xs text-muted-foreground -mt-1.5">
                 סמן ✓ אילו מוצרים ייכנסו להצעה המשולבת (PDF / WhatsApp).
               </p>
 
@@ -608,13 +608,13 @@ export function CombinedCalcModalWidget({
               ))}
 
               {pendingCount > 0 && (
-                <div className="text-[11px] text-muted-foreground">
+                <div className="text-[13px] text-muted-foreground">
                   {pendingCount} הצעות ממתינות לתשובת מפעל — לא נכללות בחישוב המשולב.
                 </div>
               )}
 
               {selectedRows.length === 0 && (
-                <div className="rounded-md border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-[11px] text-amber-400">
+                <div className="rounded-md border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-[13px] text-amber-400">
                   לא נבחר אף מוצר — סמן לפחות מוצר אחד כדי ליצור הצעה.
                 </div>
               )}
@@ -622,7 +622,7 @@ export function CombinedCalcModalWidget({
               {/* Combined summary */}
               {combinedResult && (
                 <div className="rounded-lg border border-success/30 bg-success/5 p-3 space-y-1.5 mt-1">
-                  <div className="text-[10px] uppercase tracking-wider text-success/80">
+                  <div className="text-xs uppercase tracking-wider text-success/80">
                     תוצאה משולבת ({combinedResult.count} מוצרים)
                   </div>
                   {isOverCbmConsolidationThreshold(combinedResult.combinedCbm) && (
@@ -636,7 +636,7 @@ export function CombinedCalcModalWidget({
                   />
                   {/* Manual CBM override — real merged volume for grouped orders. */}
                   <div className="flex items-center justify-between gap-2 py-0.5">
-                    <span className="text-[11px] text-muted-foreground shrink-0">נפח ידני (CBM)</span>
+                    <span className="text-[13px] text-muted-foreground shrink-0">נפח ידני (CBM)</span>
                     <input
                       type="number"
                       min={0}
@@ -649,7 +649,7 @@ export function CombinedCalcModalWidget({
                     />
                   </div>
                   {cbmOverrideValid && (
-                    <div className="text-[10px] text-amber-500/90 text-right">
+                    <div className="text-xs text-amber-500/90 text-right">
                       שילוח מחושב על {cbmOverrideParsed} CBM (עקיפה ידנית)
                     </div>
                   )}
@@ -947,7 +947,7 @@ function ProductCalcSection({
             expanded ? "" : "hover:bg-secondary/40"
           }`}
         >
-        <span className="size-5 shrink-0 grid place-items-center rounded-full bg-primary/15 text-primary text-[11px] font-bold tabular-nums">
+        <span className="size-5 shrink-0 grid place-items-center rounded-full bg-primary/15 text-primary text-[13px] font-bold tabular-nums">
           {index + 1}
         </span>
         <ChevronDown
@@ -958,11 +958,11 @@ function ProductCalcSection({
         <span className="truncate flex-1 text-sm font-semibold">
           {state.productName || row.productSpec.description || "מוצר"}
         </span>
-        <span className="font-mono text-[10px] text-muted-foreground shrink-0 hidden sm:inline">
+        <span className="font-mono text-xs text-muted-foreground shrink-0 hidden sm:inline">
           {row.quotationNo ?? row.id.slice(-6)}
         </span>
         <span
-          className={`text-[10px] rounded-full border px-1.5 py-0.5 shrink-0 ${
+          className={`text-xs rounded-full border px-1.5 py-0.5 shrink-0 ${
             stale
               ? "border-amber-500/30 bg-amber-500/10 text-amber-400"
               : finalized
@@ -987,7 +987,7 @@ function ProductCalcSection({
           <SectionLabel>פרטי מוצר ל‑PDF</SectionLabel>
           {/* Image */}
           <div>
-            <label className="block text-[11px] text-muted-foreground mb-0.5">
+            <label className="block text-[13px] text-muted-foreground mb-0.5">
               תמונת מוצר (נכנסת ל‑PDF)
             </label>
             <div className="flex items-center gap-2">
@@ -1025,12 +1025,12 @@ function ProductCalcSection({
                   className="size-12 shrink-0 rounded-md border border-border object-contain bg-background"
                 />
               ) : (
-                <div className="size-12 shrink-0 rounded-md border border-dashed border-border grid place-items-center text-[9px] text-muted-foreground">
+                <div className="size-12 shrink-0 rounded-md border border-dashed border-border grid place-items-center text-xs text-muted-foreground">
                   אין
                 </div>
               )}
             </div>
-            {imgError && <p className="text-[10px] text-destructive mt-0.5">{imgError}</p>}
+            {imgError && <p className="text-xs text-destructive mt-0.5">{imgError}</p>}
           </div>
 
           <SpecField
@@ -1053,7 +1053,7 @@ function ProductCalcSection({
             <SpecField label="גימור" value={state.finishing} onChange={(v) => onPatch({ finishing: v })} />
           </div>
           <div>
-            <label className="block text-[11px] text-muted-foreground mb-0.5">הערות ללקוח (ב‑PDF)</label>
+            <label className="block text-[13px] text-muted-foreground mb-0.5">הערות ללקוח (ב‑PDF)</label>
             <textarea
               value={state.customerNotes}
               onChange={(e) => onPatch({ customerNotes: e.target.value })}
@@ -1069,7 +1069,7 @@ function ProductCalcSection({
 
           {/* Molds */}
           <div>
-            <label className="block text-[11px] text-muted-foreground mb-0.5">
+            <label className="block text-[13px] text-muted-foreground mb-0.5">
               מולדים / תבניות (¥ CNY) — חד פעמי
             </label>
             <input
@@ -1089,7 +1089,7 @@ function ProductCalcSection({
           {row.factoryResponse ? (
             <div>
               <div className="flex items-center justify-between mb-1">
-                <label className="text-[11px] text-muted-foreground">אחוז רווח</label>
+                <label className="text-[13px] text-muted-foreground">אחוז רווח</label>
                 <span className="text-sm font-semibold text-primary tabular-nums">{state.margin}%</span>
               </div>
               <input
@@ -1103,7 +1103,7 @@ function ProductCalcSection({
               />
             </div>
           ) : (
-            <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-[11px] text-amber-300/90">
+            <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-[13px] text-amber-300/90">
               טיוטה — מתומחרת לפי האומדן השמור. המפעל עוד לא ענה, אז אין כאן
               סליידר רווח; המחיר משתתף בחישוב המשולב כמו שהוא.
             </div>
@@ -1383,7 +1383,7 @@ function CombinedBreakdown({
           פירוט מלא — ההזמנה כמוצר אחד
         </span>
         {!open && (
-          <span className="text-[10px] text-muted-foreground">{result.overallMarginPct}% רווח</span>
+          <span className="text-xs text-muted-foreground">{result.overallMarginPct}% רווח</span>
         )}
       </button>
 
@@ -1394,7 +1394,7 @@ function CombinedBreakdown({
             <div className="space-y-1">
               {items.map(({ row, pricing }) => (
                 <div key={row.id} className="flex items-center gap-2">
-                  <span className="font-mono text-[10px] text-muted-foreground shrink-0">
+                  <span className="font-mono text-xs text-muted-foreground shrink-0">
                     {row.quotationNo ?? row.id.slice(-6)}
                   </span>
                   <span className="truncate flex-1 text-muted-foreground">
@@ -1487,7 +1487,7 @@ function CombinedBreakdown({
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-primary/80 font-semibold">
+    <div className="flex items-center gap-1.5 text-xs uppercase tracking-wider text-primary/80 font-semibold">
       <span className="size-1.5 rounded-full bg-primary/60" />
       {children}
     </div>
@@ -1497,7 +1497,7 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 function BSection({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="rounded-md border border-border/50 bg-card/30 p-2">
-      <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">{title}</div>
+      <div className="text-xs uppercase tracking-wider text-muted-foreground mb-1">{title}</div>
       {children}
     </div>
   );

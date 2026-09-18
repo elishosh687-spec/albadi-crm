@@ -59,7 +59,7 @@
    plate / shipping / lead time behind "פרטים", and cards on a phone.
    Kept global: rendered inside the widget shell. */
 .competitor-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
-.competitor-range { width: 100%; min-height: 44px; margin: 4px 0 8px; accent-color: var(--lux-champagne); }
+.competitor-range { margin: 4px 0 8px; }
 .competitor-check { display: inline-flex; align-items: center; gap: 10px; min-height: 44px; cursor: pointer; font-size: 14px; }
 .competitor-check input { width: 20px; height: 20px; accent-color: var(--lux-champagne); }
 .competitor-method { font-size: 13.5px; line-height: 1.8; color: var(--lux-muted); max-width: 78ch; margin: 0 0 8px; }
@@ -365,8 +365,8 @@
 :is(.calc-lux, .lux-theme) .lux-label {
   font-family: var(--font-editorial-sans), "Manrope", ui-sans-serif, system-ui, sans-serif;
   text-transform: uppercase;
-  letter-spacing: 0.18em;
-  font-size: 10px;
+  letter-spacing: 0.12em;
+  font-size: 12px; /* was 10px */
   font-weight: 500;
   color: var(--lux-muted);
 }
@@ -483,33 +483,49 @@
 
 /* margin slider (reference §IV) — warm cool-gradient track + champagne thumb */
 :is(.calc-lux, .lux-theme) .lux-range {
+  /* The INPUT is the 44px touch target (ui-ux-pro-max); the visible 6px bar is
+     the track pseudo-element, so the look is unchanged. */
   -webkit-appearance: none;
   appearance: none;
   width: 100%;
+  height: 44px;
+  background: transparent;
+  outline: none;
+  cursor: pointer;
+  touch-action: pan-y;
+}
+:is(.calc-lux, .lux-theme) .lux-range::-webkit-slider-runnable-track {
   height: 6px;
   border-radius: 9999px;
   background: linear-gradient(270deg, var(--lux-cool), #565e74);
   box-shadow: inset 0 0 0 1px rgba(69, 70, 77, 0.2);
-  outline: none;
-  cursor: pointer;
+}
+:is(.calc-lux, .lux-theme) .lux-range::-moz-range-track {
+  height: 6px;
+  border-radius: 9999px;
+  background: linear-gradient(270deg, var(--lux-cool), #565e74);
 }
 :is(.calc-lux, .lux-theme) .lux-range::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
-  width: 18px;
-  height: 18px;
+  width: 22px;
+  height: 22px;
+  margin-top: -8px; /* centre on the 6px track */
   border-radius: 50%;
   background: #dae2fd;
   border: 0;
   box-shadow: 0 0 0 4px rgba(190, 198, 224, 0.18), 0 2px 6px rgba(0, 0, 0, 0.5);
 }
 :is(.calc-lux, .lux-theme) .lux-range::-moz-range-thumb {
-  width: 18px;
-  height: 18px;
+  width: 22px;
+  height: 22px;
   border-radius: 50%;
   background: #dae2fd;
   border: 0;
   box-shadow: 0 0 0 4px rgba(190, 198, 224, 0.18), 0 2px 6px rgba(0, 0, 0, 0.5);
+}
+:is(.calc-lux, .lux-theme) .lux-range:focus-visible::-webkit-slider-thumb {
+  box-shadow: 0 0 0 4px rgba(190, 198, 224, 0.5);
 }
 
 /* ── Shared hub editorial primitives (used by every tab via widget-ui/lux) ── */
@@ -517,8 +533,8 @@
 /* ALL-CAPS Manrope overline, e.g. "— Factory quotes" */
 :is(.calc-lux, .lux-theme) .lux-overline {
   font-family: var(--font-editorial-sans), "Manrope", ui-sans-serif, system-ui, sans-serif;
-  font-size: 10px;
-  letter-spacing: 0.34em;
+  font-size: 12px; /* was 10px */
+  letter-spacing: 0.24em;
   text-transform: uppercase;
   color: var(--lux-champagne);
 }
@@ -620,7 +636,7 @@
   line-height: 1.1;
 }
 :is(.calc-lux, .lux-theme) .lux-stat-label {
-  font-size: 10px;
+  font-size: 12px; /* ui-ux-pro-max: nothing under 12px (was 10px) */
   color: var(--lux-muted);
   letter-spacing: 0.06em;
 }
@@ -885,6 +901,7 @@
 /* same 44px floor for any older tab opted into the pass (.ux-floor) */
 .ux-floor :is(button, select, textarea, summary, [role="button"], input:not([type="checkbox"]):not([type="radio"]):not([type="range"])) { min-height: 44px; }
 .ux-floor button { min-width: 44px; }
+.ux-floor a.size-7 { min-width: 44px; min-height: 44px; } /* icon links match the icon buttons beside them */
 
 @media (max-width: 767px) {
 
@@ -947,7 +964,21 @@
   /* Opt-in: collapse a hard multi-column grid to one column. !important
      beats the inline gridTemplateColumns; inert without the class. */
   .mfit .lux-stack-sm {
-    grid-template-columns: 1fr !important;
+    /* minmax(0,1fr), not 1fr: a plain 1fr track grows to its widest child
+       (557px on the shipping list) and pushes the page sideways. */
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+  .mfit .lux-stack-sm > * {
+    min-width: 0;
+  }
+  /* a <select> is as wide as its longest option ("H20*D8*W25 — מתאים
+     לקוסמטיקה…"), which pushed the calculator 130px off a phone. */
+  .mfit .calc-lux select {
+    width: 100%;
+    min-width: 0;
+  }
+  .mfit .calc-lux :is(.grid, .flex) > * {
+    min-width: 0;
   }
 
   /* Opt-in: for grids whose children are FLAT items (headers interleaved
@@ -987,7 +1018,7 @@
      are deliberately small and a blanket min-height would stretch them into
      tall thin boxes. */
   .mfit .lux-tap {
-    min-height: 34px;
+    min-height: 44px; /* ui-ux-pro-max (18/09) — was 34px */
     padding-block: 6px;
   }
 

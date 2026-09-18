@@ -76,7 +76,7 @@ function statusBadge(status: FactoryQuoteRow["factoryStatus"]) {
   };
   const m = map[status];
   return (
-    <span className={cn("text-[10px] rounded-full px-2 py-0.5 border", m.tone)}>{m.label}</span>
+    <span className={cn("text-xs rounded-full px-2 py-0.5 border", m.tone)}>{m.label}</span>
   );
 }
 
@@ -304,7 +304,7 @@ export function FactoryQuotePanelWidget({
         </div>
         {active && statusBadge(active.factoryStatus)}
       </header>
-      <p className="mb-3 text-[11px] leading-snug text-muted-foreground border-r-2 border-muted-foreground/30 pr-2">
+      <p className="mb-3 text-[13px] leading-snug text-muted-foreground border-r-2 border-muted-foreground/30 pr-2">
         בקשות ציטוט מהמפעל ששלחת ידנית ל-Feishu. כל פעם ש-{`"`}שלח לסיכום הזמנה{`"`} נלחץ —
         נוספת שורה חדשה. <strong>לא</strong> מתעדכן אוטומטית מההצעות שהבוט שולח ללקוח.
       </p>
@@ -457,7 +457,7 @@ function NoQuoteState({
 
       {spec && (
         <div className="space-y-1.5">
-          <label className="block text-[11px] text-muted-foreground text-right">
+          <label className="block text-[13px] text-muted-foreground text-right">
             הערות להזמנה (Description ב-Feishu)
           </label>
           <textarea
@@ -526,7 +526,7 @@ function SpecPreview({
       <div className="flex items-center justify-between gap-2 -mt-1">
         <span
           className={cn(
-            "text-[10px] rounded-full px-2 py-0.5 border",
+            "text-xs rounded-full px-2 py-0.5 border",
             spec.source === "draft"
               ? "bg-primary/10 text-primary border-primary/30"
               : "bg-muted/40 text-muted-foreground border-border"
@@ -538,7 +538,7 @@ function SpecPreview({
           <button
             type="button"
             onClick={onClearDraft}
-            className="text-[10px] text-muted-foreground hover:text-destructive underline-offset-2 hover:underline"
+            className="text-xs text-muted-foreground hover:text-destructive underline-offset-2 hover:underline"
           >
             מחק נתונים ידניים
           </button>
@@ -710,7 +710,7 @@ function FinalizedState({
   return (
     <div className="space-y-3 text-sm">
       <div className="rounded-lg border border-success/30 bg-success/5 p-3">
-        <div className="text-[10px] uppercase tracking-wider text-success/80 mb-1">מחיר ללקוח</div>
+        <div className="text-xs uppercase tracking-wider text-success/80 mb-1">מחיר ללקוח</div>
         <div className="text-2xl font-bold text-success tabular-nums">{formatIls(p.totalSellingPrice)}</div>
         <div className="text-xs text-muted-foreground mt-0.5">
           {formatIls(p.unitSellingPrice)}/יח׳ · {p.quantity.toLocaleString("he-IL")} יח׳
@@ -735,7 +735,7 @@ function FinalizedState({
       </div>
 
       <div className="rounded-lg border border-dashed border-border bg-muted/20 p-3">
-        <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1.5">
+        <div className="text-xs uppercase tracking-wider text-muted-foreground mb-1.5">
           נתונים פנימיים (לא נראה ללקוח)
         </div>
         <dl className="text-xs">
@@ -958,7 +958,7 @@ function ExtraQuoteSection({
       </button>
       {open && (
         <div className="rounded-md border border-border bg-background/40 p-3">
-          <p className="text-[11px] text-muted-foreground mb-2 leading-relaxed">
+          <p className="text-[13px] text-muted-foreground mb-2 leading-relaxed">
             ההצעה הקיימת ({activeRow.quotationNo ?? activeRow.id.slice(-6)}) נשארת ב-Feishu.
             <br />• <strong>שמור כסיכום הזמנה</strong> — טיוטה חדשה תופיע בהיסטוריה, אפשר לערוך ולשלוח ל-Feishu מאוחר יותר.
             <br />• <strong>שלח ל-Feishu</strong> — שורה חדשה נוצרת מיידית עם מספר הצעה חדש.
@@ -1087,19 +1087,19 @@ function HistoryList({
       <summary className="cursor-pointer text-muted-foreground hover:text-foreground select-none">
         היסטוריית הצעות ({rows.length})
       </summary>
-      <p className="mt-1 text-[10px] text-muted-foreground">
+      <p className="mt-1 text-xs text-muted-foreground">
         סמן שתי הצעות סופיות או יותר כדי לאחד אותן ל-PDF אחד.
       </p>
       {selected.size >= 2 && (
         <div className="mt-2 flex items-center justify-between gap-2 rounded-md border border-primary/40 bg-primary/10 px-2.5 py-1.5">
-          <span className="text-[11px] font-medium text-primary">
+          <span className="text-[13px] font-medium text-primary">
             {selected.size} הצעות נבחרו
           </span>
           <div className="flex items-center gap-1.5">
             <button
               type="button"
               onClick={() => setSelected(new Set())}
-              className="rounded-md px-2 py-1 text-[11px] text-muted-foreground hover:text-foreground"
+              className="rounded-md px-2 py-1 text-[13px] text-muted-foreground hover:text-foreground"
             >
               נקה
             </button>
@@ -1107,7 +1107,7 @@ function HistoryList({
               href={combineHref}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-1 rounded-md border border-primary/40 bg-primary/10 px-2.5 py-1 text-[11px] font-medium text-primary hover:bg-primary/20"
+              className="inline-flex items-center gap-1 rounded-md border border-primary/40 bg-primary/10 px-2.5 py-1 text-[13px] font-medium text-primary hover:bg-primary/20"
             >
               פתח PDF
             </a>
@@ -1116,7 +1116,7 @@ function HistoryList({
                 href={combineWaUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center gap-1 rounded-md bg-primary px-2.5 py-1 text-[11px] font-medium text-primary-foreground hover:bg-primary/90"
+                className="inline-flex items-center gap-1 rounded-md bg-primary px-2.5 py-1 text-[13px] font-medium text-primary-foreground hover:bg-primary/90"
               >
                 שלח ב-WhatsApp
               </a>
@@ -1142,10 +1142,10 @@ function HistoryList({
                     className="shrink-0 accent-[var(--color-primary,#4A7C59)]"
                   />
                 )}
-                <span className="text-[11px] text-muted-foreground tabular-nums shrink-0">
+                <span className="text-[13px] text-muted-foreground tabular-nums shrink-0">
                   {new Date(r.createdAt).toLocaleDateString("he-IL")}
                 </span>
-                <span className="text-[11px] font-mono truncate">
+                <span className="text-[13px] font-mono truncate">
                   {r.quotationNo ?? r.id.slice(-6)}
                 </span>
                 {statusBadge(r.factoryStatus)}

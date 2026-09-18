@@ -529,11 +529,11 @@ export function FinalizeModalWidget({
           ) : (
             <>
               <div className="rounded-lg border border-border bg-card/40 p-3 space-y-2.5">
-                <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                <div className="text-xs uppercase tracking-wider text-muted-foreground">
                   פרטי המוצר ל‑PDF (ניתן לעריכה)
                 </div>
                 <div>
-                  <label className="block text-[11px] text-muted-foreground mb-0.5">
+                  <label className="block text-[13px] text-muted-foreground mb-0.5">
                     תמונת מוצר (נכנסת ל‑PDF)
                   </label>
                   <div className="flex items-center gap-2">
@@ -571,7 +571,7 @@ export function FinalizeModalWidget({
                         className="size-12 shrink-0 rounded-md border border-border object-contain bg-background"
                       />
                     ) : (
-                      <div className="size-12 shrink-0 rounded-md border border-dashed border-border grid place-items-center text-[9px] text-muted-foreground">
+                      <div className="size-12 shrink-0 rounded-md border border-dashed border-border grid place-items-center text-xs text-muted-foreground">
                         אין
                       </div>
                     )}
@@ -611,17 +611,17 @@ export function FinalizeModalWidget({
                       withThermalToken(finishing, false),
                       effFr?.notes,
                     ) ? (
-                      <div className="rounded-md px-2 py-1 text-[11px]" style={{ background: "rgba(224,110,110,0.12)", color: "#e08a8a" }}>
+                      <div className="rounded-md px-2 py-1 text-[13px]" style={{ background: "rgba(224,110,110,0.12)", color: "#e08a8a" }}>
                         ⚠️ המפעל כנראה כבר תמחר שומר קור (מופיע במפרט/בהערות) — ה-{THERMAL_LINING_PCT}% יחייבו את הלקוח פעמיים.
                       </div>
                     ) : (
-                      <div className="rounded-md px-2 py-1 text-[11px]" style={{ background: "rgba(224,169,109,0.12)", color: "#e0a96d" }}>
+                      <div className="rounded-md px-2 py-1 text-[13px]" style={{ background: "rgba(224,169,109,0.12)", color: "#e0a96d" }}>
                         המחיר מהמפעל הוא לשקית רגילה? אם ביקשת ממנו שומר קור — זה חיוב כפול.
                       </div>
                     ))}
                 </div>
                 <div>
-                  <label className="block text-[11px] text-muted-foreground mb-0.5">הערות ללקוח (ב‑PDF)</label>
+                  <label className="block text-[13px] text-muted-foreground mb-0.5">הערות ללקוח (ב‑PDF)</label>
                   <textarea
                     value={customerNotes}
                     onChange={(e) => setCustomerNotes(e.target.value)}
@@ -683,13 +683,13 @@ export function FinalizeModalWidget({
                           </div>
                           <div className="flex justify-between text-xs"><span className="text-muted-foreground">משקל קרטון (ק״ג)</span><span className="tabular-nums">{effFr.weightKg ?? "—"}</span></div>
                           {cbmWarn && (
-                            <div className="text-[11px] text-amber-600 dark:text-amber-400 leading-snug">⚠️ ה‑CBM ({cbm}) לא תואם למידות (≈{dimsCbm!.toFixed(3)}). מנפח את השילוח — בדוק.</div>
+                            <div className="text-[13px] text-amber-600 dark:text-amber-400 leading-snug">⚠️ ה‑CBM ({cbm}) לא תואם למידות (≈{dimsCbm!.toFixed(3)}). מנפח את השילוח — בדוק.</div>
                           )}
                           {tableMismatch && verify!.diffs.length > 0 && (
                             <div className="rounded border border-amber-500/40 bg-amber-500/10 px-2 py-1.5 space-y-0.5">
-                              <div className="text-[11px] font-medium text-amber-700 dark:text-amber-400">לא תואם לטבלה החיה:</div>
+                              <div className="text-[13px] font-medium text-amber-700 dark:text-amber-400">לא תואם לטבלה החיה:</div>
                               {verify!.diffs.map((d) => (
-                                <div key={d.field} className="flex justify-between text-[11px] gap-2">
+                                <div key={d.field} className="flex justify-between text-[13px] gap-2">
                                   <span className="text-muted-foreground">{d.label}</span>
                                   <span className="tabular-nums">בטבלה: <b>{String(d.live)}</b> · אצלנו: {String(d.stored ?? "—")}</span>
                                 </div>
@@ -697,24 +697,24 @@ export function FinalizeModalWidget({
                             </div>
                           )}
                           {verify && verify.verifiable && verify.match && !cbmWarn && (
-                            <div className="text-[11px] text-success">✓ הנתונים תואמים בדיוק לטבלה ב‑Feishu.</div>
+                            <div className="text-[13px] text-success">✓ הנתונים תואמים בדיוק לטבלה ב‑Feishu.</div>
                           )}
                           {verify && !verify.verifiable && (
-                            <div className="text-[11px] text-muted-foreground">לא ניתן לאמת מול הטבלה ({verify.reason ?? "אין שורה"}).</div>
+                            <div className="text-[13px] text-muted-foreground">לא ניתן לאמת מול הטבלה ({verify.reason ?? "אין שורה"}).</div>
                           )}
                           {tableMismatch && (
                             <button
                               type="button"
                               onClick={pullFromTable}
                               disabled={refreshing}
-                              className="mt-1 inline-flex items-center gap-1 rounded-md bg-amber-600 text-white px-2.5 py-1 text-[11px] font-medium disabled:opacity-60"
+                              className="mt-1 inline-flex items-center gap-1 rounded-md bg-amber-600 text-white px-2.5 py-1 text-[13px] font-medium disabled:opacity-60"
                             >
                               {refreshing ? <Loader2 className="w-3 h-3 animate-spin" /> : null}
                               רענן מהטבלה
                             </button>
                           )}
                           {cbmWarn && !tableMismatch && (
-                            <div className="text-[11px] text-amber-600 dark:text-amber-400 leading-snug">
+                            <div className="text-[13px] text-amber-600 dark:text-amber-400 leading-snug">
                               ה‑CBM שגוי <b>גם בטבלה</b> — רענון לא יעזור. צריך לתקן את תא ה‑CBM ב‑Feishu (המפעל).
                             </div>
                           )}
@@ -738,7 +738,7 @@ export function FinalizeModalWidget({
                   onChange={(e) => setMoldsCost(e.target.value)}
                   className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-ring/30"
                 />
-                <p className="text-[10px] text-muted-foreground mt-1">
+                <p className="text-xs text-muted-foreground mt-1">
                   {moldsValid
                     ? `מתחלק על ${row.productSpec.quantity.toLocaleString("he-IL")} יח׳ = ¥${(moldsParsed / row.productSpec.quantity).toFixed(3)} ליחידה — נכלל בעלות מפעל וברווח`
                     : "ריק → ללא עלות מולדים"}
@@ -758,7 +758,7 @@ export function FinalizeModalWidget({
                   onChange={(e) => setCbmOverride(e.target.value)}
                   className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-ring/30"
                 />
-                <p className="text-[10px] text-muted-foreground mt-1">
+                <p className="text-xs text-muted-foreground mt-1">
                   {cbmOverrideValid
                     ? `דורס את החישוב האוטומטי → שילוח מחושב על ${cbmOverrideParsed} CBM (להזמנות מקובצות)`
                     : "ריק → נפח מחושב אוטומטית מהמידות/קרטון"}
@@ -815,7 +815,7 @@ export function FinalizeModalWidget({
                   onChange={(e) => setMargin(parseInt(e.target.value, 10))}
                   className="w-full accent-[var(--color-primary,#4A7C59)]"
                 />
-                <div className="flex justify-between text-[10px] text-muted-foreground mt-0.5">
+                <div className="flex justify-between text-xs text-muted-foreground mt-0.5">
                   <span>0%</span>
                   <span>25%</span>
                   <span>50%</span>
@@ -841,7 +841,7 @@ export function FinalizeModalWidget({
 
               {livePricing && (
                 <div className="rounded-lg border border-success/30 bg-success/5 p-3 space-y-1.5 text-sm">
-                  <div className="text-[10px] uppercase tracking-wider text-success/80">תוצאת חישוב חיה</div>
+                  <div className="text-xs uppercase tracking-wider text-success/80">תוצאת חישוב חיה</div>
                   <PriceRow label="מחיר ללקוח / יחידה (לשקית)" value={formatIls(livePricing.unitSellingPrice)} bold />
                   {livePricing.moldsTotalSellingPriceIls > 0 && (
                     <PriceRow
@@ -922,15 +922,15 @@ export function FinalizeModalWidget({
 
               {otherQuotes.length > 0 && livePricing && config && (
                 <div className="rounded-lg border border-border bg-card/40 p-3 space-y-2">
-                  <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                  <div className="text-xs uppercase tracking-wider text-muted-foreground">
                     חישוב משולב — מוצרים שנשלחים יחד
                   </div>
-                  <div className="text-[11px] text-muted-foreground">
+                  <div className="text-[13px] text-muted-foreground">
                     סמן הזמנות נוספות של הלקוח שנשלחות במשלוח אחד — השילוח מחושב מחדש (זול יותר):
                   </div>
                   {combinedSel.size > 0 && (
                     <div className="rounded-md border border-primary/30 bg-primary/5 px-2.5 py-1.5">
-                      <div className="text-[10px] text-muted-foreground mb-0.5">
+                      <div className="text-xs text-muted-foreground mb-0.5">
                         קבע אחוז רווח לכל המסומנות יחד
                       </div>
                       <input
@@ -981,7 +981,7 @@ export function FinalizeModalWidget({
                         </label>
                         {checked && (
                           <div className="mt-1.5 pr-5">
-                            <div className="flex items-center justify-between text-[10px]">
+                            <div className="flex items-center justify-between text-xs">
                               <span className="text-muted-foreground">אחוז רווח</span>
                               <span className="font-semibold text-primary">{Math.round(m)}%</span>
                             </div>
@@ -996,7 +996,7 @@ export function FinalizeModalWidget({
                               }
                               className="w-full accent-[var(--color-primary,#4A7C59)]"
                             />
-                            <div className="text-[10px] text-muted-foreground">
+                            <div className="text-xs text-muted-foreground">
                               רווח: {formatIls(priced?.totalProfit ?? 0)}
                             </div>
                           </div>
@@ -1006,7 +1006,7 @@ export function FinalizeModalWidget({
                   })}
                   {combinedResult && (
                     <div className="rounded-md border border-success/30 bg-success/5 p-2.5 space-y-1.5 mt-1">
-                      <div className="text-[10px] uppercase tracking-wider text-success/80">
+                      <div className="text-xs uppercase tracking-wider text-success/80">
                         תוצאה משולבת ({combinedResult.count} מוצרים)
                       </div>
                       <PriceRow
@@ -1116,7 +1116,7 @@ function ReverseTargetPanel({
     <div className="rounded-lg border border-border bg-card/40 p-3 space-y-2">
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <span className="text-sm font-medium">תמחור לפי יעד</span>
-        <div className="inline-flex rounded-md border border-border overflow-hidden text-[11px]">
+        <div className="inline-flex rounded-md border border-border overflow-hidden text-[13px]">
           <ModeBtn active={mode === "profit"} onClick={() => setMode("profit")}>רווח ₪</ModeBtn>
           <ModeBtn active={mode === "total"} onClick={() => setMode("total")}>סכום כולל</ModeBtn>
           <ModeBtn active={mode === "unit"} onClick={() => setMode("unit")}>ליחידה</ModeBtn>
@@ -1135,7 +1135,7 @@ function ReverseTargetPanel({
         <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">₪</span>
       </div>
       {valid && base > 0 && (
-        <div className="grid grid-cols-2 gap-2 text-[11px] pt-1 border-t border-border/40">
+        <div className="grid grid-cols-2 gap-2 text-[13px] pt-1 border-t border-border/40">
           <Stat label="% מובלע" value={`${Math.round(marginPct * 10) / 10}%`} tone={outOfRange ? "neg" : undefined} />
           <Stat label="מחיר ליחידה" value={fmt(perUnit)} />
           <Stat label="רווח ליחידה" value={fmt(profitPerUnit)} tone={profitPerUnit < 0 ? "neg" : "pos"} />
@@ -1145,7 +1145,7 @@ function ReverseTargetPanel({
       )}
       <div className="flex items-center justify-end gap-2 pt-1">
         {outOfRange && (
-          <span className="text-[11px] text-destructive">
+          <span className="text-[13px] text-destructive">
             {marginPct < marginMin ? "מתחת ל-" : "מעל "}
             {marginPct < marginMin ? marginMin : marginMax}% — ייחתך
           </span>
@@ -1154,7 +1154,7 @@ function ReverseTargetPanel({
           type="button"
           disabled={!valid || base <= 0}
           onClick={() => onApply(marginPct)}
-          className="rounded-md border border-primary/40 bg-primary/10 px-2 py-1 text-[11px] text-primary hover:bg-primary/20 disabled:opacity-50"
+          className="rounded-md border border-primary/40 bg-primary/10 px-2 py-1 text-[13px] text-primary hover:bg-primary/20 disabled:opacity-50"
         >
           החל על סליידר
         </button>
@@ -1193,7 +1193,7 @@ function SpecField({
 }) {
   return (
     <div>
-      <label className="block text-[11px] text-muted-foreground mb-0.5">{label}</label>
+      <label className="block text-[13px] text-muted-foreground mb-0.5">{label}</label>
       <input
         type={type}
         value={value}

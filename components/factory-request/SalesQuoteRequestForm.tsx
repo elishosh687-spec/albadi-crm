@@ -300,7 +300,7 @@ export function SalesQuoteRequestForm({ apiToken, salesMode = false }: { apiToke
           <div style={{ fontSize: 16, color: "var(--lux-ink)", marginBottom: 6 }}>
             הבקשה נשלחה לאלי
           </div>
-          <div style={{ fontSize: 13, color: "#8a7f74", marginBottom: 20 }}>
+          <div style={{ fontSize: 13, color: "var(--lux-muted, #a0958a)", marginBottom: 20 }}>
             {customer?.name ? `עבור ${customer.name}. ` : ""}הוא יבדוק את הפרטים וישלח למפעל.
           </div>
           <LuxCTA onClick={resetAll}>בקשה נוספת</LuxCTA>
@@ -340,7 +340,7 @@ export function SalesQuoteRequestForm({ apiToken, salesMode = false }: { apiToke
               gap: 10,
             }}
           >
-            <Search className="size-4" style={{ color: "#8a7f74" }} />
+            <Search className="size-4" style={{ color: "var(--lux-muted, #a0958a)" }} />
             <input
               type="text"
               value={query}
@@ -368,7 +368,7 @@ export function SalesQuoteRequestForm({ apiToken, salesMode = false }: { apiToke
                   border: 0,
                   background: "transparent",
                   borderRadius: 6,
-                  color: "#8a7f74",
+                  color: "var(--lux-muted, #a0958a)",
                   cursor: "pointer",
                 }}
               >
@@ -427,7 +427,7 @@ export function SalesQuoteRequestForm({ apiToken, salesMode = false }: { apiToke
               <div style={{ fontSize: 14, color: "#e6e1e0", fontWeight: 500 }}>
                 {customer.name || customer.phone || customer.sid}
               </div>
-              <div style={{ fontSize: 11, color: "#8a7f74" }}>
+              <div style={{ fontSize: 11, color: "var(--lux-muted, #a0958a)" }}>
                 {customer.phone ?? "—"}
                 {customer.stage ? ` · ${customer.stage}` : ""}
               </div>
@@ -453,7 +453,7 @@ export function SalesQuoteRequestForm({ apiToken, salesMode = false }: { apiToke
           />
 
           <div>
-            <span className="block text-[11px] mb-1 text-right" style={{ color: "#8a7f74" }}>
+            <span className="block text-[11px] mb-1 text-right" style={{ color: "var(--lux-muted, #a0958a)" }}>
               מידות (cm)
             </span>
             <div className="grid grid-cols-3 gap-2">
@@ -462,7 +462,7 @@ export function SalesQuoteRequestForm({ apiToken, salesMode = false }: { apiToke
               <Field label="D (עומק)" value={f.depthCm} onChange={(v) => set("depthCm", v)} type="number" compact />
             </div>
             <div className="mt-2 flex items-center gap-2">
-              <span className="text-[11px] shrink-0" style={{ color: "#8a7f74" }}>או הדבק:</span>
+              <span className="text-[11px] shrink-0" style={{ color: "var(--lux-muted, #a0958a)" }}>או הדבק:</span>
               <input
                 value={sizeString}
                 onChange={(e) => handleSizeStringChange(e.target.value)}
@@ -475,7 +475,7 @@ export function SalesQuoteRequestForm({ apiToken, salesMode = false }: { apiToke
             {(() => {
               const preview = buildSizeString(parseFloat(f.widthCm) || 0, parseFloat(f.heightCm) || 0, parseFloat(f.depthCm) || 0);
               return preview ? (
-                <div className="mt-1 text-[10px] text-right" style={{ color: "#8a7f74" }}>
+                <div className="mt-1 text-[10px] text-right" style={{ color: "var(--lux-muted, #a0958a)" }}>
                   ייכתב ל-Feishu: <span className="font-mono" style={{ color: "var(--lux-ink)" }}>{preview}</span>
                 </div>
               ) : null;
@@ -547,7 +547,7 @@ export function SalesQuoteRequestForm({ apiToken, salesMode = false }: { apiToke
                   ...(airOpt ? [{ value: airOpt.id, label: "אוויר (אקספרס — מהיר)" }] : []),
                 ]}
               />
-              <div className="mt-1 text-[10px] text-right" style={{ color: "#8a7f74" }}>
+              <div className="mt-1 text-[10px] text-right" style={{ color: "var(--lux-muted, #a0958a)" }}>
                 משפיע מהותית על המחיר — ים זול ואיטי, אוויר יקר ומהיר.
               </div>
             </div>
@@ -601,7 +601,7 @@ function SelectField({
 }) {
   return (
     <label className="block">
-      <span className="block text-[11px] mb-1 text-right" style={{ color: "#8a7f74" }}>{label}</span>
+      <span className="block text-[11px] mb-1 text-right" style={{ color: "var(--lux-muted, #a0958a)" }}>{label}</span>
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
@@ -635,7 +635,7 @@ function Field({
 }) {
   return (
     <label className="block">
-      <span className="block text-[11px] mb-1 text-right" style={{ color: "#8a7f74" }}>{label}</span>
+      <span className="block text-[11px] mb-1 text-right" style={{ color: "var(--lux-muted, #a0958a)" }}>{label}</span>
       <input
         type={type}
         value={value}

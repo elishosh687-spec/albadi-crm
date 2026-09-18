@@ -93,7 +93,7 @@ export function HistoryDetailModalWidget({
             <div className="text-sm font-medium truncate">
               הצעה {row.quotationNo ?? row.id.slice(-6)}
             </div>
-            <div className="text-[10px] text-muted-foreground tabular-nums">
+            <div className="text-xs text-muted-foreground tabular-nums">
               {new Date(row.createdAt).toLocaleString("he-IL")}
             </div>
           </div>
@@ -109,7 +109,7 @@ export function HistoryDetailModalWidget({
 
         <div className="p-4 space-y-3">
           <section className="rounded-lg border border-border bg-background/40 p-3">
-            <h3 className="text-[10px] uppercase tracking-wider text-muted-foreground mb-2">
+            <h3 className="text-xs uppercase tracking-wider text-muted-foreground mb-2">
               מפרט מוצר
             </h3>
             <dl className="text-xs">
@@ -125,7 +125,7 @@ export function HistoryDetailModalWidget({
 
           {resp && (
             <section className="rounded-lg border border-border bg-background/40 p-3">
-              <h3 className="text-[10px] uppercase tracking-wider text-muted-foreground mb-2">תשובת המפעל</h3>
+              <h3 className="text-xs uppercase tracking-wider text-muted-foreground mb-2">תשובת המפעל</h3>
               <dl className="text-xs">
                 <DetailRow label="עלות יחידה" value={`¥${resp.unitCostCny}`} />
                 {resp.cartonQty !== undefined && <DetailRow label="יח׳/קרטון" value={String(resp.cartonQty)} />}
@@ -145,7 +145,7 @@ export function HistoryDetailModalWidget({
 
           {p && (
             <section className="rounded-lg border border-success/30 bg-success/5 p-3">
-              <h3 className="text-[10px] uppercase tracking-wider text-success/80 mb-2">תמחור סופי</h3>
+              <h3 className="text-xs uppercase tracking-wider text-success/80 mb-2">תמחור סופי</h3>
               <dl className="text-xs">
                 <DetailRow label="מחיר ללקוח" value={formatIls(p.totalSellingPrice)} />
                 <DetailRow label="מחיר ליחידה" value={formatIls(p.unitSellingPrice)} />
@@ -164,7 +164,7 @@ export function HistoryDetailModalWidget({
           )}
 
           {row.feishuRowIndex && (
-            <div className="text-[10px] text-muted-foreground text-center">
+            <div className="text-xs text-muted-foreground text-center">
               שורה ב-Feishu: <span className="font-mono">{row.feishuRowIndex}</span>
             </div>
           )}

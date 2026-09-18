@@ -179,7 +179,7 @@ function ModalShell({ title, subtitle, onClose, children, footer }: {
         <div className="flex items-center justify-between px-4 py-2.5 border-b border-border bg-card/80">
           <div>
             <div className="text-sm font-semibold">{title}</div>
-            {subtitle && <div className="text-[11px] text-muted-foreground">{subtitle}</div>}
+            {subtitle && <div className="text-[13px] text-muted-foreground">{subtitle}</div>}
           </div>
           <button type="button" onClick={onClose} className="size-7 rounded grid place-items-center hover:bg-secondary">
             <X className="size-4" />
@@ -377,7 +377,7 @@ export function EstimateModal({
           <div className="font-bold text-amber-500 mb-1">⚠️ לא ניתן לאמוד — שלח למפעל</div>
           <div className="text-muted-foreground">{est?.refused}</div>
           {est?.candidates && est.candidates.length > 0 && (
-            <div className="text-[11px] text-muted-foreground mt-2">
+            <div className="text-[13px] text-muted-foreground mt-2">
               מחירים שנבדקו: {est.candidates.map((x) => `${x.factory} ¥${x.unitCny}${x.inRange ? "" : " (מחוץ לטווח)"}`).join(" · ")}
             </div>
           )}
@@ -411,7 +411,7 @@ export function EstimateModal({
           </div>
           {!catalog && est?.reasoning && est.reasoning.length > 0 && (
             <div className="rounded-lg border border-border/40 bg-background/30 p-3">
-              <div className="text-[11px] font-medium text-muted-foreground mb-1 flex items-center gap-1">
+              <div className="text-[13px] font-medium text-muted-foreground mb-1 flex items-center gap-1">
                 <Sparkles className="size-3" /> היגיון האומדן
               </div>
               <ul className="text-[12px] text-muted-foreground space-y-0.5 list-disc pr-4">
@@ -421,7 +421,7 @@ export function EstimateModal({
               </ul>
             </div>
           )}
-          <div className="text-[11px] text-muted-foreground text-center">
+          <div className="text-[13px] text-muted-foreground text-center">
             {catalog
               ? "מחיר קטלוג מדויק — לשליחת ההצעה ללקוח, פתח בקטלוג."
               : "אומדן בלבד — לשליחת ההצעה הסופית ללקוח, חשב על בסיס תשובת המפעל האמיתית."}
@@ -435,7 +435,7 @@ export function EstimateModal({
 function Stat({ label, value, big, accent }: { label: string; value: string; big?: boolean; accent?: boolean }) {
   return (
     <div className={`rounded-lg border p-3 text-center ${accent ? "border-emerald-500/30 bg-emerald-500/10" : "border-border/60 bg-background/40"}`}>
-      <div className="text-[11px] text-muted-foreground mb-0.5">{label}</div>
+      <div className="text-[13px] text-muted-foreground mb-0.5">{label}</div>
       <div className={`tabular-nums font-semibold ${big ? "text-lg" : "text-sm"} ${accent ? "text-emerald-400" : ""}`}>{value}</div>
     </div>
   );
