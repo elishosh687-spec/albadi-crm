@@ -1020,10 +1020,6 @@
     overflow-wrap: anywhere;
   }
 
-  /* the ⌘K block is aria-hidden and non-functional — pure width tax here */
-  .hub-search {
-    display: none !important;
-  }
 }
 
 /* ── hub tab strip ──────────────────────────────────────────────────────
@@ -1045,4 +1041,77 @@
     -webkit-mask-image: linear-gradient(to right, transparent 0, #000 22px);
     mask-image: linear-gradient(to right, transparent 0, #000 22px);
   }
+}
+
+/* ── hub bottom bar (phone) ─────────────────────────────────────────────
+   ui-ux-pro-max: on a phone the 13-tab top strip needed sideways scrolling
+   to reach half the tabs. Phones get a bottom bar instead: the four main tabs
+   (HUB_PRIMARY_TAB_IDS) + "עוד" (a <details> sheet with the rest). Icon +
+   label, 56px tall, safe-area aware. Desktop keeps the top strip.        */
+.hub-bottom { display: none; }
+.hub-nav-link:hover:not([aria-current]) { color: #e6e1e0 !important; background: rgba(255,255,255,0.03) !important; }
+.hub-nav-link:focus-visible, .hub-bottom-item:focus-visible, .hub-more-link:focus-visible { outline: 2px solid #bec6e0; outline-offset: -2px; }
+@media (max-width: 767px) {
+  .hub-nav { display: none !important; }
+  .hub-bottom {
+    display: flex;
+    position: relative;
+    z-index: 20;
+    flex-shrink: 0;
+    padding: 4px 4px calc(4px + env(safe-area-inset-bottom));
+    background: #161514;
+    border-top: 1px solid rgba(230, 225, 224, 0.10);
+  }
+  .hub-bottom > *, .hub-more { flex: 1 1 0; min-width: 0; }
+  .hub-bottom-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    min-height: 56px;
+    padding: 4px 2px;
+    border-radius: 10px;
+    color: #a0958a;
+    font-size: 12px;
+    text-decoration: none;
+    list-style: none;
+    cursor: pointer;
+    touch-action: manipulation;
+    transition: color 150ms ease-out, background-color 150ms ease-out;
+  }
+  .hub-bottom-item::-webkit-details-marker { display: none; }
+  .hub-bottom-item > span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .hub-bottom-item[aria-current="page"] { color: #e6e1e0; background: rgba(214, 196, 172, 0.14); }
+  .hub-bottom-item[aria-current="page"] svg { color: #d6c4ac; }
+  .hub-more[open] > .hub-bottom-item { color: #e6e1e0; }
+  .hub-more-sheet {
+    position: absolute;
+    inset-inline: 8px;
+    bottom: calc(100% + 8px);
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 4px;
+    padding: 8px;
+    border-radius: 14px;
+    background: #211f1d;
+    border: 1px solid rgba(230, 225, 224, 0.12);
+    box-shadow: 0 18px 50px rgba(0, 0, 0, 0.6);
+  }
+  .hub-more-link {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 48px;
+    padding: 0 12px;
+    border-radius: 10px;
+    color: #e6e1e0;
+    font-size: 15px;
+    text-decoration: none;
+  }
+  .hub-more-link[aria-current="page"] { background: rgba(214, 196, 172, 0.14); }
+  .hub-more-link svg { color: #a0958a; flex-shrink: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .hub-bottom-item, .hub-nav-link { transition: none !important; }
 }

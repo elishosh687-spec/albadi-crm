@@ -11,10 +11,10 @@ import {
   Box,
   Package,
   Settings,
-  Search,
   CircleCheckBig,
   FlaskConical,
   Inbox,
+  Ellipsis,
   type LucideIcon,
 } from "lucide-react";
 
@@ -50,6 +50,10 @@ export interface HubDeepLink {
   view?: string;
   section?: string;
 }
+
+/** The four tabs the team uses most on a phone — the bottom bar (ui-ux-pro-max:
+ *  ≤5 items, icon + label). Everything else sits behind "עוד". Eli, 18/09. */
+export const HUB_PRIMARY_TAB_IDS = ["inbox", "drafts", "factory", "closed"] as const;
 
 function appendParams(
   path: string,
@@ -94,6 +98,10 @@ export function HubShell({
   deepLink?: HubDeepLink;
 }) {
   const active = HUB_TABS.find((tab) => tab.id === activeTab) ?? HUB_TABS[0];
+  const isPrimary = (id: string) => (HUB_PRIMARY_TAB_IDS as readonly string[]).includes(id);
+  const primary = HUB_PRIMARY_TAB_IDS.map((id) => HUB_TABS.find((t) => t.id === id)!).filter(Boolean);
+  const others = HUB_TABS.filter((t) => !isPrimary(t.id));
+  const activeIsPrimary = isPrimary(active.id);
 
   return (
     <div
@@ -110,6 +118,7 @@ export function HubShell({
     >
       <nav
         className="hub-nav"
+        aria-label="לשוניות"
         style={{
           display: "flex",
           flexWrap: "nowrap",
@@ -168,11 +177,11 @@ export function HubShell({
             scrollSnapAlign: "center",
             fontSize: 13,
             fontWeight: isActive ? 600 : 500,
-            height: 32,
+            height: 44,
             display: "flex",
             alignItems: "center",
             background: isActive ? "rgba(214,196,172,0.14)" : "transparent",
-            color: isActive ? "#e6e1e0" : "#8a7f74",
+            color: isActive ? "#e6e1e0" : "#a0958a",
             border: `1px solid ${isActive ? "rgba(214,196,172,0.30)" : "transparent"}`,
             borderRadius: 7,
             textDecoration: "none",
@@ -185,7 +194,9 @@ export function HubShell({
               key={tab.id}
               href={hubHref(mode, widgetToken, tab.id, sid)}
               style={style}
+              className="hub-nav-link"
               data-active={isActive ? "1" : undefined}
+              aria-current={isActive ? "page" : undefined}
             >
               <Icon size={15} strokeWidth={1.75} style={{ flexShrink: 0 }} />
               {tab.label}
@@ -193,43 +204,6 @@ export function HubShell({
           );
         })}
 
-        <div
-          aria-hidden
-          className="hub-search"
-          style={{
-            marginInlineStart: "auto",
-            display: "flex",
-            alignItems: "center",
-            gap: 7,
-            height: 32,
-            padding: "0 10px",
-            borderRadius: 6,
-            border: "1px solid rgba(230,225,224,0.08)",
-            color: "#8a7f74",
-            fontSize: 12.5,
-            whiteSpace: "nowrap",
-            flexShrink: 0,
-            userSelect: "none",
-          }}
-        >
-          <Search size={14} strokeWidth={1.75} style={{ flexShrink: 0 }} />
-          חיפוש
-          <span
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 1,
-              padding: "1px 5px",
-              borderRadius: 4,
-              border: "1px solid rgba(230,225,224,0.08)",
-              background: "rgba(230,225,224,0.03)",
-              color: "#8a7f74",
-              fontSize: 11,
-            }}
-          >
-            ⌘K
-          </span>
-        </div>
       </nav>
 
       <script
@@ -246,6 +220,41 @@ export function HubShell({
         style={{ flex: 1, width: "100%", border: "none", background: "#1d1b1a" }}
         allow="clipboard-write"
       />
+
+      {/* Phone only (CSS): bottom bar with the four main tabs + "עוד". The
+          <details> sheet needs no JS; every link reloads the hub anyway. */}
+      <nav className="hub-bottom" aria-label="לשוניות ראשיות">
+        {primary.map((tab) => (
+          <BottomItem key={tab.id} tab={tab} href={hubHref(mode, widgetToken, tab.id, sid)} active={tab.id === active.id} />
+        ))}
+        <details className="hub-more">
+          <summary className="hub-bottom-item" aria-current={activeIsPrimary ? undefined : "page"}>
+            {activeIsPrimary ? <Ellipsis size={22} strokeWidth={1.75} aria-hidden /> : <active.icon size={22} strokeWidth={1.75} aria-hidden />}
+            <span>{activeIsPrimary ? "עוד" : active.label}</span>
+          </summary>
+          <div className="hub-more-sheet" role="list" aria-label="עוד לשוניות">
+            {others.map((tab) => {
+              const Icon = tab.icon;
+              return (
+                <Link key={tab.id} role="listitem" className="hub-more-link" href={hubHref(mode, widgetToken, tab.id, sid)} aria-current={tab.id === active.id ? "page" : undefined}>
+                  <Icon size={18} strokeWidth={1.75} aria-hidden />
+                  {tab.label}
+                </Link>
+              );
+            })}
+          </div>
+        </details>
+      </nav>
     </div>
+  );
+}
+
+function BottomItem({ tab, href, active }: { tab: TabDef; href: string; active: boolean }) {
+  const Icon = tab.icon;
+  return (
+    <Link className="hub-bottom-item" href={href} aria-current={active ? "page" : undefined}>
+      <Icon size={22} strokeWidth={1.75} aria-hidden />
+      <span>{tab.label}</span>
+    </Link>
   );
 }
