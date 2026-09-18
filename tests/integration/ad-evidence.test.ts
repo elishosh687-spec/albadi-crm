@@ -13,6 +13,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest
 import { NextRequest } from "next/server";
 import { ciSid, purgeSid, sql } from "./_db";
 import { loadCrmEvidence } from "@/lib/ads/crm-evidence";
+import * as adsHealth from "@/lib/ads/ads-health";
 
 const AD_1 = `98${Date.now()}1`;
 const AD_2 = `98${Date.now()}2`;
@@ -48,6 +49,7 @@ beforeAll(async () => {
 });
 
 afterEach(() => {
+  vi.restoreAllMocks();
   vi.unstubAllGlobals();
   vi.unstubAllEnvs();
 });
@@ -150,7 +152,17 @@ describe("daily health job → watchdog → WhatsApp", () => {
     expect(JSON.stringify(st)).not.toContain("CI-SECRET-META-TOKEN");
   });
 
+  // The ads-health strip (CAPI ping, GHL tag search) needs credentials CI does
+  // not have; stub its RESULT so these tests pin how the job reacts to it.
+  const healthy = () =>
+    vi.spyOn(adsHealth, "checkAdsHealth").mockResolvedValue({
+      ok: true,
+      problems: 0,
+      checks: [{ key: "purchase", label: "דיווח עסקאות סגורות למטא", ok: true, detail: "ok" }],
+    });
+
   it("Meta healthy → the run succeeds (recovery), with the seeded ads judged by exact ID", async () => {
+    healthy();
     vi.stubEnv("META_ADS_TOKEN", "CI-SECRET-META-TOKEN");
     vi.stubEnv("CRON_SECRET", "ci-cron-secret");
     const real = globalThis.fetch;
@@ -171,5 +183,31 @@ describe("daily health job → watchdog → WhatsApp", () => {
     const st = await jobState();
     expect(st.lastStatus).toBe("ok");
     expect(st.lastError).toBeUndefined();
+  });
+
+  it("any red line of the ads-health strip FAILS the run with its reason (18/09: Elran never reported)", async () => {
+    vi.spyOn(adsHealth, "checkAdsHealth").mockResolvedValue({
+      ok: false,
+      problems: 2,
+      checks: [
+        { key: "purchase", label: "דיווח עסקאות סגורות למטא", ok: false, detail: "Elran — לא דווח" },
+        { key: "job:enrich-meta-attribution", label: "משימה יומית", ok: false, detail: "watchdog alerts this one" },
+      ],
+    });
+    vi.stubEnv("META_ADS_TOKEN", "CI-SECRET-META-TOKEN");
+    vi.stubEnv("CRON_SECRET", "ci-cron-secret");
+    const real = globalThis.fetch;
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input instanceof Request ? input.url : input);
+      if (!url.includes("graph.facebook.com")) return real(input, init);
+      return new Response(JSON.stringify({ data: [], paging: {} }), { status: 200 });
+    });
+    const { GET } = await import("@/app/api/cron/ads-evidence-check/route");
+    const res = await GET(cronReq("ci-cron-secret"), undefined as never);
+    expect(res.status).toBe(500);
+    const st = await jobState();
+    expect(st.lastStatus).toBe("failed");
+    expect(st.lastError).toContain("Elran — לא דווח");
+    expect(st.lastError).not.toContain("watchdog alerts this one");
   });
 });
