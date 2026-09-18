@@ -827,6 +827,23 @@
 .ux-skel { height: 60px; border-top: 1px solid var(--lux-line-soft); background: linear-gradient(90deg, rgba(255,255,255,0.02), rgba(255,255,255,0.06), rgba(255,255,255,0.02)); background-size: 200% 100%; animation: ux-shimmer 1.2s linear infinite; }
 @keyframes ux-shimmer { to { background-position: -200% 0; } }
 
+/* named rows ("דיווח למטא"): name + note | value | state pill */
+.ux-rlist { list-style: none; margin: 0; padding: 0; }
+.ux-rrow { display: grid; grid-template-columns: minmax(0,1fr) auto 104px; gap: 12px; align-items: center; min-height: 52px; padding: 8px 0; border-top: 1px solid var(--lux-line-soft); }
+.ux-rlist > .ux-rrow:first-child { border-top: 0; }
+.ux-rrow .who { min-width: 0; display: flex; flex-direction: column; }
+.ux-rrow .name { font-size: 15px; overflow-wrap: anywhere; }
+.ux-rrow .note { font-size: 13px; color: var(--lux-muted); }
+.ux-rrow .val { font-size: 14px; color: var(--lux-muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.ux-rrow .ux-pill { justify-self: end; }
+.ux-fold { border-top: 1px solid var(--lux-line); margin-top: 6px; }
+.ux-fold > summary { list-style: none; display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 48px; cursor: pointer; color: var(--lux-muted); font-size: 14px; }
+.ux-fold > summary::-webkit-details-marker { display: none; }
+.ux-fold > summary:hover { color: var(--lux-ink); }
+.ux-fold .chev { transition: transform 220ms ease-out; }
+.ux-fold[open] .chev { transform: rotate(180deg); }
+.ux-fold .ux-rlist { padding-bottom: 6px; }
+
 /* status pills — colour AND words, never colour alone */
 .ux-pill { display: inline-flex; align-items: center; gap: 6px; justify-self: start; border-radius: 9999px; padding: 4px 11px; font-size: 12.5px; border: 1px solid; white-space: nowrap; }
 .ux-pill[data-tone="good"] { color: #c9dcc3; border-color: rgba(168,192,160,0.35); background: rgba(168,192,160,0.08); }
@@ -925,6 +942,9 @@
   .mfit .ux-side .g { display: none; }
   .mfit .ux-side button { border: 1px solid var(--lux-line); border-radius: 9999px; white-space: nowrap; font-size: 14px; flex-shrink: 0; }
   .mfit .ux-savebar { border-radius: 14px; }
+  .mfit .ux-rrow { grid-template-columns: minmax(0,1fr) auto; row-gap: 2px; }
+  .mfit .ux-rrow .val { grid-row: 2; grid-column: 1; }
+  .mfit .ux-rrow .ux-pill { grid-row: 1 / span 2; grid-column: 2; }
 
   /* ---- the single highest-impact rule in this file ----------------------
      iOS Safari zooms the page whenever a control with font-size < 16px takes

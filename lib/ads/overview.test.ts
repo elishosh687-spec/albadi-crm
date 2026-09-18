@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { AdPerformanceRow } from "@/lib/analysis/ad-performance";
 import type { AdRecommendationRow } from "./assemble";
-import { buildRecommendationTodo, buildServerTodo, mergeOverviewRows, oneIn, sortOverviewRows } from "./overview";
+import { buildRecommendationTodo, buildServerTodo, groupReportRows, mergeOverviewRows, oneIn, sortOverviewRows } from "./overview";
 
 const perf = (adName: string, adIds: string[], over: Partial<AdPerformanceRow> = {}): AdPerformanceRow => ({
   adName,
@@ -111,5 +111,20 @@ describe("ads overview", () => {
   it("says how often a lead becomes X", () => {
     expect(oneIn(6, 270)).toBe("1 מכל 45");
     expect(oneIn(0, 270)).toBeNull();
+  });
+});
+
+describe("groupReportRows", () => {
+  it("puts problems first, then sent by value, and folds not-from-an-ad rows", () => {
+    const g = groupReportRows([
+      { name: "A", state: "sent", valueIls: 100 },
+      { name: "B", state: "pending", valueIls: 900 },
+      { name: "C", state: "not_from_meta", valueIls: 5000 },
+      { name: "D", state: "failed", valueIls: 10 },
+      { name: "E", state: "sent", valueIls: 700 },
+    ]);
+    expect(g.attention.map((r) => r.name)).toEqual(["D", "B"]);
+    expect(g.sent.map((r) => r.name)).toEqual(["E", "A"]);
+    expect(g.notFromMeta.map((r) => r.name)).toEqual(["C"]);
   });
 });

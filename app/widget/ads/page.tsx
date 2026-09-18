@@ -110,12 +110,14 @@ export default async function AdsWidgetPage({
 
       {active === "meta" && (
         <div className="grid gap-5">
+          {/* a broken connection explains everything below it — show it first */}
+          {health && !health.ok && <AdsHealthLine health={health} />}
           {reporting ? (
             <MetaReportPanel reporting={reporting} />
           ) : (
             <p className="ux-note">לא הצלחתי לטעון את מצב הדיווח למטא — נסה לרענן.</p>
           )}
-          <AdsHealthLine health={health} />
+          {(!health || health.ok) && <AdsHealthLine health={health} />}
         </div>
       )}
 

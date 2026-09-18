@@ -1,195 +1,116 @@
 /**
- * "מה עבר למטא" — per-deal / per-lead proof that a conversion reached Meta.
+ * "דיווח למטא" — did each closed deal / good lead reach Meta? (ui-ux-pro-max
+ * redesign, 18/09: status first, problems first, one short row per customer,
+ * the rest folded away — no filters.)
  *
- * Sits under the ads table because the aggregate counters there can read
- * "all reported" while one specific deal is missing — naming every row is what
- * makes that falsifiable. Presentation only; the data comes from
- * [lib/meta/reporting-status.ts](../../lib/meta/reporting-status.ts).
+ * The aggregate counters can read "all reported" while one specific deal is
+ * missing, so every row is named — that is what makes it falsifiable.
+ * Server-rendered, no JS: the folded groups are native <details>.
+ * Data: lib/meta/reporting-status.ts. Grouping: groupReportRows (lib/ads/overview).
  */
-import type {
-  ReportedLead,
-  MetaReportingStatus,
-} from "@/lib/meta/reporting-status";
+import { AlertTriangle, CheckCircle2, ChevronDown } from "lucide-react";
+import type { ReportedLead, MetaReportingStatus } from "@/lib/meta/reporting-status";
+import { groupReportRows } from "@/lib/ads/overview";
 
-const INK = "#e6e1e0";
-const MUTED = "var(--lux-muted)";
-const LINE = "rgba(230,225,224,0.08)";
-
-/** Visual language per state, defined once so the header chips and the row
- *  pills can never disagree about what a colour means. */
-const REPORT_STATE: Record<
-  ReportedLead["state"],
-  { color: string; label: string }
-> = {
-  sent: { color: "#7dd3a0", label: "דווח" },
-  pending: { color: "#e7cba6", label: "ממתין" },
-  no_meta_id: { color: "#e08a8a", label: "חסר מזהה" },
-  // Neutral grey on purpose: a customer who never came from an ad is not a
-  // fault, and colouring it red made the panel cry wolf.
-  not_from_meta: { color: MUTED, label: "לא ממודעה" },
-  failed: { color: "#e08a8a", label: "נכשל" },
+/** One visual language per state — colour AND words, never colour alone. */
+const STATE: Record<ReportedLead["state"], { tone: "good" | "warn" | "stop" | "idle"; label: string }> = {
+  sent: { tone: "good", label: "דווח" },
+  pending: { tone: "warn", label: "ממתין" },
+  failed: { tone: "stop", label: "נכשל" },
+  no_meta_id: { tone: "stop", label: "חסר מזהה" },
+  // Neutral on purpose: a customer who never came from an ad is not a fault.
+  not_from_meta: { tone: "idle", label: "לא ממודעה" },
 };
 
-function chip(color: string): React.CSSProperties {
-  return {
-    fontSize: 12.5,
-    padding: "4px 11px",
-    borderRadius: 999,
-    color,
-    border: `1px solid ${color}33`,
-    background: `${color}14`,
-    whiteSpace: "nowrap",
-  };
-}
+const ils = (n: number) => `₪${Math.round(n).toLocaleString("he-IL")}`;
 
-/** At-a-glance tally across both lists. */
-function countChips(reporting: MetaReportingStatus) {
-  const all = [...reporting.purchases, ...reporting.qualified];
-  const order: ReportedLead["state"][] = [
-    "sent",
-    "pending",
-    "failed",
-    "no_meta_id",
-    "not_from_meta",
-  ];
-  return order
-    .map((st) => ({
-      n: all.filter((r) => r.state === st).length,
-      ...REPORT_STATE[st],
-    }))
-    .filter((c) => c.n > 0);
-}
-
-/** One list — named rows, each with its state as a pill. */
-function ReportList({ title, rows }: { title: string; rows: ReportedLead[] }) {
-  if (rows.length === 0) return null;
+function Row({ r }: { r: ReportedLead }) {
+  const s = STATE[r.state] ?? STATE.pending;
   return (
-    <div style={{ padding: "12px 18px 14px" }}>
-      <div
-        style={{
-          fontSize: 12,
-          color: MUTED,
-          letterSpacing: "0.08em",
-          textTransform: "uppercase",
-          marginBottom: 7,
-        }}
-      >
-        {title}
+    <li className="ux-rrow">
+      <div className="who">
+        <span className="name">{r.name}</span>
+        {r.note && r.state !== "not_from_meta" ? <span className="note">{r.note}</span> : null}
       </div>
-      {rows.map((r, i) => {
-        const s = REPORT_STATE[r.state] ?? REPORT_STATE.pending;
-        return (
-          <div
-            key={`${r.name}-${i}`}
-            style={{
-              padding: "10px 0",
-              // separators only BETWEEN rows — a rule under every row, including
-              // the last, is what made the first version read as a wall
-              borderTop: i === 0 ? "none" : `1px solid ${LINE}`,
-            }}
-          >
-            <div
-              className="lux-wrap-sm"
-              style={{ display: "flex", alignItems: "center", gap: 8 }}
-            >
-              <span
-                title={r.name}
-                style={{
-                  flex: 1,
-                  minWidth: 0,
-                  fontSize: 14.5,
-                  color: INK,
-                  overflowWrap: "anywhere",
-                }}
-              >
-                {r.name}
-              </span>
-              {typeof r.valueIls === "number" ? (
-                <span
-                  className="tabular-nums"
-                  style={{ fontSize: 14, color: MUTED }}
-                >
-                  ₪{Math.round(r.valueIls).toLocaleString("he-IL")}
-                </span>
-              ) : null}
-              <span style={chip(s.color)}>{s.label}</span>
-            </div>
-            {/* the reason belongs to ITS row — one shared note under the whole
-                list left you guessing which name it referred to */}
-            {r.note ? (
-              <div style={{ fontSize: 13, color: MUTED, marginTop: 2 }}>
-                {r.note}
-              </div>
-            ) : null}
-          </div>
-        );
-      })}
-    </div>
+      <span className="val">{typeof r.valueIls === "number" ? ils(r.valueIls) : ""}</span>
+      <span className="ux-pill" data-tone={s.tone}>{s.label}</span>
+    </li>
   );
 }
 
-export function MetaReportPanel({
-  reporting,
-}: {
-  reporting: MetaReportingStatus;
-}) {
+function Folded({ title, rows }: { title: string; rows: ReportedLead[] }) {
+  if (rows.length === 0) return null;
   return (
-    <section
-      style={{
-        marginTop: 0,
-        border: `1px solid ${LINE}`,
-        borderRadius: 10,
-        background: "rgba(255,255,255,0.02)",
-        overflow: "hidden",
-      }}
-    >
-      <header
-        className="lux-wrap-sm"
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 10,
-          padding: "14px 18px",
-          borderBottom: `1px solid ${LINE}`,
-        }}
-      >
-        <div style={{ fontSize: 16, fontWeight: 500, color: INK }}>
-          מה עבר למטא
-        </div>
-        <div
-          style={{
-            display: "flex",
-            gap: 6,
-            marginInlineStart: "auto",
-            flexWrap: "wrap",
-          }}
-        >
-          {countChips(reporting).map((c) => (
-            <span key={c.label} style={chip(c.color)}>
-              {c.n} {c.label}
-            </span>
-          ))}
-        </div>
-      </header>
+    <details className="ux-fold">
+      <summary>
+        <span>{title}</span>
+        <ChevronDown className="size-4 chev" aria-hidden />
+      </summary>
+      <ul className="ux-rlist">{rows.map((r, i) => <Row key={`${r.name}-${i}`} r={r} />)}</ul>
+    </details>
+  );
+}
 
-      {reporting.unreportedRevenueIls > 0 ? (
-        <div
-          style={{
-            fontSize: 14,
-            color: "#e08a8a",
-            lineHeight: 1.65,
-            padding: "9px 14px",
-            background: "rgba(224,138,138,0.06)",
-            borderBottom: `1px solid ${LINE}`,
-          }}
-        >
-          ₪{reporting.unreportedRevenueIls.toLocaleString("he-IL")} מלקוחות
-          שהגיעו ממטא לא דווחו — חסר להם מזהה, אז אי אפשר לשייך אותם למודעה.
-        </div>
+/** One kind of event (Purchase / Qualified): problems open, the rest folded. */
+function EventSection({ title, hint, rows }: { title: string; hint: string; rows: ReportedLead[] }) {
+  const g = groupReportRows(rows);
+  const sentValue = g.sent.reduce((a, r) => a + (r.valueIls ?? 0), 0);
+  return (
+    <section className="ux-panel" aria-label={title}>
+      <h2>{title}</h2>
+      <p className="d">{hint}</p>
+      {rows.length === 0 ? (
+        <p className="text-[14px] text-muted-foreground">עוד אין מה לדווח.</p>
+      ) : (
+        <>
+          {g.attention.length > 0 && <ul className="ux-rlist">{g.attention.map((r, i) => <Row key={`${r.name}-${i}`} r={r} />)}</ul>}
+          <Folded
+            title={`דווחו למטא · ${g.sent.length}${sentValue > 0 ? ` · ${ils(sentValue)}` : ""}`}
+            rows={g.sent}
+          />
+          <Folded title={`לא הגיעו ממודעה — אין מה לדווח · ${g.notFromMeta.length}`} rows={g.notFromMeta} />
+        </>
+      )}
+    </section>
+  );
+}
+
+export function MetaReportPanel({ reporting }: { reporting: MetaReportingStatus }) {
+  const all = [...reporting.purchases, ...reporting.qualified];
+  const count = (st: ReportedLead["state"]) => all.filter((r) => r.state === st).length;
+  const problems = count("pending") + count("failed") + count("no_meta_id");
+  const fromMeta = all.length - count("not_from_meta");
+
+  return (
+    <div className="grid gap-5">
+      <div className="ux-kpis" style={{ marginBottom: 0 }}>
+        <div className="ux-kpi"><div className="k">דווחו</div><div className="v">{count("sent")}</div><div className="e">מתוך <b>{fromMeta}</b> שהגיעו ממודעה</div></div>
+        <div className="ux-kpi"><div className="k">ממתינים</div><div className="v">{count("pending")}</div><div className="e">יש מזהה, עוד לא נשלחו</div></div>
+        <div className="ux-kpi"><div className="k">נכשלו או חסר מזהה</div><div className="v">{count("failed") + count("no_meta_id")}</div><div className="e">{count("failed") + count("no_meta_id") ? "דורש בדיקה" : "אין"}</div></div>
+        <div className="ux-kpi"><div className="k">לא ממודעה</div><div className="v">{count("not_from_meta")}</div><div className="e">אין מה לדווח עליהם</div></div>
+      </div>
+
+      {problems === 0 && reporting.unreportedRevenueIls === 0 ? (
+        <section className="ux-todo ok" aria-label="מצב הדיווח">
+          <h2><CheckCircle2 className="size-4" aria-hidden /> כל מה שהגיע ממודעה דווח למטא.</h2>
+        </section>
+      ) : reporting.unreportedRevenueIls > 0 ? (
+        <p className="ux-note" style={{ color: "#f0c0c0", marginTop: 0 }}>
+          <AlertTriangle className="size-4 shrink-0" aria-hidden />
+          {ils(reporting.unreportedRevenueIls)} מלקוחות שהגיעו ממטא לא דווחו — חסר להם מזהה, אז אי אפשר לשייך אותם למודעה.
+        </p>
       ) : null}
 
-      <ReportList title="עסקאות · Purchase" rows={reporting.purchases} />
-      <ReportList title="לידים מתויגים · Qualified" rows={reporting.qualified} />
-    </section>
+      <EventSection
+        title="עסקאות שנסגרו · Purchase"
+        hint="כל עסקה שנסגרה מליד ממודעה נשלחת למטא עם הסכום, כדי שמטא תלמד מי קונה."
+        rows={reporting.purchases}
+      />
+      <EventSection
+        title="לידים טובים · Qualified"
+        hint="כל ליד שסימנת ״ליד טוב״ ב-GHL נשלח למטא, כדי שתביא עוד כמוהו."
+        rows={reporting.qualified}
+      />
+    </div>
   );
 }

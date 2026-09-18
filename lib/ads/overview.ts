@@ -6,7 +6,7 @@
  */
 import type { AdsHealth } from "@/lib/ads/ads-health";
 import type { AdPerformanceRow } from "@/lib/analysis/ad-performance";
-import type { MetaReportingStatus } from "@/lib/meta/reporting-status";
+import type { MetaReportingStatus, ReportedLead } from "@/lib/meta/reporting-status";
 import type { AdRecommendationRow } from "@/lib/ads/assemble";
 import { normalizeAdId } from "@/lib/ads/ad-id";
 
@@ -180,4 +180,27 @@ export function sortOverviewRows(rows: OverviewRow[], by: OverviewSort): Overvie
   const val = (r: OverviewRow) =>
     by === "revenue" ? r.revenueIls : by === "won" ? r.won : by === "good" ? r.markedGood : r.leads;
   return [...rows].sort((a, b) => val(b) - val(a) || b.revenueIls - a.revenueIls || b.leads - a.leads);
+}
+
+export interface ReportGroups {
+  /** Came from Meta but did not reach it — someone should look. */
+  attention: ReportedLead[];
+  sent: ReportedLead[];
+  /** Never came from an ad — nothing to report; folded away. */
+  notFromMeta: ReportedLead[];
+}
+
+const ATTENTION_ORDER: Record<string, number> = { failed: 0, no_meta_id: 1, pending: 2 };
+
+/** "דיווח למטא": problems first (failed → missing id → pending), then what
+ *  was sent (highest value first), and the not-from-an-ad rows last. Pure. */
+export function groupReportRows(rows: ReportedLead[]): ReportGroups {
+  const byValue = (a: { valueIls?: number }, b: { valueIls?: number }) => (b.valueIls ?? 0) - (a.valueIls ?? 0);
+  return {
+    attention: rows
+      .filter((r) => r.state in ATTENTION_ORDER)
+      .sort((a, b) => ATTENTION_ORDER[a.state] - ATTENTION_ORDER[b.state] || byValue(a, b)),
+    sent: rows.filter((r) => r.state === "sent").sort(byValue),
+    notFromMeta: rows.filter((r) => r.state === "not_from_meta").sort(byValue),
+  };
 }
