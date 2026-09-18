@@ -1,5 +1,35 @@
 # Session handoff
 
+## Paused project — hub redesign per ui-ux-pro-max (2026-09-18)
+
+Rule (AGENTS.md): every UI change follows `~/.claude/skills.cold/ui-ux-pro-max`
+inside Silent Luxury. How-to + all decisions: `docs/agent/mobile-ui.md`
+("UI design rules", "The `.ux-*` layer", "Compliance pass over every tab").
+
+**Done & live (all on main, deployed, probe-verified at 375 / 812×375 / 1280):**
+- Rebuilt: מודעות (+ דיווח למטא), אנליטיקה, הגדרות (side nav, one save bar;
+  ads test rules moved here), שיחות (WhatsApp-style list), מחיר מתחרים
+  (verdict in words, live KPIs, cards on phone, delete with confirm + 6s undo),
+  עסקאות (KPIs with meaning, one-line progress per deal).
+- Hub tab bar: 44px tabs; phone bottom bar = שיחות · הצעות מחיר · עסקאות + עוד.
+- אישורים tab DELETED (queues never used: 484 escalations, 0 drafts).
+  `isDraftQueueEnabled()` is hard-off. Call-analysis "תמיד לאישור"/"משולב"
+  modes now have no approval screen — rebuild one before leaving "צל".
+- Compliance pass (text ≥12px, taps ≥44px, contrast ≥4.5:1, no sideways
+  scroll) on הצעות מחיר, מחשבון, משלוחים, צבעים, מגרש בדיקות.
+
+**Next (Eli to pick when we resume):**
+1. Deeper structural redesign of one of: הצעות מחיר, מחשבון, משלוחים, צבעים,
+   מגרש בדיקות (so far only the compliance pass).
+2. The full-conversation screen (InboxView thread) — passes the probe, not
+   redesigned.
+3. Check on the phone in GHL that the bottom bar and the new tabs feel right
+   (verified in emulation only; prod needs the GHL widget token).
+
+**Housekeeping:** local branch `ui/hub-redesign` diverged from main only by
+duplicate commits (content identical) — safe to delete. Obsolete WIP patch
+for the deleted אישורים redesign is in the Claude scratchpad; ignore it.
+
 ## Completed project — Meta ad recommendations (2026-09-18)
 
 - Live in production: `מודעות` tab → המלצות · הגדרות בדיקה · דוח איכות לידים,
