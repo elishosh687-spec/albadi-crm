@@ -489,13 +489,50 @@ export default function CompetitorsScreen({
     }
   };
 
-  const remove = async (id: number) => {
-    setRows((r) => r.filter((x) => x.id !== id)); // optimistic
-    try {
-      await fetch(`/api/widget/competitor-prices/${id}?${qs}`, { method: "DELETE" });
-    } catch {
-      void load();
+  /**
+   * Delete with a 6-second undo. The DELETE is permanent, so the row is only
+   * hidden at first; the request goes out when the undo window closes (or when
+   * another row is deleted). Leaving the page inside the window keeps the row.
+   */
+  const [pendingDelete, setPendingDelete] = useState<{ row: Row; timer: ReturnType<typeof setTimeout> } | null>(null);
+  const [deleteMsg, setDeleteMsg] = useState("");
+
+  const commitDelete = useCallback(
+    async (row: Row) => {
+      try {
+        const res = await fetch(`/api/widget/competitor-prices/${row.id}?${qs}`, { method: "DELETE" });
+        const data = await res.json().catch(() => ({ ok: res.ok }));
+        if (!res.ok || !data.ok) throw new Error(data.error || "delete failed");
+        setRows((r) => r.filter((x) => x.id !== row.id));
+        setDeleteMsg("");
+      } catch {
+        setError(`המחיקה של ${row.competitor} נכשלה — ההצעה עדיין שמורה. נסה שוב.`);
+        void load();
+      } finally {
+        setPendingDelete((p) => (p?.row.id === row.id ? null : p));
+      }
+    },
+    [qs, load],
+  );
+
+  const remove = (id: number) => {
+    const row = rows.find((x) => x.id === id);
+    if (!row) return;
+    // A second delete finalizes the first one right away.
+    if (pendingDelete) {
+      clearTimeout(pendingDelete.timer);
+      void commitDelete(pendingDelete.row);
     }
+    const timer = setTimeout(() => void commitDelete(row), 6000);
+    setPendingDelete({ row, timer });
+    setDeleteMsg(`ההצעה של ${row.competitor} נמחקה`);
+  };
+
+  const undoDelete = () => {
+    if (!pendingDelete) return;
+    clearTimeout(pendingDelete.timer);
+    setPendingDelete(null);
+    setDeleteMsg("המחיקה בוטלה");
   };
 
   // Group rows by product family (Eli organizes "by product / spec").
@@ -706,7 +743,11 @@ export default function CompetitorsScreen({
       {error && <div role="alert" style={{ color: "#f0c0c0", fontSize: 14, marginBottom: 14 }}>{error}</div>}
 
       {!loading && rows.length > 0 && (
-        <SizeComparisonTable rows={rows as never} token={token} />
+        <SizeComparisonTable
+          rows={(pendingDelete ? rows.filter((r) => r.id !== pendingDelete.row.id) : rows) as never}
+          token={token}
+          onDelete={remove}
+        />
       )}
       {loading ? (
         <div className="ux-panel" role="status" style={{ color: "var(--lux-muted)", textAlign: "center" }}>טוען השוואות…</div>
@@ -717,6 +758,18 @@ export default function CompetitorsScreen({
           לחץ על <b style={{ color: "var(--lux-champagne)" }}>"מחיר מתחרה חדש"</b> כדי לתעד את ההצעה הראשונה.
         </div>
       ) : null}
+      <p className="ux-sr" aria-live="polite">{deleteMsg}</p>
+      {pendingDelete && (
+        <div className="ux-savebar" role="status" style={{ position: "sticky", bottom: 14 }}>
+          <div className="t">
+            ההצעה של {pendingDelete.row.competitor} נמחקה
+            <span> · אפשר לבטל בשניות הקרובות</span>
+          </div>
+          <button type="button" className="lux-cta-champagne" style={{ minHeight: 44, padding: "0 20px", fontSize: 14 }} onClick={undoDelete}>
+            בטל מחיקה
+          </button>
+        </div>
+      )}
     </LuxShell>
   );
 }

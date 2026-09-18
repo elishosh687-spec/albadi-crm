@@ -22,7 +22,7 @@
  */
 
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, Trash2 } from "lucide-react";
 import { gapVerdict, summarize } from "@/lib/competitors/compare";
 
 export interface CompRow {
@@ -157,10 +157,15 @@ function Num({ children, bold }: { children: React.ReactNode; bold?: boolean }) 
 export default function SizeComparisonTable({
   rows,
   token,
+  onDelete,
 }: {
   rows: CompRow[];
   token: string;
+  /** Delete one logged quote (the screen owns the undo window). */
+  onDelete?: (id: number) => void;
 }) {
+  /** Which row is asking "are you sure?" — two taps to delete, never one. */
+  const [confirmId, setConfirmId] = useState<number | null>(null);
   const [origin, setOrigin] = useState<"all" | OriginBucket>("all");
   /**
    * Which row's note is open.
@@ -494,6 +499,23 @@ export default function SizeComparisonTable({
                           {mine?.leadDays != null && <div><dt>אצלנו</dt><dd>כ־{mine.leadDays} ימים</dd></div>}
                         </dl>
                         {r.notes && <p><b>מה נמסר: </b>{r.notes}</p>}
+                        {onDelete && (
+                          <div className="competitor-delete">
+                            {confirmId === r.id ? (
+                              <>
+                                <span>למחוק את ההצעה של {r.competitor} ({r.quantity?.toLocaleString("he-IL")} יח׳)?</span>
+                                <button type="button" className="ux-btn danger" onClick={() => { setConfirmId(null); setOpenNote(null); onDelete(r.id); }}>
+                                  <Trash2 className="size-4" aria-hidden /> כן, מחק
+                                </button>
+                                <button type="button" className="ux-btn" onClick={() => setConfirmId(null)}>ביטול</button>
+                              </>
+                            ) : (
+                              <button type="button" className="ux-btn danger" onClick={() => setConfirmId(r.id)}>
+                                <Trash2 className="size-4" aria-hidden /> מחק הצעה
+                              </button>
+                            )}
+                          </div>
+                        )}
                       </td>
                     </tr>
                   )}

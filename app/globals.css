@@ -82,6 +82,9 @@
 .competitor-table tr.details dd { margin: 0; font-size: 14px; }
 .competitor-table tr.details p { margin: 10px 0 0; font-size: 13.5px; line-height: 1.7; color: var(--lux-muted); }
 .competitor-table tr.details p b { color: var(--lux-ink); font-weight: 500; }
+.competitor-delete { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 14px; padding-top: 12px; border-top: 1px dashed var(--lux-line); font-size: 14px; }
+.ux-btn.danger { color: #f0c0c0; border-color: rgba(224,138,138,0.35); }
+.ux-btn.danger:hover:not(:disabled) { background: rgba(224,138,138,0.08); }
 .ux-skel-inline { display: inline-block; width: 72px; height: 16px; border-radius: 4px; background: linear-gradient(90deg, rgba(255,255,255,0.03), rgba(255,255,255,0.09), rgba(255,255,255,0.03)); background-size: 200% 100%; animation: ux-shimmer 1.2s linear infinite; }
 @media (prefers-reduced-motion: reduce) { .ux-skel-inline { animation: none; } }
 
