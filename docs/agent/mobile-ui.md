@@ -180,3 +180,19 @@ so usability rules are not optional.
 - Probe used for verification: small text (<12px), tap targets (<44px, except
   checkboxes and `.ux-hit`), contrast (<4.5:1, colours normalised via canvas),
   overflow — run on every view at 1280, 375 and 812×375.
+
+### Hub tab bar + שיחות list (2026-09-18)
+
+- Tab bar (`components/hub/HubShell.tsx`): desktop tabs 44px, `aria-current`;
+  the fake "חיפוש ⌘K" box is gone. Phone (<768px) hides the top strip and shows
+  `.hub-bottom`: `HUB_PRIMARY_TAB_IDS` (שיחות · אישורים · הצעות מחיר ·
+  עסקאות — Eli's pick) + "עוד" (`<details>` sheet with the rest).
+- שיחות default screen is `components/inbox/ConversationList.tsx` (the old
+  "צריכים אותך עכשיו" CockpitView is deleted — its rows only showed "—"):
+  WhatsApp-style rows (who wrote the last line + text + time ago), customers
+  waiting for our reply ≤ 7 days on top (`WAITING_MAX_DAYS`, oldest first),
+  search, 40 rows per page; tap → the existing InboxView thread.
+  Formatting in `lib/inbox/list-format.ts` (media placeholders like
+  `[imageMessage]` → "תמונה"; initials via `Array.from` — indexing split a
+  non-BMP styled name and broke hydration). `renderedAt` comes from the server
+  so "לפני X" matches on hydration.
