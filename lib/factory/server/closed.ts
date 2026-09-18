@@ -457,7 +457,7 @@ export async function closeDealGroup(
           quoteId: primaryId,
           metadata: { valueIls: combined.grandTotalIls, combined: true },
         });
-        void reportPurchaseToMeta(prow.sid, combined.grandTotalIls, primaryId);
+        await reportPurchaseToMeta(prow.sid, combined.grandTotalIls, primaryId);
       }
     }
   } catch (err) {
@@ -653,7 +653,7 @@ export async function setDealClosed(id: string, closed: boolean): Promise<void> 
         quoteId: id,
         metadata: { valueIls: value, combined: false },
       });
-      void reportPurchaseToMeta(row.sid, value, id);
+      await reportPurchaseToMeta(row.sid, value, id);
     }
   }
 }

@@ -23,7 +23,6 @@ describe("selectPurchaseRetries", () => {
 
   it.each([
     ["already sent", { sentAt: "2026-09-17T00:00:00Z" }],
-    ["never attempted (no error)", { error: null }],
     ["no attribution key — Meta would refuse it every day", { hasAttributionKey: false }],
     ["no value — value-less Purchases are refused", { valueExVat: 0 }],
     ["no lead", { leadSid: " " }],
@@ -31,6 +30,11 @@ describe("selectPurchaseRetries", () => {
     ["no close date", { closedAt: null }],
   ] as const)("skips: %s", (_why, over) => {
     expect(selectPurchaseRetries([row(over as Partial<RetryCandidateInput>)], NOW)).toEqual([]);
+  });
+
+  it("regression 03/09 (Elran): a deal never stamped at all — sent nor failed — is retried", () => {
+    const [c] = selectPurchaseRetries([row({ error: null })], NOW);
+    expect(c).toMatchObject({ dealId: "fq_1", previousError: "never stamped" });
   });
 
   it("clamps event_time into Meta's 7-day window", () => {

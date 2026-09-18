@@ -9,8 +9,10 @@
  *
  * Runs inside the daily `/api/cron/enrich-meta-attribution`. Selection is
  * deliberately narrow, so a permanent refusal cannot become a daily resend:
- *   - a closed deal whose Purchase has NOT been stamped sent,
- *   - that has a recorded error (it was attempted and failed),
+ *   - a closed deal whose Purchase has NOT been stamped sent — either it
+ *     failed (recorded error) or it was never stamped at all: the sender
+ *     used to be fire-and-forget, so Vercel froze the lambda mid-send and
+ *     neither outcome landed (Elran, closed 03/09/2026, never reported),
  *   - whose lead has an attribution key (leadgen id or fbclid),
  *   - with a positive value (value-less Purchases are refused by design),
  *   - closed within RETRY_WINDOW_DAYS (a structurally broken one stops).
@@ -58,7 +60,7 @@ export function selectPurchaseRetries(rows: RetryCandidateInput[], nowMs: number
   const out: RetryCandidate[] = [];
   for (const r of rows) {
     const sid = (r.leadSid ?? "").trim();
-    if (!sid || r.sentAt || !r.error || !r.hasAttributionKey || !(r.valueExVat > 0)) continue;
+    if (!sid || r.sentAt || !r.hasAttributionKey || !(r.valueExVat > 0)) continue;
     const closedMs = r.closedAt ? Date.parse(r.closedAt) : NaN;
     if (!Number.isFinite(closedMs) || nowMs - closedMs > windowMs) continue;
     const closedSec = Math.floor(closedMs / 1000);
@@ -68,7 +70,7 @@ export function selectPurchaseRetries(rows: RetryCandidateInput[], nowMs: number
       name: r.customerName ?? sid,
       value: r.valueExVat,
       eventTime: Math.min(nowSec, Math.max(closedSec, nowSec - MAX_EVENT_AGE_SEC)),
-      previousError: r.error,
+      previousError: r.error ?? "never stamped",
     });
   }
   return out;
@@ -93,7 +95,8 @@ export async function retryFailedPurchases(opts: { dry?: boolean } = {}): Promis
     SELECT id, meta_purchase_sent_at::text AS sent_at, meta_purchase_error AS err,
            COALESCE(closed_deal_at, updated_at)::text AS closed_at
     FROM factory_quote_requests
-    WHERE meta_purchase_error IS NOT NULL AND meta_purchase_sent_at IS NULL`);
+    WHERE meta_purchase_sent_at IS NULL
+      AND (meta_purchase_error IS NOT NULL OR closed_deal_at IS NOT NULL)`);
   if (stamps.rows.length === 0) return { candidates: 0, sent: 0, failed: 0, names: [], errors: [] };
   const byId = new Map(stamps.rows.map((r) => [r.id, r]));
 
