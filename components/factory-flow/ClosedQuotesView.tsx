@@ -13,7 +13,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Loader2, Plus, Trash2, Check, Save, Download, X, Paperclip, Circle, CheckCircle2, ChevronDown, Search } from "lucide-react";
-import { LuxShell, LuxTitle, LuxAccent, LuxStat } from "@/components/widget-ui/lux";
+import { LuxShell, LuxTitle, LuxAccent } from "@/components/widget-ui/lux";
 import { widgetUrl } from "./widget-url";
 import type { DealMilestones, FactoryPricingResult, QuoteActualCosts, ZohoDocRef } from "@/lib/factory/types";
 import { computeCommission } from "@/lib/factory/commission";
@@ -243,7 +243,7 @@ export function ClosedQuotesView({ apiToken }: { apiToken: string }) {
   }, []);
 
   return (
-    <LuxShell>
+    <LuxShell className="ux ux-floor">
       <div style={{ maxWidth: MAX_W, margin: "0 auto" }}>
         <LuxTitle
           overline="— Deals"
@@ -252,31 +252,46 @@ export function ClosedQuotesView({ apiToken }: { apiToken: string }) {
               ? `ציר העסקה + הרווח האמיתי מכל לקוח · ${totals.reconciled}/${totals.count} עם עלויות שהוזנו`
               : "ציר העסקה + הרווח האמיתי מכל לקוח"
           }
-          aside={
-            quotes && totals.count > 0 ? (
-              // up to 4 KPI tiles = ~445px; unwrapped they spilled off the
-              // start edge of a 346px header and were clipped unreachable
-              <div className="lux-wrap-sm" style={{ display: "flex", gap: 10 }}>
-                <LuxStat value={totals.count} label="עסקאות" />
-                <LuxStat value={ils(totals.actualProfit)} label="רווח בפועל סה״כ" tone="success" />
-                {totals.commission >= 1 && (
-                  <LuxStat value={ils(totals.commission)} label="עמלות מכירה (סה״כ)" />
-                )}
-                {Math.abs(totals.variance) >= 1 && (
-                  <LuxStat
-                    value={`${totals.variance >= 0 ? "+" : "−"}${ils(Math.abs(totals.variance))}`}
-                    label={totals.variance >= 0 ? "מעל התכנון" : "מתחת לתכנון"}
-                    tone={totals.variance >= 0 ? "success" : "alert"}
-                  />
-                )}
-              </div>
-            ) : null
-          }
         >
           תיקי <LuxAccent>עסקאות</LuxAccent>.
         </LuxTitle>
 
-        {stats && <AccuracyStrip stats={stats} />}
+        {quotes && totals.count > 0 && (
+          <div className="ux-kpis">
+            <div className="ux-kpi">
+              <div className="k">עסקאות</div>
+              <div className="v">{totals.count}</div>
+              <div className="e"><b>{totals.reconciled}</b> עם עלויות בפועל</div>
+            </div>
+            <div className="ux-kpi">
+              <div className="k">רווח בפועל</div>
+              <div className="v" style={{ color: "var(--lux-success, #a8c0a0)" }}>{ils(totals.actualProfit)}</div>
+              <div className="e">מתוכנן היה <b>{ils(totals.plannedProfit)}</b></div>
+            </div>
+            <div className="ux-kpi">
+              <div className="k">מול התכנון</div>
+              <div className="v" style={{ color: Math.abs(totals.variance) < 1 ? undefined : totals.variance >= 0 ? "var(--lux-success, #a8c0a0)" : "#f0c0c0" }}>
+                {Math.abs(totals.variance) < 1 ? "בדיוק" : `${totals.variance >= 0 ? "+" : "−"}${ils(Math.abs(totals.variance))}`}
+              </div>
+              <div className="e">{Math.abs(totals.variance) < 1 ? "כמו שתוכנן" : totals.variance >= 0 ? "הרווחנו יותר מהמתוכנן" : "הרווחנו פחות מהמתוכנן"}</div>
+            </div>
+            <div className="ux-kpi">
+              <div className="k">עמלות מכירה</div>
+              <div className="v">{ils(totals.commission)}</div>
+              <div className="e">על כל העסקאות</div>
+            </div>
+          </div>
+        )}
+
+        {stats && (
+          <details className="ux-fold" style={{ marginBottom: 18 }}>
+            <summary>
+              <span>כמה המחשבון מדויק — מול המפעל ומול הביצוע</span>
+              <ChevronDown className="size-4 chev" aria-hidden />
+            </summary>
+            <AccuracyStrip stats={stats} />
+          </details>
+        )}
 
         {unmatched && unmatched.length > 0 && (
           <div
@@ -286,16 +301,16 @@ export function ClosedQuotesView({ apiToken }: { apiToken: string }) {
               background: "rgba(214,178,106,0.08)", border: "1px solid rgba(214,178,106,0.3)",
             }}
           >
-            <span style={{ fontSize: 12.5, color: "var(--lux-champagne, #d6b26a)" }}>
+            <span style={{ fontSize: 14, color: "var(--lux-champagne, #d6b26a)" }}>
               {unmatched.length} מסמכי Zoho מ-90 הימים האחרונים עוד לא שויכו לעסקה
             </span>
-            <span style={{ fontSize: 11.5, color: "var(--lux-muted)" }}>
+            <span style={{ fontSize: 13, color: "var(--lux-muted)" }}>
               {unmatched.slice(0, 3).map((d) =>
                 `${d.party || d.number}${d.totalIls != null ? ` ₪${Math.round(d.totalIls).toLocaleString("he-IL")}` : ""}`
               ).join(" · ")}
               {unmatched.length > 3 ? " · …" : ""}
             </span>
-            <span style={{ fontSize: 11, color: "var(--lux-muted)", marginInlineStart: "auto" }}>
+            <span style={{ fontSize: 13, color: "var(--lux-muted)", marginInlineStart: "auto" }}>
               שיוך: פתח עסקה למטה → «משוך מ-Zoho»
             </span>
           </div>
@@ -322,65 +337,41 @@ export function ClosedQuotesView({ apiToken }: { apiToken: string }) {
         {quotes && quotes.length > 0 && (
           <>
             {/* Toolbar: search + filter chips + sort — keeps 1000s navigable */}
-            <div
-              style={{
-                display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap",
-                marginBottom: 14, paddingBottom: 14, borderBottom: "1px solid var(--lux-line)",
-              }}
-            >
-              <div style={{ position: "relative", flex: "1 1 220px", minWidth: 180 }}>
-                <Search className="size-4" style={{ position: "absolute", insetInlineStart: 10, top: "50%", transform: "translateY(-50%)", color: "var(--lux-muted)" }} />
-                <input
-                  value={query}
-                  onChange={(e) => { setQuery(e.target.value); setLimit(30); }}
-                  placeholder="חיפוש לקוח / מס׳ הצעה…"
-                  style={{
-                    width: "100%", padding: "8px 12px 8px 34px", borderRadius: 8,
-                    background: "var(--lux-inset)", border: "1px solid var(--lux-line)",
-                    color: "var(--lux-ink)", fontSize: 13, outline: "none",
-                  }}
-                />
-              </div>
-              <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+            <label className="ux-search" style={{ marginBottom: 12 }}>
+              <Search className="size-4 shrink-0" aria-hidden />
+              <span className="ux-sr">חיפוש עסקה</span>
+              <input
+                type="search"
+                value={query}
+                onChange={(e) => { setQuery(e.target.value); setLimit(30); }}
+                placeholder="חיפוש לפי לקוח או מספר הצעה"
+              />
+            </label>
+            <div className="competitor-bar" style={{ paddingBottom: 14, borderBottom: "1px solid var(--lux-line)", marginBottom: 12 }}>
+              <div className="ux-chips" role="group" aria-label="סינון עסקאות">
                 {([
                   ["all", "הכל"],
-                  ["pending", "ללא עלויות"],
-                  ["done", "הוזנו עלויות"],
+                  ["pending", "חסרות עלויות"],
+                  ["done", "עלויות הוזנו"],
                   ["combined", "משולבות"],
                   ["estimate", "לפי אומדן"],
-                ] as const).map(([key, label]) => {
-                  const active = filter === key;
-                  return (
-                    <button
-                      key={key}
-                      onClick={() => { setFilter(key); setLimit(30); }}
-                      style={{
-                        fontSize: 12, padding: "5px 11px", borderRadius: 99, cursor: "pointer",
-                        background: active ? "rgba(214,196,172,0.14)" : "transparent",
-                        border: `1px solid ${active ? "var(--lux-champagne)" : "var(--lux-line)"}`,
-                        color: active ? "var(--lux-champagne)" : "var(--lux-muted)",
-                      }}
-                    >
-                      {label}
-                    </button>
-                  );
-                })}
+                ] as const).map(([key, label]) => (
+                  <button key={key} type="button" className="ux-chip" aria-pressed={filter === key} onClick={() => { setFilter(key); setLimit(30); }}>
+                    {label}
+                  </button>
+                ))}
               </div>
-              <select
-                value={sort}
-                onChange={(e) => setSort(e.target.value as typeof sort)}
-                style={{
-                  fontSize: 12, padding: "6px 10px", borderRadius: 8, cursor: "pointer",
-                  background: "var(--lux-inset)", border: "1px solid var(--lux-line)", color: "var(--lux-ink)",
-                }}
-              >
-                <option value="recent">עדכני ביותר</option>
-                <option value="profit">רווח (גבוה→נמוך)</option>
-                <option value="name">שם לקוח</option>
-              </select>
+              <label className="ux-select">
+                מיון
+                <select value={sort} onChange={(e) => setSort(e.target.value as typeof sort)}>
+                  <option value="recent">עדכני ביותר</option>
+                  <option value="profit">רווח (גבוה→נמוך)</option>
+                  <option value="name">שם לקוח</option>
+                </select>
+              </label>
             </div>
 
-            <div style={{ fontSize: 11.5, color: "var(--lux-muted)", marginBottom: 10 }}>
+            <div style={{ fontSize: 13, color: "var(--lux-muted)", marginBottom: 10 }} aria-live="polite">
               מציג {shown.length} מתוך {visible.length}
               {visible.length !== totals.count ? ` (מסונן מ-${totals.count})` : ""}
             </div>
@@ -406,15 +397,8 @@ export function ClosedQuotesView({ apiToken }: { apiToken: string }) {
             )}
 
             {visible.length > limit && (
-              <button
-                onClick={() => setLimit((n) => n + 30)}
-                style={{
-                  display: "block", margin: "16px auto 0", padding: "9px 22px", borderRadius: 8,
-                  background: "transparent", border: "1px solid var(--lux-line)", cursor: "pointer",
-                  color: "var(--lux-ink)", fontSize: 13,
-                }}
-              >
-                טען עוד ({visible.length - limit})
+              <button type="button" className="ux-btn" style={{ width: "100%", marginTop: 16 }} onClick={() => setLimit((n) => n + 30)}>
+                הצג עוד {Math.min(30, visible.length - limit)} מתוך {visible.length - limit}
               </button>
             )}
           </>
@@ -691,7 +675,6 @@ function ClosedQuoteCard({
 
   const varPos = r.variance >= 0;
   const varColor = Math.abs(r.variance) < 1 ? "var(--lux-muted)" : varPos ? "var(--lux-success,#a8c0a0)" : "#e8b4b4";
-  const doneCount = TIMELINE.filter((s) => !!milestones[s.key]).length;
   const reconciled = !!quote.actualCosts;
 
   return (
@@ -703,6 +686,13 @@ function ClosedQuoteCard({
       {/* Header — clickable summary row; body expands on click */}
       <div
         onClick={onToggle}
+        role="button"
+        tabIndex={0}
+        aria-expanded={expanded}
+        onKeyDown={(e) => {
+          if (e.target !== e.currentTarget) return;
+          if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onToggle(); }
+        }}
         style={{
           display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap",
           padding: "14px 18px", background: "var(--lux-inset)", cursor: "pointer",
@@ -721,21 +711,21 @@ function ClosedQuoteCard({
           <div className="lux-sans" style={{ fontSize: 16, fontWeight: 400, color: "var(--lux-ink)", display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
             {quote.customerName || "לקוח"}
             {quote.isCombined && (
-              <span style={{ fontSize: 10, padding: "2px 8px", borderRadius: 99, background: "rgba(214,178,106,0.12)", border: "1px solid rgba(214,178,106,0.35)", color: "var(--lux-champagne,#d6b26a)" }}>
+              <span style={{ fontSize: 12, padding: "2px 9px", borderRadius: 99, background: "rgba(214,178,106,0.12)", border: "1px solid rgba(214,178,106,0.35)", color: "var(--lux-champagne,#d6b26a)" }}>
                 עסקה משולבת · {quote.products?.length ?? 1} מוצרים
               </span>
             )}
             {quote.fromEstimate && (
               <span
                 title="נסגר לפי מחיר האומדן — עדיין לא אושר מול המפעל"
-                style={{ fontSize: 10, padding: "2px 8px", borderRadius: 99, background: "rgba(120,150,200,0.12)", border: "1px solid rgba(120,150,200,0.35)", color: "var(--lux-cool,#9db4d6)" }}
+                style={{ fontSize: 12, padding: "2px 9px", borderRadius: 99, background: "rgba(120,150,200,0.12)", border: "1px solid rgba(120,150,200,0.35)", color: "var(--lux-cool,#9db4d6)" }}
               >
                 לפי אומדן
               </span>
             )}
           </div>
           {quote.isCombined && quote.products && quote.products.length > 1 ? (
-            <div style={{ fontSize: 11.5, color: "var(--lux-muted)", marginTop: 4, display: "flex", flexDirection: "column", gap: 2 }}>
+            <div style={{ fontSize: 13, color: "var(--lux-muted)", marginTop: 4, display: "flex", flexDirection: "column", gap: 2 }}>
               {quote.products.map((p, i) => {
                 const ps = (p.productSpec ?? {}) as unknown as Record<string, unknown>;
                 const label = (ps.productName as string) || (ps.description as string) ||
@@ -751,7 +741,7 @@ function ClosedQuoteCard({
               <span style={{ marginTop: 2 }}>נסגר {fmtDate(quote.sentToCustomerAt ?? quote.updatedAt)}</span>
             </div>
           ) : (
-            <div style={{ fontSize: 11.5, color: "var(--lux-muted)", marginTop: 3 }}>
+            <div style={{ fontSize: 13, color: "var(--lux-muted)", marginTop: 3 }}>
               {[spec, quote.quotationNo ? `#${quote.quotationNo}` : null, `נסגר ${fmtDate(quote.sentToCustomerAt ?? quote.updatedAt)}`]
                 .filter(Boolean).join(" · ")}
             </div>
@@ -764,21 +754,20 @@ function ClosedQuoteCard({
             <span
               title={reconciled ? "עלויות בפועל הוזנו" : "עלויות בפועל טרם הוזנו"}
               style={{
-                fontSize: 10, padding: "1px 7px", borderRadius: 99,
+                fontSize: 12, padding: "2px 9px", borderRadius: 99,
                 background: reconciled ? "rgba(168,192,160,0.12)" : "rgba(214,178,106,0.1)",
                 border: `1px solid ${reconciled ? "rgba(168,192,160,0.35)" : "rgba(214,178,106,0.3)"}`,
                 color: reconciled ? "var(--lux-success,#a8c0a0)" : "var(--lux-champagne,#d6b26a)",
               }}
             >
-              {reconciled ? "עלויות ✓" : "ללא עלויות"}
+              {reconciled ? "עלויות בפועל הוזנו" : "חסרות עלויות בפועל"}
             </span>
-            <span style={{ fontSize: 10, color: "var(--lux-muted)" }}>{doneCount}/{TIMELINE.length} שלבים</span>
           </div>
-          <div style={{ fontSize: 10.5, color: "var(--lux-muted)", letterSpacing: "0.12em" }}>רווח בפועל מהלקוח</div>
+          <div style={{ fontSize: 12, color: "var(--lux-muted)", letterSpacing: "0.04em" }}>רווח בפועל מהלקוח</div>
           <div className="lux-serif tabular-nums" style={{ fontSize: 28, fontWeight: 300, color: varColor, lineHeight: 1.1 }}>
             {ils(r.actualProfit)}
           </div>
-          <div style={{ fontSize: 11, color: "var(--lux-muted)", marginTop: 1 }}>
+          <div style={{ fontSize: 13, color: "var(--lux-muted)", marginTop: 1 }}>
             מחיר ללקוח {ils(r.revenue)} · מתוכנן היה {ils(r.plannedProfit)}
             {Math.abs(r.variance) >= 1 && (
               <span style={{ color: varColor }}> · {varPos ? "+" : "−"}{ils(Math.abs(r.variance))}</span>
@@ -792,7 +781,7 @@ function ClosedQuoteCard({
             className="lux-tap"
             style={{
               marginTop: 8, display: "inline-flex", alignItems: "center", gap: 5,
-              fontSize: 11, color: "var(--lux-muted)", background: "transparent",
+              fontSize: 12.5, color: "var(--lux-muted)", background: "transparent",
               border: "1px solid var(--lux-line)", borderRadius: 6, padding: "3px 9px",
               cursor: removing ? "default" : "pointer", opacity: removing ? 0.5 : 1,
             }}
@@ -830,7 +819,7 @@ function ClosedQuoteCard({
               <span style={{ display: "inline-flex", alignItems: "center", gap: 7, fontSize: 13, color: "var(--lux-ink)" }}>
                 <Paperclip className="size-3.5" style={{ color: "var(--lux-champagne)" }} />
                 ההצעה המשולבת שנשלחה ללקוח · {quote.products.length} מוצרים
-                <span style={{ fontSize: 11, color: "var(--lux-muted)" }}>
+                <span style={{ fontSize: 12.5, color: "var(--lux-muted)" }}>
                   (מסמך אחד · {ils(dealTotalExVat)})
                 </span>
               </span>
@@ -841,7 +830,7 @@ function ClosedQuoteCard({
                 <button
                   type="button"
                   onClick={() => onOpenCombined?.()}
-                  style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11.5, color: "var(--lux-champagne)", background: "transparent", border: 0, cursor: "pointer" }}
+                  style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 13, color: "var(--lux-champagne)", background: "transparent", border: 0, cursor: "pointer" }}
                 >
                   <Search className="size-3.5" /> הצג הכל
                 </button>
@@ -849,7 +838,7 @@ function ClosedQuoteCard({
                   href={combinedPdfHref}
                   target="_blank"
                   rel="noreferrer"
-                  style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11.5, color: "var(--lux-cool)" }}
+                  style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 13, color: "var(--lux-cool)" }}
                 >
                   <Download className="size-3.5" /> PDF משולב
                 </a>
@@ -871,7 +860,7 @@ function ClosedQuoteCard({
                     <Paperclip className="size-3.5" style={{ color: "var(--lux-champagne)" }} />
                     {isCombinedDeal ? "פירוט מוצר" : "ההצעה שנשלחה ללקוח"}
                     {showLabel ? (p.quotationNo ? ` · #${p.quotationNo}` : "") : ""}
-                    <span style={{ fontSize: 11, color: "var(--lux-muted)" }}>(תצוגת לקוח / בוס)</span>
+                    <span style={{ fontSize: 12.5, color: "var(--lux-muted)" }}>(תצוגת לקוח / בוס)</span>
                   </button>
                   {/* On a combined deal the member's own PDF is the PRE-combination
                       quote — a document the customer never received. Only the
@@ -882,9 +871,9 @@ function ClosedQuoteCard({
                       target="_blank"
                       rel="noreferrer"
                       onClick={(e) => e.stopPropagation()}
-                      style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11.5, color: "var(--lux-cool)" }}
+                      style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 14, minHeight: 44, padding: "0 6px", color: "var(--lux-cool)" }}
                     >
-                      <Download className="size-3.5" /> PDF
+                      <Download className="size-4" aria-hidden /> PDF
                     </a>
                   )}
                 </div>
@@ -907,7 +896,7 @@ function ClosedQuoteCard({
         <div style={{ fontSize: 12.5, color: "var(--lux-ink)", fontWeight: 500, marginBottom: 2 }}>
           תוספות לעסקה
         </div>
-        <div style={{ fontSize: 11.5, color: "var(--lux-muted)", marginBottom: 8 }}>
+        <div style={{ fontSize: 13, color: "var(--lux-muted)", marginBottom: 8 }}>
           סכום שסוכם אחרי סגירת העסקה (למשל עוד 500 יח׳ במחיר שנתת). נכנס לסה״כ, לפריסת התשלומים ולחשבונית.
         </div>
         {addons.length > 0 ? (
@@ -976,7 +965,7 @@ function ClosedQuoteCard({
           <div style={{ border: "1px solid var(--lux-line)", borderRadius: 10, padding: "12px 14px" }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 8 }}>
               <div style={{ fontSize: 12.5, color: "var(--lux-ink)", fontWeight: 500 }}>מעקב תשלומים</div>
-              <div style={{ fontSize: 11, color: paidTotal >= sched.total - 0.5 ? "var(--lux-success,#a8c0a0)" : "var(--lux-muted)" }}>
+              <div style={{ fontSize: 12.5, color: paidTotal >= sched.total - 0.5 ? "var(--lux-success,#a8c0a0)" : "var(--lux-muted)" }}>
                 שולם {ils2(paidTotal)} מתוך {ils2(sched.total)}
                 {quote.paymentPlanLabel ? ` · ${quote.paymentPlanLabel}` : ""}
               </div>
@@ -1003,7 +992,7 @@ function ClosedQuoteCard({
                     </button>
                     <span style={{ color: "var(--lux-muted)", flex: 1, minWidth: 0 }}>
                       {i === 0 ? "תשלום ראשוני" : i === arr.length - 1 ? "תשלום אחרון" : `תשלום ${i + 1}`}
-                      <span style={{ fontSize: 11, opacity: 0.8 }}> · צריך {ils2(inst.ils)} ({inst.pct}% · {inst.when})</span>
+                      <span style={{ fontSize: 12.5, opacity: 0.8 }}> · צריך {ils2(inst.ils)} ({inst.pct}% · {inst.when})</span>
                     </span>
                     <div style={{ display: "flex", alignItems: "center", ...inputStyle({ width: 120, padding: "5px 9px" }) }}>
                       <span style={{ fontSize: 12, color: "var(--lux-muted)" }}>שולם ₪</span>
@@ -1060,14 +1049,14 @@ function ClosedQuoteCard({
           <CostRow label="עלות מפעל" planned={r.plannedFactory} value={factory} onChange={setFactory} delta={r.factoryDelta} />
           <CostRow label="שילוח (ממוצע ללקוח)" planned={r.plannedShipping} value={shipping} onChange={setShipping} delta={r.shippingDelta} />
           <CostRow label="עמלת סוכן מכירות" planned={r.plannedCommission} value={commission} onChange={setCommission} delta={r.commission - r.plannedCommission} />
-          <div style={{ gridColumn: "1 / -1", fontSize: 11, color: "var(--lux-muted)", marginTop: -4 }}>
+          <div style={{ gridColumn: "1 / -1", fontSize: 12.5, color: "var(--lux-muted)", marginTop: -4 }}>
             {r.commissionPct}% מבסיס העסקה (ללא שילוח, ללא מע״מ) · הוצאה קבועה שנרשמת עם סגירת העסקה (גם לפני שהלקוח שילם במלואו)
           </div>
 
           {/* Per-CBM view — "כמה חייבתי את הלקוח לקוב מול כמה שילמתי לקוב".
               Volume basis = the factory's CBM (ground truth per Eli). */}
           {typeof fp.totalCbm === "number" && fp.totalCbm > 0.001 && (
-            <div style={{ gridColumn: "1 / -1", fontSize: 11, color: "var(--lux-muted)", marginTop: -4 }}>
+            <div style={{ gridColumn: "1 / -1", fontSize: 12.5, color: "var(--lux-muted)", marginTop: -4 }}>
               לפי נפח המפעל {fp.totalCbm.toFixed(2)} CBM — חויב ללקוח{" "}
               <span className="tabular-nums" style={{ color: "var(--lux-ink)" }}>
                 ₪{Math.round(r.plannedShipping / fp.totalCbm).toLocaleString("he-IL")}/CBM
@@ -1135,7 +1124,7 @@ function ClosedQuoteCard({
               <span
                 key={`${z.type}:${z.id}`}
                 style={{
-                  fontSize: 10.5, padding: "3px 9px", borderRadius: 99,
+                  fontSize: 12, padding: "3px 9px", borderRadius: 99,
                   background: "rgba(120,150,200,0.1)", border: "1px solid rgba(120,150,200,0.25)",
                   color: "var(--lux-cool, #9db4d6)",
                 }}
@@ -1270,7 +1259,7 @@ function CostRow({
           style={{ width: "100%", background: "transparent", border: 0, textAlign: "right", color: "var(--lux-ink)", fontSize: 14, outline: "none" }}
         />
       </div>
-      <div style={{ fontSize: 11, color: deltaColor }}>{deltaText}</div>
+      <div style={{ fontSize: 12.5, color: deltaColor }}>{deltaText}</div>
     </>
   );
 }
@@ -1298,32 +1287,35 @@ const TIMELINE: {
   { key: "deliveredAt", label: "הגיע ללקוח", chip: "הגיע" },
 ];
 
-/** Compact done/current/pending pills under the customer name. */
+/** Where the deal is, in one line: the current step in words + a slim
+ *  progress bar (ui-ux-pro-max — nine tiny pills per card were unreadable). */
 function StageChips({ quote, m }: { quote: ClosedQuote; m: DealMilestones }) {
-  const stages: { chip: string; done: boolean }[] = [
-    { chip: "הצעה", done: !!quote.sentToCustomerAt },
-    { chip: "זכייה", done: true },
-    ...TIMELINE.filter((s) => s.key !== "layoutApprovedAt").map((s) => ({ chip: s.chip, done: !!m[s.key] })),
-  ];
-  const firstPending = stages.findIndex((s) => !s.done);
+  // A deal on this tab is already closed, so "offer sent" / "won" are done by
+  // definition — progress counts the post-sale steps only.
+  void quote;
+  const stages: { chip: string; label: string; done: boolean }[] = TIMELINE.map((s) => ({ chip: s.chip, label: s.label, done: !!m[s.key] }));
+  const done = stages.filter((s) => s.done).length;
+  const next = stages.find((s) => !s.done);
+  const pct = Math.round((done / stages.length) * 100);
   return (
-    <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginTop: 8 }}>
-      {stages.map((s, i) => {
-        const current = i === firstPending;
-        return (
-          <span
-            key={s.chip}
-            style={{
-              fontSize: 10, padding: "2px 9px", borderRadius: 99, whiteSpace: "nowrap",
-              background: s.done ? "rgba(168,192,160,0.12)" : current ? "rgba(214,178,106,0.12)" : "var(--lux-inset)",
-              border: `1px solid ${s.done ? "rgba(168,192,160,0.35)" : current ? "rgba(214,178,106,0.4)" : "var(--lux-line)"}`,
-              color: s.done ? "var(--lux-success,#a8c0a0)" : current ? "var(--lux-champagne,#d6b26a)" : "var(--lux-muted)",
-            }}
-          >
-            {s.done ? "✓ " : ""}{s.chip}
-          </span>
-        );
-      })}
+    <div style={{ marginTop: 8, maxWidth: 360 }}>
+      <div style={{ fontSize: 13, color: "var(--lux-muted)" }}>
+        {next ? (
+          <>השלב הבא: <b style={{ color: "var(--lux-ink)", fontWeight: 500 }}>{next.label}</b> · {done} מתוך {stages.length}</>
+        ) : (
+          <b style={{ color: "var(--lux-success, #a8c0a0)", fontWeight: 500 }}>✓ הגיע ללקוח — העסקה הושלמה</b>
+        )}
+      </div>
+      <div
+        role="progressbar"
+        aria-valuemin={0}
+        aria-valuemax={stages.length}
+        aria-valuenow={done}
+        aria-label={`שלבי העסקה: ${done} מתוך ${stages.length}`}
+        style={{ height: 4, borderRadius: 2, background: "var(--lux-line)", marginTop: 6, overflow: "hidden" }}
+      >
+        <div style={{ width: `${pct}%`, height: "100%", background: "var(--lux-success, #a8c0a0)", opacity: 0.75 }} />
+      </div>
     </div>
   );
 }
@@ -1395,7 +1387,7 @@ function DealTimeline({
       >
         <span style={{ color: "var(--lux-champagne,#d6b26a)" }}>{open ? "▾" : "◂"}</span>
         ציר העסקה — {doneCount}/{TIMELINE.length} שלבים הושלמו
-        <span style={{ marginInlineStart: "auto", fontSize: 11 }}>{open ? "סגור" : "פתח"}</span>
+        <span style={{ marginInlineStart: "auto", fontSize: 12.5 }}>{open ? "סגור" : "פתח"}</span>
       </button>
 
       {open && (
@@ -1406,8 +1398,8 @@ function DealTimeline({
               ? <CheckCircle2 className="size-4" style={{ color: "var(--lux-success,#a8c0a0)" }} />
               : <Circle className="size-4" style={{ color: "var(--lux-muted)" }} />}
             <span style={{ fontSize: 13, color: "var(--lux-ink)" }}>הצעה נשלחה ללקוח</span>
-            <span style={{ fontSize: 11.5, color: "var(--lux-muted)" }}>{fmtDate(quote.sentToCustomerAt)}</span>
-            <span style={{ marginInlineStart: "auto", fontSize: 11, color: "var(--lux-muted)" }}>אוטומטי</span>
+            <span style={{ fontSize: 13, color: "var(--lux-muted)" }}>{fmtDate(quote.sentToCustomerAt)}</span>
+            <span style={{ marginInlineStart: "auto", fontSize: 12.5, color: "var(--lux-muted)" }}>אוטומטי</span>
           </div>
 
           {TIMELINE.map((s) => {
@@ -1420,13 +1412,13 @@ function DealTimeline({
                     ? <CheckCircle2 className="size-4 shrink-0" style={{ color: "var(--lux-success,#a8c0a0)" }} />
                     : <Circle className="size-4 shrink-0" style={{ color: "var(--lux-muted)" }} />}
                   <span style={{ fontSize: 13, color: stamped ? "var(--lux-ink)" : "var(--lux-muted)" }}>{s.label}</span>
-                  {stamped && <span style={{ fontSize: 11.5, color: "var(--lux-muted)" }}>{fmtDate(stamped)}</span>}
+                  {stamped && <span style={{ fontSize: 13, color: "var(--lux-muted)" }}>{fmtDate(stamped)}</span>}
                   {/* Zoho-invoice + attach + mark buttons. This inner cluster
                       did not wrap even though its parent did, so it pushed
                       past the card edge on a phone. */}
                   <span className="lux-wrap-sm" style={{ marginInlineStart: "auto", display: "flex", gap: 6, alignItems: "center" }}>
                     {s.key === "invoiceSentAt" && milestones.invoiceZohoId && (
-                      <span style={{ fontSize: 10.5, color: "var(--lux-cool,#9db4d6)" }}>
+                      <span style={{ fontSize: 12, color: "var(--lux-cool,#9db4d6)" }}>
                         Zoho {milestones.invoiceZohoId}
                       </span>
                     )}
@@ -1434,7 +1426,7 @@ function DealTimeline({
                       <button
                         type="button"
                         onClick={onCreateInvoice}
-                        style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11, color: "var(--lux-champagne,#d6b26a)", padding: "3px 10px", borderRadius: 5, border: "1px solid rgba(214,178,106,0.4)" }}
+                        style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 12.5, color: "var(--lux-champagne,#d6b26a)", padding: "3px 10px", borderRadius: 5, border: "1px solid rgba(214,178,106,0.4)" }}
                       >
                         🧾 צור חשבונית ב-Zoho
                       </button>
@@ -1456,7 +1448,7 @@ function DealTimeline({
                           type="button"
                           onClick={() => fileInputs.current[s.fileStage!]?.click()}
                           disabled={busyKey === `up-${s.fileStage}`}
-                          style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11, color: "var(--lux-cool,#9db4d6)", padding: "3px 8px", borderRadius: 5, border: "1px solid var(--lux-line)" }}
+                          style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 12.5, color: "var(--lux-cool,#9db4d6)", padding: "3px 8px", borderRadius: 5, border: "1px solid var(--lux-line)" }}
                         >
                           {busyKey === `up-${s.fileStage}` ? <Loader2 className="size-3 animate-spin" /> : <Paperclip className="size-3" />}
                           צרף קובץ
@@ -1468,7 +1460,7 @@ function DealTimeline({
                         type="button"
                         onClick={() => putPatch({ [s.key]: null }, s.key)}
                         disabled={busyKey === s.key}
-                        style={{ fontSize: 10.5, color: "var(--lux-muted)", padding: "3px 8px" }}
+                        style={{ fontSize: 12, color: "var(--lux-muted)", padding: "3px 8px" }}
                       >
                         בטל
                       </button>
@@ -1477,7 +1469,7 @@ function DealTimeline({
                         type="button"
                         onClick={() => putPatch({ [s.key]: new Date().toISOString() }, s.key)}
                         disabled={busyKey === s.key}
-                        style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11, color: "var(--lux-champagne,#d6b26a)", padding: "3px 10px", borderRadius: 5, border: "1px solid rgba(214,178,106,0.4)" }}
+                        style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 12.5, color: "var(--lux-champagne,#d6b26a)", padding: "3px 10px", borderRadius: 5, border: "1px solid rgba(214,178,106,0.4)" }}
                       >
                         {busyKey === s.key ? <Loader2 className="size-3 animate-spin" /> : <Check className="size-3" />}
                         סמן ✓
@@ -1494,7 +1486,7 @@ function DealTimeline({
                         target="_blank"
                         rel="noreferrer"
                         style={{
-                          fontSize: 10.5, padding: "3px 9px", borderRadius: 99,
+                          fontSize: 12, padding: "3px 9px", borderRadius: 99,
                           background: "rgba(120,150,200,0.08)", border: "1px solid rgba(120,150,200,0.25)",
                           color: "var(--lux-cool,#9db4d6)", textDecoration: "none", maxWidth: 220,
                           overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
@@ -1510,8 +1502,8 @@ function DealTimeline({
             );
           })}
 
-          {err && <div style={{ fontSize: 11.5, color: "#e8b4b4", marginTop: 8 }}>שגיאה: {err}</div>}
-          <div style={{ fontSize: 10.5, color: "var(--lux-muted)", marginTop: 8 }}>
+          {err && <div style={{ fontSize: 13, color: "#e8b4b4", marginTop: 8 }}>שגיאה: {err}</div>}
+          <div style={{ fontSize: 12, color: "var(--lux-muted)", marginTop: 8 }}>
             כל סימון וכל קובץ משתקפים אוטומטית ככרטיסיית הערה על איש הקשר ב-GHL — איתי רואה.
           </div>
         </div>
@@ -1541,23 +1533,23 @@ function AccuracyCard({
       : null;
   return (
     <div style={{ background: "var(--lux-card)", border: "1px solid var(--lux-line)", borderRadius: 10, padding: "12px 16px" }}>
-      <div style={{ fontSize: 10.5, color: "var(--lux-muted)", letterSpacing: "0.1em", marginBottom: 4 }}>{title}</div>
+      <div style={{ fontSize: 12, color: "var(--lux-muted)", letterSpacing: "0.1em", marginBottom: 4 }}>{title}</div>
       {!stat ? (
         <div style={{ fontSize: 13, color: "var(--lux-muted)", padding: "6px 0" }}>אין עדיין מספיק נתונים</div>
       ) : (
         <>
           <div className="lux-serif tabular-nums" style={{ fontSize: 26, fontWeight: 300, color: "var(--lux-ink)", lineHeight: 1.15 }}>
             {pct(stat.medianAbsPct)}
-            <span style={{ fontSize: 11.5, color: "var(--lux-muted)", fontFamily: "inherit", marginInlineStart: 6 }}>פער חציוני</span>
+            <span style={{ fontSize: 13, color: "var(--lux-muted)", fontFamily: "inherit", marginInlineStart: 6 }}>פער חציוני</span>
           </div>
-          <div style={{ fontSize: 11, color: "var(--lux-muted)", marginTop: 3 }}>
+          <div style={{ fontSize: 12.5, color: "var(--lux-muted)", marginTop: 3 }}>
             ממוצע {pct(stat.meanAbsPct)} · {stat.n} עסקאות
             {signedHint && Math.abs(stat.meanSignedPct) >= 1 && (
               <> · {signedHint(stat.meanSignedPct)}</>
             )}
           </div>
           {trend !== null && Math.abs(trend) >= 0.5 && (
-            <div style={{ fontSize: 11, marginTop: 2, color: trend < 0 ? "var(--lux-success,#a8c0a0)" : "#e8b4b4" }}>
+            <div style={{ fontSize: 12.5, marginTop: 2, color: trend < 0 ? "var(--lux-success,#a8c0a0)" : "#e8b4b4" }}>
               {trend < 0 ? "▼" : "▲"} {pct(trend)} ב-10 האחרונות {trend < 0 ? "— משתפר" : "— נחלש"}
             </div>
           )}
@@ -1570,7 +1562,7 @@ function AccuracyCard({
 function AccuracyStrip({ stats }: { stats: AccuracyStats }) {
   return (
     <div style={{ marginBottom: 16 }}>
-      <div style={{ fontSize: 11, color: "var(--lux-muted)", letterSpacing: "0.14em", marginBottom: 8 }}>
+      <div style={{ fontSize: 12.5, color: "var(--lux-muted)", letterSpacing: "0.14em", marginBottom: 8 }}>
         כמה המחשבון שלי מדויק — מצטבר על כל העסקאות
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 10 }}>
@@ -1694,7 +1686,7 @@ function ZohoMatchModal({
   function Section({ title, list }: { title: string; list: ZohoSuggestion[] }) {
     return (
       <div style={{ marginBottom: 14 }}>
-        <div style={{ fontSize: 11, color: "var(--lux-muted)", letterSpacing: "0.1em", marginBottom: 6 }}>{title}</div>
+        <div style={{ fontSize: 12.5, color: "var(--lux-muted)", letterSpacing: "0.1em", marginBottom: 6 }}>{title}</div>
         {list.length === 0 ? (
           <div style={{ fontSize: 12, color: "var(--lux-muted)" }}>לא נמצאו מסמכים מתאימים</div>
         ) : (
@@ -1717,9 +1709,9 @@ function ZohoMatchModal({
                   {d.party ? ` · ${d.party}` : ""}
                 </span>
                 <span className="tabular-nums" style={{ fontSize: 12.5, color: "var(--lux-ink)" }}>{zohoAmount(d)}</span>
-                <span style={{ fontSize: 11, color: "var(--lux-muted)", minWidth: 58, textAlign: "left" }}>{fmtDate(d.date)}</span>
+                <span style={{ fontSize: 12.5, color: "var(--lux-muted)", minWidth: 58, textAlign: "left" }}>{fmtDate(d.date)}</span>
                 {d.score >= 0.6 && (
-                  <span style={{ fontSize: 10, color: "var(--lux-champagne, #d6b26a)" }}>מומלץ</span>
+                  <span style={{ fontSize: 12, color: "var(--lux-champagne, #d6b26a)" }}>מומלץ</span>
                 )}
               </label>
             );
@@ -1792,7 +1784,7 @@ function ZohoMatchModal({
                 ביטול
               </button>
             </div>
-            <div style={{ fontSize: 11, color: "var(--lux-muted)", marginTop: 10 }}>
+            <div style={{ fontSize: 12.5, color: "var(--lux-muted)", marginTop: 10 }}>
               הסכומים ימולאו בשדות — שום דבר לא נשמר עד שתלחץ «שמור עלויות בפועל».
             </div>
           </>
@@ -1888,7 +1880,7 @@ function ZohoInvoiceModal({
             <div style={{ fontSize: 12.5, color: "var(--lux-muted)", marginBottom: 10 }}>
               לקוח: <span style={{ color: "var(--lux-ink)" }}>{quote.customerName}</span>
             </div>
-            <label style={{ display: "block", fontSize: 11.5, color: "var(--lux-muted)", marginBottom: 4 }}>שם המוצר בחשבונית</label>
+            <label style={{ display: "block", fontSize: 13, color: "var(--lux-muted)", marginBottom: 4 }}>שם המוצר בחשבונית</label>
             <input value={productName} onChange={(e) => setProductName(e.target.value)} style={inputStyle({ width: "100%", marginBottom: 12 })} />
 
             <div style={{ display: "grid", gridTemplateColumns: "1fr auto", rowGap: 6, fontSize: 13, marginBottom: 12 }}>
@@ -1915,7 +1907,7 @@ function ZohoInvoiceModal({
               השאר כטיוטה ב-Zoho (בלי לסמן "נשלחה")
             </label>
 
-            <div style={{ fontSize: 11, color: "#e8b4b4", marginBottom: 12 }}>
+            <div style={{ fontSize: 12.5, color: "#e8b4b4", marginBottom: 12 }}>
               ⚠️ יוצר חשבונית אמיתית בספרים — מספר עוקב, פרטי בנק, מע״מ 18%. בדיוק כמו הסקיל המקומי שלך.
             </div>
 
@@ -2068,7 +2060,7 @@ function ZohoExpenseModal({
 
         {state !== "done" && (
           <>
-            <div style={{ fontSize: 11.5, color: "var(--lux-muted)", marginBottom: 5 }}>סוג ההוצאה</div>
+            <div style={{ fontSize: 13, color: "var(--lux-muted)", marginBottom: 5 }}>סוג ההוצאה</div>
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 12 }}>
               {([["factory", "מפעל (COGS)"], ["commission", "עמלת מכירות"], ["shipping", "שילוח"], ["other", "אחר"]] as [Bucket, string][]).map(([b, l]) => (
                 <button key={b} type="button" style={radio(bucket === b)} onClick={() => setBucket(b)}>{l}</button>
@@ -2077,7 +2069,7 @@ function ZohoExpenseModal({
 
             {needsAccount && (
               <>
-                <div style={{ fontSize: 11.5, color: "var(--lux-muted)", marginBottom: 5 }}>חשבון הוצאה ב-Zoho</div>
+                <div style={{ fontSize: 13, color: "var(--lux-muted)", marginBottom: 5 }}>חשבון הוצאה ב-Zoho</div>
                 <select value={accountId} onChange={(e) => setAccountId(e.target.value)} style={{ ...inputStyle({ width: "100%", marginBottom: 12 }), appearance: "auto" } as React.CSSProperties}>
                   <option value="">בחר חשבון…</option>
                   {accounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
@@ -2085,7 +2077,7 @@ function ZohoExpenseModal({
               </>
             )}
 
-            <div style={{ fontSize: 11.5, color: "var(--lux-muted)", marginBottom: 5 }}>מי שילם</div>
+            <div style={{ fontSize: 13, color: "var(--lux-muted)", marginBottom: 5 }}>מי שילם</div>
             <div style={{ display: "flex", gap: 6, marginBottom: 12, flexWrap: "wrap" }}>
               {["אלי", "שמעון", "העסק (Pepper)"].map((p) => (
                 <button key={p} type="button" style={radio(partner === p)} onClick={() => setPartner(p)}>{p}</button>
@@ -2094,24 +2086,24 @@ function ZohoExpenseModal({
 
             <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
               <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 11.5, color: "var(--lux-muted)", marginBottom: 5 }}>סכום</div>
+                <div style={{ fontSize: 13, color: "var(--lux-muted)", marginBottom: 5 }}>סכום</div>
                 <input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0" style={inputStyle({ width: "100%" })} />
               </div>
               <div>
-                <div style={{ fontSize: 11.5, color: "var(--lux-muted)", marginBottom: 5 }}>מטבע</div>
+                <div style={{ fontSize: 13, color: "var(--lux-muted)", marginBottom: 5 }}>מטבע</div>
                 <select value={currency} onChange={(e) => setCurrency(e.target.value)} style={{ ...inputStyle({ width: 90 }), appearance: "auto" } as React.CSSProperties}>
                   <option>ILS</option><option>CNY</option><option>USD</option>
                 </select>
               </div>
             </div>
             {currency !== "ILS" && (
-              <div style={{ fontSize: 11, color: "var(--lux-muted)", marginTop: -8, marginBottom: 12 }}>
+              <div style={{ fontSize: 12.5, color: "var(--lux-muted)", marginTop: -8, marginBottom: 12 }}>
                 יומר ל-₪ בשער חי (התוכנית שלך ב-Zoho לא מאפשרת הוצאה במטבע זר) —
                 הסכום המקורי נשמר בתיאור.
               </div>
             )}
 
-            <div style={{ fontSize: 11.5, color: "var(--lux-muted)", marginBottom: 5 }}>תיאור</div>
+            <div style={{ fontSize: 13, color: "var(--lux-muted)", marginBottom: 5 }}>תיאור</div>
             <input value={description} onChange={(e) => { setDescription(e.target.value); setDescTouched(true); }} style={inputStyle({ width: "100%", marginBottom: 12 })} />
 
             <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12.5, color: "var(--lux-muted)", marginBottom: 12, cursor: "pointer" }}>
@@ -2119,7 +2111,7 @@ function ZohoExpenseModal({
               עדכן גם את "עלויות בפועל" בכרטיס הזה (בש״ח לפי השער)
             </label>
 
-            <div style={{ fontSize: 11, color: "#e8b4b4", marginBottom: 12 }}>
+            <div style={{ fontSize: 12.5, color: "#e8b4b4", marginBottom: 12 }}>
               ⚠️ רושם הוצאה אמיתית בספרים — ללא מע״מ (ייבוא), מקושרת ללקוח {name}.
             </div>
 
