@@ -49,7 +49,7 @@ function urlPath(rel: string): string {
 
 const BEARER_RE = /function (authorized|authed)\(/;
 const OWN_GATE_RE =
-  /widgetAuthed|salesAuthed|verifyWidgetToken|GHL_INBOUND_SECRET|FB_IMPORT_SECRET|WEBSITE_IMPORT_SECRET|GHL_OUTBOUND_SECRET|authOk\(|verifySignature\(|process\.env\.BOT_SECRET|process\.env\.CRON_SECRET|process\.env\.ADMIN_PASSWORD/;
+  /widgetAuthed|salesAuthed|verifyWidgetToken|GHL_INBOUND_SECRET|FB_IMPORT_SECRET|WEBSITE_IMPORT_SECRET|GHL_OUTBOUND_SECRET|authOk\(|verifySignature\(|cronBearerOk\(|process\.env\.BOT_SECRET|process\.env\.CRON_SECRET|process\.env\.ADMIN_PASSWORD/;
 
 /** Deliberately open. The reason is the documentation. */
 const PUBLIC: Record<string, string> = {

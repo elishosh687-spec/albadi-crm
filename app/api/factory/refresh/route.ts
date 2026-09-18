@@ -6,6 +6,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { cronBearerOk } from "@/lib/observability/cron-auth";
 import { withRequestLog } from "@/lib/observability/log";
 import { withJob } from "@/lib/observability/jobs";
 import { refreshFromFeishu } from "@/lib/factory/server/refresh";
@@ -19,12 +20,11 @@ export const POST = withRequestLog("factory", async (_req: NextRequest, log) => 
 });
 
 export const GET = withJob("factory-refresh", "factory", async (req: NextRequest, log) => {
-  const secret = process.env.CRON_SECRET;
-  if (secret) {
-    const auth = req.headers.get("authorization");
-    if (auth !== `Bearer ${secret}`) {
-      return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-    }
+  // Inline on purpose (not an `authorized()` helper): the POST beside it is the
+  // dashboard button, gated by the middleware cookie, and the route-gate sweep
+  // treats a declared `authorized()` as covering every method.
+  if (!cronBearerOk(req.headers.get("authorization"))) {
+    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
   const result = await refreshFromFeishu();
   return NextResponse.json(result);

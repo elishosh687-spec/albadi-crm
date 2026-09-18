@@ -21,6 +21,7 @@
  * manually replayed.
  */
 import { NextRequest, NextResponse } from "next/server";
+import { cronBearerOk } from "@/lib/observability/cron-auth";
 import { db } from "@/lib/db";
 import { appConfig, callRecordingImports, leads } from "@/drizzle/schema";
 import { and, eq, isNotNull, isNull, lte, sql } from "drizzle-orm";
@@ -61,11 +62,7 @@ function authorized(req: NextRequest): boolean {
   // CALL_TRIGGER_SECRET (a dedicated, non-sensitive value used by the
   // local Claude scheduled task — see CLAUDE.md §"GHL call recording
   // analysis pipeline" for why both exist).
-  const accepted = [process.env.BOT_SECRET, process.env.CALL_TRIGGER_SECRET]
-    .filter((s): s is string => Boolean(s));
-  if (accepted.length === 0) return false;
-  const header = req.headers.get("authorization") ?? "";
-  return accepted.some((s) => header === `Bearer ${s}`);
+  return cronBearerOk(req.headers.get("authorization"));
 }
 
 function markerFor(messageId: string): string {

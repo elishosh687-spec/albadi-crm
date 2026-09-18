@@ -14,7 +14,7 @@ paths:
 - A jsonb merge cannot delete: `writeJob` takes a `clear` list removed with jsonb `-`; single-quote key names (`"x"` is an identifier). Passing `undefined` does nothing (un-cleared flag = ✅ re-sent forever).
 - `recordJobRun` swallows its own errors — verify jsonb SQL against the real DB, not only a mock.
 - GitHub Actions throttles schedules (a `*/5` job ran ~7×/day); the cron-job.org move is NOT set up — don't claim it is. The watchdog is the truth.
-- `/api/factory/refresh` checks `CRON_SECRET` only; others accept `BOT_SECRET`/`CALL_TRIGGER_SECRET`. Trigger by hand with `CRON_SECRET`/`CALL_TRIGGER_SECRET` (`BOT_SECRET` isn't pullable).
+- Every job accepts any of `BOT_SECRET`/`CALL_TRIGGER_SECRET`/`CRON_SECRET` (`lib/observability/cron-auth.ts`); trigger by hand with `CRON_SECRET`/`CALL_TRIGGER_SECRET` (`BOT_SECRET` isn't pullable). `/api/factory/refresh` job = GET only.
 - Late (`⏳ לא רץ`) and failed (`❌ נכשל`) alerts are distinct incidents; keep wording separate.
 
 Full detail: `docs/agent/jobs.md` — read it before non-trivial changes here.

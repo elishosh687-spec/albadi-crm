@@ -58,16 +58,22 @@ word. Eli: *"לוגים רציניים בלי התראה זה לא שווה, ו�
      `factory-refresh` and `followups`, both `*/15`: 7 a day each. No workflow
      changed that week (checked) — it is GitHub throttling, and each run that
      does fire still succeeds, which is why nothing looked broken. The crons
-     **should move off GitHub — Eli chose cron-job.org, every 5 minutes, and
-     as of 13/09 it is NOT SET UP YET.** Until he does it, every cron still
-     depends on GitHub and still runs ~7 times a day. ⚠️ An earlier draft of
+     **should move off GitHub — Eli chose cron-job.org.** State on
+     18/09/2026, verified from Vercel logs AND his cron-job.org dashboard:
+     only `process-recordings` is there (24 runs / 2h); the other six still
+     depend on GitHub. Until they are added they run a few times a day. ⚠️ An earlier draft of
      this paragraph said the move was done; a background agent read it, believed
      it, and told Eli in WhatsApp that his jobs were "running through
      cron-job.org and unaffected" — which was false. **Write a plan as a plan.**
      The workflows stay afterwards as a free safety net (every endpoint is
-     guarded against double-firing by a run-lock or a dedupe key). One value covers six jobs — `BOT_SECRET` —
-     but `/api/factory/refresh` checks **`CRON_SECRET` only**, so that one is
-     the odd row. cron-job.org aborts at 30s while `process-recordings` runs
+     guarded against double-firing by a run-lock or a dedupe key). **Since 18/09 every
+     job accepts any of `BOT_SECRET` / `CALL_TRIGGER_SECRET` / `CRON_SECRET`**
+     (`lib/observability/cron-auth.ts`), so a cron-job.org task can be cloned
+     from the working one and only the URL/schedule changed. A wrong secret
+     401s, and withJob does not record a 401 — the task would look merely
+     "late". Two method rules: `/api/factory/refresh` must be **GET** (its POST
+     is the dashboard button, not the job, and records no heartbeat);
+     `greenapi-health` needs `?alert=1` to WhatsApp on a dead instance. cron-job.org aborts at 30s while `process-recordings` runs
      to ~95s: it shows there as failed while it is fine. **The watchdog is the
      truth, not their dashboard.**
   A late job and a failed job are different incidents and no longer share

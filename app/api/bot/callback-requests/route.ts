@@ -19,6 +19,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { cronBearerOk } from "@/lib/observability/cron-auth";
 import { isQuietNow } from "@/lib/clock/quiet-hours";
 import { isNoSendDay } from "@/lib/clock/hebcal";
 import { runCallbackRequests } from "@/lib/autoresponder/callback-request";
@@ -27,12 +28,13 @@ import { withJob } from "@/lib/observability/jobs";
 export const runtime = "nodejs";
 export const maxDuration = 120;
 
+/** Any internal secret (BOT / CALL_TRIGGER / CRON) — see lib/observability/cron-auth.ts. */
+function authorized(req: Request): boolean {
+  return cronBearerOk(req.headers.get("authorization"));
+}
+
 export const POST = withJob("callback-requests", "followups", async (req: NextRequest, log) => {
-  const auth = req.headers.get("authorization");
-  const accepted = [process.env.BOT_SECRET, process.env.CRON_SECRET]
-    .filter(Boolean)
-    .map((s) => `Bearer ${s}`);
-  if (accepted.length === 0 || !accepted.includes(auth ?? "")) {
+  if (!authorized(req)) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 

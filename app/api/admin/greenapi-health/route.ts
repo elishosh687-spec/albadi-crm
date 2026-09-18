@@ -17,6 +17,7 @@
  * indistinguishable.
  */
 import { NextRequest, NextResponse } from "next/server";
+import { cronBearerOk } from "@/lib/observability/cron-auth";
 import { assessGreenHealth, formatGreenHealth } from "@/lib/greenapi/health";
 import { sendEliDM } from "@/lib/notify/eli";
 import { withJob } from "@/lib/observability/jobs";
@@ -26,15 +27,10 @@ export const maxDuration = 30;
 export const dynamic = "force-dynamic";
 
 function authorized(req: NextRequest): boolean {
-  const hdr = req.headers.get("authorization") ?? "";
-  for (const name of ["BOT_SECRET", "CALL_TRIGGER_SECRET"]) {
-    const secret = (process.env[name] ?? "").trim();
-    if (secret && hdr === `Bearer ${secret}`) return true;
-  }
-  return false;
+  return cronBearerOk(req.headers.get("authorization"));
 }
 
-export const GET = withJob("greenapi-health", "admin", async (req: NextRequest, log) => {
+const run = withJob("greenapi-health", "admin", async (req: NextRequest, log) => {
   if (!authorized(req)) {
     log.warn("unauthorized");
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
@@ -56,3 +52,7 @@ export const GET = withJob("greenapi-health", "admin", async (req: NextRequest, 
 
   return NextResponse.json({ ...health, summary: formatGreenHealth(health), alerted });
 });
+
+export const GET = run;
+// POST too: a cron-job.org task cloned from a POST job must not 405 silently.
+export const POST = run;

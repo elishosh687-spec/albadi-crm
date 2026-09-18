@@ -29,6 +29,7 @@
  * Auth: Bearer BOT_SECRET / CRON_SECRET.
  */
 import { NextRequest, NextResponse } from "next/server";
+import { cronBearerOk } from "@/lib/observability/cron-auth";
 import { db } from "@/lib/db";
 import { leads, messages } from "@/drizzle/schema";
 import { and, desc, eq, isNotNull, isNull, or, sql } from "drizzle-orm";
@@ -871,13 +872,13 @@ async function processFactoryLead(row: {
   return { sid: row.sid, action: "sent", detail: "factory_reminder" };
 }
 
+/** Any internal secret (BOT / CALL_TRIGGER / CRON) — see lib/observability/cron-auth.ts. */
+function authorized(req: Request): boolean {
+  return cronBearerOk(req.headers.get("authorization"));
+}
+
 const run = withJob("followups", "followups", async (req: NextRequest, log) => {
-  const auth = req.headers.get("authorization");
-  // Vercel cron sends `Bearer $CRON_SECRET`; manual triggers use `BOT_SECRET`.
-  const accepted = [process.env.BOT_SECRET, process.env.CRON_SECRET]
-    .filter(Boolean)
-    .map((s) => `Bearer ${s}`);
-  if (accepted.length === 0 || !accepted.includes(auth ?? "")) {
+  if (!authorized(req)) {
     log.warn("unauthorized");
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }

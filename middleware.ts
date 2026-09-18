@@ -35,7 +35,7 @@ export function middleware(req: NextRequest) {
   // ran on June coefficients for 2.5 months with no error anywhere. Any new
   // bearer-authed job under /api/factory/ must be added here too (the route's
   // own auth still runs after this).
-  const cronBearers = [process.env.CRON_SECRET, process.env.BOT_SECRET]
+  const cronBearers = [process.env.CRON_SECRET, process.env.BOT_SECRET, process.env.CALL_TRIGGER_SECRET]
     .filter(Boolean)
     .map((s) => `Bearer ${s}`);
   if (
