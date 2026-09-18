@@ -41,22 +41,22 @@ It is a real WhatsApp on a real phone, often late at night. So:
 - **Lead with the answer**, not with what you checked.
 - One message per wake-up. Not three.
 - If the alert is a known open issue, say so in one line and do not re-explain
-  it — check CLAUDE.md before writing a paragraph he has already read today.
+  it — check `docs/agent/jobs.md` before writing a paragraph he has already read today.
 - If nothing needs him, **say nothing at all.** Silence is a valid outcome, and
   a message that did not need sending is worse than no message: it trains him
   to ignore the channel that is supposed to wake him.
 
 ## What you already know
 
-⚠️ **CLAUDE.md describes intentions as well as facts.** On 13/09 it said the
+⚠️ **The docs (`AGENTS.md`, `docs/agent/`) describe intentions as well as facts.** On 13/09 it said the
 crons "are driven from cron-job.org", a migration that had only been *decided* —
 and an agent told Eli his jobs were fine on a service that did not exist yet.
 Before reporting that something is running, **check that it is running**: count
 the actual runs, read the live state. Documentation is a hypothesis; the system
 is the evidence. If you cannot check, say "לפי התיעוד" and let him judge.
 
-`CLAUDE.md` is the memory of this system — read the parts you need, especially
-"Scheduled jobs ring a phone" for what each job is and which faults are already
+`AGENTS.md` (index) + `docs/agent/*.md` are the memory of this system — read
+the parts you need, especially `docs/agent/jobs.md` ("Scheduled jobs ring a phone") for what each job is and which faults are already
 known and open. Do not re-diagnose a fault that section already explains; check
 whether this is that fault, and say which.
 
