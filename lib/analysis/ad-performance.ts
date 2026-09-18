@@ -14,6 +14,7 @@
 import { db } from "@/lib/db";
 import { sql } from "drizzle-orm";
 import { fetchAdSpend } from "@/lib/meta/ads-insights";
+import { normalizeAdId } from "@/lib/ads/ad-id";
 import { logger, serializeError } from "@/lib/observability/log";
 
 const log = logger("analysis");
@@ -79,6 +80,7 @@ export async function buildAdPerformance(
   const res = await db.execute<{
     ad: string;
     ad_id: string | null;
+    ad_ids: string[] | null;
     campaign: string | null;
     leads: number;
     engaged: number;
@@ -86,6 +88,7 @@ export async function buildAdPerformance(
   }>(sql`
     SELECT l.meta_ad_name AS ad,
            MAX(l.meta_ad_id) AS ad_id,
+           array_agg(DISTINCT l.meta_ad_id) FILTER (WHERE l.meta_ad_id IS NOT NULL) AS ad_ids,
            MAX(l.meta_campaign_name) AS campaign,
            count(*)::int AS leads,
            count(*) FILTER (WHERE ${ENGAGED})::int AS engaged,
@@ -177,8 +180,15 @@ export async function buildAdPerformance(
       const engaged = Number(r.engaged);
       const markedGood = Number(r.marked_good);
       const revenueIls = Math.round(revByAd.get(r.ad) ?? 0);
-      const s = r.ad_id ? spend.byAdId.get(r.ad_id) : undefined;
-      const spendIls = s ? Math.round(s.spendIls) : null;
+      // leads.meta_ad_id carries the sheet's "ag:" prefix; Meta returns bare
+      // digits. Joining the raw value matched nothing, so spend never showed.
+      // One NAME can be several Meta ads (form + WhatsApp copies, Advantage+
+      // duplicates): this row is per name, so it must carry the spend of EVERY
+      // id behind it — MAX(id) alone gave C-magic-hat-trick ₪104 of ₪1,146.
+      // Per-copy decisions live in the recommendations view (lib/ads).
+      const ids = [...new Set((r.ad_ids ?? []).map(normalizeAdId).filter((x): x is string => !!x))];
+      const hits = ids.map((id) => spend.byAdId.get(id)).filter((x) => x !== undefined);
+      const spendIls = hits.length ? Math.round(hits.reduce((a, h) => a + h!.spendIls, 0)) : null;
       return {
         adName: r.ad,
         adId: r.ad_id,
