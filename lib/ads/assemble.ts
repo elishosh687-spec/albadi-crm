@@ -6,7 +6,7 @@
  * An Ad ID present on only ONE side still gets a row: a CRM-only ID is exactly
  * the case that must say "לא ניתן להכריע" instead of quietly vanishing.
  */
-import { recommend, type Recommendation, type RecommendationCode } from "./recommendation-engine";
+import { recommend, type AdEvidence, type Recommendation, type RecommendationCode } from "./recommendation-engine";
 import type { AdRecommendationSettings } from "./recommendation-settings";
 import type { MetaAd, MetaSnapshot } from "./meta-evidence";
 import type { CrmEvidence } from "./crm-evidence";
@@ -33,6 +33,9 @@ export interface AdRecommendationRow {
   dealRevenueExVat: number;
   dealCustomers: string[];
   recommendation: Recommendation;
+  /** The engine's exact input — the settings screen re-runs `recommend` on
+   *  unsaved values client-side, so a change previews before it is saved. */
+  evidence: AdEvidence;
   /** Non-blocking warnings shown beside the row. */
   warnings: string[];
   /** The live recommendation disagrees with Eli's approved status. */
@@ -119,19 +122,16 @@ export function assembleRecommendations(input: {
       if (metaLeads !== c.leads) warnings.push(`מטא סופרת ${metaLeads} לידים, ב-CRM משויכים ${c.leads}`);
     }
 
-    const recommendation = recommend(
-      {
-        adId,
-        daily: m?.daily ?? [],
-        dailyHistoryComplete: meta.ok,
-        crmLeads: c?.leads ?? 0,
-        suitableLeads: c ? c.suitableLeads : 0,
-        deals: c?.deals ?? 0,
-        identityIssues,
-      },
-      settings,
-      today,
-    );
+    const evidence: AdEvidence = {
+      adId,
+      daily: m?.daily ?? [],
+      dailyHistoryComplete: meta.ok,
+      crmLeads: c?.leads ?? 0,
+      suitableLeads: c ? c.suitableLeads : 0,
+      deals: c?.deals ?? 0,
+      identityIssues,
+    };
+    const recommendation = recommend(evidence, settings, today);
     const approvedStatus = rv?.approvedStatus ?? "untested";
 
     rows.push({
@@ -153,6 +153,7 @@ export function assembleRecommendations(input: {
       dealRevenueExVat: c?.dealRevenueExVat ?? 0,
       dealCustomers: c?.dealCustomers ?? [],
       recommendation,
+      evidence,
       warnings,
       conflict: conflictBetween(approvedStatus, recommendation.code),
     });

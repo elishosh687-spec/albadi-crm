@@ -5,6 +5,11 @@
  * progressed, how many Eli marked "good lead", deals closed and revenue — per
  * Meta ad. Deterministic (see lib/analysis/ad-performance.ts), no LLM.
  *
+ * Three sub-tabs (?view=): המלצות (default — per-Ad-ID recommendations,
+ * lib/ads), הגדרות בדיקה (the policy), and דוח (this per-name quality report).
+ * The sub-tabs are plain <a> links on purpose: a full navigation fires the
+ * settings screen's unsaved-changes guard, a client-side one would not.
+ *
  * Auth: ?widget_token=<GHL_WIDGET_TOKEN>. Period via ?days=30|90 (default all).
  */
 import { widgetPageAuthed } from "@/lib/widget/page-auth";
@@ -12,6 +17,8 @@ import { buildAdPerformance } from "@/lib/analysis/ad-performance";
 import { checkMetaHealth } from "@/lib/meta/health";
 import { getMetaReportingStatus } from "@/lib/meta/reporting-status";
 import { MetaReportPanel } from "@/components/ads/MetaReportPanel";
+import { AdRecommendationsView } from "@/components/ads/AdRecommendationsView";
+import { AdRecommendationSettingsView } from "@/components/ads/AdRecommendationSettingsView";
 import Link from "next/link";
 
 export const dynamic = "force-dynamic";
@@ -25,9 +32,9 @@ const ils = (n: number) => `₪${n.toLocaleString("he-IL")}`;
 export default async function AdsWidgetPage({
   searchParams,
 }: {
-  searchParams: Promise<{ widget_token?: string; days?: string }>;
+  searchParams: Promise<{ widget_token?: string; days?: string; view?: string }>;
 }) {
-  const { widget_token, days } = await searchParams;
+  const { widget_token, days, view } = await searchParams;
   const token = widget_token ?? "";
   if (!(await widgetPageAuthed(token))) {
     return (
@@ -36,6 +43,52 @@ export default async function AdsWidgetPage({
         <p>
           חסר / לא תקין <code>widget_token</code>.
         </p>
+      </div>
+    );
+  }
+
+  const active = view === "settings" || view === "report" ? view : "recommendations";
+  const tabHref = (v: string) =>
+    `/widget/ads?widget_token=${encodeURIComponent(token)}${v === "recommendations" ? "" : `&view=${v}`}`;
+  const subTabs = (
+    <nav className="lux-wrap-sm" style={{ display: "flex", gap: 6, marginBottom: 14, borderBottom: `1px solid ${LINE}`, paddingBottom: 8 }}>
+      {[
+        { id: "recommendations", label: "המלצות" },
+        { id: "settings", label: "הגדרות בדיקה" },
+        { id: "report", label: "דוח איכות לידים" },
+      ].map((t) => (
+        <a
+          key={t.id}
+          href={tabHref(t.id)}
+          className="lux-tap"
+          style={{
+            padding: "6px 12px",
+            borderRadius: 6,
+            fontSize: 13,
+            textDecoration: "none",
+            display: "inline-flex",
+            alignItems: "center",
+            background: active === t.id ? "rgba(230,225,224,0.10)" : "transparent",
+            color: active === t.id ? INK : MUTED,
+            border: `1px solid ${active === t.id ? LINE : "transparent"}`,
+          }}
+        >
+          {t.label}
+        </a>
+      ))}
+    </nav>
+  );
+
+  if (active !== "report") {
+    return (
+      <div dir="rtl" style={{ padding: 16, color: INK }}>
+        <h2 style={{ margin: "0 0 10px", fontSize: 17, fontWeight: 600 }}>מודעות מטא</h2>
+        {subTabs}
+        {active === "settings" ? (
+          <AdRecommendationSettingsView apiToken={token} />
+        ) : (
+          <AdRecommendationsView apiToken={token} />
+        )}
       </div>
     );
   }
@@ -174,6 +227,8 @@ export default async function AdsWidgetPage({
 
   return (
     <div dir="rtl" style={{ padding: 16, color: INK }}>
+      <h2 style={{ margin: "0 0 10px", fontSize: 17, fontWeight: 600 }}>מודעות מטא</h2>
+      {subTabs}
       <div
         style={{
           display: "flex",
@@ -192,7 +247,7 @@ export default async function AdsWidgetPage({
             return (
               <Link
                 key={p.id || "all"}
-                href={`/widget/ads?widget_token=${encodeURIComponent(token)}${
+                href={`/widget/ads?widget_token=${encodeURIComponent(token)}&view=report${
                   p.id ? `&days=${p.id}` : ""
                 }`}
                 style={{
