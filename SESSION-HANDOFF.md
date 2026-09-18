@@ -1,4 +1,25 @@
-# Session handoff — call analysis V2
+# Session handoff
+
+## Pending project — Meta ad recommendations
+
+- Eli approved a design for a recommendation-only decision engine inside the
+  canonical GHL Hub `מודעות` widget.
+- No product code, database schema, settings, Meta object, or production state
+  was changed for this project.
+- The complete approved design is
+  `docs/plans/2026-09-18-meta-ad-recommendations-settings-design.md`.
+- Source methodology and evidence are outside this repository:
+  `/Users/eli/Projects/marketing/albadi/account/tests.md` and
+  `/Users/eli/Projects/marketing/albadi/account/performance/meta-ads.md`.
+- Key decisions: recommendations only; exact Ad ID identity; suitable lead only
+  from Eli's designated GHL tag; settings recalculate recommendations but never
+  overwrite approved manual winner/loser state; Prospecting and Remarketing are
+  separate; all live parameters belong in `מודעות → הגדרות בדיקה`.
+- Eli intends to continue implementation with Claude Code. The next agent must
+  read `CLAUDE.md` and the design, then write an implementation plan before
+  changing code.
+
+## Completed project — call analysis V2
 
 ## Current state
 
