@@ -11,7 +11,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AlertTriangle, CheckCircle2, Loader2, RefreshCw, ShieldCheck } from "lucide-react";
 import type { AdRecommendationRow, RecommendationsReport } from "@/lib/ads/assemble";
-import { RECOMMENDATION_LABELS, type RecommendationCode } from "@/lib/ads/recommendation-engine";
+import type { RecommendationCode } from "@/lib/ads/recommendation-engine";
 import {
   APPROVED_STATUSES,
   APPROVED_STATUS_LABELS,
@@ -21,7 +21,6 @@ import type { AdRole, AdSegment } from "@/lib/ads/structure-check";
 
 export const SEGMENT_LABELS: Record<AdSegment, string> = { prospecting: "פרוספקטינג", remarketing: "רימרקטינג" };
 export const ROLE_LABELS: Record<AdRole, string> = { control: "Control", challenger: "Challenger", remarketing: "משבצת רימרקטינג" };
-const GATE_LABELS = { none: "לפני השער הראשון", first: "סינון ראשוני", stability: "בדיקת יציבות", deal_proof: "הוכחת עסקה" } as const;
 
 type Tone = "good" | "go" | "warn" | "stop" | "idle" | "unknown";
 export const CODE_TONE: Record<RecommendationCode, Tone> = {
@@ -53,21 +52,14 @@ const ils = (n: number | null | undefined) =>
 const ils2 = (n: number | null | undefined) =>
   n === null || n === undefined ? "—" : `₪${(Math.round(n * 100) / 100).toLocaleString("he-IL")}`;
 const dmy = (d: string | null) => (d ? `${d.slice(8, 10)}/${d.slice(5, 7)}/${d.slice(2, 4)}` : "—");
+const count = (n: number, one: string, many: string) => (n === 1 ? one : `${n} ${many}`);
 const ltr = { unicodeBidi: "isolate" as const, direction: "ltr" as const };
-
-type Filters = {
-  code: RecommendationCode | "";
-  approved: ApprovedStatus | "";
-  role: AdRole | "none" | "";
-  conflictsOnly: boolean;
-  showIdle: boolean;
-};
 
 export function AdRecommendationsView({ apiToken }: { apiToken: string }) {
   const [report, setReport] = useState<RecommendationsReport | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [filters, setFilters] = useState<Filters>({ code: "", approved: "", role: "", conflictsOnly: false, showIdle: false });
+  const [showIdle, setShowIdle] = useState(false);
 
   const load = useCallback(
     async (fresh = false) => {
@@ -91,193 +83,131 @@ export function AdRecommendationsView({ apiToken }: { apiToken: string }) {
     load();
   }, [load]);
 
-  const visible = useMemo(() => {
-    if (!report) return [];
-    return report.rows.filter((r) => {
-      const idle = r.recommendation.metrics.spendIls === 0 && r.crmLeads === 0 && r.approvedStatus === "untested";
-      if (!filters.showIdle && idle) return false;
-      if (filters.code && r.recommendation.code !== filters.code) return false;
-      if (filters.approved && r.approvedStatus !== filters.approved) return false;
-      if (filters.role === "none" && r.role !== null) return false;
-      if (filters.role && filters.role !== "none" && r.role !== filters.role) return false;
-      if (filters.conflictsOnly && !r.conflict) return false;
-      return true;
-    });
-  }, [report, filters]);
+  // An ad that never spent, brought no lead and carries no decision is noise
+  // until asked for — one line at the bottom instead of dozens of rows.
+  const isIdle = (r: AdRecommendationRow) =>
+    r.recommendation.metrics.spendIls === 0 && r.crmLeads === 0 && r.approvedStatus === "untested";
+  const rows = useMemo(() => (report ? report.rows.filter((r) => showIdle || !isIdle(r)) : []), [report, showIdle]);
+  const idleCount = report ? report.rows.filter(isIdle).length : 0;
 
-  const groups: { key: string; title: string; hint: string; rows: AdRecommendationRow[] }[] = [
-    { key: "prospecting", title: "פרוספקטינג", hint: "קהל קר — Controls ו-Challenger נמדדים כאן", rows: visible.filter((r) => r.segment === "prospecting") },
-    { key: "remarketing", title: "רימרקטינג", hint: "נבחן בנפרד — קהל חם תמיד ייראה זול יותר", rows: visible.filter((r) => r.segment === "remarketing") },
-    { key: "none", title: "לא סווג", hint: "עדיין לא שויכו לפרוספקטינג או רימרקטינג — לא נספרים באף דירוג", rows: visible.filter((r) => r.segment === null) },
+  const groups: { key: string; title: string; rows: AdRecommendationRow[] }[] = [
+    { key: "prospecting", title: "פרוספקטינג", rows: rows.filter((r) => r.segment === "prospecting") },
+    { key: "remarketing", title: "רימרקטינג", rows: rows.filter((r) => r.segment === "remarketing") },
+    { key: "none", title: "לא סווג", rows: rows.filter((r) => r.segment === null) },
   ];
 
   const h = report?.health;
   const u = report?.structure.usage;
 
   return (
-    <section dir="rtl" className="space-y-4">
-      <div className="flex items-start gap-2 rounded-lg border border-emerald-400/20 bg-emerald-400/5 p-3 text-xs leading-5 text-emerald-100">
-        <ShieldCheck className="mt-0.5 size-4 shrink-0" />
-        <span>
-          המלצות בלבד. שום דבר כאן לא מפעיל, עוצר או משנה תקציב במטא. &quot;מנצחת&quot; ו&quot;מפסידה&quot; נשארות מועמדות עד
-          שתשמור סטטוס מאושר.
+    <section dir="rtl" className="space-y-3">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
+        <span className="inline-flex items-center gap-1 text-emerald-300/90">
+          <ShieldCheck className="size-3.5" /> המלצות בלבד — לא משנה דבר במטא
         </span>
-      </div>
-
-      <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
-        {report && (
+        {u && (
           <span>
-            מדיניות גרסה <strong className="text-foreground">{report.policyRevision}</strong>
-            {report.policyRevision === 0 ? " (ברירת המחדל שאושרה 18/09)" : ""} · נכון ל-{dmy(report.today)}
+            פעילות {u.active}/{u.max} · Controls {u.control.used}/{u.control.max} · Challenger {u.challenger.used}/{u.challenger.max} · רימרקטינג {u.remarketing.used}/{u.remarketing.max}
           </span>
         )}
-        <button
-          type="button"
-          onClick={() => load(true)}
-          disabled={loading}
-          className="lux-tap ms-auto inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-xs text-foreground disabled:opacity-50"
-        >
-          {loading ? <Loader2 className="size-3.5 animate-spin" /> : <RefreshCw className="size-3.5" />}
-          רענן ממטא
+        <button type="button" onClick={() => load(true)} disabled={loading}
+          className="lux-tap ms-auto inline-flex items-center gap-1 rounded-md px-2 py-1 text-foreground/80 disabled:opacity-50" aria-label="רענן ממטא">
+          {loading ? <Loader2 className="size-3.5 animate-spin" /> : <RefreshCw className="size-3.5" />} רענן
         </button>
       </div>
 
       {error && <Banner tone="stop" text={error} />}
-
-      {h && !h.meta.ok && (
-        <Banner
-          tone="stop"
-          text={`אין נתוני מטא, ולכן אין המלצה אמינה לאף מודעה: ${h.meta.reason ?? ""}. נתוני ה-CRM מוצגים כרגיל.`}
-        />
-      )}
-      {h && h.meta.ok && (h.nameCollisions.length > 0 || h.unknownToMeta.length > 0 || h.unattributedLeads > 0) && (
-        <div className="space-y-1 rounded-lg border border-amber-400/20 bg-amber-400/5 p-3 text-[11px] leading-5 text-amber-100">
-          {h.nameCollisions.map((c) => (
-            <div key={c.name}>
-              לשם <span style={ltr}>{c.name}</span> יש {c.adIds.length} מודעות שונות במטא — כל עותק מוצג ונמדד בנפרד. לפני הפעלה בחר את ה-Ad ID המדויק.
-            </div>
-          ))}
-          {h.unknownToMeta.length > 0 && <div>{h.unknownToMeta.length} מזהי מודעה ב-CRM לא קיימים במטא — מסומנים &quot;לא ניתן להכריע&quot;.</div>}
-          {h.unattributedLeads > 0 && <div>{h.unattributedLeads} לידים עם שם מודעה אבל בלי Ad ID — לא משויכים לאף מודעה (לא מאחדים לפי שם).</div>}
-        </div>
-      )}
-
-      {u && (
-        <div className="flex flex-wrap gap-2 text-xs">
-          <Slot label="פעילות עכשיו במטא" used={u.active} max={u.max} />
-          <Slot label="Controls" used={u.control.used} max={u.control.max} />
-          <Slot label="Challenger" used={u.challenger.used} max={u.challenger.max} />
-          <Slot label="רימרקטינג" used={u.remarketing.used} max={u.remarketing.max} />
-        </div>
-      )}
+      {h && !h.meta.ok && <Banner tone="stop" text={`אין נתוני מטא — אין המלצה אמינה: ${h.meta.reason ?? ""}`} />}
       {report?.structure.warnings.map((w) => <Banner key={w} tone="warn" text={w} />)}
-
-      {report && (
-        <div className="lux-wrap-sm flex flex-wrap items-end gap-2 rounded-lg border border-border/60 bg-card/20 p-3 text-xs">
-          <FilterSelect label="המלצה" value={filters.code} onChange={(v) => setFilters((f) => ({ ...f, code: v as Filters["code"] }))}
-            options={(Object.keys(RECOMMENDATION_LABELS) as RecommendationCode[]).map((c) => [c, `${RECOMMENDATION_LABELS[c]}${report.counts[c] ? ` (${report.counts[c]})` : ""}`])} />
-          <FilterSelect label="סטטוס מאושר" value={filters.approved} onChange={(v) => setFilters((f) => ({ ...f, approved: v as Filters["approved"] }))}
-            options={APPROVED_STATUSES.map((s) => [s, APPROVED_STATUS_LABELS[s]])} />
-          <FilterSelect label="תפקיד" value={filters.role} onChange={(v) => setFilters((f) => ({ ...f, role: v as Filters["role"] }))}
-            options={[...(Object.keys(ROLE_LABELS) as AdRole[]).map((r) => [r, ROLE_LABELS[r]] as [string, string]), ["none", "ללא תפקיד"]]} />
-          <Check label="רק סתירות" checked={filters.conflictsOnly} onChange={(v) => setFilters((f) => ({ ...f, conflictsOnly: v }))} />
-          <Check label="הצג גם מודעות בלי הוצאה" checked={filters.showIdle} onChange={(v) => setFilters((f) => ({ ...f, showIdle: v }))} />
-          <span className="ms-auto text-muted-foreground">{visible.length} מתוך {report.rows.length}</span>
-        </div>
-      )}
 
       {!report && !error && (
         <div className="flex items-center justify-center gap-2 py-12 text-xs text-muted-foreground">
-          <Loader2 className="size-4 animate-spin" /> טוען נתונים ממטא ומה-CRM…
+          <Loader2 className="size-4 animate-spin" /> טוען…
         </div>
       )}
 
       {report &&
         groups.map((g) =>
           g.rows.length === 0 ? null : (
-            <div key={g.key} className="space-y-2">
-              <div>
-                <h3 className="text-sm font-medium">{g.title} <span className="text-muted-foreground">· {g.rows.length}</span></h3>
-                <div className="text-[11px] text-muted-foreground">{g.hint}</div>
+            <div key={g.key}>
+              <h3 className="mb-1 text-xs font-medium text-muted-foreground">{g.title} · {g.rows.length}</h3>
+              <div className="divide-y divide-border/50 rounded-lg border border-border/60">
+                {g.rows.map((r) => <AdRow key={r.adId} row={r} apiToken={apiToken} onSaved={() => load(false)} />)}
               </div>
-              {g.rows.map((r) => (
-                <AdCard key={r.adId} row={r} apiToken={apiToken} onSaved={() => load(false)} />
-              ))}
             </div>
           ),
         )}
-      {report && visible.length === 0 && <p className="py-8 text-center text-xs text-muted-foreground">אין מודעות שמתאימות לסינון.</p>}
+
+      {idleCount > 0 && (
+        <button type="button" onClick={() => setShowIdle((v) => !v)} className="lux-tap text-[11px] text-muted-foreground underline-offset-2 hover:underline">
+          {showIdle ? "הסתר מודעות בלי הוצאה" : `הצג עוד ${idleCount} מודעות בלי הוצאה`}
+        </button>
+      )}
     </section>
   );
 }
 
-function AdCard({ row, apiToken, onSaved }: { row: AdRecommendationRow; apiToken: string; onSaved: () => void }) {
+/** One collapsed line per Ad ID; the details open on tap. */
+function AdRow({ row, apiToken, onSaved }: { row: AdRecommendationRow; apiToken: string; onSaved: () => void }) {
   const [editing, setEditing] = useState(false);
   const rec = row.recommendation;
   const m = rec.metrics;
-  const tone = CODE_TONE[rec.code];
   // Without Meta's spend history, spend is UNKNOWN, not ₪0 — every figure
   // derived from it (CPL, CAC, profit after ads) would be a confident lie.
   const noSpend = !row.evidence.dailyHistoryComplete;
   const s = <T,>(v: T) => (noSpend ? null : v);
+  const summary = [
+    noSpend ? null : ils(m.spendIls),
+    count(noSpend ? row.crmLeads : m.metaLeads, "ליד אחד", "לידים"),
+    row.deals ? count(row.deals, "עסקה אחת", "עסקאות") : null,
+  ].filter(Boolean).join(" · ");
 
   return (
-    <div className={`rounded-lg border p-3 ${row.conflict ? "border-amber-400/40" : "border-border/60"} bg-card/20`}>
-      <div className="flex flex-wrap items-start gap-2">
+    <details className="group">
+      <summary className="flex cursor-pointer list-none items-center gap-2 px-3 py-2.5">
         <div className="min-w-0 flex-1">
-          <div className="text-sm font-medium" style={ltr}>{row.adName || "(ללא שם)"}</div>
-          <div className="mt-0.5 text-[11px] text-muted-foreground">
-            <span style={ltr}>Ad ID {row.adId}</span>
-            {row.adSetName && (
-              <>
-                {" · "}
-                <span style={ltr}>Ad Set {row.adSetName}{row.adSetId ? ` (${row.adSetId})` : ""}</span>
-              </>
-            )}
-          </div>
+          <div className="truncate text-[13px]" style={ltr}>{row.adName || row.adId}</div>
+          <div className="text-[11px] text-muted-foreground">{summary}</div>
         </div>
-        <span className={`rounded-full border px-2.5 py-1 text-[11px] ${TONE_CLASS[tone]}`}>{rec.label}</span>
-      </div>
+        {row.conflict && <span className="size-2 shrink-0 rounded-full bg-amber-400" title={row.conflict} />}
+        <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[11px] ${TONE_CLASS[CODE_TONE[rec.code]]}`}>{rec.label}</span>
+      </summary>
 
-      <div className="mt-2 flex flex-wrap gap-1.5 text-[10px]">
-        <Chip text={row.effectiveStatus ? `מטא: ${row.effectiveStatus}` : "מטא: לא ידוע"} />
-        <Chip text={row.segment ? SEGMENT_LABELS[row.segment] : "סגמנט לא סווג"} />
-        <Chip text={row.role ? ROLE_LABELS[row.role] : "ללא תפקיד"} />
-        {rec.code !== "insufficient_or_conflicting_data" && <Chip text={`שער: ${GATE_LABELS[rec.gate]}`} />}
-      </div>
+      <div className="space-y-3 px-3 pb-3 text-xs">
+        <ul className="space-y-0.5 leading-5 text-foreground/90">
+          {rec.reasons.map((x, i) => <li key={i}>{x.text}</li>)}
+        </ul>
 
-      <div className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 text-xs sm:grid-cols-4 lg:grid-cols-6">
-        <Metric k="הוצאה" v={ils2(s(m.spendIls))} />
-        <Metric k="ימי מסירה" v={noSpend ? "—" : String(m.deliveryDays)} />
-        <Metric k="הוצאה ראשונה / אחרונה" v={`${dmy(m.firstSpendDate)} – ${dmy(m.lastSpendDate)}`} />
-        <Metric k="לידי מטא" v={noSpend ? "—" : String(m.metaLeads)} />
-        <Metric k="לידים ב-CRM" v={String(row.crmLeads)} />
-        <Metric k="לידים מתאימים" v={row.suitableLeads === null ? "—" : String(row.suitableLeads)} />
-        <Metric k="עסקאות CRM" v={String(row.deals)} />
-        <Metric k="CPL" v={ils2(s(m.cplIls))} />
-        <Metric k="CAC" v={ils(s(m.cacIls))} />
-        <Metric k="רווח אחרי פרסום" v={ils(s(m.contributionAfterAdsIls))} />
-        {m.leadsAtFirstGate !== null && <Metric k="לידים בשער הראשון" v={`${m.leadsAtFirstGate} ב-${ils(m.spendAtFirstGateIls)}`} />}
-        {m.leadsAtStability !== null && <Metric k="לידים בשער היציבות" v={`${m.leadsAtStability} ב-${ils(m.spendAtStabilityIls)}`} />}
-      </div>
+        <div className="grid grid-cols-3 gap-x-3 gap-y-2 sm:grid-cols-6">
+          <Metric k="CPL" v={ils2(s(m.cplIls))} />
+          <Metric k="CAC" v={ils(s(m.cacIls))} />
+          <Metric k="רווח אחרי פרסום" v={ils(s(m.contributionAfterAdsIls))} />
+          <Metric k="לידים מתאימים" v={row.suitableLeads === null ? "—" : String(row.suitableLeads)} />
+          <Metric k="ימי מסירה" v={noSpend ? "—" : String(m.deliveryDays)} />
+          <Metric k="הוצאה אחרונה" v={noSpend ? "—" : dmy(m.lastSpendDate)} />
+        </div>
 
-      <ul className="mt-3 space-y-0.5 text-xs leading-5 text-foreground/90">
-        {rec.reasons.map((x, i) => <li key={i}>{x.text}</li>)}
-      </ul>
-      {row.dealCustomers.length > 0 && <div className="mt-1 text-[11px] text-emerald-300">💰 {row.dealCustomers.join(" · ")}</div>}
-      {row.warnings.map((w) => <div key={w} className="mt-1 text-[11px] text-amber-200/90">⚠ {w}</div>)}
+        <div className="text-[11px] leading-5 text-muted-foreground">
+          <span style={ltr}>Ad ID {row.adId}</span>
+          {row.adSetName && <> · <span style={ltr}>{row.adSetName}</span></>}
+          {row.effectiveStatus && <> · מטא: {row.effectiveStatus}</>}
+          {row.dealCustomers.length > 0 && <div className="text-emerald-300/90">💰 {row.dealCustomers.join(" · ")}</div>}
+          {row.warnings.map((w) => <div key={w} className="text-amber-200/80">⚠ {w}</div>)}
+        </div>
 
-      <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-border/50 pt-2 text-xs">
-        <span className="text-muted-foreground">סטטוס מאושר:</span>
-        <strong>{APPROVED_STATUS_LABELS[row.approvedStatus]}</strong>
-        {row.approvedAt && <span className="text-[11px] text-muted-foreground">({dmy(row.approvedAt.slice(0, 10))}{row.approvedReason ? ` — ${row.approvedReason}` : ""})</span>}
-        {row.conflict && <span className="rounded-full bg-amber-500/10 px-2 py-0.5 text-[11px] text-amber-300">סתירה: {row.conflict}</span>}
-        <button type="button" onClick={() => setEditing((e) => !e)} className="lux-tap ms-auto rounded-md border border-border px-3 py-1 text-xs">
-          {editing ? "סגור" : "עדכן החלטה"}
-        </button>
+        <div className="flex flex-wrap items-center gap-2 border-t border-border/50 pt-2">
+          <span className="text-muted-foreground">החלטה:</span>
+          <strong>{APPROVED_STATUS_LABELS[row.approvedStatus]}</strong>
+          {row.segment && <span className="text-muted-foreground">· {SEGMENT_LABELS[row.segment]}</span>}
+          {row.role && <span className="text-muted-foreground">· {ROLE_LABELS[row.role]}</span>}
+          {row.conflict && <span className="text-[11px] text-amber-300">— {row.conflict}</span>}
+          <button type="button" onClick={() => setEditing((e) => !e)} className="lux-tap ms-auto rounded-md border border-border px-3 py-1">
+            {editing ? "סגור" : "עדכן"}
+          </button>
+        </div>
+        {editing && <ReviewEditor row={row} apiToken={apiToken} onDone={() => { setEditing(false); onSaved(); }} />}
       </div>
-      {editing && <ReviewEditor row={row} apiToken={apiToken} onDone={() => { setEditing(false); onSaved(); }} />}
-    </div>
+    </details>
   );
 }
 
@@ -355,19 +285,6 @@ export function Banner({ tone, text }: { tone: "warn" | "stop"; text: string }) 
   );
 }
 
-function Slot({ label, used, max }: { label: string; used: number; max: number }) {
-  const over = used > max;
-  return (
-    <span className={`rounded-md border px-2.5 py-1 ${over ? "border-red-400/30 bg-red-400/10 text-red-200" : "border-border/60 text-muted-foreground"}`}>
-      {label} <strong className="text-foreground">{used}/{max}</strong>
-    </span>
-  );
-}
-
-function Chip({ text }: { text: string }) {
-  return <span className="rounded-full border border-border/60 px-2 py-0.5 text-muted-foreground">{text}</span>;
-}
-
 function Metric({ k, v }: { k: string; v: string }) {
   return (
     <div>
@@ -375,10 +292,6 @@ function Metric({ k, v }: { k: string; v: string }) {
       <div className="font-medium tabular-nums">{v}</div>
     </div>
   );
-}
-
-function FilterSelect({ label, value, onChange, options }: { label: string; value: string; onChange: (v: string) => void; options: [string, string][] }) {
-  return <LabeledSelect label={label} value={value} onChange={onChange} options={[["", "הכל"], ...options]} />;
 }
 
 function LabeledSelect({ label, value, onChange, options }: { label: string; value: string; onChange: (v: string) => void; options: [string, string][] }) {
@@ -392,11 +305,3 @@ function LabeledSelect({ label, value, onChange, options }: { label: string; val
   );
 }
 
-function Check({ label, checked, onChange }: { label: string; checked: boolean; onChange: (v: boolean) => void }) {
-  return (
-    <label className="lux-tap inline-flex cursor-pointer items-center gap-1.5 text-xs">
-      <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} />
-      {label}
-    </label>
-  );
-}
