@@ -60,6 +60,13 @@ to, and promote if needed:
 
 The tell is behaviour: a fix that passes locally but not against prod.
 
+If `vercel promote` fails with "exceeded its deadline" (it did twice on
+2026-09-18), point the domain directly — this worked at once:
+
+```bash
+~/.local/node/bin/vercel alias set <deployment-url> albadi-crm.vercel.app
+```
+
 ## Working with Vercel + Neon from the CLI
 
 **Vercel env vars are encrypted by default.** Running `vercel env pull .env` produces a file where sensitive values (`DATABASE_URL`, all `GHL_*`, all `BRIDGE_*`, etc.) come back as empty strings — the CLI cannot decrypt them. The masking is silent: there's no error, the file looks complete.
