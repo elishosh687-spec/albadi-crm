@@ -4,8 +4,8 @@
 
 - Eli approved a design for a recommendation-only decision engine inside the
   canonical GHL Hub `מודעות` widget.
-- No product code, database schema, settings, Meta object, or production state
-  was changed for this project.
+- No database schema, settings, Meta object, or production state has been
+  changed for this project. Only the pure Phase 1 modules exist (see below).
 - The complete approved design is
   `docs/plans/2026-09-18-meta-ad-recommendations-settings-design.md`.
 - Source methodology and evidence are outside this repository:
@@ -15,9 +15,19 @@
   from Eli's designated GHL tag; settings recalculate recommendations but never
   overwrite approved manual winner/loser state; Prospecting and Remarketing are
   separate; all live parameters belong in `מודעות → הגדרות בדיקה`.
-- Eli intends to continue implementation with Claude Code. The next agent must
-  read `CLAUDE.md` and the design, then write an implementation plan before
-  changing code.
+- 2026-09-18: implementation plan written —
+  `docs/plans/2026-09-18-meta-ad-recommendations-implementation.md` (5 phases,
+  not yet approved, still no product code). Established from prod: the GHL
+  suitable-lead tag is `good lead` in `lead_tags` (15 leads);
+  `meta_qualified_sent_at` is NOT the marker (reportable subset only); three
+  ad names already have 2 Ad IDs each; no ad-set column on `leads`.
+- Eli approved the plan: keep tag `good lead`; for a name with several Ad IDs
+  the approved status goes only to the copy that produced the results.
+- Phase 1 DONE (uncommitted): `lib/ads/{recommendation-settings,recommendation-engine,structure-check,ad-id}.ts`
+  + tests. Unit suite 576 passed, typecheck clean. No DB, Meta, or prod change.
+- Next step: Phase 2 — migration `0004_ad_recommendations.sql` (+ journal),
+  settings store with revisions, review-state store with audit, widget-token
+  APIs, integration + route-gate tests. Applying 0004 to prod needs Eli's OK.
 
 ## Completed project — call analysis V2
 
