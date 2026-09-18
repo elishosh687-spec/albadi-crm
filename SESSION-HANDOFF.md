@@ -11,8 +11,17 @@
   `concept-5-daylight-two-bags`, `remarketing-quote-reminder`; the rest
   "testing"), 58 audit rows. Status sits only on the copy that produced results.
 - Open decisions for Eli, visible as the only 2 conflicts on the screen:
-  `C-magic-hat-trick` is an approved winner but CAC ₪521 > ₪500 ceiling;
-  `08_layers_peel` is a winner candidate (1 deal, CAC ₪145) not yet approved.
+  - `C-magic-hat-trick`: approved winner (Eli, 17/09) but CAC ₪521 > ₪500.
+    Recommended: KEEP as winner — 2 deals, ₪1,958 contribution after ads,
+    ~2.9:1; re-examine only if more spend without a deal pushes CAC well up.
+  - `08_layers_peel`: winner candidate (1 deal, CAC ₪145). Recommended: do NOT
+    approve yet — meta-ads.md says its creative has invented layer
+    percentages and "מחיר מפעל" and must not run as-is. Fix the claims, then
+    relaunch as the Challenger.
+- Unrelated but open: 4 GitHub-scheduled jobs (followups, factory-refresh,
+  greenapi-health, callback-requests) show "late" — GitHub throttling since
+  27/08. Eli chose cron-job.org; still NOT set up (he opens the account, the
+  agent prepares URLs + headers). See docs/agent/jobs.md.
 - `META_ADS_TOKEN` = System User "eli" (never expires). Eli pasted two Meta
   tokens into chat; the first (his personal user token) should be revoked.
 - Header notes added to `marketing/albadi/account/tests.md` and
