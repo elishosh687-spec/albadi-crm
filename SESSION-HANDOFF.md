@@ -48,16 +48,13 @@
   rows, heartbeat `lastStatus: ok`; watchdog dry-run clean for it. 66
   "conflicts" are expected — no approved statuses are seeded yet (every ad
   that spent reads "untested").
-- Phase 4 DONE (commit `d0fa4d9`, NOT yet deployed): `/widget/ads` sub-tabs
-  המלצות (default) · הגדרות בדיקה · דוח איכות לידים. Components
-  `components/ads/AdRecommendationsView.tsx` + `AdRecommendationSettingsView.tsx`,
-  help texts `lib/ads/settings-help.ts`; the API rows now carry `evidence` so the
-  settings screen previews recommendation changes client-side before saving.
-  Verified locally (no Meta token locally → the "no Meta data" state): validation,
-  consistency warnings, reset diff, unsaved guard, decision editor, 390px probe
-  clean. The data-filled view can only be seen in prod (token is prod-only).
-- Next step: deploy Phase 4 (push to main) and eyeball `מודעות → המלצות` with
-  real data in the GHL Hub. Then Phase 5: seed approved statuses from a reviewed
+- Phase 4 DONE and DEPLOYED (`63e4d63`, Vercel Ready 2026-09-18). After Eli saw
+  it locally he asked for simplicity: no filters, one collapsed row per ad
+  (details on tap), settings one line each with help behind ⓘ (memory
+  `minimal-ui-collapsed-rows`). Components: `components/ads/AdRecommendationsView.tsx`,
+  `AdRecommendationSettingsView.tsx`; help texts `lib/ads/settings-help.ts`.
+- Next step: Eli eyeballs `מודעות → המלצות` with real data in the GHL Hub
+  (the widget token is masked in Vercel, so an agent cannot open it). Then Phase 5: seed approved statuses from a reviewed
   Ad-ID mapping (Eli: status goes only to the copy that produced the results),
   header note in `tests.md`/`meta-ads.md`, add `ads-evidence` to
   `docs/agent/jobs.md`.
