@@ -4,11 +4,11 @@
  * AGENTS.md + CLAUDE.md load into EVERY agent session. On 2026-09-18 CLAUDE.md
  * had grown to 145KB (~61k tokens per message) because each incident was
  * appended as a paragraph. It was split into docs/agent/*.md, loaded on demand.
- * This test keeps the always-loaded core from regrowing, and keeps every
- * .claude/rules symlink pointing at a real, path-scoped topic file.
+ * This test keeps the always-loaded core from regrowing, and keeps each
+ * .claude/rules file a short digest that points at its full docs/agent file.
  */
 import { describe, expect, it } from "vitest";
-import { existsSync, lstatSync, readdirSync, readFileSync, realpathSync } from "node:fs";
+import { existsSync, lstatSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 const ROOT = join(__dirname, "../../..");
@@ -25,16 +25,21 @@ describe("always-loaded agent instructions stay small", () => {
     expect(read("CLAUDE.md").split("\n")[0].trim()).toBe("@AGENTS.md");
   });
 
-  it("every docs/agent topic is in the AGENTS.md index and has a path-scoped rule", () => {
+  it("every docs/agent topic is indexed and has a short path-scoped rule digest", () => {
     const index = read("AGENTS.md");
     const topics = readdirSync(join(ROOT, "docs/agent")).filter((f) => f.endsWith(".md"));
     expect(topics.length).toBeGreaterThan(0);
     for (const t of topics) {
       expect(index, `${t} missing from AGENTS.md index`).toContain("`" + t + "`");
-      expect(read(`docs/agent/${t}`).startsWith("---\npaths:"), `${t} lacks paths frontmatter`).toBe(true);
-      const link = join(ROOT, ".claude/rules", t);
-      expect(existsSync(link) && lstatSync(link).isSymbolicLink(), `.claude/rules/${t} symlink`).toBe(true);
-      expect(realpathSync(link)).toBe(realpathSync(join(ROOT, "docs/agent", t)));
+      const rulePath = join(ROOT, ".claude/rules", t);
+      expect(existsSync(rulePath), `.claude/rules/${t} missing`).toBe(true);
+      expect(lstatSync(rulePath).isSymbolicLink(), `${t}: rule must be a digest, not a symlink to the full doc`).toBe(false);
+      const rule = readFileSync(rulePath, "utf8");
+      expect(rule.startsWith("---\npaths:"), `${t} rule lacks paths frontmatter`).toBe(true);
+      expect(rule, `${t} rule must point at its full doc`).toContain(`docs/agent/${t}`);
+      expect(rule, `${t} digest not written`).not.toContain("DIGEST PENDING");
+      // A digest, not the doc: path rules load whole whenever a matching file is read.
+      expect(Buffer.byteLength(rule, "utf8"), `${t} rule is too long for a digest`).toBeLessThan(4 * 1024);
     }
   });
 });

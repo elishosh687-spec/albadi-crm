@@ -1,16 +1,3 @@
----
-paths:
-  - "lib/meta/**"
-  - "lib/sheets/**"
-  - "lib/leads/**"
-  - "lib/ads/**"
-  - "app/api/leads/**"
-  - "app/api/admin/meta-*/**"
-  - "app/api/cron/enrich-meta-attribution/**"
-  - "app/widget/ads/**"
-  - "lib/analysis/ad-performance.ts"
----
-
 # Meta CAPI loop, FB lead forms, website leads
 
 > Moved verbatim from CLAUDE.md on 2026-09-18 to keep the always-loaded context small. Index: [CLAUDE.md](../../CLAUDE.md).

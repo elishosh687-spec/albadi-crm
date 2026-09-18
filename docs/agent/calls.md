@@ -1,14 +1,3 @@
----
-paths:
-  - "app/api/bot/process-recordings/**"
-  - "app/api/elevenlabs/**"
-  - "lib/transcription/**"
-  - "lib/autoresponder/call-analysis.ts"
-  - "lib/autoresponder/callback-request.ts"
-  - "scripts/export-call-transcripts.ts"
-  - "scripts/export-whatsapp.ts"
----
-
 # Calls — GHL recordings, ElevenLabs agent, callback flow
 
 > Moved verbatim from CLAUDE.md on 2026-09-18 to keep the always-loaded context small. Index: [CLAUDE.md](../../CLAUDE.md).

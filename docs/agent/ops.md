@@ -1,13 +1,3 @@
----
-paths:
-  - "lib/observability/**"
-  - "instrumentation.ts"
-  - "vercel.json"
-  - "next.config.*"
-  - "scripts/README.md"
-  - ".vercel/**"
----
-
 # Ops — layout, logging, deploy, Vercel/Neon CLI
 
 > Moved verbatim from CLAUDE.md on 2026-09-18 to keep the always-loaded context small. Index: [CLAUDE.md](../../CLAUDE.md).

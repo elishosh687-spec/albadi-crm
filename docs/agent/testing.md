@@ -1,11 +1,3 @@
----
-paths:
-  - "tests/**"
-  - "**/*.test.ts"
-  - "vitest.config.mts"
-  - ".github/workflows/test.yml"
----
-
 # Tests
 
 > Moved verbatim from CLAUDE.md on 2026-09-18 to keep the always-loaded context small. Index: [CLAUDE.md](../../CLAUDE.md).

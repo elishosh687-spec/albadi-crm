@@ -1,9 +1,3 @@
----
-paths:
-  - "lib/manychat/stages.ts"
-  - "docs/CUSTOMER-FLOW.md"
----
-
 # Stages, labels, client-bundle rule
 
 > Moved verbatim from CLAUDE.md on 2026-09-18. Short versions are in AGENTS.md hard rules.

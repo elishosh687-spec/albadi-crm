@@ -1,15 +1,3 @@
----
-paths:
-  - "lib/manychat/**"
-  - "app/dashboard/**"
-  - "app/api/bot/restart-send/**"
-  - "app/api/bot/new-lead/**"
-  - "app/api/drafts/**"
-  - "app/actions/v2.ts"
-  - "scripts/restart-send.ts"
-  - "scripts/seed-leads.ts"
----
-
 # Legacy ManyChat-era routes, flows, dashboard v3
 
 > Moved verbatim from CLAUDE.md on 2026-09-18 to keep the always-loaded context small. Index: [CLAUDE.md](../../CLAUDE.md).

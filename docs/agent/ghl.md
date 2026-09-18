@@ -1,14 +1,3 @@
----
-paths:
-  - "lib/ghl/**"
-  - "integrations/ghl/**"
-  - "app/api/ghl/**"
-  - "app/api/integrations/**"
-  - "lib/crm-tasks/**"
-  - "lib/analysis/reconcile-stages.ts"
-  - "lib/analysis/pipeline-audit.ts"
----
-
 # GHL — source of truth, tasks, lead score, audits
 
 > Moved verbatim from CLAUDE.md on 2026-09-18 to keep the always-loaded context small. Index: [CLAUDE.md](../../CLAUDE.md).

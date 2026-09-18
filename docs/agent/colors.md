@@ -1,10 +1,3 @@
----
-paths:
-  - "lib/colors/**"
-  - "components/colors/**"
-  - "app/widget/colors/**"
----
-
 # Factory colour catalogue
 
 > Moved verbatim from CLAUDE.md on 2026-09-18 to keep the always-loaded context small. Index: [CLAUDE.md](../../CLAUDE.md).

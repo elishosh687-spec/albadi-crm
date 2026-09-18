@@ -2,8 +2,8 @@
 
 Canonical, shared by both agents. `CLAUDE.md` imports this file. Keep it SHORT:
 it loads into every session. Detail lives in `docs/agent/<topic>.md` — read the
-matching file BEFORE touching that area (Claude auto-loads it via
-`.claude/rules/` path rules; Codex: open it yourself from the index below).
+matching file BEFORE touching that area (Claude auto-loads a short digest
+from `.claude/rules/` by path; Codex: open the doc from the index below).
 
 ## Stack
 - Next.js on Vercel (`https://albadi-crm.vercel.app`); push `main` → deploy.
@@ -45,9 +45,9 @@ matching file BEFORE touching that area (Claude auto-loads it via
     verify live state (runs, rows) before saying something works.
 12. **Talk to Eli in Hebrew**, using his vocabulary.
 13. **Keep instructions small:** new knowledge goes into the matching
-    `docs/agent/*.md` (create one + add a `.claude/rules/` symlink with
-    `paths:` if none fits), not here. This file + `CLAUDE.md` stay under
-    200 lines (enforced by `tests/unit/architecture/instructions-size.test.ts`).
+    `docs/agent/*.md` (new topic → also a short `.claude/rules/<topic>.md`
+    digest with `paths:`; update the digest when a key rule changes), not here.
+    This file + `CLAUDE.md` stay under 200 lines (enforced by `tests/unit/architecture/instructions-size.test.ts`).
     Shared rule → here; Claude-only → `CLAUDE.md`; skills in both
     `.claude/skills/` and `.agents/skills/`.
 

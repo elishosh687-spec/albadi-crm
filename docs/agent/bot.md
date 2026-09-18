@@ -1,14 +1,3 @@
----
-paths:
-  - "lib/autoresponder/**"
-  - "lib/setter/**"
-  - "lib/bot-settings/**"
-  - "lib/analysis/**"
-  - "lib/sales/**"
-  - "app/api/bot/**"
-  - "bot design/**"
----
-
 # Bot layer, setter, lead analyzer
 
 > Moved verbatim from CLAUDE.md on 2026-09-18 to keep the always-loaded context small. Index: [CLAUDE.md](../../CLAUDE.md).

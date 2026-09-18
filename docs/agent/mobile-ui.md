@@ -1,11 +1,3 @@
----
-paths:
-  - "app/globals.css"
-  - "app/widget/**"
-  - "app/configurator/**"
-  - "components/**"
----
-
 # Mobile .mfit layer & widget UI
 
 > Moved verbatim from CLAUDE.md on 2026-09-18 to keep the always-loaded context small. Index: [CLAUDE.md](../../CLAUDE.md).

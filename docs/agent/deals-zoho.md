@@ -1,16 +1,3 @@
----
-paths:
-  - "lib/zoho/**"
-  - "lib/factory/server/**"
-  - "app/api/widget/factory/**"
-  - "app/api/widget/zoho/**"
-  - "app/api/widget/albadi/**"
-  - "app/api/widget/deals/**"
-  - "components/factory-flow/**"
-  - "lib/feishu/order-follow.ts"
-  - "scripts/deal-file.ts"
----
-
 # Deals, Zoho Books, deliver hub
 
 > Moved verbatim from CLAUDE.md on 2026-09-18 to keep the always-loaded context small. Index: [CLAUDE.md](../../CLAUDE.md).

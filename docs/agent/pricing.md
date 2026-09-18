@@ -1,12 +1,3 @@
----
-paths:
-  - "lib/factory/**"
-  - "components/calculator/**"
-  - "components/factory-flow/**"
-  - "app/api/factory/**"
-  - "lib/autoresponder/quote*"
----
-
 # Pricing — payment terms, plates, negotiation buffer
 
 > Moved verbatim from CLAUDE.md on 2026-09-18 to keep the always-loaded context small. Index: [CLAUDE.md](../../CLAUDE.md).
@@ -130,6 +121,8 @@ can now be sent with or without the payment block:
   in [payment-terms.ts] — explicit `"none"` → null (no terms); explicit id → that id;
   no pick → the settings default ONLY when `paymentTerms.includeByDefault` is on.
   **Default OFF** — a quote goes out clean unless a plan is chosen.
+  ⚠️ SUPERSEDED 2026-09-02: the default is ON at `30_70` — see "Default since
+  2026-09-02" above.
 - **Every manual builder** gates its payment block on the resolved plan and reverts
   its header to a plain `*הצעת מחיר*` when omitted: `sendWhatsapp`, `sendCombinedWhatsapp`,
   `sendEstimateToCustomer`, the calculator caption ([CalculatorView]), and the single +
@@ -142,4 +135,4 @@ can now be sent with or without the payment block:
 - Deals keep THEIR own stored terms (`row.paymentPlan`) on an ad-hoc PDF view —
   the "off" default only governs fresh manual sends.
 - **Rule:** any hand-built engine/send path that attaches payment MUST route the plan
-  through `resolveEffectivePlanId`. See memory [[payment-details-template]].
+  through `resolveEffectivePlanId`. See memory `docs/agent/pricing.md`.

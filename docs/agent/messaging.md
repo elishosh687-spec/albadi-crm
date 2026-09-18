@@ -1,17 +1,3 @@
----
-paths:
-  - "lib/greenapi/**"
-  - "lib/bridge/**"
-  - "lib/messaging/**"
-  - "lib/notify/**"
-  - "app/api/greenapi/**"
-  - "app/api/bridge/**"
-  - "app/api/admin/eli-dm/**"
-  - "scripts/eli-inbox.ts"
-  - "scripts/team.ts"
-  - "scripts/assistant/**"
----
-
 # Messaging — GreenAPI/bridge, Eli console, colleagues, notifications
 
 > Moved verbatim from CLAUDE.md on 2026-09-18 to keep the always-loaded context small. Index: [CLAUDE.md](../../CLAUDE.md).
@@ -170,8 +156,8 @@ early — no lead, no GHL contact, no bot, in either direction. Any NEW inbound
 path must do the same; the registry alone will not save you.
 
 Side note from that incident: **GHL rewrites a foreign number to the location's
-country.** Simon's `+8615180009512` came back from `ContactCreate` as
-`+9728615180009512`, and the resync mirrored that into `leads.phone_e164`. The
+country.** Simon's `+86<number>` came back from `ContactCreate` as
+`+972<his digits>`, and the resync mirrored that into `leads.phone_e164`. The
 sid/JID stayed correct, so sending still worked — but don't trust `phone_e164`
 for a non-Israeli contact.
 

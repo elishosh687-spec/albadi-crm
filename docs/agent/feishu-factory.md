@@ -1,11 +1,3 @@
----
-paths:
-  - "lib/feishu/**"
-  - "lib/factory/**"
-  - "app/api/factory/**"
-  - "scripts/_reparse*"
----
-
 # Feishu factory sheet & factory-quote footguns
 
 > Moved verbatim from CLAUDE.md on 2026-09-18 to keep the always-loaded context small. Index: [CLAUDE.md](../../CLAUDE.md).

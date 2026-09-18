@@ -1,11 +1,3 @@
----
-paths:
-  - "lib/observability/jobs.ts"
-  - "app/api/cron/**"
-  - ".github/workflows/**"
-  - "middleware.ts"
----
-
 # Scheduled jobs & watchdog
 
 > Moved verbatim from CLAUDE.md on 2026-09-18 to keep the always-loaded context small. Index: [CLAUDE.md](../../CLAUDE.md).
