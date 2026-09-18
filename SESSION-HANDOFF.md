@@ -26,6 +26,11 @@
 - Header notes added to `marketing/albadi/account/tests.md` and
   `performance/meta-ads.md` (live values are in the CRM) — left UNCOMMITTED in
   the marketing repo, which had other uncommitted work in those files.
+- 18/09 late: Elran's Purchase (closed 03/09, never stamped — fire-and-forget
+  send) was sent to Meta (retry: sent 1, failed 0); the send is awaited now and
+  the retry/health also catch never-stamped deals. The daily ads-evidence job
+  now fails on ANY red ads-health line → watchdog WhatsApp. Prod run after
+  deploy: 200, all green. The failure → WhatsApp path was not fired live.
 - Also fixed on the way: ads report never showed spend (`ag:` IDs, one copy per
   name); failed Purchase reports now retry daily (סהר צור resent ₪5,732.04).
 
