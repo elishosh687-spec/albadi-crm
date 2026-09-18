@@ -58,10 +58,14 @@ word. Eli: *"לוגים רציניים בלי התראה זה לא שווה, ו�
      `factory-refresh` and `followups`, both `*/15`: 7 a day each. No workflow
      changed that week (checked) — it is GitHub throttling, and each run that
      does fire still succeeds, which is why nothing looked broken. The crons
-     **should move off GitHub — Eli chose cron-job.org.** State on
-     18/09/2026, verified from Vercel logs AND his cron-job.org dashboard:
-     only `process-recordings` is there (24 runs / 2h); the other six still
-     depend on GitHub. Until they are added they run a few times a day. ⚠️ An earlier draft of
+     **moved off GitHub to cron-job.org (Eli's account).** Since 18/09/2026
+     all seven are there: `process-recordings` (*/5), `followups` and
+     `factory-refresh` (*/15, GET), `greenapi-health?alert=1`,
+     `callback-requests`, `job-watchdog` (*/30), `resume-sweep` (hourly).
+     Verified the same night: the :15/:30 runs hit prod with the right
+     method, 200, and their `jobs.status` heartbeats moved (resume-sweep's
+     first cron-job.org slot was still pending). Each task is a clone of the
+     first one, so they share its Authorization header. ⚠️ An earlier draft of
      this paragraph said the move was done; a background agent read it, believed
      it, and told Eli in WhatsApp that his jobs were "running through
      cron-job.org and unaffected" — which was false. **Write a plan as a plan.**

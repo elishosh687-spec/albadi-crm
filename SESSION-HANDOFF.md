@@ -18,10 +18,9 @@
     approve yet — meta-ads.md says its creative has invented layer
     percentages and "מחיר מפעל" and must not run as-is. Fix the claims, then
     relaunch as the Challenger.
-- Unrelated but open: 4 GitHub-scheduled jobs (followups, factory-refresh,
-  greenapi-health, callback-requests) show "late" — GitHub throttling since
-  27/08. Eli chose cron-job.org; still NOT set up (he opens the account, the
-  agent prepares URLs + headers). See docs/agent/jobs.md.
+- Scheduled jobs moved to cron-job.org on 18/09 (all seven; verified runs +
+  heartbeats, see docs/agent/jobs.md). Still to confirm: `resume-sweep`'s
+  first hourly run from cron-job.org, and that the watchdog stays quiet.
 - `META_ADS_TOKEN` = System User "eli" (never expires). Eli pasted two Meta
   tokens into chat; the first (his personal user token) should be revoked.
 - Header notes added to `marketing/albadi/account/tests.md` and
