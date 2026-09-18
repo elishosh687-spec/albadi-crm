@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useMemo } from "react";
-import { ExternalLink, Search, Loader2, Eye, Download, Trash2, Trash, X, MessageCircle, Calculator, Pencil, ChevronDown, Check, Send, Sparkles, FolderOpen, RotateCcw, CheckCircle2, RefreshCw } from "lucide-react";
+import { type LucideIcon, ExternalLink, Search, Loader2, Eye, Download, Trash2, Trash, X, MessageCircle, Calculator, Pencil, ChevronDown, Check, Send, Sparkles, FolderOpen, RotateCcw, CheckCircle2, RefreshCw } from "lucide-react";
 import { QuoteHtmlPreview } from "@/app/dashboard/v3/_components/factory/QuoteHtmlPreview";
 import { splitCustomerView } from "@/lib/factory/shipping-split";
 import { customerTotalExVat } from "@/lib/factory/customer-total";
@@ -75,12 +75,15 @@ function latestMatching(rows: ApiQuoteRow[], pred: (r: ApiQuoteRow) => boolean):
   return m[0] ?? null;
 }
 
-const STATUS_LABEL: Record<string, { text: string; cls: string }> = {
-  draft: { text: "טיוטה", cls: "bg-muted/40 text-muted-foreground border-border" },
-  pending: { text: "ממתין", cls: "bg-amber-500/15 text-amber-400 border-amber-500/30" },
-  received: { text: "התקבל", cls: "bg-accent/15 text-accent border-accent/40" },
-  finalized: { text: "סופי", cls: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30" },
+/** Status in Eli's words + the pill tone (colour AND words). */
+const STATUS_LABEL: Record<string, { text: string; tone: "idle" | "warn" | "go" | "good" }> = {
+  draft: { text: "טיוטה", tone: "idle" },
+  pending: { text: "ממתין למפעל", tone: "warn" },
+  received: { text: "המפעל ענה", tone: "go" },
+  finalized: { text: "סופי", tone: "good" },
 };
+
+const GROUP_PAGE = 30;
 
 // Convert API row → dashboard FactoryQuoteRow shape for QuoteHtmlPreview.
 function toDashboardRow(r: ApiQuoteRow): DashboardFactoryQuoteRow {
@@ -162,6 +165,7 @@ export function QuotesHistoryView({ apiToken }: { apiToken: string }) {
   // Customer cards: which are expanded, and which one's combined-calc is open.
   const [openCards, setOpenCards] = useState<Set<string>>(new Set());
   const [calcGroup, setCalcGroup] = useState<CustomerGroup | null>(null);
+  const [groupLimit, setGroupLimit] = useState(GROUP_PAGE);
   function toggleCard(sid: string) {
     setOpenCards((prev) => {
       const n = new Set(prev);
@@ -747,76 +751,68 @@ export function QuotesHistoryView({ apiToken }: { apiToken: string }) {
     };
   }, [data]);
 
-  if (err) return <div className="text-red-400 text-sm">שגיאה: {err}</div>;
+  if (err) return <p className="ux-note" style={{ color: "#f0c0c0" }}>לא הצלחתי לטעון את ההצעות ({err}) — נסה לרענן.</p>;
   if (!data) {
     return (
-      <div className="text-muted-foreground text-sm flex items-center gap-2">
-        <Loader2 className="size-3.5 animate-spin" /> טוען...
+      <div className="grid gap-3" aria-label="טוען הצעות">
+        <div className="ux-skel" style={{ height: 120 }} />
+        <div className="ux-skel" style={{ height: 320 }} />
       </div>
     );
   }
 
-  // One quote row — rendered inside its customer card (unchanged behaviour).
+  // One quote inside a customer card: what it is on one line (number, date,
+  // status in words, price), then its actions as labelled 44px buttons — they
+  // were up to 13 unlabelled 28px icons, readable only by hovering on desktop.
   function renderQuoteRow(r: ApiQuoteRow) {
+    const st = STATUS_LABEL[r.status];
+    const busy = busyId === r.id;
+    const priced = (r.status === "finalized" || r.status === "draft") && r.finalPricing;
     return (
-      // flex-wrap: this row carries up to 13 icon buttons in a shrink-0 rail
-      // (~380px on its own), which on a phone pushed the customer name out of
-      // the card entirely. Wrapping drops the rail onto its own line instead
-      // of hiding actions behind a menu. No-op at desktop width.
-      <li
-        key={r.id}
-        className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border/60 bg-background/40 px-3 py-2"
-      >
-        <div className="flex items-center gap-2 min-w-0 flex-1 flex-wrap">
-          {r.sentToCustomerAt && (
-            <span
-              title={`נשלח ללקוח ${fmtDate(r.sentToCustomerAt)}`}
-              className="shrink-0 inline-flex items-center gap-0.5 text-xs rounded-full border border-emerald-500/30 bg-emerald-500/10 text-emerald-400 px-1.5 py-0.5"
-            >
-              <Check className="size-3" /> נשלח
+      <li key={r.id} className="qh-q">
+        <div className="l1">
+          <span className="no tnum">{r.quotationNo ?? r.id.slice(-6)}</span>
+          <span className="tnum" style={{ color: "var(--lux-muted)" }}>{fmtDate(r.createdAt)}</span>
+          <span className="ux-pill" data-tone={st?.tone ?? "idle"}>{st?.text ?? r.status}</span>
+          {priced && (
+            <span className="tnum" style={{ color: r.status === "draft" ? "var(--lux-muted)" : "var(--lux-success, #a8c0a0)" }} title={r.status === "draft" ? "מחיר משוער (טיוטה — לא ממפעל)" : undefined}>
+              {r.status === "draft" ? "~" : ""}
+              {fmtMoney(displayTotal(r.finalPricing as Record<string, unknown>))}
             </span>
           )}
-          <span className="text-[13px] text-muted-foreground tabular-nums shrink-0">
-            {fmtDate(r.createdAt)}
-          </span>
-          <span className="text-[13px] font-mono text-muted-foreground shrink-0">
-            {r.quotationNo ?? r.id.slice(-6)}
-          </span>
-          <span className={`text-xs rounded-full border px-1.5 py-0.5 shrink-0 ${STATUS_LABEL[r.status]?.cls ?? "bg-muted"}`}>
-            {STATUS_LABEL[r.status]?.text ?? r.status}
-          </span>
-          <span className="text-sm font-medium truncate min-w-0">
-            {r.name ?? r.leadSid.slice(0, 20)}
-          </span>
-          {(r.status === "finalized" || r.status === "draft") && r.finalPricing && (
-            <span
-              className={`text-[13px] tabular-nums shrink-0 ${r.status === "draft" ? "text-muted-foreground" : "text-emerald-400"}`}
-              title={r.status === "draft" ? "מחיר משוער (טיוטה — לא ממפעל)" : undefined}
-            >
-              {r.status === "draft" ? "~" : ""}{fmtMoney(displayTotal(r.finalPricing as Record<string, unknown>))}
+          {r.sentToCustomerAt && (
+            <span className="ux-pill" data-tone="good" title={`נשלח ללקוח ${fmtDate(r.sentToCustomerAt)}`}>
+              <Check className="size-3.5" aria-hidden /> נשלח ללקוח
+            </span>
+          )}
+          {priced && r.closedDealAt && (
+            <span className="ux-pill" data-tone="good" title="עסקה סגורה — בלשונית עסקאות">
+              <Check className="size-3.5" aria-hidden /> בעסקאות
             </span>
           )}
         </div>
-        <div className="flex flex-wrap items-center gap-0.5 shrink-0 max-w-full">
-          <button
-            type="button"
+        <div className="ux-acts">
+          {/* the main next step first */}
+          {r.status === "received" && !r.finalPricing && (
+            <Act icon={Calculator} label="חשב הצעת מחיר" tone="primary" onClick={() => setFinalizing(r)} disabled={busy} />
+          )}
+          {r.status === "draft" && r.finalPricing && (
+            <Act icon={MessageCircle} label="שלח אומדן ב-WhatsApp" tone="go" onClick={() => handleSendWhatsApp(r)} busy={busy} />
+          )}
+          {r.status === "finalized" && (
+            <Act icon={MessageCircle} label="שלח ב-WhatsApp" tone="go" onClick={() => handleSendWhatsApp(r)} busy={busy} />
+          )}
+          {r.status === "draft" && (
+            <Act icon={Send} label="אשר ושלח למפעל" onClick={() => handlePromote(r)} busy={busy} />
+          )}
+          <Act
+            icon={Eye}
+            label={r.finalPricing ? "הצעה מלאה" : "צפה בבקשה"}
             onClick={() => (r.finalPricing ? setOpened(r) : setSpecRow(r))}
-            title={r.finalPricing ? "פתח הצעה מלאה" : "צפה בבקשה"}
-            disabled={busyId === r.id}
-            className="size-7 rounded grid place-items-center text-muted-foreground hover:text-foreground hover:bg-secondary disabled:opacity-50"
-          >
-            <Eye className="size-3.5" />
-          </button>
+            disabled={busy}
+          />
           {!r.finalPricing && (
-            <button
-              type="button"
-              onClick={() => setEstimateRow(r)}
-              title="מחשבון משוער — מחיר מיידי"
-              disabled={busyId === r.id}
-              className="size-7 rounded grid place-items-center text-muted-foreground hover:text-accent hover:bg-accent/10 disabled:opacity-50"
-            >
-              <Sparkles className="size-3.5" />
-            </button>
+            <Act icon={Sparkles} label="מחיר משוער" title="מחשבון משוער — מחיר מיידי" onClick={() => setEstimateRow(r)} disabled={busy} />
           )}
           {/* The PDF the CUSTOMER gets — always through the route, never the
               stored Blob. That Blob was rendered at finalize time, before any
@@ -825,47 +821,31 @@ export function QuotesHistoryView({ apiToken }: { apiToken: string }) {
               02/09: "אני מציג את ה-PDF ולא רואה תנאי ופרטי תשלום"). The route
               re-renders with the current terms. */}
           {(r.pdfUrl || r.finalPricing) && (
-            <a
-              href={`/api/factory/${r.id}/pdf`}
-              target="_blank"
-              rel="noopener noreferrer"
-              title="ה-PDF שהלקוח מקבל (כולל תנאי תשלום)"
-              className="size-7 rounded grid place-items-center text-muted-foreground hover:text-foreground hover:bg-secondary"
-            >
-              <Download className="size-3.5" />
-            </a>
+            <Act icon={Download} label="PDF ללקוח" title="ה-PDF שהלקוח מקבל (כולל תנאי תשלום)" href={`/api/factory/${r.id}/pdf`} newTab />
           )}
           {(r.status === "finalized" || (r.status === "draft" && r.finalPricing)) && !r.closedDealAt && (
-            <button
-              type="button"
-              onClick={() => handleCloseDeal(r, true)}
-              disabled={busyId === r.id}
+            <Act
+              icon={CheckCircle2}
+              label={r.status === "draft" ? "סגור עסקה (אומדן)" : "סגור עסקה"}
               title={r.status === "draft" ? "סגור עסקה מהאומדן — הלקוח קיבל את המחיר" : "סגור עסקה — העבר ללשונית עסקאות"}
-              className="lux-tap shrink-0 inline-flex items-center gap-1 text-xs rounded-full border border-amber-500/40 bg-amber-500/10 text-amber-400 px-2 py-0.5 hover:bg-amber-500/20 disabled:opacity-50"
-            >
-              {busyId === r.id ? <Loader2 className="size-3 animate-spin" /> : <CheckCircle2 className="size-3" />}
-              {r.status === "draft" ? "סגור עסקה (אומדן)" : "סגור עסקה"}
-            </button>
-          )}
-          {(r.status === "finalized" || r.status === "draft") && r.closedDealAt && (
-            <span
-              title="עסקה סגורה — בלשונית עסקאות"
-              className="shrink-0 inline-flex items-center gap-0.5 text-xs rounded-full border border-emerald-500/30 bg-emerald-500/10 text-emerald-400 px-1.5 py-0.5"
-            >
-              <Check className="size-3" /> בעסקאות
-            </span>
+              tone="warn"
+              onClick={() => handleCloseDeal(r, true)}
+              busy={busy}
+            />
           )}
           {(r.status === "finalized" || (r.status === "draft" && r.closedDealAt)) && (
-            <a
-              href={`/widget/closed-quotes?widget_token=${encodeURIComponent(apiToken)}&focus=${encodeURIComponent(r.id)}`}
+            <Act
+              icon={FolderOpen}
+              label="תיק עסקה"
               title="פתח תיק עסקה (ציר שלבים + רווח בפועל)"
-              className="size-7 rounded grid place-items-center text-muted-foreground hover:text-amber-400 hover:bg-amber-500/10"
-            >
-              <FolderOpen className="size-3.5" />
-            </a>
+              href={`/widget/closed-quotes?widget_token=${encodeURIComponent(apiToken)}&focus=${encodeURIComponent(r.id)}`}
+            />
           )}
           {r.status === "draft" && r.finalPricing && (
-            <a
+            <Act
+              icon={Calculator}
+              label="ערוך מחיר"
+              title="חשב מחדש / ערוך מחיר — יעדכן את אותה טיוטה"
               href={fullCalculatorHref(
                 toRequestRow(r),
                 apiToken,
@@ -876,693 +856,415 @@ export function QuotesHistoryView({ apiToken }: { apiToken: string }) {
                 ),
                 r.id
               )}
-              title="חשב מחדש / ערוך מחיר — יעדכן את אותה טיוטה"
-              className="size-7 rounded grid place-items-center text-muted-foreground hover:text-accent hover:bg-accent/10"
-            >
-              <Calculator className="size-3.5" />
-            </a>
-          )}
-          {r.status === "draft" && r.finalPricing && (
-            <button
-              type="button"
-              onClick={() => handleSendWhatsApp(r)}
-              disabled={busyId === r.id}
-              title="שלח את האומדן (טיוטה) ללקוח ב-WhatsApp"
-              className="size-7 rounded grid place-items-center text-muted-foreground hover:text-emerald-400 hover:bg-emerald-500/10 disabled:opacity-50"
-            >
-              {busyId === r.id ? <Loader2 className="size-3.5 animate-spin" /> : <MessageCircle className="size-3.5" />}
-            </button>
-          )}
-          {r.status === "draft" && (
-            <button
-              type="button"
-              onClick={() => handlePromote(r)}
-              disabled={busyId === r.id}
-              title="אשר ושלח למפעל"
-              className="size-7 rounded grid place-items-center text-primary hover:bg-primary/10 disabled:opacity-50"
-            >
-              {busyId === r.id ? <Loader2 className="size-3.5 animate-spin" /> : <Send className="size-3.5" />}
-            </button>
-          )}
-          {r.status === "received" && !r.finalPricing && (
-            <button
-              type="button"
-              onClick={() => setFinalizing(r)}
-              disabled={busyId === r.id}
-              title="חשב הצעת מחיר"
-              className="size-7 rounded grid place-items-center text-primary hover:bg-primary/10 disabled:opacity-50"
-            >
-              <Calculator className="size-3.5" />
-            </button>
+            />
           )}
           {(r.status === "finalized" || r.status === "received") && (
-            <button
-              type="button"
+            <Act
+              icon={RefreshCw}
+              label="רענן מהמפעל"
+              title="משוך שוב את נתוני הגיליון (גם להצעה סופית)"
               onClick={() => handleForceRefresh(r)}
-              disabled={busyId === r.id}
-              title="רענן מהמפעל — משוך שוב את נתוני הגיליון (גם להצעה סופית)"
-              className="size-7 rounded grid place-items-center text-muted-foreground hover:text-primary hover:bg-primary/10 disabled:opacity-50"
-            >
-              {busyId === r.id ? <Loader2 className="size-3.5 animate-spin" /> : <RefreshCw className="size-3.5" />}
-            </button>
+              busy={busy}
+            />
           )}
           {r.status === "finalized" && (
-            <button
-              type="button"
-              onClick={() => handleEditAsNew(r)}
-              disabled={busyId === r.id}
-              title="ערוך כעותק חדש — מקור נשמר"
-              className="size-7 rounded grid place-items-center text-muted-foreground hover:text-primary hover:bg-primary/10 disabled:opacity-50"
-            >
-              {busyId === r.id ? <Loader2 className="size-3.5 animate-spin" /> : <Pencil className="size-3.5" />}
-            </button>
+            <Act icon={Pencil} label="ערוך כעותק" title="ערוך כעותק חדש — מקור נשמר" onClick={() => handleEditAsNew(r)} busy={busy} />
           )}
-          {r.status === "finalized" && (
-            <button
-              type="button"
-              onClick={() => handleSendWhatsApp(r)}
-              disabled={busyId === r.id}
-              title="שלח ללקוח ב-WhatsApp"
-              className="size-7 rounded grid place-items-center text-muted-foreground hover:text-emerald-400 hover:bg-emerald-500/10 disabled:opacity-50"
-            >
-              {busyId === r.id ? <Loader2 className="size-3.5 animate-spin" /> : <MessageCircle className="size-3.5" />}
-            </button>
-          )}
-          <button
-            type="button"
-            onClick={() => handleDelete(r)}
-            disabled={busyId === r.id}
-            title="מחק הצעה"
-            className="size-7 rounded grid place-items-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 disabled:opacity-50"
-          >
-            <Trash2 className="size-3.5" />
-          </button>
-          {r.ghlUrl && (
-            <a
-              href={r.ghlUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              title="פתח ב-GHL"
-              className="size-7 rounded grid place-items-center text-muted-foreground hover:text-foreground hover:bg-secondary"
-            >
-              <ExternalLink className="size-3.5" />
-            </a>
-          )}
+          {r.ghlUrl && <Act icon={ExternalLink} label="GHL" title="פתח ב-GHL" href={r.ghlUrl} newTab />}
+          <Act icon={Trash2} label="מחק" title="מחק הצעה (לסל המיחזור)" tone="danger" onClick={() => handleDelete(r)} disabled={busy} />
         </div>
       </li>
     );
   }
 
+  const shownGroups = groups.slice(0, groupLimit);
+
   return (
     <>
-      <div className="space-y-3">
-        <div className="relative">
-          <Search className="absolute right-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-          <input
-            type="search"
-            placeholder="חפש לפי שם / טלפון / מס' הצעה"
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            className="w-full rounded-lg border border-border bg-background pr-9 pl-3 py-2 text-sm text-right focus:outline-none focus:ring-2 focus:ring-ring/30"
-          />
-        </div>
+      <div className="grid gap-5">
+        {unmatched.length > 0 && (
+          <section className="ux-panel" aria-label="הצעות שלא הותאמו ללקוח">
+            <h2>{unmatched.length} הצעות לא הותאמו ללקוח</h2>
+            <p className="d">בחר לקוח לכל אחת:</p>
+            <ul className="grid gap-2">
+              {unmatched.map((u) => (
+                <li key={u.quotationNo} className="flex items-center gap-3 flex-wrap">
+                  <span className="tnum" style={{ fontFamily: "ui-monospace, monospace", color: "var(--lux-muted)" }}>{u.quotationNo}</span>
+                  <span>{u.customer || "ללא שם"}</span>
+                  <div className="flex-1 min-w-[200px]">
+                    <LeadPickerAssign
+                      apiToken={apiToken}
+                      quotationNo={u.quotationNo}
+                      customer={u.customer}
+                      onDone={() => {
+                        setUnmatched((cur) => cur.filter((x) => x.quotationNo !== u.quotationNo));
+                        refresh();
+                      }}
+                    />
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
 
-        <div className="flex items-center justify-between gap-2">
-          <span className="text-[13px] text-muted-foreground">
-            נמחקו הצעות? ייבא אותן מחדש מ-Feishu (עם אותו מס' הצעה).
-          </span>
-          <div className="flex items-center gap-1.5 shrink-0">
-            <button
-              type="button"
-              onClick={toggleTrash}
-              className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-medium transition-colors ${
-                showTrash
-                  ? "border-amber-500/40 bg-amber-500/15 text-amber-400"
-                  : "border-border bg-card/40 text-muted-foreground hover:bg-secondary"
-              }`}
-              title="הצעות שנמחקו — ניתן לשחזר"
-            >
-              <Trash className="size-3.5" />
-              סל מיחזור{trash && trash.length > 0 ? ` (${trash.length})` : ""}
-            </button>
-            <button
-              type="button"
-              onClick={handleImport}
-              disabled={importing}
-              className="inline-flex items-center gap-1.5 rounded-md border border-primary/40 bg-primary/10 px-2.5 py-1.5 text-xs font-medium text-primary hover:bg-primary/20 disabled:opacity-60"
-            >
-              {importing ? <Loader2 className="size-3.5 animate-spin" /> : <Download className="size-3.5" />}
-              ייבא מ-Feishu
-            </button>
-          </div>
-        </div>
-
-        {showTrash && (
-          <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 space-y-1.5" dir="rtl">
-            <div className="text-xs font-semibold text-amber-400 flex items-center gap-1.5">
-              <Trash className="size-3.5" /> סל מיחזור
-              {trash && <span className="text-xs text-muted-foreground font-normal">({trash.length})</span>}
-            </div>
-            <p className="text-xs text-muted-foreground">
-              הצעות שנמחקו. שחזר כדי להחזיר לרשימה, או מחק לצמיתות.
-            </p>
-            {trash === null ? (
-              <div className="text-muted-foreground text-xs flex items-center gap-2 py-2">
-                <Loader2 className="size-3.5 animate-spin" /> טוען...
-              </div>
-            ) : trash.length === 0 ? (
-              <div className="text-muted-foreground text-xs py-2">הסל ריק.</div>
-            ) : (
-              <ul className="space-y-1">
-                {trash.map((r) => (
-                  <li
+        {needsSending.length + needsPricing.length + unsentDrafts.length === 0 ? (
+          <section className="ux-todo ok" aria-label="לטיפול עכשיו">
+            <h2>
+              <CheckCircle2 className="size-4" aria-hidden /> אין הצעות שמחכות לך — כל מה שהמפעל החזיר נשלח ללקוח.
+            </h2>
+          </section>
+        ) : (
+          <>
+            {needsSending.length > 0 && (
+              <AlertShell
+                tone="stop"
+                icon={Send}
+                title={`המפעל ענה — לשלוח ללקוח · ${needsSending.length}`}
+                hint="«סופי» = מוכן לשליחה. «התקבל» = צריך לתמחר קודם, ואז לשלוח."
+                ids={needsSending.map((r) => r.id)}
+                selectedIds={needsSending.filter((r) => selected.has(r.id)).map((r) => r.id)}
+                onToggleAll={(on) => toggleAll(needsSending.map((r) => r.id), on)}
+                onClear={() => setSelected(new Set())}
+                bulkBusy={bulkBusy}
+                actions={
+                  <>
+                    {/* Only finalized rows can be "already sent" — a quote with no
+                        price was never sent to anyone. */}
+                    {needsSending.some((r) => selected.has(r.id) && r.status === "finalized") && (
+                      <BulkButton
+                        tone="go"
+                        onClick={() => bulkMarkSent(needsSending.filter((r) => selected.has(r.id) && r.status === "finalized"))}
+                      >
+                        שלחתי כבר
+                      </BulkButton>
+                    )}
+                    <BulkButton tone="danger" onClick={() => bulkDismiss(needsSending.filter((r) => selected.has(r.id)))}>
+                      הסר מהתזכורת
+                    </BulkButton>
+                  </>
+                }
+              >
+                {needsSending.map((r) => (
+                  <AlertRow
                     key={r.id}
-                    className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border/60 bg-background/40 px-2.5 py-1.5"
-                  >
-                    <div className="flex items-center gap-2 min-w-0 flex-1 flex-wrap">
-                      <span className="text-[13px] text-muted-foreground tabular-nums shrink-0">
-                        {fmtDate(r.createdAt)}
+                    checked={selected.has(r.id)}
+                    onCheck={() => toggleRow(r.id)}
+                    name={r.name ?? r.leadSid.slice(0, 20)}
+                    meta={
+                      <>
+                        <span className="tnum">{fmtDate(r.createdAt)}</span>
+                        <span className="tnum">{r.quotationNo ?? r.id.slice(-6)}</span>
+                        <span className="ux-pill" data-tone={r.status === "finalized" ? "good" : "warn"}>
+                          {r.status === "finalized" ? "סופי — מוכן לשליחה" : "התקבל — צריך לתמחר"}
+                        </span>
+                      </>
+                    }
+                    actions={
+                      <>
+                        {r.status === "finalized" ? (
+                          <>
+                            <Act icon={MessageCircle} label="שלח ב-WhatsApp" tone="go" onClick={() => handleSendWhatsApp(r)} busy={busyId === r.id} />
+                            <Act icon={Eye} label="צפה" title="צפה בהצעה" onClick={() => (r.finalPricing ? setOpened(r) : setSpecRow(r))} disabled={busyId === r.id} />
+                            <Act icon={Check} label="שלחתי כבר" title="סמן כנשלח ידנית (בלי לשלוח מהמערכת)" onClick={() => handleMarkSent(r)} disabled={busyId === r.id} />
+                          </>
+                        ) : (
+                          <>
+                            {!r.finalPricing && (
+                              <Act icon={Calculator} label="חשב הצעת מחיר" tone="primary" onClick={() => setFinalizing(r)} disabled={busyId === r.id} />
+                            )}
+                            <Act icon={Eye} label="צפה" title="פתח לתמחור ושליחה" onClick={() => (r.finalPricing ? setOpened(r) : setSpecRow(r))} disabled={busyId === r.id} />
+                          </>
+                        )}
+                        <Act icon={X} label="הסר" title="הסר מהתזכורת (ליד מת — לא נמחק ולא נשלח, לא יחזור)" tone="danger" onClick={() => handleDismissReminder(r)} disabled={busyId === r.id} />
+                      </>
+                    }
+                  />
+                ))}
+              </AlertShell>
+            )}
+
+            {needsPricing.length > 0 && (
+              <AlertShell
+                tone="go"
+                icon={Calculator}
+                title={`בקשות שממתינות לתמחור · ${needsPricing.length}${
+                  needsPricing.some((r) => r.createdBy === "sales")
+                    ? ` (${needsPricing.filter((r) => r.createdBy === "sales").length} מאיש מכירות)`
+                    : ""
+                }`}
+                hint="מפרטים בלי מחיר — לתמחר במחשבון, ואז לשלוח ללקוח או למפעל."
+                ids={needsPricing.map((r) => r.id)}
+                selectedIds={needsPricing.filter((r) => selected.has(r.id)).map((r) => r.id)}
+                onToggleAll={(on) => toggleAll(needsPricing.map((r) => r.id), on)}
+                onClear={() => setSelected(new Set())}
+                bulkBusy={bulkBusy}
+                actions={
+                  <BulkButton tone="danger" onClick={() => bulkDismiss(needsPricing.filter((r) => selected.has(r.id)))}>
+                    הסר מהתזכורת
+                  </BulkButton>
+                }
+              >
+                {needsPricing.map((r) => (
+                  <AlertRow
+                    key={r.id}
+                    checked={selected.has(r.id)}
+                    onCheck={() => toggleRow(r.id)}
+                    name={r.name ?? r.leadSid.slice(0, 20)}
+                    meta={
+                      <>
+                        <span className="tnum">{fmtDate(r.createdAt)}</span>
+                        <span className="tnum">{r.quotationNo ?? r.id.slice(-6)}</span>
+                        {r.createdBy === "sales" && <span className="ux-pill" data-tone="go">בקשה מאיש מכירות</span>}
+                      </>
+                    }
+                    actions={
+                      <>
+                        <Act icon={Calculator} label="תמחר" tone="primary" title="תמחר במחשבון" onClick={() => setEstimateRow(r)} disabled={busyId === r.id} />
+                        <Act icon={Eye} label="מפרט" title="פתח את המפרט" onClick={() => setSpecRow(r)} disabled={busyId === r.id} />
+                        <Act icon={X} label="הסר" title="הסר מהתזכורת (לא נמחק, לא יחזור)" tone="danger" onClick={() => handleDismissReminder(r)} disabled={busyId === r.id} />
+                      </>
+                    }
+                  />
+                ))}
+              </AlertShell>
+            )}
+
+            {unsentDrafts.length > 0 && (
+              <AlertShell
+                tone="warn"
+                icon={MessageCircle}
+                title={`טיוטות שעוד לא נשלחו ללקוח · ${unsentDrafts.length}`}
+                hint="אומדנים שחישבת ולא נשלחו — שלח ללקוח, או אשר ושלח למפעל."
+                ids={unsentDrafts.map((r) => r.id)}
+                selectedIds={unsentDrafts.filter((r) => selected.has(r.id)).map((r) => r.id)}
+                onToggleAll={(on) => toggleAll(unsentDrafts.map((r) => r.id), on)}
+                onClear={() => setSelected(new Set())}
+                bulkBusy={bulkBusy}
+                actions={
+                  <BulkButton tone="go" onClick={() => bulkMarkSent(unsentDrafts.filter((r) => selected.has(r.id)))}>
+                    שלחתי כבר
+                  </BulkButton>
+                }
+              >
+                {unsentDrafts.map((r) => (
+                  <AlertRow
+                    key={r.id}
+                    checked={selected.has(r.id)}
+                    onCheck={() => toggleRow(r.id)}
+                    name={r.name ?? r.leadSid.slice(0, 20)}
+                    meta={
+                      <>
+                        <span className="tnum">{fmtDate(r.createdAt)}</span>
+                        <span className="tnum">{r.quotationNo ?? r.id.slice(-6)}</span>
+                        <span className="tnum" style={{ color: "var(--lux-ink)" }} title="מחיר משוער">
+                          ~{fmtMoney(displayTotal(r.finalPricing as Record<string, unknown>))}
+                        </span>
+                      </>
+                    }
+                    actions={
+                      <>
+                        <Act icon={MessageCircle} label="שלח ב-WhatsApp" tone="go" title="שלח את האומדן ללקוח ב-WhatsApp" onClick={() => handleSendWhatsApp(r)} busy={busyId === r.id} />
+                        <Act icon={Eye} label="צפה" title="צפה בהצעה" onClick={() => (r.finalPricing ? setOpened(r) : setSpecRow(r))} disabled={busyId === r.id} />
+                        <Act icon={Check} label="שלחתי כבר" title="סמן כנשלח ידנית (בלי לשלוח מהמערכת)" onClick={() => handleMarkSent(r)} disabled={busyId === r.id} />
+                      </>
+                    }
+                  />
+                ))}
+              </AlertShell>
+            )}
+          </>
+        )}
+
+        <section aria-labelledby="qh-all">
+          <div className="ux-sechead">
+            <h2 id="qh-all">כל ההצעות · {groups.length === 1 ? "לקוח אחד" : `${groups.length} לקוחות`}</h2>
+            <span className="hint">לחיצה על לקוח פותחת את ההצעות שלו</span>
+          </div>
+          <label className="ux-search" style={{ marginBottom: 12 }}>
+            <Search className="size-4 shrink-0" aria-hidden />
+            <span className="ux-sr">חיפוש הצעה</span>
+            <input
+              type="search"
+              placeholder="חיפוש לפי שם, טלפון או מספר הצעה"
+              value={q}
+              onChange={(e) => {
+                setQ(e.target.value);
+                setGroupLimit(GROUP_PAGE);
+              }}
+            />
+          </label>
+          <div className="ux-chips" role="group" aria-label="סינון לפי מצב" style={{ marginBottom: 14 }}>
+            {([
+              { id: "all", label: "הכל", n: counts.all },
+              { id: "draft", label: "טיוטות", n: counts.draft },
+              { id: "pending", label: "ממתינים למפעל", n: counts.pending },
+              { id: "received", label: "המפעל ענה", n: counts.received },
+              { id: "finalized", label: "סופיים", n: counts.finalized },
+            ] as const).map((b) => (
+              <button
+                key={b.id}
+                type="button"
+                className="ux-chip"
+                aria-pressed={statusFilter === b.id}
+                onClick={() => {
+                  setStatusFilter(b.id);
+                  setGroupLimit(GROUP_PAGE);
+                }}
+              >
+                {b.label} <span className="tnum">{b.n}</span>
+              </button>
+            ))}
+          </div>
+
+          {groups.length === 0 ? (
+            <div className="ux-panel" style={{ textAlign: "center", color: "var(--lux-muted)" }}>
+              {q ? `לא נמצאה הצעה עם ״${q}״.` : "אין הצעות במצב הזה."}
+            </div>
+          ) : (
+            <div className="ux-list">
+              {shownGroups.map((g) => {
+                const open = openCards.has(g.leadSid);
+                const canCalc = g.priceableCount > 0;
+                // Combined offer = all this customer's FINALIZED quotes (the
+                // combined PDF route requires every id to be finalized).
+                // Anything PRICED can form a combined offer — a factory-finalized
+                // quote or a self-calculated draft. Restricting this to finalized
+                // meant a customer holding only estimates could never get a
+                // combined offer (Eli 2026-08-02).
+                const finalizedIds = g.rows
+                  .filter((r) => r.finalPricing && (r.status === "finalized" || r.status === "draft"))
+                  .map((r) => r.id);
+                const canSendCombined = finalizedIds.length >= 1;
+                const combinedPdfHref = `/api/factory/combine/pdf?ids=${finalizedIds.join(",")}`;
+                const ghlUrl = g.rows[0]?.ghlUrl ?? null;
+                const sentCount = g.rows.filter((r) => r.sentToCustomerAt).length;
+                const name = g.name ?? g.leadSid.slice(0, 20);
+                return (
+                  <div key={g.leadSid} className="qh-g">
+                    <button
+                      type="button"
+                      className="qh-head"
+                      aria-expanded={open}
+                      onClick={() => toggleCard(g.leadSid)}
+                    >
+                      <span className="main">
+                        <span className="nm">{name}</span>
+                        <span className="sub tnum">
+                          {g.rows.length === 1 ? "הצעה אחת" : `${g.rows.length} הצעות`} · {fmtDate(g.latestAt)}
+                          {sentCount > 0 ? ` · ${sentCount} נשלחו ללקוח` : ""}
+                        </span>
                       </span>
-                      <span className="text-[13px] font-mono text-muted-foreground shrink-0">
-                        {r.quotationNo ?? r.id.slice(-6)}
+                      <span className="pills">
+                        {Object.entries(g.statusCounts).map(([st, n]) => (
+                          <span key={st} className="ux-pill" data-tone={STATUS_LABEL[st]?.tone ?? "idle"}>
+                            {STATUS_LABEL[st]?.text ?? st} {n}
+                          </span>
+                        ))}
                       </span>
-                      <span className={`text-xs rounded-full border px-1.5 py-0.5 shrink-0 ${STATUS_LABEL[r.status]?.cls ?? "bg-muted"}`}>
-                        {STATUS_LABEL[r.status]?.text ?? r.status}
-                      </span>
-                      <span className="text-sm font-medium truncate min-w-0">
-                        {r.name ?? r.leadSid.slice(0, 20)}
-                      </span>
+                      <ChevronDown className="size-4 chev" aria-hidden />
+                    </button>
+                    {open && (
+                      <div className="qh-body">
+                        <div className="ux-acts qh-gacts" role="group" aria-label={`פעולות על כל ההצעות של ${name}`}>
+                          <span className="qh-gl">כל ההצעות של הלקוח:</span>
+                          {/* Eye opens the FULL combined view (boss breakdown of
+                              every quote + customer-PDF link inside) — Eli
+                              2026-07-17: "the eye should open everything". */}
+                          {canCalc && <Act icon={Pencil} label="חישוב משולב ופירוט" tone="primary" title="פירוט מלא לבוס + PDF, עריכה וחישוב משולב" onClick={() => setCalcGroup(g)} />}
+                          {canSendCombined && (
+                            <Act
+                              icon={MessageCircle}
+                              label="שלח הצעה משולבת"
+                              tone="go"
+                              title="שלח הצעה משולבת ב-WhatsApp"
+                              onClick={() => handleSendCombined(g.leadSid, g.name, finalizedIds)}
+                              busy={busyId === `combine:${g.leadSid}`}
+                            />
+                          )}
+                          {canSendCombined && <Act icon={Download} label="PDF משולב" title="הורד PDF משולב ללקוח" href={combinedPdfHref} newTab />}
+                          {finalizedIds.length >= 2 && (
+                            <Act
+                              icon={CheckCircle2}
+                              label={`סגור עסקה משולבת (${finalizedIds.length})`}
+                              title={`${finalizedIds.length} מוצרים → עסקה אחת עם חשבונית אחת`}
+                              tone="warn"
+                              onClick={() => handleCloseDealGroup(g.leadSid, finalizedIds)}
+                              busy={busyId === `closegroup:${g.leadSid}`}
+                            />
+                          )}
+                          {ghlUrl && <Act icon={ExternalLink} label="GHL" title="פתח ב-GHL" href={ghlUrl} newTab />}
+                          <Act
+                            icon={Trash2}
+                            label="מחק הכל"
+                            title="מחק את כל הצעות הלקוח (לסל המיחזור)"
+                            tone="danger"
+                            onClick={() => handleDeleteGroup(g)}
+                            busy={busyId === `group:${g.leadSid}`}
+                          />
+                        </div>
+                        <DraftVsFactoryStrip rows={g.rows} />
+                        <ul>{g.rows.map((r) => renderQuoteRow(r))}</ul>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+          {groups.length > groupLimit && (
+            <button type="button" className="ux-btn" style={{ marginTop: 12, width: "100%" }} onClick={() => setGroupLimit((n) => n + GROUP_PAGE)}>
+              הצג עוד {Math.min(GROUP_PAGE, groups.length - groupLimit)} מתוך {groups.length - groupLimit}
+            </button>
+          )}
+        </section>
+
+        {/* Rarely used tools live at the bottom, folded. */}
+        <details className="ux-panel ux-fold" open={showTrash} style={{ marginTop: 0 }}>
+          <summary
+            onClick={(e) => {
+              e.preventDefault();
+              void toggleTrash();
+            }}
+          >
+            <span className="flex items-center gap-2">
+              <Trash className="size-4" aria-hidden />
+              סל מיחזור וייבוא מ-Feishu{trash && trash.length > 0 ? ` · ${trash.length} בסל` : ""}
+            </span>
+            <ChevronDown className="size-4 chev" aria-hidden />
+          </summary>
+          <div className="grid gap-3" style={{ paddingBottom: 6 }}>
+            <div className="flex items-center gap-3 flex-wrap">
+              <span style={{ fontSize: 14, color: "var(--lux-muted)", flex: "1 1 240px" }}>
+                נמחקו הצעות? אפשר לייבא אותן מחדש מ-Feishu, עם אותו מספר הצעה ועם תשובת המפעל.
+              </span>
+              <Act icon={Download} label="ייבא מ-Feishu" onClick={handleImport} busy={importing} />
+            </div>
+            <div style={{ fontSize: 14, color: "var(--lux-muted)" }}>הצעות שנמחקו — שחזר כדי להחזיר לרשימה, או מחק לצמיתות.</div>
+            {trash === null ? (
+              <div className="ux-skel" style={{ height: 60 }} aria-label="טוען" />
+            ) : trash.length === 0 ? (
+              <div style={{ fontSize: 14, color: "var(--lux-muted)" }}>הסל ריק.</div>
+            ) : (
+              <ul className="ux-list">
+                {trash.map((r) => (
+                  <li key={r.id} className="qh-q">
+                    <div className="l1">
+                      <span className="nm">{r.name ?? r.leadSid.slice(0, 20)}</span>
+                      <span className="no tnum">{r.quotationNo ?? r.id.slice(-6)}</span>
+                      <span className="tnum" style={{ color: "var(--lux-muted)" }}>{fmtDate(r.createdAt)}</span>
+                      <span className="ux-pill" data-tone={STATUS_LABEL[r.status]?.tone ?? "idle"}>{STATUS_LABEL[r.status]?.text ?? r.status}</span>
                     </div>
-                    <div className="flex flex-wrap items-center gap-0.5 shrink-0 max-w-full">
-                      <button
-                        type="button"
-                        onClick={() => handleRestore(r)}
-                        disabled={busyId === r.id}
-                        title="שחזר"
-                        className="inline-flex items-center gap-1 rounded-md border border-emerald-500/30 bg-emerald-500/10 px-2 py-1 text-[13px] font-medium text-emerald-400 hover:bg-emerald-500/20 disabled:opacity-50"
-                      >
-                        {busyId === r.id ? <Loader2 className="size-3 animate-spin" /> : <RotateCcw className="size-3" />}
-                        שחזר
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleHardDelete(r)}
-                        disabled={busyId === r.id}
-                        title="מחק לצמיתות"
-                        className="size-7 rounded grid place-items-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 disabled:opacity-50"
-                      >
-                        <Trash2 className="size-3.5" />
-                      </button>
+                    <div className="ux-acts">
+                      <Act icon={RotateCcw} label="שחזר" tone="go" onClick={() => handleRestore(r)} busy={busyId === r.id} />
+                      <Act icon={Trash2} label="מחק לצמיתות" tone="danger" onClick={() => handleHardDelete(r)} disabled={busyId === r.id} />
                     </div>
                   </li>
                 ))}
               </ul>
             )}
           </div>
-        )}
-
-        {unmatched.length > 0 && (
-          <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 space-y-2">
-            <div className="text-xs font-medium text-amber-400">
-              {unmatched.length} הצעות לא הותאמו ללקוח — בחר לכל אחת:
-            </div>
-            {unmatched.map((u) => (
-              <div
-                key={u.quotationNo}
-                className="flex items-center gap-2 flex-wrap rounded-md border border-border/60 bg-background/40 px-2 py-1.5"
-              >
-                <span className="text-[13px] font-mono text-muted-foreground shrink-0">
-                  {u.quotationNo}
-                </span>
-                <span className="text-xs shrink-0">{u.customer || "ללא שם"}</span>
-                <div className="flex-1 min-w-[180px]">
-                  <LeadPickerAssign
-                    apiToken={apiToken}
-                    quotationNo={u.quotationNo}
-                    customer={u.customer}
-                    onDone={() => {
-                      setUnmatched((cur) =>
-                        cur.filter((x) => x.quotationNo !== u.quotationNo)
-                      );
-                      refresh();
-                    }}
-                  />
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {needsPricing.length > 0 && (
-          <AlertShell
-            tone="sky"
-            title={
-              <>
-                📝 בקשות מחיר שממתינות לתמחור ({needsPricing.length})
-                {needsPricing.some((r) => r.createdBy === "sales") && (
-                  <span className="text-xs px-1.5 py-0.5 rounded bg-sky-500/20">
-                    {needsPricing.filter((r) => r.createdBy === "sales").length} מאיש מכירות
-                  </span>
-                )}
-              </>
-            }
-            hint="מפרטים ללא מחיר — צריך לתמחר (מחשבון) ואז לשלוח ללקוח או למפעל."
-            ids={needsPricing.map((r) => r.id)}
-            selectedIds={needsPricing.filter((r) => selected.has(r.id)).map((r) => r.id)}
-            onToggleAll={(on) => toggleAll(needsPricing.map((r) => r.id), on)}
-            onClear={() => setSelected(new Set())}
-            bulkBusy={bulkBusy}
-            actions={
-              <BulkButton tone="bad" onClick={() => bulkDismiss(needsPricing.filter((r) => selected.has(r.id)))}>
-                הסר מהתזכורת
-              </BulkButton>
-            }
-          >
-            {needsPricing.map((r) => (
-              <AlertRow
-                key={r.id}
-                tone="sky"
-                checked={selected.has(r.id)}
-                onCheck={() => toggleRow(r.id)}
-                name={r.name ?? r.leadSid.slice(0, 20)}
-                metaBadge={
-                  r.createdBy === "sales" ? (
-                    <span className="text-xs px-1.5 py-0.5 rounded bg-sky-500/15 text-sky-400 shrink-0">
-                      בקשה מאיש מכירות
-                    </span>
-                  ) : undefined
-                }
-                meta={
-                  <>
-                    <span className="tabular-nums">{fmtDate(r.createdAt)}</span>
-                    <span className="font-mono">{r.quotationNo ?? r.id.slice(-6)}</span>
-                  </>
-                }
-                actions={
-                  <>
-                    <button
-                      type="button"
-                      onClick={() => setSpecRow(r)}
-                      title="פתח את המפרט"
-                      disabled={busyId === r.id}
-                      className="size-7 rounded grid place-items-center text-muted-foreground hover:text-foreground hover:bg-secondary disabled:opacity-50"
-                    >
-                      <Eye className="size-3.5" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setEstimateRow(r)}
-                      title="תמחר במחשבון"
-                      disabled={busyId === r.id}
-                      className="size-7 rounded grid place-items-center text-sky-400 hover:bg-sky-500/10 disabled:opacity-50"
-                    >
-                      <Calculator className="size-3.5" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleDismissReminder(r)}
-                      disabled={busyId === r.id}
-                      title="הסר מהתזכורת (לא נמחק, לא יחזור)"
-                      className="size-7 rounded grid place-items-center text-muted-foreground hover:text-red-400 hover:bg-red-500/10 disabled:opacity-50"
-                    >
-                      <X className="size-3.5" />
-                    </button>
-                  </>
-                }
-              />
-            ))}
-          </AlertShell>
-        )}
-
-        {needsSending.length > 0 && (
-          <AlertShell
-            tone="red"
-            title={<>📤 המפעל ענה — צריך לשלוח ללקוח ({needsSending.length})</>}
-            hint="הצעות שהמפעל החזיר וטרם נשלחו ללקוח. «סופי» = מוכן לשליחה; «התקבל» = צריך לתמחר ואז לשלוח."
-            ids={needsSending.map((r) => r.id)}
-            selectedIds={needsSending.filter((r) => selected.has(r.id)).map((r) => r.id)}
-            onToggleAll={(on) => toggleAll(needsSending.map((r) => r.id), on)}
-            onClear={() => setSelected(new Set())}
-            bulkBusy={bulkBusy}
-            actions={
-              <>
-                {/* Only finalized rows can be "already sent" — a quote with no
-                    price was never sent to anyone. */}
-                {needsSending.some((r) => selected.has(r.id) && r.status === "finalized") && (
-                  <BulkButton
-                    tone="good"
-                    onClick={() =>
-                      bulkMarkSent(needsSending.filter((r) => selected.has(r.id) && r.status === "finalized"))
-                    }
-                  >
-                    שלחתי כבר
-                  </BulkButton>
-                )}
-                <BulkButton tone="bad" onClick={() => bulkDismiss(needsSending.filter((r) => selected.has(r.id)))}>
-                  הסר מהתזכורת
-                </BulkButton>
-              </>
-            }
-          >
-            {needsSending.map((r) => (
-              <AlertRow
-                key={r.id}
-                tone="red"
-                checked={selected.has(r.id)}
-                onCheck={() => toggleRow(r.id)}
-                name={r.name ?? r.leadSid.slice(0, 20)}
-                metaBadge={
-                  <span
-                    className={`text-xs px-1.5 py-0.5 rounded shrink-0 ${
-                      r.status === "finalized"
-                        ? "bg-emerald-500/15 text-emerald-400"
-                        : "bg-amber-500/15 text-amber-400"
-                    }`}
-                  >
-                    {r.status === "finalized" ? "סופי — מוכן לשליחה" : "התקבל — צריך לתמחר"}
-                  </span>
-                }
-                meta={
-                  <>
-                    <span className="tabular-nums">{fmtDate(r.createdAt)}</span>
-                    <span className="font-mono">{r.quotationNo ?? r.id.slice(-6)}</span>
-                  </>
-                }
-                actions={
-                  <>
-                    <button
-                      type="button"
-                      onClick={() => (r.finalPricing ? setOpened(r) : setSpecRow(r))}
-                      title={r.status === "finalized" ? "צפה בהצעה" : "פתח לתמחור ושליחה"}
-                      disabled={busyId === r.id}
-                      className="size-7 rounded grid place-items-center text-muted-foreground hover:text-foreground hover:bg-secondary disabled:opacity-50"
-                    >
-                      <Eye className="size-3.5" />
-                    </button>
-                    {r.status === "finalized" && (
-                      <>
-                        <button
-                          type="button"
-                          onClick={() => handleSendWhatsApp(r)}
-                          disabled={busyId === r.id}
-                          title="שלח את ההצעה ללקוח ב-WhatsApp"
-                          className="size-7 rounded grid place-items-center text-emerald-400 hover:bg-emerald-500/10 disabled:opacity-50"
-                        >
-                          {busyId === r.id ? <Loader2 className="size-3.5 animate-spin" /> : <MessageCircle className="size-3.5" />}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleMarkSent(r)}
-                          disabled={busyId === r.id}
-                          title="סמן כנשלח ידנית (בלי לשלוח מהמערכת)"
-                          className="size-7 rounded grid place-items-center text-muted-foreground hover:text-emerald-400 hover:bg-emerald-500/10 disabled:opacity-50"
-                        >
-                          <Check className="size-3.5" />
-                        </button>
-                      </>
-                    )}
-                    <button
-                      type="button"
-                      onClick={() => handleDismissReminder(r)}
-                      disabled={busyId === r.id}
-                      title="הסר מהתזכורת (ליד מת — לא נמחק ולא נשלח, לא יחזור)"
-                      className="size-7 rounded grid place-items-center text-muted-foreground hover:text-red-400 hover:bg-red-500/10 disabled:opacity-50"
-                    >
-                      <X className="size-3.5" />
-                    </button>
-                  </>
-                }
-              />
-            ))}
-          </AlertShell>
-        )}
-
-        {unsentDrafts.length > 0 && (
-          <AlertShell
-            tone="amber"
-            title={<>🔔 טיוטות שטרם נשלחו ללקוח ({unsentDrafts.length})</>}
-            hint="אומדנים שחישבת אך עוד לא נשלחו — שלח ללקוח או אשר ושלח למפעל."
-            ids={unsentDrafts.map((r) => r.id)}
-            selectedIds={unsentDrafts.filter((r) => selected.has(r.id)).map((r) => r.id)}
-            onToggleAll={(on) => toggleAll(unsentDrafts.map((r) => r.id), on)}
-            onClear={() => setSelected(new Set())}
-            bulkBusy={bulkBusy}
-            actions={
-              <BulkButton tone="good" onClick={() => bulkMarkSent(unsentDrafts.filter((r) => selected.has(r.id)))}>
-                שלחתי כבר
-              </BulkButton>
-            }
-          >
-            {unsentDrafts.map((r) => (
-              <AlertRow
-                key={r.id}
-                tone="amber"
-                checked={selected.has(r.id)}
-                onCheck={() => toggleRow(r.id)}
-                name={r.name ?? r.leadSid.slice(0, 20)}
-                metaBadge={
-                  <span className="tabular-nums text-foreground/80" title="מחיר משוער">
-                    ~{fmtMoney(displayTotal(r.finalPricing as Record<string, unknown>))}
-                  </span>
-                }
-                meta={
-                  <>
-                    <span className="tabular-nums">{fmtDate(r.createdAt)}</span>
-                    <span className="font-mono">{r.quotationNo ?? r.id.slice(-6)}</span>
-                  </>
-                }
-                actions={
-                  <>
-                    <button
-                      type="button"
-                      onClick={() => (r.finalPricing ? setOpened(r) : setSpecRow(r))}
-                      title="צפה בהצעה"
-                      disabled={busyId === r.id}
-                      className="size-7 rounded grid place-items-center text-muted-foreground hover:text-foreground hover:bg-secondary disabled:opacity-50"
-                    >
-                      <Eye className="size-3.5" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleSendWhatsApp(r)}
-                      disabled={busyId === r.id}
-                      title="שלח את האומדן ללקוח ב-WhatsApp"
-                      className="size-7 rounded grid place-items-center text-emerald-400 hover:bg-emerald-500/10 disabled:opacity-50"
-                    >
-                      {busyId === r.id ? <Loader2 className="size-3.5 animate-spin" /> : <MessageCircle className="size-3.5" />}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleMarkSent(r)}
-                      disabled={busyId === r.id}
-                      title="סמן כנשלח ידנית (בלי לשלוח מהמערכת)"
-                      className="size-7 rounded grid place-items-center text-muted-foreground hover:text-emerald-400 hover:bg-emerald-500/10 disabled:opacity-50"
-                    >
-                      <Check className="size-3.5" />
-                    </button>
-                  </>
-                }
-              />
-            ))}
-          </AlertShell>
-        )}
-
-        <div className="flex gap-2 flex-wrap">
-          {([
-            { id: "all", label: "הכל", n: counts.all },
-            { id: "draft", label: "טיוטות", n: counts.draft },
-            { id: "pending", label: "ממתינים", n: counts.pending },
-            { id: "received", label: "התקבלו", n: counts.received },
-            { id: "finalized", label: "סופיים", n: counts.finalized },
-          ] as const).map((b) => (
-            <button
-              key={b.id}
-              onClick={() => setStatusFilter(b.id)}
-              className={`text-xs px-3 py-1.5 rounded-md border transition-colors ${
-                statusFilter === b.id
-                  ? "bg-primary text-primary-foreground border-primary"
-                  : "border-border bg-card/40 text-muted-foreground hover:bg-secondary"
-              }`}
-            >
-              {b.label} ({b.n})
-            </button>
-          ))}
-        </div>
-
-        <div className="text-xs text-muted-foreground">
-          מציג {filtered.length} מתוך {data.length} · לחישוב/שליחה משולבת — פתח כרטיס לקוח ולחץ "חישוב משולב"
-        </div>
-
-        <div className="space-y-1.5">
-          {groups.length === 0 ? (
-            <div className="p-6 text-center text-muted-foreground text-sm rounded-lg border border-border bg-card/40">
-              לא נמצאו הצעות מתאימות
-            </div>
-          ) : (
-            groups.map((g) => {
-              const open = openCards.has(g.leadSid);
-              const canCalc = g.priceableCount > 0;
-              // Combined offer = all this customer's FINALIZED quotes (the
-              // combined PDF route requires every id to be finalized).
-              // Anything PRICED can form a combined offer — a factory-finalized
-              // quote or a self-calculated draft. Restricting this to finalized
-              // meant a customer holding only estimates could never get a
-              // combined offer (Eli 2026-08-02).
-              const finalizedIds = g.rows
-                .filter(
-                  (r) => r.finalPricing && (r.status === "finalized" || r.status === "draft")
-                )
-                .map((r) => r.id);
-              const canSendCombined = finalizedIds.length >= 1;
-              const combinedPdfHref = `/api/factory/combine/pdf?ids=${finalizedIds.join(",")}`;
-              const ghlUrl = g.rows[0]?.ghlUrl ?? null;
-              const sentCount = g.rows.filter((r) => r.sentToCustomerAt).length;
-              return (
-                <div
-                  key={g.leadSid}
-                  className="rounded-lg border border-border/60 bg-card/30 overflow-hidden"
-                >
-                  <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2">
-                    <button
-                      type="button"
-                      onClick={() => toggleCard(g.leadSid)}
-                      className="flex items-center gap-2 min-w-0 flex-1 text-right lux-tap"
-                    >
-                      <ChevronDown
-                        className={`size-4 shrink-0 text-muted-foreground transition-transform ${open ? "" : "-rotate-90"}`}
-                      />
-                      <span className="text-sm font-medium truncate min-w-0">
-                        {g.name ?? g.leadSid.slice(0, 20)}
-                      </span>
-                      <span className="text-xs rounded-full border border-border px-1.5 py-0.5 text-muted-foreground shrink-0">
-                        {g.rows.length} הצעות
-                      </span>
-                      <span className="text-[13px] text-muted-foreground tabular-nums shrink-0">
-                        {fmtDate(g.latestAt)}
-                      </span>
-                      {sentCount > 0 && (
-                        <span
-                          title={`${sentCount} הצעות נשלחו ללקוח`}
-                          className="shrink-0 inline-flex items-center gap-0.5 text-xs rounded-full border border-emerald-500/40 bg-emerald-500/15 text-emerald-400 px-1.5 py-0.5 font-medium"
-                        >
-                          <Check className="size-3" /> נשלח {sentCount}
-                        </span>
-                      )}
-                      <span className="hidden sm:flex items-center gap-1 shrink-0">
-                        {Object.entries(g.statusCounts).map(([st, n]) => (
-                          <span
-                            key={st}
-                            className={`text-xs rounded-full border px-1.5 py-0.5 ${STATUS_LABEL[st]?.cls ?? "bg-muted"}`}
-                          >
-                            {STATUS_LABEL[st]?.text ?? st} {n}
-                          </span>
-                        ))}
-                      </span>
-                    </button>
-                    <div className="flex flex-wrap items-center gap-0.5 shrink-0 max-w-full">
-                      {/* Combined-offer toolbar — same actions a single quote has.
-                          Eye opens the FULL combined view (boss breakdown of both
-                          quotes + customer-PDF link inside), matching the single-
-                          quote eye. Per Eli 2026-07-17: "the eye should open
-                          everything, not just the customer PDF." */}
-                      {canCalc && (
-                        <button
-                          type="button"
-                          onClick={() => setCalcGroup(g)}
-                          title="הצג הכל — פירוט מלא לבוס + PDF"
-                          className="size-7 rounded grid place-items-center text-muted-foreground hover:text-foreground hover:bg-secondary"
-                        >
-                          <Eye className="size-3.5" />
-                        </button>
-                      )}
-                      {canSendCombined && (
-                        <a
-                          href={combinedPdfHref}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          title="הורד PDF משולב ללקוח"
-                          className="size-7 rounded grid place-items-center text-muted-foreground hover:text-foreground hover:bg-secondary"
-                        >
-                          <Download className="size-3.5" />
-                        </a>
-                      )}
-                      <button
-                        type="button"
-                        onClick={() => setCalcGroup(g)}
-                        disabled={!canCalc}
-                        title={canCalc ? "ערוך / חישוב משולב" : "אין הצעות עם תשובת מפעל"}
-                        className="size-7 rounded grid place-items-center text-primary hover:bg-primary/10 disabled:opacity-40"
-                      >
-                        <Pencil className="size-3.5" />
-                      </button>
-                      {canSendCombined && (
-                        <button
-                          type="button"
-                          onClick={() =>
-                            handleSendCombined(g.leadSid, g.name, finalizedIds)
-                          }
-                          disabled={busyId === `combine:${g.leadSid}`}
-                          title="שלח הצעה משולבת ב-WhatsApp"
-                          className="size-7 rounded grid place-items-center text-muted-foreground hover:text-emerald-400 hover:bg-emerald-500/10 disabled:opacity-50"
-                        >
-                          {busyId === `combine:${g.leadSid}` ? (
-                            <Loader2 className="size-3.5 animate-spin" />
-                          ) : (
-                            <MessageCircle className="size-3.5" />
-                          )}
-                        </button>
-                      )}
-                      {finalizedIds.length >= 2 && (
-                        <button
-                          type="button"
-                          onClick={() => handleCloseDealGroup(g.leadSid, finalizedIds)}
-                          disabled={busyId === `closegroup:${g.leadSid}`}
-                          title={`סגור עסקה משולבת (${finalizedIds.length} מוצרים → עסקה אחת)`}
-                          className="lux-tap shrink-0 inline-flex items-center gap-1 text-xs rounded-full border border-amber-500/40 bg-amber-500/10 text-amber-400 px-2 py-0.5 hover:bg-amber-500/20 disabled:opacity-50"
-                        >
-                          {busyId === `closegroup:${g.leadSid}` ? <Loader2 className="size-3 animate-spin" /> : <CheckCircle2 className="size-3" />}
-                          סגור עסקה משולבת
-                        </button>
-                      )}
-                      <button
-                        type="button"
-                        onClick={() => handleDeleteGroup(g)}
-                        disabled={busyId === `group:${g.leadSid}`}
-                        title="מחק את כל הצעות הלקוח"
-                        className="size-7 rounded grid place-items-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 disabled:opacity-50"
-                      >
-                        {busyId === `group:${g.leadSid}` ? (
-                          <Loader2 className="size-3.5 animate-spin" />
-                        ) : (
-                          <Trash2 className="size-3.5" />
-                        )}
-                      </button>
-                      {ghlUrl && (
-                        <a
-                          href={ghlUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          title="פתח ב-GHL"
-                          className="size-7 rounded grid place-items-center text-muted-foreground hover:text-foreground hover:bg-secondary"
-                        >
-                          <ExternalLink className="size-3.5" />
-                        </a>
-                      )}
-                    </div>
-                  </div>
-                  {open && (
-                    <div className="border-t border-border/60 bg-background/30 px-2 py-2">
-                      <DraftVsFactoryStrip rows={g.rows} />
-                      <ul className="space-y-1">
-                        {g.rows.map((r) => renderQuoteRow(r))}
-                      </ul>
-                    </div>
-                  )}
-                </div>
-              );
-            })
-          )}
-        </div>
+        </details>
       </div>
 
       {payModal && (
@@ -1889,22 +1591,17 @@ function DraftVsFactoryStrip({ rows }: { rows: ApiQuoteRow[] }) {
 
 
 /**
- * The reminder panels — one shell, three uses.
+ * The reminder panels — one shell, three uses (ui-ux-pro-max, 18/09).
  *
- * They used to be three hand-rolled <ul>s of flex-wrap rows, so every row
- * wrapped at a different point and the whole thing read as a pile (Eli 02/09:
- * "זה רשימה נערמת"). Now every row is the same two-line block on a fixed grid,
- * the list scrolls instead of silently cutting off at 12, and each panel can
- * be worked in one pass: tick "בחל הכל", then one action for the lot.
+ * Every row is the same block: tick · name + details · labelled actions (they
+ * wrap under the name on a phone). Each panel can be worked in one pass: tick
+ * "בחר הכל", then one action for the lot. Colour AND words mark the kind.
  */
-const TONES = {
-  sky: { border: "border-sky-500/40", bg: "bg-sky-500/10", text: "text-sky-400", accent: "accent-sky-500" },
-  red: { border: "border-red-500/40", bg: "bg-red-500/10", text: "text-red-400", accent: "accent-red-500" },
-  amber: { border: "border-amber-500/40", bg: "bg-amber-500/10", text: "text-amber-400", accent: "accent-amber-500" },
-} as const;
+type Tone = "stop" | "go" | "warn";
 
 function AlertShell({
   tone,
+  icon: Icon,
   title,
   hint,
   ids,
@@ -1915,8 +1612,9 @@ function AlertShell({
   actions,
   children,
 }: {
-  tone: keyof typeof TONES;
-  title: React.ReactNode;
+  tone: Tone;
+  icon: LucideIcon;
+  title: string;
   hint: string;
   ids: string[];
   selectedIds: string[];
@@ -1927,118 +1625,120 @@ function AlertShell({
   actions?: React.ReactNode;
   children: React.ReactNode;
 }) {
-  const t = TONES[tone];
   const allOn = ids.length > 0 && selectedIds.length === ids.length;
   return (
-    <div className={`rounded-lg border ${t.border} ${t.bg} p-3 space-y-2`} dir="rtl">
+    <section className="ux-panel qh-alert" data-tone={tone} aria-label={title}>
       <div className="flex items-center justify-between gap-2 flex-wrap">
-        <div className={`text-xs font-semibold ${t.text} flex items-center gap-1.5`}>{title}</div>
-        <label className="inline-flex items-center gap-1.5 cursor-pointer text-[13px] text-muted-foreground hover:text-foreground">
-          <input
-            type="checkbox"
-            checked={allOn}
-            onChange={(e) => onToggleAll(e.target.checked)}
-            className={`${t.accent} size-3.5`}
-          />
+        <h2 className="flex items-center gap-2">
+          <Icon className="size-4 shrink-0" aria-hidden />
+          {title}
+        </h2>
+        <label className="qh-check">
+          <input type="checkbox" checked={allOn} onChange={(e) => onToggleAll(e.target.checked)} />
           בחר הכל
         </label>
       </div>
-      <p className="text-xs text-muted-foreground">{hint}</p>
+      <p className="d">{hint}</p>
 
       {selectedIds.length > 0 && (
-        <div className="flex items-center gap-2 flex-wrap rounded-md border border-border/60 bg-background/60 px-2.5 py-1.5">
-          <span className="text-[13px] font-medium tabular-nums">{selectedIds.length} מסומנות</span>
+        <div className="qh-bulk" aria-live="polite">
+          <span className="tnum">{selectedIds.length} מסומנות</span>
           {bulkBusy ? (
-            <span className="text-[13px] text-muted-foreground inline-flex items-center gap-1.5">
-              <Loader2 className="size-3 animate-spin" />
+            <span className="inline-flex items-center gap-2" style={{ color: "var(--lux-muted)" }}>
+              <Loader2 className="size-4 animate-spin" aria-hidden />
               {bulkBusy}
             </span>
           ) : (
             <>
               {actions}
-              <button
-                type="button"
-                onClick={onClear}
-                className="text-[13px] px-2 py-1 rounded-md border border-border text-muted-foreground hover:bg-secondary"
-              >
-                נקה בחירה
-              </button>
+              <BulkButton onClick={onClear}>נקה בחירה</BulkButton>
             </>
           )}
         </div>
       )}
 
-      <ul className="space-y-1 max-h-80 overflow-y-auto">{children}</ul>
-    </div>
+      <ul className="qh-items">{children}</ul>
+    </section>
   );
 }
 
-function BulkButton({
-  onClick,
-  children,
-  tone = "neutral",
-}: {
-  onClick: () => void;
-  children: React.ReactNode;
-  tone?: "neutral" | "good" | "bad";
-}) {
-  const cls =
-    tone === "good"
-      ? "border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/10"
-      : tone === "bad"
-        ? "border-red-500/40 text-red-400 hover:bg-red-500/10"
-        : "border-border text-muted-foreground hover:bg-secondary";
+function BulkButton({ onClick, children, tone }: { onClick: () => void; children: React.ReactNode; tone?: "go" | "danger" }) {
   return (
-    <button type="button" onClick={onClick} className={`text-[13px] px-2 py-1 rounded-md border ${cls}`}>
+    <button type="button" onClick={onClick} className={`ux-btn sm${tone ? ` ${tone}` : ""}`}>
       {children}
     </button>
   );
 }
 
-/** One reminder row: tick · two lines of detail · the row's own actions. */
+/** One reminder row: tick · name + details · the row's own actions. */
 function AlertRow({
-  tone,
   checked,
   onCheck,
   name,
   meta,
-  metaBadge,
   actions,
 }: {
-  tone: keyof typeof TONES;
   checked: boolean;
   onCheck: () => void;
   name: string;
   meta: React.ReactNode;
-  /** Price / status — on the second line, so the customer name keeps the full
-   *  width of the row. On a phone anything sharing that line squeezed the name
-   *  down to "שלמה …". */
-  metaBadge?: React.ReactNode;
   actions: React.ReactNode;
 }) {
   return (
-    <li
-      className={`flex items-center gap-2 rounded-md border px-2.5 py-2 transition-colors ${
-        checked ? "border-border bg-background/70" : "border-border/60 bg-background/40"
-      }`}
-    >
-      <input
-        type="checkbox"
-        checked={checked}
-        onChange={onCheck}
-        className={`${TONES[tone].accent} size-3.5 shrink-0`}
-      />
-      <div className="min-w-0 flex-1">
-        <div className="text-sm font-medium truncate">{name}</div>
-        {/* wrap as whole chips — without the nowrap the date and quote number
-            get squeezed to a character per line next to a status badge */}
-        <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground [&_span]:whitespace-nowrap">
-          {meta}
-          {metaBadge}
-        </div>
+    <li className="qh-item" data-on={checked || undefined}>
+      <label className="qh-check">
+        <input type="checkbox" checked={checked} onChange={onCheck} />
+        <span className="ux-sr">בחר את {name}</span>
+      </label>
+      <div className="main">
+        <div className="nm">{name}</div>
+        <div className="meta">{meta}</div>
       </div>
-      <div className="flex items-center gap-0.5 shrink-0">{actions}</div>
+      <div className="ux-acts">{actions}</div>
     </li>
+  );
+}
+
+/** A labelled action — 44px, icon + words (never an icon alone). */
+function Act({
+  icon: Icon,
+  label,
+  title,
+  onClick,
+  href,
+  newTab,
+  busy,
+  disabled,
+  tone,
+}: {
+  icon: LucideIcon;
+  label: string;
+  title?: string;
+  onClick?: () => void;
+  href?: string;
+  newTab?: boolean;
+  busy?: boolean;
+  disabled?: boolean;
+  tone?: "primary" | "go" | "warn" | "danger";
+}) {
+  const cls = `ux-btn sm${tone ? ` ${tone}` : ""}`;
+  const body = (
+    <>
+      {busy ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <Icon className="size-4" aria-hidden />}
+      {label}
+    </>
+  );
+  if (href) {
+    return (
+      <a className={cls} href={href} title={title} target={newTab ? "_blank" : undefined} rel={newTab ? "noopener noreferrer" : undefined}>
+        {body}
+      </a>
+    );
+  }
+  return (
+    <button type="button" className={cls} title={title} onClick={onClick} disabled={disabled || busy}>
+      {body}
+    </button>
   );
 }
 

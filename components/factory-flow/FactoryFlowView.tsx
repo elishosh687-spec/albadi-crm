@@ -8,7 +8,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Loader2, Search, X, User } from "lucide-react";
+import { Plus, Search, X } from "lucide-react";
 import { FactoryQuotePanelWidget } from "./FactoryQuotePanel.widget";
 import { QuotesHistoryView } from "./QuotesHistoryView";
 import { widgetUrl } from "./widget-url";
@@ -40,6 +40,7 @@ export function FactoryFlowView({ apiToken }: { apiToken: string }) {
   const [results, setResults] = useState<LeadOption[]>([]);
   const [loadingResults, setLoadingResults] = useState(false);
   const [open, setOpen] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(false);
   const [selectedSid, setSelectedSid] = useState<string | null>(null);
   const [context, setContext] = useState<LeadContext | null>(null);
   const [contextLoading, setContextLoading] = useState(false);
@@ -115,260 +116,128 @@ export function FactoryFlowView({ apiToken }: { apiToken: string }) {
     loadContext(lead.sid);
   };
 
-  const handleClear = () => {
+  const closePicker = () => {
+    setPickerOpen(false);
     setSelectedSid(null);
     setContext(null);
     setQuery("");
-    setOpen(true);
-    setTimeout(() => runSearch(""), 0);
+    setOpen(false);
   };
 
   const placeholder = useMemo(
-    () => (selectedSid ? "החלף לקוח..." : "חפש לפי שם / טלפון / sid"),
+    () => (selectedSid ? "החלף לקוח…" : "חיפוש לפי שם או טלפון"),
     [selectedSid]
   );
 
   return (
     <LuxShell className="ux ux-floor">
       <LuxTitle
-        overline="— Factory quotes"
-        subtitle="חפש לקוח כדי לפתוח או לשלוח הצעה חדשה למפעל."
+        overline="— Quotes"
+        subtitle="מה מחכה לך למעלה, ואז כל ההצעות לפי לקוח."
+        aside={
+          !pickerOpen && !selectedSid ? (
+            <button type="button" className="ux-btn primary" onClick={() => { setPickerOpen(true); setOpen(true); runSearch(""); }}>
+              <Plus className="size-4" aria-hidden /> הצעה חדשה
+            </button>
+          ) : null
+        }
       >
-        הצעות <LuxAccent>מהמפעל.</LuxAccent>
+        הצעות <LuxAccent>מחיר.</LuxAccent>
       </LuxTitle>
 
-      <div ref={containerRef} className="relative" style={{ marginBottom: 14 }}>
-        <div
-          className="relative"
-          style={{
-            background: "#211f1e",
-            borderRadius: 8,
-            boxShadow: "inset 0 0 0 1px rgba(69,70,77,0.2)",
-            display: "flex",
-            alignItems: "center",
-            padding: "13px 16px",
-            gap: 10,
-          }}
-        >
-          <Search className="size-4" style={{ color: "var(--lux-muted)" }} />
-          <input
-            type="text"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            onFocus={() => {
-              setOpen(true);
-              if (results.length === 0) runSearch(query.trim());
-            }}
-            placeholder={placeholder}
-            className="flex-1 text-right focus:outline-none"
-            style={{
-              background: "transparent",
-              border: 0,
-              fontSize: 14,
-              color: "#e6e1e0",
-            }}
-          />
-          {selectedSid && (
-            <button
-              type="button"
-              onClick={handleClear}
-              title="בחר ליד אחר"
-              className="grid place-items-center"
-              style={{
-                width: 24,
-                height: 24,
-                border: 0,
-                background: "transparent",
-                borderRadius: 6,
-                color: "var(--lux-muted)",
-                cursor: "pointer",
-              }}
-            >
-              <X className="size-4" />
+      {(pickerOpen || selectedSid) && (
+        <section className="ux-panel" style={{ marginBottom: 20 }} aria-labelledby="ff-new">
+          <div className="flex items-center justify-between gap-2">
+            <h2 id="ff-new" style={{ margin: 0, fontSize: 16, fontWeight: 500 }}>
+              {selectedSid ? "הצעה חדשה" : "הצעה חדשה — לאיזה לקוח?"}
+            </h2>
+            <button type="button" className="ux-btn sm" onClick={closePicker}>
+              <X className="size-4" aria-hidden /> סגור
             </button>
-          )}
-        </div>
+          </div>
 
-        {open && (
-          <div className="absolute z-30 mt-1 w-full rounded-lg border border-border bg-popover shadow-xl max-h-80 overflow-auto">
-            {loadingResults ? (
-              <div className="px-3 py-4 text-xs text-muted-foreground flex items-center gap-2 justify-center">
-                <Loader2 className="size-3.5 animate-spin" />
-                טוען…
+          <div ref={containerRef} className="relative" style={{ marginTop: 12 }}>
+            <label className="ux-search" style={{ marginBottom: 0 }}>
+              <Search className="size-4 shrink-0" aria-hidden />
+              <span className="ux-sr">חיפוש לקוח</span>
+              <input
+                type="search"
+                value={query}
+                autoFocus={!selectedSid}
+                onChange={(e) => setQuery(e.target.value)}
+                onFocus={() => {
+                  setOpen(true);
+                  if (results.length === 0) runSearch(query.trim());
+                }}
+                placeholder={placeholder}
+              />
+            </label>
+
+            {open && (
+              <div className="ff-results" role="listbox" aria-label="לקוחות">
+                {loadingResults ? (
+                  <div className="ux-skel" style={{ height: 120 }} aria-label="טוען" />
+                ) : results.length === 0 ? (
+                  <div style={{ padding: 16, textAlign: "center", color: "var(--lux-muted)", fontSize: 14 }}>לא נמצא לקוח.</div>
+                ) : (
+                  <ul>
+                    {results.map((r) => (
+                      <li key={r.sid}>
+                        <button type="button" role="option" aria-selected={r.sid === selectedSid} onClick={() => handlePick(r)}>
+                          <span className="min-w-0 flex-1">
+                            <span className="block" style={{ fontSize: 15 }}>{r.name || "(ללא שם)"}</span>
+                            <span className="block tnum" style={{ fontSize: 13.5, color: "var(--lux-muted)" }}>
+                              {r.phone || r.sid}
+                              {r.stage ? ` · ${r.stage}` : ""}
+                            </span>
+                          </span>
+                          <span className="tnum shrink-0" style={{ fontSize: 13.5, color: "var(--lux-muted)" }}>
+                            {new Date(r.updatedAt).toLocaleDateString("he-IL")}
+                          </span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </div>
-            ) : results.length === 0 ? (
-              <div className="px-3 py-4 text-xs text-muted-foreground text-center">
-                לא נמצאו לידים.
-              </div>
-            ) : (
-              <ul className="divide-y divide-border/60">
-                {results.map((r) => (
-                  <li key={r.sid}>
-                    <button
-                      type="button"
-                      onClick={() => handlePick(r)}
-                      className="w-full px-3 py-2 text-right hover:bg-accent flex items-center justify-between gap-2"
-                    >
-                      <div className="min-w-0 flex-1">
-                        <div className="text-sm font-medium truncate">
-                          {r.name || "(ללא שם)"}
-                        </div>
-                        <div className="text-[13px] text-muted-foreground tabular-nums truncate">
-                          {r.phone || r.sid}
-                          {r.stage ? ` · ${r.stage}` : ""}
-                        </div>
-                      </div>
-                      <div className="text-xs text-muted-foreground shrink-0 tabular-nums">
-                        {new Date(r.updatedAt).toLocaleDateString("he-IL")}
-                      </div>
-                    </button>
-                  </li>
-                ))}
-              </ul>
             )}
           </div>
-        )}
-      </div>
 
-      {!selectedSid && (
-        <div
-          className="text-center"
-          style={{
-            background: "var(--lux-card)",
-            borderRadius: 10,
-            padding: "32px 18px",
-            color: "var(--lux-muted)",
-            fontSize: 14,
-            boxShadow: "inset 0 0 0 1px var(--lux-line)",
-            marginBottom: 18,
-          }}
-        >
-          <User className="size-5 mx-auto mb-2 opacity-60" />
-          בחר ליד מהרשימה למעלה כדי להתחיל זרימת הצעת מפעל.
-        </div>
-      )}
+          {selectedSid && contextLoading && <div className="ux-skel" style={{ height: 160, marginTop: 14 }} aria-label="טוען נתוני לקוח" />}
 
-      {selectedSid && contextLoading && (
-        <div
-          className="text-center"
-          style={{
-            background: "#1d1b1a",
-            borderRadius: 10,
-            padding: "24px 18px",
-            color: "var(--lux-muted)",
-            fontSize: 14,
-            boxShadow: "inset 0 0 0 1px rgba(69,70,77,0.16)",
-            marginBottom: 16,
-          }}
-        >
-          <Loader2 className="size-4 mx-auto mb-2 animate-spin" />
-          טוען נתוני ליד…
-        </div>
-      )}
+          {selectedSid && contextError && (
+            <p className="ux-note" style={{ color: "#f0c0c0" }}>לא הצלחתי לטעון את הלקוח: {contextError}</p>
+          )}
 
-      {selectedSid && contextError && (
-        <div
-          style={{
-            background: "rgba(232,180,180,0.06)",
-            borderRadius: 10,
-            padding: "14px 18px",
-            color: "#e8b4b4",
-            fontSize: 14,
-            boxShadow: "inset 0 0 0 1px rgba(232,180,180,0.2)",
-            marginBottom: 16,
-          }}
-        >
-          ⚠️ {contextError}
-        </div>
-      )}
-
-      {selectedSid && context && (
-        <div className="space-y-4">
-          <div
-            className="flex items-center justify-between flex-wrap"
-            style={{
-              background: "#1d1b1a",
-              borderRadius: 8,
-              padding: "14px 18px",
-              gap: 10,
-              boxShadow: "inset 0 0 0 1px rgba(69,70,77,0.16)",
-            }}
-          >
-            <div className="flex items-center gap-3 min-w-0">
-              <User className="size-5" style={{ color: "#bec6e0" }} />
-              <div className="min-w-0">
-                <div style={{ fontSize: 15, color: "#e6e1e0", fontWeight: 500 }}>
-                  {context.lead.name || context.lead.phone || context.lead.sid}
+          {selectedSid && context && (
+            <div className="grid gap-4" style={{ marginTop: 14 }}>
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <div className="min-w-0">
+                  <div style={{ fontSize: 16 }}>{context.lead.name || context.lead.phone || context.lead.sid}</div>
+                  <div className="tnum" style={{ fontSize: 13.5, color: "var(--lux-muted)" }}>
+                    {context.lead.phone ?? "—"}
+                    {context.lead.stage ? ` · ${context.lead.stage}` : ""}
+                  </div>
                 </div>
-                <div
-                  style={{
-                    fontFamily: "var(--font-editorial-sans), Manrope, system-ui",
-                    fontSize: 12.5,
-                    color: "var(--lux-muted)",
-                    fontVariantNumeric: "tabular-nums",
-                  }}
-                >
-                  {context.lead.phone ?? "—"} · sid {context.lead.sid}
-                  {context.lead.stage ? ` · ${context.lead.stage}` : ""}
+                <div className="flex items-center gap-2 flex-wrap">
+                  {context.lead.quoteTotal && <span className="ux-pill" data-tone="go">הצעה: {context.lead.quoteTotal}</span>}
+                  {context.lead.followUpDate && <span className="ux-pill" data-tone="idle">מעקב: {context.lead.followUpDate}</span>}
                 </div>
               </div>
-            </div>
-            <div className="flex items-center gap-2">
-              {context.lead.quoteTotal && (
-                <span
-                  style={{
-                    padding: "5px 12px",
-                    borderRadius: 9999,
-                    fontSize: 12,
-                    color: "#d6c4ac",
-                    background: "rgba(214,196,172,0.08)",
-                    boxShadow: "inset 0 0 0 1px rgba(214,196,172,0.2)",
-                  }}
-                >
-                  ציטוט: {context.lead.quoteTotal}
-                </span>
-              )}
-              {context.lead.followUpDate && (
-                <span
-                  style={{
-                    padding: "5px 12px",
-                    borderRadius: 9999,
-                    fontSize: 12,
-                    color: "#c6c6cd",
-                    background: "#211f1e",
-                    boxShadow: "inset 0 0 0 1px rgba(69,70,77,0.2)",
-                  }}
-                >
-                  מעקב: {context.lead.followUpDate}
-                </span>
-              )}
-            </div>
-          </div>
 
-          <FactoryQuotePanelWidget
-            apiToken={apiToken}
-            leadId={context.lead.sid}
-            leadName={context.lead.name}
-            qState={(context.lead.qState as Record<string, unknown> | null) ?? null}
-            factorySpecDraft={(context.lead.factorySpecDraft as Record<string, unknown> | null) ?? null}
-          />
-        </div>
+              <FactoryQuotePanelWidget
+                apiToken={apiToken}
+                leadId={context.lead.sid}
+                leadName={context.lead.name}
+                qState={(context.lead.qState as Record<string, unknown> | null) ?? null}
+                factorySpecDraft={(context.lead.factorySpecDraft as Record<string, unknown> | null) ?? null}
+              />
+            </div>
+          )}
+        </section>
       )}
 
-      <div
-        style={{
-          marginTop: 18,
-          background: "var(--lux-card)",
-          borderRadius: 10,
-          padding: "16px 18px",
-          boxShadow: "inset 0 0 0 1px var(--lux-line)",
-        }}
-      >
-        <div className="lux-label" style={{ marginBottom: 10 }}>
-          היסטוריית הצעות מפעל
-        </div>
-        <QuotesHistoryView apiToken={apiToken} />
-      </div>
+      <QuotesHistoryView apiToken={apiToken} />
     </LuxShell>
   );
 }
