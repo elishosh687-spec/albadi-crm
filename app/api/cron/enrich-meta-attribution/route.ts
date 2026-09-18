@@ -11,6 +11,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { enrichMetaAttribution } from "@/lib/sheets/meta-attribution";
 import { pollGoodLeads } from "@/lib/meta/good-lead-poll";
 import { postFormAnswerNotes } from "@/lib/sheets/form-answers-note";
+import { retryFailedPurchases } from "@/lib/meta/purchase-retry";
 import { serializeError } from "@/lib/observability/log";
 import { withJob } from "@/lib/observability/jobs";
 
@@ -41,7 +42,8 @@ const run = withJob("enrich-meta-attribution", "meta", async (req: NextRequest, 
   try {
     if (dry) {
       const goodLeads = await pollGoodLeads({ dry: true });
-      return NextResponse.json({ ok: true, dry: true, goodLeads });
+      const purchaseRetry = await retryFailedPurchases({ dry: true });
+      return NextResponse.json({ ok: true, dry: true, goodLeads, purchaseRetry });
     }
     // 1. Fill leadgen ids from the Meta form sheets (past + new leads).
     const result = await enrichMetaAttribution();
@@ -63,9 +65,18 @@ const run = withJob("enrich-meta-attribution", "meta", async (req: NextRequest, 
     } catch (e) {
       formNotes = { error: e instanceof Error ? e.message : String(e) };
     }
+    // 3. Retry Purchase reports that failed at "סגור עסקה" (a transient error
+    //    used to leave the deal unreported forever). Non-fatal.
+    let purchaseRetry: Awaited<ReturnType<typeof retryFailedPurchases>> | { error: string };
+    try {
+      purchaseRetry = await retryFailedPurchases();
+    } catch (e) {
+      log.warn("purchase_retry.failed", { ...serializeError(e) });
+      purchaseRetry = { error: e instanceof Error ? e.message : String(e) };
+    }
     // The per-tick summary — this is how a dead cron gets noticed.
     log.info("tick.summary", { ...result });
-    return NextResponse.json({ ok: true, ...result, goodLeads, formNotes });
+    return NextResponse.json({ ok: true, ...result, goodLeads, formNotes, purchaseRetry });
   } catch (e) {
     log.error("enrich.failed", e);
     return NextResponse.json(

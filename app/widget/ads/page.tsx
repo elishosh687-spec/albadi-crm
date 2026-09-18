@@ -14,7 +14,8 @@
  */
 import { widgetPageAuthed } from "@/lib/widget/page-auth";
 import { buildAdPerformance } from "@/lib/analysis/ad-performance";
-import { checkMetaHealth } from "@/lib/meta/health";
+import { checkAdsHealth } from "@/lib/ads/ads-health";
+import { AdsHealthLine } from "@/components/ads/AdsHealthLine";
 import { getMetaReportingStatus } from "@/lib/meta/reporting-status";
 import { MetaReportPanel } from "@/components/ads/MetaReportPanel";
 import { AdRecommendationsView } from "@/components/ads/AdRecommendationsView";
@@ -48,6 +49,8 @@ export default async function AdsWidgetPage({
   }
 
   const active = view === "settings" || view === "report" ? view : "recommendations";
+  // One status for the whole tab, on every sub-tab (Eli: "שהכל עובד").
+  const adsHealth = await checkAdsHealth().catch(() => null);
   const tabHref = (v: string) =>
     `/widget/ads?widget_token=${encodeURIComponent(token)}${v === "recommendations" ? "" : `&view=${v}`}`;
   const subTabs = (
@@ -84,6 +87,7 @@ export default async function AdsWidgetPage({
       <div dir="rtl" style={{ padding: 16, color: INK }}>
         <h2 style={{ margin: "0 0 10px", fontSize: 17, fontWeight: 600 }}>מודעות מטא</h2>
         {subTabs}
+        <AdsHealthLine health={adsHealth} />
         {active === "settings" ? (
           <AdRecommendationSettingsView apiToken={token} />
         ) : (
@@ -94,9 +98,8 @@ export default async function AdsWidgetPage({
   }
 
   const sinceDays = days === "30" ? 30 : days === "90" ? 90 : undefined;
-  const [report, health, reporting] = await Promise.all([
+  const [report, reporting] = await Promise.all([
     buildAdPerformance({ sinceDays }),
-    checkMetaHealth().catch(() => null),
     getMetaReportingStatus().catch(() => null),
   ]);
   const { totals } = report;
@@ -229,6 +232,7 @@ export default async function AdsWidgetPage({
     <div dir="rtl" style={{ padding: 16, color: INK }}>
       <h2 style={{ margin: "0 0 10px", fontSize: 17, fontWeight: 600 }}>מודעות מטא</h2>
       {subTabs}
+      <AdsHealthLine health={adsHealth} />
       <div
         style={{
           display: "flex",
@@ -319,34 +323,6 @@ export default async function AdsWidgetPage({
           ) : null}
         </>
       )}
-
-      {/* Health strip — the loop fails silently, so surface it here. */}
-      {health ? (
-        <div
-          style={{
-            marginTop: 18,
-            padding: "10px 12px",
-            border: `1px solid ${health.ok ? LINE : "rgba(224,138,138,0.35)"}`,
-            borderRadius: 8,
-            background: health.ok ? "transparent" : "rgba(224,138,138,0.06)",
-          }}
-        >
-          <div style={{ fontSize: 12.5, fontWeight: 600, marginBottom: 6 }}>
-            {health.ok ? "✓ החיבור למטא תקין" : "⚠ יש בעיה בדיווח למטא"}
-          </div>
-          {health.checks.map((c) => (
-            <div
-              key={c.key}
-              style={{ fontSize: 11.5, color: MUTED, lineHeight: 1.7 }}
-            >
-              <span style={{ color: c.ok ? "#7dd3a0" : "#e08a8a" }}>
-                {c.ok ? "●" : "●"}
-              </span>{" "}
-              {c.label}: {c.detail}
-            </div>
-          ))}
-        </div>
-      ) : null}
 
       {/* Per-lead proof. The counters above can say "all reported" while a
           specific deal never reached Meta — that is exactly how the ₪13,475
