@@ -9,6 +9,9 @@
  * (and once on recovery) — with the Hebrew reason, which is why this THROWS
  * rather than answering a bare 5xx.
  *
+ * It also fails on any red line of the tab's status strip (checkAdsHealth),
+ * so every part of the ads feature reaches WhatsApp, not only Meta reading.
+ *
  * Data warnings (a lead without an Ad ID, a name with two IDs) are logs only:
  * they are facts about the data, not a broken connection. A poorly performing
  * ad is never an alert.
@@ -19,6 +22,11 @@
 import { NextResponse } from "next/server";
 import { withJob } from "@/lib/observability/jobs";
 import { buildRecommendations } from "@/lib/ads/build-recommendations";
+import { checkAdsHealth } from "@/lib/ads/ads-health";
+
+/** Checks this run must not alert on: its own previous result, and jobs the
+ *  watchdog already WhatsApps about directly. */
+const NOT_ALERTED_HERE = new Set(["meta-read", "job:ads-evidence", "job:enrich-meta-attribution"]);
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -40,6 +48,15 @@ const run = withJob("ads-evidence", "meta", async (req, log) => {
   const h = report.health;
   if (!h.meta.ok) {
     throw new Error(`המלצות המודעות: ${h.meta.reason}`);
+  }
+  // Everything else the מודעות tab's status line checks — CAPI connection,
+  // lead→ad attribution, good-lead reporting, Purchase reports — alerts too
+  // (Eli, 18/09: "על כל פיצר מודעות … אם משהו לא עובד תכתוב בווצאפ").
+  // ponytail: one incident for any mix of problems; a second problem that
+  // appears while the first is still open does not re-alert.
+  const broken = (await checkAdsHealth()).checks.filter((c) => !c.ok && !NOT_ALERTED_HERE.has(c.key));
+  if (broken.length) {
+    throw new Error(`מודעות — ${broken.map((c) => `${c.label}: ${c.detail}`).join(" · ")}`);
   }
   const summary = {
     ok: true,

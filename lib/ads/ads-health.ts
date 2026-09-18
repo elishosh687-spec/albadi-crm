@@ -17,6 +17,7 @@ import { sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { checkMetaHealth, type MetaHealthCheck } from "@/lib/meta/health";
 import { checkJobs, type JobCheck } from "@/lib/observability/jobs";
+import { RETRY_WINDOW_DAYS } from "@/lib/meta/purchase-retry";
 
 export type AdsHealthCheck = MetaHealthCheck;
 
@@ -42,7 +43,7 @@ export function purchaseCheck(rows: PurchaseRow[]): AdsHealthCheck {
     detail:
       retryable.length === 0
         ? "כל העסקאות מליד ממטא דווחו"
-        : `${retryable.map((r) => r.name).join(", ")} — הדיווח נכשל (${retryable[0].error.slice(0, 80)}). ננסה שוב אוטומטית בריצה היומית בבוקר.`,
+        : `${retryable.map((r) => r.name).join(", ")} — לא דווח (${retryable[0].error.slice(0, 80)}). ננסה שוב אוטומטית בריצה היומית בבוקר.`,
   };
 }
 
@@ -95,12 +96,21 @@ export async function checkAdsHealth(): Promise<AdsHealth> {
   }
 
   const pr = await db.execute<{ name: string | null; err: string; has_key: boolean }>(sql`
-    SELECT COALESCE(l.name, q.manychat_sub_id) AS name, q.meta_purchase_error AS err,
+    SELECT DISTINCT ON (COALESCE(q.deal_group_id, q.id))
+           COALESCE(l.name, q.manychat_sub_id) AS name,
+           COALESCE(q.meta_purchase_error, 'לא נשלח בסגירת העסקה') AS err,
            (l.meta_leadgen_id IS NOT NULL OR l.meta_fbclid IS NOT NULL) AS has_key
     FROM factory_quote_requests q
     LEFT JOIN leads l ON trim(l.manychat_sub_id) = trim(q.manychat_sub_id)
-    WHERE q.meta_purchase_error IS NOT NULL AND q.meta_purchase_sent_at IS NULL
-      AND q.deleted_at IS NULL`);
+    WHERE q.meta_purchase_sent_at IS NULL AND q.deleted_at IS NULL
+      -- Failed, or never stamped at all (Elran, 03/09: the send was cut off
+      -- mid-flight and left no trace). Same window as the daily retry.
+      AND (q.meta_purchase_error IS NOT NULL
+           OR (q.closed_deal_at > now() - make_interval(days => ${RETRY_WINDOW_DAYS})
+               AND q.closed_deal_at < now() - interval '10 minutes'))
+      -- A combined deal is reported once, on its primary member.
+      AND NOT EXISTS (SELECT 1 FROM factory_quote_requests o
+                      WHERE o.deal_group_id = q.deal_group_id AND o.meta_purchase_sent_at IS NOT NULL)`);
   checks.push(purchaseCheck(pr.rows.map((r) => ({ name: (r.name ?? "—").split("|")[0].trim(), error: r.err, hasKey: Boolean(r.has_key) }))));
 
   checks.push(jobCheck(byJob.get("enrich-meta-attribution"), "משימה יומית — שיוך ודיווח למטא"));

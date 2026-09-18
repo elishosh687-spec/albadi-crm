@@ -183,10 +183,17 @@ fails the build if a Graph write appears in `lib/ads/`, `app/api/widget/ads/`,
 - **Health**: one status line on every sub-tab (`lib/ads/ads-health.ts`); the
   daily `ads-evidence` job (`/api/cron/ads-evidence-check`, 06:30 UTC) throws the
   Hebrew reason on a broken Meta/CRM read, so the watchdog WhatsApps Eli.
+  Since 18/09 it ALSO throws on any red line of that status strip (CAPI,
+  attribution, good-lead reporting, Purchase reports) — Eli wants every part of
+  the ads feature on WhatsApp. Job lines are excluded (the watchdog alerts them
+  directly). One incident per mix of problems. `pollGoodLeads` now throws when
+  every GHL tag search fails — it used to return "nobody tagged" = green.
 - **Purchase retry**: `lib/meta/purchase-retry.ts` inside the daily
   enrich-meta-attribution job resends a Purchase that FAILED at "סגור עסקה"
-  (סהר צור, 16/09, transient "fetch failed") — only with an attribution key,
-  value > 0, closed ≤ 45 days.
+  (סהר צור, 16/09, transient "fetch failed") or was never stamped at all —
+  the send was `void` (fire-and-forget), Vercel froze it mid-flight, and
+  Elran (closed 03/09) left no trace until 18/09. It is awaited now. Only
+  with an attribution key, value > 0, closed ≤ 45 days.
 - **Initial statuses** came from the registry in `marketing/albadi/account/performance/meta-ads.md`
   via `scripts/ad-review-seed-proposal.ts` → reviewed `scripts/data/ad-review-seed.json`
   → `scripts/seed-ad-review-state.ts --go` (28 Ad IDs). A name's status goes

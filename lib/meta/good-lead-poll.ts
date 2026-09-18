@@ -51,13 +51,22 @@ export async function pollGoodLeads(
 ): Promise<GoodLeadPollResult> {
   // 1. Every contact carrying any good-lead tag.
   const contactIds = new Set<string>();
+  let lastSearchError: unknown = null;
+  let searchFailures = 0;
   for (const tag of GOOD_LEAD_TAGS) {
     try {
       const rows = await searchContactsByTag(tag);
       rows.forEach((c) => c.id && contactIds.add(c.id));
     } catch (e) {
+      searchFailures++;
+      lastSearchError = e;
       log.warn("good_lead_poll.tag_search_failed", { tag, ...serializeError(e) });
     }
+  }
+  // Every search failed = GHL is unreachable, not "nobody is tagged". Returning
+  // zero here painted the health line green through a dead GHL connection.
+  if (searchFailures === GOOD_LEAD_TAGS.length) {
+    throw new Error(`חיפוש תגיות ב-GHL נכשל: ${lastSearchError instanceof Error ? lastSearchError.message : String(lastSearchError)}`);
   }
   if (contactIds.size === 0) {
     return { tagged: 0, matched: 0, sent: 0, failed: 0, errors: [], unattributable: 0, unattributableNames: [] };
