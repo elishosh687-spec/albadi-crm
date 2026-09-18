@@ -22,6 +22,8 @@ const log = logger("analysis");
 export interface AdPerformanceRow {
   adName: string;
   adId: string | null;
+  /** Every normalized Meta Ad ID behind this name (copies share a name). */
+  adIds: string[];
   campaignName: string | null;
   leads: number;
   /** Reached an engaged pipeline stage (DISCAVERY / FACTORY_WAIT / CONSIDERATION / WON). */
@@ -192,6 +194,7 @@ export async function buildAdPerformance(
       return {
         adName: r.ad,
         adId: r.ad_id,
+        adIds: ids,
         campaignName: r.campaign,
         leads,
         engaged,

@@ -23,7 +23,7 @@ import {
 import { SETTING_HELP } from "@/lib/ads/settings-help";
 import { RECOMMENDATION_LABELS, recommend, type RecommendationCode } from "@/lib/ads/recommendation-engine";
 import type { RecommendationsReport } from "@/lib/ads/assemble";
-import { CODE_TONE, TONE_CLASS } from "./AdRecommendationsView";
+import { CODE_TONE, TONE_CLASS } from "./ReviewEditor";
 
 type Policy = { revision: number; settings: AdRecommendationSettings; updatedAt: string | null; actor: string | null; isDefault: boolean };
 type Revision = { revision: number; changedKeys: string[]; actor: string | null; createdAt: string };
@@ -143,13 +143,13 @@ export function AdRecommendationSettingsView({ apiToken }: { apiToken: string })
 
   return (
     <section dir="rtl" className="space-y-4">
-      <div className="inline-flex items-center gap-1 text-[11px] text-emerald-300/90">
+      <div className="inline-flex items-center gap-1 text-[13px] text-emerald-300/90">
         <ShieldCheck className="size-3.5" /> ההגדרות משנות המלצות בלבד. הן אינן מפעילות או עוצרות מודעות ב-Meta.
       </div>
 
       {policy && (
         <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-          <span className="text-[11px]">
+          <span className="text-[13px]">
             גרסה {policy.revision}
             {policy.isDefault ? " · ברירת המחדל מ-18/09" : ""}
             {policy.updatedAt ? ` · ${new Date(policy.updatedAt).toLocaleDateString("he-IL")}` : ""}
@@ -159,7 +159,7 @@ export function AdRecommendationSettingsView({ apiToken }: { apiToken: string })
               <RotateCcw className="size-3.5" /> איפוס
             </button>
             <button type="button" onClick={save} disabled={busy || !dirty || (validation !== null && !validation.ok)}
-              className="lux-cta-champagne disabled:cursor-not-allowed disabled:opacity-50" style={{ minHeight: 36, padding: "0 14px", fontSize: 12 }}>
+              className="lux-cta-champagne disabled:cursor-not-allowed disabled:opacity-50" style={{ minHeight: 44, padding: "0 18px", fontSize: 14 }}>
               {busy ? <Loader2 className="size-3.5 animate-spin" /> : <Save className="size-3.5" />}
               {busy ? "שומר…" : dirty ? `שמור ${dirtyKeys.length} שינויים` : "נשמר"}
             </button>
@@ -224,14 +224,14 @@ export function AdRecommendationSettingsView({ apiToken }: { apiToken: string })
               {preview.changes.map((c) => (
                 <li key={c.adId} className="flex flex-wrap items-center gap-1.5">
                   <span style={{ unicodeBidi: "isolate", direction: "ltr" }}>{c.name}</span>
-                  <span className={`rounded-full border px-2 py-0.5 text-[10px] ${TONE_CLASS[CODE_TONE[c.from]]}`}>{RECOMMENDATION_LABELS[c.from]}</span>
+                  <span className={`rounded-full border px-2 py-0.5 text-xs ${TONE_CLASS[CODE_TONE[c.from]]}`}>{RECOMMENDATION_LABELS[c.from]}</span>
                   ←
-                  <span className={`rounded-full border px-2 py-0.5 text-[10px] ${TONE_CLASS[CODE_TONE[c.to]]}`}>{RECOMMENDATION_LABELS[c.to]}</span>
+                  <span className={`rounded-full border px-2 py-0.5 text-xs ${TONE_CLASS[CODE_TONE[c.to]]}`}>{RECOMMENDATION_LABELS[c.to]}</span>
                 </li>
               ))}
             </ul>
           )}
-          <div className="text-[11px] text-sky-100/70">סטטוסים מאושרים לא משתנים בשמירה. שינוי התגית משפיע על הספירה רק אחרי שמירה.</div>
+          <div className="text-[13px] text-sky-100/70">סטטוסים מאושרים לא משתנים בשמירה. שינוי התגית משפיע על הספירה רק אחרי שמירה.</div>
         </div>
       )}
 
@@ -266,7 +266,7 @@ export function AdRecommendationSettingsView({ apiToken }: { apiToken: string })
       {revisions.length > 0 && (
         <details className="rounded-lg border border-border/60 bg-background/20">
           <summary className="cursor-pointer list-none px-4 py-3 text-sm font-medium">היסטוריית גרסאות</summary>
-          <ul className="space-y-1 border-t border-border/50 p-3 text-[11px] text-muted-foreground">
+          <ul className="space-y-1 border-t border-border/50 p-3 text-[13px] text-muted-foreground">
             {revisions.map((r) => (
               <li key={r.revision}>
                 <strong className="text-foreground">גרסה {r.revision}</strong> · {new Date(r.createdAt).toLocaleString("he-IL")} ·{" "}
@@ -285,7 +285,7 @@ export function AdRecommendationSettingsView({ apiToken }: { apiToken: string })
               className="lux-tap inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-xs">
               <ClipboardCopy className="size-3.5" /> העתק
             </button>
-            <pre className="max-h-80 overflow-auto whitespace-pre-wrap rounded-md border border-border/60 bg-background/60 p-3 text-[11px] leading-5 text-muted-foreground">{markdown}</pre>
+            <pre className="max-h-80 overflow-auto whitespace-pre-wrap rounded-md border border-border/60 bg-background/60 p-3 text-[13px] leading-5 text-muted-foreground">{markdown}</pre>
           </div>
         </details>
       )}
@@ -337,13 +337,13 @@ function SettingField({
                 else onChange(Number(raw));
               }}
               className="w-20 rounded-md border border-border bg-background/60 px-2 py-1.5 text-xs" />
-            <span className="w-11 text-[11px] text-muted-foreground" style={{ unicodeBidi: "isolate", direction: undefined }}>{label?.unit ?? ""}</span>
+            <span className="w-11 text-[13px] text-muted-foreground" style={{ unicodeBidi: "isolate", direction: undefined }}>{label?.unit ?? ""}</span>
           </span>
         )}
       </div>
-      {error && <p className="mt-1 text-[11px] text-red-300">{error}</p>}
+      {error && <p className="mt-1 text-[13px] text-red-300">{error}</p>}
       {open && (
-        <div className="mt-1 space-y-1 text-[11px] leading-5 text-muted-foreground">
+        <div className="mt-1 space-y-1 text-[13px] leading-5 text-muted-foreground">
           {help && <p>{help.help}</p>}
           {help?.whenUnset && <p>כשריק: {help.whenUnset}</p>}
           {isSpendGate && typeof value === "number" && daily > 0 && <p>≈ {Math.ceil(value / daily)} ימי מסירה ב-₪{daily} ליום.</p>}

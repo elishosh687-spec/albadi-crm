@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   aggregateLossReasons,
   buildBotFunnel,
+  funnelSteps,
   normalizeLossReason,
   percentage,
   summarizeProfits,
@@ -81,5 +82,26 @@ describe("sales funnel analytics", () => {
       averageProfitIls: null,
       medianProfitIls: null,
     });
+  });
+});
+
+describe("funnelSteps", () => {
+  const row = (event: string, uniqueLeads: number, attempts = uniqueLeads) => ({ event, label: event, attempts, uniqueLeads });
+
+  it("gives a drop % per step and marks only the biggest drop", () => {
+    const s = funnelSteps([row("a", 326), row("b", 205), row("c", 174), row("d", 101)]);
+    expect(s.map((x) => x.dropPct)).toEqual([null, 37, 15, 42]);
+    expect(s.map((x) => x.worst)).toEqual([false, false, false, true]);
+    expect(s[3].ofStart).toBe(31);
+  });
+
+  it("shows an unrecorded step as empty, not as a 100% drop", () => {
+    const s = funnelSteps([row("a", 100), row("b", 0, 0)]);
+    expect(s[1]).toMatchObject({ empty: true, dropPct: null, worst: false });
+  });
+
+  it("does not invent a drop when a later event count goes up", () => {
+    const s = funnelSteps([row("a", 100), row("b", 150)]);
+    expect(s[1].dropPct).toBeNull();
   });
 });

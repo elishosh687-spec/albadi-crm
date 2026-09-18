@@ -71,7 +71,7 @@ export default function PlaysEditor({
               padding: 10,
             }}
           >
-            <div style={{ fontSize: 11, color: "#6ee7b7", marginBottom: 6 }}>
+            <div style={{ fontSize: 12.5, color: "#6ee7b7", marginBottom: 6 }}>
               {BLOCKER_LABEL[k]}
             </div>
             <Field label="כותרת">
@@ -120,7 +120,7 @@ export default function PlaysEditor({
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <label style={{ display: "block", marginBottom: 8 }}>
-      <div style={{ fontSize: 11, color: "#71717a", marginBottom: 3 }}>{label}</div>
+      <div style={{ fontSize: 12.5, color: "var(--lux-muted, #a1a1aa)", marginBottom: 3 }}>{label}</div>
       {children}
     </label>
   );

@@ -15,6 +15,8 @@ export const dynamic = "force-dynamic";
 
 interface SearchParams {
   widget_token?: string;
+  /** Settings group to open, e.g. `ads` (see SETTINGS_GROUPS). */
+  section?: string;
 }
 
 export default async function SettingsWidgetPage({
@@ -37,5 +39,5 @@ export default async function SettingsWidgetPage({
     );
   }
 
-  return <SettingsView apiToken={token} />;
+  return <SettingsView apiToken={token} initialSection={params.section} />;
 }

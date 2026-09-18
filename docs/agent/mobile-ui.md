@@ -120,3 +120,63 @@ renderer dies — that reads as "the page won't load", not as a bad fixture.
 **Footgun while developing:** Turbopack serves a **stale CSS chunk** — edits to
 globals.css silently don't appear, and restarting the dev server is not enough.
 `rm -rf .next/dev .next/cache` and restart. Two rounds were lost to this.
+
+## UI design rules — ui-ux-pro-max (permanent rule, 2026-09-18)
+
+Eli's rule: **every UI change or addition** (new tab, restyle, new control,
+new section) follows the `ui-ux-pro-max` skill
+(`~/.claude/skills.cold/ui-ux-pro-max/SKILL.md`; Codex: `~/.codex/skills/ui-ux-pro-max`,
+a symlink to the same folder). Four people use the hub, on desktop and phone,
+so usability rules are not optional.
+
+- **Style stays Silent Luxury.** The skill's `--design-system` generator
+  suggests a blue/light "Data-Dense Dashboard" with Fira fonts for this product
+  type — do NOT adopt it; its own `consistency` rule wins. Take its structure
+  (KPIs first, status colours + text, sort, row hover), not its palette.
+- Run the skill's searches for the area you touch
+  (`python3 ~/.claude/skills.cold/ui-ux-pro-max/scripts/search.py "<q>" --domain ux|chart`).
+- **Contrast:** secondary text ≥ 4.5:1 on the card surface. The original
+  `--lux-muted #8a7f74` measures 4.1–4.4:1 → use `#a0958a` (5.5:1) for
+  secondary text and `#958b80` as the faintest allowed text colour.
+- **Touch:** every button/chip/tab/input ≥ 44px tall (supersedes the old 34px
+  `lux-tap`). Small visuals (switches) get a 44px hit area.
+- **Type:** nothing under 12px; body 15px desktop, 16px phone.
+- Wrap long names (ad names) instead of ellipsis-truncating them.
+- Funnels: ≤ 8 stages, group unmeasured stages as "לא נמדד" (never 0%),
+  mark the biggest drop in colour **and** words, text summary for screen readers.
+- Loading = skeleton, save = "שומר…" → "נשמר" (aria-live), inline validation
+  on blur with the error under the field.
+- Every tab / sub-tab has its own URL (query or hash) so a colleague can be sent
+  straight to it.
+- Transitions 150–220ms; respect `prefers-reduced-motion`.
+- Before delivery: run the skill's Pre-Delivery Checklist, probe 375px +
+  landscape, and measure contrast/tap/font sizes in the browser — don't eyeball.
+
+### The `.ux-*` layer (built 2026-09-18 — ads, analytics, settings)
+
+- CSS lives in `app/globals.css` (block "`.ux-*` — the ui-ux-pro-max layer";
+  phone rules inside the first `@media (max-width: 767px)` block). A tab opts in
+  with `<LuxShell className="ux">`. Blast radius = `grep ux-`.
+- Pieces: `ux-chip`/`ux-btn` (44px), `ux-tabs` (underline tabs, `aria-current`
+  / `aria-selected`), `ux-todo` ("לטיפול עכשיו"), `ux-kpis`, `ux-list`+`ux-row`
+  (collapsed `<details>` rows; phone shows `.mline`), `ux-pill[data-tone]`,
+  `ux-panel`, `ux-alerts`, `ux-funnel`/`ux-fs`, `ux-table`, `ux-hbars`,
+  `ux-set`/`ux-side`/`ux-savebar` (settings), `ux-skel`, `ux-sr`, `ux-hit`
+  (44px hit area around a small glyph).
+- `.ux-set` gives every control in the (older) settings components a 44px floor.
+- **Deep links:** the hub forwards `?view=` and `?section=` to the tab iframe
+  (`HubShell` `deepLink`); a tab mirrors its sub-view back with `syncHubUrl`
+  / `<HubUrlSync>` (`lib/widget/hub-link.ts`). A link to ANOTHER tab uses
+  `hubHref(...)` + `target="_parent"` — a plain link inside the iframe would
+  load a hub inside the hub.
+- Settings groups: `SETTINGS_GROUPS` in `components/settings/SettingsView.tsx`
+  (`price` · `ship` · `team` · `calls` · `templates` · `ads`). Groups stay
+  mounted (hidden) so a half-edited group keeps its draft; one sticky save bar
+  lists what changed; `beforeunload` guards a dirty draft.
+- Root layout's rust `a {}` colour is scoped to the light pages
+  (`a:where(:not(.lux-theme *, .calc-lux *))`): unlayered, it used to beat every
+  Tailwind text colour on a link and read 2.45:1 on the dark hub.
+- Lux red is `--color-destructive: #ec8b8b` (the default read 4.48:1).
+- Probe used for verification: small text (<12px), tap targets (<44px, except
+  checkboxes and `.ux-hit`), contrast (<4.5:1, colours normalised via canvas),
+  overflow — run on every view at 1280, 375 and 812×375.

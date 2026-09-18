@@ -478,7 +478,7 @@ export default function PipelineAuditSection({ token }: { token: string }) {
                       e.stopPropagation();
                       applyGroup(target);
                     }}
-                    style={{ fontSize: 11.5, padding: "7px 14px" }}
+                    style={{ fontSize: 13, padding: "7px 14px" }}
                   >
                     ✓ אשר את כל {rows.length} הלידים
                   </LuxCTA>
@@ -589,7 +589,7 @@ function GroupCard({
         </span>
         <span
           style={{
-            fontSize: 11,
+            fontSize: 12.5,
             padding: "2px 8px",
             borderRadius: 99,
             color: chip.color,
@@ -616,7 +616,7 @@ function GroupCard({
         <div
           style={{
             padding: "0 16px 12px",
-            fontSize: 11.5,
+            fontSize: 13,
             color: "var(--lux-muted)",
             marginTop: -8,
             paddingInlineStart: 40,
@@ -701,7 +701,7 @@ function LagRow({
           <span
             style={{
               color: "var(--lux-muted)",
-              fontSize: 11,
+              fontSize: 12.5,
               width: 10,
               flexShrink: 0,
             }}
@@ -856,7 +856,7 @@ function LagRow({
             <div
               className="lux-label"
               style={{
-                fontSize: 9.5,
+                fontSize: 12,
                 marginBottom: 4,
                 letterSpacing: "0.14em",
               }}
@@ -920,7 +920,7 @@ function NoTaskLead({
           display: "flex",
           gap: 10,
           flexWrap: "wrap",
-          fontSize: 11,
+          fontSize: 12.5,
           fontVariantNumeric: "tabular-nums",
         }}
       >
@@ -941,7 +941,7 @@ function NoTaskLead({
         title='יוצר משימה לאיש המכירות ב-GHL — "לדבר עם הלקוח", להיום'
         style={{
           marginTop: 2,
-          fontSize: 11,
+          fontSize: 12.5,
           fontWeight: 600,
           padding: "6px 12px",
           borderRadius: 6,
@@ -1000,13 +1000,13 @@ const subGroupHeader: React.CSSProperties = {
 };
 
 const subGroupTitle: React.CSSProperties = {
-  fontSize: 11,
+  fontSize: 12.5,
   letterSpacing: "0.08em",
   color: "var(--lux-champagne)",
 };
 
 const subGroupCount: React.CSSProperties = {
-  fontSize: 10.5,
+  fontSize: 12,
   padding: "1px 7px",
   borderRadius: 99,
   color: "var(--lux-muted)",
@@ -1027,7 +1027,7 @@ const badgeCurrent: React.CSSProperties = {
 
 const badgeCurrentSmall: React.CSSProperties = {
   ...badgeCurrent,
-  fontSize: 11,
+  fontSize: 12.5,
   padding: "3px 9px",
   whiteSpace: "normal",
   wordBreak: "keep-all",
@@ -1048,7 +1048,7 @@ const badgeSuggested: React.CSSProperties = {
 
 const badgeSuggestedSmall: React.CSSProperties = {
   ...badgeSuggested,
-  fontSize: 11,
+  fontSize: 12.5,
   padding: "3px 9px",
   whiteSpace: "normal",
   wordBreak: "keep-all",
@@ -1074,13 +1074,13 @@ const stageBlock: React.CSSProperties = {
 };
 
 const arrowLabel: React.CSSProperties = {
-  fontSize: 9.5,
+  fontSize: 12,
   color: "var(--lux-muted)",
   letterSpacing: "0.14em",
 };
 
 const arrowDivider: React.CSSProperties = {
-  fontSize: 10,
+  fontSize: 12,
   color: "var(--lux-muted)",
   letterSpacing: "0.14em",
   textAlign: "center",
@@ -1088,7 +1088,7 @@ const arrowDivider: React.CSSProperties = {
 };
 
 const hint: React.CSSProperties = {
-  fontSize: 11,
+  fontSize: 12.5,
   color: "#a8a29a",
   lineHeight: 1.45,
   marginTop: 2,
@@ -1133,7 +1133,7 @@ function commitmentBadge(score: number): React.CSSProperties {
       ? { color: "#e0a96d", bg: "rgba(224,169,109,0.14)", edge: "rgba(224,169,109,0.30)" }
       : { color: "var(--lux-muted)", bg: "rgba(255,255,255,0.04)", edge: "rgba(69,70,77,0.20)" };
   return {
-    fontSize: 10.5,
+    fontSize: 12,
     padding: "2px 8px",
     borderRadius: 99,
     color: tone.color,

@@ -16,7 +16,10 @@ from `.claude/rules/` by path; Codex: open the doc from the index below).
 
 ## Hard rules
 1. **Widget first.** Build UI under `/widget`; `/dashboard/v3` is dead — an
-   alias may only import the widget component.
+   alias may only import the widget component. **Every UI change or addition
+   follows the ui-ux-pro-max skill** (`~/.claude/skills.cold/ui-ux-pro-max/SKILL.md`,
+   incl. its Pre-Delivery Checklist) inside the Silent Luxury style — see
+   `docs/agent/mobile-ui.md` → "UI design rules".
 2. **GHL owns shared fields** (name/phone/email/tags/stage/owner/tasks/lead
    score); the DB mirrors them and owns bot history + analytics.
 3. **The bot never moves `pipeline_stage`.** Stages (`V2_PIPELINE_STAGES`,

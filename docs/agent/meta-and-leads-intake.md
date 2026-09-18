@@ -156,7 +156,7 @@ per ad — leads · progressed (DISCAVERY+) · % (colour-coded; grey under 5 lea
 until a NEW campaign is built with **conversion leads** (Meta won't let an
 existing ad set switch), Meta only records these events.
 
-## Ad recommendations — "מודעות → המלצות / הגדרות בדיקה" (built 2026-09-18)
+## Ad recommendations — "מודעות" tab (built 2026-09-18, redesigned same day)
 
 Recommendation-only decision support per **exact Meta Ad ID**. Nothing in it can
 activate, pause, edit or budget a Meta object — `tests/unit/architecture/ads-read-only.test.ts`
@@ -192,6 +192,16 @@ fails the build if a Graph write appears in `lib/ads/`, `app/api/widget/ads/`,
   → `scripts/seed-ad-review-state.ts --go` (28 Ad IDs). A name's status goes
   only to the copy that produced the results (Eli, 18/09).
 - UI shape is minimal on purpose (Eli): no filters, one collapsed row per ad.
+- **Tab layout (ui-ux-pro-max redesign, 18/09):** `/widget/ads` default view =
+  "לטיפול עכשיו" (failed health checks + purchases not `sent`/`not_from_meta`,
+  then Meta-down / decision conflicts / structure warnings) → 4 KPIs with a
+  "1 מכל N" meaning → one row per ad NAME from `buildAdPerformance`, enriched
+  with the per-Ad-ID recommendation via `row.adIds` (`lib/ads/overview.ts`,
+  joined by `normalizeAdId`, never by name; several copies → the highest-spend
+  copy's pill). `?view=meta` = "מה עבר למטא" + connection health. The policy
+  editor moved to the settings tab (`?tab=settings&section=ads`);
+  `?view=settings` still renders it for old links. Old `recommendations` /
+  `report` values land on the default view.
 
 ## FB Lead Ads form pipeline (Sheet → Apps Script → CRM)
 

@@ -4,15 +4,14 @@ import { useEffect, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import {
-  AlertTriangle, ArrowLeft, Banknote, Bot, CheckCircle2, CircleDollarSign,
-  Clock3, Inbox, MessageSquare, PhoneCall, Search, Target, Users,
+  AlertTriangle, ArrowLeft, Bot, CheckCircle2, CircleDollarSign,
+  Clock3, Inbox, MessageSquare, PhoneCall, Search, Target,
 } from "lucide-react";
-import {
-  Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis,
-} from "recharts";
 import { cn } from "@/lib/cn";
-import { percentage } from "@/lib/analytics/funnel";
-import { STAGE_LABEL } from "@/lib/messaging/stage-meta";
+import { funnelSteps, percentage } from "@/lib/analytics/funnel";
+import { groupByLabel, sourceLabel, stageLabel } from "@/lib/analytics/labels";
+import { syncHubUrl } from "@/lib/widget/hub-link";
+import { LuxShell, LuxTitle, LuxAccent } from "@/components/widget-ui/lux";
 import {
   LIFECYCLE_LABEL, PRIORITY_LABEL, type LifecycleKey, type PriorityBand,
 } from "@/lib/crm/insights";
@@ -74,7 +73,6 @@ export function AnalyticsView({ data }: { data: AnalyticsData }) {
     }, 60_000);
     return () => window.clearInterval(timer);
   }, [router]);
-  const started = data.botFunnel.find((row) => row.event === "questionnaire_started")?.uniqueLeads ?? 0;
   const quoted = data.botFunnel.find((row) => row.event === "quote_sent")?.uniqueLeads ?? 0;
   const replied = data.botFunnel.find((row) => row.event === "post_quote_reply")?.uniqueLeads ?? 0;
   const totalQuality = data.qualification.reduce((sum, row) => sum + row.count, 0);
@@ -100,55 +98,73 @@ export function AnalyticsView({ data }: { data: AnalyticsData }) {
     else params.set("view", next);
     const query = params.toString();
     router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+    syncHubUrl({ view: next === "sales" ? null : next });
   }
 
+  // "3 things to handle" — each from a real number, each with a way to act.
+  const lossTotal = data.lossReasons.reduce((sum, row) => sum + row.count, 0);
+  const lossUnrecorded = data.lossReasons.find((row) => row.key === "UNRECORDED")?.count ?? 0;
+  const lossUnrecordedPct = percentage(lossUnrecorded, lossTotal);
+  const median = data.salesOutcomes.medianHumanResponseMinutes;
+  const updated = new Date(data.generatedAt).toLocaleString("he-IL", { dateStyle: "short", timeStyle: "short", timeZone: "Asia/Jerusalem" });
+
   return (
-    <div className="mx-auto flex w-full max-w-[1420px] flex-col gap-6 pb-16">
-      <header className="border-b border-border/70 pb-6">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-          <div className="max-w-2xl">
-            <p className="mb-2 text-xs font-medium tracking-[0.18em] text-primary">מרכז ביצועים</p>
-            <h1 className="text-3xl font-semibold tracking-tight md:text-4xl" style={{ fontFamily: "var(--font-display)" }}>
-              מה קורה מהליד הראשון ועד העסקה
-            </h1>
-            <p className="mt-2 text-sm leading-6 text-muted-foreground">
-              משפך, אבחון לידים ותפעול במקום אחד — מהכניסה הראשונה ועד העסקה, בלי מסכים כפולים.
-            </p>
-          </div>
-          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
-            <span className={cn("size-2 rounded-full", data.dataHealth?.status === "healthy" ? "bg-success" : data.dataHealth ? "bg-destructive" : "bg-warning")} aria-hidden="true" />
-            <span>{healthLabel}</span>
-            <span aria-hidden="true">·</span>
-            <span>מתרענן כל דקה · עודכן {new Date(data.generatedAt).toLocaleString("he-IL", { dateStyle: "short", timeStyle: "short", timeZone: "Asia/Jerusalem" })}</span>
-          </div>
-        </div>
-      </header>
+    <LuxShell className="ux">
+      <LuxTitle
+        overline="— Performance"
+        subtitle={<>מתעדכן כל דקה · עודכן {updated}</>}
+        aside={
+          <span className="ux-chip" role="status">
+            <span className="ux-dot" data-tone={data.dataHealth?.status === "healthy" ? undefined : data.dataHealth ? "bad" : "warn"} aria-hidden />
+            {healthLabel}
+          </span>
+        }
+      >
+        מהליד ועד <LuxAccent>העסקה.</LuxAccent>
+      </LuxTitle>
 
-      <section className="grid gap-4 lg:grid-cols-[minmax(0,1.65fr)_minmax(290px,0.75fr)]">
-        <div className="grid grid-cols-2 overflow-hidden rounded-2xl border border-border bg-card md:grid-cols-4">
-          <HeadlineMetric label="לידים חדשים השבוע" value={formatNumber(data.newLeadsWeek)} icon={<Users />} />
-          <HeadlineMetric label="הגיבו למחיר" value={formatNumber(data.salesOutcomes.replied)} icon={<MessageSquare />} />
-          <HeadlineMetric label="נסגרו" value={formatNumber(data.salesOutcomes.closed)} icon={<CheckCircle2 />} />
-          <HeadlineMetric label="הכנסות החודש" value={formatIls(data.wonMonthSumIls)} icon={<Banknote />} />
-        </div>
-        <div className="rounded-2xl border border-border bg-card p-5">
-          <div className="mb-4 flex items-center gap-2"><Target className="size-4 text-primary" /><h2 className="text-sm font-semibold">שלוש נקודות לבדיקה</h2></div>
-          <div className="space-y-3">
-            <SignalRow label="המרה מהתחלה למחיר" value={formatPercent(percentage(quoted, started))} />
-            <SignalRow label="תגובה אחרי מחיר" value={formatPercent(percentage(replied, quoted))} />
-            <SignalRow label="לידים שסווגו" value={formatPercent(classificationRate)} tone={classificationRate !== null && classificationRate < 50 ? "warning" : "default"} />
-          </div>
-        </div>
-      </section>
+      <div className="ux-kpis">
+        <Kpi k="לידים חדשים השבוע" v={formatNumber(data.newLeadsWeek)} e="נכנסו מכל המקורות" />
+        <Kpi k="הגיבו אחרי המחיר" v={formatNumber(data.salesOutcomes.replied)} e={quoted > 0 ? <><b>{formatPercent(percentage(replied, quoted))}</b> מאלה שקיבלו מחיר</> : "עוד לא נשלח מחיר"} />
+        <Kpi k="נסגרו" v={formatNumber(data.salesOutcomes.closed)} e={data.salesOutcomes.replied > 0 ? <><b>{formatPercent(percentage(data.salesOutcomes.closed, data.salesOutcomes.replied))}</b> מאלה שהגיבו</> : "—"} />
+        <Kpi k="הכנסות החודש" v={formatIls(data.wonMonthSumIls)} e={data.wonMonthSumIls > 0 ? "עסקאות שנסגרו החודש" : "עוד לא נסגרה עסקה החודש"} />
+      </div>
 
-      <nav className="flex w-full gap-1 overflow-x-auto rounded-xl border border-border bg-card p-1" role="tablist" aria-label="תחומי אנליטיקה">
+      <div className="ux-sechead"><h2>שלושה דברים לבדוק</h2></div>
+      <div className="ux-alerts">
+        <Alert
+          ok={classificationRate !== null && classificationRate >= 50}
+          title="סיווג לידים"
+          big={totalQuality === 0 ? "—" : formatNumber(unclassified)}
+          text={totalQuality === 0 ? "אין עדיין לידים לסיווג." : `לידים בלי סיווג איכות, מתוך ${formatNumber(totalQuality)}.`}
+          how="בלי סיווג אי אפשר לדעת איזה מקור מביא לידים טובים."
+          action={{ label: "לאבחון לידים", onClick: () => selectView("diagnosis") }}
+        />
+        <Alert
+          ok={lossUnrecordedPct === null || lossUnrecordedPct < 50}
+          title="הפסדים בלי סיבה"
+          big={formatPercent(lossUnrecordedPct)}
+          text={lossTotal === 0 ? "אין עדיין עסקאות אבודות." : `${formatNumber(lossUnrecorded)} מתוך ${formatNumber(lossTotal)} עסקאות אבודות נסגרו בלי סיבה.`}
+          how="בלי סיבה אי אפשר לדעת אם הבעיה היא מחיר, תזמון או התאמה."
+          action={{ label: "לרשימת הלידים", href: links.leads }}
+        />
+        <Alert
+          ok={median !== null && median <= 120}
+          title="זמן מענה של נציג"
+          big={formatMinutes(median)}
+          text="חציון מהצעת המחיר ועד שנציג חוזר ללקוח."
+          how={`ממוצע ניסיונות מעקב: ${data.salesOutcomes.avgFollowups === null ? "—" : data.salesOutcomes.avgFollowups.toFixed(1)} לליד.`}
+          action={{ label: "לתור העבודה", onClick: () => selectView("operations") }}
+        />
+      </div>
+
+      <div className="ux-tabs" role="tablist" aria-label="תחומי אנליטיקה">
         {VIEWS.map((item) => (
-          <button key={item.key} type="button" role="tab" aria-selected={view === item.key} onClick={() => selectView(item.key)}
-            className={cn("min-h-11 min-w-fit flex-1 rounded-lg px-4 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary", view === item.key ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted/50 hover:text-foreground")}>
+          <button key={item.key} type="button" role="tab" aria-selected={view === item.key} onClick={() => selectView(item.key)}>
             {item.label}
           </button>
         ))}
-      </nav>
+      </div>
 
       {view === "sales" && <SalesView data={data} />}
       {view === "diagnosis" && (
@@ -169,7 +185,7 @@ export function AnalyticsView({ data }: { data: AnalyticsData }) {
       )}
       {view === "operations" && <OperationsView data={data} links={links} />}
       {view === "bot" && <BotHealthView data={data} />}
-    </div>
+    </LuxShell>
   );
 }
 
@@ -305,57 +321,55 @@ function BotHealthView({ data }: { data: AnalyticsData }) {
 }
 
 function Panel({ title, description, children }: { title: string; description?: string; children: React.ReactNode }) {
-  return <section className="rounded-2xl border border-border bg-card p-4 md:p-6"><div className="mb-5"><h2 className="text-base font-semibold">{title}</h2>{description && <p className="mt-1 max-w-2xl text-sm leading-6 text-muted-foreground">{description}</p>}</div>{children}</section>;
+  return <section className="ux-panel"><h2>{title}</h2>{description ? <p className="d">{description}</p> : <div style={{ height: 12 }} />}{children}</section>;
 }
 
-function HeadlineMetric({ label, value, icon }: { label: string; value: string; icon: React.ReactNode }) {
-  return <div className="min-h-32 border-l border-b border-border p-4 last:border-l-0 md:border-b-0 md:p-5"><div className="flex items-center gap-2 text-xs text-muted-foreground [&_svg]:size-4 [&_svg]:text-primary">{icon}<span>{label}</span></div><p className="mt-4 text-2xl font-semibold tabular-nums md:text-3xl" style={{ fontFamily: "var(--font-display)" }}>{value}</p></div>;
+function Kpi({ k, v, e }: { k: string; v: string; e: React.ReactNode }) {
+  return <div className="ux-kpi"><div className="k">{k}</div><div className="v">{v}</div><div className="e">{e}</div></div>;
 }
 
-function SignalRow({ label, value, tone = "default" }: { label: string; value: string; tone?: "default" | "warning" }) {
-  return <div className="flex items-center justify-between gap-4 border-t border-border/60 pt-3 first:border-0 first:pt-0"><span className="text-sm text-muted-foreground">{label}</span><span className={cn("text-sm font-semibold tabular-nums", tone === "warning" && "text-warning")}>{value}</span></div>;
+function Alert({ ok, title, big, text, how, action }: { ok: boolean; title: string; big: string; text: string; how: string; action: { label: string; href?: string; onClick?: () => void } }) {
+  return (
+    <div className="ux-alert">
+      <div className={cn("top", ok && "ok")}>{ok ? <CheckCircle2 className="size-4" aria-hidden /> : <AlertTriangle className="size-4" aria-hidden />}{title}{ok ? " · תקין" : ""}</div>
+      <div className="big">{big}</div>
+      <div className="txt">{text}</div>
+      <div className="how">{how}</div>
+      {action.href ? (
+        <a href={action.href} target="_parent">{action.label} <ArrowLeft className="size-4" aria-hidden /></a>
+      ) : (
+        <a href="#" role="button" onClick={(e) => { e.preventDefault(); action.onClick?.(); }}>{action.label} <ArrowLeft className="size-4" aria-hidden /></a>
+      )}
+    </div>
+  );
 }
 
 function Funnel({ rows }: { rows: AnalyticsData["botFunnel"] }) {
-  const base = rows[0]?.uniqueLeads ?? 0;
+  const steps = funnelSteps(rows);
+  const measured = steps.filter((s) => !s.empty);
+  const empty = steps.filter((s) => s.empty);
+  const worst = steps.find((s) => s.worst);
+  const summary = `משפך הבוט: ${measured.map((s) => `${s.label} ${s.uniqueLeads}`).join(", ")}.${worst ? ` הנפילה הגדולה: ${worst.label}, ${worst.dropPct} אחוז.` : ""}`;
   return (
-    <div className="space-y-1">
-      {rows.map((row, index) => {
-        const rate = percentage(row.uniqueLeads, base);
-        const width = Math.max(row.uniqueLeads > 0 ? 2 : 0, rate ?? 0);
-        return (
-          <div
-            key={row.event}
-            className="grid grid-cols-[28px_minmax(0,1fr)_54px] items-center gap-3 py-2"
-          >
-            <span
-              className={cn(
-                "grid size-7 place-items-center rounded-full border text-xs tabular-nums",
-                index === 0
-                  ? "border-primary bg-primary text-primary-foreground"
-                  : "border-border bg-background text-muted-foreground"
-              )}
-            >
-              {index + 1}
-            </span>
-            <div className="min-w-0">
-              <div className="mb-1.5 flex items-center justify-between gap-3 text-sm">
-                <span className="truncate">{row.label}</span>
-                <span className="text-xs text-muted-foreground">
-                  {row.attempts !== row.uniqueLeads ? `${row.attempts} ניסיונות` : ""}
-                </span>
-              </div>
-              <div className="h-1.5 overflow-hidden rounded-full bg-muted/50">
-                <div className="h-full rounded-full bg-primary" style={{ width: `${width}%` }} />
-              </div>
-            </div>
-            <div className="text-left">
-              <div className="text-sm font-semibold tabular-nums">{formatNumber(row.uniqueLeads)}</div>
-              <div className="text-[11px] text-muted-foreground">{formatPercent(rate)}</div>
-            </div>
-          </div>
-        );
-      })}
+    <div className="ux-funnel" role="img" aria-label={summary}>
+      {measured.map((s) => (
+        <div key={s.event} className="ux-fs" data-worst={s.worst || undefined}>
+          <span>{s.label}{s.worst && <span className="tag">הנפילה הגדולה</span>}</span>
+          <div className="track"><div className="fill" style={{ width: `${Math.max(2, Math.min(100, s.ofStart ?? 0))}%` }} /></div>
+          <span className="val">
+            {formatNumber(s.uniqueLeads)}
+            <small>{s.dropPct !== null ? `−${s.dropPct}%` : s.attempts !== s.uniqueLeads ? `${formatNumber(s.attempts)} ניסיונות` : " "}</small>
+          </span>
+        </div>
+      ))}
+      {empty.length > 0 && (
+        <div className="ux-fs" data-empty>
+          <span>{empty.length === 1 ? empty[0].label : `${empty.length} שלבים נוספים`}</span>
+          <div className="track" />
+          <span className="val">אין נתונים</span>
+        </div>
+      )}
+      {empty.length > 1 && <p className="ux-note">{empty.map((s) => s.label).join(" · ")} — לא נרשם אף אירוע, לכן הם לא מוצגים כ־0%.</p>}
     </div>
   );
 }
@@ -380,7 +394,7 @@ function LargeMetric({ label, value, icon }: { label: string; value: string; ico
 }
 
 function ActionMetric({ icon, label, value, href, critical = false }: { icon: React.ReactNode; label: string; value: number; href: string; critical?: boolean }) {
-  return <Link href={href} className="group flex min-h-16 items-center gap-3 py-3"><span className={cn("grid size-9 place-items-center rounded-lg bg-muted/40 text-muted-foreground [&_svg]:size-4", critical && "bg-destructive/10 text-destructive")}>{icon}</span><span className="flex-1 text-sm">{label}</span><strong className={cn("text-lg tabular-nums", critical && "text-destructive")}>{formatNumber(value)}</strong><ArrowLeft className="size-4 text-muted-foreground transition-transform group-hover:-translate-x-1" /></Link>;
+  return <Link href={href} target={href.startsWith("/widget/hub") ? "_parent" : undefined} className="group flex min-h-16 items-center gap-3 py-3 text-foreground"><span className={cn("grid size-9 place-items-center rounded-lg bg-muted/40 text-muted-foreground [&_svg]:size-4", critical && "bg-destructive/10 text-destructive")}>{icon}</span><span className="flex-1 text-sm">{label}</span><strong className={cn("text-lg tabular-nums", critical && "text-destructive")}>{formatNumber(value)}</strong><ArrowLeft className="size-4 text-muted-foreground transition-transform group-hover:-translate-x-1" /></Link>;
 }
 
 function MessageMix({ label, value, total }: { label: string; value: number; total: number }) {
@@ -389,16 +403,46 @@ function MessageMix({ label, value, total }: { label: string; value: number; tot
 }
 
 function SourceTable({ rows }: { rows: AnalyticsData["sourcePerformance"] }) {
-  return <div className="overflow-x-auto"><table className="w-full min-w-[480px] text-sm"><thead><tr className="border-b border-border text-xs text-muted-foreground"><th className="pb-3 text-right font-medium">מקור</th><th className="pb-3 text-left font-medium">לידים</th><th className="pb-3 text-left font-medium">הצעות</th><th className="pb-3 text-left font-medium">נסגרו</th><th className="pb-3 text-left font-medium">המרה</th></tr></thead><tbody className="divide-y divide-border/60">{rows.map((row) => <tr key={row.source}><td className="max-w-52 truncate py-3">{row.source}</td><td className="py-3 text-left tabular-nums">{row.leads}</td><td className="py-3 text-left tabular-nums">{row.quoted}</td><td className="py-3 text-left tabular-nums">{row.won}</td><td className="py-3 text-left tabular-nums text-primary">{formatPercent(percentage(row.won, row.leads))}</td></tr>)}</tbody></table>{rows.length === 0 && <p className="py-10 text-center text-sm text-muted-foreground">אין עדיין מספיק נתוני מקור.</p>}</div>;
+  if (rows.length === 0) return <p className="py-10 text-center text-sm text-muted-foreground">אין עדיין מספיק נתוני מקור.</p>;
+  return (
+    <div style={{ overflowX: "auto" }}>
+      <table className="ux-table">
+        <caption className="ux-sr">לידים, הצעות, עסקאות והמרה לפי מקור</caption>
+        <thead><tr><th scope="col">מקור</th><th scope="col" className="n">לידים</th><th scope="col" className="n">הצעות</th><th scope="col" className="n">נסגרו</th><th scope="col" className="n">המרה</th></tr></thead>
+        <tbody>
+          {rows.map((row) => (
+            <tr key={row.source}>
+              <td>{sourceLabel(row.source)}</td>
+              <td className="n">{formatNumber(row.leads)}</td>
+              <td className="n">{formatNumber(row.quoted)}</td>
+              <td className="n">{formatNumber(row.won)}</td>
+              <td className="n">{formatPercent(percentage(row.won, row.leads))}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
 }
 
 function PipelineChart({ rows }: { rows: AnalyticsData["pipelineDist"] }) {
-  const chart = rows.map((row) => ({ ...row, label: STAGE_LABEL[row.stage] ?? row.stage, color: stageColor(row.stage) }));
-  return <div className="h-72 min-w-0" dir="ltr"><ResponsiveContainer width="100%" height="100%" minWidth={0}><BarChart data={chart} margin={{ top: 8, right: 4, bottom: 8, left: 0 }}><CartesianGrid vertical={false} stroke="oklch(0.3 0.02 270)" /><XAxis dataKey="label" stroke="oklch(0.6 0.02 270)" tick={{ fontSize: 11 }} interval={0} /><YAxis stroke="oklch(0.6 0.02 270)" tick={{ fontSize: 11 }} allowDecimals={false} /><Tooltip contentStyle={{ background: "oklch(0.22 0.02 270)", border: "1px solid oklch(0.3 0.02 270)", borderRadius: 10, fontSize: 12 }} cursor={{ fill: "oklch(0.25 0.02 270 / 0.45)" }} /><Bar dataKey="count" radius={[6, 6, 0, 0]}>{chart.map((entry) => <Cell key={entry.stage} fill={entry.color} />)}</Bar></BarChart></ResponsiveContainer></div>;
+  const grouped = groupByLabel(rows, (row) => stageLabel(row.stage));
+  const max = Math.max(1, ...grouped.map((g) => g.count));
+  if (grouped.length === 0) return <p className="py-10 text-center text-sm text-muted-foreground">אין לידים פעילים.</p>;
+  return (
+    <div className="ux-hbars">
+      {grouped.map((g) => (
+        <div key={g.label} className="ux-hbar">
+          <span>{g.label}</span>
+          <div className="track" aria-hidden><div className="fill" style={{ width: `${Math.max(2, (g.count / max) * 100)}%` }} /></div>
+          <span className="n">{formatNumber(g.count)}</span>
+        </div>
+      ))}
+    </div>
+  );
 }
 
 function formatNumber(value: number): string { return value.toLocaleString("he-IL"); }
 function formatPercent(value: number | null): string { return value === null ? "—" : `${value}%`; }
 function formatIls(value: number | null): string { return value === null ? "—" : `₪${Math.round(value).toLocaleString("he-IL")}`; }
 function formatMinutes(value: number | null): string { if (value === null) return "—"; if (value < 60) return `${Math.round(value)} דק׳`; if (value < 1440) return `${(value / 60).toFixed(1)} שעות`; return `${(value / 1440).toFixed(1)} ימים`; }
-function stageColor(stage: string): string { return ({ INTAKE: "#0ea5e9", DISCAVERY: "#06b6d4", FACTORY_WAIT: "#f59e0b", CONSIDERATION: "#f43f5e", WON: "#10b981", LOST: "#64748b" } as Record<string, string>)[stage] ?? "#64748b"; }

@@ -10,10 +10,11 @@
  * Mirrors the dashboard FactoryPricingForm 1:1 for layout and validation.
  */
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import {
   Save, Plus, Trash2, Ship, Plane, Loader2, RefreshCw,
   ArrowLeftRight, Percent, Truck, ChevronDown,
+  Coins, Users, PhoneCall, MessageSquareText, Megaphone,
 } from "lucide-react";
 import { cn } from "@/lib/cn";
 import type {
@@ -28,6 +29,47 @@ import { LuxShell, LuxTitle, LuxAccent } from "@/components/widget-ui/lux";
 import { AssigneeSection } from "@/components/settings/AssigneeSection";
 import { QuoteNotifySection } from "@/components/settings/QuoteNotifySection";
 import { CallAnalysisSettingsSection } from "@/components/settings/CallAnalysisSettingsSection";
+import { AdRecommendationSettingsView } from "@/components/ads/AdRecommendationSettingsView";
+import { syncHubUrl } from "@/lib/widget/hub-link";
+
+/**
+ * Groups of the settings screen (ui-ux-pro-max redesign): a side nav instead of
+ * one long page. The id is the URL `?section=` value, so a colleague can be sent
+ * straight to e.g. `?tab=settings&section=ads`.
+ */
+export type SettingsSection = "price" | "ship" | "team" | "calls" | "templates" | "ads";
+const SETTINGS_GROUPS: { id: SettingsSection; label: string; area: string; icon: typeof Truck }[] = [
+  { id: "price", label: "תמחור", area: "מכירות", icon: Coins },
+  { id: "ship", label: "שילוח", area: "מכירות", icon: Truck },
+  { id: "team", label: "שיוך והתראות", area: "צוות", icon: Users },
+  { id: "calls", label: "ניתוח שיחות", area: "צוות", icon: PhoneCall },
+  { id: "templates", label: "תבניות הודעה", area: "צוות", icon: MessageSquareText },
+  { id: "ads", label: "כללי בדיקת מודעות", area: "שיווק", icon: Megaphone },
+];
+export function parseSettingsSection(raw: string | undefined | null): SettingsSection {
+  return SETTINGS_GROUPS.some((g) => g.id === raw) ? (raw as SettingsSection) : "price";
+}
+
+/** Which save-bar label each changed config key gets, and its group. */
+const CONFIG_KEY_LABELS: Record<string, { label: string; group: "price" | "ship" }> = {
+  usdToIls: { label: "דולר → שקל", group: "price" },
+  usdToCny: { label: "דולר → יואן", group: "price" },
+  ilsToCny: { label: "שקל → יואן", group: "price" },
+  fxAutoUpdate: { label: "עדכון שער אוטומטי", group: "price" },
+  fxUpdatedAt: { label: "שער מטבע", group: "price" },
+  paymentTerms: { label: "תנאי תשלום", group: "price" },
+  defaultProfitMargin: { label: "רווח ברירת מחדל", group: "price" },
+  profitMarginByQuantity: { label: "רווח לפי כמות", group: "price" },
+  commissionPct: { label: "עמלת מכירות", group: "price" },
+  negotiationBufferAgorot: { label: "מרווח מיקוח", group: "price" },
+  estimatorShippingBufferPct: { label: "מרווח ביטחון שילוח", group: "price" },
+  estimatorShippingBufferLamPct: { label: "מרווח ביטחון שילוח — למינציה", group: "price" },
+  laminationPlateFeePerColorCny: { label: "עמלת למינציה", group: "price" },
+  seaCarriers: { label: "ספקי שילוח ים", group: "ship" },
+  activeSeaCarrierId: { label: "ספק ים פעיל", group: "ship" },
+  assumedShipmentCbm: { label: "נפח משלוח משוער", group: "ship" },
+  shippingOptions: { label: "אפשרויות שילוח", group: "ship" },
+}
 
 function widgetUrl(path: string, token: string): string {
   const u = new URL(path, "http://placeholder.local");
@@ -48,7 +90,8 @@ function slugify(s: string): string {
 
 const QTY_TIERS = ["1000", "3000", "5000", "10000"] as const;
 
-export function SettingsView({ apiToken }: { apiToken: string }) {
+export function SettingsView({ apiToken, initialSection }: { apiToken: string; initialSection?: string }) {
+  const [section, setSection] = useState<SettingsSection>(() => parseSettingsSection(initialSection));
   const [initial, setInitial] = useState<FactoryPricingConfig | null>(null);
   const [state, setState] = useState<FactoryPricingConfig | null>(null);
   const [loading, setLoading] = useState(true);
@@ -86,6 +129,39 @@ export function SettingsView({ apiToken }: { apiToken: string }) {
     [initial, state]
   );
 
+  const changedLabels = useMemo(() => {
+    if (!initial || !state) return [];
+    const keys = new Set([...Object.keys(initial), ...Object.keys(state)]) as Set<keyof FactoryPricingConfig>;
+    const out: { label: string; group: "price" | "ship" }[] = [];
+    for (const k of keys) {
+      if (JSON.stringify(initial[k]) === JSON.stringify(state[k])) continue;
+      const known = CONFIG_KEY_LABELS[k as string];
+      if (known && !out.some((o) => o.label === known.label)) out.push(known);
+      else if (!known) out.push({ label: String(k), group: "price" });
+    }
+    return out;
+  }, [initial, state]);
+
+  // A full navigation (another tab, a reload) would drop the draft.
+  useEffect(() => {
+    if (!dirty) return;
+    const h = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", h);
+    return () => window.removeEventListener("beforeunload", h);
+  }, [dirty]);
+
+  const selectSection = (next: SettingsSection) => {
+    setSection(next);
+    const url = new URL(window.location.href);
+    url.searchParams.set("section", next);
+    window.history.replaceState(window.history.state, "", url.pathname + url.search);
+    syncHubUrl({ section: next });
+    window.scrollTo({ top: 0 });
+  };
+
   const errors = useMemo(() => (state ? validate(state) : {}), [state]);
   const hasErrors = Object.keys(errors).length > 0;
 
@@ -101,7 +177,7 @@ export function SettingsView({ apiToken }: { apiToken: string }) {
       });
       const data = await res.json();
       if (data?.ok) {
-        setMsg({ ok: true, text: "נשמר ✓" });
+        setMsg({ ok: true, text: "נשמר. הצעות חדשות יחושבו לפי הערכים החדשים." });
         // Re-fetch to confirm what landed.
         await load();
       } else {
@@ -218,82 +294,58 @@ export function SettingsView({ apiToken }: { apiToken: string }) {
   const setAssumedCbm = (v: number) =>
     setState((s) => (s ? { ...s, assumedShipmentCbm: v > 0 ? v : 1 } : s));
 
-  if (loading) {
-    return (
-      <LuxShell>
-        <div
-          style={{
-            background: "var(--lux-card)",
-            borderRadius: 10,
-            padding: "48px 18px",
-            textAlign: "center",
-            color: "#8a7f74",
-            fontSize: 14,
-            boxShadow: "inset 0 0 0 1px var(--lux-line)",
-          }}
-        >
-          <Loader2 className="size-5 mx-auto mb-2 animate-spin opacity-70" />
+  const pricingDirty = changedLabels.some((c) => c.group === "price");
+  const shippingDirty = changedLabels.some((c) => c.group === "ship");
+
+  const configBody = (group: "price" | "ship") => {
+    if (loading) {
+      return (
+        <div className="ux-panel" role="status" style={{ textAlign: "center", color: "var(--lux-muted)", padding: "48px 18px" }}>
+          <Loader2 className="size-5 mx-auto mb-2 animate-spin opacity-70" aria-hidden />
           טוען הגדרות…
         </div>
-      </LuxShell>
-    );
-  }
-
-  if (loadError) {
-    return (
-      <LuxShell>
-        <div
-          className="flex items-center justify-between gap-3"
-          style={{
-            background: "rgba(232,180,180,0.06)",
-            borderRadius: 10,
-            padding: "14px 18px",
-            color: "#e8b4b4",
-            fontSize: 14,
-            boxShadow: "inset 0 0 0 1px rgba(232,180,180,0.2)",
-          }}
-        >
-          <span>⚠️ {loadError}</span>
-          <button
-            type="button"
-            onClick={load}
-            className="inline-flex items-center gap-1.5"
+      );
+    }
+    if (loadError || !state) {
+      return (
+          <div
+            className="flex items-center justify-between gap-3"
             style={{
-              padding: "7px 13px",
-              borderRadius: 9999,
-              fontSize: 12,
-              color: "#8a7f74",
-              background: "transparent",
-              border: 0,
-              boxShadow: "inset 0 0 0 1px rgba(69,70,77,0.22)",
-              cursor: "pointer",
+              background: "rgba(232,180,180,0.06)",
+              borderRadius: 10,
+              padding: "14px 18px",
+              color: "#e8b4b4",
+              fontSize: 14,
+              boxShadow: "inset 0 0 0 1px rgba(232,180,180,0.2)",
             }}
           >
-            <RefreshCw className="size-3.5" />
-            נסה שוב
-          </button>
-        </div>
-      </LuxShell>
-    );
-  }
+            <span>⚠️ {loadError}</span>
+            <button
+              type="button"
+              onClick={load}
+              className="inline-flex items-center gap-1.5"
+              style={{
+                padding: "7px 13px",
+                borderRadius: 9999,
+                fontSize: 12,
+                color: "var(--lux-muted)",
+                background: "transparent",
+                border: 0,
+                boxShadow: "inset 0 0 0 1px rgba(69,70,77,0.22)",
+                cursor: "pointer",
+              }}
+            >
+              <RefreshCw className="size-3.5" />
+              נסה שוב
+            </button>
+          </div>
+      );
+    }
+    return group === "price" ? pricingGroup(state) : shippingGroup(state);
+  };
 
-  if (!state) return null;
-
-  return (
-    <LuxShell>
-      <LuxTitle
-        overline="— Pricing settings"
-        subtitle="שערי המרה, רווחיות ועלויות שילוח לכל הצעה סופית. שינויים נכנסים מיידית."
-      >
-        הגדרות תמחור <LuxAccent>מפעל.</LuxAccent>
-      </LuxTitle>
-      <section className="space-y-6" dir="rtl">
-
-      <CallAnalysisSettingsSection apiToken={apiToken} />
-
-      <AssigneeSection apiToken={apiToken} />
-      <QuoteNotifySection apiToken={apiToken} />
-
+  const pricingGroup = (state: FactoryPricingConfig) => (
+    <div className="space-y-5">
       <FormSection icon={ArrowLeftRight} title="שערי המרה" desc="המרות מטבע לחישוב עלות והצעה">
         {/* Live auto-update controls */}
         <div className="mb-4 rounded-lg border border-border/60 bg-background/30 p-3 flex flex-wrap items-center justify-between gap-3">
@@ -311,7 +363,7 @@ export function SettingsView({ apiToken }: { apiToken: string }) {
             </button>
             <div>
               <div className="text-sm font-medium">עדכון שער אוטומטי מהאינטרנט</div>
-              <div className="text-[11px] text-muted-foreground">
+              <div className="text-[13px] text-muted-foreground">
                 {state.fxAutoUpdate === true
                   ? "השער מתעדכן אוטומטית פעם ביום מהשוק."
                   : "השער קפוא — עדכון ידני בלבד (הפעל כדי לעדכן אוטומטית)."}
@@ -328,7 +380,7 @@ export function SettingsView({ apiToken }: { apiToken: string }) {
             <RefreshCw className={cn("size-3.5", refreshingFx && "animate-spin")} /> רענן עכשיו
           </button>
         </div>
-        {fxMsg && <div className="mb-3 text-[11px] text-muted-foreground">{fxMsg}</div>}
+        {fxMsg && <div className="mb-3 text-[13px] text-muted-foreground">{fxMsg}</div>}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <NumField label="USD → ILS" suffix="₪" hint="שער דולר אמריקאי לשקל" value={state.usdToIls} step={0.01} onChange={(v) => updateNumber("usdToIls", v)} error={errors.usdToIls as string | undefined} />
           <NumField label="USD → CNY" suffix="¥" hint="כמה יואן בדולר (לעלות יחידה ¥ → ₪)" value={state.usdToCny} step={0.01} onChange={(v) => updateNumber("usdToCny", v)} error={errors.usdToCny as string | undefined} />
@@ -344,7 +396,7 @@ export function SettingsView({ apiToken }: { apiToken: string }) {
           <label className="flex items-center justify-between gap-3 rounded-lg border border-border/70 bg-background/30 p-3 cursor-pointer">
             <div>
               <div className="text-xs font-medium">צרף תנאי תשלום להצעות כברירת מחדל</div>
-              <div className="text-[11px] text-muted-foreground">
+              <div className="text-[13px] text-muted-foreground">
                 כבוי (מומלץ) → הצעה נשלחת בלי פרטי בנק/פריסה, ואיש המכירות מוסיף אותם ידנית בשליחה. לא משפיע על הבוט.
               </div>
             </div>
@@ -402,7 +454,7 @@ export function SettingsView({ apiToken }: { apiToken: string }) {
                 );
               })}
             </div>
-            <p className="text-[11px] text-muted-foreground mt-2">
+            <p className="text-[13px] text-muted-foreground mt-2">
               אפשר לשנות לכל שליחה בנפרד (כולל אחוז חופשי) במסך שליחת ההצעה.
             </p>
           </div>
@@ -441,7 +493,7 @@ export function SettingsView({ apiToken }: { apiToken: string }) {
         </div>
         <div className="mt-4 rounded-lg border border-border/60 bg-background/30 p-3">
           <h3 className="text-xs font-medium mb-0.5">אחוזי רווחיות לפי כמות</h3>
-          <p className="text-[11px] text-muted-foreground mb-3">
+          <p className="text-[13px] text-muted-foreground mb-3">
             השאלון בווצאפ לוקח את האחוז המתאים לפי הכמות שהלקוח בחר. כמות שלא ברשימה → "רווח ברירת מחדל".
           </p>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -452,6 +504,11 @@ export function SettingsView({ apiToken }: { apiToken: string }) {
         </div>
       </FormSection>
 
+    </div>
+  );
+
+  const shippingGroup = (state: FactoryPricingConfig) => (
+    <div className="space-y-5">
       {/* Sea carriers — the tiered forwarder pricing that drives sea cost */}
       <SeaCarriersSection
         carriers={state.seaCarriers ?? []}
@@ -507,35 +564,93 @@ export function SettingsView({ apiToken }: { apiToken: string }) {
         </div>
       </FormSection>
 
-      <div className="mt-6 flex items-center gap-3 pt-4" style={{ borderTop: "1px solid var(--lux-line)" }}>
-        <button
-          type="button"
-          onClick={save}
-          disabled={saving || !dirty || hasErrors}
-          className="lux-cta-champagne"
-          style={{ minHeight: 44, padding: "0 20px", fontSize: 14 }}
-        >
-          {saving ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
-          {saving ? "שומר…" : dirty ? "שמור הגדרות תמחור" : "נשמר"}
-        </button>
-        {hasErrors && (
-          <span className="text-xs" style={{ color: "#e8b4b4" }}>
-            יש שדות לא תקינים — תקן לפני שמירה
-          </span>
-        )}
-        {msg && (
-          <span className={cn("text-xs", msg.ok ? "text-success" : "text-destructive")}>
-            {msg.text}
-          </span>
-        )}
-      </div>
+    </div>
+  );
 
-      {/* Message templates — self-saving via server actions, independent of the
-          pricing-config save button above. */}
-      <div className="mt-6">
-        <TemplatesManager />
+  const dirtyGroups: Record<SettingsSection, boolean> = {
+    price: pricingDirty,
+    ship: shippingDirty,
+    team: false,
+    calls: false,
+    templates: false,
+    ads: false,
+  };
+
+  return (
+    <LuxShell className="ux">
+      <LuxTitle
+        overline="— Settings"
+        subtitle="כל ההגדרות במקום אחד. שינוי נכנס לתוקף מיד אחרי שמירה ומשפיע על הצעות חדשות בלבד."
+      >
+        הגדרות <LuxAccent>המערכת.</LuxAccent>
+      </LuxTitle>
+
+      <div className="ux-set">
+        <nav className="ux-side" aria-label="קבוצות הגדרות">
+          {SETTINGS_GROUPS.map((g, i) => (
+            <Fragment key={g.id}>
+              {(i === 0 || SETTINGS_GROUPS[i - 1].area !== g.area) && <div className="g">{g.area}</div>}
+              <button type="button" aria-current={section === g.id ? "true" : "false"} onClick={() => selectSection(g.id)}>
+                <g.icon className="size-4" aria-hidden />
+                {g.label}
+                {dirtyGroups[g.id] && <span className="dirty" aria-label="יש שינויים שלא נשמרו" />}
+              </button>
+            </Fragment>
+          ))}
+        </nav>
+
+        <div dir="rtl">
+          {/* Every group stays mounted (hidden, not unmounted) so a half-edited
+              group keeps its draft while you look at another one. */}
+          <section hidden={section !== "price"} aria-label="תמחור">{configBody("price")}</section>
+          <section hidden={section !== "ship"} aria-label="שילוח">{configBody("ship")}</section>
+          <section hidden={section !== "team"} aria-label="שיוך והתראות" className="space-y-5">
+            <AssigneeSection apiToken={apiToken} />
+            <QuoteNotifySection apiToken={apiToken} />
+          </section>
+          <section hidden={section !== "calls"} aria-label="ניתוח שיחות">
+            <CallAnalysisSettingsSection apiToken={apiToken} />
+          </section>
+          <section hidden={section !== "templates"} aria-label="תבניות הודעה">
+            <TemplatesManager />
+          </section>
+          <section hidden={section !== "ads"} aria-label="כללי בדיקת מודעות">
+            <AdRecommendationSettingsView apiToken={apiToken} />
+          </section>
+
+          {(dirty || saving || msg) && (
+            <div className="ux-savebar" role="region" aria-label="שמירת תמחור ושילוח">
+              <div className="t">
+                {saving ? (
+                  "שומר…"
+                ) : dirty ? (
+                  <>
+                    {changedLabels.length === 1 ? "שינוי אחד לא נשמר" : `${changedLabels.length} שינויים לא נשמרו`}
+                    <span> · {changedLabels.map((c) => c.label).join(", ")}</span>
+                  </>
+                ) : msg ? (
+                  <span style={{ color: msg.ok ? "var(--lux-success, #a8c0a0)" : "#f0c0c0" }}>{msg.text}</span>
+                ) : null}
+                {hasErrors && dirty && (
+                  <span role="alert" style={{ display: "block", color: "#f0c0c0" }}>יש שדה לא תקין — הוא מסומן באדום. תקן אותו לפני שמירה.</span>
+                )}
+              </div>
+              <p className="ux-sr" aria-live="polite">{saving ? "שומר" : msg?.text ?? ""}</p>
+              {dirty && (
+                <button type="button" className="ux-btn" onClick={() => { setState(initial); setMsg(null); }} disabled={saving}>
+                  בטל שינויים
+                </button>
+              )}
+              {dirty && (
+                <button type="button" onClick={save} disabled={saving || hasErrors} aria-busy={saving} className="lux-cta-champagne" style={{ minHeight: 48, padding: "0 22px", fontSize: 15 }}>
+                  {saving ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <Save className="size-4" aria-hidden />}
+                  {saving ? "שומר…" : "שמור"}
+                </button>
+              )}
+            </div>
+          )}
+        </div>
       </div>
-      </section>
     </LuxShell>
   );
 }
@@ -546,7 +661,7 @@ function FormSection({
   desc,
   action,
   children,
-  defaultOpen = false,
+  defaultOpen = true,
 }: {
   icon: typeof Truck;
   title: string;
@@ -584,7 +699,7 @@ function FormSection({
           </span>
           <div className="min-w-0">
             <h3 className="text-sm font-semibold leading-tight">{title}</h3>
-            {desc && <p className="text-[11px] text-muted-foreground leading-tight">{desc}</p>}
+            {desc && <p className="text-[13px] text-muted-foreground leading-tight">{desc}</p>}
           </div>
         </button>
         {open && action}
@@ -620,12 +735,12 @@ function NumField({
       <div className="flex items-center gap-1.5">
         <label className="text-sm font-medium">{label}</label>
         {badge && (
-          <span className="rounded-full bg-warning/15 text-warning text-[9px] font-medium px-1.5 py-0.5">
+          <span className="rounded-full bg-warning/15 text-warning text-xs font-medium px-1.5 py-0.5">
             {badge}
           </span>
         )}
       </div>
-      {hint && <p className="text-[11px] text-muted-foreground leading-tight">{hint}</p>}
+      {hint && <p className="text-[13px] text-muted-foreground leading-tight">{hint}</p>}
       <div className="relative">
         <input
           type="number"
@@ -644,7 +759,7 @@ function NumField({
           </span>
         )}
       </div>
-      {error && <span className="text-[11px] text-destructive">{error}</span>}
+      {error && <span className="text-[13px] text-destructive">{error}</span>}
     </div>
   );
 }
@@ -701,12 +816,12 @@ function ShippingOptionCard({
         </div>
       </div>
 
-      <div className="text-[11px] text-muted-foreground mb-2">
+      <div className="text-[13px] text-muted-foreground mb-2">
         id: <code className="bg-muted/40 px-1 rounded">{opt.id}</code>
       </div>
 
       {opt.type === "sea" ? (
-        <p className="text-[11px] text-muted-foreground">
+        <p className="text-[13px] text-muted-foreground">
           התעריפים נקבעים לפי הספק הפעיל ב"ספקי שילוח ים" למעלה. כאן רק שם
           האפשרות וההפעלה.
         </p>

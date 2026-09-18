@@ -91,7 +91,7 @@ export function SeaCarriersSection({
           />
           <span className="min-w-0">
             <span className="block text-sm font-medium">ספקי שילוח ים</span>
-            <span className="block text-[11px] text-muted-foreground mt-0.5">
+            <span className="block text-[13px] text-muted-foreground mt-0.5">
               מחיר לקוב ל-1 עד 7 קוב, לפי המחירון של הספק. הספק הפעיל קובע את חישוב
               השילוח לכל הצעה חדשה.
             </span>
@@ -114,7 +114,7 @@ export function SeaCarriersSection({
           {/* Assumed shipment volume — the default pricing basis */}
           <div className="rounded-lg border border-primary/30 bg-primary/5 p-3 mb-3">
             <label className="text-sm font-medium">נפח משלוח משוער (קוב)</label>
-            <p className="text-[11px] text-muted-foreground mb-2">
+            <p className="text-[13px] text-muted-foreground mb-2">
               בסיס התמחור לכל הזמנה קטנה: הזמנה מתחת לנפח הזה מחויבת לפי המחיר-לקוב
               בנקודה הזאת (ההימור שעוד הזמנות יצטברו וימלאו משלוח). הזמנה גדולה יותר
               משלמת את עלותה האמיתית. ברירת מחדל: 3.
@@ -228,13 +228,13 @@ function CarrierCard({
         </button>
       </div>
 
-      <label className="text-[11px] font-medium text-muted-foreground">
+      <label className="text-[13px] font-medium text-muted-foreground">
         מחיר לקוב ($) לפי נפח המשלוח
       </label>
       <div className="grid grid-cols-4 sm:grid-cols-7 gap-2 mt-1">
         {LEVELS.map((lvl) => (
           <div key={lvl} className="flex flex-col gap-0.5">
-            <span className="text-[10px] text-muted-foreground text-center">{lvl} קוב</span>
+            <span className="text-xs text-muted-foreground text-center">{lvl} קוב</span>
             <input
               type="number"
               step={1}
@@ -270,11 +270,11 @@ function CarrierPreview({
   });
   return (
     <div className="mt-3 rounded-md border border-border bg-muted/20 p-2">
-      <p className="text-[11px] font-medium mb-1">
+      <p className="text-[13px] font-medium mb-1">
         תצוגה חיה — עלות שילוח להזמנה (בסיס {assumedCbm} קוב)
       </p>
       <div className="overflow-x-auto">
-        <table className="w-full text-[11px] tabular-nums">
+        <table className="w-full text-[13px] tabular-nums">
           <thead className="text-muted-foreground">
             <tr className="text-right">
               <th className="font-normal py-0.5 pl-2">קוב</th>

@@ -189,7 +189,7 @@ export default function AnalysisScreen({
                     aria-pressed={active}
                     onClick={() => setStages((current) => active ? current.filter((item) => item !== key) : [...current, key])}
                     className={cn(
-                      "min-h-9 rounded-full border px-3 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
+                      "min-h-11 rounded-full border px-4 text-[13px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
                       active
                         ? "border-primary/40 bg-primary/15 text-primary"
                         : "border-border bg-background/30 text-muted-foreground hover:bg-muted/50 hover:text-foreground"
@@ -327,7 +327,7 @@ function PatternList({
                 type="button"
                 onClick={() => setOpen(isOpen ? null : id)}
                 aria-expanded={isOpen}
-                className="flex min-h-10 w-full items-center gap-3 rounded-lg text-right text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                className="flex min-h-11 w-full items-center gap-3 rounded-lg text-right text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
               >
                 <ChevronDown className={cn("size-4 shrink-0 text-muted-foreground transition-transform", isOpen && "rotate-180")} />
                 <span className="min-w-0 flex-1">{p.label}</span>

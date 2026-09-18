@@ -44,16 +44,26 @@ export const HUB_TABS: TabDef[] = [
   { id: "settings", label: "הגדרות", icon: Settings, path: "/widget/settings" },
 ];
 
+/** Deep-link params a tab may receive from the hub URL, e.g.
+ *  `?tab=settings&section=ads` or `?tab=analytics&view=ops`. */
+export interface HubDeepLink {
+  view?: string;
+  section?: string;
+}
+
 function appendParams(
   path: string,
   mode: HubMode,
   widgetToken: string,
   sid: string,
-  acceptsSid = false
+  acceptsSid = false,
+  deepLink: HubDeepLink = {}
 ): string {
   const params = new URLSearchParams();
   if (mode === "widget") params.set("widget_token", widgetToken);
   if (acceptsSid && sid) params.set("sid", sid);
+  if (deepLink.view) params.set("view", deepLink.view);
+  if (deepLink.section) params.set("section", deepLink.section);
   const query = params.toString();
   return query ? `${path}?${query}` : path;
 }
@@ -75,11 +85,13 @@ export function HubShell({
   widgetToken = "",
   activeTab,
   sid = "",
+  deepLink = {},
 }: {
   mode: HubMode;
   widgetToken?: string;
   activeTab?: string;
   sid?: string;
+  deepLink?: HubDeepLink;
 }) {
   const active = HUB_TABS.find((tab) => tab.id === activeTab) ?? HUB_TABS[0];
 
@@ -230,7 +242,7 @@ export function HubShell({
 
       <iframe
         key={`${mode}-${active.id}-${sid}`}
-        src={appendParams(active.path, mode, widgetToken, sid, active.acceptsSid)}
+        src={appendParams(active.path, mode, widgetToken, sid, active.acceptsSid, deepLink)}
         style={{ flex: 1, width: "100%", border: "none", background: "#1d1b1a" }}
         allow="clipboard-write"
       />

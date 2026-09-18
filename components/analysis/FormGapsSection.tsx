@@ -171,7 +171,7 @@ export default function FormGapsSection({ token }: { token: string }) {
                   <div style={{ fontSize: 13.5, fontWeight: 600 }}>{g.name}</div>
                   <div
                     style={{
-                      fontSize: 11.5,
+                      fontSize: 13,
                       color: "var(--lux-muted)",
                       fontVariantNumeric: "tabular-nums",
                       direction: "ltr",
@@ -191,7 +191,7 @@ export default function FormGapsSection({ token }: { token: string }) {
                 >
                   <span
                     style={{
-                      fontSize: 11.5,
+                      fontSize: 13,
                       color: alert ? "#e0736f" : "var(--lux-muted)",
                     }}
                   >
@@ -203,12 +203,15 @@ export default function FormGapsSection({ token }: { token: string }) {
                       target="_blank"
                       rel="noreferrer"
                       style={{
-                        fontSize: 11.5,
+                        fontSize: 13,
                         color: "var(--lux-accent, #c9a86a)",
                         textDecoration: "none",
                         border: "1px solid var(--lux-border, rgba(255,255,255,0.12))",
                         borderRadius: 8,
-                        padding: "4px 8px",
+                        padding: "0 12px",
+                        minHeight: 44,
+                        display: "inline-flex",
+                        alignItems: "center",
                         whiteSpace: "nowrap",
                       }}
                     >

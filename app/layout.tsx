@@ -59,8 +59,11 @@ const globalCss = `
     line-height: 1.5;
     -webkit-font-smoothing: antialiased;
   }
-  a { color: ${colors.accent}; text-decoration: none; transition: color 150ms; }
-  a:hover { color: ${colors.accentHover}; }
+  /* Rust links are for the light paper pages only. Inside the warm-dark hub
+     (.lux-theme / .calc-lux) rust on #1d1b1a is 2.45:1 — unreadable — and, being
+     unlayered, it also beat every Tailwind text colour on a link. */
+  a:where(:not(.lux-theme *, .calc-lux *)) { color: ${colors.accent}; text-decoration: none; transition: color 150ms; }
+  a:where(:not(.lux-theme *, .calc-lux *)):hover { color: ${colors.accentHover}; }
   button { font-family: inherit; }
   input, textarea, select { font-family: inherit; color: inherit; }
   :focus-visible {

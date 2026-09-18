@@ -28,16 +28,18 @@ export function InfoDot({
         onToggle();
       }}
       aria-label="מה זה עושה"
+      aria-expanded={open}
       title="מה זה עושה"
+      className="ux-hit"
       style={{
         flexShrink: 0,
-        width: size + 5,
-        height: size + 5,
+        width: size + 7,
+        height: size + 7,
         borderRadius: 99,
         border: 0,
         cursor: "pointer",
         fontFamily: "inherit",
-        fontSize: size - 2,
+        fontSize: Math.max(12, size - 1),
         lineHeight: 1,
         display: "inline-flex",
         alignItems: "center",
@@ -55,7 +57,7 @@ export function InfoDot({
 }
 
 export const infoLineStyle: React.CSSProperties = {
-  fontSize: 11.5,
+  fontSize: 13,
   lineHeight: 1.55,
   color: "var(--lux-muted, #a8a29a)",
   background: "rgba(214,196,172,0.06)",

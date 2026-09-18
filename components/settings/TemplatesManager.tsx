@@ -162,7 +162,7 @@ export function TemplatesManager() {
           </span>
           <div className="min-w-0">
             <h3 className="text-sm font-semibold leading-tight">תבניות הודעה</h3>
-            <p className="text-[11px] text-muted-foreground leading-tight">
+            <p className="text-[13px] text-muted-foreground leading-tight">
               ההודעות שנשלחות בקליק מלשונית שיחות · ערוך נוסח, הוסף או כבה
             </p>
           </div>
@@ -199,15 +199,15 @@ export function TemplatesManager() {
                   <div className="flex items-center gap-2">
                     <span className="text-sm font-medium truncate">{t.name}</span>
                     {!t.active && (
-                      <span className="text-[10px] rounded px-1 py-0.5 bg-background/60 text-muted-foreground border border-border/60">
+                      <span className="text-xs rounded px-1 py-0.5 bg-background/60 text-muted-foreground border border-border/60">
                         כבוי
                       </span>
                     )}
-                    <span className="text-[10px] text-muted-foreground">
+                    <span className="text-xs text-muted-foreground">
                       {TYPE_LABEL[t.type] ?? t.type} · #{t.sortOrder}
                     </span>
                   </div>
-                  <p className="text-[11px] text-muted-foreground truncate">
+                  <p className="text-[13px] text-muted-foreground truncate">
                     {t.body.replace(/\n/g, " ")}
                   </p>
                 </div>
@@ -225,7 +225,7 @@ export function TemplatesManager() {
                       type="button"
                       onClick={() => remove(t.id)}
                       disabled={pending}
-                      className="text-[11px] rounded-md px-2 py-1 bg-destructive/20 text-destructive border border-destructive/40"
+                      className="text-[13px] rounded-md px-2 py-1 bg-destructive/20 text-destructive border border-destructive/40"
                     >
                       מחק
                     </button>
@@ -286,7 +286,7 @@ export function TemplatesManager() {
             </div>
 
             <label className="flex flex-col gap-1">
-              <span className="text-[11px] text-muted-foreground">שם התבנית</span>
+              <span className="text-[13px] text-muted-foreground">שם התבנית</span>
               <input
                 value={draft.name}
                 onChange={(e) => setDraft({ ...draft, name: e.target.value })}
@@ -296,7 +296,7 @@ export function TemplatesManager() {
             </label>
 
             <label className="flex flex-col gap-1">
-              <span className="text-[11px] text-muted-foreground">נוסח ההודעה</span>
+              <span className="text-[13px] text-muted-foreground">נוסח ההודעה</span>
               <textarea
                 value={draft.body}
                 onChange={(e) => setDraft({ ...draft, body: e.target.value })}
@@ -304,14 +304,14 @@ export function TemplatesManager() {
                 className="w-full bg-background/50 border border-border rounded-md px-3 py-2 text-sm leading-relaxed focus:outline-none focus:ring-2 focus:ring-ring/30"
                 style={{ whiteSpace: "pre-wrap" }}
               />
-              <span className="text-[10px] text-muted-foreground">
+              <span className="text-xs text-muted-foreground">
                 כוכביות *מדגישות* טקסט בוואטסאפ. שורות חדשות נשמרות.
               </span>
             </label>
 
             <div className="flex items-center gap-3">
               <label className="flex flex-col gap-1 flex-1">
-                <span className="text-[11px] text-muted-foreground">סוג</span>
+                <span className="text-[13px] text-muted-foreground">סוג</span>
                 <select
                   value={draft.type}
                   onChange={(e) => setDraft({ ...draft, type: e.target.value })}
@@ -323,7 +323,7 @@ export function TemplatesManager() {
                 </select>
               </label>
               <label className="flex flex-col gap-1 w-24">
-                <span className="text-[11px] text-muted-foreground">סדר</span>
+                <span className="text-[13px] text-muted-foreground">סדר</span>
                 <input
                   type="number"
                   value={draft.sortOrder}
@@ -338,7 +338,7 @@ export function TemplatesManager() {
             {draft.type === "cta_url" && (
               <div className="flex items-center gap-3">
                 <label className="flex flex-col gap-1 flex-1">
-                  <span className="text-[11px] text-muted-foreground">טקסט הכפתור</span>
+                  <span className="text-[13px] text-muted-foreground">טקסט הכפתור</span>
                   <input
                     value={draft.ctaLabel ?? ""}
                     onChange={(e) => setDraft({ ...draft, ctaLabel: e.target.value })}
@@ -346,7 +346,7 @@ export function TemplatesManager() {
                   />
                 </label>
                 <label className="flex flex-col gap-1 flex-1">
-                  <span className="text-[11px] text-muted-foreground">קישור</span>
+                  <span className="text-[13px] text-muted-foreground">קישור</span>
                   <input
                     value={draft.ctaUrl ?? ""}
                     onChange={(e) => setDraft({ ...draft, ctaUrl: e.target.value })}

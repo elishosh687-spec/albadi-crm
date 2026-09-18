@@ -1,34 +1,41 @@
 /**
- * Widget "מודעות" screen — per-ad lead quality.
+ * Widget "מודעות" screen — which ad brings money, not just form fills.
  *
- * Answers "which ad brings money, not just form fills": leads vs how many
- * progressed, how many Eli marked "good lead", deals closed and revenue — per
- * Meta ad. Deterministic (see lib/analysis/ad-performance.ts), no LLM.
- *
- * Three sub-tabs (?view=): המלצות (default — per-Ad-ID recommendations,
- * lib/ads), הגדרות בדיקה (the policy), and דוח (this per-name quality report).
- * The sub-tabs are plain <a> links on purpose: a full navigation fires the
+ * Redesigned per ui-ux-pro-max (docs/agent/mobile-ui.md → "UI design rules"):
+ *   ?view=           (default) לטיפול עכשיו + KPIs + one collapsed row per ad
+ *   ?view=meta       what reached Meta (per deal/lead) + connection health
+ *   ?view=settings   legacy link — the test rules now live in the settings tab
+ *                    (?tab=settings&section=ads); kept so old links still work.
+ * Sub-tabs are plain <a> links on purpose: a full navigation fires the
  * settings screen's unsaved-changes guard, a client-side one would not.
+ * Old values `recommendations` / `report` land on the default view.
+ *
+ * Deterministic (lib/analysis/ad-performance.ts, lib/ads/*), no LLM.
+ * Recommendation only — nothing here writes to Meta.
  *
  * Auth: ?widget_token=<GHL_WIDGET_TOKEN>. Period via ?days=30|90 (default all).
  */
+import { Settings } from "lucide-react";
 import { widgetPageAuthed } from "@/lib/widget/page-auth";
 import { buildAdPerformance } from "@/lib/analysis/ad-performance";
 import { checkAdsHealth } from "@/lib/ads/ads-health";
-import { AdsHealthLine } from "@/components/ads/AdsHealthLine";
+import { buildServerTodo } from "@/lib/ads/overview";
 import { getMetaReportingStatus } from "@/lib/meta/reporting-status";
+import { hubHref } from "@/lib/widget/hub-link";
+import { AdsHealthLine } from "@/components/ads/AdsHealthLine";
 import { MetaReportPanel } from "@/components/ads/MetaReportPanel";
-import { AdRecommendationsView } from "@/components/ads/AdRecommendationsView";
+import { AdsOverview } from "@/components/ads/AdsOverview";
 import { AdRecommendationSettingsView } from "@/components/ads/AdRecommendationSettingsView";
-import Link from "next/link";
+import { LuxShell, LuxTitle, LuxAccent } from "@/components/widget-ui/lux";
+import { HubUrlSync } from "@/components/hub/HubUrlSync";
 
 export const dynamic = "force-dynamic";
 
-const INK = "#e6e1e0";
-const MUTED = "#8a7f74";
-const LINE = "rgba(230,225,224,0.08)";
-
-const ils = (n: number) => `₪${n.toLocaleString("he-IL")}`;
+const PERIODS: { id: string; label: string }[] = [
+  { id: "", label: "הכל" },
+  { id: "90", label: "90 יום" },
+  { id: "30", label: "30 יום" },
+];
 
 export default async function AdsWidgetPage({
   searchParams,
@@ -48,301 +55,79 @@ export default async function AdsWidgetPage({
     );
   }
 
-  const active = view === "settings" || view === "report" ? view : "recommendations";
-  // One status for the whole tab, on every sub-tab (Eli: "שהכל עובד").
-  const adsHealth = await checkAdsHealth().catch(() => null);
-  const tabHref = (v: string) =>
-    `/widget/ads?widget_token=${encodeURIComponent(token)}${v === "recommendations" ? "" : `&view=${v}`}`;
-  const subTabs = (
-    <nav className="lux-wrap-sm" style={{ display: "flex", gap: 6, marginBottom: 14, borderBottom: `1px solid ${LINE}`, paddingBottom: 8 }}>
-      {[
-        { id: "recommendations", label: "המלצות" },
-        { id: "settings", label: "הגדרות בדיקה" },
-        { id: "report", label: "דוח איכות לידים" },
-      ].map((t) => (
-        <a
-          key={t.id}
-          href={tabHref(t.id)}
-          className="lux-tap"
-          style={{
-            padding: "6px 12px",
-            borderRadius: 6,
-            fontSize: 13,
-            textDecoration: "none",
-            display: "inline-flex",
-            alignItems: "center",
-            background: active === t.id ? "rgba(230,225,224,0.10)" : "transparent",
-            color: active === t.id ? INK : MUTED,
-            border: `1px solid ${active === t.id ? LINE : "transparent"}`,
-          }}
-        >
-          {t.label}
-        </a>
-      ))}
-    </nav>
-  );
+  const active = view === "meta" || view === "settings" ? view : "ads";
+  const period = days === "30" || days === "90" ? days : "";
+  const href = (v: string, d = period) => {
+    const p = new URLSearchParams({ widget_token: token });
+    if (v !== "ads") p.set("view", v);
+    if (d) p.set("days", d);
+    return `/widget/ads?${p.toString()}`;
+  };
+  const settingsHref = hubHref(token, { tab: "settings", section: "ads" });
 
-  if (active !== "report") {
-    return (
-      <div dir="rtl" style={{ padding: 16, color: INK }}>
-        <h2 style={{ margin: "0 0 10px", fontSize: 17, fontWeight: 600 }}>מודעות מטא</h2>
-        {subTabs}
-        <AdsHealthLine health={adsHealth} />
-        {active === "settings" ? (
-          <AdRecommendationSettingsView apiToken={token} />
-        ) : (
-          <AdRecommendationsView apiToken={token} />
-        )}
-      </div>
-    );
-  }
-
-  const sinceDays = days === "30" ? 30 : days === "90" ? 90 : undefined;
-  const [report, reporting] = await Promise.all([
-    buildAdPerformance({ sinceDays }),
+  const [health, reporting, report] = await Promise.all([
+    checkAdsHealth().catch(() => null),
     getMetaReportingStatus().catch(() => null),
+    active === "ads" ? buildAdPerformance({ sinceDays: period ? Number(period) : undefined }) : Promise.resolve(null),
   ]);
-  const { totals } = report;
-  // Phase B columns only appear once Meta spend is actually available.
-  const showSpend = report.totalSpendIls !== null;
-
-  // Only the ads that produced something stay on screen — a deal, revenue, or
-  // a lead Eli marked good. The rest collapse into a dropdown.
-  const isLeading = (r: (typeof report.rows)[number]) =>
-    r.revenueIls > 0 || r.won > 0 || r.markedGood > 0;
-  const leadingRows = report.rows.filter(isLeading);
-  const restRows = report.rows.filter((r) => !isLeading(r));
-  const restLeads = restRows.reduce((a, r) => a + r.leads, 0);
-
-  const periods: { id: string; label: string }[] = [
-    { id: "", label: "הכל" },
-    { id: "90", label: "90 יום" },
-    { id: "30", label: "30 יום" },
-  ];
-
-  const th: React.CSSProperties = {
-    textAlign: "right",
-    padding: "8px 10px",
-    fontSize: 12,
-    fontWeight: 500,
-    color: MUTED,
-    borderBottom: `1px solid ${LINE}`,
-    whiteSpace: "nowrap",
-  };
-  const td: React.CSSProperties = {
-    padding: "10px",
-    fontSize: 13,
-    color: INK,
-    borderBottom: `1px solid ${LINE}`,
-    whiteSpace: "nowrap",
-  };
-
-  const renderTable = (rows: typeof report.rows) => (
-      <div style={{ overflowX: "auto" }}>
-          <table style={{ borderCollapse: "collapse", width: "100%", minWidth: 620 }}>
-            <thead>
-              <tr>
-                <th style={th}>מודעה</th>
-                <th style={th}>לידים</th>
-                <th style={th}>סומנו טובים</th>
-                <th style={th}>נסגרו</th>
-                <th style={th}>הכנסה</th>
-                {showSpend ? (
-                  <>
-                    <th style={th}>עלות</th>
-                    <th style={th}>עלות/ליד איכותי</th>
-                    <th style={th}>רווח</th>
-                  </>
-                ) : null}
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((r) => (
-                <tr key={r.adName}>
-                  <td style={{ ...td, whiteSpace: "normal", maxWidth: 260 }}>
-                    {/* Ad names are Latin/technical ("07_chain_cut") — inside an
-                        RTL table they render mangled ("chain_cut_07") unless the
-                        run is isolated. */}
-                    <span style={{ unicodeBidi: "isolate", direction: "ltr", display: "inline-block" }}>
-                      {r.adName}
-                    </span>
-                    {r.campaignName ? (
-                      <div
-                        style={{
-                          fontSize: 11,
-                          color: MUTED,
-                          unicodeBidi: "isolate",
-                        }}
-                      >
-                        {r.campaignName}
-                      </div>
-                    ) : null}
-                    {/* WHO the ad actually brought — far more actionable than a count. */}
-                    {r.dealCustomers.length > 0 ? (
-                      <div style={{ fontSize: 11, color: "#7dd3a0", marginTop: 3 }}>
-                        💰 {r.dealCustomers.join(" · ")}
-                      </div>
-                    ) : null}
-                    {r.goodLeadNames.length > 0 ? (
-                      <div style={{ fontSize: 11, color: "#e0c68a", marginTop: 2 }}>
-                        ⭐ {r.goodLeadNames.map((n) => n.split("|")[0].trim()).join(" · ")}
-                      </div>
-                    ) : null}
-                  </td>
-                  <td style={td}>{r.leads}</td>
-                  <td style={td}>{r.markedGood || "—"}</td>
-                  <td style={td}>{r.won || "—"}</td>
-                  <td style={{ ...td, fontWeight: r.revenueIls ? 600 : 400 }}>
-                    {r.revenueIls ? ils(r.revenueIls) : "—"}
-                  </td>
-                  {showSpend ? (
-                    <>
-                      <td style={td}>
-                        {r.spendIls !== null ? ils(r.spendIls) : "—"}
-                      </td>
-                      <td style={td}>
-                        {r.costPerQualityLeadIls !== null
-                          ? ils(r.costPerQualityLeadIls)
-                          : "—"}
-                      </td>
-                      <td
-                        style={{
-                          ...td,
-                          fontWeight: 600,
-                          color:
-                            r.roiIls === null
-                              ? INK
-                              : r.roiIls > 0
-                                ? "#7dd3a0"
-                                : "#e08a8a",
-                        }}
-                      >
-                        {r.roiIls !== null ? ils(r.roiIls) : "—"}
-                      </td>
-                    </>
-                  ) : null}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-      </div>
-  );
+  const serverTodo = buildServerTodo(health, reporting);
 
   return (
-    <div dir="rtl" style={{ padding: 16, color: INK }}>
-      <h2 style={{ margin: "0 0 10px", fontSize: 17, fontWeight: 600 }}>מודעות מטא</h2>
-      {subTabs}
-      <AdsHealthLine health={adsHealth} />
-      <div
-        style={{
-          display: "flex",
-          alignItems: "baseline",
-          gap: 12,
-          flexWrap: "wrap",
-          marginBottom: 4,
-        }}
-      >
-        <h2 style={{ margin: 0, fontSize: 17, fontWeight: 600 }}>
-          איכות לידים לפי מודעה
-        </h2>
-        <div style={{ display: "flex", gap: 6, marginInlineStart: "auto" }}>
-          {periods.map((p) => {
-            const active = (days ?? "") === p.id;
-            return (
-              <Link
-                key={p.id || "all"}
-                href={`/widget/ads?widget_token=${encodeURIComponent(token)}&view=report${
-                  p.id ? `&days=${p.id}` : ""
-                }`}
-                style={{
-                  padding: "4px 10px",
-                  borderRadius: 6,
-                  fontSize: 12,
-                  textDecoration: "none",
-                  border: `1px solid ${LINE}`,
-                  background: active ? "rgba(230,225,224,0.08)" : "transparent",
-                  color: active ? INK : MUTED,
-                }}
-              >
-                {p.label}
-              </Link>
-            );
-          })}
-        </div>
-      </div>
-      <p style={{ margin: "0 0 14px", fontSize: 12.5, color: MUTED }}>
-        לא כמה לידים — כמה מהם סומנו כטובים וכמה סגרו עסקה.
-      </p>
-
-      {/* totals */}
-      <div style={{ display: "flex", gap: 18, flexWrap: "wrap", marginBottom: 14 }}>
-        {[
-          { k: "לידים", v: String(totals.leads) },
-          { k: "סומנו טובים", v: String(totals.markedGood) },
-          { k: "נסגרו", v: String(totals.won) },
-          { k: "הכנסה", v: ils(totals.revenueIls) },
-          ...(report.totalSpendIls !== null
-            ? [
-                { k: "עלות פרסום", v: ils(report.totalSpendIls) },
-                {
-                  k: "רווח גולמי",
-                  v: ils(totals.revenueIls - report.totalSpendIls),
-                },
-              ]
-            : []),
-        ].map((s) => (
-          <div key={s.k}>
-            <div style={{ fontSize: 11.5, color: MUTED }}>{s.k}</div>
-            <div style={{ fontSize: 18, fontWeight: 600 }}>{s.v}</div>
+    <LuxShell className="ux">
+      <HubUrlSync view={active === "ads" ? null : active} />
+      <LuxTitle
+        overline="— Meta Ads"
+        subtitle="איזו מודעה מביאה כסף, לא רק טפסים. המסך ממליץ בלבד — שום דבר לא משתנה במטא."
+        aside={
+          <div className="ux-chips">
+            <a className="ux-chip ux-head-status" href={href("meta")}>
+              <span className="ux-dot" data-tone={health?.ok ? undefined : "warn"} aria-hidden />
+              {!health ? "מצב החיבורים לא ידוע" : health.ok ? "החיבורים תקינים" : health.problems === 1 ? "חיבור אחד דורש טיפול" : `${health.problems} חיבורים דורשים טיפול`}
+            </a>
+            {active === "ads" &&
+              PERIODS.map((p) => (
+                <a key={p.id || "all"} className="ux-chip" href={href("ads", p.id)} aria-current={period === p.id ? "true" : undefined}>
+                  {p.label}
+                </a>
+              ))}
           </div>
-        ))}
-      </div>
+        }
+      >
+        מודעות <LuxAccent>מטא.</LuxAccent>
+      </LuxTitle>
 
-      {report.rows.length === 0 ? (
-        <p style={{ color: MUTED, fontSize: 13 }}>
-          אין עדיין נתוני מודעות לתקופה הזו.
-        </p>
-      ) : (
-        <>
-          {renderTable(leadingRows)}
-          {restRows.length > 0 ? (
-            <details style={{ marginTop: 10 }}>
-              <summary
-                style={{
-                  cursor: "pointer",
-                  fontSize: 12.5,
-                  color: MUTED,
-                  padding: "6px 2px",
-                  userSelect: "none",
-                }}
-              >
-                מודעות ללא תוצאות — {restRows.length} מודעות · {restLeads} לידים
-              </summary>
-              <div style={{ marginTop: 6, opacity: 0.75 }}>{renderTable(restRows)}</div>
-            </details>
-          ) : null}
-        </>
+      <nav className="ux-tabs" aria-label="תצוגות מודעות">
+        <a href={href("ads")} aria-current={active === "ads" ? "page" : undefined}>מודעות</a>
+        <a href={href("meta")} aria-current={active === "meta" ? "page" : undefined}>דיווח למטא</a>
+        <a className="ux-tabs-end" href={settingsHref} target="_parent">
+          <Settings className="size-4" aria-hidden /> כללי בדיקה
+        </a>
+      </nav>
+
+      {active === "ads" && report && (
+        <AdsOverview apiToken={token} report={report} serverTodo={serverTodo} metaHref={href("meta")} />
       )}
 
-      {/* Per-lead proof. The counters above can say "all reported" while a
-          specific deal never reached Meta — that is exactly how the ₪13,475
-          gap went unnoticed. This names every row and its state. */}
-      {reporting ? <MetaReportPanel reporting={reporting} /> : null}
+      {active === "meta" && (
+        <div className="grid gap-5">
+          {reporting ? (
+            <MetaReportPanel reporting={reporting} />
+          ) : (
+            <p className="ux-note">לא הצלחתי לטעון את מצב הדיווח למטא — נסה לרענן.</p>
+          )}
+          <AdsHealthLine health={health} />
+        </div>
+      )}
 
-      {!showSpend && report.spendUnavailable ? (
-        <p style={{ marginTop: 12, fontSize: 12, color: MUTED }}>
-          עלויות פרסום לא מוצגות — {report.spendUnavailable}. להצגת עלות לליד
-          איכותי ורווח, צריך <code>META_ADS_TOKEN</code> (System User token עם
-          ads_read, כזה שלא פג).
-        </p>
-      ) : null}
-
-      {report.unattributed > 0 ? (
-        <p style={{ marginTop: 12, fontSize: 12, color: MUTED }}>
-          {report.unattributed} לידים מפייסבוק ללא שיוך למודעה (לא נמצאה התאמה
-          בגיליון הטופס).
-        </p>
-      ) : null}
-    </div>
+      {active === "settings" && (
+        <>
+          <p className="ux-note" style={{ marginTop: 0, marginBottom: 16 }}>
+            כללי הבדיקה עברו ללשונית הגדרות.{" "}
+            <a href={settingsHref} target="_parent" style={{ color: "var(--lux-champagne)" }}>לפתוח שם</a>
+          </p>
+          <AdRecommendationSettingsView apiToken={token} />
+        </>
+      )}
+    </LuxShell>
   );
 }

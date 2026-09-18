@@ -309,7 +309,8 @@
   --color-secondary: rgba(255, 255, 255, 0.05);
   --color-secondary-foreground: #e6e1e0;
   --color-muted: rgba(255, 255, 255, 0.03);
-  --color-muted-foreground: #8a7f74;
+  --color-muted-foreground: #a0958a; /* ≥4.5:1 on cards (ui-ux-pro-max) — was #8a7f74, 4.1:1 */
+  --color-destructive: #ec8b8b; /* readable red on warm-dark (≥4.5:1); the default was 4.48:1 */
   --color-border: rgba(230, 225, 224, 0.08);
   --color-input: rgba(230, 225, 224, 0.1);
   --color-ring: rgba(190, 198, 224, 0.45);
@@ -326,8 +327,8 @@
   /* warm-dark overrides of the additive --gg-* tokens used inline */
   --gg-bg: #1d1b1a;
   --gg-text: #e6e1e0;
-  --gg-text-muted: #8a7f74;
-  --gg-text-faint: rgba(138, 127, 116, 0.6);
+  --gg-text-muted: #a0958a;
+  --gg-text-faint: #958b80;
   --gg-glass-rim: inset 0 1px 0 rgba(230, 225, 224, 0.06);
   --gg-glass-float: 0 18px 50px rgba(0, 0, 0, 0.5);
   --gg-edge: linear-gradient(
@@ -342,8 +343,8 @@
 
   /* calculator-local palette tokens (consumed by inline styles in the JSX) */
   --lux-ink: #e6e1e0;
-  --lux-muted: #8a7f74;
-  --lux-faint: rgba(138, 127, 116, 0.6);
+  --lux-muted: #a0958a;
+  --lux-faint: #958b80; /* faintest allowed text colour, ≥4.5:1 on bg */
   --lux-champagne: #d6c4ac;
   --lux-cool: #bec6e0;
   --lux-inset: #141312;
@@ -710,7 +711,221 @@
   padding: 26px 32px 40px;
 }
 
+
+/* links inside the warm-dark hub take their colour from their context (the
+   root layout's rust link colour is scoped to the light pages). */
+:where(.calc-lux, .lux-theme) a { color: inherit; text-decoration: none; }
+
+/* ══════════════════════════════════════════════════════════════════════
+   .ux-* — the ui-ux-pro-max layer for the redesigned hub tabs (ads,
+   analytics, settings). Rules of the skill baked in: every control ≥44px,
+   no text <12px (16px body on a phone, see the mobile block), text ≥4.5:1,
+   150–220ms transitions, reduced-motion respected. Docs:
+   docs/agent/mobile-ui.md → "UI design rules". Only elements that carry a
+   .ux-* class are touched, so the blast radius is `grep ux-`.
+   ══════════════════════════════════════════════════════════════════════ */
+.ux { font-size: 15px; line-height: 1.55; }
+.ux :is(button, a, summary, select) { touch-action: manipulation; }
+.ux :is(button, a, summary) { transition: background-color 150ms ease-out, color 150ms ease-out, border-color 150ms ease-out, opacity 150ms; }
+.ux :is(button, a):active { opacity: 0.78; }
+.ux :focus-visible { outline: 2px solid var(--lux-cool); outline-offset: 2px; border-radius: 6px; }
+.ux .tnum { font-variant-numeric: tabular-nums; }
+.ux .ltr { direction: ltr; unicode-bidi: isolate; display: inline-block; }
+.ux.lux-shell .lux-overline { font-size: 12px; letter-spacing: 0.24em; }
+.ux.lux-shell .lux-label { font-size: 12px; letter-spacing: 0.12em; }
+.ux.lux-shell .lux-stat-label { font-size: 12px; }
+/* small inline controls (the "i" info dot) keep their look but get a 44px
+   hit area around them — ui-ux-pro-max: extend the hit area, not the glyph */
+.ux .ux-hit { position: relative; }
+.ux .ux-hit::before { content: ""; position: absolute; inset: 50% auto auto 50%; width: 44px; height: 44px; transform: translate(-50%, -50%); }
+.ux-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+@media (prefers-reduced-motion: reduce) {
+  .ux *, .ux *::before, .ux *::after { transition: none !important; animation: none !important; }
+}
+
+/* chips / status pill / buttons — all 44px tall */
+.ux-chips { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.ux-chip { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 16px; border-radius: 9999px; border: 1px solid var(--lux-line); background: none; color: var(--lux-muted); font-size: 14px; cursor: pointer; text-decoration: none; white-space: nowrap; }
+.ux-chip:hover { color: var(--lux-ink); background: rgba(255,255,255,0.03); }
+.ux-chip[aria-current="true"], .ux-chip[aria-pressed="true"] { color: var(--lux-ink); background: var(--lux-card-raised); border-color: rgba(230,225,224,0.16); }
+.ux-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--lux-success, #a8c0a0); flex-shrink: 0; }
+.ux-dot[data-tone="warn"] { background: #e0c68a; }
+.ux-dot[data-tone="bad"] { background: #e08a8a; }
+.ux-btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 44px; padding: 0 16px; border-radius: 9999px; border: 1px solid var(--lux-line); background: none; color: var(--lux-ink); font-size: 14px; cursor: pointer; white-space: nowrap; text-decoration: none; }
+.ux-btn:hover:not(:disabled) { background: var(--lux-card-raised); }
+.ux-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+/* underline tabs — one per URL (?view= / ?section=) */
+.ux-tabs { display: flex; gap: 22px; border-bottom: 1px solid var(--lux-line); margin-bottom: 24px; overflow-x: auto; scrollbar-width: none; }
+.ux-tabs > * { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 0 2px; margin-bottom: -1px; border: 0; border-bottom: 2px solid transparent; background: none; color: var(--lux-muted); font-size: 15px; white-space: nowrap; cursor: pointer; text-decoration: none; }
+.ux-tabs > *:hover { color: var(--lux-ink); }
+.ux-tabs > [aria-current="page"], .ux-tabs > [aria-selected="true"] { color: var(--lux-ink); border-bottom-color: var(--lux-champagne); }
+.ux-tabs .ux-tabs-end { margin-inline-start: auto; font-size: 14px; }
+
+/* "לטיפול עכשיו" */
+.ux-todo { border: 1px solid rgba(214,196,172,0.22); background: linear-gradient(180deg, rgba(214,196,172,0.06), rgba(214,196,172,0.02)); border-radius: 12px; padding: 18px 20px; margin-bottom: 22px; }
+.ux-todo h2 { margin: 0 0 12px; font-size: 15px; font-weight: 500; color: var(--lux-champagne); display: flex; align-items: center; gap: 8px; }
+.ux-todo ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+.ux-todo li { display: flex; gap: 12px; align-items: center; }
+.ux-todo .n { width: 24px; height: 24px; border-radius: 50%; border: 1px solid rgba(214,196,172,0.4); color: var(--lux-champagne); font-size: 12px; display: grid; place-items: center; flex-shrink: 0; }
+.ux-todo .t { flex: 1; min-width: 0; }
+.ux-todo .t b { font-weight: 500; }
+.ux-todo .t span { display: block; color: var(--lux-muted); font-size: 13.5px; }
+.ux-todo.ok { border-color: rgba(168,192,160,0.3); background: rgba(168,192,160,0.05); }
+.ux-todo.ok h2 { color: var(--lux-success, #a8c0a0); margin: 0; }
+
+/* KPI strip: number + one-line meaning */
+.ux-kpis { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); border: 1px solid var(--lux-line); border-radius: 12px; overflow: hidden; margin-bottom: 26px; background: var(--lux-card); }
+.ux-kpi { padding: 18px 20px; border-inline-start: 1px solid var(--lux-line); min-width: 0; }
+.ux-kpi:first-child { border-inline-start: 0; }
+.ux-kpi .k { font-size: 13px; color: var(--lux-muted); }
+.ux-kpi .v { font-size: 28px; font-weight: 300; letter-spacing: -0.01em; margin: 4px 0 2px; font-variant-numeric: tabular-nums; }
+.ux-kpi .e { font-size: 13px; color: var(--lux-faint); }
+.ux-kpi .e b { color: var(--lux-ink); font-weight: 400; }
+
+.ux-sechead { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin: 0 0 10px; }
+.ux-sechead h2 { margin: 0; font-size: 16px; font-weight: 500; }
+.ux-sechead .hint { font-size: 13px; color: var(--lux-muted); }
+.ux-select { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; color: var(--lux-muted); }
+.ux-select select { min-height: 44px; padding: 0 10px; border-radius: 8px; border: 1px solid var(--lux-line); background: var(--lux-inset); color: var(--lux-ink); font: inherit; font-size: 14px; }
+
+/* collapsed rows (one line per item, details on tap) */
+.ux-list { border: 1px solid var(--lux-line); border-radius: 12px; overflow: hidden; background: var(--lux-card); }
+.ux-colhead, .ux-row > summary { display: grid; grid-template-columns: minmax(0,1.6fr) repeat(4, 76px) 176px 18px; gap: 12px; align-items: center; }
+.ux-colhead { padding: 10px 18px; font-size: 12.5px; color: var(--lux-faint); border-bottom: 1px solid var(--lux-line); }
+.ux-colhead > span { text-align: center; }
+.ux-colhead > span:first-child { text-align: start; }
+.ux-row { border-top: 1px solid var(--lux-line-soft); }
+.ux-row:first-of-type { border-top: 0; }
+.ux-row > summary { list-style: none; cursor: pointer; padding: 14px 18px; min-height: 60px; transition: background-color 150ms; }
+.ux-row > summary::-webkit-details-marker { display: none; }
+.ux-row > summary:hover { background: rgba(255,255,255,0.035); }
+.ux-row .name { font-size: 15px; overflow-wrap: anywhere; }
+.ux-row .sub { font-size: 12.5px; color: var(--lux-faint); overflow-wrap: anywhere; }
+.ux-row .m { text-align: center; font-size: 15px; font-variant-numeric: tabular-nums; }
+.ux-row .m.money { color: var(--lux-success, #a8c0a0); }
+.ux-row .m.none { color: var(--lux-faint); }
+.ux-row .chev { color: var(--lux-faint); transition: transform 220ms ease-out; }
+.ux-row[open] .chev { transform: rotate(180deg); }
+.ux-row .mline { display: none; grid-column: 1 / -1; gap: 14px; flex-wrap: wrap; font-size: 14px; color: var(--lux-muted); }
+.ux-row .mline b { color: var(--lux-ink); font-weight: 400; }
+.ux-row .mline .g { color: var(--lux-success, #a8c0a0); }
+.ux-bar { height: 4px; border-radius: 2px; background: var(--lux-line); margin-top: 6px; overflow: hidden; max-width: 280px; }
+.ux-bar > i { display: block; height: 100%; background: var(--lux-success, #a8c0a0); opacity: 0.7; }
+.ux-detail { padding: 4px 18px 18px; display: grid; grid-template-columns: minmax(0,1.2fr) minmax(0,1fr); gap: 18px; }
+.ux-box { background: var(--lux-inset); border: 1px solid var(--lux-line-soft); border-radius: 10px; padding: 14px 16px; min-width: 0; }
+.ux-box h3 { margin: 0 0 8px; font-size: 13px; color: var(--lux-muted); font-weight: 400; }
+.ux-box ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 8px; font-size: 14px; }
+.ux-names { display: flex; flex-wrap: wrap; gap: 6px; }
+.ux-names span { font-size: 13px; border: 1px solid var(--lux-line); border-radius: 9999px; padding: 3px 11px; }
+.ux-names.won span { border-color: rgba(168,192,160,0.35); color: #c9dcc3; }
+.ux-metrics { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 10px 12px; margin-top: 12px; }
+.ux-metrics .k { font-size: 12px; color: var(--lux-muted); }
+.ux-metrics .v { font-size: 15px; font-variant-numeric: tabular-nums; }
+.ux-more { display: flex; width: 100%; align-items: center; justify-content: space-between; min-height: 52px; padding: 0 18px; border: 0; border-top: 1px solid var(--lux-line); background: none; color: var(--lux-muted); font-size: 14px; cursor: pointer; }
+.ux-more:hover { background: rgba(255,255,255,0.035); color: var(--lux-ink); }
+.ux-skel { height: 60px; border-top: 1px solid var(--lux-line-soft); background: linear-gradient(90deg, rgba(255,255,255,0.02), rgba(255,255,255,0.06), rgba(255,255,255,0.02)); background-size: 200% 100%; animation: ux-shimmer 1.2s linear infinite; }
+@keyframes ux-shimmer { to { background-position: -200% 0; } }
+
+/* status pills — colour AND words, never colour alone */
+.ux-pill { display: inline-flex; align-items: center; gap: 6px; justify-self: start; border-radius: 9999px; padding: 4px 11px; font-size: 12.5px; border: 1px solid; white-space: nowrap; }
+.ux-pill[data-tone="good"] { color: #c9dcc3; border-color: rgba(168,192,160,0.35); background: rgba(168,192,160,0.08); }
+.ux-pill[data-tone="go"] { color: #d3d9ec; border-color: rgba(190,198,224,0.3); background: rgba(190,198,224,0.07); }
+.ux-pill[data-tone="warn"] { color: #ecdcb3; border-color: rgba(224,198,138,0.3); background: rgba(224,198,138,0.07); }
+.ux-pill[data-tone="stop"] { color: #f0c0c0; border-color: rgba(224,138,138,0.3); background: rgba(224,138,138,0.07); }
+.ux-pill[data-tone="idle"], .ux-pill[data-tone="unknown"] { color: var(--lux-muted); border-color: var(--lux-line); }
+
+/* panels / analytics */
+.ux-panel { border: 1px solid var(--lux-line); border-radius: 12px; background: var(--lux-card); padding: 18px 20px; min-width: 0; }
+.ux-panel > h2 { margin: 0; font-size: 16px; font-weight: 500; }
+.ux-panel > .d { margin: 3px 0 14px; font-size: 13.5px; color: var(--lux-muted); }
+.ux-note { font-size: 13px; color: var(--lux-faint); margin-top: 14px; display: flex; gap: 8px; align-items: flex-start; }
+.ux-grid2 { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 18px; }
+.ux-alerts { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 12px; margin-bottom: 26px; }
+.ux-alert { border: 1px solid var(--lux-line); border-radius: 12px; padding: 16px; background: var(--lux-card); display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.ux-alert .top { display: flex; align-items: center; gap: 8px; font-size: 13px; color: #e0c68a; }
+.ux-alert .top.ok { color: var(--lux-success, #a8c0a0); }
+.ux-alert .big { font-size: 26px; font-weight: 300; font-variant-numeric: tabular-nums; }
+.ux-alert .txt { font-size: 14px; }
+.ux-alert .how { font-size: 13px; color: var(--lux-muted); }
+.ux-alert a { margin-top: auto; min-height: 44px; display: inline-flex; align-items: center; gap: 4px; color: var(--lux-champagne); font-size: 14px; text-decoration: none; }
+.ux-alert a:hover { text-decoration: underline; text-underline-offset: 3px; }
+.ux-funnel { display: grid; gap: 8px; }
+.ux-fs { display: grid; grid-template-columns: 170px minmax(0,1fr) 92px; align-items: center; gap: 12px; font-size: 14px; }
+.ux-fs .track { height: 26px; background: var(--lux-inset); border-radius: 6px; overflow: hidden; }
+.ux-fs .fill { height: 100%; border-radius: 6px; background: linear-gradient(90deg, rgba(190,198,224,0.35), rgba(214,196,172,0.45)); }
+.ux-fs .val { text-align: end; font-variant-numeric: tabular-nums; }
+.ux-fs .val small { display: block; font-size: 12px; color: var(--lux-faint); }
+.ux-fs[data-worst] .fill { background: linear-gradient(90deg, rgba(224,198,138,0.45), rgba(224,198,138,0.72)); }
+.ux-fs[data-worst] .val small, .ux-fs .tag { color: #e0c68a; }
+.ux-fs .tag { font-size: 12px; margin-inline-start: 6px; }
+.ux-fs[data-empty] { color: var(--lux-faint); }
+.ux-fs[data-empty] .track { background: repeating-linear-gradient(-45deg, transparent 0 6px, rgba(230,225,224,0.04) 6px 12px); }
+.ux-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.ux-table th { font-weight: 400; font-size: 12.5px; color: var(--lux-faint); text-align: start; padding: 8px 6px; border-bottom: 1px solid var(--lux-line); }
+.ux-table td { padding: 10px 6px; border-bottom: 1px solid var(--lux-line-soft); }
+.ux-table tr:last-child td { border-bottom: 0; }
+.ux-table .n { text-align: center; font-variant-numeric: tabular-nums; }
+.ux-stat3 { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 10px; }
+.ux-stat3 > div { background: var(--lux-inset); border-radius: 10px; padding: 12px; min-width: 0; }
+.ux-stat3 .v { font-size: 22px; font-weight: 300; font-variant-numeric: tabular-nums; }
+.ux-stat3 .k { font-size: 12.5px; color: var(--lux-muted); }
+.ux-hbars { display: grid; gap: 10px; }
+.ux-hbar { display: grid; grid-template-columns: 150px minmax(0,1fr) 48px; gap: 10px; align-items: center; font-size: 14px; }
+.ux-hbar .track { height: 8px; background: var(--lux-inset); border-radius: 4px; overflow: hidden; }
+.ux-hbar .fill { height: 100%; background: var(--lux-champagne); opacity: 0.6; border-radius: 4px; }
+.ux-hbar .n { text-align: end; font-variant-numeric: tabular-nums; }
+
+/* settings: side nav + one group at a time */
+.ux-set { display: grid; grid-template-columns: 240px minmax(0,1fr); gap: 28px; align-items: start; }
+.ux-set > * { min-width: 0; }
+.ux-side { position: sticky; top: 12px; display: grid; gap: 2px; }
+.ux-side .g { font-size: 12px; color: var(--lux-faint); padding: 12px 12px 4px; }
+.ux-side button { display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 0 12px; border: 0; border-radius: 10px; background: none; color: var(--lux-muted); font-size: 15px; text-align: start; cursor: pointer; }
+.ux-side button:hover { color: var(--lux-ink); background: rgba(255,255,255,0.03); }
+.ux-side button[aria-current="true"] { color: var(--lux-ink); background: var(--lux-card-raised); }
+.ux-side button .dirty { margin-inline-start: auto; width: 7px; height: 7px; border-radius: 50%; background: var(--lux-champagne); }
+.ux-savebar { position: sticky; bottom: 14px; z-index: 20; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 16px; padding: 10px 12px 10px 18px; border-radius: 16px; background: #2a2725; border: 1px solid rgba(214,196,172,0.3); box-shadow: 0 18px 50px rgba(0,0,0,0.5); }
+.ux-savebar .t { flex: 1; min-width: 180px; font-size: 14px; }
+.ux-savebar .t span { color: var(--lux-muted); }
+/* the settings groups are older components; give every control in them the
+   44px floor here instead of editing ~40 call sites. Icon-only buttons also get
+   a 44px width. Checkboxes/radios keep their size (their <label> is the target). */
+.ux-set :is(button, select, textarea, summary, input:not([type="checkbox"]):not([type="radio"])) { min-height: 44px; }
+.ux-set button { min-width: 44px; }
+
 @media (max-width: 767px) {
+
+  /* ── .ux-* phone layout (ui-ux-pro-max: 16px body, stacked grids) ── */
+  .mfit .ux { font-size: 16px; }
+  .mfit .ux-todo .t span, .mfit .ux-kpi .e, .mfit .ux-note, .mfit .ux-alert .how { font-size: 14px; }
+  .mfit .ux-todo li { flex-wrap: wrap; align-items: flex-start; }
+  .mfit .ux-todo .t { flex: 1 1 calc(100% - 40px); }
+  .mfit .ux-todo li > :last-child:not(.t) { margin-inline-start: 36px; }
+  .mfit .ux-head-status { flex-basis: 100%; }
+  .mfit .ux-kpis { grid-template-columns: repeat(2, minmax(0,1fr)); }
+  .mfit .ux-kpi { border-inline-start: 0; border-top: 1px solid var(--lux-line); padding: 14px; }
+  .mfit .ux-kpi:nth-child(-n+2) { border-top: 0; }
+  .mfit .ux-kpi:nth-child(even) { border-inline-start: 1px solid var(--lux-line); }
+  .mfit .ux-kpi .v { font-size: 22px; }
+  .mfit .ux-colhead { display: none; }
+  .mfit .ux-row > summary { grid-template-columns: minmax(0,1fr) auto; row-gap: 8px; padding: 14px; }
+  .mfit .ux-row .m, .mfit .ux-row .chev { display: none; }
+  .mfit .ux-row .mline { display: flex; }
+  .mfit .ux-row .ux-pill { grid-row: 1; grid-column: 2; }
+  .mfit .ux-detail { grid-template-columns: minmax(0,1fr); padding: 4px 14px 16px; }
+  .mfit .ux-grid2, .mfit .ux-alerts { grid-template-columns: minmax(0,1fr); }
+  .mfit .ux-panel { padding: 16px 14px; }
+  .mfit .ux-fs { grid-template-columns: 112px minmax(0,1fr) 72px; font-size: 13px; }
+  .mfit .ux-hbar { grid-template-columns: 110px minmax(0,1fr) 44px; }
+  .mfit .ux-stat3 { grid-template-columns: repeat(2, minmax(0,1fr)); }
+  .mfit .ux-stat3 .v { font-size: 19px; }
+  .mfit .ux-set { grid-template-columns: minmax(0,1fr); gap: 16px; }
+  .mfit .ux-side { position: static; display: flex; overflow-x: auto; gap: 6px; scrollbar-width: none; padding-bottom: 4px; }
+  .mfit .ux-side .g { display: none; }
+  .mfit .ux-side button { border: 1px solid var(--lux-line); border-radius: 9999px; white-space: nowrap; font-size: 14px; flex-shrink: 0; }
+  .mfit .ux-savebar { border-radius: 14px; }
+
   /* ---- the single highest-impact rule in this file ----------------------
      iOS Safari zooms the page whenever a control with font-size < 16px takes
      focus, and never zooms back. There are 163 form controls here, nearly all

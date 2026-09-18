@@ -54,7 +54,7 @@ export function QuoteNotifySection({ apiToken }: { apiToken: string }) {
     }
   }
 
-  const label: React.CSSProperties = { fontSize: 12.5, color: "#8a7f74" };
+  const label: React.CSSProperties = { fontSize: 12.5, color: "var(--lux-muted)" };
   const input: React.CSSProperties = {
     width: "100%",
     padding: "7px 9px",
@@ -85,7 +85,7 @@ export function QuoteNotifySection({ apiToken }: { apiToken: string }) {
       </p>
 
       {!loaded ? (
-        <div style={{ color: "#8a7f74", fontSize: 13 }}>טוען…</div>
+        <div style={{ color: "var(--lux-muted)", fontSize: 13 }}>טוען…</div>
       ) : (
         <>
           <label

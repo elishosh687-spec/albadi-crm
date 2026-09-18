@@ -207,7 +207,7 @@ export function CallAnalysisSettingsSection({ apiToken }: { apiToken: string }) 
             <BrainCircuit className="size-5" />
           </div>
           <div>
-            <div className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">שיחות ומעקב</div>
+            <div className="text-[13px] uppercase tracking-[0.18em] text-muted-foreground">שיחות ומעקב</div>
             <h2 className="mt-1 text-lg font-medium">ניתוח שיחות ומשימות</h2>
             <p className="mt-1 max-w-2xl text-xs leading-6 text-muted-foreground">
               המנתח מוציא עובדות והצעת פעולה. הקוד בודק ציטוט, אחראי, מועד וביטחון לפני שמשהו נכתב ל-GHL.
@@ -217,7 +217,7 @@ export function CallAnalysisSettingsSection({ apiToken }: { apiToken: string }) 
         </div>
         <div className="flex items-center gap-2">
           {values && (
-            <span className={`rounded-full px-2.5 py-1 text-[11px] ${writesTasks ? "bg-amber-500/10 text-amber-300" : "bg-emerald-500/10 text-emerald-300"}`}>
+            <span className={`rounded-full px-2.5 py-1 text-[13px] ${writesTasks ? "bg-amber-500/10 text-amber-300" : "bg-emerald-500/10 text-emerald-300"}`}>
               {writesTasks ? "יצירת משימות פעילה" : taskMode === "shadow" ? "מצב צל — ללא משימות" : "ללא יצירה אוטומטית"}
             </span>
           )}
@@ -226,7 +226,7 @@ export function CallAnalysisSettingsSection({ apiToken }: { apiToken: string }) 
             onClick={save}
             disabled={!values || busy || dirtyCount === 0}
             className="lux-cta-champagne disabled:cursor-not-allowed disabled:opacity-50"
-            style={{ minHeight: 38, padding: "0 14px", fontSize: 12 }}
+            style={{ minHeight: 44, padding: "0 18px", fontSize: 14 }}
           >
             {busy ? <Loader2 className="size-3.5 animate-spin" /> : <Save className="size-3.5" />}
             {busy ? "שומר…" : dirtyCount ? `שמור ${dirtyCount} שינויים` : "נשמר"}
@@ -262,9 +262,9 @@ export function CallAnalysisSettingsSection({ apiToken }: { apiToken: string }) 
                 <div>
                   <div className="flex items-center gap-2 text-sm font-medium">
                     {section.title}
-                    {section.write && <span className="rounded-full bg-amber-500/10 px-2 py-0.5 text-[10px] text-amber-300">עשוי לכתוב ל-GHL</span>}
+                    {section.write && <span className="rounded-full bg-amber-500/10 px-2 py-0.5 text-xs text-amber-300">עשוי לכתוב ל-GHL</span>}
                   </div>
-                  <p className="mt-1 text-[11px] leading-5 text-muted-foreground">{section.description}</p>
+                  <p className="mt-1 text-[13px] leading-5 text-muted-foreground">{section.description}</p>
                 </div>
                 <span className="mt-1 text-muted-foreground transition-transform group-open:rotate-180">⌄</span>
               </summary>
@@ -290,7 +290,7 @@ export function CallAnalysisSettingsSection({ apiToken }: { apiToken: string }) 
       <details className="rounded-lg border border-sky-400/20 bg-sky-400/5">
         <summary className="cursor-pointer list-none px-4 py-3">
           <div className="text-sm font-medium text-sky-100">בדיקה יבשה על תמלול</div>
-          <p className="mt-1 text-[11px] leading-5 text-sky-100/70">
+          <p className="mt-1 text-[13px] leading-5 text-sky-100/70">
             מדביקים תמלול ורואים מה ינותח, איזו החלטה תתקבל ואיך תיראה ההערה. הבדיקה לא שומרת דבר ולא כותבת ל-GHL.
           </p>
         </summary>
@@ -311,7 +311,7 @@ export function CallAnalysisSettingsSection({ apiToken }: { apiToken: string }) 
               <div className="rounded-md border border-border/60 bg-background/40 p-3 text-xs">
                 החלטה: <strong>{previewResult.decision}</strong> · סיבה: {previewResult.reason}
               </div>
-              <pre className="max-h-72 overflow-auto whitespace-pre-wrap rounded-md border border-border/60 bg-background/60 p-3 text-[11px] leading-5 text-muted-foreground">{previewResult.note}</pre>
+              <pre className="max-h-72 overflow-auto whitespace-pre-wrap rounded-md border border-border/60 bg-background/60 p-3 text-[13px] leading-5 text-muted-foreground">{previewResult.note}</pre>
             </div>
           )}
         </div>
@@ -335,10 +335,10 @@ function AnalysisSetting({
     <div className={`rounded-lg border p-3 ${dirty ? "border-primary/35 bg-primary/5" : "border-border/50 bg-card/20"}`}>
       <div className="flex items-center justify-between gap-3">
         <label className="text-xs font-medium">{field.label}</label>
-        {dirty && <span className="text-[10px] text-primary">שונה, טרם נשמר</span>}
+        {dirty && <span className="text-xs text-primary">שונה, טרם נשמר</span>}
       </div>
-      <p className="mt-1 whitespace-pre-line text-[11px] leading-5 text-muted-foreground">{field.description}</p>
-      {field.where && <p className="mt-1 text-[10px] text-muted-foreground/70">איפה זה משפיע: {field.where}</p>}
+      <p className="mt-1 whitespace-pre-line text-[13px] leading-5 text-muted-foreground">{field.description}</p>
+      {field.where && <p className="mt-1 text-xs text-muted-foreground/70">איפה זה משפיע: {field.where}</p>}
       <div className="mt-3">
         <AnalysisControl field={field} value={value} onChange={onChange} />
       </div>
@@ -393,7 +393,7 @@ function AnalysisControl({
           onChange={(event) => onChange(Number(event.target.value))}
           className="w-32 rounded-md border border-border bg-background/60 px-3 py-2 text-xs"
         />
-        {field.unit && <span className="text-[11px] text-muted-foreground">{field.unit}</span>}
+        {field.unit && <span className="text-[13px] text-muted-foreground">{field.unit}</span>}
       </div>
     );
   }

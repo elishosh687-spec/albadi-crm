@@ -101,3 +101,36 @@ export function summarizeProfits(profits: number[]): {
     medianProfitIls: median,
   };
 }
+
+export type FunnelStep = BotFunnelRow & {
+  /** Share of the first step, 0..100 (null when the first step is 0). */
+  ofStart: number | null;
+  /** Drop from the previous step, 0..100; null for the first step, or when the
+   *  count went UP (steps measured by different events aren't monotonic). */
+  dropPct: number | null;
+  /** The single biggest drop in the funnel — highlighted in colour AND words. */
+  worst: boolean;
+  /** No event recorded at all — shown as "no data", never as a 0% cliff. */
+  empty: boolean;
+};
+
+/** Funnel rows → display steps (ui-ux-pro-max: explicit drop % per stage,
+ *  highlight the biggest drop, no fake zeros). Pure. */
+export function funnelSteps(rows: BotFunnelRow[]): FunnelStep[] {
+  const base = rows[0]?.uniqueLeads ?? 0;
+  const steps: FunnelStep[] = rows.map((row, i) => {
+    const prev = i > 0 ? rows[i - 1].uniqueLeads : null;
+    const empty = row.uniqueLeads === 0 && row.attempts === 0;
+    const dropPct =
+      prev === null || empty || prev <= 0 || row.uniqueLeads > prev
+        ? null
+        : Math.round(((prev - row.uniqueLeads) / prev) * 100);
+    return { ...row, ofStart: percentage(row.uniqueLeads, base), dropPct, worst: false, empty };
+  });
+  let worstIdx = -1;
+  steps.forEach((s, i) => {
+    if (s.dropPct !== null && s.dropPct > 0 && (worstIdx < 0 || s.dropPct > steps[worstIdx].dropPct!)) worstIdx = i;
+  });
+  if (worstIdx >= 0) steps[worstIdx].worst = true;
+  return steps;
+}

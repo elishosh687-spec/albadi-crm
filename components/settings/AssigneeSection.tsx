@@ -185,13 +185,13 @@ export function AssigneeSection({ apiToken }: { apiToken: string }) {
                 >
                   {u.name}
                   {savedId === u.id && (
-                    <span className="text-[10px] text-emerald-400 me-1.5"> ✓ פעיל</span>
+                    <span className="text-xs text-emerald-400 me-1.5"> ✓ פעיל</span>
                   )}
                 </button>
               );
             })}
           </div>
-          <div className="mt-2 text-[11px] text-muted-foreground">
+          <div className="mt-2 text-[13px] text-muted-foreground">
             כל ליד חדש משויך לאיש הזה.
           </div>
         </>
@@ -200,7 +200,7 @@ export function AssigneeSection({ apiToken }: { apiToken: string }) {
       {/* ROUND-ROBIN mode */}
       {mode === "round_robin" && users !== null && users.length > 0 && (
         <>
-          <div className="mt-3 text-[11px] text-muted-foreground">
+          <div className="mt-3 text-[13px] text-muted-foreground">
             בחר את האנשים בסבב, לפי הסדר — ליד ראשון לראשון, שני לשני, וחוזר חלילה.
           </div>
           <div className="mt-2 flex flex-wrap gap-2">
@@ -221,7 +221,7 @@ export function AssigneeSection({ apiToken }: { apiToken: string }) {
                   )}
                 >
                   {inRotation && (
-                    <span className="inline-flex size-4 items-center justify-center rounded-full bg-primary/80 text-[10px] font-bold text-background">
+                    <span className="inline-flex size-4 items-center justify-center rounded-full bg-primary/80 text-xs font-bold text-background">
                       {order + 1}
                     </span>
                   )}
@@ -260,7 +260,7 @@ export function AssigneeSection({ apiToken }: { apiToken: string }) {
             שמור סבב
           </button>
           {rotation.length < 2 && (
-            <div className="mt-1.5 text-[11px] text-amber-400">בחר לפחות 2 אנשים לסבב.</div>
+            <div className="mt-1.5 text-[13px] text-amber-400">בחר לפחות 2 אנשים לסבב.</div>
           )}
         </>
       )}
@@ -279,7 +279,7 @@ export function AssigneeSection({ apiToken }: { apiToken: string }) {
         {err && <span className="text-red-400">שגיאה: {err}</span>}
       </div>
 
-      <div className="mt-1 text-[11px] text-muted-foreground">
+      <div className="mt-1 text-[13px] text-muted-foreground">
         משפיע רק על שיוך <b>חדש</b>. לידים ומשימות קיימים נשארים אצל מי שהם משויכים
         אליו עכשיו.
       </div>

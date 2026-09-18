@@ -6,7 +6,7 @@ export const dynamic = "force-dynamic";
 export default async function Home({
   searchParams,
 }: {
-  searchParams: Promise<{ tab?: string; sid?: string }>;
+  searchParams: Promise<{ tab?: string; sid?: string; view?: string; section?: string }>;
 }) {
   const params = await searchParams;
   return (
@@ -15,6 +15,7 @@ export default async function Home({
         mode="standalone"
         activeTab={params.tab}
         sid={params.sid?.trim() ?? ""}
+        deepLink={{ view: params.view, section: params.section }}
       />
     </WidgetSurface>
   );

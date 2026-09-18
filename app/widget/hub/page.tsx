@@ -9,6 +9,8 @@ interface SearchParams {
   widget_token?: string;
   tab?: string;
   sid?: string;
+  view?: string;
+  section?: string;
 }
 
 export default async function HubWidgetPage({
@@ -34,6 +36,7 @@ export default async function HubWidgetPage({
       widgetToken={token}
       activeTab={params.tab}
       sid={params.sid?.trim() ?? ""}
+      deepLink={{ view: params.view, section: params.section }}
     />
   );
 }

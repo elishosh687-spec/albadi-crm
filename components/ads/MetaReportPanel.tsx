@@ -12,7 +12,7 @@ import type {
 } from "@/lib/meta/reporting-status";
 
 const INK = "#e6e1e0";
-const MUTED = "#8a7f74";
+const MUTED = "var(--lux-muted)";
 const LINE = "rgba(230,225,224,0.08)";
 
 /** Visual language per state, defined once so the header chips and the row
@@ -32,8 +32,8 @@ const REPORT_STATE: Record<
 
 function chip(color: string): React.CSSProperties {
   return {
-    fontSize: 11,
-    padding: "2px 9px",
+    fontSize: 12.5,
+    padding: "4px 11px",
     borderRadius: 999,
     color,
     border: `1px solid ${color}33`,
@@ -64,12 +64,12 @@ function countChips(reporting: MetaReportingStatus) {
 function ReportList({ title, rows }: { title: string; rows: ReportedLead[] }) {
   if (rows.length === 0) return null;
   return (
-    <div style={{ padding: "10px 14px 12px" }}>
+    <div style={{ padding: "12px 18px 14px" }}>
       <div
         style={{
-          fontSize: 10.5,
+          fontSize: 12,
           color: MUTED,
-          letterSpacing: "0.14em",
+          letterSpacing: "0.08em",
           textTransform: "uppercase",
           marginBottom: 7,
         }}
@@ -82,7 +82,7 @@ function ReportList({ title, rows }: { title: string; rows: ReportedLead[] }) {
           <div
             key={`${r.name}-${i}`}
             style={{
-              padding: "7px 0",
+              padding: "10px 0",
               // separators only BETWEEN rows — a rule under every row, including
               // the last, is what made the first version read as a wall
               borderTop: i === 0 ? "none" : `1px solid ${LINE}`,
@@ -97,11 +97,9 @@ function ReportList({ title, rows }: { title: string; rows: ReportedLead[] }) {
                 style={{
                   flex: 1,
                   minWidth: 0,
-                  fontSize: 13,
+                  fontSize: 14.5,
                   color: INK,
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
-                  whiteSpace: "nowrap",
+                  overflowWrap: "anywhere",
                 }}
               >
                 {r.name}
@@ -109,7 +107,7 @@ function ReportList({ title, rows }: { title: string; rows: ReportedLead[] }) {
               {typeof r.valueIls === "number" ? (
                 <span
                   className="tabular-nums"
-                  style={{ fontSize: 12.5, color: MUTED }}
+                  style={{ fontSize: 14, color: MUTED }}
                 >
                   ₪{Math.round(r.valueIls).toLocaleString("he-IL")}
                 </span>
@@ -119,7 +117,7 @@ function ReportList({ title, rows }: { title: string; rows: ReportedLead[] }) {
             {/* the reason belongs to ITS row — one shared note under the whole
                 list left you guessing which name it referred to */}
             {r.note ? (
-              <div style={{ fontSize: 11, color: MUTED, marginTop: 2 }}>
+              <div style={{ fontSize: 13, color: MUTED, marginTop: 2 }}>
                 {r.note}
               </div>
             ) : null}
@@ -138,7 +136,7 @@ export function MetaReportPanel({
   return (
     <section
       style={{
-        marginTop: 20,
+        marginTop: 0,
         border: `1px solid ${LINE}`,
         borderRadius: 10,
         background: "rgba(255,255,255,0.02)",
@@ -151,11 +149,11 @@ export function MetaReportPanel({
           display: "flex",
           alignItems: "center",
           gap: 10,
-          padding: "11px 14px",
+          padding: "14px 18px",
           borderBottom: `1px solid ${LINE}`,
         }}
       >
-        <div style={{ fontSize: 13, fontWeight: 600, color: INK }}>
+        <div style={{ fontSize: 16, fontWeight: 500, color: INK }}>
           מה עבר למטא
         </div>
         <div
@@ -177,7 +175,7 @@ export function MetaReportPanel({
       {reporting.unreportedRevenueIls > 0 ? (
         <div
           style={{
-            fontSize: 12,
+            fontSize: 14,
             color: "#e08a8a",
             lineHeight: 1.65,
             padding: "9px 14px",
