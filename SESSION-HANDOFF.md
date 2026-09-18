@@ -5,7 +5,7 @@
 - Eli approved a design for a recommendation-only decision engine inside the
   canonical GHL Hub `מודעות` widget.
 - No production database, setting, or Meta object has been changed for this
-  project. Code for Phases 1–2 is committed locally (see below).
+  project. Code for Phases 1–3 is committed locally (see below).
 - The complete approved design is
   `docs/plans/2026-09-18-meta-ad-recommendations-settings-design.md`.
 - Source methodology and evidence are outside this repository:
@@ -29,11 +29,20 @@
   architecture test, integration test. Unit + typecheck + integration (191/191
   on a throwaway branch, deleted) green. **0004 is NOT applied to production.**
   Nothing calls the new routes yet, so prod is unaffected until the UI ships.
-- Next step: Phase 3 — Meta daily evidence by exact Ad ID (paginated insights,
-  `action_type=lead` only, `fetchAdStatuses`), CRM evidence by normalised
-  `meta_ad_id` + `lead_tags` tag + closed deals, assembly + `GET
-  /api/widget/ads/recommendations`. Apply 0004 to prod only with Eli's OK,
-  before the Phase 4 UI deploys.
+- Phase 3 DONE — Meta daily evidence by exact Ad ID, CRM evidence, assembly,
+  `GET /api/widget/ads/recommendations`, and the daily alert job
+  `ads-evidence` (`/api/cron/ads-evidence-check`, Vercel 06:30 UTC) that fails
+  with a Hebrew reason → the watchdog WhatsApps Eli. Tests green (unit 630,
+  integration 202 on a deleted throwaway branch).
+- **Blocker for real use:** `META_ADS_TOKEN` is NOT set in Vercel production
+  (checked 2026-09-18) — the existing ads report has never shown spend either.
+  Eli must create a System User token with `ads_read` only (Business Settings
+  → System Users) and it goes into Vercel. Until then the new job fails daily
+  by design, so set the token before/with the deploy.
+- Next step: Phase 4 — the `המלצות` / `הגדרות בדיקה` sub-tabs in
+  `app/widget/ads`. Then Phase 5: apply 0004 to prod (Eli's OK), set the
+  token, seed review state from the reviewed mapping, deploy, kick the job once,
+  add the job to `docs/agent/jobs.md`.
 
 ## Completed project — call analysis V2
 

@@ -1,7 +1,7 @@
 # Meta Ad Recommendations — Implementation Plan
 
 **Date:** 2026-09-18
-**Status:** Approved by Eli 2026-09-18. Phase 1 done (`f5f4733`); Phase 2 done (code + tests, migration NOT yet applied to prod); Phases 3–5 pending
+**Status:** Approved by Eli 2026-09-18. Phase 1 done (`f5f4733`); Phase 2 done (migration NOT yet applied to prod); Phase 3 done; Phases 4–5 pending
 **Approved design:** `docs/plans/2026-09-18-meta-ad-recommendations-settings-design.md`
 **Methodology sources (read-only, never loaded at runtime):**
 `/Users/eli/Projects/marketing/albadi/account/tests.md`,
@@ -298,6 +298,48 @@ Unit: `actions` parsing (lead vs `onsite_conversion.lead_grouped` etc.),
 pagination merge, delivery-day counting, join with one-sided IDs, same-name
 two-ID case stays two rows. Integration: seeded `test:ci-*` leads with tags
 and a closed quote, Meta fetch stubbed.
+
+### Phase 3 as built (2026-09-18)
+
+- `lib/ads/meta-evidence.ts` — insights `level=ad`, `time_increment=1`, in
+  90-day windows from `META_ADS_HISTORY_START` (default `2026-01-01`), every
+  `paging.next` followed; `/ads` for name/ad set/campaign/`effective_status`.
+  Any failed request → whole snapshot unavailable (a partial history would
+  decide gates wrongly). Leads = `action_type === "lead"` only. Errors are
+  explained in Hebrew (190 expired, 10/200 permission, 4/17/32/613 rate
+  limit) and neither a URL nor a raw fetch error is ever returned — the
+  `paging.next` URL carries the token. 10-minute cache.
+- `lib/ads/crm-evidence.ts` — grouped by `normalizeAdId(meta_ad_id)`;
+  suitable = `lead_tags` tag equal (case/space-insensitive) to the setting;
+  deals from `listClosedQuotes()`; reports leads with a name but no ID and
+  names with several IDs. `test:` leads excluded (option for the test only).
+- `lib/ads/assemble.ts` — union of Meta / CRM / review-state IDs; a CRM-only ID
+  → `insufficient_or_conflicting_data` + `health.unknownToMeta`; name
+  collisions and Meta-vs-CRM lead-count mismatch are row warnings only;
+  `conflictBetween(approved, code)` flags disagreement, never applies it.
+- `lib/ads/build-recommendations.ts` + `GET /api/widget/ads/recommendations`
+  (`?fresh=1`). Meta down still answers 200 with the reason in `health.meta`.
+- **Alerts (Eli, 2026-09-18: "התראות ללוגים ואלי אם משהו הפסיק לעבוד בחיבורים").**
+  New job `ads-evidence` in `JOBS` + `vercel.json` (`30 6 * * *`, after the
+  06:00 attribution cron) → `/api/cron/ads-evidence-check`, wrapped with
+  `withJob`. It builds exactly what the screen builds and THROWS with the
+  Hebrew reason when Meta is unavailable (no/expired token, permission, a page
+  that failed) or the DB/CRM read fails — so the job watchdog WhatsApps Eli
+  once per incident with that reason, and once on recovery. Data warnings are
+  log lines only (`ads_evidence.identity_warnings`); a badly performing ad is
+  never an alert.
+  ⚠️ **Until `META_ADS_TOKEN` is set in Vercel production this job fails every
+  day** — correct (the feature cannot work), but it means the token must be
+  set before or together with the deploy. After deploy, POST the route once by
+  hand so the watchdog doesn't report "never ran".
+- Tests: unit `meta-evidence` (paging, lead parsing, windowing, token never
+  leaked), `assemble` (exact-ID rows, Meta down, unknown ID, conflicts);
+  integration `ad-evidence` (real DB fold, API, job fails on missing/expired
+  token with the reason in `jobs.status`, recovers on a stubbed healthy Meta).
+  Unit 630 + 2 expected fails; integration 202/202 on a throwaway branch
+  (deleted).
+- Docs gap: the new job is not yet listed in `docs/agent/jobs.md` — another
+  session was mid-edit on `docs/agent/*` at the time; add it in Phase 5.
 
 ---
 
