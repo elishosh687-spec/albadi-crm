@@ -4,8 +4,8 @@
 
 - Eli approved a design for a recommendation-only decision engine inside the
   canonical GHL Hub `מודעות` widget.
-- No production database, setting, or Meta object has been changed for this
-  project. Code for Phases 1–3 is committed locally (see below).
+- Phases 1–3 are deployed to production (see below). No Meta object was
+  changed; the only Meta change was the system user's ad-account access.
 - The complete approved design is
   `docs/plans/2026-09-18-meta-ad-recommendations-settings-design.md`.
 - Source methodology and evidence are outside this repository:
@@ -34,15 +34,24 @@
   `ads-evidence` (`/api/cron/ads-evidence-check`, Vercel 06:30 UTC) that fails
   with a Hebrew reason → the watchdog WhatsApps Eli. Tests green (unit 630,
   integration 202 on a deleted throwaway branch).
-- **Blocker for real use:** `META_ADS_TOKEN` is NOT set in Vercel production
-  (checked 2026-09-18) — the existing ads report has never shown spend either.
-  Eli must create a System User token with `ads_read` only (Business Settings
-  → System Users) and it goes into Vercel. Until then the new job fails daily
-  by design, so set the token before/with the deploy.
+- **DEPLOYED 2026-09-18 (Eli's OK):** migration 0004 applied to prod Neon
+  (3 empty tables + 4 indexes verified); pushed `1924f60` to main; Vercel
+  production deployment Ready. `META_ADS_TOKEN` is set in Vercel production —
+  a SYSTEM USER token ("eli", business 1041177089073457, never expires); Eli
+  ticked every scope, but the system user only holds the ad account (Manage
+  campaigns) + the "Ads Automation" app. Two Meta tokens were pasted into chat
+  — the first (Eli's personal user token) should be revoked.
+- Also shipped: the existing ads report now shows spend — it joined `ag:`-prefixed
+  `meta_ad_id` against bare Meta IDs (never matched) and took one copy's spend
+  per name (C-magic-hat-trick ₪104 of ₪1,146). Verified live: total ₪4,324.
+- `ads-evidence` job kicked by hand after deploy: ok, 69 ads, 368 Meta daily
+  rows, heartbeat `lastStatus: ok`; watchdog dry-run clean for it. 66
+  "conflicts" are expected — no approved statuses are seeded yet (every ad
+  that spent reads "untested").
 - Next step: Phase 4 — the `המלצות` / `הגדרות בדיקה` sub-tabs in
-  `app/widget/ads`. Then Phase 5: apply 0004 to prod (Eli's OK), set the
-  token, seed review state from the reviewed mapping, deploy, kick the job once,
-  add the job to `docs/agent/jobs.md`.
+  `app/widget/ads` (the APIs are live). Then Phase 5: seed review state from a
+  reviewed Ad-ID mapping, header note in `tests.md`/`meta-ads.md`, add the job
+  to `docs/agent/jobs.md`.
 
 ## Completed project — call analysis V2
 
