@@ -23,7 +23,7 @@ import {
   ChevronDown,
   ChevronLeft,
 } from "lucide-react";
-import { LuxShell, LuxTitle, LuxAccent, LuxCTA, LuxStat } from "@/components/widget-ui/lux";
+import { LuxShell, LuxTitle, LuxAccent, LuxCTA } from "@/components/widget-ui/lux";
 import SizeComparisonTable from "./SizeComparisonTable";
 
 interface Row {
@@ -87,13 +87,14 @@ const inputStyle: React.CSSProperties = {
   border: "1px solid var(--lux-line)",
   borderRadius: 7,
   color: "var(--lux-ink)",
-  fontSize: 13.5,
-  padding: "9px 11px",
+  fontSize: 16,
+  minHeight: 44,
+  padding: "9px 12px",
   outline: "none",
   fontFamily: "inherit",
 };
 const labelStyle: React.CSSProperties = {
-  fontSize: 11.5,
+  fontSize: 13,
   color: "var(--lux-muted)",
   marginBottom: 5,
   display: "block",
@@ -516,28 +517,8 @@ export default function CompetitorsScreen({
       return n;
     });
 
-  // Headline stats: on how many head-to-heads are we cheaper / faster.
-  const stats = useMemo(() => {
-    let priceN = 0, cheaper = 0, leadN = 0, faster = 0;
-    for (const r of rows) {
-      if (r.ourPrice != null && r.competitorPrice != null) {
-        priceN++;
-        if (r.ourPrice <= r.competitorPrice) cheaper++;
-      }
-      if (r.ourLeadDays != null && r.competitorLeadDays != null) {
-        leadN++;
-        if (r.ourLeadDays <= r.competitorLeadDays) faster++;
-      }
-    }
-    return {
-      total: rows.length,
-      cheaperPct: priceN ? Math.round((cheaper / priceN) * 100) : null,
-      fasterPct: leadN ? Math.round((faster / leadN) * 100) : null,
-    };
-  }, [rows]);
-
   return (
-    <LuxShell>
+    <LuxShell className="ux">
       <LuxTitle
         overline="— Competitor intel"
         subtitle="כל פעם שאתה נתקל בהצעה מתחרה — תעד אותה כאן עם אותם מאפיינים שאנחנו מתמחרים, ותדע בדיוק איפה אתה עומד: מחיר, גלופות וזמן אספקה."
@@ -550,21 +531,6 @@ export default function CompetitorsScreen({
       >
         מחיר <LuxAccent>מתחרים</LuxAccent>.
       </LuxTitle>
-
-      {/* headline stats */}
-      <div style={{ display: "flex", gap: 12, marginBottom: 18, flexWrap: "wrap" }}>
-        <LuxStat value={stats.total} label="השוואות" />
-        <LuxStat
-          value={stats.cheaperPct != null ? `${stats.cheaperPct}%` : "—"}
-          label="זולים יותר"
-          tone={stats.cheaperPct != null && stats.cheaperPct >= 50 ? "success" : "default"}
-        />
-        <LuxStat
-          value={stats.fasterPct != null ? `${stats.fasterPct}%` : "—"}
-          label="מהירים יותר"
-          tone={stats.fasterPct != null && stats.fasterPct >= 50 ? "success" : "default"}
-        />
-      </div>
 
       {/* add form */}
       {showForm && (
@@ -737,13 +703,13 @@ export default function CompetitorsScreen({
         </div>
       )}
 
-      {error && <div style={{ color: "#e8b4b4", fontSize: 13, marginBottom: 14 }}>{error}</div>}
+      {error && <div role="alert" style={{ color: "#f0c0c0", fontSize: 14, marginBottom: 14 }}>{error}</div>}
 
       {!loading && rows.length > 0 && (
         <SizeComparisonTable rows={rows as never} token={token} />
       )}
       {loading ? (
-        <div style={{ color: "var(--lux-muted)", fontSize: 13 }}>טוען…</div>
+        <div className="ux-panel" role="status" style={{ color: "var(--lux-muted)", textAlign: "center" }}>טוען השוואות…</div>
       ) : rows.length === 0 ? (
         <div style={{ color: "var(--lux-muted)", fontSize: 13.5, textAlign: "center", padding: "40px 20px", lineHeight: 1.6 }}>
           עדיין אין השוואות.

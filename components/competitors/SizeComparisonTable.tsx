@@ -22,6 +22,8 @@
  */
 
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { ChevronDown } from "lucide-react";
+import { gapVerdict, summarize } from "@/lib/competitors/compare";
 
 export interface CompRow {
   id: number;
@@ -260,7 +262,7 @@ export default function SizeComparisonTable({
 
   const spec = visible[0];
   // Only what every row in this size actually shares. Colours, lamination and
-  // handles now vary row to row and are shown per row instead.
+  // handles vary row to row and are shown per row instead.
   const specLine = spec
     ? [
         (spec.size?.split(/[×x*]/).length ?? 0) > 2 ? "תלת־ממדי" : "שטוח",
@@ -270,274 +272,231 @@ export default function SizeComparisonTable({
         .join(" · ")
     : "";
 
-  // One style per column, shared by the header and its cells, so a header can
-  // never drift away from the numbers beneath it.
-  const th: React.CSSProperties = {
-    padding: "10px 12px",
-    fontSize: 11,
-    fontWeight: 600,
-    color: "var(--lux-muted)",
-    whiteSpace: "nowrap",
-    textAlign: "start",
-    letterSpacing: "0.02em",
+  /** Both order totals + the verdict for one row (plates per the toggle). */
+  const compare = (r: CompRow) => {
+    const mine = ours.get(r.id);
+    const theirsTotal = theirTotal(r, withPlates);
+    // `totalIls` from the API always carries our plates; without them the
+    // order is simply unit × quantity.
+    const ourTotal = withPlates
+      ? mine?.totalIls ?? null
+      : mine?.unitIls != null && r.quantity
+        ? mine.unitIls * r.quantity
+        : null;
+    return { mine, theirsTotal, ourTotal, verdict: gapVerdict(theirsTotal, ourTotal) };
   };
-  const td: React.CSSProperties = {
-    padding: "11px 12px",
-    fontSize: 13,
-    textAlign: "start",
-    whiteSpace: "nowrap",
-    verticalAlign: "middle",
-  };
-  const soft: React.CSSProperties = { ...td, fontSize: 12, color: "var(--lux-muted)" };
-  // The "אנחנו" column is the point of the table — framed rather than tinted,
-  // so it reads as one continuous column top to bottom.
-  const mineEdge = "1px solid rgba(214,196,172,0.22)";
-  const mineCell: React.CSSProperties = {
-    ...td,
-    background: "rgba(214,196,172,0.06)",
-    borderInlineStart: mineEdge,
-    borderInlineEnd: mineEdge,
-  };
+
+  // Headline numbers — across everything logged (in the chosen origin), from
+  // the LIVE price of our side.
+  const overall = useMemo(() => summarize(inOrigin.map((r) => compare(r).verdict)), [inOrigin, ours, withPlates]); // eslint-disable-line react-hooks/exhaustive-deps
+  const here = useMemo(() => summarize(visible.map((r) => compare(r).verdict)), [visible, ours, withPlates]); // eslint-disable-line react-hooks/exhaustive-deps
+  const suppliers = new Set(rows.map((r) => r.competitor.trim())).size;
+  const loadingOurs = pricing && ours.size === 0;
+
+  // Group this size's quotes by supplier (חביב sent ten rows for one bag);
+  // the name shows once per group.
+  const grouped = useMemo(
+    () =>
+      [...visible].sort(
+        (a, b) => a.competitor.localeCompare(b.competitor, "he") || (a.quantity ?? 0) - (b.quantity ?? 0),
+      ),
+    [visible],
+  );
 
   return (
     <div>
-      <div className="competitor-toolbar">
-        <div className="competitor-toolbar__filters">
-          <div>
-            <span className="competitor-toolbar__label">איפה מייצרים</span>
-            <div className="competitor-segmented">
-              {ORIGIN_TABS.map((t) => {
-                const n = originCounts[t.id];
-                if (t.id !== "all" && n === 0) return null;
-                const on = t.id === origin;
-                return (
-                  <button key={t.id} type="button" onClick={() => setOrigin(t.id)} className="lux-tap" data-active={on}>
-                    {t.label} <Num>{n}</Num>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-          <label>
-            <span className="competitor-toolbar__label">מידה להשוואה</span>
-            <select className="competitor-size-select" value={size} onChange={(e) => setSize(e.target.value)}>
-              {sizes.map(([s, n]) => <option key={s} value={s}>{s} · {n} הצעות</option>)}
-            </select>
-          </label>
+      <div className="ux-kpis">
+        <div className="ux-kpi">
+          <div className="k">השוואות</div>
+          <div className="v">{rows.length}</div>
+          <div className="e">מ־<b>{suppliers}</b> ספקים</div>
         </div>
+        <div className="ux-kpi">
+          <div className="k">אנחנו זולים יותר</div>
+          <div className="v">{loadingOurs ? "…" : overall.compared ? `${overall.cheaper} מתוך ${overall.compared}` : "—"}</div>
+          <div className="e">{origin === "all" ? "בכל ההשוואות שיש לנו מחיר" : origin === "IL" ? "מול ייצור בארץ" : "מול ייצור בחו״ל"}</div>
+        </div>
+        <div className="ux-kpi">
+          <div className="k">חיסכון ממוצע ללקוח</div>
+          <div className="v">{loadingOurs || overall.avgSaving == null ? "—" : nisWhole(Math.abs(overall.avgSaving))}</div>
+          <div className="e">{overall.avgSaving == null ? "אין עדיין מחיר שלנו" : overall.avgSaving >= 0 ? "להזמנה, לטובתנו" : "להזמנה — אנחנו יקרים יותר"}</div>
+        </div>
+        <div className="ux-kpi">
+          <div className="k">אספקה</div>
+          <div className="v" style={{ fontSize: 20 }}>{origin === "IL" ? "הם מהירים" : origin === "CN" ? "דומה" : "תלוי"}</div>
+          <div className="e">בארץ: שבועות · חו״ל ואצלנו: כ־3 חודשים</div>
+        </div>
+      </div>
 
-        <div className="competitor-toolbar__scenario">
-          <div className="competitor-margin-heading">
-            <span><b>תרחיש שלנו</b><small>שינוי הרווח מעדכן רק את עמודת אלבדי</small></span>
-            <Num bold>{margin ?? "—"}%</Num>
-          </div>
-        <input
-          type="range"
-          min={0}
-          max={85}
-          step={1}
-          value={margin ?? 60}
-          onChange={(e) => setMargin(Number(e.target.value))}
-          className="lux-range"
-          style={{ width: "100%" }}
-          aria-label="אחוז רווחיות"
-        />
-          <div className="competitor-scenario-footer">
+      <div className="competitor-bar">
+        <div className="ux-chips" role="group" aria-label="איפה מייצרים">
+          {ORIGIN_TABS.map((t) => {
+            const n = originCounts[t.id];
+            if (t.id !== "all" && n === 0) return null;
+            return (
+              <button key={t.id} type="button" className="ux-chip" aria-pressed={t.id === origin} onClick={() => setOrigin(t.id)}>
+                {t.label} <span className="tnum">{n}</span>
+              </button>
+            );
+          })}
+        </div>
+        <label className="ux-select">
+          מידה
+          <select value={size} onChange={(e) => setSize(e.target.value)}>
+            {sizes.map(([s, n]) => (
+              <option key={s} value={s}>{s} · {n} הצעות</option>
+            ))}
+          </select>
+        </label>
+      </div>
+
+      <details className="ux-panel ux-fold competitor-scenario" style={{ marginBottom: 18 }}>
+        <summary style={{ color: "var(--lux-ink)" }}>
+          <span>
+            תרחיש: רווח <b className="tnum">{margin ?? "—"}%</b> · {withPlates ? "כולל גלופות" : "בלי גלופות"}
+            <span className="ux-sr"> — לחץ לשינוי</span>
+          </span>
+          <span className="flex items-center gap-2" style={{ color: "var(--lux-muted)", fontSize: 13 }}>
+            שנה <ChevronDown className="size-4 chev" aria-hidden />
+          </span>
+        </summary>
+        <div style={{ paddingTop: 8 }}>
+          <label htmlFor="comp-margin" style={{ fontSize: 14, color: "var(--lux-muted)" }}>
+            אחוז הרווח שלנו — משנה רק את העמודה "אנחנו"
+          </label>
+          <input
+            id="comp-margin"
+            type="range"
+            min={0}
+            max={85}
+            step={1}
+            value={margin ?? 60}
+            onChange={(e) => setMargin(Number(e.target.value))}
+            className="lux-range competitor-range"
+          />
+          <div className="flex flex-wrap items-center gap-3">
             <label className="competitor-check">
               <input type="checkbox" checked={withPlates} onChange={(e) => setWithPlates(e.target.checked)} />
               לכלול גלופות בסה״כ
             </label>
             {defaultMargin != null && margin !== defaultMargin && (
-              <button type="button" onClick={() => setMargin(defaultMargin)}>חזרה לברירת מחדל</button>
+              <button type="button" className="ux-btn" onClick={() => setMargin(defaultMargin)}>
+                חזרה ל־{defaultMargin}%
+              </button>
             )}
-            {pricing && <span>מחשב…</span>}
           </div>
         </div>
-      </div>
+      </details>
 
       {priceErr && (
-        <div style={{ fontSize: 12, color: "#e8b4b4", marginBottom: 10 }}>
-          לא הצלחתי לחשב את הצד שלנו: {priceErr}
-        </div>
+        <p className="ux-note" style={{ color: "#f0c0c0", marginTop: 0 }} role="alert">
+          לא הצלחתי לחשב את הצד שלנו ({priceErr}). המחירים שלהם נכונים; נסה לרענן.
+        </p>
       )}
 
-      <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: 8, flexWrap: "wrap" }}>
-        <span style={{ fontSize: 16, fontWeight: 600 }}>
-          <Num>{size}</Num>
+      <div className="ux-sechead">
+        <h2>
+          <span className="ltr">{size}</span>
+          <span style={{ fontSize: 14, color: "var(--lux-muted)", fontWeight: 400, marginInlineStart: 10 }}>{specLine}</span>
+        </h2>
+        <span className="hint" aria-live="polite">
+          {loadingOurs || pricing
+            ? "מחשב את המחיר שלנו…"
+            : here.compared
+              ? `במידה הזו: זולים ב־${here.cheaper} מתוך ${here.compared}`
+              : ""}
         </span>
-        <span style={{ fontSize: 12, color: "var(--lux-muted)" }}>{specLine}</span>
       </div>
 
-      {/* the table — a flat grid, so it scrolls sideways rather than stacking */}
-      <div
-        className="lux-scroll-x"
-        style={{ overflowX: "auto", borderRadius: 8, boxShadow: "inset 0 0 0 1px var(--lux-line)" }}
-      >
-        <table style={{ width: "100%", minWidth: origin === "all" ? 720 : 640, borderCollapse: "collapse" }}>
+      <div className="competitor-table-wrap">
+        <table className="competitor-table">
+          <caption className="ux-sr">הצעות מתחרים במידה {size}, מול המחיר שלנו לאותה כמות ומפרט</caption>
           <thead>
-            <tr style={{ background: "rgba(255,255,255,0.03)" }}>
-              <th style={th}>ספק</th>
-              {/* redundant once a bucket is picked — and dropping it pulls the
-                  "אנחנו" column into view on a phone without side-scrolling */}
-              {origin === "all" && <th style={th}>ייצור</th>}
-              <th style={th}>כמות</th>
-              {/* Competitors quote a MATRIX — the same bag at two quantities,
-                  with and without lamination, at one or two colours. Without
-                  this column those rows are indistinguishable and the table
-                  reads as one price contradicting itself. */}
-              <th style={th}>מפרט</th>
-              <th style={th}>שלהם</th>
-              <th style={{ ...th, color: "var(--lux-champagne)", background: "rgba(214,196,172,0.06)", borderInlineStart: mineEdge, borderInlineEnd: mineEdge }}>
-                אנחנו
-              </th>
-              <th style={th}>פער בהזמנה</th>
-              <th style={th}>גלופה</th>
-              <th style={th}>משלוח</th>
-              <th style={th}>אספקה</th>
+            <tr>
+              <th scope="col">ספק</th>
+              <th scope="col">כמות · מפרט</th>
+              <th scope="col">שלהם</th>
+              <th scope="col" className="mine">אנחנו</th>
+              <th scope="col">מי זול יותר</th>
+              <th scope="col"><span className="ux-sr">פרטים</span></th>
             </tr>
           </thead>
           <tbody>
-            {visible.map((r, i) => {
-              const mine = ours.get(r.id);
-              const theirs = r.competitorPrice;
-              const theirsTotal = theirTotal(r, withPlates);
-              // `totalIls` from the API always carries our plates; without
-              // them the order is simply unit × quantity.
-              const ourTotal = withPlates
-                ? mine?.totalIls ?? null
-                : mine?.unitIls != null && r.quantity
-                  ? mine.unitIls * r.quantity
-                  : null;
-              // The gap is on the ORDER, not the unit — that is the number
-              // that decides a deal, and the only one that can carry plates.
-              const gap = ourTotal != null && theirsTotal != null ? theirsTotal - ourTotal : null;
-              const isCheapest = theirs != null && cheapest != null && theirs === cheapest;
-              const zebra = i % 2 ? "rgba(255,255,255,0.015)" : "transparent";
-              const line = { borderTop: "1px solid var(--lux-line)" };
+            {grouped.map((r, i) => {
+              const { mine, theirsTotal, ourTotal, verdict } = compare(r);
+              const firstOfSupplier = i === 0 || grouped[i - 1].competitor !== r.competitor;
+              const isCheapest = r.competitorPrice != null && cheapest != null && r.competitorPrice === cheapest;
+              const open = openNote === r.id;
               return (
                 <Fragment key={r.id}>
-                <tr style={{ background: zebra }}>
-                  <td style={{ ...td, ...line }}>
-                    {r.competitor}
-                    {isCheapest && (
-                      <span style={{ fontSize: 10, color: "var(--lux-muted)", marginInlineStart: 6 }}>הזול</span>
-                    )}
-                  </td>
-                  {origin === "all" && (
-                    <td style={{ ...soft, ...line }}>
-                      {r.origin ?? (bucketOf(r) === "IL" ? "ישראל" : "חו״ל")}
+                  <tr className={firstOfSupplier ? "group-start" : undefined}>
+                    <td data-label="ספק" className="sup">
+                      {/* the name repeats (dimmed) so a phone card still says who */}
+                      <span className={firstOfSupplier ? undefined : "repeat"}>{r.competitor}</span>
+                      <small>{r.origin ?? (bucketOf(r) === "IL" ? "ישראל" : "חו״ל")}{isCheapest ? " · הזול במידה הזו" : ""}</small>
                     </td>
-                  )}
-                  <td style={{ ...td, ...line }}>
-                    <Num>{r.quantity?.toLocaleString("he-IL") ?? "—"}</Num>
-                  </td>
-                  <td style={{ ...soft, ...line }}>
-                    {specOf(r)}
-                    {r.notes && (
+                    <td data-label="כמות · מפרט">
+                      <span className="tnum">{r.quantity?.toLocaleString("he-IL") ?? "—"} יח׳</span>
+                      <small>{specOf(r)}</small>
+                    </td>
+                    <td data-label="שלהם">
+                      <Num>{r.competitorPrice != null ? nis(r.competitorPrice) : "—"}</Num>
+                      {theirsTotal != null && <small><Num>{nisWhole(theirsTotal)}</Num> להזמנה</small>}
+                    </td>
+                    <td data-label="אנחנו" className="mine">
+                      {loadingOurs ? (
+                        <span className="ux-skel-inline" aria-label="מחשב" />
+                      ) : mine?.unitIls != null ? (
+                        <>
+                          <Num bold>{nis(mine.unitIls)}</Num>
+                          <small>
+                            {ourTotal != null && <><Num>{nisWhole(ourTotal)}</Num> להזמנה · </>}
+                            {SOURCE_SHORT[mine.source ?? ""] ?? ""}
+                          </small>
+                          {mine.source === "proxy" && mine.proxyLabel && (
+                            <small className="proxy">
+                              לפי <Num>{mine.proxyLabel}</Num> (<Num>{`${(mine.proxyAreaPct ?? 0) > 0 ? "+" : ""}${mine.proxyAreaPct}%`}</Num> בד)
+                            </small>
+                          )}
+                        </>
+                      ) : (
+                        <small title={mine?.refused ?? ""}>{mine?.refused ? "צריך מחיר מהמפעל" : "—"}</small>
+                      )}
+                    </td>
+                    <td data-label="מי זול יותר">
+                      {verdict ? (
+                        <span className="ux-pill" data-tone={verdict.tone === "good" ? "good" : verdict.tone === "bad" ? "stop" : "idle"}>
+                          {verdict.text}
+                        </span>
+                      ) : (
+                        <small>{loadingOurs ? "" : "אין השוואה"}</small>
+                      )}
+                    </td>
+                    <td className="more">
                       <button
                         type="button"
-                        onClick={() => setOpenNote(openNote === r.id ? null : r.id)}
-                        title="מה בדיוק נמסר"
-                        className="lux-tap"
-                        style={{
-                          marginInlineStart: 6,
-                          border: "none",
-                          background: "transparent",
-                          cursor: "pointer",
-                          fontSize: 11,
-                          fontFamily: "inherit",
-                          color: openNote === r.id ? "var(--lux-champagne)" : "var(--lux-muted)",
-                          textDecoration: "underline",
-                          padding: 0,
-                        }}
+                        className="ux-btn"
+                        aria-expanded={open}
+                        aria-controls={`comp-more-${r.id}`}
+                        onClick={() => setOpenNote(open ? null : r.id)}
                       >
-                        פרטים
+                        {open ? "סגור" : "פרטים"}
                       </button>
-                    )}
-                  </td>
-                  <td style={{ ...td, ...line }}>
-                    <Num>{theirs != null ? nis(theirs) : "—"}</Num>
-                    {theirsTotal != null && (
-                      <span style={{ display: "block", fontSize: 10, color: "var(--lux-muted)" }}>
-                        <Num>{nisWhole(theirsTotal)}</Num>
-                      </span>
-                    )}
-                  </td>
-                  <td style={{ ...mineCell, ...line, borderTopColor: "rgba(214,196,172,0.18)" }}>
-                    {mine?.unitIls != null ? (
-                      <>
-                        <Num bold>{nis(mine.unitIls)}</Num>
-                        <span style={{ display: "block", fontSize: 10, color: "var(--lux-muted)" }}>
-                          {ourTotal != null && <Num>{nisWhole(ourTotal)}</Num>}
-                          {" · "}
-                          {SOURCE_SHORT[mine.source ?? ""] ?? ""}
-                        </span>
-                        {/* A price taken from a different bag must name that
-                            bag, and say which way it leans — a proxy 4% smaller
-                            understates what the real size would cost. */}
-                        {mine.source === "proxy" && mine.proxyLabel && (
-                          <span
-                            style={{ display: "block", fontSize: 10, color: "var(--lux-champagne)", whiteSpace: "normal" }}
-                            title={`שטח בד ${(mine.proxyAreaPct ?? 0) > 0 ? "+" : ""}${mine.proxyAreaPct}% · נפח ${(mine.proxyVolPct ?? 0) > 0 ? "+" : ""}${mine.proxyVolPct}% מול המידה המבוקשת`}
-                          >
-                            <Num>{mine.proxyLabel}</Num>
-                            {" "}
-                            (<Num>{`${(mine.proxyAreaPct ?? 0) > 0 ? "+" : ""}${mine.proxyAreaPct}%`}</Num> בד)
-                          </span>
-                        )}
-                      </>
-                    ) : (
-                      <span
-                        style={{ fontSize: 11, color: "var(--lux-muted)", whiteSpace: "normal", display: "block", maxWidth: 130 }}
-                        title={mine?.refused ?? ""}
-                      >
-                        {mine?.refused ? "צריך מחיר מהמפעל" : "—"}
-                      </span>
-                    )}
-                  </td>
-                  <td
-                    style={{
-                      ...td,
-                      ...line,
-                      color: gap == null ? "var(--lux-muted)" : gap > 0 ? "#a8c0a0" : "#e8b4b4",
-                    }}
-                  >
-                    <Num>{gap == null ? "—" : (gap > 0 ? "−" : "+") + nisWhole(Math.abs(gap))}</Num>
-                  </td>
-                  <td style={{ ...soft, ...line }}>
-                    <Num>
-                      {r.competitorPlateFee == null
-                        ? "—"
-                        : (r.competitorPlateFeeCurrency === "USD" ? "$" : "₪") +
-                          Math.round(r.competitorPlateFee) +
-                          (r.competitorPlatePer === "order" ? " למידה" : "")}
-                    </Num>
-                  </td>
-                  <td style={{ ...soft, ...line }}>
-                    {r.shippingIncluded === true ? "כולל" : r.shippingIncluded === false ? "לא כולל" : "—"}
-                  </td>
-                  <td style={{ ...soft, ...line }}>{r.leadTimeText ?? "—"}</td>
-                </tr>
-                {/* Its own row rather than a tooltip: a tooltip needs a hover
-                    this screen does not have. */}
-                {openNote === r.id && r.notes && (
-                  <tr style={{ background: "rgba(214,196,172,0.05)" }}>
-                    <td
-                      colSpan={origin === "all" ? 10 : 9}
-                      style={{
-                        ...td,
-                        borderTop: "1px solid var(--lux-line)",
-                        whiteSpace: "normal",
-                        fontSize: 12,
-                        color: "var(--lux-muted)",
-                        lineHeight: 1.7,
-                      }}
-                    >
-                      <b style={{ color: "var(--lux-ink)" }}>{r.competitor} · מה נמסר: </b>
-                      {r.notes}
                     </td>
                   </tr>
-                )}
+                  {open && (
+                    <tr className="details" id={`comp-more-${r.id}`}>
+                      <td colSpan={6}>
+                        <dl>
+                          <div><dt>גלופה</dt><dd><Num>{r.competitorPlateFee == null ? "לא נמסר" : (r.competitorPlateFeeCurrency === "USD" ? "$" : "₪") + Math.round(r.competitorPlateFee) + (r.competitorPlatePer === "order" ? " להזמנה" : " לצבע")}</Num></dd></div>
+                          <div><dt>משלוח</dt><dd>{r.shippingIncluded === true ? "כולל" : r.shippingIncluded === false ? "לא כולל" : "לא נמסר"}</dd></div>
+                          <div><dt>אספקה</dt><dd>{r.leadTimeText ?? "לא נמסר"}</dd></div>
+                          {mine?.leadDays != null && <div><dt>אצלנו</dt><dd>כ־{mine.leadDays} ימים</dd></div>}
+                        </dl>
+                        {r.notes && <p><b>מה נמסר: </b>{r.notes}</p>}
+                      </td>
+                    </tr>
+                  )}
                 </Fragment>
               );
             })}
@@ -545,27 +504,22 @@ export default function SizeComparisonTable({
         </table>
       </div>
 
-      <p style={{ marginTop: 10, fontSize: 11.5, color: "var(--lux-muted)", lineHeight: 1.7, maxWidth: "72ch" }}>
-        הצד שלנו מחושב חי במחשבון, במשלוח ימי, לאותה כמות ולאותו מפרט בדיוק.
-        השורה הקטנה מתחת לכל מחיר היא <b style={{ color: "var(--lux-ink)" }}>סה״כ להזמנה</b>,
-        והפער מחושב עליו — כי זה מה שהלקוח משלם.
-        {withPlates
-          ? " הגלופות נספרות: אצלנו ¥1,000 לצבע, אצלם לפי מה שמסרו."
-          : " הגלופות לא נספרות — הן מרווח מיקוח, לא מחיר שנעמוד עליו."}{" "}
-        אצל מי שכולל את הגלופה בתוך המחיר ליחידה (חביב) היא בפנים כך או כך, ולא ניתן להוציא אותה.
-        «מדויק» = המידה בקטלוג. «משוער» = מודל האומדן.
-        «לפי מידה דומה» = אין לנו מחיר למידה הזו, אז זה המחיר של המידה הקרובה ביותר שיש לנו —
-        היא רשומה מתחת למספר, יחד עם כמה בד יש בה יותר או פחות. פער בד שלילי אומר שהמידה
-        האמיתית תעלה אצלנו קצת יותר מהמוצג. «צריך מחיר מהמפעל» = גם זה לא היה אפשרי,
-        ולא נמציא מספר. פער שלילי (ירוק) = אנחנו זולים מהם.
-        {origin === "IL" && (
-          <>
-            {" "}
-            <b style={{ color: "var(--lux-ink)" }}>שים לב:</b> מול ייצור בארץ ההשוואה היא מחיר מול זמן —
-            הם מספקים בשבועיים, אנחנו מייצרים בסין וזה כ-3 חודשים.
-          </>
-        )}
-      </p>
+      <details className="ux-fold" style={{ marginTop: 14 }}>
+        <summary>
+          <span>איך מחשבים את ההשוואה</span>
+          <ChevronDown className="size-4 chev" aria-hidden />
+        </summary>
+        <p className="competitor-method">
+          הצד שלנו מחושב חי במחשבון, במשלוח ימי, לאותה כמות ולאותו מפרט. ההשוואה היא על <b>סה״כ ההזמנה</b> — מה שהלקוח משלם.
+          {withPlates
+            ? " הגלופות נספרות: אצלנו ¥1,000 לצבע, אצלם לפי מה שמסרו."
+            : " הגלופות לא נספרות — הן מרווח מיקוח, לא מחיר שנעמוד עליו."}{" "}
+          מי שכולל את הגלופה בתוך המחיר ליחידה (חביב) — היא בפנים בכל מקרה.
+          «מדויק» = המידה בקטלוג. «משוער» = מודל האומדן. «לפי מידה דומה» = אין לנו מחיר למידה הזו, אז זה המחיר של המידה הקרובה, עם כמה בד יש בה יותר או פחות.
+          «צריך מחיר מהמפעל» = לא ניתן לחשב, ולא נמציא מספר.
+          {origin === "IL" && " מול ייצור בארץ ההשוואה היא מחיר מול זמן — הם מספקים בשבועות, אנחנו מסין בכ־3 חודשים."}
+        </p>
+      </details>
     </div>
   );
 }

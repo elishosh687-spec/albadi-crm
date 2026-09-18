@@ -196,3 +196,14 @@ so usability rules are not optional.
   `[imageMessage]` → "תמונה"; initials via `Array.from` — indexing split a
   non-BMP styled name and broke hydration). `renderedAt` comes from the server
   so "לפני X" matches on hydration.
+
+### מחיר מתחרים (2026-09-18)
+
+`SizeComparisonTable` keeps Eli's "pick a size, see every competitor" model
+(a card-per-comparison layout was rejected earlier as unreadable) but: KPIs
+now come from the LIVE our-side price (`lib/competitors/compare.ts` —
+`gapVerdict`/`summarize`; the old "זולים יותר" used the hand-typed `ourPrice`
+and showed "—"), one filter row, the profit scenario folded in a `<details>`,
+6 columns with the verdict in words ("אנחנו זולים ב־₪3,950 (32%)"),
+plate/shipping/lead time behind "פרטים", rows grouped by supplier, and the
+table turns into cards under 768px (`.competitor-table` in globals.css).
