@@ -109,7 +109,7 @@ export const APPROVED_DEFAULTS_2026_09_18: AdRecommendationSettings = {
 /** Hebrew label + unit per field — used by error messages and the screen. */
 export const FIELD_LABELS: Record<string, { label: string; unit?: string }> = {
   "economics.contributionProfitIls": { label: "רווח תרומה לעסקה ראשונה", unit: "₪" },
-  "economics.targetLtgpCacRatio": { label: "יחס LTGP:CAC יעד", unit: ":1" },
+  "economics.targetLtgpCacRatio": { label: "יחס LTGP:CAC יעד", unit: "ל-1" },
   "economics.maxCacIls": { label: "CAC מקסימלי", unit: "₪" },
   "economics.targetCplIls": { label: "CPL יעד", unit: "₪" },
   "economics.expectedLeadsPerDeal": { label: "לידים צפויים לעסקה", unit: "לידים" },
