@@ -197,3 +197,11 @@ carries `qState.callbackFlow`). Respects quiet hours + no-send days.
   `CALLBACK_REQUESTS_ENABLED=1` in Vercel prod; (2) add a ~30-min trigger (GitHub
   Action, like process-recordings) POSTing the detector; (3) test on ONE
   disposable lead first (reply with a time → task appears).
+
+## Call-action approvals UI removed (2026-09-18)
+
+The אישורים tab (incl. "פעולות משיחות", `/api/widget/call-actions/*`) was
+deleted with Eli; `call_action_candidates` had never held a row (task mode is
+"צל"). The settings still offer "תמיד לאישור" / "משולב" task modes — those park
+candidates as `pending` for an approval screen that no longer exists. Before
+moving off "צל" or "אוטומטי", rebuild an approval view or drop those modes.

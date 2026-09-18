@@ -13,7 +13,6 @@ import {
   Settings,
   CircleCheckBig,
   FlaskConical,
-  Inbox,
   Ellipsis,
   type LucideIcon,
 } from "lucide-react";
@@ -30,7 +29,6 @@ interface TabDef {
 
 export const HUB_TABS: TabDef[] = [
   { id: "inbox", label: "שיחות", icon: MessagesSquare, path: "/widget/inbox", acceptsSid: true },
-  { id: "drafts", label: "אישורים", icon: Inbox, path: "/widget/drafts" },
   { id: "factory", label: "הצעות מחיר", icon: Receipt, path: "/widget/factory-flow", acceptsSid: true },
   { id: "closed", label: "עסקאות", icon: CircleCheckBig, path: "/widget/closed-quotes" },
   { id: "analytics", label: "אנליטיקה", icon: BarChart3, path: "/widget/analytics" },
@@ -51,9 +49,11 @@ export interface HubDeepLink {
   section?: string;
 }
 
-/** The four tabs the team uses most on a phone — the bottom bar (ui-ux-pro-max:
- *  ≤5 items, icon + label). Everything else sits behind "עוד". Eli, 18/09. */
-export const HUB_PRIMARY_TAB_IDS = ["inbox", "drafts", "factory", "closed"] as const;
+/** The tabs the team uses most on a phone — the bottom bar (ui-ux-pro-max:
+ *  ≤5 items, icon + label). Everything else sits behind "עוד". Eli, 18/09
+ *  (אישורים was the 4th; the tab was deleted the same day — its queues were
+ *  never used). */
+export const HUB_PRIMARY_TAB_IDS = ["inbox", "factory", "closed"] as const;
 
 function appendParams(
   path: string,

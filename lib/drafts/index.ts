@@ -266,7 +266,12 @@ export async function rejectDraft(
 }
 
 export function isDraftQueueEnabled(): boolean {
-  return process.env.ENABLE_DRAFT_QUEUE === "1";
+  // Off for good (Eli, 18/09/2026): the אישורים tab that showed and approved
+  // these drafts was deleted — bot_drafts had never held a single row. A queued
+  // draft would now be invisible and the customer would get no reply, so the
+  // queue stays closed regardless of ENABLE_DRAFT_QUEUE; escalations still DM
+  // Eli to reply manually. Re-enabling needs a UI to approve drafts first.
+  return false;
 }
 
 /**

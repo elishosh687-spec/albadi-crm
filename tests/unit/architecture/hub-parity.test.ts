@@ -8,7 +8,6 @@ const read = (relativePath: string) =>
 
 const HUB_PAGE_ROUTES = [
   "inbox",
-  "drafts",
   "factory-flow",
   "closed-quotes",
   "analytics",

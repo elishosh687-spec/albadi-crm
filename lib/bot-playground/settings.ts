@@ -68,7 +68,7 @@ export async function loadEffectiveSettings(): Promise<SettingsGroup[]> {
     items: [
       {
         label: "תור טיוטות (רגעי כסף)",
-        value: flag("drafts", process.env.ENABLE_DRAFT_QUEUE === "1"),
+        value: flag("drafts", false), // queue removed 18/09 — lib/drafts isDraftQueueEnabled
         source: "env",
         hint: "ENABLE_DRAFT_QUEUE",
       },

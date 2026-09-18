@@ -694,7 +694,7 @@ async function processCustomerLead(row: {
       await sendEliDM(
         `🤖 Followup supervisor escalation — ${who} (stage=${row.pipelineStage ?? "?"}, attempt ${attempt})\n` +
           `Reason: ${verdict.reason}\n` +
-          (draftId ? `Draft #${draftId} ready in /dashboard/v3/drafts` : "Draft generation failed — handle manually.")
+          "Handle manually from the CRM."
       );
     } catch (e) {
       log.error("escalate.eli_dm_failed", e, { sid: row.sid, stage: row.pipelineStage, attempt });

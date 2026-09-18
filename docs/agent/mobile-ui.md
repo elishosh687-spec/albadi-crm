@@ -185,8 +185,8 @@ so usability rules are not optional.
 
 - Tab bar (`components/hub/HubShell.tsx`): desktop tabs 44px, `aria-current`;
   the fake "חיפוש ⌘K" box is gone. Phone (<768px) hides the top strip and shows
-  `.hub-bottom`: `HUB_PRIMARY_TAB_IDS` (שיחות · אישורים · הצעות מחיר ·
-  עסקאות — Eli's pick) + "עוד" (`<details>` sheet with the rest).
+  `.hub-bottom`: `HUB_PRIMARY_TAB_IDS` (שיחות · הצעות מחיר · עסקאות —
+  Eli's pick; אישורים was deleted the same day) + "עוד" (`<details>` sheet with the rest).
 - שיחות default screen is `components/inbox/ConversationList.tsx` (the old
   "צריכים אותך עכשיו" CockpitView is deleted — its rows only showed "—"):
   WhatsApp-style rows (who wrote the last line + text + time ago), customers

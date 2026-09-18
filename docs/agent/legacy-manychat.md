@@ -69,10 +69,14 @@ npx tsx scripts/restart-send.ts --confirm
 [app/dashboard/README.md](app/dashboard/README.md) for structure and
 [app/dashboard/v3/README.md](app/dashboard/v3/README.md) for conventions.
 
-**Feature flag:** `ENABLE_DRAFT_QUEUE=1` is on in prod. Money-related
-escalations (`negotiating` / `reject` / `spec_change`) generate a draft
-reply via `generateAndQueueDraft` (LLM-tuned for money moments) and store
-it in `bot_drafts` for Eli to approve from `/dashboard/v3/drafts`.
+**Draft queue — removed 2026-09-18.** It never worked in prod: 484
+escalations in `bot_decision_log`, zero `draft_queued`, `bot_drafts` empty.
+Eli deleted the אישורים tab (drafts queue, call-action approvals, decision
+history, bot preview — the UI and their `/api/widget/drafts|decisions|
+call-actions`, `/api/bot/preview` routes). `isDraftQueueEnabled()` now always
+returns false regardless of `ENABLE_DRAFT_QUEUE`, so an escalation never parks
+a reply nobody can see — it DMs Eli to reply manually. Re-enabling needs an
+approval UI first. `lib/drafts` itself (approve/reject) is still there.
 
 **Data model:**
 - `bot_drafts` — pending/approved/rejected/sent/failed. Always sent via

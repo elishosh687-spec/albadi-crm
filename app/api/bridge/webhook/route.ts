@@ -742,7 +742,7 @@ async function routeThroughSupervisor(input: SupervisorRouteInput): Promise<void
         `🤖 Supervisor escalation — ${who} (${stage ?? "no stage"})\n` +
           `Inbound: "${inboundText.slice(0, 200)}"\n` +
           `LLM reason: ${verdict.reason}\n` +
-          (draftId ? `Draft #${draftId} ready in /dashboard/v3/drafts` : "Draft generation failed — reply manually from CRM.")
+          "Reply manually from the CRM."
       );
     } catch (e) {
       log.error("supervisor.eli_dm_failed", e, { sid });

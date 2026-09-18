@@ -246,7 +246,7 @@ export async function dispatchSupervisor(
         `🤖 Supervisor escalation — ${who} (${stage ?? "no stage"})\n` +
           `Inbound: "${inboundText.slice(0, 200)}"\n` +
           `LLM reason: ${verdict.reason}\n` +
-          (draftId ? `Draft #${draftId} ready in /widget/drafts` : "Draft generation failed — reply manually from CRM.")
+          "Reply manually from the CRM."
       );
     } catch (e) {
       log.error("supervisor.dispatch.eli_dm_failed", e, { sid });

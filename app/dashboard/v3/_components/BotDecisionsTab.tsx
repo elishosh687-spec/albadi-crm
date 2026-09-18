@@ -8,7 +8,7 @@
  *   Eli     — what Eli decided after the fact (approve / edit / reject /
  *             manual reply / stage override / direct WA reply), if anything.
  *
- * No actions on this surface. To approve drafts, go to /dashboard/v3/drafts.
+ * No actions on this surface (the drafts approval page was removed 18/09/2026).
  * To override a stage, use the lead's overview tab.
  */
 
