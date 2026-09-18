@@ -19,7 +19,9 @@ word. Eli: *"לוגים רציניים בלי התראה זה לא שווה, ו�
   Eli** (`sendEliDM`) once per incident when a job is late (3 missed ticks, or
   6h past a daily slot) or failed, and once on recovery. `?dry=1` previews.
   A new cron MUST be added to `JOBS` and wrapped with `withJob`, or it is
-  invisible again.
+  invisible again. A job whose failure needs a REASON in the WhatsApp must
+  throw an Error with it — a bare 5xx records only "HTTP 500"
+  (`ads-evidence` does this).
 - **Any bearer-authed job under `/api/factory/*` must ALSO be added to the
   allow-list in `middleware.ts`** — the route's own auth is never reached
   otherwise. `CRON_SECRET` and `CALL_TRIGGER_SECRET` are readable via

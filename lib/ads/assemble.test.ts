@@ -163,7 +163,7 @@ describe("conflictBetween", () => {
     ["loser", "continue_to_deal_proof", "מתקדמת"],
     ["testing", "winner_candidate", "עדיין לא אושרה"],
     ["testing", "loser_candidate", "עדיין לא אושרה"],
-    ["untested", "collecting", "לא נוסתה"],
+    ["untested", "winner_candidate", "עדיין לא אושרה"],
   ] as const)("approved %s vs %s → conflict", (approved, code, word) => {
     expect(conflictBetween(approved, code)).toContain(word);
   });
@@ -173,6 +173,8 @@ describe("conflictBetween", () => {
     ["loser", "early_stop"],
     ["testing", "quality_review"],
     ["untested", "untested"],
+    ["untested", "collecting"],
+    ["untested", "early_stop"],
     ["winner", "insufficient_or_conflicting_data"],
   ] as const)("approved %s vs %s → no conflict", (approved, code) => {
     expect(conflictBetween(approved, code)).toBeNull();

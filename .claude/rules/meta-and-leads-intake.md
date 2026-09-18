@@ -27,4 +27,6 @@ paths:
 - `/api/leads/facebook-import`: phones stored without `+` (`digitsOnly()`), dedupe by `phoneE164 OR waJid`; existing lead → tag only, never re-sends OPENING.
 - Website WhatsApp leads are recognised by prefill fragments in `lib/leads/website-origin.ts` — update them when site copy changes (nothing fails loudly). `lead_source` uses `COALESCE(…, 'website')` so earlier attribution wins; always write a `source_touches` row.
 
+- Ad recommendations (`lib/ads/`): recommendation-only, never writes to Meta (architecture test). Join by `normalizeAdId` (`ag:` prefix), never by ad name; suitable lead = the configured `lead_tags` tag, not `meta_qualified_sent_at`.
+
 Full detail: `docs/agent/meta-and-leads-intake.md` — read it before non-trivial changes here.

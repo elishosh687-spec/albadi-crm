@@ -156,6 +156,43 @@ per ad — leads · progressed (DISCAVERY+) · % (colour-coded; grey under 5 lea
 until a NEW campaign is built with **conversion leads** (Meta won't let an
 existing ad set switch), Meta only records these events.
 
+## Ad recommendations — "מודעות → המלצות / הגדרות בדיקה" (built 2026-09-18)
+
+Recommendation-only decision support per **exact Meta Ad ID**. Nothing in it can
+activate, pause, edit or budget a Meta object — `tests/unit/architecture/ads-read-only.test.ts`
+fails the build if a Graph write appears in `lib/ads/`, `app/api/widget/ads/`,
+`components/ads/`. Design + plan: `docs/plans/2026-09-18-meta-ad-recommendations-*.md`.
+
+- **Engine** `lib/ads/recommendation-engine.ts` (pure, client-safe): 13 codes,
+  gates judged at the day cumulative spend CROSSED them (₪100 / ₪250 / ₪500),
+  a CRM deal is judged before any CPL rule, missing/partial data never yields a
+  winner or loser. Policy `lib/ads/recommendation-settings.ts` (validated,
+  `.strict()`), stored in `app_config` `ads.recommendation.settings` +
+  append-only `ad_recommendation_policy_revisions` (one CTE per save, revision PK
+  = optimistic lock). Approved status per Ad ID: `ad_review_state` + `_audit`
+  (migration 0004). A settings change never touches an approved status.
+- **Evidence**: Meta daily insights (`lib/ads/meta-evidence.ts`, 90-day windows,
+  every page, `action_type=lead` only — a WhatsApp-destination ad therefore
+  shows 0 leads; there is none running since 08/06/2026). CRM by
+  `normalizeAdId(meta_ad_id)` — the sheet stores `ag:<id>`, Meta returns bare
+  digits; joining raw values matched nothing for months. Suitable lead = the
+  `lead_tags` tag in the setting (`good lead`), NEVER `meta_qualified_sent_at`.
+- **`META_ADS_TOKEN`** (Vercel prod) = System User "eli" in business
+  `1041177089073457`, never expires; the system user holds the ad account
+  (Manage campaigns) + the "Ads Automation" app only.
+- **Health**: one status line on every sub-tab (`lib/ads/ads-health.ts`); the
+  daily `ads-evidence` job (`/api/cron/ads-evidence-check`, 06:30 UTC) throws the
+  Hebrew reason on a broken Meta/CRM read, so the watchdog WhatsApps Eli.
+- **Purchase retry**: `lib/meta/purchase-retry.ts` inside the daily
+  enrich-meta-attribution job resends a Purchase that FAILED at "סגור עסקה"
+  (סהר צור, 16/09, transient "fetch failed") — only with an attribution key,
+  value > 0, closed ≤ 45 days.
+- **Initial statuses** came from the registry in `marketing/albadi/account/performance/meta-ads.md`
+  via `scripts/ad-review-seed-proposal.ts` → reviewed `scripts/data/ad-review-seed.json`
+  → `scripts/seed-ad-review-state.ts --go` (28 Ad IDs). A name's status goes
+  only to the copy that produced the results (Eli, 18/09).
+- UI shape is minimal on purpose (Eli): no filters, one collapsed row per ad.
+
 ## FB Lead Ads form pipeline (Sheet → Apps Script → CRM)
 
 Replaces the old Google Apps Script → ManyChat path. Three independent layers around a single Google Sheet; safe to re-run end-to-end.

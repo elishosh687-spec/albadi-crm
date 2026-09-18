@@ -73,9 +73,13 @@ export function conflictBetween(approved: ApprovedStatus, code: RecommendationCo
   if (approved === "loser" && PROGRESSING.includes(code)) {
     return "מאושרת כמפסידה, אבל ההמלצה החיה מתקדמת";
   }
-  if (approved === "testing" && WINNER_LIKE.includes(code)) return "מועמדת למנצחת — עדיין לא אושרה";
-  if (approved === "testing" && code === "loser_candidate") return "מועמדת למפסידה — עדיין לא אושרה";
-  if (approved === "untested" && code !== "untested") return "קיבלה הוצאה אבל מסומנת כלא נוסתה";
+  const undecided = approved === "testing" || approved === "untested";
+  if (undecided && WINNER_LIKE.includes(code)) return "מועמדת למנצחת — עדיין לא אושרה";
+  if (undecided && code === "loser_candidate") return "מועמדת למפסידה — עדיין לא אושרה";
+  // "Spent but still marked untested" is NOT a conflict: most old ads were
+  // never part of a decision at all, and flagging them buried the two real
+  // disagreements under 38 mechanical ones (18/09/2026). A conflict means the
+  // live recommendation contradicts a decision Eli actually made.
   return null;
 }
 

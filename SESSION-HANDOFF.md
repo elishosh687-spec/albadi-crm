@@ -1,63 +1,25 @@
 # Session handoff
 
-## Pending project — Meta ad recommendations
+## Completed project — Meta ad recommendations (2026-09-18)
 
-- Eli approved a design for a recommendation-only decision engine inside the
-  canonical GHL Hub `מודעות` widget.
-- Phases 1–3 are deployed to production (see below). No Meta object was
-  changed; the only Meta change was the system user's ad-account access.
-- The complete approved design is
-  `docs/plans/2026-09-18-meta-ad-recommendations-settings-design.md`.
-- Source methodology and evidence are outside this repository:
-  `/Users/eli/Projects/marketing/albadi/account/tests.md` and
-  `/Users/eli/Projects/marketing/albadi/account/performance/meta-ads.md`.
-- Key decisions: recommendations only; exact Ad ID identity; suitable lead only
-  from Eli's designated GHL tag; settings recalculate recommendations but never
-  overwrite approved manual winner/loser state; Prospecting and Remarketing are
-  separate; all live parameters belong in `מודעות → הגדרות בדיקה`.
-- 2026-09-18: implementation plan written —
-  `docs/plans/2026-09-18-meta-ad-recommendations-implementation.md` (5 phases,
-  approved the same day). Established from prod: the GHL
-  suitable-lead tag is `good lead` in `lead_tags` (15 leads);
-  `meta_qualified_sent_at` is NOT the marker (reportable subset only); three
-  ad names already have 2 Ad IDs each; no ad-set column on `leads`.
-- Eli approved the plan: keep tag `good lead`; for a name with several Ad IDs
-  the approved status goes only to the copy that produced the results.
-- Phase 1 DONE — commit `f5f4733` (pure engine + settings + tests).
-- Phase 2 DONE — migration `0004_ad_recommendations.sql`, settings store with
-  revisions, review-state store with audit, 3 widget-token routes, read-only
-  architecture test, integration test. Unit + typecheck + integration (191/191
-  on a throwaway branch, deleted) green. **0004 is NOT applied to production.**
-  Nothing calls the new routes yet, so prod is unaffected until the UI ships.
-- Phase 3 DONE — Meta daily evidence by exact Ad ID, CRM evidence, assembly,
-  `GET /api/widget/ads/recommendations`, and the daily alert job
-  `ads-evidence` (`/api/cron/ads-evidence-check`, Vercel 06:30 UTC) that fails
-  with a Hebrew reason → the watchdog WhatsApps Eli. Tests green (unit 630,
-  integration 202 on a deleted throwaway branch).
-- **DEPLOYED 2026-09-18 (Eli's OK):** migration 0004 applied to prod Neon
-  (3 empty tables + 4 indexes verified); pushed `1924f60` to main; Vercel
-  production deployment Ready. `META_ADS_TOKEN` is set in Vercel production —
-  a SYSTEM USER token ("eli", business 1041177089073457, never expires); Eli
-  ticked every scope, but the system user only holds the ad account (Manage
-  campaigns) + the "Ads Automation" app. Two Meta tokens were pasted into chat
-  — the first (Eli's personal user token) should be revoked.
-- Also shipped: the existing ads report now shows spend — it joined `ag:`-prefixed
-  `meta_ad_id` against bare Meta IDs (never matched) and took one copy's spend
-  per name (C-magic-hat-trick ₪104 of ₪1,146). Verified live: total ₪4,324.
-- `ads-evidence` job kicked by hand after deploy: ok, 69 ads, 368 Meta daily
-  rows, heartbeat `lastStatus: ok`; watchdog dry-run clean for it. 66
-  "conflicts" are expected — no approved statuses are seeded yet (every ad
-  that spent reads "untested").
-- Phase 4 DONE and DEPLOYED (`63e4d63`, Vercel Ready 2026-09-18). After Eli saw
-  it locally he asked for simplicity: no filters, one collapsed row per ad
-  (details on tap), settings one line each with help behind ⓘ (memory
-  `minimal-ui-collapsed-rows`). Components: `components/ads/AdRecommendationsView.tsx`,
-  `AdRecommendationSettingsView.tsx`; help texts `lib/ads/settings-help.ts`.
-- Next step: Eli eyeballs `מודעות → המלצות` with real data in the GHL Hub
-  (the widget token is masked in Vercel, so an agent cannot open it). Then Phase 5: seed approved statuses from a reviewed
-  Ad-ID mapping (Eli: status goes only to the copy that produced the results),
-  header note in `tests.md`/`meta-ads.md`, add `ads-evidence` to
-  `docs/agent/jobs.md`.
+- Live in production: `מודעות` tab → המלצות · הגדרות בדיקה · דוח איכות לידים,
+  one health status line on every sub-tab. Recommendation-only; nothing writes
+  to Meta. Full reference: `docs/agent/meta-and-leads-intake.md` → "Ad
+  recommendations"; design + plan in `docs/plans/2026-09-18-meta-ad-recommendations-*`.
+- Approved statuses seeded for 28 Ad IDs from the `meta-ads.md` registry
+  (winners `07_chain_cut`, `C-magic-hat-trick` = Control; losers
+  `concept-5-daylight-two-bags`, `remarketing-quote-reminder`; the rest
+  "testing"), 58 audit rows. Status sits only on the copy that produced results.
+- Open decisions for Eli, visible as the only 2 conflicts on the screen:
+  `C-magic-hat-trick` is an approved winner but CAC ₪521 > ₪500 ceiling;
+  `08_layers_peel` is a winner candidate (1 deal, CAC ₪145) not yet approved.
+- `META_ADS_TOKEN` = System User "eli" (never expires). Eli pasted two Meta
+  tokens into chat; the first (his personal user token) should be revoked.
+- Header notes added to `marketing/albadi/account/tests.md` and
+  `performance/meta-ads.md` (live values are in the CRM) — left UNCOMMITTED in
+  the marketing repo, which had other uncommitted work in those files.
+- Also fixed on the way: ads report never showed spend (`ag:` IDs, one copy per
+  name); failed Purchase reports now retry daily (סהר צור resent ₪5,732.04).
 
 ## Completed project — call analysis V2
 
