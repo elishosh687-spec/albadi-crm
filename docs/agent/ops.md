@@ -48,6 +48,18 @@ Push to `main` → Vercel **usually** auto-deploys via GitHub integration.
 
 The CLI deploy uses the linked project from `.vercel/project.json` — no need to specify the project name. Build runs on Vercel (not local).
 
+**Second gotcha (seen 2026-09-18):** a production build can reach **Ready and
+still not be serving** — `vercel ls` shows it on top, but the domain alias stays
+on the previous deployment. "Ready" is not "live". Check what the domain points
+to, and promote if needed:
+
+```bash
+~/.local/node/bin/vercel inspect albadi-crm.vercel.app | grep url
+~/.local/node/bin/vercel promote <deployment-url> --yes
+```
+
+The tell is behaviour: a fix that passes locally but not against prod.
+
 ## Working with Vercel + Neon from the CLI
 
 **Vercel env vars are encrypted by default.** Running `vercel env pull .env` produces a file where sensitive values (`DATABASE_URL`, all `GHL_*`, all `BRIDGE_*`, etc.) come back as empty strings — the CLI cannot decrypt them. The masking is silent: there's no error, the file looks complete.
