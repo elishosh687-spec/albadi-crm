@@ -576,7 +576,7 @@ export function CalculatorView({ products, quantityTiers, shippingOptions, initi
             className={cn("px-4 py-1.5", tab === "estimate" ? "bg-primary text-primary-foreground" : "text-muted-foreground")}
             style={{ borderRadius: 9999 }}
           >
-            מחשבון משוער ✨
+            מחשבון משוער
           </button>
         </div>
       </div>
@@ -903,17 +903,9 @@ export function CalculatorView({ products, quantityTiers, shippingOptions, initi
               </span>
             </div>
 
-            {/* commission readout | min-profit input */}
+            {/* min-profit input (the commission is edited in the box below —
+                a read-only copy of it here was a second "עמלת מכירות") */}
             <div className="grid grid-cols-2 gap-3.5">
-              <AddonField label="עמלת מכירות">
-                <div
-                  className="tabular-nums"
-                  style={{ background: "var(--lux-inset)", borderRadius: 3, border: "1px solid var(--lux-line)", padding: "11px 14px" }}
-                >
-                  <span style={{ fontSize: 16, color: "var(--lux-ink)" }}>{effectiveCommissionPct}</span>
-                  <span style={{ fontSize: 12, color: "var(--lux-muted)" }}>% · ללא שילוח</span>
-                </div>
-              </AddonField>
               <AddonField label="רווח מינימלי / יח׳">
                 <div
                   className="tabular-nums flex items-center"
@@ -999,7 +991,7 @@ export function CalculatorView({ products, quantityTiers, shippingOptions, initi
               {error}
             </div>
           )}
-          {r && c && !loading && <ProposalSummary r={r} c={c} share={share} />}
+          {r && cEff && !loading && <ProposalSummary r={r} c={cEff} share={share} />}
         </>}
       />
 
@@ -1606,7 +1598,7 @@ function EstimateTab({ apiToken, shippingOptions, sid, leadName, initialMargins,
         quote={<>
           {geoBlocked && (
             <div className="rounded-xl border border-destructive/50 bg-destructive/10 p-5 text-sm">
-              <div className="font-bold text-destructive mb-1.5">⛔ מידה לא תקינה — המפעל לא יכול לייצר</div>
+              <div className="font-bold text-destructive mb-1.5">מידה לא תקינה — המפעל לא יכול לייצר</div>
               <ul className="list-disc pr-5 text-muted-foreground space-y-0.5">
                 {geoErrors.map((e, i) => (<li key={i}>{e}</li>))}
               </ul>
@@ -1785,6 +1777,15 @@ function Stat({ label, value, tone }: { label: string; value: string; tone?: "po
 // result as BreakdownCard (presentation only, no math) and drives the SAME share
 // actions as QuoteShareCard via the shared `share` instance. The detailed share
 // UI (lead picker + text preview) still lives in QuoteShareCard below.
+/** Take the operator to the customer picker in the share card (bottom of the
+ *  page) — every send/save button needs a picked customer. */
+function focusSharePicker(share: QuoteShareApi) {
+  if (share.pickedSid) share.clearLead();
+  const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  document.getElementById("calc-share")?.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "center" });
+  window.setTimeout(() => document.getElementById("calc-share-q")?.focus(), reduce ? 0 : 350);
+}
+
 function ProposalSummary({
   r,
   c,
@@ -1792,13 +1793,16 @@ function ProposalSummary({
   hasEstimate,
 }: {
   r: QuoteResult;
-  c: { productionPerUnitIls: number; shippingPerUnitIls: number };
+  c: { productionPerUnitIls: number; shippingPerUnitIls: number; commissionPct?: number };
   share: QuoteShareApi;
   /** estimate tab → secondaries become real PDF + factory-request actions. */
   hasEstimate?: boolean;
 }) {
   const hasMolds = r.moldsTotalSellingPriceIls > 0;
-  const netProfit = r.totalProfitIls; // display-only; matches summary semantics
+  // Net = after the salesperson commission — same computeCommission call as the
+  // boss table below. This used to be r.totalProfitIls, so "נטו" read the same
+  // as the gross profit next to it.
+  const netProfit = computeCommission(r.totalOrderPriceIls, r.totalProfitIls, c.commissionPct, r2(c.shippingPerUnitIls * r.quantity)).netProfit;
   const shippingName = r.shippingOption?.name ?? "—";
   return (
     <div className="flex flex-col gap-3.5">
@@ -1897,6 +1901,24 @@ function ProposalSummary({
           </div>
         </div>
 
+        {/* Who it goes to — the CTAs below are disabled until a customer is
+            picked, and nothing said so (the picker is at the bottom). */}
+        <div className="calc-to" style={{ marginTop: 20 }}>
+          {share.pickedSid ? (
+            <>
+              <span className="min-w-0">
+                <span style={{ color: "var(--lux-muted)" }}>ללקוח: </span>
+                <b style={{ fontWeight: 500 }}>{share.pickedName ?? "(ללא שם)"}</b>
+              </span>
+              <button type="button" className="calc-to-link" onClick={() => focusSharePicker(share)}>החלף</button>
+            </>
+          ) : (
+            <button type="button" className="calc-to-pick" onClick={() => focusSharePicker(share)}>
+              <Search className="size-4" aria-hidden /> בחר לקוח כדי לשלוח או לשמור
+            </button>
+          )}
+        </div>
+
         {/* CTAs — reuse the SAME share actions (send / PDF / factory) */}
         <button
           type="button"
@@ -1904,7 +1926,7 @@ function ProposalSummary({
           disabled={!share.pickedSid || share.sending}
           title={!share.pickedSid ? "בחר ליד למטה כדי לאפשר שליחה" : undefined}
           className="lux-cta-primary"
-          style={{ marginTop: 20 }}
+          style={{ marginTop: 10 }}
         >
           {share.sending ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
           {share.sending ? "שולח…" : "שלח הצעה בוואטסאפ"}
@@ -1919,7 +1941,7 @@ function ProposalSummary({
                 className="lux-cta-ghost"
               >
                 {share.busy === "pdf" ? <Loader2 className="size-3.5 animate-spin" /> : <Send className="size-3.5" />}
-                הורד PDF
+                שלח אומדן PDF
               </button>
               <button
                 type="button"
@@ -2040,7 +2062,8 @@ function BossBreakdownTable({
   const shippingUnit = r2(c.shippingPerUnitIls);
   const handlesUnit = r2(customerBreakdownIls(r).handlesIls);
   const totalCostUnit = r2(r.totalCostPerUnitIls);
-  const shippingTotal = r2(shippingUnit * r.quantity);
+  // exact total (NOT rounded-per-unit × qty) — must match DetailedBreakdown
+  const shippingTotal = r2(c.shippingPerUnitIls * r.quantity);
   const comm = computeCommission(r.totalOrderPriceIls, r.totalProfitIls, c.commissionPct, shippingTotal);
   const shipLabel = r.shippingOption?.type === "air" ? "אוויר" : "ים";
 
@@ -2138,7 +2161,7 @@ function BreakdownCard({
   const profitUnit     = r2(r.profitPerUnitIls);
 
   const productionTotal = r2(productionUnit * r.quantity);
-  const shippingTotal   = r2(shippingUnit * r.quantity);
+  const shippingTotal   = r2(c.shippingPerUnitIls * r.quantity); // exact, matches DetailedBreakdown
   const totalCostTotal  = r2(r.totalCostPerUnitIls * r.quantity);
 
   // Salesperson commission — boss-only, display-only (does not change the
@@ -2795,7 +2818,7 @@ function PaymentPlanPicker({
             : "border-border bg-background/40 text-muted-foreground hover:bg-secondary"
         }`}
       >
-        ⛔ ללא תנאי תשלום
+        ללא תנאי תשלום
       </button>
       {PAYMENT_PRESETS.map((p) => (
         <button
@@ -2853,9 +2876,9 @@ function QuoteShareCard(props: {
   } = props.share ?? ownShare;
 
   return (
-    <section className="rounded-xl border border-border bg-card p-4 flex flex-col gap-3" dir="rtl">
+    <section id="calc-share" className="rounded-xl border border-border bg-card p-4 flex flex-col gap-3" dir="rtl">
       <div className="flex items-center justify-between gap-2 flex-wrap">
-        <h2 className="text-sm font-medium">📨 שליחת ההצעה ללקוח</h2>
+        <h2 className="text-sm font-medium flex items-center gap-2"><Send className="size-4" aria-hidden /> שליחת ההצעה ללקוח</h2>
         <div className="flex items-center gap-2">
           <button
             type="button"
@@ -2928,7 +2951,9 @@ function QuoteShareCard(props: {
                 setOpen(true);
                 if (results.length === 0) runSearch(query.trim());
               }}
-              placeholder="חפש ליד לפי שם / טלפון / sid"
+              id="calc-share-q"
+              aria-label="חיפוש לקוח"
+              placeholder="חיפוש לקוח לפי שם או טלפון"
               className="w-full rounded-md border border-border bg-background pr-8 pl-3 py-1.5 text-xs text-right focus:outline-none focus:ring-2 focus:ring-ring/30"
             />
           </div>
@@ -2987,7 +3012,7 @@ function QuoteShareCard(props: {
               className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background/40 px-3 py-1.5 text-xs font-medium hover:bg-secondary disabled:opacity-50"
             >
               {busy === "pdf" ? <Loader2 className="size-3.5 animate-spin" /> : <Send className="size-3.5" />}
-              שלח אומדן ראשוני ללקוח 📄
+              שלח אומדן ראשוני ללקוח
             </button>
             <button
               type="button"
@@ -2997,7 +3022,7 @@ function QuoteShareCard(props: {
               className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background/40 px-3 py-1.5 text-xs font-medium hover:bg-secondary disabled:opacity-50"
             >
               {busy === "factory" ? <Loader2 className="size-3.5 animate-spin" /> : <Send className="size-3.5" />}
-              בקש הצעת מחיר מהמפעל 🏭
+              בקש הצעת מחיר מהמפעל
             </button>
           </div>
           {estimate.cartonConfidence === "low" && (

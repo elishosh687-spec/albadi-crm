@@ -97,6 +97,10 @@
 .ff-results li + li { border-top: 1px solid var(--lux-line-soft); }
 .ff-results button { width: 100%; display: flex; align-items: center; gap: 12px; min-height: 56px; padding: 8px 16px; border: 0; background: none; color: var(--lux-ink); text-align: start; cursor: pointer; }
 .ff-results button:hover, .ff-results button:focus-visible { background: rgba(255,255,255,0.05); }
+.calc-to { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 14px; }
+.calc-to-pick { width: 100%; display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; border-radius: 9999px; border: 1px dashed rgba(214,196,172,0.45); background: none; color: var(--lux-champagne); font-size: 14px; cursor: pointer; }
+.calc-to-pick:hover { background: rgba(214,196,172,0.06); }
+.calc-to-link { min-height: 44px; padding: 0 8px; border: 0; background: none; color: var(--lux-cool); font-size: 14px; text-decoration: underline; cursor: pointer; }
 
 /* הצעות מחיר — reminders + one card per customer (ui-ux-pro-max, 18/09) */
 .qh-alert { border-inline-start: 3px solid var(--lux-line); }
