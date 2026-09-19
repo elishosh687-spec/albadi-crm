@@ -73,7 +73,7 @@ If `vercel promote` fails with "exceeded its deadline" (it did twice on
 
 To actually query the DB or call GHL from local:
 
-- **Neon (DB):** `neonctl` lives at `~/.local/node/bin/neonctl` (npm global, not on `$PATH` by default) and is already authed. Project id: `fragrant-morning-71359670`. Org id: `org-frosty-star-50411125`. One-liner to feed any tsx script the live DATABASE_URL:
+- **Neon (DB):** `neonctl` lives at `~/.local/node/bin/neonctl` (npm global, not on `$PATH` by default) and authenticates with a Neon API key (`NEON_API_KEY`, exported from `~/.zshenv` out of `~/.config/neonctl/api-key`, key "mac-local" — 19/09/2026). The old OAuth login kept breaking: parallel sessions raced on its refresh token and every loser reopened the browser consent page. Project id: `fragrant-morning-71359670`. Org id: `org-frosty-star-50411125`. One-liner to feed any tsx script the live DATABASE_URL:
   ```bash
   DATABASE_URL="$(~/.local/node/bin/neonctl connection-string --project-id fragrant-morning-71359670 --org-id org-frosty-star-50411125)" npx tsx scripts/<name>.ts
   ```
