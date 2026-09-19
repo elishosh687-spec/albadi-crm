@@ -15,6 +15,8 @@
  * Client-safe: data arrives via /api/widget/playground only.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
+import { Brain, FastForward, Map as MapIcon, MessagesSquare, MonitorCog, PhoneCall, RotateCcw, Settings2, X, type LucideIcon } from "lucide-react";
+import { syncHubUrl } from "@/lib/widget/hub-link";
 import BotSettingsPanel from "./BotSettingsPanel";
 import BotMapPanel from "./BotMapPanel";
 
@@ -76,14 +78,23 @@ const C = {
 
 type Tab = "chat" | "map" | "settings" | "system";
 
-export default function PlaygroundView({ apiToken }: { apiToken: string }) {
-  // ?tab=settings lets the bot map link straight at a knob instead of telling
-  // the reader where to go looking for it.
-  const [tab, setTab] = useState<Tab>(() => {
-    if (typeof window === "undefined") return "chat";
-    const t = new URLSearchParams(window.location.search).get("tab");
-    return t === "settings" || t === "system" || t === "map" ? t : "chat";
-  });
+const TABS: [Tab, string, LucideIcon][] = [
+  ["chat", "שיחה", MessagesSquare],
+  ["map", "מפת הבוט", MapIcon],
+  ["settings", "הגדרות הבוט", Settings2],
+  ["system", "מצב מערכת", MonitorCog],
+];
+
+export default function PlaygroundView({ apiToken, initialTab }: { apiToken: string; initialTab?: string }) {
+  // ?view=settings (from the server, so hydration matches) lets the bot map
+  // and colleagues link straight at a sub-tab.
+  const [tab, setTabState] = useState<Tab>(() =>
+    initialTab === "settings" || initialTab === "system" || initialTab === "map" ? initialTab : "chat",
+  );
+  const setTab = (next: Tab) => {
+    setTabState(next);
+    syncHubUrl({ view: next === "chat" ? null : next });
+  };
   const [transcript, setTranscript] = useState<PlaygroundMessage[]>([]);
   const [lead, setLead] = useState<LeadState | null>(null);
   const [systemInfo, setSystemInfo] = useState<SettingsGroup[]>([]);
@@ -202,29 +213,31 @@ export default function PlaygroundView({ apiToken }: { apiToken: string }) {
             הבוט האמיתי, בלי לקוחות — שום הודעה לא יוצאת ל-WhatsApp
           </span>
         </div>
-        <nav style={{ display: "flex", gap: 2, maxWidth: 1100, margin: "8px auto 0" }}>
-          {(
-            [
-              ["chat", "💬 שיחה"],
-              ["map", "🗺 מפת הבוט"],
-              ["settings", "⚙️ הגדרות הבוט"],
-              ["system", "🖥 מצב מערכת"],
-            ] as [Tab, string][]
-          ).map(([id, label]) => (
+        <nav role="tablist" aria-label="מגרש בדיקות" style={{ display: "flex", gap: 2, maxWidth: 1100, margin: "8px auto 0", overflowX: "auto", scrollbarWidth: "none" }}>
+          {TABS.map(([id, label, Icon]) => (
             <button
               key={id}
+              type="button"
+              role="tab"
+              aria-selected={tab === id}
               onClick={() => setTab(id)}
               style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 6,
+                minHeight: 44,
+                whiteSpace: "nowrap",
                 background: "transparent",
                 border: "none",
                 borderBottom: `2px solid ${tab === id ? C.accent : "transparent"}`,
                 color: tab === id ? C.text : C.dim,
                 padding: "8px 14px",
-                fontSize: 13.5,
+                fontSize: 14,
                 fontWeight: tab === id ? 600 : 400,
                 cursor: "pointer",
               }}
             >
+              <Icon size={16} aria-hidden />
               {label}
             </button>
           ))}
@@ -247,8 +260,8 @@ export default function PlaygroundView({ apiToken }: { apiToken: string }) {
             }}
           >
             <span style={{ flex: 1 }}>{notice}</span>
-            <button onClick={() => setNotice(null)} style={linkBtn}>
-              ✕
+            <button type="button" onClick={() => setNotice(null)} style={linkBtn} aria-label="סגור הודעה">
+              <X size={16} aria-hidden />
             </button>
           </div>
         )}
@@ -343,7 +356,7 @@ export default function PlaygroundView({ apiToken }: { apiToken: string }) {
                       lineHeight: 1.8,
                     }}
                   >
-                    <div style={{ fontSize: 26, marginBottom: 6 }}>💬</div>
+                    <MessagesSquare size={28} style={{ margin: "0 auto 6px", opacity: 0.7 }} aria-hidden />
                     אתה הלקוח. כתוב הודעה ראשונה —<br />
                     למשל <b>&quot;היי, אני צריך שקיות&quot;</b> — והבוט האמיתי יענה.
                   </div>
@@ -399,7 +412,7 @@ export default function PlaygroundView({ apiToken }: { apiToken: string }) {
               }}
             >
               <ToolCard
-                icon="🧠"
+                icon={Brain}
                 title="מוח המכירות (סטר)"
                 caption="מנתח את השיחה הנוכחית ומראה מה הוא היה עונה — בלי לשלוח."
               >
@@ -417,7 +430,7 @@ export default function PlaygroundView({ apiToken }: { apiToken: string }) {
               </ToolCard>
 
               <ToolCard
-                icon="⏩"
+                icon={FastForward}
                 title="מכונת זמן"
                 caption="מזיז את השיחה אחורה בזמן — לבדוק פולו-אפים בלי לחכות ימים."
               >
@@ -434,7 +447,7 @@ export default function PlaygroundView({ apiToken }: { apiToken: string }) {
                       onClick={async () => {
                         await post({ action: "time_travel", hours: h }, "time");
                         setNotice(
-                          `⏪ השיחה הוזזה ${label} אחורה (תראה את השעות על ההודעות). עכשיו לחץ "מה הסטר היה עונה?" כדי לראות את הפולו-אפ.`
+                          `השיחה הוזזה ${label} אחורה (תראה את השעות על ההודעות). עכשיו לחץ "מה הסטר היה עונה?" כדי לראות את הפולו-אפ.`
                         );
                       }}
                       disabled={!!busy}
@@ -447,7 +460,7 @@ export default function PlaygroundView({ apiToken }: { apiToken: string }) {
               </ToolCard>
 
               <ToolCard
-                icon="📞"
+                icon={PhoneCall}
                 title="בקשת זמן לשיחה"
                 caption="מדמה את הודעת תיאום השיחה האמיתית, כולל רשימת ההכנה של הלקוח."
               >
@@ -460,7 +473,7 @@ export default function PlaygroundView({ apiToken }: { apiToken: string }) {
                 </button>
               </ToolCard>
 
-              <ToolCard icon="↺" title="איפוס" caption="מוחק את השיחה ואת כל מצב הבוט — התחלה נקייה.">
+              <ToolCard icon={RotateCcw} title="איפוס" caption="מוחק את השיחה ואת כל מצב הבוט — התחלה נקייה.">
                 <button
                   onClick={async () => {
                     setSetter(null);
@@ -483,12 +496,12 @@ export default function PlaygroundView({ apiToken }: { apiToken: string }) {
 /* ================= sub-components ================= */
 
 function ToolCard({
-  icon,
+  icon: Icon,
   title,
   caption,
   children,
 }: {
-  icon: string;
+  icon: LucideIcon;
   title: string;
   caption: string;
   children: React.ReactNode;
@@ -502,8 +515,8 @@ function ToolCard({
         padding: 12,
       }}
     >
-      <div style={{ fontSize: 13.5, fontWeight: 600, marginBottom: 2 }}>
-        {icon} {title}
+      <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 2, display: "flex", alignItems: "center", gap: 6 }}>
+        <Icon size={16} aria-hidden /> {title}
       </div>
       <p style={{ margin: "0 0 9px", fontSize: 13, color: C.dim, lineHeight: 1.55 }}>{caption}</p>
       {children}

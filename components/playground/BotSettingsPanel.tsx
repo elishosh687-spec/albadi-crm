@@ -28,7 +28,7 @@ const C = {
   border: "rgba(255,255,255,0.08)",
   text: "#e8e4de",
   dim: "#9a938a",
-  faint: "#6b645c",
+  faint: "#958b80", // ≥4.5:1 (ui-ux-pro-max) — was #6b645c, ~2.8:1
   accent: "#c9a227",
   on: "#4ea172",
 };
@@ -446,7 +446,7 @@ function Control({
         </div>
         {parsed.warnings.map((w, i) => (
           <div key={i} style={{ fontSize: 12.5, color: "#D0A03C", marginTop: 2 }}>
-            ⚠ {w}
+            {w}
           </div>
         ))}
       </div>

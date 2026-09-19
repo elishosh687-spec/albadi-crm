@@ -12,6 +12,9 @@ export const dynamic = "force-dynamic";
 
 interface SearchParams {
   widget_token?: string;
+  /** sub-tab (hub forwards ?view=); ?tab= kept for old bot-map links */
+  view?: string;
+  tab?: string;
 }
 
 export default async function PlaygroundWidgetPage({
@@ -33,5 +36,5 @@ export default async function PlaygroundWidgetPage({
     );
   }
 
-  return <PlaygroundView apiToken={token} />;
+  return <PlaygroundView apiToken={token} initialTab={params.view ?? params.tab} />;
 }
