@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { AlertTriangle, Copy, RefreshCw } from "lucide-react";
 import type { LeadAnalysis } from "@/lib/analysis/analyze-lead";
 import { getStagePlay, type BlockerKey, type StagePlay } from "@/lib/sales/stage-plays.he";
 
@@ -76,192 +77,132 @@ export default function LeadAnalysisInline({
 
   if (loading) {
     return (
-      <div dir="rtl" style={{ color: "#a1a1aa", fontSize: 13, padding: "8px 2px" }}>
-        ⏳ מנתח את {name || "הליד"}… (כמה שניות)
+      <div className="grid gap-3" aria-live="polite">
+        <p style={{ margin: 0, fontSize: 14, color: "var(--lux-muted)" }}>מנתח את {name || "הליד"}… (כמה שניות)</p>
+        <div className="ux-skel" style={{ height: 120 }} />
       </div>
     );
   }
   if (error) {
     return (
-      <div dir="rtl" style={{ color: "#fecaca", fontSize: 13 }}>
-        שגיאה: {error}{" "}
-        <button onClick={() => run(true)} style={linkBtn}>
-          נסה שוב
+      <p className="ux-note" style={{ color: "#f0c0c0", alignItems: "center" }}>
+        הניתוח נכשל: {error}
+        <button type="button" className="ux-btn sm" onClick={() => run(true)}>
+          <RefreshCw className="size-4" aria-hidden /> נסה שוב
         </button>
-      </div>
+      </p>
     );
   }
   if (!verdict) return null;
 
   const v = verdict;
   return (
-    <div dir="rtl" style={{ fontSize: 13, color: "#e4e4e7", lineHeight: 1.5 }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
-        <Chip text={`חסם: ${BLOCKER_HE[v.primary_blocker] ?? v.primary_blocker}`} tone="accent" />
-        <Chip text={`מחויבות ${v.commitment_scorecard.score_1_5}/5`} tone="neutral" />
-        <Chip text={`ביטחון ${CONF_HE[v.confidence] ?? v.confidence}`} tone="neutral" />
-        {cached && <span style={{ fontSize: 11, color: "#71717a" }}>שמור</span>}
-        <button onClick={() => run(true)} style={{ ...linkBtn, marginInlineStart: "auto" }}>
-          🔄 רענן
+    <div className="la" dir="rtl">
+      <div className="la-top">
+        <span className="ux-pill" data-tone="go">חסם: {BLOCKER_HE[v.primary_blocker] ?? v.primary_blocker}</span>
+        <span className="ux-pill" data-tone="idle">מחויבות {v.commitment_scorecard.score_1_5}/5</span>
+        <span className="ux-pill" data-tone="idle">ביטחון {CONF_HE[v.confidence] ?? v.confidence}</span>
+        {cached && <span style={{ fontSize: 13, color: "var(--lux-muted)" }}>מהשמירה</span>}
+        <button type="button" className="ux-btn sm" style={{ marginInlineStart: "auto" }} onClick={() => run(true)}>
+          <RefreshCw className="size-4" aria-hidden /> נתח מחדש
         </button>
       </div>
 
       {v.insufficient_data ? (
-        <div style={{ color: "#fbbf24" }}>⚠️ {v.root_cause}</div>
+        <p className="ux-note" style={{ color: "#ecdcb3" }}>
+          <AlertTriangle className="size-4 shrink-0" aria-hidden /> {v.root_cause}
+        </p>
       ) : (
         <>
           {(() => {
             const play = plays?.[v.primary_blocker as BlockerKey] ?? getStagePlay(v.primary_blocker);
             return (
-              <div
-                style={{
-                  background: "#10231a",
-                  border: "1px solid #1f5132",
-                  borderRadius: 8,
-                  padding: 10,
-                  marginBottom: 8,
-                }}
-              >
-                <div style={{ fontSize: 11, color: "#6ee7b7", marginBottom: 4 }}>
-                  ▶ הפליי ({play.stage})
-                </div>
-                <div style={{ fontWeight: 600, marginBottom: 4 }}>{play.title}</div>
-                {play.lines.map((l, i) => (
-                  <div key={i} style={{ marginBottom: 3 }}>
-                    • {l}
-                  </div>
-                ))}
-                <div style={{ fontSize: 12, color: "#a1a1aa", marginTop: 4 }}>
-                  שלב הבא: {play.nextStep}
-                </div>
-              </div>
+              <section className="la-play" aria-label="מה לעשות">
+                <div className="k">מה לעשות · {play.stage}</div>
+                <h3>{play.title}</h3>
+                <ul>
+                  {play.lines.map((l, i) => (
+                    <li key={i}>{l}</li>
+                  ))}
+                </ul>
+                <div className="k">שלב הבא: {play.nextStep}</div>
+              </section>
             );
           })()}
-          <Section title="שורש התקיעה">{v.root_cause}</Section>
 
-          {v.objections.length > 0 && (
-            <Section title="התנגדויות">
-              <ul style={{ margin: 0, paddingInlineStart: 18 }}>
-                {v.objections.map((o, i) => (
-                  <li key={i} style={{ marginBottom: 4 }}>
-                    <span style={{ color: o.is_surface_or_root === "root" ? "#fca5a5" : "#e4e4e7" }}>
-                      {o.text}
-                    </span>
-                    {o.quote && (
-                      <div style={{ color: "#a1a1aa", fontStyle: "italic" }}>«{o.quote}»</div>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            </Section>
-          )}
-
-          {v.price_forensics && (
-            <Section title="פירוק מחיר">
-              שלנו {v.price_forensics.our_unit ?? "?"} מול {v.price_forensics.their_alt_unit ?? "?"}
-              {v.price_forensics.gulpha_issue && " · בעיית גלופה"}
-              {v.price_forensics.branded_vs_unbranded && " · ממותג↔לא-ממותג"}
-            </Section>
-          )}
-
-          {v.followup_verdict && (
-            <Section title="מעקב">
-              {v.followup_verdict.promised ? "הבטחנו" : "לא הבטחנו"} ·{" "}
-              {v.followup_verdict.delivered ? "מסרנו" : "לא מסרנו"}
-              {v.followup_verdict.gap_days != null && ` · פער ${v.followup_verdict.gap_days} ימים`}
-            </Section>
-          )}
-
-          {v.sample && (
-            <Section title="דוגמה">
-              {v.sample.asked ? "ביקש" : "לא ביקש"} ·{" "}
-              {v.sample.fulfilled ? "נשלחה" : "לא נשלחה"}
-            </Section>
-          )}
+          <dl className="la-dl">
+            <dt>שורש התקיעה</dt>
+            <dd>{v.root_cause}</dd>
+            {v.objections.length > 0 && (
+              <>
+                <dt>התנגדויות</dt>
+                <dd>
+                  <ul>
+                    {v.objections.map((o, i) => (
+                      <li key={i}>
+                        <span style={{ color: o.is_surface_or_root === "root" ? "#f0c0c0" : undefined }}>
+                          {o.text}
+                          {o.is_surface_or_root === "root" ? " (שורש)" : ""}
+                        </span>
+                        {o.quote && <div className="q">«{o.quote}»</div>}
+                      </li>
+                    ))}
+                  </ul>
+                </dd>
+              </>
+            )}
+            {v.price_forensics && (
+              <>
+                <dt>פירוק מחיר</dt>
+                <dd>
+                  שלנו {v.price_forensics.our_unit ?? "?"} מול {v.price_forensics.their_alt_unit ?? "?"}
+                  {v.price_forensics.gulpha_issue && " · בעיית גלופה"}
+                  {v.price_forensics.branded_vs_unbranded && " · ממותג↔לא-ממותג"}
+                </dd>
+              </>
+            )}
+            {v.followup_verdict && (
+              <>
+                <dt>מעקב</dt>
+                <dd>
+                  {v.followup_verdict.promised ? "הבטחנו" : "לא הבטחנו"} · {v.followup_verdict.delivered ? "מסרנו" : "לא מסרנו"}
+                  {v.followup_verdict.gap_days != null && ` · פער ${v.followup_verdict.gap_days} ימים`}
+                </dd>
+              </>
+            )}
+            {v.sample && (
+              <>
+                <dt>דוגמה</dt>
+                <dd>
+                  {v.sample.asked ? "ביקש" : "לא ביקש"} · {v.sample.fulfilled ? "נשלחה" : "לא נשלחה"}
+                </dd>
+              </>
+            )}
+          </dl>
 
           {v.recommended_next_action && (
-            <div
-              style={{
-                marginTop: 8,
-                padding: "6px 10px",
-                background: "#1a2638",
-                border: "1px solid #2f4a6e",
-                borderRadius: 8,
-                color: "#dbeafe",
-              }}
-            >
-              ▶ {v.recommended_next_action}
-            </div>
+            <p className="la-next">
+              <b>הצעד הבא:</b> {v.recommended_next_action}
+            </p>
           )}
 
-          <div style={{ marginTop: 8 }}>
-            <div style={{ fontSize: 11, color: "#71717a", marginBottom: 2 }}>💬 תסריט תשובה</div>
-            <div
-              style={{
-                padding: "8px 10px",
-                background: "#0d0f14",
-                border: "1px solid #2a2d34",
-                borderRadius: 8,
-                whiteSpace: "pre-wrap",
-              }}
-            >
-              {v.recommended_reply_script}
+          <section aria-label="תסריט תשובה">
+            <div className="flex items-center justify-between gap-2" style={{ marginBottom: 6 }}>
+              <span style={{ fontSize: 14, color: "var(--lux-muted)" }}>תסריט תשובה</span>
+              <button type="button" className="ux-btn sm" onClick={() => navigator.clipboard?.writeText(v.recommended_reply_script)}>
+                <Copy className="size-4" aria-hidden /> העתק
+              </button>
             </div>
-            <button
-              onClick={() => navigator.clipboard?.writeText(v.recommended_reply_script)}
-              style={{ ...linkBtn, marginTop: 4 }}
-            >
-              העתק
-            </button>
-          </div>
+            <div className="la-script">{v.recommended_reply_script}</div>
+          </section>
 
           {v.grounding.dropped_unverified > 0 && (
-            <div style={{ fontSize: 11, color: "#71717a", marginTop: 6 }}>
-              ⓘ נופו {v.grounding.dropped_unverified} ציטוטים לא-מבוססים (בדיקת אמת).
-            </div>
+            <p style={{ fontSize: 13, color: "var(--lux-muted)", margin: 0 }}>
+              נופו {v.grounding.dropped_unverified} ציטוטים שלא נמצאו בשיחה (בדיקת אמת).
+            </p>
           )}
         </>
       )}
     </div>
   );
 }
-
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <div style={{ marginTop: 6 }}>
-      <span style={{ fontSize: 11, color: "#71717a" }}>{title}: </span>
-      <span>{children}</span>
-    </div>
-  );
-}
-
-function Chip({ text, tone }: { text: string; tone: "accent" | "neutral" }) {
-  const c =
-    tone === "accent"
-      ? { bg: "#1a2638", br: "#2f4a6e", fg: "#dbeafe" }
-      : { bg: "#17191f", br: "#2a2d34", fg: "#a1a1aa" };
-  return (
-    <span
-      style={{
-        fontSize: 11,
-        padding: "2px 8px",
-        background: c.bg,
-        border: `1px solid ${c.br}`,
-        borderRadius: 999,
-        color: c.fg,
-      }}
-    >
-      {text}
-    </span>
-  );
-}
-
-const linkBtn: React.CSSProperties = {
-  background: "transparent",
-  border: "none",
-  color: "#60a5fa",
-  fontSize: 12,
-  cursor: "pointer",
-  fontFamily: "inherit",
-  padding: 0,
-};

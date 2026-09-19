@@ -13,7 +13,7 @@ import { db } from "@/lib/db";
 import { leads, messages, messageTemplates } from "@/drizzle/schema";
 import { asc, desc, eq, sql } from "drizzle-orm";
 import { widgetPageAuthed } from "@/lib/widget/page-auth";
-import { type InboxRow, type QuickTemplate } from "@/components/inbox/InboxView";
+import { type InboxRow, type QuickTemplate } from "@/components/inbox/ConversationThread";
 import CockpitShell from "@/components/inbox/CockpitShell";
 import { type ConversationLead } from "@/components/inbox/ConversationList";
 import { loadFollowupQueue } from "@/lib/dashboard/followup-queue";

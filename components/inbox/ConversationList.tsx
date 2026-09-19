@@ -7,7 +7,7 @@
  * Like WhatsApp: name, who wrote the last line and what, how long ago.
  * Customers waiting for OUR reply come first (longest wait on top); everyone
  * else by recency. Tapping a row opens the full conversation (the screen that
- * already works — InboxView), via CockpitShell. "בוט מושהה" shows only when
+ * already works — ConversationThread), via CockpitShell. "בוט מושהה" shows only when
  * it is; stages in Eli's words. Read-only: no writes from this screen.
  */
 import { useEffect, useMemo, useState } from "react";
