@@ -191,7 +191,7 @@ so usability rules are not optional.
   "צריכים אותך עכשיו" CockpitView is deleted — its rows only showed "—"):
   WhatsApp-style rows (who wrote the last line + text + time ago), customers
   waiting for our reply ≤ 7 days on top (`WAITING_MAX_DAYS`, oldest first),
-  search, 40 rows per page; tap → the existing InboxView thread.
+  search, 40 rows per page; tap → `ConversationThread` (below).
   Formatting in `lib/inbox/list-format.ts` (media placeholders like
   `[imageMessage]` → "תמונה"; initials via `Array.from` — indexing split a
   non-BMP styled name and broke hydration). `renderedAt` comes from the server
@@ -226,3 +226,36 @@ table turns into cards under 768px (`.competitor-table` in globals.css).
 - Font sweep in factory-flow / shipping / playground / colors / calculator:
   inline and Tailwind sizes under 12px raised; `#8a7f74` → `var(--lux-muted)`.
   Playground `faint` #6b645c → #958b80.
+
+### Structural pass over the remaining tabs (2026-09-18, second session)
+
+- **LuxShell is not a scroll container any more** (`overflow-x: clip`, was
+  `overflow-y: auto` + `min-height`): the shell grew with its content, the
+  window scrolled, and every `position: sticky` child (calculator summary,
+  shipping rail, settings save bar) was pinned to a box that never scrolled.
+- **הצעות מחיר** (`QuotesHistoryView` / `FactoryFlowView`): "הצעה חדשה" button
+  opens the lead picker (no second search box on top); reminder panels
+  (`AlertShell` — המפעל ענה / ממתינות לתמחור / טיוטות) use lucide icons and
+  labelled 44px actions (`Act` = `.ux-btn.sm` + tone `primary|go|warn|danger`);
+  one card per customer (`.qh-g`, 30 per page) with the customer-wide actions
+  inside; recycle bin + Feishu import folded at the bottom. Statuses in words:
+  טיוטה · ממתין למפעל · המפעל ענה · סופי.
+- **מחשבון**: layout is Eli's approved mockup — do not restructure. Fixed:
+  summary "נטו" showed the GROSS profit; boss table used rounded-per-unit
+  shipping × qty for the commission base (≠ DetailedBreakdown) — all three use
+  `r2(shippingPerUnitIls × qty)` now. "בחר לקוח" row in the summary (the send
+  buttons were disabled with no hint). Read-only commission copy removed.
+- **צירוף משלוחים**: search, "עסקאות שנסגרו" first, date + quote no. per row,
+  stage via `stageLabel`, real checkbox; phone pins the saving to the bottom
+  only while something is ticked. Loader skips soft-deleted quotes.
+- **צבעים**: search by name / hex / factory code, `ux-tabs`, `?view=factories`.
+- **מגרש בדיקות**: lucide icons (no emoji), 44px tablist, `?view=`
+  (`?tab=` still read), initial tab from the server (hydration). Bot map /
+  settings faint text → #958b80.
+- **שיחה מלאה**: `components/inbox/ConversationThread.tsx` replaced InboxView
+  (deleted). Chat layout (`.ux-thread`: only `.th-body` scrolls), bot state in
+  words + action, labelled tool row, day separators, sender + time per bubble,
+  16px composer. `LeadAnalysisInline` restyled (`.la-*`).
+- Probe after all of it: 11 tabs × 375 / 1280 clean except the known false
+  positive (dark text on a champagne button reads as 1.09:1 against the page).
+

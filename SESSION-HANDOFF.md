@@ -1,34 +1,30 @@
 # Session handoff
 
-## Paused project — hub redesign per ui-ux-pro-max (2026-09-18)
+## Completed project — hub redesign per ui-ux-pro-max (2026-09-18)
 
 Rule (AGENTS.md): every UI change follows `~/.claude/skills.cold/ui-ux-pro-max`
 inside Silent Luxury. How-to + all decisions: `docs/agent/mobile-ui.md`
-("UI design rules", "The `.ux-*` layer", "Compliance pass over every tab").
+("UI design rules", "The `.ux-*` layer", "Structural pass over the remaining tabs").
 
-**Done & live (all on main, deployed, probe-verified at 375 / 812×375 / 1280):**
-- Rebuilt: מודעות (+ דיווח למטא), אנליטיקה, הגדרות (side nav, one save bar;
-  ads test rules moved here), שיחות (WhatsApp-style list), מחיר מתחרים
-  (verdict in words, live KPIs, cards on phone, delete with confirm + 6s undo),
-  עסקאות (KPIs with meaning, one-line progress per deal).
-- Hub tab bar: 44px tabs; phone bottom bar = שיחות · הצעות מחיר · עסקאות + עוד.
-- אישורים tab DELETED (queues never used: 484 escalations, 0 drafts).
-  `isDraftQueueEnabled()` is hard-off. Call-analysis "תמיד לאישור"/"משולב"
-  modes now have no approval screen — rebuild one before leaving "צל".
-- Compliance pass (text ≥12px, taps ≥44px, contrast ≥4.5:1, no sideways
-  scroll) on הצעות מחיר, מחשבון, משלוחים, צבעים, מגרש בדיקות.
+**Every hub tab is done & live** (main, deployed; probe clean on all 11 tabs at
+375 and 1280 — only false positive: dark text on champagne buttons):
+מודעות, אנליטיקה, הגדרות, שיחות (list + new ConversationThread), הצעות מחיר,
+עסקאות, מחיר מתחרים, מחשבון, צבעים, צירוף משלוחים, מגרש בדיקות. אישורים tab
+deleted. 3D designer keeps its own light theme by design.
 
-**Next (Eli to pick when we resume):**
-1. Deeper structural redesign of one of: הצעות מחיר, מחשבון, משלוחים, צבעים,
-   מגרש בדיקות (so far only the compliance pass).
-2. The full-conversation screen (InboxView thread) — passes the probe, not
-   redesigned.
-3. Check on the phone in GHL that the bottom bar and the new tabs feel right
+Bugs fixed on the way (18/09, second session): calculator summary "נטו" showed
+the gross profit; boss-table commission base used rounded shipping (₪0.43 off);
+LuxShell `overflow:auto` broke every sticky element; shipping planner offered
+soft-deleted quotes; playground tab hydration mismatch; estimate "הורד PDF"
+actually sent the PDF on WhatsApp (relabelled "שלח אומדן PDF").
+
+**Open:**
+1. Check on the phone in GHL that the bottom bar and the new screens feel right
    (verified in emulation only; prod needs the GHL widget token).
-
-**Housekeeping:** local branch `ui/hub-redesign` diverged from main only by
-duplicate commits (content identical) — safe to delete. Obsolete WIP patch
-for the deleted אישורים redesign is in the Claude scratchpad; ignore it.
+2. Modals inside הצעות מחיר (FinalizeModal, CombinedCalcModal, HistoryDetail,
+   Spec/Estimate) got only the compliance pass, not a structural redesign.
+3. If call analysis ever leaves "צל" mode, rebuild an approval screen first
+   (the אישורים tab is gone).
 
 ## Completed project — Meta ad recommendations (2026-09-18)
 

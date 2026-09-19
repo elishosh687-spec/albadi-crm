@@ -8,9 +8,10 @@ paths:
 
 # Mobile `.mfit` layer & widget UI
 - **Every UI change follows the ui-ux-pro-max skill** (`~/.claude/skills.cold/ui-ux-pro-max`) inside Silent Luxury: text ≥4.5:1 (muted `#a0958a`), taps ≥44px, text ≥12px (16px phone), skeleton/saving states, URL per tab, run its Pre-Delivery Checklist. Details: "UI design rules" in the doc.
+- `LuxShell` must not be a scroll container (`overflow-x: clip`) — `overflow: auto` there silently breaks every sticky child.
 - Every hub tab is opted into `.ux-floor` (44px controls) or `.ux-set`; ads / analytics / settings / inbox / competitors use the `.ux-*` layer (`<LuxShell className="ux">`); links to another tab = `hubHref()` + `target="_parent"`; sub-views sync to the hub URL (`?view=`, `?section=`).
 - Build user-visible features under `/widget` first; a `/dashboard/v3` alias must import the exact widget component and loader, never a second implementation.
-- All mobile CSS lives in ONE `@media (max-width: 767px)` block at the end of `app/globals.css` — desktop is unchanged by construction.
+- Phone CSS lives only inside `@media (max-width: 767px)` blocks in `app/globals.css` (the big `.mfit` block + one per component section: `.qh-*`, `.sh-*`, `.th-*`, competitors, hub bar) — desktop is unchanged by construction.
 - Scope with `.mfit`, NEVER `.gg-theme` (also on `app/dashboard/v3/layout.tsx`). `.mfit` is set in `app/widget/layout.tsx`, `app/configurator/page.tsx`, `components/playground/PlaygroundView.tsx`.
 - Opt-in hooks: `lux-stack-sm` (1fr), `lux-scroll-x` (flat grids), `lux-wrap-sm`, `lux-tap` (min-height 44px text buttons, was 34), `size-7` (→36px icons). `!important` only on these invented classes.
 - No blanket `.mfit button { min-height }` — it stretches the inline 18px payment checkboxes.
