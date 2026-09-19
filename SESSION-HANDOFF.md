@@ -45,8 +45,8 @@ actually sent the PDF on WhatsApp (relabelled "שלח אומדן PDF").
     percentages and "מחיר מפעל" and must not run as-is. Fix the claims, then
     relaunch as the Challenger.
 - Scheduled jobs moved to cron-job.org on 18/09 (all seven; verified runs +
-  heartbeats, see docs/agent/jobs.md). Still to confirm: `resume-sweep`'s
-  first hourly run from cron-job.org, and that the watchdog stays quiet.
+  heartbeats, see docs/agent/jobs.md). `resume-sweep` confirmed hourly on
+  19/09 (16:00, 17:00, 18:00 all 200). Neon CLI now uses an API key (ops.md).
 - `META_ADS_TOKEN` = System User "eli" (never expires). Eli pasted two Meta
   tokens into chat; the first (his personal user token) should be revoked.
 - Header notes added to `marketing/albadi/account/tests.md` and
