@@ -69,14 +69,16 @@ function formatIls(n: number): string {
 
 function statusBadge(status: FactoryQuoteRow["factoryStatus"]) {
   const map: Record<FactoryQuoteRow["factoryStatus"], { label: string; tone: string }> = {
-    draft: { label: "טיוטה", tone: "bg-muted/40 text-muted-foreground border-border" },
-    pending: { label: "ממתין למפעל", tone: "bg-warning/15 text-warning border-warning/30" },
-    received: { label: "התקבלה תשובה", tone: "bg-primary/15 text-primary border-primary/30" },
-    finalized: { label: "הצעה סופית", tone: "bg-success/15 text-success border-success/30" },
+    draft: { label: "טיוטה", tone: "idle" },
+    pending: { label: "ממתין למפעל", tone: "warn" },
+    received: { label: "המפעל ענה", tone: "go" },
+    finalized: { label: "הצעה סופית", tone: "good" },
   };
   const m = map[status];
   return (
-    <span className={cn("text-xs rounded-full px-2 py-0.5 border", m.tone)}>{m.label}</span>
+    <span className="ux-pill" data-tone={m.tone}>
+      {m.label}
+    </span>
   );
 }
 
@@ -1083,114 +1085,66 @@ function HistoryList({
   };
 
   return (
-    <details className="mt-3 text-xs" open>
-      <summary className="cursor-pointer text-muted-foreground hover:text-foreground select-none">
-        היסטוריית הצעות ({rows.length})
+    <details className="ux-fold" open style={{ marginTop: 12 }}>
+      <summary>
+        <span>היסטוריית הצעות ללקוח · {rows.length}</span>
+        <ChevronDown className="size-4 chev" aria-hidden />
       </summary>
-      <p className="mt-1 text-xs text-muted-foreground">
+      <p style={{ margin: "0 0 8px", fontSize: 14, color: "var(--lux-muted)" }}>
         סמן שתי הצעות סופיות או יותר כדי לאחד אותן ל-PDF אחד.
       </p>
       {selected.size >= 2 && (
-        <div className="mt-2 flex items-center justify-between gap-2 rounded-md border border-primary/40 bg-primary/10 px-2.5 py-1.5">
-          <span className="text-[13px] font-medium text-primary">
-            {selected.size} הצעות נבחרו
-          </span>
-          <div className="flex items-center gap-1.5">
-            <button
-              type="button"
-              onClick={() => setSelected(new Set())}
-              className="rounded-md px-2 py-1 text-[13px] text-muted-foreground hover:text-foreground"
-            >
-              נקה
-            </button>
-            <a
-              href={combineHref}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1 rounded-md border border-primary/40 bg-primary/10 px-2.5 py-1 text-[13px] font-medium text-primary hover:bg-primary/20"
-            >
-              פתח PDF
+        <div className="qh-bulk" aria-live="polite">
+          <span className="tnum">{selected.size} הצעות נבחרו</span>
+          <a href={combineHref} target="_blank" rel="noopener noreferrer" className="ux-btn sm">
+            PDF משולב
+          </a>
+          {combineWaUrl && (
+            <a href={combineWaUrl} target="_blank" rel="noopener noreferrer" className="ux-btn sm go">
+              פתח בוואטסאפ
             </a>
-            {combineWaUrl && (
-              <a
-                href={combineWaUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1 rounded-md bg-primary px-2.5 py-1 text-[13px] font-medium text-primary-foreground hover:bg-primary/90"
-              >
-                שלח ב-WhatsApp
-              </a>
-            )}
-          </div>
+          )}
+          <button type="button" onClick={() => setSelected(new Set())} className="ux-btn sm">
+            נקה
+          </button>
         </div>
       )}
-      <ul className="mt-2 space-y-1">
+      <ul className="ux-list">
         {rows.map((r) => {
           const isBusy = busyId === r.id;
+          const no = r.quotationNo ?? r.id.slice(-6);
           return (
-            <li
-              key={r.id}
-              className="flex items-center justify-between gap-2 rounded-md border border-border/60 bg-background/40 px-2 py-1.5"
-            >
-              <div className="flex items-center gap-2 min-w-0 flex-1">
-                {r.factoryStatus === "finalized" && (
-                  <input
-                    type="checkbox"
-                    checked={selected.has(r.id)}
-                    onChange={() => toggleSelected(r.id)}
-                    title="בחר לאיחוד ל-PDF"
-                    className="shrink-0 accent-[var(--color-primary,#4A7C59)]"
-                  />
-                )}
-                <span className="text-[13px] text-muted-foreground tabular-nums shrink-0">
-                  {new Date(r.createdAt).toLocaleDateString("he-IL")}
-                </span>
-                <span className="text-[13px] font-mono truncate">
-                  {r.quotationNo ?? r.id.slice(-6)}
-                </span>
+            <li key={r.id} className="th-quote">
+              {r.factoryStatus === "finalized" ? (
+                <label className="qh-check">
+                  <input type="checkbox" checked={selected.has(r.id)} onChange={() => toggleSelected(r.id)} />
+                  <span className="ux-sr">בחר את הצעה {no} לאיחוד</span>
+                </label>
+              ) : (
+                <span style={{ width: 44 }} aria-hidden />
+              )}
+              <span className="main">
+                <span className="tnum" style={{ fontFamily: "ui-monospace, monospace" }}>{no}</span>
+                <span className="tnum" style={{ color: "var(--lux-muted)" }}>{new Date(r.createdAt).toLocaleDateString("he-IL")}</span>
                 {statusBadge(r.factoryStatus)}
-              </div>
-              <div className="flex items-center gap-0.5 shrink-0">
-                <button
-                  type="button"
-                  onClick={() => setOpened(r)}
-                  disabled={isBusy}
-                  title="פתח מפרט מלא"
-                  className="size-6 rounded grid place-items-center text-muted-foreground hover:text-foreground hover:bg-secondary disabled:opacity-60"
-                >
-                  <Eye className="size-3" />
+              </span>
+              <span className="ux-acts">
+                <button type="button" className="ux-btn sm" onClick={() => setOpened(r)} disabled={isBusy}>
+                  <Eye className="size-4" aria-hidden /> מפרט
                 </button>
                 {r.factoryStatus === "draft" ? (
-                  <button
-                    type="button"
-                    onClick={() => handleSendDraftToFeishu(r)}
-                    disabled={isBusy}
-                    title="שלח את הטיוטה ל-Feishu"
-                    className="size-6 rounded grid place-items-center text-muted-foreground hover:text-primary hover:bg-primary/10 disabled:opacity-60"
-                  >
-                    {isBusy ? <Loader2 className="size-3 animate-spin" /> : <Send className="size-3" />}
+                  <button type="button" className="ux-btn sm" onClick={() => handleSendDraftToFeishu(r)} disabled={isBusy}>
+                    {isBusy ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <Send className="size-4" aria-hidden />} שלח ל-Feishu
                   </button>
                 ) : (
-                  <button
-                    type="button"
-                    onClick={() => handleResend(r)}
-                    disabled={isBusy}
-                    title="שלח שוב ל-Feishu (שורה חדשה)"
-                    className="size-6 rounded grid place-items-center text-muted-foreground hover:text-primary hover:bg-primary/10 disabled:opacity-60"
-                  >
-                    {isBusy ? <Loader2 className="size-3 animate-spin" /> : <Repeat className="size-3" />}
+                  <button type="button" className="ux-btn sm" onClick={() => handleResend(r)} disabled={isBusy} title="יוצר שורה חדשה ב-Feishu">
+                    {isBusy ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <Repeat className="size-4" aria-hidden />} שלח שוב ל-Feishu
                   </button>
                 )}
-                <button
-                  type="button"
-                  onClick={() => handleDelete(r)}
-                  disabled={isBusy}
-                  title="מחק הצעה"
-                  className="size-6 rounded grid place-items-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 disabled:opacity-60"
-                >
-                  <Trash2 className="size-3" />
+                <button type="button" className="ux-btn sm danger" onClick={() => handleDelete(r)} disabled={isBusy}>
+                  <Trash2 className="size-4" aria-hidden /> מחק
                 </button>
-              </div>
+              </span>
             </li>
           );
         })}
