@@ -15,19 +15,19 @@
  */
 
 import { useMemo, useState } from "react";
-import { ExternalLink, PackageCheck, Check } from "lucide-react";
+import { ExternalLink, PackageCheck, Search, AlertTriangle } from "lucide-react";
+import { stageLabel } from "@/lib/analytics/labels";
 import type { SeaCarrierProfile } from "@/lib/factory/types";
 import type { ConsolidationCandidate } from "@/lib/factory/consolidation";
 import { consolidateShipment, seaShipmentCost } from "@/lib/factory/sea-carriers";
 import { LuxShell, LuxTitle, LuxAccent } from "@/components/widget-ui/lux";
 
-const STAGE_LABEL: Record<string, string> = {
-  WON: "נסגר ✓",
-  CONSIDERATION: "שוקל / משא ומתן",
-  DISCAVERY: "אפיון",
-  FACTORY_WAIT: "מחכה למפעל",
-  INTAKE: "קליטה",
-};
+const PAGE = 40;
+
+const isClosed = (c: ConsolidationCandidate) => !!c.closedDealAt || c.stage === "WON";
+
+const fmtDate = (iso: string) =>
+  new Date(iso).toLocaleDateString("he-IL", { day: "2-digit", month: "2-digit", year: "2-digit" });
 
 export function ConsolidationView({
   candidates,
@@ -42,6 +42,10 @@ export function ConsolidationView({
   ghlContactBase?: string;
 }) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [query, setQuery] = useState("");
+  const [shown, setShown] = useState(PAGE);
+  // Closed deals are what actually ships — start there when there are any.
+  const [scope, setScope] = useState<"closed" | "all">(() => (candidates.some(isClosed) ? "closed" : "all"));
 
   const toggle = (id: string) =>
     setSelected((s) => {
@@ -77,175 +81,120 @@ export function ConsolidationView({
         <LuxTitle overline="— Consolidation planner">
           צירוף <LuxAccent>משלוחים.</LuxAccent>
         </LuxTitle>
-        <div
-          style={{
-            background: "rgba(232,180,180,0.06)",
-            borderRadius: 10,
-            padding: "14px 18px",
-            color: "#e8b4b4",
-            fontSize: 14,
-            boxShadow: "inset 0 0 0 1px rgba(232,180,180,0.2)",
-          }}
-        >
-          ⚠️ אין ספק שילוח ים פעיל. הגדר ספק פעיל בטאב ההגדרות לפני שימוש בכלי הצירוף.
-        </div>
+        <p className="ux-note" style={{ color: "#f0c0c0" }}>
+          <AlertTriangle className="size-4 shrink-0" aria-hidden />
+          אין ספק שילוח ים פעיל. הגדר ספק פעיל בהגדרות (משלוח) לפני שימוש בכלי הצירוף.
+        </p>
       </LuxShell>
     );
   }
+
+  const q = query.trim().toLowerCase();
+  const pool = scope === "closed" ? candidates.filter(isClosed) : candidates;
+  const visible = q
+    ? pool.filter((c) =>
+        [c.customerName, c.productName, c.quotationNo, c.phone].some((v) => (v ?? "").toLowerCase().includes(q)),
+      )
+    : pool;
+  const closedCount = candidates.filter(isClosed).length;
 
   return (
     <LuxShell className="ux ux-floor">
       <LuxTitle
         overline="— Consolidation planner"
-        subtitle={`סמן הזמנות ים מאותו זמן כדי לראות כמה תחסוך אם תשלח אותן יחד במקום כל אחת בנפרד. כלי תכנון בלבד — לא משנה מחירים ללקוחות. ספק: ${carrier.name}.`}
+        subtitle={`סמן הזמנות ים שיוצאות בערך באותו זמן, ותראה כמה חוסכים אם שולחים אותן יחד. כלי תכנון בלבד — לא משנה מחירים ללקוחות. ספק: ${carrier.name}.`}
       >
-        צירוף משלוחים — <LuxAccent>תכנון.</LuxAccent>
+        צירוף <LuxAccent>משלוחים.</LuxAccent>
       </LuxTitle>
 
       {candidates.length === 0 ? (
-        <div
-          style={{
-            background: "var(--lux-card)",
-            borderRadius: 10,
-            padding: "32px 18px",
-            textAlign: "center",
-            color: "var(--lux-muted)",
-            fontSize: 14,
-            boxShadow: "inset 0 0 0 1px var(--lux-line)",
-          }}
-        >
+        <div className="ux-panel" style={{ textAlign: "center", color: "var(--lux-muted)" }}>
           אין הזמנות ים סופיות לצירוף כרגע.
         </div>
       ) : (
-        <div
-          // lux-stack-sm: the 320px summary rail is a FIXED track, so on a
-          // phone it leaves the candidate list negative width and the page
-          // scrolls sideways. This is one of only two grids here that truly
-          // overflow rather than merely crowd.
-          className="lux-stack-sm"
-          style={{
-            display: "grid",
-            gridTemplateColumns: "1fr 320px",
-            gap: 18,
-            alignItems: "start",
-          }}
-        >
-          {/* candidate list */}
-          <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>
-            <div className="lux-label" style={{ marginBottom: 2 }}>
-              הזמנות ים סופיות · בחר לצירוף
+        <div className="sh-grid">
+          <section aria-labelledby="sh-list">
+            <h2 id="sh-list" className="ux-sr">הזמנות ים לצירוף</h2>
+            <label className="ux-search" style={{ marginBottom: 12 }}>
+              <Search className="size-4 shrink-0" aria-hidden />
+              <span className="ux-sr">חיפוש הזמנה</span>
+              <input
+                type="search"
+                value={query}
+                onChange={(e) => {
+                  setQuery(e.target.value);
+                  setShown(PAGE);
+                }}
+                placeholder="חיפוש לפי לקוח, מוצר או מספר הצעה"
+              />
+            </label>
+            <div className="ux-chips" role="group" aria-label="אילו הזמנות להציג" style={{ marginBottom: 14 }}>
+              <button type="button" className="ux-chip" aria-pressed={scope === "closed"} onClick={() => { setScope("closed"); setShown(PAGE); }}>
+                עסקאות שנסגרו <span className="tnum">{closedCount}</span>
+              </button>
+              <button type="button" className="ux-chip" aria-pressed={scope === "all"} onClick={() => { setScope("all"); setShown(PAGE); }}>
+                כל ההצעות הסופיות <span className="tnum">{candidates.length}</span>
+              </button>
             </div>
-            {candidates.map((c) => {
-              const isSel = selected.has(c.id);
-              const solo = soloUsdById.get(c.id) ?? 0;
-              return (
-                <label
-                  key={c.id}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 14,
-                    background: isSel ? "#1d1b1a" : "#161514",
-                    borderRadius: 8,
-                    padding: "14px 18px",
-                    cursor: "pointer",
-                    boxShadow: isSel
-                      ? "inset 0 0 0 1px rgba(190,198,224,0.3)"
-                      : "inset 0 0 0 1px rgba(69,70,77,0.16)",
-                    transition: "box-shadow .12s ease, background .12s ease",
-                  }}
-                >
-                  <input
-                    type="checkbox"
-                    checked={isSel}
-                    onChange={() => toggle(c.id)}
-                    style={{ position: "absolute", opacity: 0, pointerEvents: "none" }}
-                    aria-hidden
-                  />
-                  <span
-                    style={{
-                      width: 20,
-                      height: 20,
-                      borderRadius: 5,
-                      background: isSel ? "rgba(190,198,224,0.2)" : "#211f1e",
-                      boxShadow: isSel
-                        ? "inset 0 0 0 1px rgba(190,198,224,0.5)"
-                        : "inset 0 0 0 1px rgba(69,70,77,0.3)",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      flexShrink: 0,
-                    }}
-                  >
-                    {isSel ? <Check size={13} strokeWidth={2.5} color="#bec6e0" /> : null}
-                  </span>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                      <span
-                        style={{ fontSize: 15, color: "#e6e1e0", fontWeight: 500 }}
-                        className="truncate"
-                      >
-                        {c.customerName ?? "לקוח ללא שם"}
-                      </span>
-                      {c.stage && (
-                        <span
-                          style={{
-                            fontSize: 12,
-                            color: "var(--lux-muted)",
-                            background: "#211f1e",
-                            padding: "2px 8px",
-                            borderRadius: 4,
-                            flexShrink: 0,
-                          }}
-                        >
-                          {STAGE_LABEL[c.stage] ?? c.stage}
+
+            {visible.length === 0 ? (
+              <div className="ux-panel" style={{ textAlign: "center", color: "var(--lux-muted)" }}>
+                {q ? `לא נמצאה הזמנה עם ״${query}״.` : "אין עסקאות ים שנסגרו — עבור ל״כל ההצעות הסופיות״."}
+              </div>
+            ) : (
+              <ul className="ux-list">
+                {visible.slice(0, shown).map((c) => {
+                  const isSel = selected.has(c.id);
+                  const solo = soloUsdById.get(c.id) ?? 0;
+                  const when = c.closedDealAt ?? c.createdAt;
+                  return (
+                    <li key={c.id} className="sh-row" data-on={isSel || undefined}>
+                      <label className="sh-pick">
+                        <input type="checkbox" checked={isSel} onChange={() => toggle(c.id)} />
+                        <span className="main">
+                          <span className="top">
+                            <span className="nm">{c.customerName ?? "לקוח ללא שם"}</span>
+                            {c.stage && (
+                              <span className="ux-pill" data-tone={isClosed(c) ? "good" : "idle"}>{stageLabel(c.stage)}</span>
+                            )}
+                          </span>
+                          <span className="sub">
+                            {c.productName || "מוצר לא ידוע"}
+                            {c.quantity ? ` · ${c.quantity.toLocaleString("he-IL")} יח׳` : ""}
+                          </span>
+                          <span className="sub tnum">
+                            {c.closedDealAt ? "נסגרה" : "הצעה"} {fmtDate(when)}
+                            {c.quotationNo ? ` · ${c.quotationNo}` : ""}
+                          </span>
                         </span>
-                      )}
+                        <span className="num tnum">
+                          <span className="v">{c.cbm} קוב</span>
+                          <span className="sub">לבד ₪{ils(solo)}</span>
+                        </span>
+                      </label>
                       {ghlContactBase && c.ghlContactId && (
                         <a
+                          className="sh-ghl"
                           href={`${ghlContactBase}${c.ghlContactId}`}
                           target="_blank"
                           rel="noreferrer"
-                          onClick={(e) => e.stopPropagation()}
+                          aria-label={`כרטיס הלקוח ${c.customerName ?? ""} ב-GHL`}
                           title="כרטיס לקוח ב-GHL"
-                          style={{ color: "var(--lux-muted)", flexShrink: 0, display: "inline-flex" }}
                         >
-                          <ExternalLink size={13} />
+                          <ExternalLink className="size-4" aria-hidden />
                         </a>
                       )}
-                    </div>
-                    <div
-                      style={{ fontSize: 12.5, color: "var(--lux-muted)", marginTop: 2 }}
-                      className="truncate"
-                    >
-                      {c.productName ?? "—"}
-                      {c.quantity ? ` · ${c.quantity.toLocaleString()} יח'` : ""}
-                    </div>
-                  </div>
-                  <div style={{ textAlign: "left", flexShrink: 0 }}>
-                    <div
-                      style={{
-                        fontSize: 15,
-                        color: "#e6e1e0",
-                        fontVariantNumeric: "tabular-nums",
-                      }}
-                    >
-                      {c.cbm} קוב
-                    </div>
-                    <div
-                      style={{
-                        fontSize: 12.5,
-                        color: "var(--lux-muted)",
-                        fontVariantNumeric: "tabular-nums",
-                      }}
-                    >
-                      לבד ₪{ils(solo)}
-                    </div>
-                  </div>
-                </label>
-              );
-            })}
-          </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+            {visible.length > shown && (
+              <button type="button" className="ux-btn" style={{ marginTop: 12, width: "100%" }} onClick={() => setShown((n) => n + PAGE)}>
+                הצג עוד {Math.min(PAGE, visible.length - shown)} מתוך {visible.length - shown}
+              </button>
+            )}
+          </section>
 
           {/* live comparison rail */}
           <SummaryRail
@@ -255,6 +204,7 @@ export function ConsolidationView({
             combinedIls={result ? ils(result.combinedUsd) : null}
             savingIls={result ? ils(result.savingUsd) : null}
             recommendation={result?.recommendation.text ?? null}
+            onClear={() => setSelected(new Set())}
           />
         </div>
       )}
@@ -269,6 +219,7 @@ function SummaryRail({
   combinedIls,
   savingIls,
   recommendation,
+  onClear,
 }: {
   count: number;
   combinedCbm: number | undefined;
@@ -276,124 +227,53 @@ function SummaryRail({
   combinedIls: string | null;
   savingIls: string | null;
   recommendation: string | null;
+  onClear: () => void;
 }) {
   return (
-    <div
-      style={{
-        position: "sticky",
-        top: 12,
-        background: "#1d1b1a",
-        borderRadius: 8,
-        padding: "22px 22px",
-        boxShadow: `inset 0 0 0 1px ${
-          count > 0 ? "rgba(190,198,224,0.22)" : "rgba(69,70,77,0.16)"
-        }`,
-      }}
-    >
-      <div
-        className="lux-label"
-        style={{ color: count > 0 ? "#bec6e0" : "var(--lux-muted)", marginBottom: 18 }}
-      >
-        {count === 0 ? "בחר כדי להתחיל" : `${count} נבחרו · השוואה חיה`}
+    <aside className="ux-panel sh-rail" data-on={count > 0 || undefined} aria-live="polite" aria-label="השוואה">
+      <div className="flex items-center justify-between gap-2">
+        <h2 style={{ margin: 0, fontSize: 16, fontWeight: 500 }}>
+          {count === 0 ? "השוואה" : count === 1 ? "נבחרה הזמנה אחת" : `נבחרו ${count} הזמנות`}
+        </h2>
+        {count > 0 && (
+          <button type="button" className="ux-btn sm" onClick={onClear}>
+            נקה
+          </button>
+        )}
       </div>
 
       {count === 0 ? (
-        <div style={{ fontSize: 12.5, color: "var(--lux-muted)", lineHeight: 1.55 }}>
-          סמן הזמנות מהרשימה כדי לראות חיסכון במשלוח מאוחד.
-        </div>
+        <p style={{ margin: "10px 0 0", fontSize: 14, color: "var(--lux-muted)", lineHeight: 1.6 }}>
+          סמן שתי הזמנות או יותר כדי לראות כמה עולה לשלוח אותן יחד מול כל אחת לבד.
+        </p>
       ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+        <div className="grid gap-4" style={{ marginTop: 16 }}>
           <div>
-            <div style={{ fontSize: 12, color: "var(--lux-muted)", marginBottom: 3 }}>נפח מאוחד</div>
-            <div
-              style={{
-                fontFamily: "var(--font-body), Heebo, system-ui",
-                fontWeight: 300,
-                fontSize: 22,
-                color: "#e6e1e0",
-                fontVariantNumeric: "tabular-nums",
-              }}
-            >
-              {combinedCbm} קוב
-            </div>
+            <div className="k">נפח ביחד</div>
+            <div className="tnum" style={{ fontSize: 22, fontWeight: 300 }}>{combinedCbm} קוב</div>
           </div>
-
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "baseline",
-            }}
-          >
+          <div className="flex justify-between gap-4 sh-more">
             <div>
-              <div style={{ fontSize: 12, color: "var(--lux-muted)", marginBottom: 3 }}>בנפרד</div>
-              <div
-                style={{
-                  fontSize: 18,
-                  color: "#c6c6cd",
-                  fontVariantNumeric: "tabular-nums",
-                }}
-              >
-                ₪{soloIls}
-              </div>
+              <div className="k">כל אחת לבד</div>
+              <div className="tnum" style={{ fontSize: 18 }}>₪{soloIls}</div>
             </div>
-            <div style={{ textAlign: "left" }}>
-              <div style={{ fontSize: 12, color: "var(--lux-muted)", marginBottom: 3 }}>מאוחד</div>
-              <div
-                style={{
-                  fontSize: 18,
-                  color: "#c6c6cd",
-                  fontVariantNumeric: "tabular-nums",
-                }}
-              >
-                ₪{combinedIls}
-              </div>
+            <div style={{ textAlign: "end" }}>
+              <div className="k">ביחד</div>
+              <div className="tnum" style={{ fontSize: 18 }}>₪{combinedIls}</div>
             </div>
           </div>
-
-          <div
-            style={{
-              padding: "14px 16px",
-              borderRadius: 8,
-              background: "rgba(127,211,168,0.08)",
-              boxShadow: "inset 0 0 0 1px rgba(127,211,168,0.25)",
-            }}
-          >
-            <div style={{ fontSize: 12, color: "var(--lux-muted)", marginBottom: 3 }}>חיסכון</div>
-            <div
-              style={{
-                fontFamily: "var(--font-body), Heebo, system-ui",
-                fontWeight: 300,
-                fontSize: 30,
-                color: "#7fd3a8",
-                fontVariantNumeric: "tabular-nums",
-                lineHeight: 1.05,
-              }}
-            >
-              ₪{savingIls}
-            </div>
+          <div className="sh-save">
+            <div className="k">חיסכון</div>
+            <div className="tnum" style={{ fontSize: 30, fontWeight: 300, lineHeight: 1.05 }}>₪{savingIls}</div>
           </div>
-
           {recommendation && (
-            <div
-              style={{
-                display: "flex",
-                alignItems: "flex-start",
-                gap: 9,
-                padding: "13px 14px",
-                borderRadius: 8,
-                background: "#161514",
-                boxShadow: "inset 0 0 0 1px rgba(69,70,77,0.16)",
-              }}
-            >
-              <PackageCheck size={17} color="#bec6e0" style={{ flexShrink: 0 }} />
-              <span style={{ fontSize: 12.5, lineHeight: 1.55, color: "#c6c6cd" }}>
-                {recommendation}
-              </span>
-            </div>
+            <p className="flex items-start gap-2 sh-more" style={{ margin: 0, fontSize: 14, lineHeight: 1.6, color: "var(--lux-ink)" }}>
+              <PackageCheck className="size-4 shrink-0" style={{ marginTop: 3, color: "var(--lux-cool)" }} aria-hidden />
+              {recommendation}
+            </p>
           )}
         </div>
       )}
-    </div>
+    </aside>
   );
 }

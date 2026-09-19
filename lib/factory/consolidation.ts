@@ -23,6 +23,11 @@ export interface ConsolidationCandidate {
   cbm: number;
   shippingOptionId: string | null;
   shippingOptionName: string | null;
+  quotationNo: string | null;
+  /** ISO — when the quote was created. */
+  createdAt: string;
+  /** ISO — when the deal was closed (עסקאות), null if not closed. */
+  closedDealAt: string | null;
 }
 
 /** Is this quote's chosen shipping a SEA option (per the active config)? */
@@ -60,6 +65,9 @@ export async function loadConsolidationCandidates(opts?: {
       phone: leads.phoneE164,
       stage: leads.pipelineStage,
       ghlContactId: leads.ghlContactId,
+      quotationNo: factoryQuoteRequests.quotationNo,
+      createdAt: factoryQuoteRequests.createdAt,
+      closedDealAt: factoryQuoteRequests.closedDealAt,
     })
     .from(factoryQuoteRequests)
     .leftJoin(
@@ -69,7 +77,7 @@ export async function loadConsolidationCandidates(opts?: {
     .where(
       sql`${factoryQuoteRequests.factoryStatus} = 'finalized' and ${isNotNull(
         factoryQuoteRequests.finalPricing
-      )}`
+      )} and ${factoryQuoteRequests.deletedAt} is null`
     )
     .orderBy(desc(factoryQuoteRequests.createdAt))
     .limit(limit);
@@ -94,6 +102,9 @@ export async function loadConsolidationCandidates(opts?: {
       cbm,
       shippingOptionId: fp?.shippingOptionId ?? spec?.shippingOptionId ?? null,
       shippingOptionName: fp?.shippingOptionName ?? null,
+      quotationNo: r.quotationNo ?? null,
+      createdAt: r.createdAt.toISOString(),
+      closedDealAt: r.closedDealAt ? r.closedDealAt.toISOString() : null,
     });
   }
 

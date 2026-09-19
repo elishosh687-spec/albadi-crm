@@ -102,6 +102,38 @@
 .calc-to-pick:hover { background: rgba(214,196,172,0.06); }
 .calc-to-link { min-height: 44px; padding: 0 8px; border: 0; background: none; color: var(--lux-cool); font-size: 14px; text-decoration: underline; cursor: pointer; }
 
+/* צירוף משלוחים (ui-ux-pro-max, 18/09) */
+.sh-grid { display: grid; grid-template-columns: minmax(0,1fr) 320px; gap: 18px; align-items: start; }
+.sh-rail { position: sticky; top: 12px; }
+.sh-rail[data-on] { border-color: rgba(190,198,224,0.3); }
+.sh-rail .k { font-size: 13px; color: var(--lux-muted); margin-bottom: 2px; }
+.sh-save { padding: 14px 16px; border-radius: 10px; background: rgba(168,192,160,0.08); border: 1px solid rgba(168,192,160,0.3); color: #c9dcc3; }
+.sh-row { display: flex; align-items: stretch; border-top: 1px solid var(--lux-line-soft); transition: background-color 150ms; }
+.sh-row:first-child { border-top: 0; }
+.sh-row:hover { background: rgba(255,255,255,0.03); }
+.sh-row[data-on] { background: rgba(190,198,224,0.07); }
+.sh-pick { flex: 1; min-width: 0; display: grid; grid-template-columns: 24px minmax(0,1fr) auto; gap: 12px; align-items: center; padding: 12px 16px; min-height: 64px; cursor: pointer; }
+.sh-pick input { width: 18px; height: 18px; accent-color: var(--lux-cool); }
+.sh-pick .main, .sh-pick .num { display: grid; gap: 2px; min-width: 0; }
+.sh-pick .top { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; }
+.sh-pick .nm { font-size: 15px; overflow-wrap: anywhere; }
+.sh-pick .sub { font-size: 13.5px; color: var(--lux-muted); overflow-wrap: anywhere; }
+.sh-pick .num { text-align: end; }
+.sh-pick .num .v { font-size: 15px; }
+.sh-ghl { display: grid; place-items: center; width: 48px; flex-shrink: 0; color: var(--lux-muted); border-inline-start: 1px solid var(--lux-line-soft); }
+.sh-ghl:hover { color: var(--lux-ink); background: rgba(255,255,255,0.04); }
+@media (prefers-reduced-motion: reduce) { .sh-row { transition: none; } }
+@media (max-width: 767px) {
+  .sh-grid { grid-template-columns: minmax(0,1fr); }
+  /* phone: the comparison pins to the bottom while you tick — only once
+     something is ticked, and only the headline numbers */
+  .sh-rail { position: sticky; bottom: 0; top: auto; z-index: 5; box-shadow: 0 -10px 28px rgba(0,0,0,0.45); }
+  .sh-rail:not([data-on]) { display: none; }
+  .sh-rail .sh-more { display: none; }
+  .sh-pick { grid-template-columns: 24px minmax(0,1fr); padding: 12px 14px; }
+  .sh-pick .num { grid-column: 2; text-align: start; display: flex; gap: 12px; align-items: baseline; }
+}
+
 /* הצעות מחיר — reminders + one card per customer (ui-ux-pro-max, 18/09) */
 .qh-alert { border-inline-start: 3px solid var(--lux-line); }
 .qh-alert[data-tone="stop"] { border-inline-start-color: #e08a8a; }

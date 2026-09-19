@@ -14,9 +14,9 @@ export const dynamic = "force-dynamic";
 export default async function ColorsWidgetPage({
   searchParams,
 }: {
-  searchParams: Promise<{ widget_token?: string }>;
+  searchParams: Promise<{ widget_token?: string; view?: string }>;
 }) {
-  const { widget_token } = await searchParams;
+  const { widget_token, view } = await searchParams;
   const token = widget_token ?? "";
   if (!(await widgetPageAuthed(token))) {
     return (
@@ -28,5 +28,5 @@ export default async function ColorsWidgetPage({
       </div>
     );
   }
-  return <ColorCatalogScreen />;
+  return <ColorCatalogScreen initialView={view} />;
 }

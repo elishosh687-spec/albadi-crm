@@ -34,7 +34,12 @@ export default function LuxShell({
         // dvh, not vh: mobile Safari's collapsing toolbar makes 100vh taller
         // than the visible viewport, which clips the bottom of every screen.
         minHeight: "100dvh",
-        overflowY: "auto",
+        // clip, NOT auto: with min-height the shell grows with its content, so
+        // `overflow: auto` never scrolled — the window does — but it still made
+        // the shell the scroll container of every `position: sticky` child,
+        // which then never stuck (calculator summary, shipping rail). `clip`
+        // keeps wide content from scrolling the page sideways without that.
+        overflowX: "clip",
         ...(padding ? { padding } : null),
         ...style,
       }}

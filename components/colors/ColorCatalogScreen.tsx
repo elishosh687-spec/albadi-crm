@@ -13,7 +13,8 @@
  */
 
 import { useState } from "react";
-import { Info } from "lucide-react";
+import { Info, Search } from "lucide-react";
+import { syncHubUrl } from "@/lib/widget/hub-link";
 import { LuxShell, LuxTitle, LuxAccent, LuxStat, Section } from "@/components/widget-ui/lux";
 import {
   FACTORIES,
@@ -29,8 +30,20 @@ const TOTAL = FACTORY_ORDER.reduce((n, id) => n + FACTORY_COLORS[id].length, 0);
 /** Latin codes and hex values must not be reordered by the RTL page. */
 const LTR = { direction: "ltr" as const, unicodeBidi: "isolate" as const };
 
-export default function ColorCatalogScreen() {
-  const [view, setView] = useState<"shared" | "factories">("shared");
+type View = "shared" | "factories";
+
+/** Search matches a Hebrew name, a hex, or a factory code ("y21" finds Y21). */
+const norm = (v: string) => v.trim().toLowerCase().replace(/^#/, "");
+const hit = (q: string, ...fields: string[]) => !q || fields.some((f) => norm(f).includes(q));
+
+export default function ColorCatalogScreen({ initialView }: { initialView?: string }) {
+  const [view, setView] = useState<View>(initialView === "factories" ? "factories" : "shared");
+  const [query, setQuery] = useState("");
+  const q = norm(query);
+  const pick = (next: View) => {
+    setView(next);
+    syncHubUrl({ view: next === "shared" ? null : next });
+  };
 
   return (
     <LuxShell className="ux ux-floor">
@@ -50,26 +63,32 @@ export default function ColorCatalogScreen() {
         <LuxStat value={FACTORY_ORDER.length} label="מפעלים" />
       </div>
 
-      <div
-        role="tablist"
-        aria-label="תצוגה"
-        className="lux-wrap-sm"
-        style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}
-      >
-        <ViewTab active={view === "shared"} onClick={() => setView("shared")}>
+      <div role="tablist" aria-label="תצוגה" className="ux-tabs">
+        <button type="button" role="tab" aria-selected={view === "shared"} onClick={() => pick("shared")}>
           הקטלוג הכללי
-        </ViewTab>
-        <ViewTab active={view === "factories"} onClick={() => setView("factories")}>
+        </button>
+        <button type="button" role="tab" aria-selected={view === "factories"} onClick={() => pick("factories")}>
           לפי מפעל
-        </ViewTab>
+        </button>
       </div>
 
-      {view === "shared" ? <SharedView /> : <FactoriesView />}
+      <label className="ux-search">
+        <Search className="size-4 shrink-0" aria-hidden />
+        <span className="ux-sr">חיפוש צבע</span>
+        <input
+          type="search"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="חיפוש לפי שם צבע או קוד מפעל (למשל Y21)"
+        />
+      </label>
+
+      {view === "shared" ? <SharedView q={q} /> : <FactoriesView q={q} />}
 
       <p
         style={{
           marginTop: 22,
-          fontSize: 12,
+          fontSize: 13.5,
           lineHeight: 1.7,
           color: "var(--lux-muted)",
           maxWidth: "68ch",
@@ -83,53 +102,26 @@ export default function ColorCatalogScreen() {
   );
 }
 
-function ViewTab({
-  active,
-  onClick,
-  children,
-}: {
-  active: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      role="tab"
-      aria-selected={active}
-      onClick={onClick}
-      className="lux-tap"
-      style={{
-        padding: "7px 15px",
-        borderRadius: 6,
-        border: "none",
-        cursor: "pointer",
-        fontSize: 13,
-        fontFamily: "inherit",
-        color: active ? "#1d1b1a" : "var(--lux-ink)",
-        background: active ? "var(--lux-champagne)" : "var(--lux-card)",
-        boxShadow: active ? "none" : "inset 0 0 0 1px var(--lux-line)",
-      }}
-    >
-      {children}
-    </button>
-  );
-}
-
 /* ------------------------------------------------------------------ shared */
 
-function SharedView() {
+function SharedView({ q }: { q: string }) {
+  const shown = SHARED_COLORS.filter((c) => hit(q, c.nameHe, c.hex, ...Object.values(c.codes)));
   return (
     <Section
       numeral="I"
       eyebrow="זמין בכל המפעלים"
       title={`${SHARED_COLORS.length} גוונים שאפשר להבטיח`}
     >
-      <p style={{ margin: "6px 0 16px", fontSize: 13, color: "var(--lux-muted)" }}>
+      <p style={{ margin: "6px 0 16px", fontSize: 14, color: "var(--lux-muted)" }}>
         לכל גוון — הקוד שצריך לבקש מכל מפעל. אם לקוח דורש גוון אחר, יש עוד{" "}
         {TOTAL - SHARED_COLORS.length} גוונים בקטלוגים של המפעלים; מתאימים ידנית
         מול המפעל שיקבל את ההזמנה.
       </p>
+      {shown.length === 0 && (
+        <p style={{ fontSize: 14, color: "var(--lux-muted)" }}>
+          אין גוון משותף שמתאים לחיפוש — נסה ״לפי מפעל״, שם יש את כל {TOTAL} הגוונים.
+        </p>
+      )}
       <div
         style={{
           display: "grid",
@@ -137,7 +129,7 @@ function SharedView() {
           gap: 12,
         }}
       >
-        {SHARED_COLORS.map((c) => (
+        {shown.map((c) => (
           <article
             key={c.hex}
             style={{
@@ -161,8 +153,8 @@ function SharedView() {
                 className="lux-wrap-sm"
                 style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}
               >
-                <strong style={{ fontSize: 14 }}>{c.nameHe}</strong>
-                <span style={{ ...LTR, fontSize: 12.5, color: "var(--lux-muted)" }}>{c.hex}</span>
+                <strong style={{ fontSize: 15 }}>{c.nameHe}</strong>
+                <span style={{ ...LTR, fontSize: 13, color: "var(--lux-muted)" }}>{c.hex}</span>
                 <span
                   title={`הפרש מרבי בין המפעלים: ΔE ${c.maxDeltaE}`}
                   style={{
@@ -186,7 +178,7 @@ function SharedView() {
                       display: "flex",
                       alignItems: "baseline",
                       gap: 8,
-                      fontSize: 12,
+                      fontSize: 13,
                     }}
                   >
                     <span style={{ color: "var(--lux-muted)", minWidth: 58, ...LTR, textAlign: "start" }}>
@@ -195,7 +187,7 @@ function SharedView() {
                     <code
                       style={{
                         ...LTR,
-                        fontSize: 12,
+                        fontSize: 13,
                         padding: "1px 6px",
                         borderRadius: 3,
                         background: "var(--lux-card)",
@@ -224,19 +216,21 @@ function SharedView() {
 
 const NUMERALS = ["I", "II", "III"];
 
-function FactoriesView() {
+function FactoriesView({ q }: { q: string }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
       {FACTORY_ORDER.map((id, i) => (
-        <FactoryBlock key={id} id={id} numeral={NUMERALS[i]} />
+        <FactoryBlock key={id} id={id} numeral={NUMERALS[i]} q={q} />
       ))}
     </div>
   );
 }
 
-function FactoryBlock({ id, numeral }: { id: FactoryId; numeral: string }) {
+function FactoryBlock({ id, numeral, q }: { id: FactoryId; numeral: string; q: string }) {
   const meta = FACTORIES[id];
-  const groups = colorsByCatalog(id);
+  const groups = colorsByCatalog(id)
+    .map((g) => ({ ...g, colors: g.colors.filter((c) => hit(q, c.code, c.hex)) }))
+    .filter((g) => g.colors.length > 0);
   const total = FACTORY_COLORS[id].length;
 
   return (
@@ -260,17 +254,17 @@ function FactoryBlock({ id, numeral }: { id: FactoryId; numeral: string }) {
             display: "inline-flex",
             alignItems: "center",
             gap: 6,
-            fontSize: 12,
+            fontSize: 14,
             color: "var(--lux-champagne)",
           }}
         >
-          <Info size={13} strokeWidth={2} />
+          <Info size={15} strokeWidth={2} />
           מתי מזמינים מכאן?
         </summary>
         <p
           style={{
             margin: "8px 0 0",
-            fontSize: 12.5,
+            fontSize: 14,
             lineHeight: 1.75,
             color: "var(--lux-ink)",
             maxWidth: "62ch",
@@ -286,6 +280,9 @@ function FactoryBlock({ id, numeral }: { id: FactoryId; numeral: string }) {
         </p>
       </details>
 
+      {groups.length === 0 && (
+        <p style={{ fontSize: 14, color: "var(--lux-muted)" }}>אין אצל המפעל הזה קוד שמתאים לחיפוש.</p>
+      )}
       {groups.map((g) => (
         <div key={g.catalog} style={{ marginBottom: 14 }}>
           {groups.length > 1 ? (
@@ -324,14 +321,14 @@ function FactoryBlock({ id, numeral }: { id: FactoryId; numeral: string }) {
                   style={{
                     ...LTR,
                     marginTop: 4,
-                    fontSize: 12.5,
+                    fontSize: 13,
                     lineHeight: 1.35,
                     color: "var(--lux-ink)",
                     textAlign: "start",
                   }}
                 >
                   {c.code}
-                  <span style={{ display: "block", fontSize: 12, color: "var(--lux-muted)" }}>
+                  <span style={{ display: "block", fontSize: 12.5, color: "var(--lux-muted)" }}>
                     {c.hex}
                   </span>
                 </figcaption>
