@@ -4,7 +4,7 @@ import { useLaminationDefault } from "@/lib/factory/calculator/use-lamination-de
 import { resolveLamination } from "@/lib/factory/calculator/lamination";
 import { THERMAL_LABEL, THERMAL_LINING_PCT, withThermalToken } from "@/lib/factory/thermal";
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
-import { Loader2, Send, Copy, Check, Search, X, ChevronDown, Calculator, Pencil, Ship, Plane, Repeat, Minus, Plus } from "lucide-react";
+import { Loader2, Send, Copy, Check, Search, X, ChevronDown, Calculator, Pencil, Ship, Plane, Repeat, Minus, Plus, FileText } from "lucide-react";
 import { cn } from "@/lib/cn";
 import type { Product, QuantityTier, ShippingOption, QuoteResult } from "@/lib/factory/calculator/types";
 import type { FactoryCustomInput, FactoryPricingResult, ShippingSplit } from "@/lib/factory/types";
@@ -1224,6 +1224,24 @@ interface EstimateApiResponse {
 
 const SELECT_CLS = "bg-background/50 border border-border rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring/30";
 
+/**
+ * Escape hatch shown on every estimate refusal: open the factory-quote request
+ * form prefilled with this spec. New tab so the calculator keeps its state.
+ */
+function FactoryRequestLink({ href }: { href: string }) {
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noreferrer"
+      className="mt-3 inline-flex min-h-11 items-center gap-2 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+    >
+      <FileText className="size-4" aria-hidden />
+      בקש מחיר מהמפעל למידה הזו
+    </a>
+  );
+}
+
 function ConfidenceBadge({ confidence }: { confidence?: string }) {
   const map: Record<string, [string, string]> = {
     high: ["bg-success/15 text-success", "ביטחון גבוה"],
@@ -1277,6 +1295,20 @@ function EstimateTab({ apiToken, shippingOptions, sid, leadName, initialMargins,
   // filled in (`valid`); depth 0 = flat bag, which skips the depth rules.
   const geoErrors = valid ? validateBagGeometry(wN, parseFloat(d) || 0, hN) : [];
   const geoBlocked = geoErrors.length > 0;
+
+  /**
+   * A size the estimator won't price is exactly the size the factory has to
+   * quote — so every refusal keeps a way out (Eli 2026-09-22). Deep-links the
+   * request form with this spec, the lead and the refusal reason prefilled.
+   */
+  const factoryRequestHref = (reason: string) => {
+    const p = new URLSearchParams({ h, d: d || "0", w, qty, colors: String(colors), handles: String(handles), lam: String(lam), thermal: String(thermal) });
+    if (apiToken) p.set("widget_token", apiToken);
+    if (sid) p.set("sid", sid);
+    if (leadName) p.set("name", leadName);
+    if (reason) p.set("note", reason);
+    return `/widget/factory-request?${p.toString()}`;
+  };
 
   const effectiveQty = Math.max(1, Math.round(parseFloat(qty) || 0));
   const defaultMargin = initialMargins[qty] ?? 40;
@@ -1602,7 +1634,8 @@ function EstimateTab({ apiToken, shippingOptions, sid, leadName, initialMargins,
               <ul className="list-disc pr-5 text-muted-foreground space-y-0.5">
                 {geoErrors.map((e, i) => (<li key={i}>{e}</li>))}
               </ul>
-              <div className="text-[13px] text-muted-foreground mt-2">תקן את המידות כדי לחשב מחיר.</div>
+              <div className="text-[13px] text-muted-foreground mt-2">תקן את המידות כדי לחשב מחיר — או בקש מהמפעל מחיר למידה הזו כמו שהיא.</div>
+              <FactoryRequestLink href={factoryRequestHref(`המחשבון חסם: ${geoErrors.join(" · ")}`)} />
             </div>
           )}
           {!geoBlocked && loading && (<div className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="size-4 animate-spin" />מחשב…</div>)}
@@ -1615,6 +1648,7 @@ function EstimateTab({ apiToken, shippingOptions, sid, leadName, initialMargins,
               {est.candidates && est.candidates.length > 0 && (
                 <div className="text-[13px] text-muted-foreground mt-2">מחירים שנבדקו: {est.candidates.map((x) => `${x.factory} ¥${x.unitCny}${x.inRange ? "" : " (מחוץ לטווח)"}`).join(" · ")}</div>
               )}
+              <FactoryRequestLink href={factoryRequestHref(est.refused ?? "האומדן סירב")} />
             </div>
           )}
 

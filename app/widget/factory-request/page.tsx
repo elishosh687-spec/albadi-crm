@@ -15,10 +15,18 @@ export const dynamic = "force-dynamic";
 export default async function FactoryRequestPage({
   searchParams,
 }: {
-  searchParams: Promise<{ widget_token?: string }>;
+  // Prefill (deep link from the calculator's estimate tab when it refused to price):
+  // h/d/w/qty/colors/handles/lam/thermal + the lead (sid/name) + the refusal reason.
+  searchParams: Promise<{
+    widget_token?: string;
+    sid?: string; name?: string;
+    h?: string; d?: string; w?: string; qty?: string;
+    colors?: string; handles?: string; lam?: string; thermal?: string;
+    note?: string;
+  }>;
 }) {
-  const { widget_token } = await searchParams;
-  const token = widget_token ?? "";
+  const sp = await searchParams;
+  const token = sp.widget_token ?? "";
   if (!(await widgetPageAuthed(token))) {
     return (
       <div dir="rtl" style={{ padding: 24, color: "#f87171" }}>
@@ -29,5 +37,17 @@ export default async function FactoryRequestPage({
       </div>
     );
   }
-  return <SalesQuoteRequestForm apiToken={token} />;
+  const bool = (v: string | undefined) => (v === "true" ? true : v === "false" ? false : undefined);
+  return (
+    <SalesQuoteRequestForm
+      apiToken={token}
+      prefill={{
+        sid: sp.sid, name: sp.name,
+        h: sp.h, d: sp.d, w: sp.w, qty: sp.qty,
+        colors: sp.colors ? parseInt(sp.colors, 10) || undefined : undefined,
+        handles: bool(sp.handles), lam: bool(sp.lam), thermal: bool(sp.thermal),
+        notes: sp.note,
+      }}
+    />
+  );
 }

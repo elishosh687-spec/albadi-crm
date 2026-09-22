@@ -13,7 +13,7 @@ import { suggestsLamination } from "@/lib/factory/calculator/lamination";
 import { useLaminationDefault } from "@/lib/factory/calculator/use-lamination-default";
 import { THERMAL_FINISHING_TOKEN, THERMAL_LABEL } from "@/lib/factory/thermal";
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
-import { Loader2, Send, CheckCircle2, Search, X, User } from "lucide-react";
+import { Loader2, Send, CheckCircle2, Search, X, User, AlertTriangle } from "lucide-react";
 import { LuxShell, LuxTitle, LuxAccent, LuxCTA, Section } from "@/components/widget-ui/lux";
 import { validateBagGeometry } from "@/lib/factory/bag-geometry";
 
@@ -75,19 +75,52 @@ const EMPTY_SPEC = {
   notes: "",
 };
 
-export function SalesQuoteRequestForm({ apiToken, salesMode = false }: { apiToken: string; salesMode?: boolean }) {
+/**
+ * Deep-link prefill (the calculator's estimate tab links here when it refuses to
+ * price a size — Eli 2026-09-22: "even when it can't calculate I still want to
+ * be able to send it to the factory").
+ */
+export interface RequestPrefill {
+  sid?: string;
+  name?: string;
+  h?: string; d?: string; w?: string; qty?: string;
+  colors?: number;
+  handles?: boolean;
+  lam?: boolean;
+  thermal?: boolean;
+  notes?: string;
+}
+
+const prefillSpec = (p?: RequestPrefill) => ({
+  ...EMPTY_SPEC,
+  widthCm: p?.w ?? EMPTY_SPEC.widthCm,
+  heightCm: p?.h ?? EMPTY_SPEC.heightCm,
+  depthCm: p?.d ?? EMPTY_SPEC.depthCm,
+  quantity: p?.qty ?? EMPTY_SPEC.quantity,
+  logoColors: p?.colors ?? EMPTY_SPEC.logoColors,
+  hasHandles: p?.handles ?? EMPTY_SPEC.hasHandles,
+  hasLamination: p?.lam ?? EMPTY_SPEC.hasLamination,
+  hasThermal: p?.thermal ?? EMPTY_SPEC.hasThermal,
+  notes: p?.notes ?? EMPTY_SPEC.notes,
+});
+
+export function SalesQuoteRequestForm({ apiToken, salesMode = false, prefill }: { apiToken: string; salesMode?: boolean; prefill?: RequestPrefill }) {
   // --- customer picker state ---
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useState(prefill?.sid ? (prefill.name ?? prefill.sid) : "");
   const [results, setResults] = useState<LeadOption[]>([]);
   const [loadingResults, setLoadingResults] = useState(false);
   const [open, setOpen] = useState(false);
-  const [customer, setCustomer] = useState<LeadOption | null>(null);
+  const [customer, setCustomer] = useState<LeadOption | null>(
+    prefill?.sid ? { sid: prefill.sid, name: prefill.name ?? null, phone: null, stage: null, updatedAt: "" } : null,
+  );
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pickerRef = useRef<HTMLDivElement | null>(null);
 
   // --- spec form state ---
-  const [f, setF] = useState(EMPTY_SPEC);
-  const [sizeString, setSizeString] = useState("");
+  const [f, setF] = useState(() => prefillSpec(prefill));
+  const [sizeString, setSizeString] = useState(() =>
+    buildSizeString(parseFloat(prefill?.w ?? "") || 0, parseFloat(prefill?.h ?? "") || 0, parseFloat(prefill?.d ?? "") || 0),
+  );
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sent, setSent] = useState(false);
@@ -203,6 +236,16 @@ export function SalesQuoteRequestForm({ apiToken, salesMode = false }: { apiToke
     }
   };
 
+  // Factory machine limits. For the SALESPERSON this stays a hard block (Eli
+  // 2026-07-22 — never forward a size the factory can't make). For Eli himself
+  // it is only a warning: asking the factory about an out-of-envelope size is
+  // exactly what this form is for (Eli 2026-09-22).
+  const geoErrs = validateBagGeometry(
+    parseFloat(f.widthCm) || 0,
+    parseFloat(f.depthCm) || 0,
+    parseFloat(f.heightCm) || 0,
+  );
+
   // Every field is mandatory + a hard MOQ of 3000: the salesperson must never
   // send Eli an incomplete or below-minimum request.
   const validate = (): string | null => {
@@ -212,10 +255,7 @@ export function SalesQuoteRequestForm({ apiToken, salesMode = false }: { apiToke
     if (!(parseFloat(f.widthCm) > 0)) return "חסר רוחב";
     if (!(parseFloat(f.heightCm) > 0)) return "חסר גובה";
     if (f.depthCm.trim() === "") return "חסר עומק (הקלד 0 לשקית שטוחה)";
-    // Factory machine limits (hard block — Eli 2026-07-22): can't send Eli a
-    // request for a size the factory physically can't make.
-    const geo = validateBagGeometry(parseFloat(f.widthCm) || 0, parseFloat(f.depthCm) || 0, parseFloat(f.heightCm) || 0);
-    if (geo.length) return geo[0];
+    if (salesMode && geoErrs.length) return geoErrs[0];
     if (f.quantity.trim() === "") return "חסרה כמות";
     if ((parseInt(f.quantity, 10) || 0) < MOQ) return `מינימום הזמנה ${MOQ.toLocaleString("he-IL")} יחידות`;
     return null;
@@ -559,6 +599,21 @@ export function SalesQuoteRequestForm({ apiToken, salesMode = false }: { apiToke
             onChange={(v) => set("notes", v)}
             placeholder="(אופציונלי)"
           />
+
+          {!salesMode && geoErrs.length > 0 && (
+            <div
+              className="flex gap-2 rounded-md p-3 text-[11px] text-right"
+              style={{ background: "rgba(224,169,109,0.10)", boxShadow: "inset 0 0 0 1px rgba(224,169,109,0.35)", color: "#e0a96d" }}
+            >
+              <AlertTriangle className="size-4 shrink-0" aria-hidden />
+              <div>
+                <div style={{ fontWeight: 500 }}>מחוץ למגבלות המכונה שהמפעל מסר — אפשר לשלוח בכל זאת ולשאול אותם.</div>
+                <ul className="mt-1 list-disc pr-4">
+                  {geoErrs.map((e, i) => (<li key={i}>{e}</li>))}
+                </ul>
+              </div>
+            </div>
+          )}
 
           {error && (
             <p className="text-xs" style={{ color: "#e8b4b4" }}>

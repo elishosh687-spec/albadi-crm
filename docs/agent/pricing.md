@@ -136,3 +136,22 @@ can now be sent with or without the payment block:
   the "off" default only governs fresh manual sends.
 - **Rule:** any hand-built engine/send path that attaches payment MUST route the plan
   through `resolveEffectivePlanId`. See memory `docs/agent/pricing.md`.
+
+## Why a size doesn't get a price — and the escape hatch (2026-09-22)
+
+Three independent gates, in order. Only the first one blocks *before* the
+estimator even runs:
+
+1. **Machine geometry** ([lib/factory/bag-geometry.ts](lib/factory/bag-geometry.ts)) —
+   `9 ≤ D ≤ 39`, `W > D`, `W ≤ 53`, `18 ≤ H ≤ min(½·D+35, 55)`. The `½·D+35`
+   ceiling is what a tall bag trips: H50 needs D≥30, H55 needs D≥40 (impossible,
+   D caps at 39). Red box "מידה לא תקינה".
+2. **Estimator refusals** ([lib/factory/estimator.ts](lib/factory/estimator.ts)) —
+   qty < 3,000 / > 200,000, narrow-and-tall (D ≤ 10 and H ≥ 1.5·W), no modelled
+   factory for the construction, area outside the factory envelope. Amber box.
+3. **Carton envelope** (area 1,500–5,400 cm²) — shipping CBM not estimable → refuse.
+
+Every one of those states now carries **"בקש מחיר מהמפעל למידה הזו"**, a deep link
+to `/widget/factory-request` prefilled with the spec, the lead and the refusal
+reason. In that form the geometry rules are a **warning, not a block, for Eli**
+(they stay a hard block in `salesMode` so Itay can't forward an impossible size).
