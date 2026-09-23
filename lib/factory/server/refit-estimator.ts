@@ -17,7 +17,7 @@ export const CURSOR_KEY = "estimator.last_refit_at";
 const GATE_MEDIAN = 6;
 
 /** New real quotes from the DB → per-factory PRICE points + CARTON points for the fits. */
-async function dbQuotePoints(): Promise<{ points: Pt[]; cartonPoints: CartonPt[]; latestIso: string | null }> {
+export async function dbQuotePoints(): Promise<{ points: Pt[]; cartonPoints: CartonPt[]; latestIso: string | null }> {
   // carton data also lives on FINALIZED quotes (not only 'received'), so include both.
   const rows = await db.select().from(factoryQuoteRequests);
   const points: Pt[] = [];

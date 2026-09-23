@@ -183,3 +183,26 @@ shows: job ran · formulas published or kept (reason in Hebrew) · price accurac
 carton model frozen or not · what the quotes teach. The refit stores its last
 outcome (incl. `quotesLearned` / `quotesGradingOnly` / `quotesUnmodelled`) in
 `app_config` `estimator.last_refit_at.result`.
+
+### Before/after: learning plain prices from quotes (measured 2026-09-22)
+
+`scripts/estimator-before-after.ts` (read-only) scores every quote with a model
+fitted without it. 33 unique quotes after dedupe (Feishu log ∩ DB overlap is
+large — `dedupeQuotes`/`quoteKey`). On what the estimator agrees to price:
+
+| | median | 90% within | worst | signed mean |
+|---|---|---|---|---|
+| now (plain from catalog) | 4.5% | 13.4% | 22% | −4.6% |
+| `learnPlain` | 5.1% | 13.4% | 22% | −3.5% |
+
+No gain → the live refit keeps `learnPlain` OFF. Feeding quotes naively was
+worse (worst 62%) until flat/tray/narrow-tall quotes were kept out of the fit
+(`learnable`). The 22% is factory spread, not the model: H40×W40×D10 was ¥1.30
+from 亚森 and ¥1.85 from Mandy.
+
+**Verified trust range** (quotes land within ~±13%): gusseted D 10–25, H 28–45,
+W 28–53, **height ≤ ~1.15× width**, 3k–10k pcs. Big misses: narrow-tall
+(−45…−50%, refused), flat (−35…+41%, refused). **No quote exists for a
+gusseted bag taller than 1.15× its width** — that is where 50×30×14 (1.67)
+sits. The ½·D+35 geometry rule does not follow this boundary: it blocks
+H45×W50×D10 (priced within 5%) and lets through tall-narrow bags with no data.

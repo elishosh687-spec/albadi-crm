@@ -110,7 +110,32 @@ export interface FacModel {
   handle: Record<number, number>; lamHandle: Record<number, number>;
   plate: ReturnType<typeof affine>; areaMin: number; areaMax: number;
 }
-export function buildModel(catAll: Pt[], qlAll: Pt[], fac: string, dropQuoteKey?: string): FacModel {
+/**
+ * `learnPlain` (2026-09-22): fit the PLAIN (non-laminated) base line from the
+ * catalog AND the factory quotes, and widen the area envelope to where quotes
+ * exist. Before this, plain price came from the 6 catalog sizes only and every
+ * plain quote merely graded it — Eli believed the calculator learnt from all of
+ * them. Quotes are normalised to the base line (1 colour, no handle) by taking
+ * off the catalog-fitted handle/colour add-ons, exactly like the lam line does.
+ */
+export interface FitOpts { learnPlain?: boolean }
+/**
+ * Quotes the live estimator would never price (it refuses them) must not bend
+ * the line it does price: wine/bottle narrow-tall (isNarrowTall in estimator.ts),
+ * flat (D ≤ 2) and tray (H < 10) — same limits as the carton model. Measured
+ * 2026-09-22: one flat H40×W30 pair (¥0.63 @3k, ¥0.57 @5k) alone pushed a
+ * gusseted prediction to +62%.
+ */
+const learnable = (size: string) => { const dm = dimsStr(size); return !!dm && dm.d > 2 && dm.h >= 10 && !(dm.d <= 10 && dm.h >= 1.5 * dm.w); };
+/** One key per real quote, whatever the size string's spelling — the same quote lives in the Feishu log AND the DB. */
+export const quoteKey = (p: Pt) => { const dm = dimsStr(p.size); return `${p.factory}|${dm ? `${dm.h}/${dm.d}/${dm.w}` : p.size}|${p.qty}|${p.hasLam}|${p.hasHandle}`; };
+/** Collapse duplicates (Feishu log + DB) to one point, averaging the price. */
+export function dedupeQuotes(pts: Pt[]): Pt[] {
+  const by = new Map<string, Pt[]>();
+  for (const p of pts) { const k = quoteKey(p); by.set(k, [...(by.get(k) ?? []), p]); }
+  return [...by.values()].map((g) => ({ ...g[0], price: g.reduce((a, b) => a + b.price, 0) / g.length }));
+}
+export function buildModel(catAll: Pt[], qlAll: Pt[], fac: string, dropQuoteKey?: string, opts?: FitOpts): FacModel {
   // Heat-press points drive every existing coefficient; sewn (车缝) points get
   // their own line so a sewn price never leaks into the heat-press fit.
   const cat = catAll.filter((p) => p.factory === fac && (p.construction ?? "heat_press") === "heat_press");
@@ -127,7 +152,7 @@ export function buildModel(catAll: Pt[], qlAll: Pt[], fac: string, dropQuoteKey?
     const pts = catSewn.filter((p) => p.qty === q);
     sewnLam[q] = affine(pts.map((p) => p.area), pts.map((p) => p.price - (p.hasHandle ? sewnLamHandle[q] : 0)));
   }
-  const ql = qlAll.filter((p) => p.factory === fac && p.qty <= MAX_QTY && (!dropQuoteKey || `${p.size}|${p.qty}|${p.hasLam}|${p.hasHandle}` !== dropQuoteKey));
+  const ql = qlAll.filter((p) => p.factory === fac && p.qty <= MAX_QTY && (!dropQuoteKey || quoteKey(p) !== dropQuoteKey));
   const base: FacModel["base"] = {}, lam: FacModel["lam"] = {}, color: FacModel["color"] = {}, lamColor: FacModel["lamColor"] = {}, handle: FacModel["handle"] = {}, lamHandle: FacModel["lamHandle"] = {};
   for (const q of TIERS) {
     const baseP = cat.filter((p) => p.qty === q && !p.hasHandle && !p.hasLam && p.colors === 1);
@@ -175,9 +200,19 @@ export function buildModel(catAll: Pt[], qlAll: Pt[], fac: string, dropQuoteKey?
     for (const p of ql.filter((p) => snapTier(p.qty) === q && p.hasLam)) { xs.push(p.area); ys.push(p.price - (p.hasHandle ? lamHandle[q] : 0)); }
     lam[q] = affine(xs, ys);
   }
+  const learnPts = opts?.learnPlain ? ql.filter((p) => !p.hasLam && p.qty >= TIERS[0] && learnable(p.size)) : [];
+  for (const q of opts?.learnPlain ? TIERS : []) {
+    const xs: number[] = [], ys: number[] = [];
+    for (const p of cat.filter((p) => p.qty === q && !p.hasHandle && !p.hasLam && p.colors === 1)) { xs.push(p.area); ys.push(p.price); }
+    for (const p of learnPts.filter((p) => snapTier(p.qty) === q)) {
+      const c = p.colors && p.colors > 1 ? (color[q][Math.min(p.colors, 3)] ?? 0) : 0;
+      xs.push(p.area); ys.push(p.price - (p.hasHandle ? handle[q] : 0) - c);
+    }
+    base[q] = affine(xs, ys);
+  }
   const plateP = cat.filter((p) => p.hasLam && p.plateFee != null && p.plateFee! > 0);
   const plate = affine(plateP.map((p) => p.area), plateP.map((p) => p.plateFee!));
-  const areas = cat.map((p) => p.area);
+  const areas = [...cat.map((p) => p.area), ...learnPts.map((p) => p.area)];
   return { sewnLam, sewnLamHandle, base, lam, color, lamColor, handle, lamHandle, plate, areaMin: areas.length ? Math.min(...areas) : 0, areaMax: areas.length ? Math.max(...areas) : 0 };
 }
 
@@ -191,9 +226,9 @@ export function predict(m: FacModel, p: { area: number; qty: number; hasHandle: 
 }
 
 export interface LooResult { errs: number[]; refused: string[]; stats: ReturnType<typeof pct> | null }
-export function looValidate(cat: Pt[], ql: Pt[]): LooResult {
+export function looValidate(cat: Pt[], ql: Pt[], opts?: FitOpts): LooResult {
   const errs: number[] = []; const refused: string[] = [];
-  const baseModels: Record<string, FacModel> = {}; for (const f of FACS) baseModels[f] = buildModel(cat, ql, f);
+  const baseModels: Record<string, FacModel> = {}; for (const f of FACS) baseModels[f] = buildModel(cat, ql, f, undefined, opts);
   for (const m of ql.filter((p) => p.qty <= MAX_QTY)) {
     if (!(FACS as readonly string[]).includes(m.factory)) { refused.push(`${m.size} ${m.factory} (no grid)`); continue; }
     // Mirror the estimator's own refusals (lib/factory/estimator.ts): rows it
@@ -203,7 +238,8 @@ export function looValidate(cat: Pt[], ql: Pt[]): LooResult {
     if (m.qty < 3000) { refused.push(`${m.size} q${m.qty} (below MOQ)`); continue; }
     const dm = dimsStr(m.size);
     if (dm && dm.d > 0 && dm.d <= 10 && dm.h >= 1.5 * dm.w) { refused.push(`${m.size} (narrow-tall)`); continue; }
-    const model = m.hasLam ? buildModel(cat, ql, m.factory, `${m.size}|${m.qty}|${m.hasLam}|${m.hasHandle}`) : baseModels[m.factory];
+    // A quote that feeds the fit must be scored by a model fitted WITHOUT it.
+    const model = m.hasLam || opts?.learnPlain ? buildModel(cat, ql, m.factory, quoteKey(m), opts) : baseModels[m.factory];
     const pr = predict(model, m);
     if (!pr) { refused.push(`${m.size} ${m.factory} (combo)`); continue; }
     if (pr.conf === "low") { refused.push(`${m.size} ${m.factory} (range)`); continue; }
@@ -280,10 +316,10 @@ export function toCartonCoef(pts: CartonPt[], fittedAt: string): CartonCoef {
 }
 
 const r3 = (n: number) => Math.round(n * 1000) / 1000;
-export function toCoeffs(cat: Pt[], ql: Pt[], loo: LooResult, fittedAt: string, carton?: CartonCoef): EstimatorCoeffs {
+export function toCoeffs(cat: Pt[], ql: Pt[], loo: LooResult, fittedAt: string, carton?: CartonCoef, opts?: FitOpts): EstimatorCoeffs {
   const factories: EstimatorCoeffs["factories"] = {};
   for (const f of FACS) {
-    const m = buildModel(cat, ql, f);
+    const m = buildModel(cat, ql, f, undefined, opts);
     factories[f] = {
       areaMin: m.areaMin, areaMax: m.areaMax,
       plateFeePerColor: m.plate ? { makeFee: r3(m.plate.intercept), perCm2: m.plate.slope } : null,
