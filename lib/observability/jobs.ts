@@ -40,6 +40,7 @@ export const JOBS = {
   "enrich-meta-attribution": { label: "שיוך לידים למודעות (Meta)", everyMin: 24 * 60, via: "vercel" },
   "ads-evidence": { label: "נתוני המלצות מודעות (מטא + CRM)", everyMin: 24 * 60, via: "vercel" },
   "google-attribution": { label: "שיוך לידים לקמפיינים (Google)", everyMin: 24 * 60, via: "vercel" },
+  "google-ads-check": { label: "בדיקת חיבורי Google Ads", everyMin: 24 * 60, via: "vercel" },
   followups: { label: "פולואפים של הבוט", everyMin: 15, via: "github" },
   "process-recordings": { label: "עיבוד הקלטות שיחה", everyMin: 5, via: "github" },
   "factory-refresh": { label: "רענון הצעות מהמפעל (Feishu)", everyMin: 15, via: "github" },

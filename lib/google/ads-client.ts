@@ -104,7 +104,10 @@ async function accessToken(cfg: GoogleAdsConfig, fetchFn: FetchFn): Promise<{ ok
 export function explainGoogleError(status: number, body: any): string {
   const err = Array.isArray(body) ? body[0]?.error : body?.error;
   const details = JSON.stringify(err?.details ?? "");
-  const msg = String(err?.message ?? "").slice(0, 200);
+  // The top-level message is generic ("Request contains an invalid argument");
+  // Google's real reason sits in details[].errors[].message.
+  const detailMsg = (err?.details ?? []).flatMap((d: any) => d?.errors ?? []).map((e: any) => e?.message).find(Boolean);
+  const msg = String(detailMsg ?? err?.message ?? "").slice(0, 200);
   if (/DEVELOPER_TOKEN_NOT_APPROVED|DEVELOPER_TOKEN_PROHIBITED|DEVELOPER_TOKEN_INVALID/.test(details)) {
     return "ה-developer token של Google Ads לא מאושר לחשבון הזה";
   }

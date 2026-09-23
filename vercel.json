@@ -35,6 +35,10 @@
     {
       "path": "/api/cron/google-attribution",
       "schedule": "45 6 * * *"
+    },
+    {
+      "path": "/api/cron/google-ads-check",
+      "schedule": "0 7 * * *"
     }
   ],
   "functions": {
