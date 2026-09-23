@@ -39,6 +39,10 @@
     {
       "path": "/api/cron/google-ads-check",
       "schedule": "0 7 * * *"
+    },
+    {
+      "path": "/api/cron/google-conversions",
+      "schedule": "15 7 * * *"
     }
   ],
   "functions": {

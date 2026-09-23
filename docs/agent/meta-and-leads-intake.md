@@ -319,5 +319,25 @@ gets a warn dot when it has a problem.
   from Meta's. Screen: `components/ads/GoogleSettingsView.tsx`, settings section
   `google-ads` under area "שיווק · גוגל" (Meta's stays `ads`, "שיווק · מטא").
 - No Google recommendation engine yet — gates wait for a month of data and Eli's
-  approval, like Meta's did on 18/09. Conversion upload back to Google (plan
-  phase 5) needs its own design + explicit OK; the read-only test blocks it.
+  approval, like Meta's did on 18/09.
+
+### CRM → Google offline conversions (phase 5, built 2026-09-23, Eli's OK)
+
+`lib/google/conversions.ts` (rules) · `conversions-upload.ts` (the ONLY Google
+write; Data Manager API `events:ingest` — the Google Ads API click upload is
+blocked since 15/06/2026 for accounts that never used it, Albadi included) ·
+`conversions-run.ts` + job `google-conversions` (07:15 UTC).
+Same moments as the Meta loop: qualified (suitable tag or DISCAVERY+) →
+`7711834479`, quote (CONSIDERATION/WON or a deal) → `7711834482`, purchase
+(closed deal, real ex-VAT total, close time) → `7711834485`. ONE_PER_CLICK
+actions + `transactionId albadi-<event>-<sid>` → never double-counted. Stamps
+`google_*_sent_at` (migration 0007) only in `live`. Hashed email + E.164 phone
+ride along (enhanced conversions for leads is on in the account).
+- `GOOGLE_CONVERSIONS_MODE` = off | validate (default) | live.
+- Needs `GOOGLE_DATAMANAGER_REFRESH_TOKEN` issued with BOTH scopes
+  (`auth/datamanager` + `auth/adwords`) — the read token can't be reused — and
+  the Data Manager API enabled in the OAuth client's Cloud project.
+- ⚠️ Bidding: the three actions are PRIMARY and their categories
+  (QUALIFIED_LEAD, REQUEST_QUOTE, CONVERTED_LEAD) are biddable at account level,
+  so the Search campaign WILL optimise on them once live. PMax is fenced by its
+  custom goal (form only). Changing that is an account change → marketing draft.

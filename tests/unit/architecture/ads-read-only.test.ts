@@ -54,17 +54,18 @@ describe("Meta ad recommendations never write to Meta", () => {
 /**
  * Same rule for Google Ads (2026-09-23). Google's OAuth scope cannot be made
  * read-only, so this test IS the read-only guard: `lib/google/*` may only run
- * `googleAds:searchStream` (GAQL SELECT). Conversion uploads (plan phase 5)
- * need their own design and Eli's explicit OK — and a change here.
+ * `googleAds:searchStream` (GAQL SELECT). The ONE exception, approved by Eli
+ * on 23/09 (plan phase 5): `lib/google/conversions-upload.ts` may send offline
+ * conversions through the Data Manager API — and nothing else anywhere may.
  */
 describe("Google Ads code never writes to Google Ads", () => {
   const G_FORBIDDEN: [RegExp, string][] = [
     [/:mutate\b|\bmutate[A-Z]\w*\s*\(|\/mutate\b/, "a Google Ads mutate call"],
-    [/uploadClickConversions|uploadCallConversions|uploadUserData|:upload\b|datamanager\.googleapis/i, "a conversion/data upload"],
+    [/uploadClickConversions|uploadCallConversions|uploadUserData|:upload\b/i, "a Google Ads API upload"],
     [/googleAds:(?!searchStream\b)\w+/, "a Google Ads service call other than searchStream"],
   ];
   const gfiles = [
-    ...["lib/google", "app/api/cron/google-attribution", "app/api/cron/google-ads-check", "app/api/widget/ads/google-settings"].flatMap(walk),
+    ...["lib/google", "app/api/cron/google-attribution", "app/api/cron/google-ads-check", "app/api/cron/google-conversions", "app/api/widget/ads/google-settings"].flatMap(walk),
     ...["lib/ads", "components/ads"].flatMap(walk).filter((f) => /\/(google-|Google)/.test(f)),
     "app/widget/ads/page.tsx",
   ];
@@ -75,12 +76,22 @@ describe("Google Ads code never writes to Google Ads", () => {
     expect(gfiles).toContain("components/ads/GoogleOverview.tsx");
   });
 
+  const UPLOADER = "lib/google/conversions-upload.ts";
   for (const f of gfiles) {
     it(f, () => {
       const src = fs.readFileSync(path.join(ROOT, f), "utf8");
       for (const [re, what] of G_FORBIDDEN) {
         expect(re.test(src), `${f} contains ${what}`).toBe(false);
       }
+      if (f !== UPLOADER) {
+        expect(/datamanager\.googleapis/i.test(src), `${f} talks to the Data Manager API — only ${UPLOADER} may`).toBe(false);
+      }
     });
   }
+
+  it("the uploader only ever calls events:ingest", () => {
+    const src = fs.readFileSync(path.join(ROOT, UPLOADER), "utf8");
+    const urls = src.match(/https:\/\/datamanager\.googleapis\.com\/[^"'`\s]+/g) ?? [];
+    expect(urls).toEqual(["https://datamanager.googleapis.com/v1/events:ingest"]);
+  });
 });

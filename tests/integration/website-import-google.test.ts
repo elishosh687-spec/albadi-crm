@@ -24,7 +24,7 @@ const GCLID = "Cj0KCQjwCI-first-click";
 // Every leads migration the schema knows about: drizzle's INSERT names every
 // column in drizzle/schema.ts, so ONE missing column fails every lead insert.
 async function applyMigration() {
-  for (const f of ["0005_google_click_attribution.sql", "0006_google_click_campaign.sql"]) {
+  for (const f of ["0005_google_click_attribution.sql", "0006_google_click_campaign.sql", "0007_google_conversions.sql"]) {
     const file = readFileSync(join(process.cwd(), "drizzle/migrations", f), "utf8");
     for (const stmt of file.split("--> statement-breakpoint")) {
       const body = stmt.replace(/^\s*--.*$/gm, "").trim();

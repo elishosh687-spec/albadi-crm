@@ -148,6 +148,13 @@ export const leads = pgTable("leads", {
   googleClickDate: text("google_click_date"),
   googleAttribution: text("google_attribution"),
   googleAttributedAt: timestamp("google_attributed_at", { withTimezone: true }),
+  // Offline conversions reported to Google Ads (migration 0007, phase 5) —
+  // lib/google/conversions*.ts. Stamped only in GOOGLE_CONVERSIONS_MODE=live.
+  googleQualifiedSentAt: timestamp("google_qualified_sent_at", { withTimezone: true }),
+  googleQuoteSentAt: timestamp("google_quote_sent_at", { withTimezone: true }),
+  googlePurchaseSentAt: timestamp("google_purchase_sent_at", { withTimezone: true }),
+  googleConversionError: text("google_conversion_error"),
+  googleConversionErrorAt: timestamp("google_conversion_error_at", { withTimezone: true }),
 
   // GoHighLevel CRM ids. Populated by integrations/ghl/sync.ts on first sync.
   ghlContactId: text("ghl_contact_id"),

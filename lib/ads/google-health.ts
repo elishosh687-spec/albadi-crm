@@ -35,6 +35,8 @@ export interface GoogleHealthFacts {
   unattributedRecent: { notFound: number; names: string[] };
   /** Live landing pages and their HTTP status (null = unreachable). */
   landing: { url: string; status: number | null }[] | null;
+  /** CRM → Google offline conversions (phase 5). */
+  reporting: { mode: "off" | "validate" | "live"; authorised: boolean; sent30: number; errors: { name: string; error: string }[] };
   jobs: AdsHealthCheck[];
 }
 
@@ -163,6 +165,26 @@ export function evaluateGoogleHealth(f: GoogleHealthFacts, s: GoogleAdsSettings)
           : f.landing.filter((l) => l.status === null || l.status >= 400).map((l) => `${l.url} → ${l.status ?? "לא עונה"}`).join(" · "),
   });
 
+  {
+    const r = f.reporting;
+    const ok = r.mode !== "live" || r.errors.length === 0;
+    checks.push({
+      key: "reporting",
+      label: "דיווח המרות מה-CRM לגוגל",
+      ok,
+      detail:
+        r.mode === "off"
+          ? "כבוי (GOOGLE_CONVERSIONS_MODE=off)"
+          : !r.authorised
+            ? "עוד לא פעיל — חסרה הרשאת Data Manager (GOOGLE_DATAMANAGER_REFRESH_TOKEN). לידים איכותיים ועסקאות לא נשלחים לגוגל."
+            : r.mode === "validate"
+              ? "במצב בדיקה — גוגל בודקת כל אירוע, שום המרה לא נספרת עדיין"
+              : r.errors.length === 0
+                ? `פעיל — ${r.sent30} המרות דווחו ב-30 הימים האחרונים`
+                : r.errors.slice(0, 3).map((e) => `${e.name}: ${e.error}`).join(" · "),
+    });
+  }
+
   checks.push(...f.jobs);
   const problems = checks.filter((c) => !c.ok).length;
   return { ok: problems === 0, problems, checks };
@@ -272,6 +294,18 @@ export async function checkGoogleHealth(opts: { fresh?: boolean } = {}): Promise
 
   const { checks: jobs } = await checkJobs();
   const byJob = new Map(jobs.map((j) => [j.job, j]));
+  const { conversionsMode, dataManagerConfig } = await import("@/lib/google/conversions-upload");
+  const [sentRes, errRes] = await Promise.all([
+    db.execute<{ n: number }>(sql`
+      SELECT (count(*) FILTER (WHERE google_qualified_sent_at > now() - interval '30 days')
+            + count(*) FILTER (WHERE google_quote_sent_at > now() - interval '30 days')
+            + count(*) FILTER (WHERE google_purchase_sent_at > now() - interval '30 days'))::int AS n
+      FROM leads WHERE manychat_sub_id NOT LIKE 'test:%'`),
+    db.execute<{ name: string | null; err: string }>(sql`
+      SELECT name, google_conversion_error AS err FROM leads
+      WHERE google_conversion_error IS NOT NULL AND google_conversion_error_at > now() - interval '7 days'
+        AND manychat_sub_id NOT LIKE 'test:%' ORDER BY google_conversion_error_at DESC LIMIT 10`),
+  ]);
 
   const facts: GoogleHealthFacts = {
     today,
@@ -288,9 +322,16 @@ export async function checkGoogleHealth(opts: { fresh?: boolean } = {}): Promise
       names: unattr.rows.map((r) => (r.name ?? "").split("|")[0].trim()).filter(Boolean),
     },
     landing,
+    reporting: {
+      mode: conversionsMode(),
+      authorised: Boolean(dataManagerConfig().refreshToken),
+      sent30: Number(sentRes.rows[0]?.n ?? 0),
+      errors: errRes.rows.map((r) => ({ name: (r.name ?? "—").split("|")[0].trim(), error: r.err })),
+    },
     jobs: [
       jobCheck(byJob.get("google-attribution"), "משימה יומית — שיוך לידים לקמפיינים"),
       jobCheck(byJob.get("google-ads-check"), "משימה יומית — בדיקת חיבורי גוגל"),
+      jobCheck(byJob.get("google-conversions"), "משימה יומית — דיווח המרות לגוגל"),
     ],
   };
   return evaluateGoogleHealth(facts, s);

@@ -10,6 +10,7 @@ import {
   googleConsistencyWarnings,
   googleSettingsToMarkdown,
   validateGoogleSettings,
+  withGoogleDefaults,
 } from "./google-settings";
 
 const clone = () => structuredClone(D);
@@ -39,6 +40,24 @@ describe("validateGoogleSettings", () => {
     const s = clone();
     s.alerts.attributionLookbackDays = 120;
     expect(validateGoogleSettings(s).ok).toBe(false);
+  });
+});
+
+describe("withGoogleDefaults", () => {
+  it("a document saved before the reporting group existed gets its defaults", () => {
+    const old = structuredClone(D) as Partial<typeof D>;
+    delete old.reporting;
+    const v = validateGoogleSettings(withGoogleDefaults(old));
+    expect(v.ok).toBe(true);
+    if (v.ok) expect(v.value.reporting.purchaseActionId).toBe("7711834485");
+  });
+  it("keeps saved values and still refuses unknown keys", () => {
+    const s = structuredClone(D);
+    s.alerts.clicksWithoutLeadsMin = 55;
+    const v = validateGoogleSettings(withGoogleDefaults({ ...s, junk: 1 }));
+    expect(v.ok).toBe(false);
+    const ok = validateGoogleSettings(withGoogleDefaults(s));
+    expect(ok.ok && ok.value.alerts.clicksWithoutLeadsMin).toBe(55);
   });
 });
 

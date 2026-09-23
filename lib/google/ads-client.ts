@@ -59,18 +59,26 @@ export type GaqlResult =
   | { ok: true; rows: any[] }
   | { ok: false; reason: string; configured: boolean };
 
-let cachedToken: { value: string; expiresAt: number; key: string } | null = null;
+const tokenCache = new Map<string, { value: string; expiresAt: number }>();
 
-/** Test hook — forget the cached access token. */
+/** Test hook — forget the cached access tokens. */
 export function _resetTokenCache() {
-  cachedToken = null;
+  tokenCache.clear();
 }
 
-async function accessToken(cfg: GoogleAdsConfig, fetchFn: FetchFn): Promise<{ ok: true; token: string } | { ok: false; reason: string }> {
+/**
+ * OAuth access token for `cfg.refreshToken`, cached per refresh token.
+ * Exported for the Data Manager upload, which uses its own refresh token
+ * (a different scope). `label` names the env var in error messages.
+ */
+export async function accessToken(
+  cfg: Pick<GoogleAdsConfig, "clientId" | "clientSecret" | "refreshToken">,
+  fetchFn: FetchFn,
+  label = "GOOGLE_ADS_REFRESH_TOKEN",
+): Promise<{ ok: true; token: string } | { ok: false; reason: string }> {
   const key = `${cfg.clientId}:${cfg.refreshToken.slice(-6)}`;
-  if (cachedToken && cachedToken.key === key && cachedToken.expiresAt > Date.now() + 60_000) {
-    return { ok: true, token: cachedToken.value };
-  }
+  const hit = tokenCache.get(key);
+  if (hit && hit.expiresAt > Date.now() + 60_000) return { ok: true, token: hit.value };
   let resp: Response;
   try {
     resp = await fetchFn(OAUTH_URL, {
@@ -91,12 +99,12 @@ async function accessToken(cfg: GoogleAdsConfig, fetchFn: FetchFn): Promise<{ ok
   if (!resp.ok || !body?.access_token) {
     const err = String(body?.error ?? "");
     if (err === "invalid_grant") {
-      return { ok: false, reason: "ההרשאה ל-Google Ads (GOOGLE_ADS_REFRESH_TOKEN) פגה או בוטלה — צריך להנפיק refresh token חדש" };
+      return { ok: false, reason: `ההרשאה לגוגל (${label}) פגה או בוטלה — צריך להנפיק refresh token חדש` };
     }
     if (err === "invalid_client") return { ok: false, reason: "פרטי אפליקציית ה-OAuth של גוגל לא תקינים (GOOGLE_ADS_CLIENT_ID/SECRET)" };
     return { ok: false, reason: `גוגל דחתה את חידוש ההרשאה (${resp.status}${err ? `, ${err}` : ""})` };
   }
-  cachedToken = { value: body.access_token, expiresAt: Date.now() + Number(body.expires_in ?? 3000) * 1000, key };
+  tokenCache.set(key, { value: body.access_token, expiresAt: Date.now() + Number(body.expires_in ?? 3000) * 1000 });
   return { ok: true, token: body.access_token };
 }
 

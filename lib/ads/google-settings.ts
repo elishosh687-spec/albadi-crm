@@ -47,6 +47,14 @@ export interface GoogleAdsSettings {
     /** Count a WhatsApp lead whose prefill says it came from Google. */
     countWhatsAppPrefill: boolean;
   };
+  /** CRM → Google offline conversions (phase 5). */
+  reporting: {
+    qualifiedValueIls: number;
+    quoteValueIls: number;
+    qualifiedActionId: string;
+    quoteActionId: string;
+    purchaseActionId: string;
+  };
 }
 
 /** Starting point, 2026-09-23. Economics copied from the approved Meta numbers
@@ -62,6 +70,8 @@ export const GOOGLE_DEFAULTS_2026_09_23: GoogleAdsSettings = {
     attributionLookbackDays: 14,
   },
   measurement: { formConversionActionId: "7710681316", countWhatsAppPrefill: true },
+  // The three UPLOAD_CLICKS actions created 17/08 ("CRM – …"); values = their Google defaults.
+  reporting: { qualifiedValueIls: 100, quoteValueIls: 300, qualifiedActionId: "7711834479", quoteActionId: "7711834482", purchaseActionId: "7711834485" },
 };
 
 export const GOOGLE_GROUPS: { key: keyof GoogleAdsSettings; title: string; description: string }[] = [
@@ -69,6 +79,7 @@ export const GOOGLE_GROUPS: { key: keyof GoogleAdsSettings; title: string; descr
   { key: "suitableLead", title: "ליד מתאים — גוגל", description: "התגית ב-GHL שמסמנת ליד מתאים, לספירה בלשונית גוגל." },
   { key: "alerts", title: "ספי התראות", description: "מתי שורת החיבורים הופכת לאדומה ונשלחת הודעה בוואטסאפ." },
   { key: "measurement", title: "מדידה", description: "מה נחשב ליד מגוגל ואיזו פעולת המרה משווים מול ה-CRM." },
+  { key: "reporting", title: "דיווח חזרה לגוגל", description: "אילו אירועים מה-CRM נשלחים לגוגל ובאיזה ערך, כדי שגוגל תלמד מה ליד טוב. עסקה נשלחת תמיד בסכום האמיתי." },
 ];
 
 export const GOOGLE_FIELD_LABELS: Record<string, { label: string; unit?: string }> = {
@@ -83,6 +94,11 @@ export const GOOGLE_FIELD_LABELS: Record<string, { label: string; unit?: string 
   "alerts.attributionLookbackDays": { label: "חלון לבדיקת לידים בלי שיוך", unit: "ימים" },
   "measurement.formConversionActionId": { label: "מזהה פעולת ההמרה של הטופס" },
   "measurement.countWhatsAppPrefill": { label: "לספור וואטסאפ עם ״הגעתי מגוגל״" },
+  "reporting.qualifiedValueIls": { label: "ערך ליד איכותי", unit: "₪" },
+  "reporting.quoteValueIls": { label: "ערך הצעת מחיר שנשלחה", unit: "₪" },
+  "reporting.qualifiedActionId": { label: "פעולת ההמרה — ליד איכותי" },
+  "reporting.quoteActionId": { label: "פעולת ההמרה — הצעת מחיר" },
+  "reporting.purchaseActionId": { label: "פעולת ההמרה — עסקה" },
 };
 
 export const GOOGLE_SETTING_HELP: Record<string, { help: string; whenUnset?: string }> = {
@@ -100,6 +116,11 @@ export const GOOGLE_SETTING_HELP: Record<string, { help: string; whenUnset?: str
   "alerts.attributionLookbackDays": { help: "ליד מגוגל מהימים האלה שלא שויך לקמפיין (או \"לא נמצא\") = אדום." },
   "measurement.formConversionActionId": { help: "פעולת ההמרה בגוגל שסופרת טופס הצעת מחיר. מולה משווים את לידי ה-CRM." },
   "measurement.countWhatsAppPrefill": { help: "ליד שפנה בוואטסאפ מכפתור באתר עם הטקסט \"הגעתי מגוגל\" נספר כליד מגוגל, בלי קמפיין (אין לו מזהה קליק)." },
+  "reporting.qualifiedValueIls": { help: "הערך שנשלח לגוגל כשליד מגוגל מסומן ״ליד טוב״ או עובר לאפיון. גוגל משתמשת בערך כדי להעדיף לידים כאלה." },
+  "reporting.quoteValueIls": { help: "הערך שנשלח לגוגל כשליד מגוגל מגיע לשלב שוקל / משא ומתן (הצעת מחיר בידיו)." },
+  "reporting.qualifiedActionId": { help: "פעולת ההמרה בגוגל (סוג העלאה) שמקבלת לידים איכותיים. נוצרה 17/08 בשם ״CRM – ליד איכותי״." },
+  "reporting.quoteActionId": { help: "פעולת ההמרה בגוגל שמקבלת הצעות מחיר. ״CRM – נשלחה הצעת מחיר״." },
+  "reporting.purchaseActionId": { help: "פעולת ההמרה בגוגל שמקבלת עסקאות, בסכום העסקה בפועל לפני מע״מ. ״CRM – מקדמה / עסקה״." },
 };
 
 const money = z.number().finite().positive();
@@ -120,6 +141,9 @@ const schema = z
       })
       .strict(),
     measurement: z.object({ formConversionActionId: z.string(), countWhatsAppPrefill: z.boolean() }).strict(),
+    reporting: z
+      .object({ qualifiedValueIls: money, quoteValueIls: money, qualifiedActionId: z.string(), quoteActionId: z.string(), purchaseActionId: z.string() })
+      .strict(),
   })
   .strict();
 
@@ -148,6 +172,9 @@ export function validateGoogleSettings(raw: unknown): GoogleValidation {
   if (!v.suitableLead.tag.trim()) errors.push({ path: "suitableLead.tag", message: "חסרה תגית GHL של ליד מתאים" });
   if (!/^\d{5,20}$/.test(v.measurement.formConversionActionId.trim())) {
     errors.push({ path: "measurement.formConversionActionId", message: "מזהה פעולת ההמרה חייב להיות מספר" });
+  }
+  for (const k of ["qualifiedActionId", "quoteActionId", "purchaseActionId"] as const) {
+    if (!/^\d{5,20}$/.test(v.reporting[k].trim())) errors.push({ path: `reporting.${k}`, message: "מזהה פעולת ההמרה חייב להיות מספר" });
   }
   if (v.alerts.clicksWindowDays > 30) errors.push({ path: "alerts.clicksWindowDays", message: "חלון הקליקים עד 30 יום" });
   if (v.alerts.attributionLookbackDays > 90) {
@@ -191,4 +218,17 @@ export function googleSettingsToMarkdown(s: GoogleAdsSettings, revision: number)
     lines.push("");
   }
   return lines.join("\n");
+}
+
+/** A stored document from before a group existed gets that group's defaults —
+ *  never "invalid → silently back to all defaults". Unknown keys still fail. */
+export function withGoogleDefaults(raw: unknown): unknown {
+  if (!raw || typeof raw !== "object") return raw;
+  const r = raw as Record<string, unknown>;
+  const out: Record<string, unknown> = { ...r };
+  for (const [g, def] of Object.entries(GOOGLE_DEFAULTS_2026_09_23)) {
+    const cur = r[g];
+    out[g] = cur && typeof cur === "object" ? { ...def, ...(cur as object) } : def;
+  }
+  return out;
 }

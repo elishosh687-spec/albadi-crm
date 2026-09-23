@@ -27,10 +27,27 @@ const base = (p: Partial<GoogleHealthFacts> = {}): GoogleHealthFacts => ({
   crmLeadsInWindow: 3,
   unattributedRecent: { notFound: 0, names: [] },
   landing: [{ url: "https://albadisael.com/", status: 200 }],
+  reporting: { mode: "live", authorised: true, sent30: 2, errors: [] },
   jobs: [],
   ...p,
 });
 const check = (f: GoogleHealthFacts, key: string) => evaluateGoogleHealth(f, S).checks.find((c) => c.key === key)!;
+
+describe("reporting line", () => {
+  it("not authorised yet → says so plainly, not an alert", () => {
+    const c = check(base({ reporting: { mode: "validate", authorised: false, sent30: 0, errors: [] } }), "reporting");
+    expect(c.ok).toBe(true);
+    expect(c.detail).toContain("GOOGLE_DATAMANAGER_REFRESH_TOKEN");
+  });
+  it("live with an upload error → red with the customer's name", () => {
+    const c = check(base({ reporting: { mode: "live", authorised: true, sent30: 0, errors: [{ name: "דנה", error: "purchase: גוגל דחתה" }] } }), "reporting");
+    expect(c.ok).toBe(false);
+    expect(c.detail).toContain("דנה");
+  });
+  it("live and clean → green with the count", () => {
+    expect(check(base(), "reporting").detail).toBe("פעיל — 2 המרות דווחו ב-30 הימים האחרונים");
+  });
+});
 
 describe("evaluateGoogleHealth", () => {
   it("all green on a healthy day", () => {

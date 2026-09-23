@@ -50,6 +50,13 @@
       "when": 1790200000000,
       "tag": "0006_google_click_campaign",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1790210000000,
+      "tag": "0007_google_conversions",
+      "breakpoints": true
     }
   ]
 }

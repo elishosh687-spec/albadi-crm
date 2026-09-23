@@ -27,7 +27,7 @@ type Revision = { revision: number; changedKeys: string[]; actor: string | null;
 type Policy = { revision: number; settings: GoogleAdsSettings; updatedAt: string | null; isDefault: boolean; history: Revision[] };
 
 const NULLABLE = new Set(["economics.targetCplIls"]);
-const TEXT = new Set(["suitableLead.tag", "measurement.formConversionActionId"]);
+const TEXT = new Set(["suitableLead.tag", "measurement.formConversionActionId", "reporting.qualifiedActionId", "reporting.quoteActionId", "reporting.purchaseActionId"]);
 
 const fmt = (v: unknown) => (v === null ? "לא מוגדר" : typeof v === "boolean" ? (v ? "כן" : "לא") : String(v));
 const get = (s: GoogleAdsSettings, path: string) => {
@@ -112,7 +112,7 @@ export function GoogleSettingsView({ apiToken }: { apiToken: string }) {
   return (
     <section dir="rtl" className="space-y-4">
       <div className="inline-flex items-center gap-1 text-[13px] text-emerald-300/90">
-        <ShieldCheck className="size-3.5" /> ההגדרות משנות התראות ומספרים בלבד. הן לא נוגעות בשום דבר ב-Google Ads, ונפרדות לגמרי מההגדרות של מטא.
+        <ShieldCheck className="size-3.5" /> ההגדרות לא משנות שום הגדרה ב-Google Ads, ונפרדות לגמרי מההגדרות של מטא. רק ״דיווח חזרה לגוגל״ קובע אילו ערכים נשלחים כהמרות.
       </div>
 
       {policy && (

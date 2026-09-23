@@ -15,6 +15,7 @@ import {
   GOOGLE_SETTINGS_SCHEMA_VERSION,
   changedGoogleKeys,
   validateGoogleSettings,
+  withGoogleDefaults,
   type GoogleAdsSettings,
   type GoogleSettingsError,
 } from "./google-settings";
@@ -52,7 +53,7 @@ export async function getGooglePolicy(): Promise<StoredGooglePolicy> {
   const res = await db.execute<{ value: any }>(sql`SELECT value FROM app_config WHERE key = ${GOOGLE_SETTINGS_KEY} LIMIT 1`);
   const doc = res.rows[0]?.value;
   if (!doc) return DEFAULT;
-  const v = validateGoogleSettings(doc.settings);
+  const v = validateGoogleSettings(withGoogleDefaults(doc.settings));
   if (!v.ok) {
     log.error("google_settings.stored_invalid", new Error("invalid stored google settings"), { errors: v.errors.map((e) => e.path) });
     return { ...DEFAULT, revision: Number(doc.revision) || 0, history: Array.isArray(doc.history) ? doc.history : [] };

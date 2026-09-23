@@ -19,7 +19,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
-const NOT_ALERTED_HERE = new Set(["job:google-ads-check", "job:google-attribution"]);
+const NOT_ALERTED_HERE = new Set(["job:google-ads-check", "job:google-attribution", "job:google-conversions"]);
 
 function authed(req: Request): boolean {
   const accepted = [process.env.CRON_SECRET, process.env.BOT_SECRET, process.env.CALL_TRIGGER_SECRET]
