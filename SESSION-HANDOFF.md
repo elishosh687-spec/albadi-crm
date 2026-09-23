@@ -1,6 +1,6 @@
 # Session handoff
 
-## OPEN — Google Ads in the CRM: phases 1–4 LIVE (2026-09-23); phase 5 separate
+## OPEN — Google Ads in the CRM: phases 1–5 LIVE (2026-09-23); phase 5 waits on Eli's authorisation
 
 Plan: `docs/plans/2026-09-23-google-ads-tab-design.md`; knowledge: `docs/agent/meta-and-leads-intake.md`
 → "Google Ads — click attribution" + "The Google side of the מודעות tab". Live: migrations 0005+0006 (prod),
@@ -8,8 +8,11 @@ GOOGLE_ADS_* in Vercel (marketing repo's creds, Eli OK), jobs google-attribution
 07:00 UTC, מודעות tab switch מטא|גוגל (`?view=google`, `?view=google-health`), settings "שיווק · גוגל".
 **Verify next:** first scheduled runs green in jobs.status; the next real website lead carries google_gclid
 and gets a campaign. **Open:** no real lead with a gclid ever reached the CRM (Google counted 1 form
-conversion over 107 clicks, 13/08) — watch the gap line once a campaign runs. Phase 5 (conversion upload
-to Google) and a Google recommendation engine: NOT built — need design + Eli's explicit OK.
+conversion over 107 clicks, 13/08) — watch the gap line once a campaign runs. Phase 5 BUILT (f5fa5ec, migration 0007 in prod), mode
+`validate`, reporting line says "not authorised". **To go live:** (1) enable Data Manager API in Cloud project
+315201964483; (2) Eli runs `marketing/shared/generate_datamanager_token.py` (consent, both scopes → straight to
+Vercel); (3) redeploy, run the job in validate, confirm Google accepts; (4) `GOOGLE_CONVERSIONS_MODE=live` (Eli OK —
+Search will bid on these actions). Google recommendation engine: not built (needs a month of data).
 
 ## OPEN — estimator per-factory gate: verify the first nightly run (2026-09-22)
 
