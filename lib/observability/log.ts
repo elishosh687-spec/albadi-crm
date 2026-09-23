@@ -46,6 +46,7 @@ export const FEATURES = [
   "zoho", // Zoho Books read/write
   "feishu", // Feishu sheets / order follow
   "meta", // Meta CAPI, attribution, ads insights
+  "google", // Google Ads read, click attribution
   "calls", // GHL call recording pipeline
   "elevenlabs", // voice agent sync
   "analysis", // lead analyzer, pipeline audit

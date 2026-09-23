@@ -135,6 +135,19 @@ export const leads = pgTable("leads", {
   utmTerm: text("utm_term"),
   utmContent: text("utm_content"),
   landingUrl: text("landing_url"),
+  // Which campaign / ad group / keyword the click came from (migration 0006).
+  // Filled by the daily google-attribution job from Google's click_view (or
+  // from utm_content = ad group id when there is no gclid).
+  // `googleAttribution`: click_view | utm | not_found — not_found stops retries.
+  googleCampaignId: text("google_campaign_id"),
+  googleCampaignName: text("google_campaign_name"),
+  googleAdGroupId: text("google_ad_group_id"),
+  googleAdGroupName: text("google_ad_group_name"),
+  googleKeyword: text("google_keyword"),
+  googleMatchType: text("google_match_type"),
+  googleClickDate: text("google_click_date"),
+  googleAttribution: text("google_attribution"),
+  googleAttributedAt: timestamp("google_attributed_at", { withTimezone: true }),
 
   // GoHighLevel CRM ids. Populated by integrations/ghl/sync.ts on first sync.
   ghlContactId: text("ghl_contact_id"),

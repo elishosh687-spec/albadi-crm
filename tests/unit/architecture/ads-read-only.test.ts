@@ -50,3 +50,31 @@ describe("Meta ad recommendations never write to Meta", () => {
     });
   }
 });
+
+/**
+ * Same rule for Google Ads (2026-09-23). Google's OAuth scope cannot be made
+ * read-only, so this test IS the read-only guard: `lib/google/*` may only run
+ * `googleAds:searchStream` (GAQL SELECT). Conversion uploads (plan phase 5)
+ * need their own design and Eli's explicit OK — and a change here.
+ */
+describe("Google Ads code never writes to Google Ads", () => {
+  const G_FORBIDDEN: [RegExp, string][] = [
+    [/:mutate\b|\bmutate[A-Z]\w*\s*\(|\/mutate\b/, "a Google Ads mutate call"],
+    [/uploadClickConversions|uploadCallConversions|uploadUserData|:upload\b|datamanager\.googleapis/i, "a conversion/data upload"],
+    [/googleAds:(?!searchStream\b)\w+/, "a Google Ads service call other than searchStream"],
+  ];
+  const gfiles = ["lib/google"].flatMap(walk);
+
+  it("scans lib/google (sanity)", () => {
+    expect(gfiles).toContain("lib/google/ads-client.ts");
+  });
+
+  for (const f of gfiles) {
+    it(f, () => {
+      const src = fs.readFileSync(path.join(ROOT, f), "utf8");
+      for (const [re, what] of G_FORBIDDEN) {
+        expect(re.test(src), `${f} contains ${what}`).toBe(false);
+      }
+    });
+  }
+});

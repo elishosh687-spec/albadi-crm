@@ -271,3 +271,24 @@ way, with the page name (the site interpolates it into quotes) in
 **If the site copy changes, update the fragments** — they are the whole
 mechanism, and nothing fails loudly when they stop matching. The tell is
 `lead_source` going quiet again.
+
+## Google Ads — click attribution (built 2026-09-23)
+
+Plan: `docs/plans/2026-09-23-google-ads-tab-design.md`. Website leads carry
+`google_gclid/gbraid/wbraid`, `utm_*`, `landing_url` in their own columns
+(migration 0005; `lib/leads/google-click.ts`, blanks-only in website-import).
+The daily `/api/cron/google-attribution` (job `google-attribution`, 06:45 UTC)
+fills `google_campaign_* / ad_group_* / keyword / match_type / click_date`
+(migration 0006) from Google's `click_view` — one day per query, the lead's
+Israel day and the two before, 90 days back only — or from
+`utm_content = {adgroupid}` when there is no gclid. `google_attribution` =
+`click_view | utm | not_found`; not_found only after 3 days, then no retries.
+
+**Read-only toward Google.** `lib/google/ads-client.ts` runs only
+`googleAds:searchStream` (GAQL SELECT); `ads-read-only.test.ts` fails the build
+on a mutate/upload. Credentials: `GOOGLE_ADS_*` in Vercel — the marketing
+repo's own (Eli, 23/09). Albadi `6763920913` is called with NO
+login-customer-id header.
+
+⚠️ As of 23/09 no real website lead had EVER reached the CRM with a gclid (the
+only two were `smoke-test` rows) — the Google→site→CRM chain is unproven.

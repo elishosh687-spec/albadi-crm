@@ -2,8 +2,8 @@
  * website-import stores the Google click + UTM in their own columns
  * (migration 0005, 2026-09-23) — new lead, and blanks-only on an existing one.
  *
- * The branch is copied from production, which may not have 0005 yet; the
- * migration is idempotent, so this file applies it first.
+ * The branch is copied from production, which may not have 0005/0006 yet; the
+ * migrations are idempotent, so this file applies them first.
  *
  * GHL and WhatsApp are mocked: nothing leaves the test.
  */
@@ -21,11 +21,15 @@ const PHONE = ciPhone(7305);
 const SID = `${PHONE}@s.whatsapp.net`;
 const GCLID = "Cj0KCQjwCI-first-click";
 
+// Every leads migration the schema knows about: drizzle's INSERT names every
+// column in drizzle/schema.ts, so ONE missing column fails every lead insert.
 async function applyMigration() {
-  const file = readFileSync(join(process.cwd(), "drizzle/migrations/0005_google_click_attribution.sql"), "utf8");
-  for (const stmt of file.split("--> statement-breakpoint")) {
-    const body = stmt.replace(/^\s*--.*$/gm, "").trim();
-    if (body) await sql(body);
+  for (const f of ["0005_google_click_attribution.sql", "0006_google_click_campaign.sql"]) {
+    const file = readFileSync(join(process.cwd(), "drizzle/migrations", f), "utf8");
+    for (const stmt of file.split("--> statement-breakpoint")) {
+      const body = stmt.replace(/^\s*--.*$/gm, "").trim();
+      if (body) await sql(body);
+    }
   }
 }
 

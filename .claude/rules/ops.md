@@ -6,6 +6,7 @@ paths:
   - "next.config.*"
   - "scripts/README.md"
   - ".vercel/**"
+  - "drizzle/**"
 ---
 
 # Ops — logging, deploy, Vercel/Neon CLI
@@ -17,6 +18,7 @@ paths:
 - Push to `main` usually auto-deploys, but the webhook sometimes silently doesn't fire: check `vercel ls`, else `~/.local/node/bin/vercel deploy --prod --yes`.
 - `vercel env pull` silently blanks sensitive vars (`DATABASE_URL`, `GHL_*`, `BRIDGE_*`); get the DB via `~/.local/node/bin/neonctl connection-string --project-id fragrant-morning-71359670 --org-id org-frosty-star-50411125`.
 - GHL tokens come from the `ghl_oauth_tokens` table.
+- A new `leads` column: apply the migration to prod and verify it BEFORE pushing `main` — drizzle's INSERT names every schema column, so a missing one breaks every lead insert.
 - Production env writes (`vercel env add`/`rm`) need explicit user authorization.
 
 Full detail: `docs/agent/ops.md` — read it before non-trivial changes here.

@@ -38,6 +38,14 @@
 
 ## Deploy
 
+**⚠️ A new `leads` column ships in TWO steps — migration first, code second
+(found 2026-09-23).** Drizzle's INSERT names EVERY column in `drizzle/schema.ts`,
+so code that knows a column the live DB lacks fails every lead insert — website,
+Meta import, WhatsApp — not only the feature's own. Apply the (idempotent)
+migration to production, verify the columns in `information_schema`, THEN push
+`main`. An integration test that inserts a lead must apply every new migration
+first (see `tests/integration/website-import-google.test.ts`).
+
 Push to `main` → Vercel **usually** auto-deploys via GitHub integration.
 
 **Gotcha (seen 2026-06-07):** the GitHub→Vercel webhook silently doesn't fire sometimes. After pushing, run `vercel ls` and check the top deployment age. If it's older than your last commit, trigger manually:
