@@ -8,13 +8,17 @@
  * watchdog WhatsApps Eli; a missing Data Manager token is a known,
  * not-yet-authorised state and is reported, not alerted.
  *
+ * `?probe=1` sends ONE synthetic event with validateOnly (never counted,
+ * whatever the mode) to prove the token, its scopes and the API end to end.
+ *
  * Auth: Bearer CRON_SECRET / BOT_SECRET / CALL_TRIGGER_SECRET. POST for a
  * manual kick.
  */
 import { NextResponse } from "next/server";
 import { withJob } from "@/lib/observability/jobs";
 import { runGoogleConversions } from "@/lib/google/conversions-run";
-import { dataManagerConfig } from "@/lib/google/conversions-upload";
+import { dataManagerConfig, ingestEvents } from "@/lib/google/conversions-upload";
+import { ingestBody } from "@/lib/google/conversions";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -31,6 +35,17 @@ const run = withJob("google-conversions", "google", async (req, log) => {
   if (!authed(req)) {
     log.warn("unauthorized");
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
+  }
+  if (new URL(req.url).searchParams.get("probe") === "1") {
+    const cfg = dataManagerConfig();
+    const now = new Date(Date.now() - 3_600_000);
+    const body = ingestBody(cfg.customerId, "7711834479", [{
+      conv: { sid: "probe", event: "qualified", actionId: "7711834479", at: now, valueIls: 1, transactionId: `albadi-probe-${Date.now()}` },
+      lead: { gclid: "Cj0KCQjwprobeValidateOnly0000", gbraid: null, wbraid: null, email: null, phoneE164: null },
+    }], true);
+    const r = await ingestEvents(body);
+    log.info("google_conversions.probe", { ok: r.ok, reason: r.ok ? null : r.reason });
+    return NextResponse.json({ probe: true, validateOnly: true, ...r });
   }
   const r = await runGoogleConversions();
   log.info("google_conversions.done", { ...r, pending: JSON.stringify(r.pending) });
