@@ -41,8 +41,16 @@ export type IngestResult = { ok: true; requestId: string | null; warnings: strin
 /** Hebrew reason for a Data Manager error. Never echoes a secret. */
 export function explainDataManagerError(status: number, body: any): string {
   const err = body?.error ?? {};
-  const msg = String(err.message ?? "").slice(0, 220);
   const details = JSON.stringify(err.details ?? "");
+  // The top message is generic ("There was a problem with the request");
+  // the reason is in details[].fieldViolations / details[].errors.
+  const violations = (Array.isArray(err.details) ? err.details : [])
+    .flatMap((d: any) => [...(d?.fieldViolations ?? []), ...(d?.errors ?? [])])
+    .map((v: any) => [v?.field ?? v?.location?.fieldPathElements?.map((e: any) => e.fieldName).join("."), v?.description ?? v?.message ?? v?.reason].filter(Boolean).join(": "))
+    .filter(Boolean)
+    .slice(0, 3)
+    .join(" · ");
+  const msg = [String(err.message ?? ""), violations].filter(Boolean).join(" — ").slice(0, 400);
   if (/ACCESS_TOKEN_SCOPE_INSUFFICIENT|insufficient.*scope/i.test(details + msg)) {
     return "להרשאה אין את ה-scope של Data Manager — צריך להנפיק GOOGLE_DATAMANAGER_REFRESH_TOKEN עם datamanager + adwords";
   }
