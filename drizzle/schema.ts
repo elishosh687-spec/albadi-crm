@@ -122,6 +122,20 @@ export const leads = pgTable("leads", {
   metaFbclid: text("meta_fbclid"),
   metaFbp: text("meta_fbp"),
 
+  // Google Ads click + UTM for WEBSITE-sourced leads (migration 0005,
+  // 2026-09-23). Before that they reached website-import and lived only in
+  // `notes`. Filled blanks-only; lib/leads/google-click.ts builds the values.
+  // Plan: docs/plans/2026-09-23-google-ads-tab-design.md.
+  googleGclid: text("google_gclid"),
+  googleGbraid: text("google_gbraid"),
+  googleWbraid: text("google_wbraid"),
+  utmSource: text("utm_source"),
+  utmMedium: text("utm_medium"),
+  utmCampaign: text("utm_campaign"),
+  utmTerm: text("utm_term"),
+  utmContent: text("utm_content"),
+  landingUrl: text("landing_url"),
+
   // GoHighLevel CRM ids. Populated by integrations/ghl/sync.ts on first sync.
   ghlContactId: text("ghl_contact_id"),
   ghlOpportunityId: text("ghl_opportunity_id"),

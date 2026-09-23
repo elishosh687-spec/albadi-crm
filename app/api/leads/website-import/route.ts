@@ -27,10 +27,10 @@
  *       → insert, tag, push to GHL, optionally send OPENING.
  *         → { status: "sent" | "created" }
  *
- * The Google click id is NOT stored in its own column — it lives in the
- * website's own Postgres, which is what the Google Ads offline-conversion
- * export queries. Here it goes into `notes` so it is visible on the GHL contact
- * card when Eli closes the deal.
+ * The Google click id + UTM are stored in their own columns (migration 0005,
+ * 2026-09-23 — `lib/leads/google-click.ts`), blanks-only like every other
+ * attribution field, so the ads tab can tie a lead to a Google campaign. They
+ * also still go into `notes` so they are visible on the GHL contact card.
  */
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
@@ -40,6 +40,7 @@ import { z } from "zod";
 import { sendBridgeMessage } from "@/lib/bridge/client";
 import { OPENING, kickstartQuestionnaire } from "@/lib/autoresponder/questionnaire";
 import { getBotSettings } from "@/lib/bot-settings/store";
+import { googleClickColumns } from "@/lib/leads/google-click";
 import { syncLeadToGHL } from "@/integrations/ghl/sync";
 import { serializeError, withRequestLog } from "@/lib/observability/log";
 
@@ -167,6 +168,7 @@ export const POST = withRequestLog("leads", async (req: NextRequest, log) => {
   const email = body.email?.trim() || null;
   const note = buildAttributionNote(body);
   const leadSource = pickLeadSource(body);
+  const click = googleClickColumns(body);
 
   // 1. Dedupe — someone who already messaged us on WhatsApp and then filled the
   //    form is one lead, not two.
@@ -214,6 +216,13 @@ export const POST = withRequestLog("leads", async (req: NextRequest, log) => {
         // Only fill blanks — never clobber a manual override.
         ...(row.leadSource ? {} : { leadSource }),
         ...(row.email ? {} : email ? { email } : {}),
+        // Same rule for the Google click / UTM: an earlier click keeps its
+        // attribution; only empty columns are filled.
+        ...Object.fromEntries(
+          Object.entries(click)
+            .filter(([, v]) => v !== null)
+            .map(([k, v]) => [k, sql`COALESCE(${leads[k as keyof typeof click]}, ${v})`]),
+        ),
         updatedAt: new Date(),
       })
       .where(sql`trim(${leads.manychatSubId}) = ${row.sid.trim()}`);
@@ -251,6 +260,7 @@ export const POST = withRequestLog("leads", async (req: NextRequest, log) => {
       // back to the right ad even though they never touched an Instant Form.
       metaFbclid: body.fbclid ?? null,
       metaFbp: body.fbp ?? null,
+      ...click,
     });
   } catch (err) {
     return NextResponse.json(
