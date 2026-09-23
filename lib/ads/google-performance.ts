@@ -33,6 +33,8 @@ export interface GoogleLeadRow {
   suitable: boolean;
   engaged: boolean;
   viaWhatsApp: boolean;
+  /** Carries a gclid / gbraid / wbraid. */
+  hasClick: boolean;
 }
 
 export interface GoogleDealRow {
@@ -88,8 +90,9 @@ export interface GoogleCampaignRow extends GoogleMoney {
 export interface GooglePerformanceReport {
   rows: GoogleCampaignRow[];
   totals: { leads: number; suitable: number; won: number; revenueIls: number; spendIls: number | null; clicks: number | null };
-  /** Google leads without a campaign (WhatsApp prefill, not yet / not found). */
-  unattributed: { total: number; whatsapp: number; notFound: number; pending: number };
+  /** Google leads without a campaign: WhatsApp prefill (no click id by nature),
+   *  click not found by Google, waiting for the nightly run, or no click id at all. */
+  unattributed: { total: number; whatsapp: number; notFound: number; pending: number; noClick: number };
   spendUnavailable: string | null;
   since: string | null;
 }
@@ -119,7 +122,7 @@ export function foldGooglePerformance(
     keywords: Map<string, GoogleKeywordRow>;
   };
   const acc = new Map<string, Acc>();
-  const unattributed = { total: 0, whatsapp: 0, notFound: 0, pending: 0 };
+  const unattributed = { total: 0, whatsapp: 0, notFound: 0, pending: 0, noClick: 0 };
 
   for (const l of leads) {
     const ds = dealsBySid.get(l.sid.trim()) ?? [];
@@ -127,7 +130,8 @@ export function foldGooglePerformance(
       unattributed.total++;
       if (l.viaWhatsApp) unattributed.whatsapp++;
       else if (l.attribution === "not_found") unattributed.notFound++;
-      else unattributed.pending++;
+      else if (l.hasClick) unattributed.pending++;
+      else unattributed.noClick++;
       continue;
     }
     let a = acc.get(l.campaignId);
@@ -271,7 +275,7 @@ export async function loadGoogleLeads(settings: GoogleAdsSettings, since: string
   const res = await db.execute<{
     sid: string; name: string | null; campaign_id: string | null; campaign_name: string | null;
     ad_group_id: string | null; ad_group_name: string | null; keyword: string | null; match_type: string | null;
-    attribution: string | null; suitable: boolean; engaged: boolean; has_click: boolean;
+    attribution: string | null; suitable: boolean; engaged: boolean; has_click: boolean; via_wa: boolean;
   }>(sql`
     SELECT l.manychat_sub_id AS sid, l.name, l.google_campaign_id AS campaign_id, l.google_campaign_name AS campaign_name,
            l.google_ad_group_id AS ad_group_id, l.google_ad_group_name AS ad_group_name,
@@ -279,7 +283,9 @@ export async function loadGoogleLeads(settings: GoogleAdsSettings, since: string
            EXISTS (SELECT 1 FROM lead_tags t WHERE t.manychat_sub_id = l.manychat_sub_id
                    AND lower(btrim(t.tag)) = lower(btrim(${settings.suitableLead.tag}))) AS suitable,
            (${ENGAGED}) AS engaged,
-           (l.google_gclid IS NOT NULL OR l.google_gbraid IS NOT NULL OR l.google_wbraid IS NOT NULL) AS has_click
+           (l.google_gclid IS NOT NULL OR l.google_gbraid IS NOT NULL OR l.google_wbraid IS NOT NULL) AS has_click,
+           EXISTS (SELECT 1 FROM source_touches st WHERE st.manychat_sub_id = l.manychat_sub_id
+                   AND st.source_detail_1 = 'landing_google') AS via_wa
     FROM leads l
     WHERE l.manychat_sub_id NOT LIKE 'test:%'
       AND (l.lead_source = 'google' OR l.google_gclid IS NOT NULL OR l.google_gbraid IS NOT NULL
@@ -297,7 +303,8 @@ export async function loadGoogleLeads(settings: GoogleAdsSettings, since: string
     attribution: r.attribution,
     suitable: Boolean(r.suitable),
     engaged: Boolean(r.engaged),
-    viaWhatsApp: !r.has_click && !r.campaign_id,
+    viaWhatsApp: Boolean(r.via_wa) && !r.has_click && !r.campaign_id,
+    hasClick: Boolean(r.has_click),
   }));
 }
 

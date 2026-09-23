@@ -15,7 +15,7 @@ export interface TodoItem {
   title: string;
   detail: string;
   /** Which sub-view explains/fixes it. */
-  target: "meta" | "ads";
+  target: "meta" | "ads" | "google-health";
 }
 
 const ils = (n: number) => `₪${Math.round(n).toLocaleString("he-IL")}`;
@@ -51,6 +51,16 @@ export function buildServerTodo(
     });
   }
   return items;
+}
+
+/** Google side: every red line of the Google status list. Pure. */
+export function buildGoogleTodo(health: AdsHealth | null): TodoItem[] {
+  if (!health) {
+    return [{ key: "g-health-unknown", title: "לא הצלחתי לבדוק את החיבורים לגוגל", detail: "נסה לרענן את הדף.", target: "google-health" }];
+  }
+  return health.checks
+    .filter((c) => !c.ok)
+    .map((c) => ({ key: `g-${c.key}`, title: `${c.label} — לא תקין`, detail: c.detail, target: "google-health" as const }));
 }
 
 /** Client-side part: needs the recommendations report (Meta). */

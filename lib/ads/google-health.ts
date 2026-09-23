@@ -49,7 +49,11 @@ export function evaluateGoogleHealth(f: GoogleHealthFacts, s: GoogleAdsSettings)
     key: "google-read",
     label: "קריאת נתונים מ-Google Ads",
     ok: readOk && Boolean(f.snapshot?.ok),
-    detail: !f.read.ok ? f.read.reason : f.snapshot && !f.snapshot.ok ? f.snapshot.reason : "תקין",
+    detail: !f.read.ok
+      ? f.read.reason
+      : f.snapshot && !f.snapshot.ok
+        ? f.snapshot.reason
+        : `נקרא בהצלחה — ${f.snapshot?.ok ? f.snapshot.campaigns.size : 0} קמפיינים בחשבון`,
   });
 
   checks.push({
@@ -290,4 +294,15 @@ export async function checkGoogleHealth(opts: { fresh?: boolean } = {}): Promise
     ],
   };
   return evaluateGoogleHealth(facts, s);
+}
+
+let healthCache: { at: number; value: AdsHealth } | null = null;
+
+/** For screens: the last check if it is under 10 minutes old (the page chip
+ *  and the Google tab both need it; the daily job always runs fresh). */
+export async function cachedGoogleHealth(opts: { fresh?: boolean } = {}): Promise<AdsHealth> {
+  if (!opts.fresh && healthCache && Date.now() - healthCache.at < 10 * 60_000) return healthCache.value;
+  const value = await checkGoogleHealth({ fresh: opts.fresh });
+  healthCache = { at: Date.now(), value };
+  return value;
 }

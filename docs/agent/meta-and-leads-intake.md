@@ -292,3 +292,32 @@ login-customer-id header.
 
 ⚠️ As of 23/09 no real website lead had EVER reached the CRM with a gclid (the
 only two were `smoke-test` rows) — the Google→site→CRM chain is unproven.
+Google itself counted 107 clicks (07/08–01/09) and ONE form conversion (13/08).
+
+### The Google side of the "מודעות" tab (built 2026-09-23)
+
+Two worlds, one switch (Eli: "ברור שאלו שני עולמות שונים"). The platform
+rides on `view` so the hub's deep links need no change: `?view=google`
+(campaigns) and `?view=google-health` (every check); no `view`/`meta` = Meta as
+before. Each platform has its own status chip; the OTHER platform's switch
+gets a warn dot when it has a problem.
+
+- `lib/ads/google-evidence.ts` — campaign/ad group × day spend (all-or-nothing,
+  10-min cache). `lib/ads/google-performance.ts` — CRM leads/suitable/deals/
+  revenue per campaign, ad group, keyword; spend unknown = "—".
+- `lib/ads/google-health.ts` + job `google-ads-check` (07:00 UTC) — read,
+  auto-tagging, silent ENABLED campaign, disapproved / NOT_ELIGIBLE, auto-applied
+  recommendations (`change_event` client_type GOOGLE_ADS_RECOMMENDATIONS),
+  clicks without CRM leads, Google↔CRM form gap per closed day
+  (`metrics.all_conversions_by_conversion_date` FROM customer — the per-campaign
+  form of that query is refused), not-found clicks, landing pages, both jobs.
+  Red throws → watchdog WhatsApp. The page uses `cachedGoogleHealth` (10 min);
+  `?fresh=1` re-reads.
+- Settings: `lib/ads/google-settings.ts` (+ `google-settings-store.ts`, ONE
+  app_config row `ads.google.settings` with revision + history inside, conditional
+  upsert) — economics / suitable tag / alert thresholds / measurement, separate
+  from Meta's. Screen: `components/ads/GoogleSettingsView.tsx`, settings section
+  `google-ads` under area "שיווק · גוגל" (Meta's stays `ads`, "שיווק · מטא").
+- No Google recommendation engine yet — gates wait for a month of data and Eli's
+  approval, like Meta's did on 18/09. Conversion upload back to Google (plan
+  phase 5) needs its own design + explicit OK; the read-only test blocks it.

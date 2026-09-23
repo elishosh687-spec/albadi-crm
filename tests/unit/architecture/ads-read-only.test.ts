@@ -63,10 +63,16 @@ describe("Google Ads code never writes to Google Ads", () => {
     [/uploadClickConversions|uploadCallConversions|uploadUserData|:upload\b|datamanager\.googleapis/i, "a conversion/data upload"],
     [/googleAds:(?!searchStream\b)\w+/, "a Google Ads service call other than searchStream"],
   ];
-  const gfiles = ["lib/google"].flatMap(walk);
+  const gfiles = [
+    ...["lib/google", "app/api/cron/google-attribution", "app/api/cron/google-ads-check", "app/api/widget/ads/google-settings"].flatMap(walk),
+    ...["lib/ads", "components/ads"].flatMap(walk).filter((f) => /\/(google-|Google)/.test(f)),
+    "app/widget/ads/page.tsx",
+  ];
 
   it("scans lib/google (sanity)", () => {
     expect(gfiles).toContain("lib/google/ads-client.ts");
+    expect(gfiles).toContain("lib/ads/google-health.ts");
+    expect(gfiles).toContain("components/ads/GoogleOverview.tsx");
   });
 
   for (const f of gfiles) {

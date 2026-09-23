@@ -1,18 +1,15 @@
 # Session handoff
 
-## OPEN — Google Ads in the CRM: phase 1 LIVE, phase 2 (attribution) built — waiting to ship (2026-09-23)
+## OPEN — Google Ads in the CRM: phases 1–4 LIVE (2026-09-23); phase 5 separate
 
-Plan: `docs/plans/2026-09-23-google-ads-tab-design.md`. Eli: platform switch מטא|גוגל in ads + settings split;
-reuse the marketing repo's Google Ads credentials (approved 23/09); go step by step.
-Phase 1 shipped — 0005 applied to prod (9 columns verified), commit 9aea591 on main, Vercel Ready: `lib/leads/google-click.ts` (+10 unit tests), 9 columns in `drizzle/schema.ts`,
-`drizzle/migrations/0005_google_click_attribution.sql` (+journal idx 5), website-import writes them blanks-only,
-`tests/integration/website-import-google.test.ts` (passed on a throwaway Neon branch). `npm test` 706 ✓, typecheck ✓.
-**Verify on the next real website lead:** its row has google_gclid/utm_* filled. Backfill dropped: only 2 notes ever carried a gclid, both `smoke-test` MaxBaby leads.
-Phase 2a built locally: `lib/google/ads-client.ts` (read-only GAQL, verified live against 6763920913),
-`lib/google/attribution*.ts`, migration 0006 (9 cols), cron `/api/cron/google-attribution` (06:45 UTC, JOBS),
-GOOGLE_ADS_* env in Vercel prod (added 23/09). **Ship order: apply 0006 to prod → verify → push main.**
-Next (2b): `lib/ads/google-evidence.ts` — spend per campaign/ad group.
-**Finding:** no real website lead with a gclid ever reached the CRM — to investigate in phase 3 (tracking chain).
+Plan: `docs/plans/2026-09-23-google-ads-tab-design.md`; knowledge: `docs/agent/meta-and-leads-intake.md`
+→ "Google Ads — click attribution" + "The Google side of the מודעות tab". Live: migrations 0005+0006 (prod),
+GOOGLE_ADS_* in Vercel (marketing repo's creds, Eli OK), jobs google-attribution 06:45 + google-ads-check
+07:00 UTC, מודעות tab switch מטא|גוגל (`?view=google`, `?view=google-health`), settings "שיווק · גוגל".
+**Verify next:** first scheduled runs green in jobs.status; the next real website lead carries google_gclid
+and gets a campaign. **Open:** no real lead with a gclid ever reached the CRM (Google counted 1 form
+conversion over 107 clicks, 13/08) — watch the gap line once a campaign runs. Phase 5 (conversion upload
+to Google) and a Google recommendation engine: NOT built — need design + Eli's explicit OK.
 
 ## OPEN — estimator per-factory gate: verify the first nightly run (2026-09-22)
 

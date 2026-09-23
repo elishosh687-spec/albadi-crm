@@ -14,7 +14,7 @@ import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import {
   Save, Plus, Trash2, Ship, Plane, Loader2, RefreshCw,
   ArrowLeftRight, Percent, Truck, ChevronDown,
-  Coins, Users, PhoneCall, MessageSquareText, Megaphone, Gauge,
+  Coins, Users, PhoneCall, MessageSquareText, Megaphone, Gauge, Search,
 } from "lucide-react";
 import { cn } from "@/lib/cn";
 import type {
@@ -31,6 +31,7 @@ import { QuoteNotifySection } from "@/components/settings/QuoteNotifySection";
 import { CallAnalysisSettingsSection } from "@/components/settings/CallAnalysisSettingsSection";
 import { EstimatorHealthSection } from "@/components/settings/EstimatorHealthSection";
 import { AdRecommendationSettingsView } from "@/components/ads/AdRecommendationSettingsView";
+import { GoogleSettingsView } from "@/components/ads/GoogleSettingsView";
 import { syncHubUrl } from "@/lib/widget/hub-link";
 
 /**
@@ -38,7 +39,7 @@ import { syncHubUrl } from "@/lib/widget/hub-link";
  * one long page. The id is the URL `?section=` value, so a colleague can be sent
  * straight to e.g. `?tab=settings&section=ads`.
  */
-export type SettingsSection = "price" | "calc" | "ship" | "team" | "calls" | "templates" | "ads";
+export type SettingsSection = "price" | "calc" | "ship" | "team" | "calls" | "templates" | "ads" | "google-ads";
 const SETTINGS_GROUPS: { id: SettingsSection; label: string; area: string; icon: typeof Truck }[] = [
   { id: "price", label: "תמחור", area: "מכירות", icon: Coins },
   { id: "calc", label: "דיוק המחשבון", area: "מכירות", icon: Gauge },
@@ -46,7 +47,10 @@ const SETTINGS_GROUPS: { id: SettingsSection; label: string; area: string; icon:
   { id: "team", label: "שיוך והתראות", area: "צוות", icon: Users },
   { id: "calls", label: "ניתוח שיחות", area: "צוות", icon: PhoneCall },
   { id: "templates", label: "תבניות הודעה", area: "צוות", icon: MessageSquareText },
-  { id: "ads", label: "כללי בדיקת מודעות", area: "שיווק", icon: Megaphone },
+  // Meta and Google are two separate worlds (Eli, 23/09): their own area each.
+  // `ads` stays Meta's id so existing links keep working.
+  { id: "ads", label: "כללי בדיקה — מטא", area: "שיווק · מטא", icon: Megaphone },
+  { id: "google-ads", label: "כללי בדיקה — גוגל", area: "שיווק · גוגל", icon: Search },
 ];
 export function parseSettingsSection(raw: string | undefined | null): SettingsSection {
   return SETTINGS_GROUPS.some((g) => g.id === raw) ? (raw as SettingsSection) : "price";
@@ -577,6 +581,7 @@ export function SettingsView({ apiToken, initialSection }: { apiToken: string; i
     calls: false,
     templates: false,
     ads: false,
+    "google-ads": false,
   };
 
   return (
@@ -620,8 +625,11 @@ export function SettingsView({ apiToken, initialSection }: { apiToken: string; i
           <section hidden={section !== "templates"} aria-label="תבניות הודעה">
             <TemplatesManager />
           </section>
-          <section hidden={section !== "ads"} aria-label="כללי בדיקת מודעות">
+          <section hidden={section !== "ads"} aria-label="כללי בדיקה — מטא">
             <AdRecommendationSettingsView apiToken={apiToken} />
+          </section>
+          <section hidden={section !== "google-ads"} aria-label="כללי בדיקה — גוגל">
+            <GoogleSettingsView apiToken={apiToken} />
           </section>
 
           {(dirty || saving || msg) && (

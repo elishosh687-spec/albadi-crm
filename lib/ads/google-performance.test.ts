@@ -25,12 +25,12 @@ const snap: GoogleSnapshot = {
 
 const lead = (sid: string, p: Partial<GoogleLeadRow> = {}): GoogleLeadRow => ({
   sid, name: sid, campaignId: "241", campaignName: "Search", adGroupId: "a1", adGroupName: "שקיות אלבד",
-  keyword: "תיק אל בד", matchType: "PHRASE", attribution: "click_view", suitable: false, engaged: false, viaWhatsApp: false, ...p,
+  keyword: "תיק אל בד", matchType: "PHRASE", attribution: "click_view", suitable: false, engaged: false, viaWhatsApp: false, hasClick: true, ...p,
 });
 
 describe("foldGooglePerformance", () => {
   const r = foldGooglePerformance(
-    [lead("l1", { suitable: true, name: "דנה | 050" }), lead("l2"), lead("w1", { campaignId: null, viaWhatsApp: true }), lead("n1", { campaignId: null, attribution: "not_found" })],
+    [lead("l1", { suitable: true, name: "דנה | 050" }), lead("l2"), lead("w1", { campaignId: null, viaWhatsApp: true, hasClick: false }), lead("n1", { campaignId: null, attribution: "not_found" }), lead("x1", { campaignId: null, attribution: null, hasClick: false })],
     [{ sid: "l1", customerName: "דנה בע״מ", totalExVat: 8000 }],
     snap,
     S,
@@ -55,8 +55,8 @@ describe("foldGooglePerformance", () => {
   });
 
   it("leads without a campaign are counted apart, by reason", () => {
-    expect(r.unattributed).toEqual({ total: 2, whatsapp: 1, notFound: 1, pending: 0 });
-    expect(r.totals.leads).toBe(4);
+    expect(r.unattributed).toEqual({ total: 3, whatsapp: 1, notFound: 1, pending: 0, noClick: 1 });
+    expect(r.totals.leads).toBe(5);
   });
 
   it("the period filters spend", () => {

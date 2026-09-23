@@ -170,7 +170,7 @@ so usability rules are not optional.
   `hubHref(...)` + `target="_parent"` — a plain link inside the iframe would
   load a hub inside the hub.
 - Settings groups: `SETTINGS_GROUPS` in `components/settings/SettingsView.tsx`
-  (`price` · `ship` · `team` · `calls` · `templates` · `ads`). Groups stay
+  (`price` · `ship` · `team` · `calls` · `templates` · `ads` (Meta) · `google-ads`). Groups stay
   mounted (hidden) so a half-edited group keeps its draft; one sticky save bar
   lists what changed; `beforeunload` guards a dirty draft.
 - Root layout's rust `a {}` colour is scoped to the light pages
