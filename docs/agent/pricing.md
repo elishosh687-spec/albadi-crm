@@ -175,5 +175,11 @@ logic + tests in [estimator-health.ts](lib/factory/estimator-health.ts)): refit 
 published or kept (reason in Hebrew) · price accuracy vs the 6% gate · carton
 model vs its 10% gate · what the formula is built from. The refit stores its last
 outcome in `app_config` `estimator.last_refit_at.result`.
+**Decision (Eli, 2026-09-22): nothing to change in the estimator's formulas,
+envelope or refusals** — "יש סיבה שהוא מחשב את מה שביקשתי". Only MANDY and
+WEIWEI (亚森) have price formulas; each is built from its own master rows only.
+The nightly refit judges and publishes **each factory on its own quotes**
+(`gateFactory`, per-factory `accuracy`/`fittedAt` in the coefficients);
+`refitEstimator({ dryRun: true })` fits and judges without writing or sending.
 `scripts/estimator-before-after.ts` (read-only) re-runs the leave-one-out
 comparison; `FitOpts.learnPlain` exists and is OFF (no measured gain).

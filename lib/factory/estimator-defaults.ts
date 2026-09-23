@@ -27,7 +27,14 @@ export interface FactoryCoef {
   areaMax: number;
   plateFeePerColor: AffineCoef | null;
   tiers: Record<string, TierCoef>; // "3000"|"5000"|"10000"
+  /** This factory's own leave-one-out accuracy on its own quotes, and when its
+   *  formula was last published. Each factory passes the refit gate on its own
+   *  (Eli 2026-09-22); absent on fits from before that. */
+  accuracy?: { medianPct: number; maxPct: number; n: number } | null;
+  fittedAt?: string;
 }
+/** Eli names factories by their contact, the code by the company (see lib/colors/factory-catalog.ts). */
+export const FACTORY_LABEL: Record<string, string> = { Mandy: "MANDY", "亚森": "WEIWEI", "鼎驰": "CHEN" };
 /**
  * Carton / packing model (VERIFIED 2026-06-24, adversarial workflow wf_699152fc-834).
  * A flat-stacked folded bag occupies `area × T`, so CBM_per_unit (m³) = T_mm · area · 1e-7

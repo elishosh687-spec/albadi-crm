@@ -17,6 +17,6 @@ paths:
 - Plate fee lives only in `lib/factory/molds.ts`; one-time per order (in `totalOrderPriceIls`, not `sellingPricePerUnitIls`), so print it as its own line (`buildQuoteMessage` takes `moldsIls`).
 - `negotiationBufferAgorot` is added per bag before `ceilAgorot` in BOTH engines (`calculator/engine.ts`, `pricing.ts`).
 - Estimator (`lib/factory/estimator.ts`) REFUSES narrow-tall bags (`isNarrowTall`) and qty < `MIN_QTY`; picks factory by construction (`allowedFactoriesFor`); shipping buffers are settings (`estimatorShippingBufferPct`, `estimatorShippingBufferLamPct`) — detail in `docs/agent/jobs.md` (refit gate).
-- Estimator design (per factory × 3D/2D cell, envelope, 2D/鼎驰 out) has recorded reasons in `docs/archive/research/estimator/` — read it and ask Eli before calling any of it a bug. 2026-09-22 measurements: `2026-09-22-OBSERVATIONS.md` there. Settings → "דיוק המחשבון" shows the refit health.
+- Estimator design (per factory × 3D/2D cell, envelope, 2D/鼎驰 out) has recorded reasons in `docs/archive/research/estimator/` — read it and ask Eli before calling any of it a bug. 2026-09-22 measurements: `2026-09-22-OBSERVATIONS.md` there. Settings → "דיוק המחשבון" shows the refit health. Eli 2026-09-22: no change to formulas/envelope/refusals; the refit gates and publishes each factory (MANDY, WEIWEI) on its own quotes (`gateFactory`).
 
 Full detail: `docs/agent/pricing.md` — read it before non-trivial changes here.

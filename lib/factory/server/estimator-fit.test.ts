@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { dedupeQuotes, quoteKey, buildModel, predict, type Pt } from "./estimator-fit";
+import { dedupeQuotes, quoteKey, buildModel, predict, gateFactory, pct, type Pt } from "./estimator-fit";
 
 const q = (size: string, price: number, extra: Partial<Pt> = {}): Pt => ({
   factory: "亚森", size, area: 0, colors: 1, hasHandle: false, hasLam: false, qty: 3000, price, src: "quote", ...extra,
@@ -35,5 +35,23 @@ describe("learnPlain — flat, tray and narrow-tall quotes never bend the gusset
     const base = buildModel(cat, [], "亚森");
     const learnt = buildModel(cat, [g], "亚森", undefined, { learnPlain: true });
     expect(at(learnt, 4060)).toBeGreaterThan(at(base, 4060));
+  });
+});
+
+describe("gateFactory — each factory judged on its own quotes (Eli 2026-09-22)", () => {
+  const loo = (errs: number[]) => ({ errs, refused: [], stats: errs.length ? pct(errs) : null });
+  it("publishes a factory under the 6% gate", () => {
+    expect(gateFactory("Mandy", loo([2, -4, 5]), 4.5).publish).toBe(true);
+  });
+  it("keeps the old formula above the gate, whatever the other factory does", () => {
+    const g = gateFactory("亚森", loo([7, -8, 9]), null);
+    expect(g).toMatchObject({ publish: false, n: 3 });
+    expect(g.reason).toContain("> 6% gate");
+  });
+  it("keeps the old formula when it got >2 points worse than its own last fit", () => {
+    expect(gateFactory("Mandy", loo([5.5, -5.5, 5.5]), 3).publish).toBe(false);
+  });
+  it("no quotes to test against → nothing to prove the new formula → keep old", () => {
+    expect(gateFactory("Mandy", loo([]), 4)).toMatchObject({ publish: false, n: 0 });
   });
 });

@@ -248,6 +248,27 @@ export function looValidate(cat: Pt[], ql: Pt[], opts?: FitOpts): LooResult {
   return { errs, refused, stats: errs.length ? pct(errs) : null };
 }
 
+/** Publish gate on leave-one-out median error (%). */
+export const GATE_MEDIAN_PCT = 6;
+export interface FactoryGate {
+  factory: string; n: number; newMedianPct: number | null; maxPct: number | null;
+  prevMedianPct: number | null; publish: boolean; reason: string;
+}
+/**
+ * Each factory is judged ONLY on its own quotes and published on its own (Eli
+ * 2026-09-22). Before this, one median over MANDY + WEIWEI together decided
+ * both: a bad WEIWEI night froze MANDY's update and vice versa. No quotes to
+ * test against → keep the old formula (nothing to prove the new one).
+ */
+export function gateFactory(factory: string, loo: LooResult, prevMedianPct: number | null): FactoryGate {
+  const st = loo.stats;
+  const base = { factory, n: st?.n ?? 0, newMedianPct: st?.median ?? null, maxPct: st?.max ?? null, prevMedianPct };
+  if (!st || st.n === 0) return { ...base, publish: false, reason: "no quotes to validate — kept old" };
+  if (st.median > GATE_MEDIAN_PCT) return { ...base, publish: false, reason: `kept old — new median ${st.median.toFixed(1)}% > ${GATE_MEDIAN_PCT}% gate` };
+  if (prevMedianPct != null && st.median > prevMedianPct + 2) return { ...base, publish: false, reason: `kept old — new median ${st.median.toFixed(1)}% materially worse than current ${prevMedianPct.toFixed(1)}%` };
+  return { ...base, publish: true, reason: "published" };
+}
+
 /* ───────────────────────── Carton / packing model ─────────────────────────
  * VERIFIED 2026-06-24 (workflow wf_699152fc-834). A flat-stacked folded bag occupies
  * `area × T`, so CBM/unit (m³) = T_mm · area · 1e-7. T fitted on GUSSETED 80g bags only

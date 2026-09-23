@@ -27,6 +27,33 @@ describe("estimator health — the settings 'דיוק המחשבון' screen", (
     expect(h.checks.map((c) => c.status)).toEqual(["ok", "ok", "ok", "ok", "ok"]);
   });
 
+  it("shows accuracy per factory once the refit judges them separately", () => {
+    const h = assessEstimatorHealth({
+      ...healthy,
+      coeffs: { ...healthy.coeffs, factories: {
+        Mandy: { accuracy: { medianPct: 4.5, maxPct: 22, n: 22 } },
+        "亚森": { accuracy: { medianPct: 7.1, maxPct: 41, n: 10 } },
+      } },
+    }, NOW);
+    expect(byId(h, "accuracy:Mandy")).toMatchObject({ status: "ok", label: "דיוק המחיר — MANDY" });
+    expect(byId(h, "accuracy:亚森")).toMatchObject({ status: "warn", label: "דיוק המחיר — WEIWEI" });
+    expect(h.checks.find((c) => c.id === "accuracy")).toBeUndefined();
+  });
+
+  it("one factory kept old while the other published → a warning naming which", () => {
+    const h = assessEstimatorHealth({
+      ...healthy,
+      lastRefit: { result: { ...healthy.lastRefit!.result!, published: true, perFactory: [
+        { factory: "Mandy", n: 22, newMedianPct: 4.5, publish: true, reason: "published" },
+        { factory: "亚森", n: 10, newMedianPct: 7.3, publish: false, reason: "kept old — new median 7.3% > 6% gate" },
+      ] } },
+    }, NOW);
+    const p = byId(h, "published");
+    expect(p.status).toBe("warn");
+    expect(p.detail).toContain("MANDY: עודכן");
+    expect(p.detail).toContain("WEIWEI: הסטייה החדשה 7.3%");
+  });
+
   it("a dead cron is a FAIL, not silence (the 2026-06-24 → 09-09 outage)", () => {
     const h = assessEstimatorHealth({ ...healthy, job: { health: "late", minutesSinceOk: 11 * 7 * 1440 } }, NOW);
     expect(h.status).toBe("fail");

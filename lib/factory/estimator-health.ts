@@ -16,6 +16,8 @@ export interface EstimatorHealthInput {
   /** Published coefficients (app_config factory_estimators). */
   coeffs: {
     fittedAt?: string;
+    /** Per-factory accuracy (each factory judged on its own quotes since 2026-09-22). */
+    factories?: Record<string, { accuracy?: { medianPct: number; maxPct: number; n: number } | null; fittedAt?: string }>;
     accuracy?: { medianPct: number; maxPct: number; n: number } | null;
     carton?: { fittedAt?: string; accuracy?: { medianPct: number; maxPct: number; n: number } | null } | null;
   };
@@ -24,12 +26,15 @@ export interface EstimatorHealthInput {
     ranAt?: string;
     result?: {
       published: boolean; reason: string;
+      perFactory?: { factory: string; n: number; newMedianPct: number | null; publish: boolean; reason: string }[];
       catalogPoints: number; quoteLogPoints: number; dbPoints: number;
       cartonMedianPct: number | null; cartonPublished: boolean;
       quotesLearned: number; quotesGradingOnly: number; quotesUnmodelled: number;
     };
   } | null;
 }
+
+import { FACTORY_LABEL } from "./estimator-defaults";
 
 export interface HealthCheck { id: string; label: string; status: HealthStatus; detail: string }
 export interface EstimatorHealth { status: HealthStatus; checks: HealthCheck[] }
@@ -76,23 +81,40 @@ export function assessEstimatorHealth(input: EstimatorHealthInput, now = new Dat
     checks.push({ id: "published", label: "הנוסחאות מתעדכנות", status: "warn", detail: "אין תאריך כיול — המחשבון רץ על ברירת המחדל" });
   } else if (fitAge > STALE_DAYS) {
     checks.push({ id: "published", label: "הנוסחאות מתעדכנות", status: "warn", detail: `עודכנו לאחרונה ב‑${heDate(fittedAt)} (לפני ${fitAge} ימים)${r && !r.published ? ` — ${reasonHe(r.reason)}` : ""}` });
-  } else if (r && !r.published) {
+  } else if (r?.perFactory?.some((g) => !g.publish)) {
+    checks.push({
+      id: "published", label: "הנוסחאות מתעדכנות", status: "warn",
+      detail: r.perFactory.map((g) => `${FACTORY_LABEL[g.factory] ?? g.factory}: ${g.publish ? "עודכן" : g.n === 0 ? "אין הצעות לבדיקה — נשארה הקודמת" : reasonHe(g.reason)}`).join(" · "),
+    });
+  } else if (r && !r.perFactory && !r.published) {
     checks.push({ id: "published", label: "הנוסחאות מתעדכנות", status: "warn", detail: reasonHe(r.reason) });
   } else {
     checks.push({ id: "published", label: "הנוסחאות מתעדכנות", status: "ok", detail: `עודכנו ב‑${heDate(fittedAt)}` });
   }
 
-  // 3. How close is the price to real factory quotes?
-  const acc = coeffs.accuracy;
-  checks.push(
-    !acc
-      ? { id: "accuracy", label: "דיוק המחיר", status: "warn", detail: "אין עדיין מדידת דיוק" }
-      : {
-          id: "accuracy", label: "דיוק המחיר",
-          status: acc.medianPct <= PRICE_GATE_PCT ? "ok" : "warn",
-          detail: `סטייה חציונית ${acc.medianPct.toFixed(1)}% מול ${acc.n} הצעות מפעל אמיתיות (סף ${PRICE_GATE_PCT}%) · הכי רחוקה ${Math.round(acc.maxPct)}%`,
-        },
-  );
+  // 3. How close is the price to real factory quotes — per factory, each on its own quotes.
+  const perFac = Object.entries(coeffs.factories ?? {}).filter(([, f]) => f.accuracy);
+  if (perFac.length) {
+    for (const [name, f] of perFac) {
+      const a = f.accuracy!;
+      checks.push({
+        id: `accuracy:${name}`, label: `דיוק המחיר — ${FACTORY_LABEL[name] ?? name}`,
+        status: a.medianPct <= PRICE_GATE_PCT ? "ok" : "warn",
+        detail: `סטייה חציונית ${a.medianPct.toFixed(1)}% מול ${a.n} הצעות של המפעל הזה (סף ${PRICE_GATE_PCT}%) · הכי רחוקה ${Math.round(a.maxPct)}%`,
+      });
+    }
+  } else {
+    const acc = coeffs.accuracy;
+    checks.push(
+      !acc
+        ? { id: "accuracy", label: "דיוק המחיר", status: "warn", detail: "אין עדיין מדידת דיוק" }
+        : {
+            id: "accuracy", label: "דיוק המחיר",
+            status: acc.medianPct <= PRICE_GATE_PCT ? "ok" : "warn",
+            detail: `סטייה חציונית ${acc.medianPct.toFixed(1)}% מול ${acc.n} הצעות, שני המפעלים יחד (סף ${PRICE_GATE_PCT}%) — יפוצל לכל מפעל אחרי הכיול הבא`,
+          },
+    );
+  }
 
   // 4. Packing (CBM) model — has its own gate and can freeze on its own.
   const carton = coeffs.carton;
