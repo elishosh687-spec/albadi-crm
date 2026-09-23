@@ -225,3 +225,28 @@ The ½·D+35 rule does not follow the error boundary: of the 7 requested sizes i
 blocks, 6 are below 1.5× width (e.g. H45×W35×D13); it also blocks H45×W50×D10,
 priced within 5%. Its origin is unrecorded (Eli dictated it 2026-07-22; the
 only written check is the factory example D10 → H40).
+
+### The catalog has 15 sizes — the fit reads 6 (found 2026-09-22)
+
+Feishu catalog `PBKystZ1dhCsZgtp4qgc2nzxnMf`: 15 size tabs, ~436 price rows.
+`parseTab` names the factory ONLY by the price cell's fill colour
+(`COLOR_FACTORY`: 70AD47 = Mandy, 5B9BD5 = 亚森). Tabs that quote a single
+factory name it in the header (`Supplier供应商:` row, col D) and leave cells
+unfilled (grey D9DCE1 = the laminated block), so **9 tabs / 214 rows are
+dropped**: H15-D5-W20, H18-D9-W20 (Mandy), H50-D20-W60, and six flat tabs.
+1,000-pc rows (56) are dropped on purpose (below MOQ).
+
+Tried reading the header supplier (and keeping flat tabs out): accuracy on real
+quotes got WORSE — median 4.5% → 8.7%, 亚森 H45×W50×D10 −5% → +20%. Cause: price
+is a CURVE in area, not a line. 亚森 3k: the 6-size line says ¥1.72 for
+H50-D20-W60, the catalog says ¥2.90; forcing the line through it overprices mid
+bags. **Not deployed; parser unchanged.** Next step if pursued: a curved base
+line (e.g. per-tier quadratic in area), measured with
+`scripts/estimator-before-after.ts` before any publish.
+
+**鼎驰 (CHEN) has no catalog tab at all** — every model needs a catalog price
+list for its base line and add-ons, so `FACS` is Mandy/亚森 only and all 37 鼎驰
+80g quotes (the most of any factory, incl. every tall bag it priced) are unused,
+not even for grading. Also noted: the catalog shows 亚森 heat-press lamination
+(H15-D5-W20, 热压 laminating) though `toCoeffs` assumes 亚森 laminates only by
+sewing — unverified.
