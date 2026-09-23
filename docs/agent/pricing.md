@@ -156,97 +156,24 @@ to `/widget/factory-request` prefilled with the spec, the lead and the refusal
 reason. In that form the geometry rules are a **warning, not a block, for Eli**
 (they stay a hard block in `salesMode` so Itay can't forward an impossible size).
 
-## What the daily refit actually learns — and where to see it (2026-09-22)
+## Estimator design — read the research BEFORE changing or judging it
 
-`/api/factory/refit-estimator` runs daily (04:00), rebuilds the estimator from
-the Feishu catalog + the Feishu quote log + DB `received` quotes (80g only),
-and publishes only if the LOO median stays ≤ 6% and not >2 pts worse.
-**It does NOT learn from every quote.** In `buildModel`
-([estimator-fit.ts](lib/factory/server/estimator-fit.ts)):
-
-- **Plain (non-laminated) price = catalog only** — 6 fixed sizes (H20–40). Plain
-  factory quotes only GRADE it (they are the LOO test set). Most orders are plain.
-- **Laminated price** is the only line fitted from quotes (catalog + quote log + DB).
-- **Area envelope** (1,520–5,950 cm²) comes from the catalog sizes, so it never
-  widens no matter how many big/tall bags get quoted.
-- **鼎驰/CHEN has no model** — its quotes (e.g. every H50×W50×D15 at ¥1.50) are dropped.
-- **Carton model** has its own ≤10% gate; since 2026-09-10 it sits at 10.6%, so
-  packing is frozen on the 09-10 fit.
-
-Measured 2026-09-22 on tall bags: H45×W50×D10 −5% (fine); H50×W33×D9 −49% and
-H36×W18×D9 −45% (narrow-tall — refused on purpose). No tall bag with D>10 inside
-the envelope has a factory price, so e.g. 50×30×14's ¥1.53 is unverified.
+The estimator is one formula per **(factory × structure)** cell — 🟢 Mandy × 3D,
+🔵 亚森 × 3D; 2D blocked — each with a base price + shipping, agreed with Eli on
+2026-07-03. The envelope (area 1,520–5,950, gusseted, 3k–10k), dropping 2D,
+reading only the two-supplier catalog tabs, and leaving 鼎驰 out all have
+recorded reasons: **[docs/archive/research/estimator/](../archive/research/estimator/)**
+— start with `SUMMARY.md`, `FACTORY-MODEL-PROGRESS.md`, `TWO-PROBLEMS.md`. What
+looks like a bug there may be a decision; ask Eli before "fixing" it.
+The 2026-09-22 measurements (trust range by shape, before/after of learning
+plain prices from quotes, catalog read counts, open questions) are in
+[2026-09-22-OBSERVATIONS.md](../archive/research/estimator/2026-09-22-OBSERVATIONS.md) —
+observations, not decisions.
 
 **Settings → "דיוק המחשבון"** ([EstimatorHealthSection](components/settings/EstimatorHealthSection.tsx),
-logic in [estimator-health.ts](lib/factory/estimator-health.ts), tests next to it)
-shows: job ran · formulas published or kept (reason in Hebrew) · price accuracy ·
-carton model frozen or not · what the quotes teach. The refit stores its last
-outcome (incl. `quotesLearned` / `quotesGradingOnly` / `quotesUnmodelled`) in
-`app_config` `estimator.last_refit_at.result`.
-
-### Before/after: learning plain prices from quotes (measured 2026-09-22)
-
-`scripts/estimator-before-after.ts` (read-only) scores every quote with a model
-fitted without it. 33 unique quotes after dedupe (Feishu log ∩ DB overlap is
-large — `dedupeQuotes`/`quoteKey`). On what the estimator agrees to price:
-
-| | median | 90% within | worst | signed mean |
-|---|---|---|---|---|
-| now (plain from catalog) | 4.5% | 13.4% | 22% | −4.6% |
-| `learnPlain` | 5.1% | 13.4% | 22% | −3.5% |
-
-No gain → the live refit keeps `learnPlain` OFF. Feeding quotes naively was
-worse (worst 62%) until flat/tray/narrow-tall quotes were kept out of the fit
-(`learnable`). The 22% is factory spread, not the model: H40×W40×D10 was ¥1.30
-from 亚森 and ¥1.85 from Mandy.
-
-**Trust range — double-checked 2026-09-22** (Eli: "תעשה דאבלצ'ק, זה חשוב").
-Cross-checked with a second code path (the live `estimateFactoryCny`, forced to
-each quote's own factory): it reproduces the LOO errors quote-for-quote. Flat
-bags are out of scope — the estimator refuses them (carton model).
-
-| gusseted plain/lam quote | H/W | model vs factory |
-|---|---|---|
-| 11 "normal" plain bags, D 10–20, H 28–45, W 28–53 | 0.78–1.13 | −8%…+2%, one −22% (factory spread) |
-| H36×W30×D15 lam, Mandy, 20k (5 quotes, ¥0.80) | 1.20 | +6% |
-| H30×W20×D10 plain, 鼎驰 ¥0.82 (vs 亚森 line) | 1.50 | +2% |
-| H50×W33×D9 plain, 亚森 ¥2.20 | 1.52 | **−49%** |
-| H36×W18×D9 plain, 亚森 ¥1.55 | 2.00 | **−45%** |
-
-So: accurate up to H/W 1.2 (one point above 1.13); at H/W ≥ 1.5 two of three
-quotes are off by half. **Nothing between 1.2 and 1.5, and nothing ≥ 1.5 with a
-gusset over 10.** 50×30×14 (1.67, D14) sits in that hole — unknown, not "wrong".
-
-A first proposal ("refuse above 1.15× width") was WRONG and withdrawn: on the 95
-distinct gusseted 80g sizes customers asked for, it would have blocked 17 more,
-including H36×W30×D15 (verified +6%) and everyday H40×W30×D15-type bags.
-
-The ½·D+35 rule does not follow the error boundary: of the 7 requested sizes it
-blocks, 6 are below 1.5× width (e.g. H45×W35×D13); it also blocks H45×W50×D10,
-priced within 5%. Its origin is unrecorded (Eli dictated it 2026-07-22; the
-only written check is the factory example D10 → H40).
-
-### The catalog has 15 sizes — the fit reads 6 (found 2026-09-22)
-
-Feishu catalog `PBKystZ1dhCsZgtp4qgc2nzxnMf`: 15 size tabs, ~436 price rows.
-`parseTab` names the factory ONLY by the price cell's fill colour
-(`COLOR_FACTORY`: 70AD47 = Mandy, 5B9BD5 = 亚森). Tabs that quote a single
-factory name it in the header (`Supplier供应商:` row, col D) and leave cells
-unfilled (grey D9DCE1 = the laminated block), so **9 tabs / 214 rows are
-dropped**: H15-D5-W20, H18-D9-W20 (Mandy), H50-D20-W60, and six flat tabs.
-1,000-pc rows (56) are dropped on purpose (below MOQ).
-
-Tried reading the header supplier (and keeping flat tabs out): accuracy on real
-quotes got WORSE — median 4.5% → 8.7%, 亚森 H45×W50×D10 −5% → +20%. Cause: price
-is a CURVE in area, not a line. 亚森 3k: the 6-size line says ¥1.72 for
-H50-D20-W60, the catalog says ¥2.90; forcing the line through it overprices mid
-bags. **Not deployed; parser unchanged.** Next step if pursued: a curved base
-line (e.g. per-tier quadratic in area), measured with
-`scripts/estimator-before-after.ts` before any publish.
-
-**鼎驰 (CHEN) has no catalog tab at all** — every model needs a catalog price
-list for its base line and add-ons, so `FACS` is Mandy/亚森 only and all 37 鼎驰
-80g quotes (the most of any factory, incl. every tall bag it priced) are unused,
-not even for grading. Also noted: the catalog shows 亚森 heat-press lamination
-(H15-D5-W20, 热压 laminating) though `toCoeffs` assumes 亚森 laminates only by
-sewing — unverified.
+logic + tests in [estimator-health.ts](lib/factory/estimator-health.ts)): refit ran ·
+published or kept (reason in Hebrew) · price accuracy vs the 6% gate · carton
+model vs its 10% gate · what the formula is built from. The refit stores its last
+outcome in `app_config` `estimator.last_refit_at.result`.
+`scripts/estimator-before-after.ts` (read-only) re-runs the leave-one-out
+comparison; `FitOpts.learnPlain` exists and is OFF (no measured gain).

@@ -5,8 +5,7 @@
  * turns it into checks a human can read.
  *
  * Why it exists: the refit cron was dead for 11 weeks (2026-06-24 → 09-09) and
- * nothing said a word; and "the calculator learns from every factory quote" was
- * believed while only LAMINATED quotes ever changed a coefficient.
+ * nothing said a word.
  */
 
 export type HealthStatus = "ok" | "warn" | "fail";
@@ -110,19 +109,17 @@ export function assessEstimatorHealth(input: EstimatorHealthInput, now = new Dat
     });
   }
 
-  // 5. What do the factory quotes actually teach?
-  if (!r) {
-    checks.push({ id: "learning", label: "מה נלמד מהצעות המפעל", status: "warn", detail: "יוצג אחרי הכיול הבא (04:00)" });
-  } else {
-    checks.push({
-      id: "learning", label: "מה נלמד מהצעות המפעל",
-      status: r.quotesGradingOnly > 0 || r.quotesUnmodelled > 0 ? "warn" : "ok",
-      detail:
-        `${r.quotesLearned} הצעות עם למינציה משנות את הנוסחה · ` +
-        `${r.quotesGradingOnly} הצעות רגילות רק בודקות אותה (המחיר הרגיל נלמד מ‑${r.catalogPoints} שורות קטלוג בלבד)` +
-        (r.quotesUnmodelled ? ` · ${r.quotesUnmodelled} ממפעל בלי מודל (למשל 鼎驰) — לא נכנסות בכלל` : ""),
-    });
-  }
+  // 5. What the formula is built from — information, not a verdict. By design
+  // (2026-07-03, docs/archive/research/estimator) the base price per factory ×
+  // structure comes from the catalog; quotes grade it, laminated ones also feed it.
+  checks.push({
+    id: "learning", label: "ממה הנוסחה נבנית", status: "ok",
+    detail: !r
+      ? "יוצג אחרי הכיול הבא (04:00)"
+      : `מחירון הקטלוג (${r.catalogPoints} שורות) · ${r.quotesLearned} הצעות מפעל עם למינציה נכנסות לנוסחה · ` +
+        `${r.quotesGradingOnly} הצעות רגילות משמשות לבדיקת הדיוק` +
+        (r.quotesUnmodelled ? ` · ${r.quotesUnmodelled} ממפעל בלי קטלוג (למשל 鼎驰) לא בשימוש` : ""),
+  });
 
   const status: HealthStatus = checks.some((c) => c.status === "fail") ? "fail" : checks.some((c) => c.status === "warn") ? "warn" : "ok";
   return { status, checks };

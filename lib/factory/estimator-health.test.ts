@@ -60,19 +60,20 @@ describe("estimator health — the settings 'דיוק המחשבון' screen", (
     expect(byId(h, "carton").detail).toContain("10.6%");
   });
 
-  it("says out loud that plain-bag quotes only grade the model", () => {
+  it("reports what the formula is built from as information, not a warning", () => {
     const h = assessEstimatorHealth({
       ...healthy,
       lastRefit: { result: { ...healthy.lastRefit!.result!, quotesLearned: 26, quotesGradingOnly: 65, quotesUnmodelled: 8 } },
     }, NOW);
     const l = byId(h, "learning");
-    expect(l.status).toBe("warn");
-    expect(l.detail).toContain("65 הצעות רגילות רק בודקות");
+    expect(l.status).toBe("ok");
+    expect(l.detail).toContain("65 הצעות רגילות משמשות לבדיקת הדיוק");
     expect(l.detail).toContain("鼎驰");
+    expect(h.status).toBe("ok");
   });
 
-  it("before the first run that stores an outcome, learning is pending — not green", () => {
+  it("before the first run that stores an outcome, the source line is pending", () => {
     const h = assessEstimatorHealth({ ...healthy, lastRefit: null }, NOW);
-    expect(byId(h, "learning").status).toBe("warn");
+    expect(byId(h, "learning").detail).toContain("אחרי הכיול הבא");
   });
 });
