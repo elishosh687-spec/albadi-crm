@@ -124,6 +124,9 @@ export function ingestBody(
         transactionId: conv.transactionId,
         conversionValue: conv.valueIls,
         currency: "ILS",
+        // Required for offline conversions (Google, 23/09: "event_source: Required
+        // field is missing"). A CRM stage change is neither web, app, store nor phone.
+        eventSource: "OTHER",
         adIdentifiers: lead.gclid ? { gclid: lead.gclid } : lead.gbraid ? { gbraid: lead.gbraid } : { wbraid: lead.wbraid },
         ...(ids.length ? { userData: { userIdentifiers: ids } } : {}),
       };

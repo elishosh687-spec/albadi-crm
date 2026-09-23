@@ -82,7 +82,7 @@ describe("request body", () => {
     expect(b.destinations).toEqual([{ operatingAccount: { accountType: "GOOGLE_ADS", accountId: "6763920913" }, productDestinationId: "7711834479" }]);
     expect(b.validateOnly).toBe(true);
     expect(b.encoding).toBe("HEX");
-    expect(b.events[0]).toMatchObject({ transactionId: conv.transactionId, conversionValue: 100, currency: "ILS", adIdentifiers: { gclid: "CjwKCAjw-click" } });
+    expect(b.events[0]).toMatchObject({ transactionId: conv.transactionId, conversionValue: 100, currency: "ILS", eventSource: "OTHER", adIdentifiers: { gclid: "CjwKCAjw-click" } });
     expect(b.events[0].userData?.userIdentifiers).toHaveLength(2);
   });
 
