@@ -1,14 +1,13 @@
 # Session handoff
 
-## OPEN — Google Ads in the CRM: phase 1 built locally, NOT applied/deployed (2026-09-23)
+## OPEN — Google Ads in the CRM: phase 1 LIVE (2026-09-23), next = phase 2
 
 Plan: `docs/plans/2026-09-23-google-ads-tab-design.md`. Eli: platform switch מטא|גוגל in ads + settings split;
 reuse the marketing repo's Google Ads credentials (approved 23/09); go step by step.
-Phase 1 done locally (uncommitted): `lib/leads/google-click.ts` (+10 unit tests), 9 columns in `drizzle/schema.ts`,
+Phase 1 shipped — 0005 applied to prod (9 columns verified), commit 9aea591 on main, Vercel Ready: `lib/leads/google-click.ts` (+10 unit tests), 9 columns in `drizzle/schema.ts`,
 `drizzle/migrations/0005_google_click_attribution.sql` (+journal idx 5), website-import writes them blanks-only,
 `tests/integration/website-import-google.test.ts` (passed on a throwaway Neon branch). `npm test` 706 ✓, typecheck ✓.
-**Order to ship:** apply 0005 to prod FIRST (Eli's OK) → then push main (push = deploy; the route writes the new
-columns). Backfill dropped: only 2 notes ever carried a gclid, both `smoke-test` MaxBaby leads.
+**Verify on the next real website lead:** its row has google_gclid/utm_* filled. Backfill dropped: only 2 notes ever carried a gclid, both `smoke-test` MaxBaby leads.
 **Finding:** no real website lead with a gclid ever reached the CRM — to investigate in phase 3 (tracking chain).
 
 ## OPEN — estimator per-factory gate: verify the first nightly run (2026-09-22)
