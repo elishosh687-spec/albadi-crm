@@ -200,9 +200,28 @@ worse (worst 62%) until flat/tray/narrow-tall quotes were kept out of the fit
 (`learnable`). The 22% is factory spread, not the model: H40×W40×D10 was ¥1.30
 from 亚森 and ¥1.85 from Mandy.
 
-**Verified trust range** (quotes land within ~±13%): gusseted D 10–25, H 28–45,
-W 28–53, **height ≤ ~1.15× width**, 3k–10k pcs. Big misses: narrow-tall
-(−45…−50%, refused), flat (−35…+41%, refused). **No quote exists for a
-gusseted bag taller than 1.15× its width** — that is where 50×30×14 (1.67)
-sits. The ½·D+35 geometry rule does not follow this boundary: it blocks
-H45×W50×D10 (priced within 5%) and lets through tall-narrow bags with no data.
+**Trust range — double-checked 2026-09-22** (Eli: "תעשה דאבלצ'ק, זה חשוב").
+Cross-checked with a second code path (the live `estimateFactoryCny`, forced to
+each quote's own factory): it reproduces the LOO errors quote-for-quote. Flat
+bags are out of scope — the estimator refuses them (carton model).
+
+| gusseted plain/lam quote | H/W | model vs factory |
+|---|---|---|
+| 11 "normal" plain bags, D 10–20, H 28–45, W 28–53 | 0.78–1.13 | −8%…+2%, one −22% (factory spread) |
+| H36×W30×D15 lam, Mandy, 20k (5 quotes, ¥0.80) | 1.20 | +6% |
+| H30×W20×D10 plain, 鼎驰 ¥0.82 (vs 亚森 line) | 1.50 | +2% |
+| H50×W33×D9 plain, 亚森 ¥2.20 | 1.52 | **−49%** |
+| H36×W18×D9 plain, 亚森 ¥1.55 | 2.00 | **−45%** |
+
+So: accurate up to H/W 1.2 (one point above 1.13); at H/W ≥ 1.5 two of three
+quotes are off by half. **Nothing between 1.2 and 1.5, and nothing ≥ 1.5 with a
+gusset over 10.** 50×30×14 (1.67, D14) sits in that hole — unknown, not "wrong".
+
+A first proposal ("refuse above 1.15× width") was WRONG and withdrawn: on the 95
+distinct gusseted 80g sizes customers asked for, it would have blocked 17 more,
+including H36×W30×D15 (verified +6%) and everyday H40×W30×D15-type bags.
+
+The ½·D+35 rule does not follow the error boundary: of the 7 requested sizes it
+blocks, 6 are below 1.5× width (e.g. H45×W35×D13); it also blocks H45×W50×D10,
+priced within 5%. Its origin is unrecorded (Eli dictated it 2026-07-22; the
+only written check is the factory example D10 → H40).
