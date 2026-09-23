@@ -333,10 +333,13 @@ Same moments as the Meta loop: qualified (suitable tag or DISCAVERY+) →
 actions + `transactionId albadi-<event>-<sid>` → never double-counted. Stamps
 `google_*_sent_at` (migration 0007) only in `live`. Hashed email + E.164 phone
 ride along (enhanced conversions for leads is on in the account).
-- `GOOGLE_CONVERSIONS_MODE` = off | validate (default) | live.
-- Needs `GOOGLE_DATAMANAGER_REFRESH_TOKEN` issued with BOTH scopes
-  (`auth/datamanager` + `auth/adwords`) — the read token can't be reused — and
-  the Data Manager API enabled in the OAuth client's Cloud project.
+- `GOOGLE_CONVERSIONS_MODE` = off | validate (default) | live — **live since 23/09**.
+- `event_source` is REQUIRED for offline conversions (`eventSource: "OTHER"` for a CRM
+  stage); the top-level 400 message is generic — read `details[].fieldViolations`.
+- `?probe=1` on the job sends ONE validateOnly event — proves token + scopes + API.
+- `GOOGLE_DATAMANAGER_REFRESH_TOKEN` (issued 23/09 by Eli, BOTH scopes `auth/datamanager` +
+  `auth/adwords`; re-issue: `marketing/shared/generate_datamanager_token.py`) and the Data Manager
+  API enabled in Cloud project `maxbaby` (315201964483, OAuth app "In production").
 - ⚠️ Bidding: the three actions are PRIMARY and their categories
   (QUALIFIED_LEAD, REQUEST_QUOTE, CONVERTED_LEAD) are biddable at account level,
   so the Search campaign WILL optimise on them once live. PMax is fenced by its

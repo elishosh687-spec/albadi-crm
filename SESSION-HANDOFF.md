@@ -1,18 +1,16 @@
 # Session handoff
 
-## OPEN — Google Ads in the CRM: phases 1–5 LIVE (2026-09-23); phase 5 waits on Eli's authorisation
+## DONE (verify) — Google Ads in the CRM: phases 1–5 LIVE (2026-09-23)
 
 Plan: `docs/plans/2026-09-23-google-ads-tab-design.md`; knowledge: `docs/agent/meta-and-leads-intake.md`
-→ "Google Ads — click attribution" + "The Google side of the מודעות tab". Live: migrations 0005+0006 (prod),
-GOOGLE_ADS_* in Vercel (marketing repo's creds, Eli OK), jobs google-attribution 06:45 + google-ads-check
-07:00 UTC, מודעות tab switch מטא|גוגל (`?view=google`, `?view=google-health`), settings "שיווק · גוגל".
-**Verify next:** first scheduled runs green in jobs.status; the next real website lead carries google_gclid
-and gets a campaign. **Open:** no real lead with a gclid ever reached the CRM (Google counted 1 form
-conversion over 107 clicks, 13/08) — watch the gap line once a campaign runs. Phase 5 BUILT (f5fa5ec, migration 0007 in prod), mode
-`validate`, reporting line says "not authorised". **To go live:** (1) enable Data Manager API in Cloud project
-315201964483; (2) Eli runs `marketing/shared/generate_datamanager_token.py` (consent, both scopes → straight to
-Vercel); (3) redeploy, run the job in validate, confirm Google accepts; (4) `GOOGLE_CONVERSIONS_MODE=live` (Eli OK —
-Search will bid on these actions). Google recommendation engine: not built (needs a month of data).
+(Google sections). Live in prod: migrations 0005–0007; jobs google-attribution 06:45, google-ads-check 07:00,
+google-conversions 07:15 UTC; מודעות tab מטא|גוגל; settings "שיווק · גוגל"; offline conversions
+**GOOGLE_CONVERSIONS_MODE=live** — Data Manager API enabled in Cloud project `maxbaby` (315201964483),
+GOOGLE_DATAMANAGER_REFRESH_TOKEN issued by Eli 23/09 (datamanager+adwords), probe `?probe=1` accepted by Google.
+All 13 health lines green 23/09. **Verify next:** the first real website lead from Google gets a gclid, a
+campaign, and — when it moves stage — `google_*_sent_at`. **Open finding:** no real lead with a gclid ever reached
+the CRM (Google: 1 form conversion / 107 clicks, 13/08). ⚠️ Search will bid on the three CRM actions (primary,
+biddable categories); PMax is fenced by its custom goal. Google recommendation engine: not built (needs data).
 
 ## OPEN — estimator per-factory gate: verify the first nightly run (2026-09-22)
 
