@@ -1,15 +1,14 @@
 # Session handoff
 
-## OPEN — estimator: per-factory accuracy gate, awaiting Eli's OK (2026-09-22)
+## OPEN — estimator per-factory gate: verify the first nightly run (2026-09-22)
 
-Branch `estimator-per-factory-gate` (pushed, NOT on main = not live). The nightly
-refit judges and publishes MANDY and WEIWEI each on its own quotes (`gateFactory`),
-per-factory accuracy in settings + WhatsApp. Dry run on live data: MANDY 4.5% (22),
-WEIWEI 5.0% (10) — both pass. **Deploy = Eli says yes → `git push origin
-estimator-per-factory-gate:main`**, then after the 04:00 run check Settings →
-"דיוק המחשבון" shows two accuracy lines. Eli's decision: no change to the
-estimator's formulas/envelope/refusals. Everything discussed:
-`docs/archive/research/estimator/2026-09-22-OBSERVATIONS.md`.
+Deployed to main on Eli's OK. The nightly refit now judges and publishes MANDY
+and WEIWEI each on its own quotes (`gateFactory`). **Next step:** after the 04:00
+run, check the WhatsApp has one line per factory and Settings → "דיוק המחשבון"
+shows "דיוק המחיר — MANDY" and "— WEIWEI" (the refit writes
+`factories[f].accuracy` on that run). Dry run before deploy: MANDY 4.5% (22),
+WEIWEI 5.0% (10). Eli's decision: no change to formulas/envelope/refusals.
+Record + 5 open questions: `docs/archive/research/estimator/2026-09-22-OBSERVATIONS.md`.
 
 ## Completed project — hub redesign per ui-ux-pro-max (2026-09-18)
 
