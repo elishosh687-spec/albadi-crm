@@ -17,5 +17,6 @@ paths:
 - Plate fee lives only in `lib/factory/molds.ts`; one-time per order (in `totalOrderPriceIls`, not `sellingPricePerUnitIls`), so print it as its own line (`buildQuoteMessage` takes `moldsIls`).
 - `negotiationBufferAgorot` is added per bag before `ceilAgorot` in BOTH engines (`calculator/engine.ts`, `pricing.ts`).
 - Estimator (`lib/factory/estimator.ts`) REFUSES narrow-tall bags (`isNarrowTall`) and qty < `MIN_QTY`; picks factory by construction (`allowedFactoriesFor`); shipping buffers are settings (`estimatorShippingBufferPct`, `estimatorShippingBufferLamPct`) — detail in `docs/agent/jobs.md` (refit gate).
+- The daily refit learns plain-bag prices from the 6-size CATALOG only; factory quotes change only the laminated line (plain quotes just grade it), 鼎驰 has no model. Settings → "דיוק המחשבון" (`lib/factory/estimator-health.ts`) shows whether it runs/publishes.
 
 Full detail: `docs/agent/pricing.md` — read it before non-trivial changes here.

@@ -155,3 +155,31 @@ Every one of those states now carries **"בקש מחיר מהמפעל למידה
 to `/widget/factory-request` prefilled with the spec, the lead and the refusal
 reason. In that form the geometry rules are a **warning, not a block, for Eli**
 (they stay a hard block in `salesMode` so Itay can't forward an impossible size).
+
+## What the daily refit actually learns — and where to see it (2026-09-22)
+
+`/api/factory/refit-estimator` runs daily (04:00), rebuilds the estimator from
+the Feishu catalog + the Feishu quote log + DB `received` quotes (80g only),
+and publishes only if the LOO median stays ≤ 6% and not >2 pts worse.
+**It does NOT learn from every quote.** In `buildModel`
+([estimator-fit.ts](lib/factory/server/estimator-fit.ts)):
+
+- **Plain (non-laminated) price = catalog only** — 6 fixed sizes (H20–40). Plain
+  factory quotes only GRADE it (they are the LOO test set). Most orders are plain.
+- **Laminated price** is the only line fitted from quotes (catalog + quote log + DB).
+- **Area envelope** (1,520–5,950 cm²) comes from the catalog sizes, so it never
+  widens no matter how many big/tall bags get quoted.
+- **鼎驰/CHEN has no model** — its quotes (e.g. every H50×W50×D15 at ¥1.50) are dropped.
+- **Carton model** has its own ≤10% gate; since 2026-09-10 it sits at 10.6%, so
+  packing is frozen on the 09-10 fit.
+
+Measured 2026-09-22 on tall bags: H45×W50×D10 −5% (fine); H50×W33×D9 −49% and
+H36×W18×D9 −45% (narrow-tall — refused on purpose). No tall bag with D>10 inside
+the envelope has a factory price, so e.g. 50×30×14's ¥1.53 is unverified.
+
+**Settings → "דיוק המחשבון"** ([EstimatorHealthSection](components/settings/EstimatorHealthSection.tsx),
+logic in [estimator-health.ts](lib/factory/estimator-health.ts), tests next to it)
+shows: job ran · formulas published or kept (reason in Hebrew) · price accuracy ·
+carton model frozen or not · what the quotes teach. The refit stores its last
+outcome (incl. `quotesLearned` / `quotesGradingOnly` / `quotesUnmodelled`) in
+`app_config` `estimator.last_refit_at.result`.

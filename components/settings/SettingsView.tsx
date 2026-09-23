@@ -14,7 +14,7 @@ import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import {
   Save, Plus, Trash2, Ship, Plane, Loader2, RefreshCw,
   ArrowLeftRight, Percent, Truck, ChevronDown,
-  Coins, Users, PhoneCall, MessageSquareText, Megaphone,
+  Coins, Users, PhoneCall, MessageSquareText, Megaphone, Gauge,
 } from "lucide-react";
 import { cn } from "@/lib/cn";
 import type {
@@ -29,6 +29,7 @@ import { LuxShell, LuxTitle, LuxAccent } from "@/components/widget-ui/lux";
 import { AssigneeSection } from "@/components/settings/AssigneeSection";
 import { QuoteNotifySection } from "@/components/settings/QuoteNotifySection";
 import { CallAnalysisSettingsSection } from "@/components/settings/CallAnalysisSettingsSection";
+import { EstimatorHealthSection } from "@/components/settings/EstimatorHealthSection";
 import { AdRecommendationSettingsView } from "@/components/ads/AdRecommendationSettingsView";
 import { syncHubUrl } from "@/lib/widget/hub-link";
 
@@ -37,9 +38,10 @@ import { syncHubUrl } from "@/lib/widget/hub-link";
  * one long page. The id is the URL `?section=` value, so a colleague can be sent
  * straight to e.g. `?tab=settings&section=ads`.
  */
-export type SettingsSection = "price" | "ship" | "team" | "calls" | "templates" | "ads";
+export type SettingsSection = "price" | "calc" | "ship" | "team" | "calls" | "templates" | "ads";
 const SETTINGS_GROUPS: { id: SettingsSection; label: string; area: string; icon: typeof Truck }[] = [
   { id: "price", label: "תמחור", area: "מכירות", icon: Coins },
+  { id: "calc", label: "דיוק המחשבון", area: "מכירות", icon: Gauge },
   { id: "ship", label: "שילוח", area: "מכירות", icon: Truck },
   { id: "team", label: "שיוך והתראות", area: "צוות", icon: Users },
   { id: "calls", label: "ניתוח שיחות", area: "צוות", icon: PhoneCall },
@@ -570,6 +572,7 @@ export function SettingsView({ apiToken, initialSection }: { apiToken: string; i
   const dirtyGroups: Record<SettingsSection, boolean> = {
     price: pricingDirty,
     ship: shippingDirty,
+    calc: false,
     team: false,
     calls: false,
     templates: false,
@@ -603,6 +606,9 @@ export function SettingsView({ apiToken, initialSection }: { apiToken: string; i
           {/* Every group stays mounted (hidden, not unmounted) so a half-edited
               group keeps its draft while you look at another one. */}
           <section hidden={section !== "price"} aria-label="תמחור">{configBody("price")}</section>
+          <section hidden={section !== "calc"} aria-label="דיוק המחשבון">
+            <EstimatorHealthSection apiToken={apiToken} />
+          </section>
           <section hidden={section !== "ship"} aria-label="שילוח">{configBody("ship")}</section>
           <section hidden={section !== "team"} aria-label="שיוך והתראות" className="space-y-5">
             <AssigneeSection apiToken={apiToken} />

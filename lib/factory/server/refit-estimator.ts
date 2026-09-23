@@ -9,10 +9,11 @@ import { appConfig, factoryQuoteRequests } from "@/drizzle/schema";
 import { eq } from "drizzle-orm";
 import type { FactoryProductSpec, FactoryResponse } from "@/lib/factory/types";
 import { getEstimatorCoeffs, setEstimatorCoeffs } from "@/lib/factory/estimator-config";
-import { extractFeishu, looValidate, toCoeffs, bagAreaCm2, normSupplier, colorsFromText, catalogCartonPts, toCartonCoef, type Pt, type CartonPt } from "./estimator-fit";
+import { extractFeishu, looValidate, toCoeffs, bagAreaCm2, normSupplier, colorsFromText, catalogCartonPts, toCartonCoef, FACS, type Pt, type CartonPt } from "./estimator-fit";
 import { sendEliDM } from "@/lib/notify/eli";
 
-const CURSOR_KEY = "estimator.last_refit_at";
+/** Also holds the last run's outcome — the settings "דיוק המחשבון" screen reads it. */
+export const CURSOR_KEY = "estimator.last_refit_at";
 const GATE_MEDIAN = 6;
 
 /** New real quotes from the DB → per-factory PRICE points + CARTON points for the fits. */
@@ -68,7 +69,15 @@ export interface RefitResult {
   ok: boolean; published: boolean; reason: string;
   newMedianPct: number | null; prevMedianPct: number | null;
   dbPoints: number; catalogPoints: number; quoteLogPoints: number; misaligned: number;
-  cartonMedianPct: number | null; cartonPoints: number;
+  cartonMedianPct: number | null; cartonPoints: number; cartonPublished: boolean;
+  /**
+   * What the factory quotes actually TEACH. Only laminated quotes from a
+   * modelled factory enter a coefficient (buildModel's `lam` line); a plain
+   * quote only GRADES the catalog-fitted model, and a quote from a factory with
+   * no price model (鼎驰/CHEN) is ignored. Surfaced so "the calculator learns
+   * from every quote" is never assumed.
+   */
+  quotesLearned: number; quotesGradingOnly: number; quotesUnmodelled: number;
   dmStatus?: string;
 }
 
@@ -105,9 +114,21 @@ export async function refitEstimator(opts?: { fittedAt?: string }): Promise<Refi
     reason = `kept old — new median ${newMedian?.toFixed(1)}% materially worse than current ${prevMedian?.toFixed(1)}%`;
   }
 
-  // advance cursor (audit only — the fit always reads the full set)
-  await db.insert(appConfig).values({ key: CURSOR_KEY, value: { iso: latestIso ?? fittedAt, at: fittedAt } })
-    .onConflictDoUpdate({ target: appConfig.key, set: { value: { iso: latestIso ?? fittedAt, at: fittedAt }, updatedAt: new Date() } });
+  const modelled = (p: Pt) => (FACS as readonly string[]).includes(p.factory);
+  const quotesLearned = qlAll.filter((p) => p.hasLam && modelled(p)).length;
+  const quotesGradingOnly = qlAll.filter((p) => !p.hasLam && modelled(p)).length;
+  const quotesUnmodelled = qlAll.filter((p) => !modelled(p)).length;
+  const result = {
+    published: publish, reason, newMedianPct: newMedian, prevMedianPct: prevMedian,
+    dbPoints: dbPts.length, catalogPoints: cat.length, quoteLogPoints: ql.length, misaligned,
+    cartonMedianPct: cartonMedian, cartonPoints: cartonPts.length, cartonPublished: cartonOk,
+    quotesLearned, quotesGradingOnly, quotesUnmodelled,
+  };
+
+  // Cursor + last outcome (the fit always reads the full set; this is for the settings screen).
+  const cursor = { iso: latestIso ?? fittedAt, at: fittedAt, ranAt: new Date().toISOString(), result };
+  await db.insert(appConfig).values({ key: CURSOR_KEY, value: cursor })
+    .onConflictDoUpdate({ target: appConfig.key, set: { value: cursor, updatedAt: new Date() } });
 
   const cartonLine = `📦 אריזה: CBM/יח׳ דיוק חציון ${cartonMedian?.toFixed(1)}% (${cartonCoef.accuracy?.n ?? 0} גזורות${cartonOk ? "" : " — לא עודכן, מתחת לסף"})`;
   const dm = publish
@@ -115,5 +136,5 @@ export async function refitEstimator(opts?: { fittedAt?: string }): Promise<Refi
     : `⚠️ מחירון אומדן לא עודכן (${reason}).\nנשמרו הנוסחאות הקודמות. נקודות DB חדשות: ${dbPts.length}\n${cartonLine}`;
   const dmStatus = await sendEliDM(dm);
 
-  return { ok: true, published: publish, reason, newMedianPct: newMedian, prevMedianPct: prevMedian, dbPoints: dbPts.length, catalogPoints: cat.length, quoteLogPoints: ql.length, misaligned, cartonMedianPct: cartonMedian, cartonPoints: cartonPts.length, dmStatus };
+  return { ok: true, ...result, dmStatus };
 }
